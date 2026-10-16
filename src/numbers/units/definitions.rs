@@ -44,18 +44,12 @@ pub(super) const BLOCK_NAME: &str = "unit_definitions";
 const RUN_TIME_NAMES: &str = "unit_names";
 const RUN_TIME_SCALES: &str = "unit_scales";
 const RUN_TIME_DIMENSIONS: &str = "unit_dimensions";
-/// The dimensions a run-time quantity knows, packed into one int: length + 256·mass + 65536·time
-const RUN_TIME_DIMENSION_WEIGHTS: [(Dimension, i64); 3] =
-	[(Dimension::Length, 1), (Dimension::Mass, 256), (Dimension::Time, 65536)];
-/// The dimension each name of lib/units.warp stands for: time's is `duration` (decision anchor-time)
-const DIMENSION_WORDS: [(&str, Dimension); 6] = [
-	("length", Dimension::Length),
-	("mass", Dimension::Mass),
-	("duration", Dimension::Time),
-	("era", Dimension::Era),
-	("temperature", Dimension::Temperature),
-	("pixels", Dimension::Pixel),
-];
+/// A run-time quantity packs its powers of the base quantities into one int, one byte each in written order (length +
+/// 256·mass + 65536·duration …, skipping NOT_AT_RUN_TIME), so multiplying quantities adds them; seven fit in 64 bits
+const RUN_TIME_BYTE: i64 = 256;
+const RUN_TIME_QUANTITIES: u8 = 7;
+/// Base quantities whose units count from another zero (`°C`) or a calendar's (`AD`) don't compute at run time
+const NOT_AT_RUN_TIME: [&str; 2] = ["era", "temperature"];
 
 pub(super) struct Definitions {
 	/// The dimensions by name, in written order, and the names of products of them (`speed := length/duration`)
@@ -115,7 +109,7 @@ pub(super) fn defines(line_word: &str, name: &str) -> bool {
 }
 
 /// The run-time tables of lib/units.warp's Quantity (`quantity(5, "km")`), in place of the block itself: each unit and
-/// each alias of units (`mph`, `Hz`) with its SI amount and its dimension packed as length + 256·mass + 65536·time
+/// each alias of units (`mph`, `Hz`) with its SI amount and its base quantities packed (RUN_TIME_BYTE)
 pub(super) fn run_time_tables() -> String {
 	let rows: Vec<(&str, Rational, i64)> = definitions()
 		.units
@@ -143,8 +137,15 @@ fn si_amount(unit: &Unit) -> Rational {
 	Rational::new(BigInt::from(unit.factor), BigInt::from(steps))
 }
 
+/// One byte per run-time base quantity: its place among them, so era and temperature take no byte
 fn packed(dimension: Dimension) -> Option<i64> {
-	RUN_TIME_DIMENSION_WEIGHTS.iter().find(|(known, _)| *known == dimension).map(|(_, weight)| *weight)
+	let run_time = run_time_quantities(&definitions().dimensions);
+	let place = run_time.iter().position(|known| *known == dimension)?;
+	Some(RUN_TIME_BYTE.pow(place as u32))
+}
+
+fn run_time_quantities(dimensions: &[(&str, Dimension)]) -> Vec<Dimension> {
+	dimensions.iter().filter(|(name, _)| !NOT_AT_RUN_TIME.contains(name)).map(|(_, dimension)| *dimension).collect()
 }
 
 /// `mi/h`, `1/s`, `kg*m/s²`: the SI amount and packed dimension of an alias made of units; None for one of other words
@@ -312,14 +313,24 @@ impl<'a> Reader<'a> {
 			return Ok(());
 		}
 		if let Some((name, anchor)) = definition(QUANTITY_WORD, " ") {
-			match DIMENSION_WORDS.iter().find(|(word, _)| *word == name) {
-				Some((_, dimension)) => {
-					self.dimensions.push((name, *dimension));
-					self.base_units.push((*dimension, anchor));
+			// `quantity length meter`: a new anchor word makes a base quantity; `quantity speed m/s` names units known
+			match tokens(anchor).len() == 1 && !self.knows(powered(anchor).0) {
+				true => {
+					let dimension = Dimension(
+						u8::try_from(self.dimensions.len()).map_err(|_| format!("{line}: too many quantities"))?,
+					);
+					let run_time = run_time_quantities(&self.dimensions).len() as u8;
+					if run_time >= RUN_TIME_QUANTITIES && !NOT_AT_RUN_TIME.contains(&name) {
+						return Err(format!(
+							"{line}: too many base quantities for run time, {RUN_TIME_QUANTITIES} fit"
+						));
+					}
+					self.dimensions.push((name, dimension));
+					self.base_units.push((dimension, anchor));
 					let scale = Rational::integer(1);
-					self.units.push(Read { name: anchor, dimension: *dimension, scale, zero: Rational::zero() });
+					self.units.push(Read { name: anchor, dimension, scale, zero: Rational::zero() });
 				}
-				None => self.derived_dimensions.push((name, powers_of(anchor, &self.units)?)),
+				false => self.derived_dimensions.push((name, powers_of(anchor, &self.units)?)),
 			}
 			return Ok(());
 		}

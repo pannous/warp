@@ -9,7 +9,7 @@
 // `unit cm := meter/100`, which fixes its quantity and factor, `unit m := 1 meter` one of the same amount, `unit °C as K
 // := it + 273.15` one in K computed from `it`, the amount in °C (decision unit-target); a unit of several units or none
 // (`unit mph := mi/h`, `unit ° := π/180`) is a word for that expression; px is a quantity of its own, a length turns
-// into px by plain arithmetic with the screen's density, `3 cm * display.dpi`; a unit added here is known everywhere,
+// into px by plain arithmetic with the screen's density, `3 cm * display.density`; a unit added here is known everywhere,
 // also in conversions
 unit_definitions = data {
 	// `SI quantity` gives the units of a quantity the SI prefixes, `prefix k := 10^3` is one of them (giga down to
@@ -61,6 +61,7 @@ unit_definitions = data {
 	unit kHz := 1/ms
 	unit ° := π/180
 	unit dpi := px/inch
+	quantity density px/inch
 	unit ppi := dpi
 	unit dot := px
 	name millisecond := ms
@@ -85,8 +86,8 @@ unit_definitions = data {
 }
 
 // At run time the block above stands for the tables the Quantity class reads (src/numbers/units.rs): unit_names,
-// unit_scales (each unit's SI amount) and unit_dimensions, which packs the powers of length, mass and time as
-// length + 256·mass + 65536·time, so multiplying quantities adds dimensions
+// unit_scales (each unit's SI amount) and unit_dimensions, which packs the powers of every base quantity, one
+// byte each in written order (length + 256·mass + 65536·duration …), so multiplying quantities adds them
 
 class Quantity {
 	amount: number

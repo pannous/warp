@@ -8,14 +8,14 @@ use warp::wasm_emitter::compile;
 #[test]
 fn test_two_returned_values_destructure() {
 	is!("f():=return 1, 2; x, y = f(); x+y", 3);
-	is!("divmod(a, b) := return a//b, a%b; q, r = divmod(17, 5); q*10+r", 32);
+	is!("divmod(a, b) := return a /! b, a%b; q, r = divmod(17, 5); q*10+r", 32);
 	is!("half(x) := return x, x/2.5; a, b = half(5); b", 2.0);
 	is!("named() := return \"a\", 2; s, n = named(); s", "a");
 }
 
 #[test]
 fn test_tuple_function_returns_wasm_multi_value() {
-	let module = compile("divmod(a, b) := return a//b, a%b; q, r = divmod(17, 5); q")
+	let module = compile("divmod(a, b) := return a /! b, a%b; q, r = divmod(17, 5); q")
 		.unwrap_or_else(|error| panic!("{error:?}"));
 	assert_eq!(result_count(&module.bytes, "divmod"), Some(2));
 }
@@ -46,7 +46,7 @@ fn test_bare_list_assignment_still_asks() {
 
 #[test]
 fn test_tuple_returns_inside_functions() {
-	is!("divmod(a, b) := return a//b, a%b; digits(n) := { q, r = divmod(n, 10); q + r }; digits(47)", 11);
+	is!("divmod(a, b) := return a /! b, a%b; digits(n) := { q, r = divmod(n, 10); q + r }; digits(47)", 11);
 	is!("pair(n) := { if n > 0 { return n, 1 }; return 0, 0 }; a, b = pair(5); a+b", 6);
 }
 

@@ -23,6 +23,65 @@ pub(crate) const USE_KEYWORD: &str = "use";
 /// `from list import zip, unique`: only those words of the module
 pub(crate) const IMPORT_KEYWORD: &str = "import";
 
+/// `fast` alone as the first statement of a program or module (user 2026-10-16, card fast-scope): the program's sin cos
+/// exp pow atan2 are lib/fast_math.warp's polynomials, its Ints machine i64s that wrap, its `/` of Ints a float
+pub(crate) fn is_fast_pragma(statement: &Node) -> bool {
+	statement.drop_meta().is_symbol(crate::words::FAST_WORD)
+}
+
+/// The statements after a first `fast`, and whether there was one
+pub(super) fn without_fast_pragma(code: Node) -> (Node, bool) {
+	match code {
+		Node::List(mut items, bracket, separator) if items.first().is_some_and(is_fast_pragma) => {
+			items.remove(0);
+			(Node::List(items, bracket, separator), true)
+		}
+		other => (other, false),
+	}
+}
+
+/// A fast program's pragma as the module it means: `use fast_math`
+pub(super) fn fast_math_use() -> Node {
+	let module = Node::Symbol(FAST_MODULE.into());
+	Node::List(vec![Node::Symbol(USE_KEYWORD.into()), module], Bracket::None, Separator::Space)
+}
+
+/// `fast f(x) := body`, or any `f(x) := body` of a fast module: the head and the body
+pub(super) fn fast_definition(statement: &Node, fast_module: bool) -> Option<(Node, Node)> {
+	let definition = match statement.drop_meta() {
+		Node::List(items, Bracket::None, _) => match items.as_slice() {
+			[modifier, definition] if is_fast_pragma(modifier) => definition,
+			_ => return None,
+		},
+		definition if fast_module => definition,
+		_ => return None,
+	};
+	match definition.drop_meta() {
+		Node::Key(name, Op::Define, body) => Some((name.as_ref().clone(), body.as_ref().clone())),
+		_ => None,
+	}
+}
+
+/// fast_math's `sin` as a `fast` function calls it: `fast_math·sin`
+pub(super) fn fast_name(word: &str) -> String {
+	format!("{FAST_MODULE}{QUALIFIER}{word}")
+}
+
+/// `a / b` of fast code as `(a as float) / b`: a float, never an exact ratio
+pub(crate) fn float_division(node: Node) -> Node {
+	match node {
+		Node::Key(left, Op::Div, right) => {
+			let left = Node::Key(
+				Box::new(float_division(*left)),
+				Op::As,
+				Box::new(Node::Symbol(crate::words::FLOAT_WORD.into())),
+			);
+			Node::Key(Box::new(left), Op::Div, Box::new(float_division(*right)))
+		}
+		other => other.map_children(float_division),
+	}
+}
+
 /// `use x`, `require x`, `import x`, `include x`: a statement that brings in a module, the one list every pass asks
 pub(crate) fn is_import_keyword(word: &str) -> bool {
 	USE_KEYWORDS.contains(&word) || word == INCLUDE_KEYWORD

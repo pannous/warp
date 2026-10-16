@@ -163,8 +163,11 @@ pub struct WasmGcEmitter {
 	int_scratch: u32,        // first of INT_SCRATCH_LOCALS i64 locals in the current function
 	loop_values: LoopValues, // the Node locals holding text loop values (control_flow.rs)
 	wrapping_ints: bool,     // inside `expr as i64`: machine arithmetic
-	int_heap_global: u32,    // $BigInts heap that handles index
-	int_count_global: u32,   // used slots in that heap
+	/// `%` and `//` of Ints beyond the fixnums: the ratio-aware exact_* runtime when ratios may reach them, else int_*
+	ratio_division: bool,
+	int_division: bool, // emitted an int_* slow path, valid only if the module makes no ratio (emit_module)
+	int_heap_global: u32, // $BigInts heap that handles index
+	int_count_global: u32, // used slots in that heap
 	/// the cursor of cons-list indexing: the first of the globals list, cell, index (list_ops.rs emit_list_cursor_globals)
 	list_cursor_global: Option<u32>,
 	/// the cursors of text indexing: the first of the globals text, index, at (list_ops.rs emit_text_cursor_globals)
@@ -262,6 +265,8 @@ impl WasmGcEmitter {
 			int_scratch: 0,
 			loop_values: LoopValues::default(),
 			wrapping_ints: false,
+			ratio_division: false,
+			int_division: false,
 			int_heap_global: 0,
 			int_count_global: 0,
 			list_cursor_global: None,
@@ -454,14 +459,13 @@ impl WasmGcEmitter {
 	fn get_type(&self, node: &Node) -> Kind {
 		let node = node.drop_meta();
 		match node {
-			// Check user_globals for symbols
+			// a local or parameter, then a global of that name: `g(x) := x as list` never takes a global x's kind
 			Node::Symbol(name) => {
-				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
-					return kind;
-				}
-				// Fall back to scope lookup
 				if let Some(local) = self.scope.lookup(name) {
 					return local.kind;
+				}
+				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
+					return kind;
 				}
 				Kind::Symbol
 			}
@@ -665,6 +669,7 @@ impl WasmGcEmitter {
 		} else if !missing.is_empty() {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
+			rerun.ratio_division = self.ratio_division;
 			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
 			rerun.inherited_needs = rerun.discovered_needs.clone();
 			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
@@ -794,6 +799,7 @@ impl WasmGcEmitter {
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// an error in main never points into the user or prelude function compiled last (lib/prelude.warp:30:272)
 		self.source_position = None;
+		self.wrapping_ints = crate::compiler::compile_mode::is_fast_program();
 		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
 		self.live_loops = crate::lowering::music_words::live_loop_names(node);
 		// Pre-pass: collect variables first so scope is populated
@@ -906,8 +912,8 @@ impl WasmGcEmitter {
 		if let Some((value, declared)) = declared_values::declared_field_value(node) {
 			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
 		}
-		if let Some(item) = crate::lowering::data_items::marked_item(node) {
-			return self.emit_data_item(func, item);
+		if let Some((item, place)) = crate::lowering::data_items::marked_item(node) {
+			return self.emit_data_item(func, item, place);
 		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
 			let fields = self.with_declared_field_types(name, fields);
@@ -1052,9 +1058,27 @@ fn last_statement_items(program: &Node) -> usize {
 	}
 }
 
+/// The module of `node`; `%` and `//` use the small int_* runtime unless the module makes ratios, which takes a
+/// second emission with the ratio-aware exact_* one (card int-i64)
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
+	let (compiled, int_division) = emit_module_with(node, false)?;
+	if int_division && makes_ratios(&compiled.bytes) {
+		// the first emission already hinted the same program
+		return Ok(crate::normalize::without_hints(|| emit_module_with(node, true))?.0);
+	}
+	Ok(compiled)
+}
+
+/// Every wasm ratio is made by ratio_new, so a module without it holds none
+fn makes_ratios(module: &[u8]) -> bool {
+	let names = crate::compiler::dead_functions::function_names(module).unwrap_or_default();
+	names.values().any(|name| name == numbers::exact::RATIO_NEW)
+}
+
+fn emit_module_with(node: &Node, ratio_division: bool) -> Result<(CompiledModule, bool), Node> {
 	use crate::analyzer::effects::Capability;
 	let mut emitter = WasmGcEmitter::new();
+	emitter.ratio_division = ratio_division;
 	emitter.emit_for_node(node);
 	if let Some(type_error) = emitter.type_error() {
 		return Err(type_error);
@@ -1062,8 +1086,9 @@ pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 	let needs_host = emitter.imports(Capability::Host);
 	let needs_wasi = emitter.imports(Capability::Wasi);
 	let needs_ffi = emitter.imports(Capability::Ffi);
+	let int_division = emitter.int_division;
 	let bytes = emitter.try_finish().map_err(|message| crate::node::error(&message))?;
-	Ok(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi })
+	Ok((CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }, int_division))
 }
 
 /// Is the first statement that mentions `name` its plain assignment `name = value` (value not reading name)

@@ -55,7 +55,7 @@ const fn rule(name: &'static str, edits: fn(&[String], &[LineScan]) -> Vec<Edit>
 	Rule { name, edits, hash_comments_only: false }
 }
 
-pub(super) const RULES: [Rule; 8] = [
+pub(super) const RULES: [Rule; 9] = [
 	Rule { name: "# comment", edits: hash_comments, hash_comments_only: true },
 	rule("trailing whitespace", trailing_whitespace),
 	rule("blank lines", blank_lines),
@@ -63,10 +63,11 @@ pub(super) const RULES: [Rule; 8] = [
 	rule("space after a comma or semicolon", separator_spacing),
 	rule("space after a key's colon", colon_spacing),
 	rule("spaces around an operator", operator_spacing),
+	rule("spaces around a ternary", ternary_spacing),
 	rule("indentation", indentation),
 ];
 
-/// `// text` → `# text` (user, 2026-10-15: `//` also means floor division); `/// doc` → `## doc`; `//!` stays
+/// `// text` → `# text` (user, 2026-10-15: `//` reads like Python's floor division); `/// doc` → `## doc`; `//!` stays
 fn hash_comments(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	let mut edits = Vec::new();
 	for (index, line) in lines.iter().enumerate() {
@@ -91,14 +92,14 @@ fn changed(index: usize, line: &str, new: String) -> Option<Edit> {
 
 fn trailing_whitespace(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	let trimmed = |(index, line): (usize, &String)| {
-		(!scans[index].ends_in_text).then(|| changed(index, line, line.trim_end().to_string())).flatten()
+		(!scans[index].ends_in_text_or_comment()).then(|| changed(index, line, line.trim_end().to_string())).flatten()
 	};
 	lines.iter().enumerate().filter_map(trimmed).collect()
 }
 
 /// At most one blank line in a row, none at the start or the end
 fn blank_lines(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
-	let is_blank = |index: usize| lines[index].trim().is_empty() && !scans[index].starts_in_text;
+	let is_blank = |index: usize| lines[index].trim().is_empty() && !scans[index].starts_in_text_or_comment();
 	let last_content = (0..lines.len()).rev().find(|&index| !is_blank(index));
 	(0..lines.len())
 		.filter(|&index| {
@@ -114,7 +115,7 @@ fn characters(line: &str, scan: &LineScan) -> Vec<(char, bool)> {
 }
 
 fn indentation_length(characters: &[(char, bool)], scan: &LineScan) -> usize {
-	if scan.starts_in_text {
+	if scan.starts_in_text_or_comment() {
 		return 0;
 	}
 	characters.iter().take_while(|(c, _)| *c == ' ' || *c == '\t').count()
@@ -127,15 +128,26 @@ fn rewrite_code(
 	scans: &[LineScan],
 	rewrite: impl Fn(&[(char, bool)], usize, &mut String, &LineScan) -> usize,
 ) -> Vec<Edit> {
+	rewrite_code_with(lines, scans, |_| (), |characters, at, written, scan, _| rewrite(characters, at, written, scan))
+}
+
+/// rewrite_code with what `prepare` finds once per line, handed to every `rewrite` of that line
+fn rewrite_code_with<T>(
+	lines: &[String],
+	scans: &[LineScan],
+	prepare: impl Fn(&[(char, bool)]) -> T,
+	rewrite: impl Fn(&[(char, bool)], usize, &mut String, &LineScan, &T) -> usize,
+) -> Vec<Edit> {
 	let mut edits = Vec::new();
 	for (index, line) in lines.iter().enumerate() {
 		let characters = characters(line, &scans[index]);
+		let prepared = prepare(&characters);
 		let indentation = indentation_length(&characters, &scans[index]);
 		let mut written: String = characters[..indentation].iter().map(|(c, _)| c).collect();
 		let mut at = indentation;
 		while at < characters.len() {
 			if characters[at].1 {
-				at += rewrite(&characters, at, &mut written, &scans[index]).max(1);
+				at += rewrite(&characters, at, &mut written, &scans[index], &prepared).max(1);
 			} else {
 				written.push(characters[at].0);
 				at += 1;
@@ -229,7 +241,17 @@ fn binary_operator(characters: &[(char, bool)], at: usize) -> Option<&'static st
 	}
 	let before = characters[..at].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c))?;
 	let next = characters[after..].iter().map(|(c, _)| *c).find(|c| !is_space(*c))?;
-	(is_operand_end(before) && is_operand_start(next)).then_some(operator)
+	(is_operand_end(before) && is_operand_start(next) && !inside_a_name(characters, at)).then_some(operator)
+}
+
+/// The `-` at `at` is part of a name, `my-var` or `o-b` (card chars-map): spaced it would split the name, so the line's
+/// other operators could not be spaced either
+fn inside_a_name(characters: &[(char, bool)], at: usize) -> bool {
+	let word: Vec<char> =
+		characters[..at].iter().rev().map(|(c, _)| *c).take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+	characters[at].0 == '-'
+		&& word.last().is_some_and(|first| !first.is_numeric())
+		&& characters.get(at + 1).is_some_and(|(next, _)| crate::warp_parser::hyphen_joins_word(*next))
 }
 
 fn operator_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
@@ -248,6 +270,70 @@ fn operator_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	})
 }
 
+/// `o<97?65: 97` → `o < 97 ? 65 : 97` (card format-ternary): a `?` between operands with its `:` later on the line, and
+/// that `:`, are spaced; an optional `x?` and a key's colon stay
+fn ternary_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
+	rewrite_code_with(lines, scans, ternary_marks, |characters, at, written, _, marks| {
+		let c = characters[at].0;
+		if !marks.contains(&at) {
+			written.push(c);
+			return 1;
+		}
+		let kept = written.trim_end_matches([' ', '\t']).len();
+		written.truncate(kept);
+		written.push(' ');
+		written.push(c);
+		written.push(' ');
+		1 + characters[at + 1..].iter().take_while(|(c, code)| is_space(*c) && *code).count()
+	})
+}
+
+/// The positions of the line's ternary `?`s and their `:`s
+fn ternary_marks(characters: &[(char, bool)]) -> std::collections::HashSet<usize> {
+	(0..characters.len())
+		.filter_map(|question| ternary_colon(characters, question).map(|colon| [question, colon]))
+		.flatten()
+		.collect()
+}
+
+/// A `?` between operands: no optional `x?`
+fn is_ternary_question(characters: &[(char, bool)], at: usize) -> bool {
+	if characters.get(at) != Some(&('?', true)) {
+		return false;
+	}
+	let before = characters[..at].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c));
+	let after = characters[at + 1..].iter().map(|(c, _)| *c).find(|c| !is_space(*c));
+	before.is_some_and(is_operand_end) && after.is_some_and(is_operand_start)
+}
+
+/// The `:` of the ternary whose `?` is at `question`: the first plain colon after it at its bracket depth that no
+/// nested ternary takes, None when the `?` is no ternary
+fn ternary_colon(characters: &[(char, bool)], question: usize) -> Option<usize> {
+	if !is_ternary_question(characters, question) {
+		return None;
+	}
+	let code = |index: usize| characters.get(index).filter(|(_, code)| *code).map(|(c, _)| *c);
+	let (mut depth, mut nested) = (0, 0);
+	for index in question + 1..characters.len() {
+		match code(index) {
+			Some('(' | '[' | '{') => depth += 1,
+			Some(')' | ']' | '}') if depth == 0 => return None,
+			Some(')' | ']' | '}') => depth -= 1,
+			Some('?') if depth == 0 && is_ternary_question(characters, index) => nested += 1,
+			Some(':') if depth == 0 => {
+				let plain = code(index + 1).is_none_or(|next| !":=".contains(next)) && code(index - 1) != Some(':');
+				match nested {
+					_ if !plain => {}
+					0 => return Some(index),
+					_ => nested -= 1,
+				}
+			}
+			_ => {}
+		}
+	}
+	None
+}
+
 /// The indentation as written, a tab counting TAB_WIDTH
 fn written_width(line: &str) -> usize {
 	line.chars().take_while(|c| is_space(*c)).map(|c| if c == '\t' { TAB_WIDTH } else { 1 }).sum()
@@ -262,10 +348,13 @@ fn indentation(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	let mut previous_code = String::new();
 	for (index, line) in lines.iter().enumerate() {
 		let scan = &scans[index];
-		if scan.starts_in_text || line.trim().is_empty() {
+		let code = code_text(line, scan);
+		if scan.starts_in_text_or_comment() || line.trim().is_empty() {
+			if scan.starts_in_text_or_comment() && !code.is_empty() {
+				previous_code = code;
+			}
 			continue;
 		}
-		let code = code_text(line, scan);
 		let width = written_width(line);
 		while offside.last().is_some_and(|&header| width <= header) {
 			offside.pop();

@@ -6,7 +6,7 @@
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
-use crate::analyzer::call_name;
+use crate::analyzer::{call_name, function_definitions};
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
@@ -14,7 +14,7 @@ use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse_template;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -191,6 +191,298 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 		.or_else(|| arrow_lambda(&it_function(node)?))
 }
 
+/// `xs map f`, `ps map .a`, `xs filter {it > 2}` (cards infix-map, map-dot): an iteration word between a list and its
+/// function is the method call `xs.map(f)`, left to right, `xs map f filter g` is `xs.map(f).filter(g)`; a prefix
+/// `map f xs` stays. The list is the rightmost operand before the word: `f() := xs map g` maps xs, `return xs map g`
+/// returns the mapped list, `ps sort by .a` labels the function. A function of the program calls what follows,
+/// `f sorted xs`
+pub fn lower_infix_iterations(program: Node) -> Node {
+	let functions: HashSet<String> = function_definitions(&program).user_functions.into_keys().collect();
+	let (parameters, labels) = definition_parameters(&program);
+	let variables: HashSet<String> = crate::music_words::defined_names(&program)
+		.into_iter()
+		.filter(|name| !functions.contains(name))
+		.chain(parameters)
+		.chain([IMPLICIT_PARAMETER.to_string()])
+		.collect();
+	infix_iterations(program, &ProgramWords { variables, labels })
+}
+
+/// `variables`: the words the program assigns or takes as parameters; any other word before an iteration word is
+/// a function or a module's word, `square all 1 to 5`, and the iteration stays prefix. `labels`: each function's
+/// parameter labels, `f(xs, each y)`, which stay labels in a call of that function, `f [1 2 3] each 2`
+struct ProgramWords {
+	variables: HashSet<String>,
+	labels: HashMap<String, HashSet<String>>,
+}
+
+/// `f(ys:list, n, each d) := …`: the parameter names ys, n and d, typed or not, and each function's labels (f: each)
+fn definition_parameters(program: &Node) -> (Vec<String>, HashMap<String, HashSet<String>>) {
+	let (mut names, mut labels) = (Vec::new(), HashMap::<String, HashSet<String>>::new());
+	program.visit(&mut |node| {
+		let Node::Key(head, Op::Define | Op::Assign, _) = node else { return };
+		let Some(Node::List(items, _, _)) = definition_call(head) else { return };
+		let function = crate::node::leading_name(&items[0]);
+		for parameter in &items[1..] {
+			match parameter.drop_meta() {
+				Node::List(words, Bracket::None, _) if words.len() > 1 => {
+					labels.entry(function.clone()).or_default().insert(crate::node::leading_name(&words[0]));
+					names.push(crate::node::leading_name(&words[words.len() - 1]));
+				}
+				_ => names.push(crate::node::leading_name(parameter)),
+			}
+		}
+	});
+	(names, labels)
+}
+
+fn infix_iterations(node: Node, words: &ProgramWords) -> Node {
+	let is_list_operand = |node: &Node| {
+		is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(|name| words.variables.contains(name))
+	};
+	match node {
+		// `ys = sort xs by >`: the parser hung the phrase on the operator, `(sort xs by) > ø`
+		Node::Key(..) if dangling_sort_operator(&node).is_some_and(|(words, label)| sorts_before(&words[..label])) => {
+			let (words_of_sort, _) = dangling_sort_operator(&node).expect("checked");
+			infix_iterations(Node::List(words_of_sort, Bracket::None, Separator::Space), words)
+		}
+		// `melody(notes, each duration) := …`: a definition's head names its parameters, `each` a label
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if definition_call(&head).is_some() => {
+			Node::Key(head, op, Box::new(infix_iterations(*body, words)))
+		}
+		Node::List(items, bracket, separator) if is_phrase(&bracket, &separator) => {
+			// a label of the function this phrase calls
+			let called_labels = items.first().and_then(|head| words.labels.get(&crate::node::leading_name(head)));
+			let is_label =
+				|node: &Node| called_labels.is_some_and(|labels| labels.contains(&crate::node::leading_name(node)));
+			let items = items.into_iter().map(|item| infix_iterations(item, words)).collect();
+			let mut pending: VecDeque<Node> = prefix_sort_grouped(labeled_sort_functions(items), &bracket).into();
+			let mut combined: Vec<Node> = Vec::with_capacity(pending.len());
+			let mut changed = false;
+			while let Some(item) = pending.pop_front() {
+				// `ys map` grouped as a phrase of its own before the function: its words are this phrase's
+				if let Some(phrase) = phrase_ending_in_iteration(&item, is_list_operand)
+					.filter(|phrase| !pending.is_empty() && !phrase.last().is_some_and(is_label))
+				{
+					phrase.into_iter().rev().for_each(|word| pending.push_front(word));
+					continue;
+				}
+				let after_list =
+					combined.last().is_some_and(|left| is_list_operand(rightmost_operand(left))) && !is_label(&item);
+				// `xs map f`, or `xs (map f)` where the phrase grouped the prefix call first (`ys = xs map f`)
+				let iteration = after_list
+					.then(|| grouped_iteration(&item).or_else(|| bare_iteration(&item, &mut pending)))
+					.flatten();
+				match iteration {
+					Some((word, function)) => {
+						let left = combined.pop().expect("a list before");
+						combined.push(attach_iteration(left, &word, function));
+						changed = true;
+					}
+					None => combined.push(item),
+				}
+			}
+			match (changed, &bracket) {
+				(true, Bracket::None | Bracket::Round) if combined.len() == 1 => combined.pop().expect("one"),
+				_ => Node::List(combined, bracket, separator),
+			}
+		}
+		other => other.map_children(|child| infix_iterations(child, words)),
+	}
+}
+
+/// the `f(x)` of a definition head `f(x)` or `f(x): int` before `:=`: a function's name and parameters
+fn definition_call(head: &Node) -> Option<&Node> {
+	match head.drop_meta() {
+		Node::Key(head, Op::Colon | Op::As, _) => definition_call(head),
+		call @ Node::List(items, Bracket::Round, _)
+			if items.first().is_some_and(|name| matches!(name.drop_meta(), Node::Symbol(_))) =>
+		{
+			Some(call)
+		}
+		_ => None,
+	}
+}
+
+/// Words side by side in one statement: `xs map f`, `(xs map f)`, a block's one phrase `{ return xs map f }`
+fn is_phrase(bracket: &Bracket, separator: &Separator) -> bool {
+	matches!(bracket, Bracket::None | Bracket::Round | Bracket::Curly)
+		&& !separator.separates_statements()
+		&& *separator != Separator::Colon
+}
+
+/// `map f` with the iteration word as its own item: the function after it
+fn bare_iteration(item: &Node, pending: &mut VecDeque<Node>) -> Option<(String, Node)> {
+	iteration_word(item)?;
+	Some((item.name(), pending.pop_front()?))
+}
+
+/// A sort label after an iteration word and the function after it are the labeled function, `by: f`, the way a call's
+/// parentheses write it: `sort xs by >`, `xs sort by >`, `sort ps by .a`, `sort ps by {it.a}` (card sort-xs)
+fn labeled_sort_functions(items: Vec<Node>) -> Vec<Node> {
+	let mut labeled = Vec::with_capacity(items.len());
+	let mut after_iteration = false;
+	let mut rest = items.into_iter();
+	while let Some(item) = rest.next() {
+		// `by >` and `by > map f`: the parser hung the rest of the phrase on the operator
+		if let Some((words, _)) = dangling_sort_operator(&item).filter(|_| after_iteration) {
+			labeled.extend(words);
+			continue;
+		}
+		let function = match item.drop_meta() {
+			_ if !after_iteration => None,
+			Node::Key(label, Op::Colon, function) if is_sort_label(label) => {
+				Some((label.as_ref().clone(), function.as_ref().clone()))
+			}
+			_ if is_sort_label(&item) => rest.next().map(|function| (item.clone(), function)),
+			_ => None,
+		};
+		after_iteration |= iteration_word(&item).is_some();
+		labeled.push(match function {
+			Some((label, function)) if member_of(&function).is_some() => {
+				key(label, Op::Colon, member_lambda(&function))
+			}
+			Some((label, function)) => key(label, Op::Colon, function),
+			None => item,
+		});
+	}
+	labeled
+}
+
+/// `sort xs by: > map f`: the prefix sort ends at its labeled function, the call `sort(xs, by: >)` the list of what
+/// follows; `(sort xs by: >)` is that call too
+fn prefix_sort_grouped(mut items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
+	let labeled = |item: &Node| matches!(item.drop_meta(), Node::Key(label, Op::Colon, _) if is_sort_label(label));
+	let Some(word) = items.first().filter(|first| iteration_word(first).is_some()).map(Node::name) else {
+		return items;
+	};
+	let last = items.len() - 1;
+	// the list comes first: `sort xs by: >`; `.sorted(by: >)` is a method's arguments
+	let call_ends_at = (2..=last).find(|&at| {
+		labeled(&items[at])
+			&& if at == last { *bracket == Bracket::Round } else { iteration_word(&items[at + 1]).is_some() }
+	});
+	match call_ends_at {
+		Some(at) => {
+			let rest = items.split_off(at + 1);
+			[vec![call(&word, items.split_off(1))], rest].concat()
+		}
+		None => items,
+	}
+}
+
+/// An iteration word among the words, the one a sort label after them belongs to
+fn sorts_before(words: &[Node]) -> bool {
+	words.iter().any(|word| iteration_word(word).is_some())
+}
+
+/// The words of `… by > rest` with the operator as the labeled function, `… by: > rest`, and where that label stands,
+/// when the parser hung them on the operator after a sort label: `(sort xs by) > ø`, `by > (map f)`
+fn dangling_sort_operator(node: &Node) -> Option<(Vec<Node>, usize)> {
+	// `by: > map f`: the colon's value is the operator with the rest hung on it, as `by > map f`
+	if let Node::Key(label, Op::Colon, value) = node.drop_meta() {
+		return match value.drop_meta() {
+			Node::Key(nothing, op, rest) if nothing.is_empty_node() && !rest.is_empty_node() => {
+				dangling_sort_operator(&key(label.as_ref().clone(), *op, rest.as_ref().clone()))
+			}
+			_ => None,
+		};
+	}
+	let Node::Key(left, op, right) = node.drop_meta() else { return None };
+	if !op.is_operation() || operator_symbol(*op).is_none() {
+		return None;
+	}
+	let mut words = phrase_words(left);
+	let label = words.pop().filter(is_sort_label)?;
+	let label_at = words.len();
+	words.push(key(label, Op::Colon, key(Node::Empty, *op, Node::Empty)));
+	words.extend(phrase_words(right).into_iter().filter(|word| !word.is_empty_node()));
+	Some((words, label_at))
+}
+
+/// The words of a phrase, nested phrases spliced in (`(sort xs) by`), or the one node
+fn phrase_words(node: &Node) -> Vec<Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() => {
+			items.iter().flat_map(phrase_words).collect()
+		}
+		_ => vec![node.clone()],
+	}
+}
+
+/// `ys map` of `f(ys) := ys map sq`, which the parser grouped before the function: its words
+fn phrase_ending_in_iteration(node: &Node, is_list_operand: impl Fn(&Node) -> bool) -> Option<Vec<Node>> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() => match items.as_slice() {
+			[.., left, word] if iteration_word(word).is_some() && is_list_operand(rightmost_operand(left)) => {
+				Some(items.clone())
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// An operator that takes a whole phrase on its right: `f() := xs map g`, `n = xs map g`, `a + xs map g`; a lookup
+/// `p.xs map g` keeps its receiver
+fn takes_phrase_on_the_right(op: &Op) -> bool {
+	matches!(op, Op::Assign | Op::Define | Op::Colon)
+		|| op.is_compound_assign()
+		|| op.is_operation() && !op.is_prefix() && !op.is_suffix()
+}
+
+/// The operand right before the next word: `xs` of `f() := xs`, of `return xs`
+fn rightmost_operand(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::Key(_, op, right) if takes_phrase_on_the_right(op) => rightmost_operand(right),
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() && !items.is_empty() => {
+			rightmost_operand(items.last().expect("an item"))
+		}
+		other => other,
+	}
+}
+
+/// `xs.word(function)` in place of the rightmost operand
+fn attach_iteration(left: Node, word: &str, function: Node) -> Node {
+	match left {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(attach_iteration(*node, word, function)), data },
+		Node::Key(target, op, right) if takes_phrase_on_the_right(&op) => {
+			Node::Key(target, op, Box::new(attach_iteration(*right, word, function)))
+		}
+		Node::List(mut items, Bracket::None, separator) if !separator.separates_statements() && !items.is_empty() => {
+			let last = items.pop().expect("an item");
+			items.push(attach_iteration(last, word, function));
+			Node::List(items, Bracket::None, separator)
+		}
+		list => key(list, Op::Dot, call(word, vec![function])),
+	}
+}
+
+/// `map f` of a phrase grouped as a call without brackets: the iteration word and its one function
+fn grouped_iteration(node: &Node) -> Option<(String, Node)> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() => match items.as_slice() {
+			[word, function] if iteration_word(word).is_some() => Some((word.name(), function.clone())),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// What may stand left of an infix iteration word: not a word that calls what follows, `print map f xs`,
+/// `count filter f xs`, or a statement word, `return find x`, `await all jobs`
+fn is_list_operand(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => {
+			!(crate::library_words::is_calling_word(name)
+				|| is_iteration_word(name)
+				|| crate::soft_keywords::is_statement_word(name)
+				|| crate::operators::is_operator_word(name))
+		}
+		_ => true,
+	}
+}
+
 /// `xs.map(.floor)`, `people.sort(by: .age)`, `f = .name`: a leading-dot word in a code position, an argument in a call's
 /// parentheses or the value of `=` / `:=`, is the lambda `it => it.age` on its member, as Swift's `.member` (card
 /// dot-lambda), written out before any pass reads it so it goes the way of a written lambda. Element attributes and data
@@ -234,6 +526,11 @@ fn member_of(node: &Node) -> Option<&str> {
 
 /// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
 /// `find`, `map`, `filter`, … under any spelling: a class's method of that name keeps them for other values
+/// `by` of `sort by: f`, `key` of `sort(key=f)`
+pub(crate) fn is_sort_label(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()))
+}
+
 pub(crate) fn is_iteration_word(name: &str) -> bool {
 	iteration_word(&Node::Symbol(name.to_string())).is_some()
 }
@@ -312,11 +609,10 @@ pub(crate) fn labeled_list(argument: &Node) -> Option<(Node, Vec<Node>)> {
 
 /// The sorting function without its label: `by: >`, `key: s => s.length`, `key=f`
 fn unlabeled(function: Node) -> Node {
-	let is_label = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()));
 	match function.drop_meta() {
-		Node::Key(label, Op::Colon | Op::Assign, inner) if is_label(label) => inner.as_ref().clone(),
+		Node::Key(label, Op::Colon | Op::Assign, inner) if is_sort_label(label) => inner.as_ref().clone(),
 		Node::Key(head, arrow @ Op::Arrow, body) => match head.drop_meta() {
-			Node::Key(label, Op::Colon, parameters) if is_label(label) => {
+			Node::Key(label, Op::Colon, parameters) if is_sort_label(label) => {
 				Node::Key(parameters.clone(), *arrow, body.clone())
 			}
 			_ => function,
@@ -991,7 +1287,13 @@ impl Lowering {
 		match literal_function(function) {
 			Some(lambda) => Some(lambda.params.len()),
 			None => match function.drop_meta() {
-				Node::Symbol(name) => self.context.user_functions.get(name).map(|defined| defined.params.len()),
+				// `sort(xs, by: count)`: a library word of one value is a key
+				Node::Symbol(name) => self
+					.context
+					.user_functions
+					.get(name)
+					.map(|defined| defined.params.len())
+					.or_else(|| crate::library_words::is_one_value_function(name).then_some(1)),
 				_ => None,
 			},
 		}

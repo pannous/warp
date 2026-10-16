@@ -5,9 +5,21 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 
 - Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
-- Per job ("branch, tip"): `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only
-  origin/main`, merge `origin/<branch>`. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the
-  result is not empty and tests/main.rs has no duplicate lines); any other conflict goes back to the worker.
+- The queue is the board (user, 2026-10-16): `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
+  cards are merged, each at the tip its card names (`git merge <tip>`, not `origin/<branch>`: the worker may have
+  pushed since). A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
+  branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
+  and tell the Supervisor about lost-looking work.
+- Batches of at most ~8 Ready cards (user, 2026-10-16). Express cards (and crash fixes) go alone and next. Wide
+  refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
+- Per batch: `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only origin/main`,
+  merge each card's tip. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the result is not
+  empty and tests/main.rs has no duplicate lines). Other trivial conflicts you resolve yourself (merge or rebase):
+  formatting, mod/use line lists, adjacent additions to lists or tables only. Logic touched on both sides bounces to
+  the owner: `todo move <card> Now` + `todo note <card> "<the conflicting hunk, what to do>"`. Never "take ours/theirs"
+  blindly.
+- After the push: `todo done <card> <commit>` for each merged card (Ready → Done; the owner adds `--try` later).
+  A failing test or a reviewer veto: leave the card out, `todo move <card> Now` + `todo note` with the failure.
 - The user's own edits go into every batch (user, 2026-10-08): check `git -C /Users/me/dev/angles/warp status --short`
   and commit its uncommitted changes on the integration tip as the user's change (never touch their working tree). A
   file that looks stale (re-adds moved code, reverts decisions): include the rest and ask the user about that file.
@@ -22,9 +34,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   `cargo check --offline --lib --target wasm32-unknown-unknown --no-default-features`, and compile the browser test
   build (native-only API in a test broke it twice): `tests/queue.sh cargo --offline test --target wasm32-wasip1
   --no-default-features --test tests --no-run`. Both with zero warnings (CI denies them).
-- Reviewer (notes/agents/reviewer.md): it reviews each merge request while you gate, never in front of you. Before a
-  push, leave out a branch warp-reviewer vetoed (drop it from the batch); its polish tips come as new tips for the
-  next batch. A missing review never holds a push.
+- Reviewer (notes/agents/reviewer.md): it reviews each Ready card while you gate, never in front of you. Before a
+  push, leave out a card warp-reviewer vetoed (it moves the card back to Now with a note; drop it from the batch); its
+  polish comes as new Ready cards for the next batch. A missing review never holds a push.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
   Push exactly the hash the suite ran on (`git push origin <tested-hash>:main`), never a branch ref that may have
   moved: workers push new tips mid-run, so never re-merge `origin/<branch>` between the run and the push.
@@ -54,7 +66,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
   TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
-- Failures: report test name + first panic line to the worker. A failure that passes alone is shared state: find and
+- Failures: report test name + first panic line to the worker (the bounce note on its card, above). A failure that passes alone is shared state: find and
   fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
 - Batch branches that arrive close together. After each push: one line to the Supervisor and the board.
 - GitHub CI runs only on demand (`gh workflow run "Rust CI" -R pannous/warp`), when the Supervisor asks.

@@ -203,7 +203,9 @@ jobs:
         set -o pipefail
         tour() { python3 web/playground/test_in_browser.py --examples --firefox --site _site 2>&1 | tee "$1"; }
         tour first-attempt.log && exit 0
-        stall=$(grep -o "gave no sign for [^:]*" first-attempt.log | head -1)
+        # `|| true`: under the step's bash -e and pipefail, a first attempt without a stall line (grep finds nothing)
+        # ended the step here, so the second attempt never ran (Playground run 38856999410)
+        stall=$(grep -o "gave no sign for [^:]*" first-attempt.log | head -1 || true)
         echo "::warning title=Firefox tour failed once, running it again::${stall:-the first attempt is in the log above} (card tour-firefox-stall)"
         tour second-attempt.log
 

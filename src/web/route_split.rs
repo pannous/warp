@@ -4,12 +4,10 @@
 //! keeps a table slot and a placeholder import (module `placeholder.app-route-N`) per moved function, and the route's
 //! module, instantiated with the primary's exports as `primary`, fills the slots. Without wasm-split on PATH the site
 //! ships one module, with a note.
-use crate::compiler::dead_functions::CallGraph;
+use crate::compiler::dead_functions::{function_names, CallGraph};
 use crate::host::{TASK_SPAWN_VALUES, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR};
 use crate::modules::binaryen::BINARYEN_FEATURES;
-use std::collections::HashMap;
 use std::process::Command;
-use wasmparser::{Name, NameSectionReader, Parser, Payload};
 
 const WASM_SPLIT: &str = "wasm-split";
 /// The function of route N is ROUTE_FUNCTION_PREFIX + N (src/lowering/web/routes.rs)
@@ -92,28 +90,6 @@ fn movable_exports(module: &[u8]) -> Result<Vec<String>, String> {
 		true => Ok(vec![]),
 		false => crate::host::host_parts::section_names(module, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR),
 	}
-}
-
-/// The names of the module's functions (its name section), by function index
-fn function_names(module: &[u8]) -> wasmparser::Result<HashMap<u32, String>> {
-	let mut names = HashMap::new();
-	for payload in Parser::new(0).parse_all(module) {
-		let Payload::CustomSection(section) = payload? else {
-			continue;
-		};
-		let wasmparser::KnownCustom::Name(reader) = section.as_known() else {
-			continue;
-		};
-		for subsection in NameSectionReader::from(reader) {
-			if let Name::Function(map) = subsection? {
-				for naming in map {
-					let naming = naming?;
-					names.insert(naming.index, naming.name.to_string());
-				}
-			}
-		}
-	}
-	Ok(names)
 }
 
 /// wasm-split --multi-split in a folder of its own: the primary module and one module per manifest entry

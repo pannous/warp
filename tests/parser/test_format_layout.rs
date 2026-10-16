@@ -30,10 +30,10 @@ fn test_offside_block_indented_by_tabs() {
 
 #[test]
 fn test_hash_comments_only_when_asked() {
-	let code = "x = 7//2 // half\n/// doc\nprint x\n";
+	let code = "x = 7 /! 2 // half\n/// doc\nprint x\n";
 	assert_eq!(formatted(code), code);
 	let hashed = format(code, Options { hash_comments: true }).unwrap().text;
-	assert_eq!(hashed, "x = 7//2 # half\n## doc\nprint x\n");
+	assert_eq!(hashed, "x = 7 /! 2 # half\n## doc\nprint x\n");
 }
 
 #[test]
@@ -78,4 +78,21 @@ fn test_no_soft_hints_inside_a_shader_block() {
 	let named = "point = {\n\t# a wgsl { block reads it\n\tcnt: 1\n}\nnote = \"shader {\"\nmsg = \"}\"\n";
 	let hints: Vec<String> = soft_hints(named).into_iter().map(|hint| hint.message).collect();
 	assert_eq!(hints.len(), 2, "{hints:?}");
+}
+
+/// card chars-map: a hyphen inside a name (`o-b`, `my-var`) stays glued and the line's other operators are spaced;
+/// spacing it changed the parsed tree, which left the whole line unformatted
+#[test]
+fn test_a_hyphen_inside_a_name_leaves_the_rest_of_the_line_formatted() {
+	assert_eq!(formatted("my-var = 3\nprint my-var+1\n"), "my-var = 3\nprint my-var + 1\n");
+	assert_eq!(formatted("f(o, b) := {x=(o-b+13)%26+b; x}\n"), "f(o, b) := {x = (o-b + 13) % 26 + b; x}\n");
+}
+
+// card format-ternary: the ternary's `?` and `:` are spaced, nested ones too; an optional type and a key's colon stay
+#[test]
+fn test_ternary_spaced() {
+	assert_eq!(formatted("b = o<97?65: 97\n"), "b = o < 97 ? 65 : 97\n");
+	assert_eq!(formatted("c = x>0?1:x<0?-1:0\n"), "c = x > 0 ? 1 : x < 0 ? -1 : 0\n");
+	let kept = "m = {a: 1}\n";
+	assert_eq!(formatted(kept), kept);
 }

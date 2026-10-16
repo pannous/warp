@@ -4,7 +4,7 @@ use super::*;
 /// Each `shader { … }` (or `wgsl { … }`) block of `code`: the line and column right after its `{`, and its text's lines
 pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 	let chars: Vec<char> = code.chars().collect();
-	shader_texts(&chars, |_| true)
+	shader_texts(code)
 		.into_iter()
 		.map(|text| {
 			let before = &chars[..text.start];
@@ -16,18 +16,21 @@ pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 		.collect()
 }
 
-/// `code` with the text of each shader block blanked to spaces (line breaks kept): only its warp is left to read.
-/// `is_code(at)`: whether the character at `at` is warp code, so a comment or a text naming `wgsl {` starts no block
-pub fn without_shader_texts(code: &str, is_code: impl Fn(usize) -> bool) -> String {
+/// `code` with the text of each shader block blanked to spaces (line breaks kept): only its warp is left to read
+pub fn without_shader_texts(code: &str) -> String {
 	let mut chars: Vec<char> = code.chars().collect();
-	for text in shader_texts(&chars, is_code) {
+	for text in shader_texts(code) {
 		chars[text].iter_mut().filter(|ch| **ch != '\n').for_each(|ch| *ch = ' ');
 	}
 	chars.into_iter().collect()
 }
 
-/// Where the text between the braces of each shader block is, in characters
-fn shader_texts(chars: &[char], is_code: impl Fn(usize) -> bool) -> Vec<std::ops::Range<usize>> {
+/// Where the text between the braces of each shader block of `code` is, in characters; a comment or a text naming
+/// `wgsl {` starts no block
+fn shader_texts(code: &str) -> Vec<std::ops::Range<usize>> {
+	let chars: Vec<char> = code.chars().collect();
+	let code_characters = crate::formatting::code_characters(code);
+	let is_code = |at: usize| code_characters.get(at) == Some(&true);
 	let is_name_part = |at: usize| chars.get(at).is_some_and(|ch| ch.is_alphanumeric() || *ch == '_');
 	let mut texts = vec![];
 	let mut at = 0;
@@ -58,16 +61,13 @@ fn shader_texts(chars: &[char], is_code: impl Fn(usize) -> bool) -> Vec<std::ops
 
 impl WarpParser {
 	/// `shader { … }` (or `wgsl { … }`) at the cursor: WGSL as a sublanguage, the braces' content verbatim as text
-	/// without its common indentation (card g_oFJc); braces inside WGSL comments do not count. A dialect's block
-	/// (`twigl { … }`) is the call of its word with that text
+	/// without its common indentation (card g_oFJc); braces inside WGSL comments do not count
 	pub(crate) fn parse_shader_block(&mut self) -> Option<Node> {
 		if self.options.data_mode {
 			return None;
 		}
-		let word = SHADER_WORDS
-			.iter()
-			.chain(&SHADER_DIALECT_WORDS)
-			.find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
+		let word =
+			SHADER_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
 		let mut open = word.len();
 		if self.is_identifier_start(open) || self.peek_char(open).is_ascii_digit() {
 			return None;
@@ -89,10 +89,6 @@ impl WarpParser {
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);
-		let text = crate::graphics::shader_holes::shader_text(&without_common_indentation(&source));
-		Some(match SHADER_DIALECT_WORDS.contains(word) {
-			true => crate::node::call(word, vec![text]),
-			false => text,
-		})
+		Some(crate::graphics::shader_holes::shader_text(&without_common_indentation(&source)))
 	}
 }

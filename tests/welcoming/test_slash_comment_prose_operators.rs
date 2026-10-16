@@ -9,7 +9,7 @@ fn slash_notes(code: &str) -> usize {
 	let _ = std::fs::remove_file(path);
 	let notes = with_acknowledger(Acknowledging(vec![]), || {
 		use_acknowledgements_file(path);
-		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 	});
 	let _ = std::fs::remove_file(path);
 	notes

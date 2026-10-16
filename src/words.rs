@@ -1,6 +1,9 @@
 //! The keywords and marks the parser and several lowering passes look for, a leaf module: it depends on nothing
 
 pub const COUNT_WORD: &str = "count";
+/// `warp fast …`, a first statement `fast`, `fast f(x) := …`: sin cos exp pow atan2 as wasm polynomials (lib/fast_math.warp,
+/// card fast-scope); `x: fast int` is i64
+pub const FAST_WORD: &str = "fast";
 /// The class of a path written without quotes where a word has a method for it (lib/shell.warp, `sort ./names.txt`)
 pub const PATH_CLASS: &str = "Path";
 pub const PATH_FIELD: &str = "name";
@@ -13,6 +16,19 @@ pub const MAP_WORD: &str = "map";
 pub const OF_WORD: &str = "of";
 pub const ON_WORD: &str = "on";
 pub const ONCE_WORD: &str = "once";
+/// Other systems' event names, listened to as the warp event with a got-it note (card key-aliases): one line per alias,
+/// marked when it names a release, which warp's events do not tell apart from the press
+pub const EVENT_ALIASES: [(&str, &str, bool); 9] = [
+	("keydown", "key", false),
+	("key_down", "key", false),
+	("keypress", "key", false),
+	("keyup", "key", true),
+	("key_up", "key", true),
+	("mousedown", "click", false),
+	("mouse_down", "click", false),
+	("mouseup", "click", true),
+	("mouse_up", "click", true),
+];
 pub const WHENEVER_WORD: &str = "whenever";
 pub const RETURN_WORD: &str = "return";
 pub const SUM_WORD: &str = "sum";

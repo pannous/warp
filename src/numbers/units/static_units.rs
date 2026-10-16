@@ -226,7 +226,7 @@ impl Inference {
 		let written = written_factors(program, &classes);
 		let mut temperatures: Vec<&'static Unit> = vec![];
 		for factor in &written {
-			if factor.unit.dimension == Dimension::Temperature
+			if factor.unit.dimension == Dimension::temperature()
 				&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
 			{
 				temperatures.push(factor.unit)
@@ -543,6 +543,27 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 		(Op::Pow, Node::Number(Number::Int(power))) => i32::try_from(*power).ok(),
 		_ => None,
 	}
+}
+
+/// `3 cm as px`, `3 m as s`: what turns `given` into `target` by a product, as the fix: a named quantity of
+/// lib/units.warp (`speed`, shown in its base units m/s) before a unit word of it (dpi, px per inch)
+fn conversion_fix(given: &Signature, target: &Signature) -> String {
+	let (times, divided) = (combined(target, given, -1), combined(given, target, -1));
+	let fix = |ratio: &Signature, amount: String| match () {
+		_ if **ratio == *times => Some(format!("; multiply by {amount}")),
+		_ if **ratio == *divided => Some(format!("; divide by {amount}")),
+		_ => None,
+	};
+	let quantities = dimension_names().map(|(name, powers)| {
+		let ratio = Signature::from(powers);
+		let amount = format!("a {name} ({})", shown(&ratio));
+		(ratio, amount)
+	});
+	let unit_words = super::unit_aliases().iter().filter_map(|(name, expression)| {
+		let units = super::unit_expression(&crate::warp_parser::parse(expression))?;
+		Some((signature(&units), format!("an amount in {name}")))
+	});
+	quantities.chain(unit_words).find_map(|(ratio, amount)| fix(&ratio, amount)).unwrap_or_default()
 }
 
 fn number_node(amount: &Rational) -> Option<Node> {
@@ -877,8 +898,8 @@ impl Inference {
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
 				if dimension_signature(&right, &self.variables).is_some() || is_time_type(&right, &self.variables) =>
 			{
-				let named =
-					dimension_signature(&right, &self.variables).unwrap_or_else(|| vec![(Dimension::Time, 1)].into());
+				let named = dimension_signature(&right, &self.variables)
+					.unwrap_or_else(|| vec![(Dimension::duration(), 1)].into());
 				let (_, given) = self.infer(left.as_ref().clone())?;
 				if given.is_empty() && is_time_type(&right, &self.variables) {
 					return self.unchecked_key(*left, op, *right);
@@ -1047,9 +1068,10 @@ impl Inference {
 		// a list converts each element: `[3, 4] cm in m`
 		if *given != *target {
 			return Err(Stop::Error(format!(
-				"DimensionError: {} cannot be converted to {}",
+				"DimensionError: {} cannot be converted to {}{}",
 				shown(&given),
-				shown(&target)
+				shown(&target),
+				conversion_fix(&given, &target)
 			)));
 		}
 		Ok((quantity, given))
@@ -1354,8 +1376,8 @@ impl Inference {
 	/// The zero of the unit a temperature shows in, 0 for any other signature
 	fn temperature_zero(&self, signature: &Signature) -> Rational {
 		match &**signature {
-			[(Dimension::Temperature, 1)] if !signature.is_list() => {
-				si_zero(display_unit(&self.display, Dimension::Temperature))
+			[(dimension, 1)] if *dimension == Dimension::temperature() && !signature.is_list() => {
+				si_zero(display_unit(&self.display, Dimension::temperature()))
 			}
 			_ => Rational::integer(0),
 		}

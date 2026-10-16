@@ -19,7 +19,7 @@ lines(t) := split(t, "\n")
 // a letter with a case beyond ASCII too (é, Ω), not yet the caseless scripts (card unicode-letters)
 letters(t) := [c for c in chars(t) if is_alpha(c) or upper(c) != lower(c)]
 capitalize(t) := if t == "" then t else upper(t[0]) + t[1..]
-center(t, width) := pad_right(pad_left(t, (width + count(t))//2), width)
+center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
 title(t) := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
 slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
@@ -30,9 +30,9 @@ def to_utf8(t: text) {
 	for c in t {
 		n = ord(c)
 		if n < 128 { out = out + [n] }
-		else if n < 2048 { out = out + [192 + n//64, 128 + n % 64] }
-		else if n < 65536 { out = out + [224 + n//4096, 128 + n//64 % 64, 128 + n % 64] }
-		else { out = out + [240 + n//262144, 128 + n//4096 % 64, 128 + n//64 % 64, 128 + n % 64] }
+		else if n < 2048 { out = out + [192 + n /! 64, 128 + n % 64] }
+		else if n < 65536 { out = out + [224 + n /! 4096, 128 + n /! 64 % 64, 128 + n % 64] }
+		else { out = out + [240 + n /! 262144, 128 + n /! 4096 % 64, 128 + n /! 64 % 64, 128 + n % 64] }
 	}
 	out
 }

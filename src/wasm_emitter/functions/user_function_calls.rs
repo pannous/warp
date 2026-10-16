@@ -277,6 +277,8 @@ impl WasmGcEmitter {
 	/// Compile a user function's body (PASS 2)
 	pub(in crate::wasm_emitter) fn compile_user_function_body(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
+		// a `fast` function's Ints are machine i64s that wrap (card fast-scope)
+		let outer_wrapping = std::mem::replace(&mut self.wrapping_ints, crate::compiler::compile_mode::is_fast(name));
 		let returns_node = user_fn.return_kind.is_ref(); // Text, Symbol, List, etc. return Node refs
 		let function_scope = Scope::with_function_kinds(self.user_function_kinds())
 			.with_closure_targets(self.ctx.closure_variable_targets.clone());
@@ -396,6 +398,7 @@ impl WasmGcEmitter {
 			self.compile_tuple_packer(&user_fn.tuple_kinds);
 		}
 		self.swap_function_state(enclosing);
+		self.wrapping_ints = outer_wrapping;
 
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
 		self.exports.export(name, ExportKind::Func, func_idx);

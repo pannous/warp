@@ -14,7 +14,7 @@ Goal: every `samples/*.warp` runs, ideally by fixing the language rather than th
 ## Warp habits the old samples get wrong (sample-side fixes)
 - Lists are shared (P200b): a function changes the list it is passed, as in Python; `+` and `copy()` make new lists.
 - A function sees main-level constants; to change (or read a computed) main-level value, declare it `global`.
-- `/` is exact division (`7/3` stays a fraction); use `//` for floor division, written glued: ` // ` with spaces is a comment.
+- `/` is exact division (`7/3` stays a fraction); use `/!` for floor division (`7 /! 2`); `//` is always a comment.
 - `1e10` is an exact number and cannot later hold a float: `1e10 as float`.
 - One-character texts are characters: `'5' as int` is 53; `c as text as int` is the digit.
 - Types are declared `type V { x: float }` (not `type V: {…}` / `type V = {…}`); construct with `V(1, 2)`, `V{x: 1}` or `V { x: 1 }`.

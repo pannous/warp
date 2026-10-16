@@ -73,6 +73,9 @@ const NO_CANVAS_CONTEXT = "this browser gives a Worker's canvas no WebGPU contex
 // tour's shader example then waited until the run's time was up, and the Worker's replacement logged a bare "uncaught
 // exception: undefined"): a failure that says which, well within the run's time
 const GPU_DEVICE_WAIT_MS = 5000;
+// a step doing real work, compiling a shader or reading back a heavy compute shader's result (a slow or software GPU):
+// silent this long it fails naming itself, still before the program's side stops waiting (GPU_JOB_WAIT_MS)
+const GPU_WORK_WAIT_MS = 25000;
 const GPU_JOB_WAIT_MS = 30000; // the program's side: a task Worker that gives no answer in this time is said to
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
@@ -155,7 +158,7 @@ const paintCanvasArrived = ({ id, canvas }) => arrivingCanvas(id).arrived(canvas
 // the task Worker's side of a page canvas: the OffscreenCanvas the page sent, drawn on through WebGPU
 async function gpuCanvas({ id, replaces }) {
 	const device = await theGpuDevice(); // without an adapter that error, as gpu_render's
-	const canvas = await arrivingCanvas(id).canvas;
+	const canvas = await answeredWithin(arrivingCanvas(id).canvas, "canvas from the page");
 	arrivingCanvases.delete(id);
 	paintCanvases.delete(replaces);
 	const context = canvas.getContext("webgpu");
@@ -291,11 +294,12 @@ async function gpuDeviceOrFailure() {
 	return device;
 }
 
-// the browser's answer for `what`, or a failure once it has kept silent for GPU_DEVICE_WAIT_MS
-function answeredWithin(promise, what) {
+// the browser's answer for `what`, or a failure once it has kept silent for `waitMs` (GPU_DEVICE_WAIT_MS): every awaited step
+// (adapter, device, page canvas, compilation, validation, read-back) names itself, within the run's own stop
+function answeredWithin(promise, what, waitMs = GPU_DEVICE_WAIT_MS) {
 	let timer;
 	const silence = new Promise((_, fail) => {
-		timer = setTimeout(() => fail(new Error(`the browser's WebGPU gave no ${what} in ${GPU_DEVICE_WAIT_MS / 1000} s`)), GPU_DEVICE_WAIT_MS);
+		timer = setTimeout(() => fail(new Error(`the browser's WebGPU gave no ${what} in ${waitMs / 1000} s`)), waitMs);
 	});
 	return Promise.race([promise, silence]).finally(() => clearTimeout(timer));
 }
@@ -320,7 +324,7 @@ const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () =
 // the shader's module; one that does not compile throws where and why
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
-	const problems = (await module.getCompilationInfo()).messages.filter(message => message.type === "error");
+	const problems = (await answeredWithin(module.getCompilationInfo(), "compilation report", GPU_WORK_WAIT_MS)).messages.filter(message => message.type === "error");
 	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${essence(problem.message)}`).join("; "));
 	return module;
 }
@@ -339,7 +343,7 @@ const gpuReadBack = async (device, encoder, readback) => (await gpuReadBacks(dev
 // submit the encoded work; the validation error it raised throws
 async function gpuSubmitted(device, encoder) {
 	device.queue.submit([encoder.finish()]);
-	const invalid = await device.popErrorScope();
+	const invalid = await answeredWithin(device.popErrorScope(), "validation report");
 	if (invalid) throw new Error(invalid.message);
 }
 
@@ -347,7 +351,7 @@ async function gpuSubmitted(device, encoder) {
 async function gpuReadBacks(device, encoder, readbacks) {
 	await gpuSubmitted(device, encoder);
 	return Promise.all(readbacks.map(async readback => {
-		await readback.mapAsync(GPUMapMode.READ);
+		await answeredWithin(readback.mapAsync(GPUMapMode.READ), "read-back result", GPU_WORK_WAIT_MS);
 		const bytes = readback.getMappedRange().slice(0);
 		readback.destroy();
 		return bytes;
@@ -452,17 +456,17 @@ function writeSharedWords(shared, words) {
 // the program's side: hand the job to a task Worker (by default the GPU's, gpuTaskWorker) and wait for the values it
 // gives, raw words as `Words` (a copy: the shared buffer takes the next answer)
 function gpuJob(word, job, transfer = [], Words = Float32Array, worker = hasTaskWorkers() && gpuTaskWorker()) {
-	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
-	if (!worker) throw new Error(`${word}: every task Worker is busy`);
+	if (!hasTaskWorkers()) throw new HostWordFailure(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
+	if (!worker) throw new HostWordFailure(`${word}: every task Worker is busy`);
 	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	// the buffer and the Worker stay out of their pools: the answer may still come
-	if (Atomics.wait(header, 0, 0, GPU_JOB_WAIT_MS) === "timed-out") throw new Error(`${word}: the GPU's task Worker gave no answer in ${GPU_JOB_WAIT_MS / 1000} s`);
+	if (Atomics.wait(header, 0, 0, GPU_JOB_WAIT_MS) === "timed-out") throw new HostWordFailure(`${word}: the GPU's task Worker gave no answer in ${GPU_JOB_WAIT_MS / 1000} s`);
 	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
 	returnAnswerBuffer(shared);
-	if (error) throw new Error(`${word}: ${error}`);
+	if (error) throw new HostWordFailure(`${word}: ${error}`);
 	return values;
 }
 
@@ -478,21 +482,6 @@ function gpuTaskWorker() {
 function linearCells(memory, block) {
 	const count = Number(new DataView(memory.buffer).getBigInt64(Number(block), true));
 	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
-}
-
-// GLSL functions as WGSL ones (lib/draw.warp glsl_shader): naga as natively (crates/warp-glsl), in glsl.wasm of its own,
-// loaded at the first translation so warp.wasm stays without it (web/playground/build.sh); the answer is the WGSL, or
-// the error after a leading NUL
-const GLSL_URL = new URL("glsl.wasm", self.location.href).href;
-let glslExports;
-function glslWgsl(glsl) {
-	glslExports ??= new WebAssembly.Instance(new WebAssembly.Module(getSync(GLSL_URL, 0, true))).exports;
-	const bytes = utf8.encode(glsl);
-	new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(bytes.length), bytes.length).set(bytes);
-	const length = glslExports.glsl_wgsl(bytes.length);
-	const answer = new TextDecoder().decode(new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(0), length));
-	if (answer.startsWith("\0")) throw new Error(answer.slice(1));
-	return answer;
 }
 
 addHostPart({
@@ -591,21 +580,31 @@ addHostPart({
 			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
+		const computed = (shader, numbers, workgroups) => {
+			const code = plain(shader), given = plain(numbers);
+			// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
+			const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
+			if (given !== null && typeof given === "object" && isPlainObject(given)) {
+				const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
+				const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
+				const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
+				const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
+				return buildValue(program(), { kind: CURLY_LIST, items: entries });
+			}
+			const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
+			return list(values, item(gpuElements(code)));
+		};
+		const rendered = (shader, width, height, values) => {
+			const pixels = holder.gpuRendered(plain(shader), width, height, values);
+			return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
+		};
+		// a WGSL error inside a `try` is the program's to catch
+		const catchable = word => (...given) => {
+			try { return word(...given); } catch (failure) { raisedInProgram(program(), failure); }
+		};
 		return {
-			gpu_compute: (shader, numbers, workgroups) => {
-				const code = plain(shader), given = plain(numbers);
-				// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
-				const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
-				if (given !== null && typeof given === "object" && isPlainObject(given)) {
-					const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
-					const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
-					const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
-					const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
-					return buildValue(program(), { kind: CURLY_LIST, items: entries });
-				}
-				const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
-				return list(values, item(gpuElements(code)));
-			},
+			gpu_compute: catchable(computed),
+			gpu_render: catchable(rendered),
 			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
 			gpu_compute_linear: (shader, block, workgroups) => {
 				const cells = linearCells(program().memory, block);
@@ -617,15 +616,9 @@ addHostPart({
 			gpu_map_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, false, keeping),
 			// `s = sum(xs.map(x => …) @gpu)`, min, max: each workgroup's partial result, left after the values, into target
 			gpu_reduce_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, true, keeping),
-			gpu_render: (shader, width, height, values) => {
-				const pixels = holder.gpuRendered(plain(shader), width, height, values);
-				return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
-			},
 			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 		};
 	},
-	// lib/draw.warp glsl_shader (twigl, shadertoy): GLSL functions as WGSL ones
-	adapters: { draw: { glsl_wgsl: glslWgsl } },
 });

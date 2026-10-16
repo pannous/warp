@@ -32,13 +32,21 @@ pub const PREVIOUS_HOLE: &str = "previous";
 pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
 
 /// Underscore spellings of a built-in hole's member, aliases that hint at the dotted form (user 2026-10-14, card
-/// values-number): `$mouse_x` is `$mouse.x`
-pub const HOLE_ALIASES: [(&str, &str); 2] = [("mouse_x", "mouse.x"), ("mouse_y", "mouse.y")];
-const ALIAS_REASON: &str = "the pointer is the built-in hole $mouse, a vec2f";
+/// values-number): `$mouse_x` is `$mouse.x`; and The Book of Shaders' uniform names (glslCanvas, GLSL Sandbox; card
+/// compute-toys): `$u_time` is `$time`, `$u_resolution` `$size`, `$u_mouse` `$mouse`
+pub const HOLE_ALIASES: [(&str, &str, &str); 5] = [
+	("mouse_x", "mouse.x", POINTER_REASON),
+	("mouse_y", "mouse.y", POINTER_REASON),
+	("u_time", "time", BOOK_OF_SHADERS_REASON),
+	("u_resolution", "size", BOOK_OF_SHADERS_REASON),
+	("u_mouse", "mouse", BOOK_OF_SHADERS_REASON),
+];
+const POINTER_REASON: &str = "the pointer is the built-in hole $mouse, a vec2f";
+const BOOK_OF_SHADERS_REASON: &str = "The Book of Shaders' uniform names are aliases of warp's built-in holes";
 
 /// The dotted form of an aliased hole (`mouse_x` → `mouse.x`), any other name itself
 fn dotted(name: &str) -> &str {
-	HOLE_ALIASES.iter().find(|(alias, _)| *alias == name).map_or(name, |(_, dotted)| dotted)
+	HOLE_ALIASES.iter().find(|(alias, ..)| *alias == name).map_or(name, |(_, dotted, _)| dotted)
 }
 
 /// what a shader missing the value `name` may have meant ("" for nothing)
@@ -91,13 +99,13 @@ pub fn shader_text(wgsl: &str) -> Node {
 
 /// `$mouse_x` works as `$mouse.x`, with a hint to write that
 fn hint_aliases(wgsl: &str) {
-	for (alias, dotted) in HOLE_ALIASES {
+	for (alias, dotted, reason) in HOLE_ALIASES {
 		let written = format!("${alias}");
 		let found = wgsl
 			.match_indices(&written)
 			.any(|(at, _)| !wgsl[at + written.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'));
 		if found {
-			crate::normalize::hint(&written, &format!("${dotted}"), ALIAS_REASON);
+			crate::normalize::hint(&written, &format!("${dotted}"), reason);
 		}
 	}
 }
@@ -164,16 +172,9 @@ fn renders(items: &[Node]) -> bool {
 	matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if RENDERING_WORDS.contains(&word.as_str()))
 }
 
-/// The holes of a shader text, or of a dialect's block (`twigl { … }`, the call of its word with the text); another
-/// call given a shader (`f(shader { … })`) gives what f returns, not the shader
 fn holes_of(node: &Node) -> Option<Vec<String>> {
-	let is_dialect =
-		|word: &Node| crate::warp_parser::SHADER_DIALECT_WORDS.iter().any(|dialect| word.is_symbol(dialect));
-	match (node.attribute(HOLES_ATTRIBUTE).map(Node::drop_meta), node.drop_meta()) {
-		(Some(Node::List(names, _, _)), _) => Some(names.iter().map(Node::name).collect()),
-		(None, Node::List(items, Bracket::Round, _)) if items.len() == 2 && is_dialect(&items[0]) => {
-			holes_of(&items[1])
-		}
+	match node.attribute(HOLES_ATTRIBUTE)?.drop_meta() {
+		Node::List(names, _, _) => Some(names.iter().map(Node::name).collect()),
 		_ => None,
 	}
 }

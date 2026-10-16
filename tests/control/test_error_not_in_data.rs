@@ -29,3 +29,21 @@ fn test_an_error_still_travels_as_an_argument_and_a_local() {
 	is!(&format!("{E}f(x) := if x failed then 1 else 2; f(e)"), 1);
 	is!(&format!("{E}g = e; if g failed then 1 else 2"), 1);
 }
+
+#[test]
+fn test_an_error_written_into_a_list_or_field_raises() {
+	fails_with(&format!("{E}xs = [1, 2]; xs#1 = e; xs"), "divide by zero: a list item holds no error");
+	fails_with(&format!("{E}xs = [1, 2]; xs[0] = e; xs"), "a list item holds no error");
+	fails_with(&format!("{E}xs = [1, 2]; xs.add(e); xs"), "a list item holds no error");
+	fails_with(&format!("{E}q = {{k: 1}}; q.k = e; q"), "divide by zero: a field holds no error");
+	fails_with(&format!("{E}q = {{k: e}}; q"), "a field holds no error");
+	fails_with(&format!("{E}class pt{{x:int}}; p = pt(e); p"), "a field holds no error");
+}
+
+#[test]
+fn test_a_place_declared_or_error_holds_an_error() {
+	is!(&format!("{E}xs:[int or error] = [e, 2]; if xs#1 failed then 1 else 2"), 1);
+	is!(&format!("{E}xs:[int?] = [e, 2]; if xs#1 failed then 1 else 2"), 1);
+	is!(&format!("{E}xs:[int or error] = [1, 2]; xs#1 = e; if xs#1 failed then 1 else 2"), 1);
+	is!(&format!("{E}class pt{{x:int or error}}; p = pt(e); if p.x failed then 1 else 2"), 1);
+}

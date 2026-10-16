@@ -1,7 +1,6 @@
 // The standard library module draw (notes/stdlib.md, card drawing-words): `use draw`, a canvas of colored pixels shown by
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: rgb, hsv, the named colors, with_alpha
 use math
-use regex
 // the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480 (user 2026-10-10: defaults, no errors)
 global canvas_width = view_width
@@ -40,7 +39,7 @@ def hsv(h, s, v) {
 }
 // alpha from 0 (invisible) to 1 (opaque)
 with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
-alpha_of(color) := color//16777216
+alpha_of(color) := color /! 16777216
 
 // what draw_shape's kind says (src/graphics/gpu_canvas.rs)
 clear_shape = 0
@@ -55,6 +54,11 @@ def canvas(width, height) {
 	canvas_height = height
 	canvas_pixels = int[pixels_for(width, height)]
 }
+// the canvas's size as properties (decision property-accessors): written, it is a new blank canvas, as an HTML canvas is
+canvas.width := canvas_width
+canvas.width(new_width) := canvas(new_width, canvas_height)
+canvas.height := canvas_height
+canvas.height(new_height) := canvas(canvas_width, new_height)
 
 def clear(color) {
 	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color) }
@@ -71,7 +75,7 @@ def mixed(below, color) {
 }
 
 // one channel (its place 65536, 256 or 1) of color over under, by alpha a from 0 to 255
-channel_mix(color, under, a, place) := ((color//place % 256) * a + (under//place % 256) * (255 - a))//255
+channel_mix(color, under, a, place) := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
 
 def dot(x, y, color) {
 	col = cell(x)
@@ -127,160 +131,6 @@ def label(x, y, words, color, size = 12) {
 	width = covered[0]
 	for at in 0..width * covered[1] {
 		amount = covered[at + 2]
-		if amount > 0 { dot(x + at % width, y + at//width, with_alpha(color, amount / 255)) }
+		if amount > 0 { dot(x + at % width, y + at /! width, with_alpha(color, amount / 255)) }
 	}
-}
-
-// glsl_shader(glsl, color): a WGSL shader for paint from GLSL 450 functions (card create-little): naga turns them into
-// WGSL (crates/warp-glsl), and the shader's main gives each pixel the WGSL expression `color`, which calls them
-// with `flipped`, the pixel as GLSL counts it (rows from the bottom), `size`, `pointer` (in pixels, y up) and the
-// shader's built-in values (values.time, values.frame …). twigl and shadertoy are the dialects written so far
-glsl_shader(glsl: text, color: text) := {
-	wgsl = std_pure("draw", "glsl_wgsl", ["#version 450\n" + noise_for(glsl) + glsl + "\nvoid main() {}\n"])
-	with_back_frame(wgsl) + "
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
-	let size = values.size;
-	let flipped = vec4f(at.x, size.y - at.y, at.z, at.w);
-	let pointer = vec2f(values.mouse.x, size.y - values.mouse.y);
-	return vec4f((" + color + ").rgb, 1.0);
-}
-"
-}
-
-// GLSL's backbuffer, the shader's previous frame (twigl's b; card twigl-glsl): warp_back(uv) of uv from 0 to 1, y up, as
-// GLSL counts. GLSL cannot reach WGSL's values.previous, so the GLSL calls a stub, and in the WGSL the stub's definition
-// gets another name and its calls go to back_frame's warp_back, which reads values.previous
-back_stub_name = "warp_back_stub"
-back_stub = "vec4 warp_back_stub(vec2 uv) { return vec4(0.); }\n"
-back_frame = "
-fn warp_back(uv: vec2<f32>) -> vec4<f32> {
-	return values.previous(vec2f(uv.x, 1.0 - uv.y) * values.size);
-}
-"
-with_back_frame(wgsl: text) := if wgsl contains "fn " + back_stub_name + "(" then wgsl.replace("fn " + back_stub_name + "(", "fn warp_back_unused(").replace(back_stub_name + "(", "warp_back(") + back_frame else wgsl
-// twigl's `texture(b, uv)`, blanks anywhere, as a call of the stub
-twigl_back_read = "\\btexture\\(\\s*b\\s*,"
-
-// twigl's noise (card twigl-glsl): fsnoise and fsnoiseDigits hash a point to [0, 1), snoise2D and snoise3D are simplex
-// noise in [-1, 1] (Ian McEwan, Ashima Arts, webgl-noise, MIT license); glsl_shader adds them where they are called
-twigl_noise = "
-float fsnoise(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
-float fsnoiseDigits(vec2 c) { return fract(sin(dot(c, vec2(0.129898, 0.78233))) * 437.585453); }
-vec2 mod289(vec2 x) { return x - floor(x * (1. / 289.)) * 289.; }
-vec3 mod289(vec3 x) { return x - floor(x * (1. / 289.)) * 289.; }
-vec4 mod289(vec4 x) { return x - floor(x * (1. / 289.)) * 289.; }
-vec3 permute(vec3 x) { return mod289(((x * 34.) + 1.) * x); }
-vec4 permute(vec4 x) { return mod289(((x * 34.) + 1.) * x); }
-vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-float snoise2D(vec2 v) {
-	const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
-	vec2 i = floor(v + dot(v, C.yy));
-	vec2 x0 = v - i + dot(i, C.xx);
-	vec2 i1 = (x0.x > x0.y) ? vec2(1., 0.) : vec2(0., 1.);
-	vec4 x12 = x0.xyxy + C.xxzz;
-	x12.xy -= i1;
-	i = mod289(i);
-	vec3 p = permute(permute(i.y + vec3(0., i1.y, 1.)) + i.x + vec3(0., i1.x, 1.));
-	vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.);
-	m = m * m;
-	m = m * m;
-	vec3 x = 2. * fract(p * C.www) - 1.;
-	vec3 h = abs(x) - 0.5;
-	vec3 ox = floor(x + 0.5);
-	vec3 a0 = x - ox;
-	m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
-	vec3 g;
-	g.x = a0.x * x0.x + h.x * x0.y;
-	g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-	return 130. * dot(m, g);
-}
-float snoise3D(vec3 v) {
-	const vec2 C = vec2(1. / 6., 1. / 3.);
-	const vec4 D = vec4(0., 0.5, 1., 2.);
-	vec3 i = floor(v + dot(v, C.yyy));
-	vec3 x0 = v - i + dot(i, C.xxx);
-	vec3 g = step(x0.yzx, x0.xyz);
-	vec3 l = 1. - g;
-	vec3 i1 = min(g.xyz, l.zxy);
-	vec3 i2 = max(g.xyz, l.zxy);
-	vec3 x1 = x0 - i1 + C.xxx;
-	vec3 x2 = x0 - i2 + C.yyy;
-	vec3 x3 = x0 - D.yyy;
-	i = mod289(i);
-	vec4 p = permute(permute(permute(i.z + vec4(0., i1.z, i2.z, 1.)) + i.y + vec4(0., i1.y, i2.y, 1.)) + i.x + vec4(0., i1.x, i2.x, 1.));
-	float n_ = 0.142857142857;
-	vec3 ns = n_ * D.wyz - D.xzx;
-	vec4 j = p - 49. * floor(p * ns.z * ns.z);
-	vec4 x_ = floor(j * ns.z);
-	vec4 y_ = floor(j - 7. * x_);
-	vec4 x = x_ * ns.x + ns.yyyy;
-	vec4 y = y_ * ns.x + ns.yyyy;
-	vec4 h = 1. - abs(x) - abs(y);
-	vec4 b0 = vec4(x.xy, y.xy);
-	vec4 b1 = vec4(x.zw, y.zw);
-	vec4 s0 = floor(b0) * 2. + 1.;
-	vec4 s1 = floor(b1) * 2. + 1.;
-	vec4 sh = -step(h, vec4(0.));
-	vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
-	vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
-	vec3 p0 = vec3(a0.xy, h.x);
-	vec3 p1 = vec3(a0.zw, h.y);
-	vec3 p2 = vec3(a1.xy, h.z);
-	vec3 p3 = vec3(a1.zw, h.w);
-	vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
-	p0 *= norm.x;
-	p1 *= norm.y;
-	p2 *= norm.z;
-	p3 *= norm.w;
-	vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.);
-	m = m * m;
-	return 42. * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
-}
-"
-// twigl_noise for GLSL that calls snoise or fsnoise (both contain "snoise") and defines no noise of its own, as an include
-// guard would: pasted shaders often bring theirs, with mod289
-noise_for(glsl: text) := if glsl contains "snoise" and not (glsl contains "mod289" or glsl contains "float snoise" or glsl contains "float fsnoise") then twigl_noise else ""
-
-// twigl(code): a shader in the shorthand of twigl.app's geekest mode: the code draws the color o of the pixel FC from
-// r, the size in pixels, t, the seconds, m, the pointer from 0 to 1, and f, the frame, with twigl's hsv, rotate2D,
-// rotate3D, noise (twigl_noise) and b, the previous frame (texture(b, uv)). paint(twigl(code)) draws it, frame after
-// frame in a loop
-twigl(code: text) := {
-	helpers = "
-vec3 hsv(float h, float s, float v) {
-	vec4 t = vec4(1., 2. / 3., 1. / 3., 3.);
-	vec3 p = abs(fract(vec3(h) + t.xyz) * 6. - vec3(t.w));
-	return v * mix(vec3(t.x), clamp(p - vec3(t.x), 0., 1.), s);
-}
-mat2 rotate2D(float r) { return mat2(cos(r), sin(r), -sin(r), cos(r)); }
-mat3 rotate3D(float angle, vec3 axis) {
-	vec3 a = normalize(axis);
-	float s = sin(angle);
-	float c = cos(angle);
-	float r = 1. - c;
-	return mat3(a.x * a.x * r + c, a.y * a.x * r + a.z * s, a.z * a.x * r - a.y * s, a.x * a.y * r - a.z * s,
-		a.y * a.y * r + c, a.z * a.y * r + a.x * s, a.x * a.z * r + a.y * s, a.y * a.z * r - a.x * s, a.z * a.z * r + c);
-}
-"
-	reads_back = matches(code, twigl_back_read)
-	drawing = "vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) {\nvec4 o = vec4(0.);\n" + replace_all(code, twigl_back_read, back_stub_name + "(") + "\nreturn o;\n}"
-	glsl_shader(helpers + (if reads_back then back_stub else "") + drawing, "warp_twigl(flipped, size, values.time, pointer / size, values.frame)")
-}
-
-// shadertoy(code): a shader as shadertoy.com writes them: mainImage(out vec4 fragColor, in vec2 fragCoord) with
-// iResolution, iTime, iMouse (the pointer in pixels, also as the click) and iFrame; no iChannel textures
-shadertoy(code: text) := {
-	inputs = "vec3 iResolution;\nfloat iTime;\nvec4 iMouse;\nint iFrame;\n"
-	drawing = "
-vec4 warp_shadertoy(vec2 at, vec2 size, float time, vec2 pointer, float frame) {
-	iResolution = vec3(size, 1.);
-	iTime = time;
-	iMouse = vec4(pointer, pointer);
-	iFrame = int(frame);
-	vec4 color = vec4(0.);
-	mainImage(color, at);
-	return color;
-}
-"
-	glsl_shader(inputs + code + drawing, "warp_shadertoy(flipped.xy, size, values.time, pointer, values.frame)")
 }

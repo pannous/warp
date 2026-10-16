@@ -5,6 +5,8 @@
 
 const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
+// a program with a `try` exports it: the runtime error that raises the Error left in trap_detail (runtime_errors.rs)
+const RETURNED_ERROR_EXPORT = "returned_error";
 // the position of the statement a trapped run was in, line << 32 | column (src/wasm_emitter/globals.rs emit_trap_position)
 const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
@@ -281,7 +283,7 @@ function buildValue(module, tree) {
 }
 
 // src/operators/codes.rs OP_CODES as written (Op::as_str), by the code a key carries above the kind bits
-const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "²", "³", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "//", "//="];
+const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "²", "³", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "/!", "/!="];
 // the keys that are entries of an object; the others are operations
 const ENTRY_OPERATORS = ["", ":", "=", ":="];
 const ROUND_BRACKET = 2n; // src/wasm_emitter bracket info: Curly 0, Square 1, Round 2
@@ -362,6 +364,21 @@ const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: C
 // a codepoint (a WIT char, P94) as src/modules/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
 const KIND_CODEPOINT = "4";
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
+// a host word failing for the program's reason (a shader that does not compile), as native TaskFailure
+class HostWordFailure extends Error {}
+
+// a host word's failure as the program's own error (card wgsl-error, as src/host/native.rs raised): in a program with a
+// `try` its message goes to trap_detail and the program's returned_error raises it, which a running `try` catches
+// (`catch e` binds the message) and which otherwise traps as `raise` does; without a `try`, or any other exception (a
+// bug of the host), the failure as it was
+function raisedInProgram(exports, failure) {
+	const returnedError = exports[RETURNED_ERROR_EXPORT], detail = exports[TRAP_DETAIL_EXPORT];
+	if (!(failure instanceof HostWordFailure) || !returnedError || !detail) throw failure;
+	detail.value = buildValue(exports, treeOfPlain(failure.message));
+	returnedError();
+	throw failure;
+}
+
 function treeOfPlain(value) {
 	if (value === null || value === undefined) return { kind: "0", data: null, chain: [] };
 	if (typeof value === "boolean") return { kind: BOOL_KIND, data: { int: value ? "1" : "0" }, chain: [] };

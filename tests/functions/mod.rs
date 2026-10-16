@@ -84,6 +84,7 @@ mod test_function_references;
 mod test_function_type_at_run_time; // card type-function
 mod test_function_values;
 mod test_functions;
+mod test_functions_passed_by_name; // card specialise-named-functions
 mod test_gap_feeding; // card gap-feeding
 mod test_generator_arguments;
 mod test_generators; // card generators-function
@@ -91,8 +92,10 @@ mod test_getter_warning_text;
 mod test_global_with_closures;
 mod test_go_functions;
 mod test_ignored_parameters;
+mod test_infix_iteration; // cards infix-map, map-dot
 mod test_inlining;
 mod test_it_arguments; // card map-it
+mod test_it_reserved; // card it-reserved
 mod test_kebab_members;
 mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
@@ -108,6 +111,7 @@ mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
+mod test_list_word; // card sum-list
 mod test_map_function_first; // card map-function
 mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_list_fields; // card field-list
@@ -184,6 +188,7 @@ mod test_shadowed_log;
 mod test_soft_keywords;
 mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
+mod test_sort_labels; // card sort-xs
 mod test_spaced_assign_definition;
 mod test_specialised_variants;
 mod test_statement_blocks; // card statement-block

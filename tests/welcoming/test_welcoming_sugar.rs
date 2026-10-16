@@ -101,10 +101,10 @@ fn a_number_joins_a_text_in_its_text_form() {
 }
 
 #[test]
-fn glued_double_slash_is_floor_division() {
-	is!("7//2", 3);
-	is!("-7//2", -4);
-	is!("x=10; x//=2; x", 5);
+fn floor_division_is_slash_bang() {
+	is!("7 /! 2", 3);
+	is!("-7 /! 2", -4);
+	is!("x=10; x /!= 2; x", 5);
 	is!("7 // a comment", 7);
 	is!("u='http://x.org'; 1", 1);
 	is!("7 div 2", 3);
@@ -116,7 +116,7 @@ fn a_fractional_index_says_so() {
 	fails_with("xs=[1 2 3]; n=5; xs[n/2]", "index must be an integer");
 	fails_with("xs=[1 2 3]; n=5; xs#(n/2)", "index must be an integer");
 	is!("xs=[1 2 3]; n=4; xs[n/2]", 3);
-	is!("xs=[1 2 3 4]; n=5; xs[n//2]", 3);
+	is!("xs=[1 2 3 4]; n=5; xs[n /! 2]", 3);
 }
 
 #[test]
@@ -168,16 +168,15 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
-	// user decision 2026-10-08: `//` before a space is a comment, `x //= 3` and `a//b` divide
+	// user decision floor-division 2026-10-16: `//` is always a comment, floor division is `/!`
 	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 5);
 	is!("x = 7 // 2\nx", 7);
 	is!("x = 7    // 2\nx", 7);
-	is!("n = 10; n //= 3\nn", 3);
-	is!("items=[1 2 3 4 5]\nmid = len(items)//2\nmid", 2);
-	is!("n = 10; n//=3; n", 3);
+	is!("items=[1 2 3 4 5]\nmid = len(items) /! 2\nmid", 2);
+	is!("n = 10; n /!= 3; n", 3);
 	// the note "`// …` after code is a comment" shows until acknowledged; a `//` line of its own is no news
 	let notes = |code: &str| {
-		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 	};
 	let path = "scratch/test_welcoming_sugar.slash_comment";
 	std::fs::create_dir_all("scratch").unwrap();
@@ -199,7 +198,7 @@ fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 fn a_comment_after_a_text_needs_no_note() {
 	use warp::normalize::capture_hints;
 	let notes = |code: &str| {
-		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 	};
 	assert_eq!(notes("p = { e: \"trailing\" // a comment\n age: 30 }; p.age"), 0);
 	assert_eq!(notes("x = \"a\", // a comment\nx"), 0);
@@ -211,7 +210,7 @@ fn a_comment_after_a_text_needs_no_note() {
 fn a_word_comment_after_a_value_needs_no_note() {
 	use warp::normalize::capture_hints;
 	let notes = |code: &str| {
-		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 	};
 	assert_eq!(notes("cutoff = 900 // Hz\ncutoff"), 0);
 	assert_eq!(notes("x = 4 // peaks\nx"), 0);

@@ -50,7 +50,7 @@ for j in 0...#b { prev.push(j) }
 y = abs(c - col) == 2
 f = abs
 sqrt 16 + 1
-q = 7//2
+q = 7 /! 2
 x //= 2
 r = 7 div 2
 3 times { a.push(true) }
@@ -78,3 +78,8 @@ a.b²
 [2⁻¹ 2⁰ 2¹]
 xs#1²
 2x²
+thrice { print "hi" }
+x = twice "ab"
+once [0]
+twice {a: 1}
+s.once

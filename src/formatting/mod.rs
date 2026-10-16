@@ -10,6 +10,7 @@ mod synonyms;
 use crate::compiler::meta::LineInfo;
 use crate::node::{Node, COMMENT_KEY};
 use crate::warp_parser::WarpParser;
+pub(crate) use lines::code_characters;
 use rules::{Edit, RULES};
 pub use soft_hints::{soft_hints, Hint};
 

@@ -559,6 +559,9 @@ impl Inference {
 			.iter()
 			.find(|(_, fields)| fields.iter().any(|(name, signature)| *name == field && !signature.is_empty()))?
 			.0;
-		Some(Stop::Error(format!("{}.{field}: the unit of {class}.{field} is known of an instance declared so: `x: {class} = …`, a constructor call, an element of a list declared [{class}]", object.serialize().trim())))
+		Some(Stop::Error(format!(
+			"{}.{field}: the unit of {class}.{field} is known of an instance declared so: `x: {class} = …`, a constructor call, an element of a list declared [{class}]",
+			object.serialize().trim()
+		)))
 	}
 }

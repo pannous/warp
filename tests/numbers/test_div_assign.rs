@@ -1,4 +1,4 @@
-// `x /= y` is exactly `x = x / y`; floor division is `x//=y`; a variable declared `x:int` keeps a whole number
+// `x /= y` is exactly `x = x / y`; floor division is `x /!= y`; a variable declared `x:int` keeps a whole number
 // (user decision 2026-10-08, card div-assign)
 use crate::is;
 use warp::wasm_emitter::eval;
@@ -14,8 +14,8 @@ fn divide_assign_divides_exactly() {
 
 #[test]
 fn floor_divide_assign_floors() {
-	is!("x = 7; x//=2; x", 3);
-	is!("x = -7; x//=3; x", -3);
+	is!("x = 7; x /!= 2; x", 3);
+	is!("x = -7; x /!= 3; x", -3);
 }
 
 #[test]
