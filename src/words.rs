@@ -77,6 +77,8 @@ pub const GENERIC_MARK: &str = "generic";
 pub const OPERATOR_WORD_MARK: &str = "operator_word";
 /// Words that declare a name assignable once: `const x=5`, `final x=5`
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
+/// Rust's `&mut x`, read as the value itself (card rust-refs)
+pub const MUT_WORD: &str = "mut";
 /// Rust's `let mut x` and `let mutable x`
 pub const MUTABLE_WORDS: [&str; 2] = ["mut", "mutable"];
 

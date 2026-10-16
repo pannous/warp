@@ -13,3 +13,9 @@ Read notes/agents/common.md and notes/agents/supervisor.md: the fleet rules appl
 - warp-supervisor (tmux) runs the main fleet: tell it which cards you take, so no card is worked twice.
 - Wait for the user's instructions. When asked for parallel tasks, pick easy cards from Soon and run each as a nested
   session. Afterwards, write down in notes/agents/boss.md what worked and what didn't, for the comparison.
+
+## rust-refs trial (2026-10-16)
+A nested desktop-app session took one card end to end (worktree, test first, parser fix, queue run, clippy). What worked:
+the brief naming the card and the rules was enough, no questions needed. What hurt: `tests/queue.sh` waited 10-30 minutes
+behind other sessions' runs, and the foreground Bash timeout (10 min) moved long queue runs into the background, so
+runs go to a log file in data/ with a `done` marker and are polled.
