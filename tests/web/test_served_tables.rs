@@ -1,4 +1,4 @@
-// Card sample-server (found serving samples/server.warp): a served route reads the table as the database has it at the
+// Card sample-server (found serving samples/servers/server.warp): a served route reads the table as the database has it at the
 // request, not as it was when the server started; a page render (its own instance) may have added rows since
 use std::time::Duration;
 

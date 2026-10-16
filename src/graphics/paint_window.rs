@@ -1,7 +1,7 @@
 //! paint(pixels, width, height) in a terminal (card g_gGsg): the frames in a window, drawn through a wgpu surface (Metal
 //! on macOS). A window owns the main thread there, which the program runs on, so a viewer process does: the same
 //! binary as `warp paint-window`, reading frames from its stdin, [width u32][height u32][width×height RGBA bytes]. Each
-//! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed, the
+//! paint call replaces the frame (samples/graphics/webgpu.warp animates); the last one stays until the window is closed, the
 //! program waiting for that (wait_until_closed). The program ending otherwise ends its stdin and so the viewer.
 //! `use draw` on the GPU sends shapes instead (src/graphics/gpu_canvas.rs): [SHAPES_MARK][width][height][count][count shapes],
 //! drawn over the canvas texture this process keeps, which the window then shows; no pixels cross.

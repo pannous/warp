@@ -1,6 +1,6 @@
 // card winamp-like: spectrum(samples, seconds, bands) gives how loud each frequency band sounds in the samples at that
 // moment, from 0 to 1 (bands spaced evenly in pitch from band_low to band_high Hz), computed in warp, so the same
-// natively and in the playground; samples/visualizer.warp paints it as bars while the song plays
+// natively and in the playground; samples/sound/visualizer.warp paints it as bars while the song plays
 use crate::is;
 
 const SOUND: &str = "use sound\n";
@@ -59,7 +59,7 @@ fn a_nonzero_visualizer_child_report_names_its_exit_status() {
 #[cfg(feature = "native")]
 #[test]
 fn the_visualizer_paints_while_it_plays() {
-	animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/visualizer.warp"))
+	animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/sound/visualizer.warp"))
 		.expect("the visualizer needs no GPU");
 }
 
@@ -67,7 +67,7 @@ fn the_visualizer_paints_while_it_plays() {
 #[cfg(feature = "native")]
 #[test]
 fn the_gpu_visualizer_raymarches_while_it_plays() {
-	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu_visualizer.warp")).is_none() {
+	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu/gpu_visualizer.warp")).is_none() {
 		crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 }
@@ -77,7 +77,7 @@ fn the_gpu_visualizer_raymarches_while_it_plays() {
 #[cfg(feature = "native")]
 #[test]
 fn the_gpu_visualizer_written_in_warp_raymarches_while_it_plays() {
-	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu_visualizer_warp.warp")).is_none() {
+	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu/gpu_visualizer_warp.warp")).is_none() {
 		crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 }

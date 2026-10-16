@@ -1,7 +1,7 @@
 # Sample sweep (samples/, started 2026-10-03)
 
-Goal: every `samples/*.warp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
-`is!("samples/x.warp", …)` line in tests/programs/test_samples.rs.
+Goal: every `samples/<chapter>/*.warp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
+`is!("samples/<chapter>/x.warp", …)` line in tests/programs/test_samples.rs.
 
 ## How to sweep
 - Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …` (or `probes/samples/…`).
@@ -9,7 +9,7 @@ Goal: every `samples/*.warp` runs, ideally by fixing the language rather than th
 - Skip `raylib_*` / `sdl_*` in sweeps: they open real windows.
 - `test.wasm` in the cwd is the last emitted module, written before validation: `wasm-tools print test.wasm` shows the
   function behind an "internal error: WASM validation failed".
-- `samples/life_kotlin_ranges.warp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
+- `samples/loops/life_kotlin_ranges.warp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
 
 ## Warp habits the old samples get wrong (sample-side fixes)
 - Lists are shared (P200b): a function changes the list it is passed, as in Python; `+` and `copy()` make new lists.
@@ -52,3 +52,18 @@ The failures left, each with its reason in web/playground/excluded_samples.txt:
 - raylib/sdl: not run in sweeps (windows). SDL_video.h is among the SDL headers now (SDL_CreateWindow).
 Fixed on samples-run: a loop variable reusing a number's name reads fields (`item = 2; for item in basket {
 item.price }`); an import no header declares says so; `xs where country is germany` hints `it.country==germany`.
+
+## Folders (2026-10-16)
+- samples/ has one folder per chapter of the playground guide, the groups of its example menu (web/playground/guide.js
+  groupExamplesByChapter): hello numbers text signals conditions matching lists objects loops functions types storage
+  errors modules events tasks web servers graphics gpu sound wasm laws advanced; plus system (crontab, unix_commands:
+  native-only processes), golf/ and wit/ as before. A sample sits in the folder of the first chapter whose `Examples:
+  …; samples:` line names it; samples no chapter can name (excluded_samples.txt: raylib, SDL, errors…) sit by topic.
+- tests/web/test_guide.rs every_chapter_has_its_own_sample_folder keeps the two in step: a chapter's samples in one
+  folder, no folder shared by two chapters. A new sample: its chapter's folder + its name in that chapter's line.
+- The menu and the address (#fizzbuzz) still name a sample by its file name, so names stay unique across folders
+  (build.sh refuses twins); samples.js has SAMPLE_FILES name → path for the runs' neighbour files (play "mozart.mp3").
+- Tests find a sample by name with tests/common sample_path / sample_files (never format!("samples/{name}.warp")).
+- `use lib` / `use square` find the module samples through SEARCH_DIRECTORIES "samples/modules" (src/modules.rs).
+- probes/samples_paths.py [checkout] rewrites flat paths (samples/x.warp) of a branch or the wiki to the folders;
+  `--move x.warp <folder>` first moves a flat sample a merge brought in.

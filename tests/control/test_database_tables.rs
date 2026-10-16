@@ -199,11 +199,11 @@ fn save_is_an_expression() {
 	);
 }
 
-// samples/orm.warp keeps its rows beside it (in the browser in IndexedDB) and seeds them once; each run makes Bo (row 2)
+// samples/storage/orm.warp keeps its rows beside it (in the browser in IndexedDB) and seeds them once; each run makes Bo (row 2)
 // a year older (the sample ends with `bo.age += 1`, no save needed; the test appends `bo` to read him back)
 #[test]
 fn the_orm_sample_runs_twice_on_the_same_rows() {
-	let sample = format!("{}\nbo", std::fs::read_to_string("samples/orm.warp").unwrap());
+	let sample = format!("{}\nbo", std::fs::read_to_string("samples/storage/orm.warp").unwrap());
 	let runs = [eval(&sample).serialize(), eval(&sample).serialize()];
 	for run in &runs {
 		assert!(run.contains("Bo") && run.contains("id:2"), "{run}");

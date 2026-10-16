@@ -37,7 +37,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   is carded and fixed forward with priority, the last good site stays up meanwhile. An urgent fix (the user waiting to
   try it) is deployed at once: `gh workflow run Playground -R pannous/warp` (main). The local gate cannot see the
   runner's environment:
-  GitHub's runner has no GPU and is slower (a "ready" status raced the first run; samples/webgpu logged Chrome's
+  GitHub's runner has no GPU and is slower (a "ready" status raced the first run; samples/graphics/webgpu logged Chrome's
   "No available adapters." — fixed by AGENT_BROWSER_ARGS SwiftShader in pages.yml). So a batch that adds or changes a
   sample, web/playground/** or pages.yml gets the runner's verdict before main: push the tested tip as a branch and
   `gh workflow run Playground -R pannous/warp --ref <branch>`; job build green = both tours pass on the runner (its

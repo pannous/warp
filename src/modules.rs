@@ -41,9 +41,9 @@ pub use program_file::*;
 mod use_statements;
 pub(crate) use use_statements::*;
 
-/// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
-/// that are not standard, like netbase, P194)
-pub const SEARCH_DIRECTORIES: [&str; 7] = [".", "include", "lib", "lib/extra", "src", "source", "samples"];
+/// Where modules are looked for, in this order: the current directory, the library (lib/extra: modules
+/// that are not standard, like netbase, P194), the module samples (samples/modules: lib, square)
+pub const SEARCH_DIRECTORIES: [&str; 7] = [".", "include", "lib", "lib/extra", "src", "source", "samples/modules"];
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.

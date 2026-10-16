@@ -121,8 +121,8 @@ stub (a debug warp built the stub in its own profile; that stub is 5.6 MB today)
 
 | executable (release stub) | before | after | machine code (raw) |
 |---|---|---|---|
-| samples/quicksort.warp | 1131568 | 927296 | 215856 → 179752 |
-| samples/game_of_life.warp | 1115744 | 919616 | 200032 → 163680 |
+| samples/lists/quicksort.warp | 1131568 | 927296 | 215856 → 179752 |
+| samples/loops/game_of_life.warp | 1115744 | 919616 | 200032 → 163680 |
 | `6*7` | 1045520 | 906816 | |
 The rest is the stub. Start time unchanged (~19 ms per run with process start). Next steps if needed: a stub without
 the system signals and values (optional packages chosen by the program's imports), or the shared runtime module

@@ -1,5 +1,5 @@
 // `\e` is the escape character (bash, Ruby) and `\x1b` a byte in hex (Python, JS, Rust): terminal codes such as
-// "\e[H" (cursor home) and "\x1b[2J" (clear) of samples/game_of_life.warp (card g_n-58); before, both lost the backslash
+// "\e[H" (cursor home) and "\x1b[2J" (clear) of samples/loops/game_of_life.warp (card g_n-58); before, both lost the backslash
 use crate::is;
 
 #[test]

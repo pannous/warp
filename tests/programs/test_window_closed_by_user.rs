@@ -1,5 +1,5 @@
 // card escape-window: the user ending the paint window (closing it, Cmd-Q) ends its program and its sounds; before,
-// samples/gpu_visualizer_warp.warp kept playing (and opened a new window with its next frame) until ctrl-c. The viewer
+// samples/gpu/gpu_visualizer_warp.warp kept playing (and opened a new window with its next frame) until ctrl-c. The viewer
 // says so with a `closed` line (src/graphics/paint_window.rs), which the program reads among its input lines. Escape
 // ends the run likewise, unless the program names that key: then it is the program's, as on a page, and its `exit`
 // stops the sounds instead of waiting for them

@@ -40,7 +40,7 @@ const PENDING_VALUE = "…"; // the value shown from Run until the new one arriv
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
-// terminal codes in printed text (`print "\e[H"`, samples/game_of_life.warp): clearing the screen or moving the cursor
+// terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.warp): clearing the screen or moving the cursor
 // home starts the text anew, the other codes (colors, cursor moves) are dropped
 const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
 const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
@@ -1068,7 +1068,7 @@ const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
 // the file of the chosen sample, whose neighbours its runs name relatively (host-files.js besideProgram)
 function programFile() {
 	const name = $("examples").value;
-	return EXAMPLES[name] === undefined && SAMPLES[name] !== undefined ? `samples/${name}.warp` : undefined;
+	return EXAMPLES[name] === undefined ? SAMPLE_FILES[name] : undefined;
 }
 
 // puts the code in the editor and runs it once; resolves once its report is shown

@@ -137,7 +137,7 @@ fn a_warp_modules_classes() {
 	is!(&format!("{SHAPES}; dir(shapes.P)"), warp::texts(vec!["x", "y", "sq"]));
 }
 
-// card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/reflection.warp)
+// card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/types/reflection.warp)
 #[test]
 fn a_functions_dump() {
 	is!("area(width: int, height: int) := width * height\narea.dump", "area(width: int, height: int) := width*height");

@@ -28,7 +28,7 @@ const QUIT_SECONDS = 30;
 const REPORTED_LEVELS = new Set(["error", "warn", "warning", "assert"]);
 const FAILED_STATUS = 400;
 // api.github.com answers 60 unauthenticated requests an hour per address, which a shared CI runner's address has often
-// used up (samples/live_region, card samples-fetches): with GITHUB_TOKEN set, its requests carry the token, added here
+// used up (samples/web/live_region, card samples-fetches): with GITHUB_TOKEN set, its requests carry the token, added here
 // so the page never sees it
 const GITHUB_API = "api.github.com";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;

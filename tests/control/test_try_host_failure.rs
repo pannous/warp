@@ -11,7 +11,7 @@ fn try_catches_an_adapter_failure() {
 
 #[test]
 fn the_sample_falls_back_to_default_settings() {
-	is!("samples/try_failed_json.warp", "light");
+	is!("samples/errors/try_failed_json.warp", "light");
 }
 
 #[test]

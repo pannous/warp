@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds web/playground: the warp compiler for the browser (no wasmtime: the `native` feature off, src/web/mod.rs) in two
-# builds, samples.js (samples/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
+# builds, samples.js (samples/<chapter>/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
 # version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
 # Usage: build.sh [optimized|debug|components|pinned|served <site>|site <site>]   (all when omitted)
@@ -140,14 +140,14 @@ collect_site() {
 	done
 	# the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
 	mkdir -p "$site/tests/fixtures/wasm" && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h "$site/tests/fixtures/wasm/"
-	# the samples' neighbours at their repository paths, as natively: `play "mozart.mp3"` beside samples/play_mp3.warp
+	# the samples' neighbours at their repository paths, as natively: `play "mozart.mp3"` beside samples/sound/play_mp3.warp
 	# (card open-mozart), the files a sample reads, writes over or includes; the regular ones, not the links
-	# (samples/tests, samples/shapes.wasm)
+	# (samples/tests, samples/wasm/shapes.wasm)
 	git ls-files -z samples | while IFS= read -r -d '' file; do
 		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
 	done
-	# the warp-compiled module samples/import_compiled.warp imports by its bare name (samples/shapes.wasm links it)
-	mkdir -p "$site/samples" && cp tests/fixtures/compiled/shapes.wasm "$site/samples/"
+	# the warp-compiled module samples/wasm/import_compiled.warp imports by its bare name (samples/wasm/shapes.wasm links it)
+	mkdir -p "$site/samples/wasm" && cp tests/fixtures/compiled/shapes.wasm "$site/samples/wasm/"
 	echo "$DOMAIN" > "$site/CNAME"
 	# the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
 	write_site_served_files "$site"
@@ -168,14 +168,22 @@ esac
 
 write_repository_served_files
 
-python3 - "$page/samples.js" "$page/excluded_samples.txt" samples/*.warp <<'PYTHON'
-import json, os, sys
+# a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples
+python3 - "$page/samples.js" "$page/excluded_samples.txt" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\)/') <<'PYTHON'
+import collections, json, os, sys
 # the samples the page cannot run yet stay out of the menu, each named with its error in excluded_samples.txt
 excluded = {line.split()[0] for line in open(sys.argv[2], encoding="utf-8") if line.strip() and not line.startswith("#")}
-names = {os.path.basename(path)[:-len(".warp")]: path for path in sys.argv[3:]}
-samples = {name: open(path, encoding="utf-8").read() for name, path in names.items() if name not in excluded}
+files = collections.defaultdict(list)
+for path in sys.argv[3:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
+# the menu and the address (#fizzbuzz) name a sample by its file name: one name, one file
+twins = {name: paths for name, paths in files.items() if len(paths) > 1}
+if twins: sys.exit(f"samples sharing a name: {twins}")
+names = {name: paths[0] for name, paths in sorted(files.items()) if name not in excluded}
+samples = {name: open(path, encoding="utf-8").read() for name, path in names.items()}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
-	script.write("// made by build.sh from samples/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
+	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
+	script.write("// each sample's file, which its runs name their neighbours beside (playground.js programFile)\n")
+	script.write("const SAMPLE_FILES = " + json.dumps(names, indent="\t") + ";\n")
 PYTHON
 echo "built $page/samples.js"
 

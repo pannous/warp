@@ -80,7 +80,7 @@ fn paint_frames_for_the_window_read_back_as_sent() {
 }
 
 // card shader-brush: macOS sends mouse moves only to the key window, and the paint window started from a terminal is
-// not it, so samples/shader_brush.warp's glow never followed the hovering pointer; the viewer's view gets a tracking
+// not it, so samples/graphics/shader_brush.warp's glow never followed the hovering pointer; the viewer's view gets a tracking
 // area active always (src/graphics/paint_window.rs track_pointer_always). Checked on a view of no window: none opens here
 #[test]
 #[cfg(all(feature = "native", target_os = "macos"))]
