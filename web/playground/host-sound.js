@@ -124,12 +124,12 @@ const wholeNumbers = list => Array.from(list, Number);
 // the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound/mod.rs
 // render): the samples interleaved and the channels
 // play(hum, 2s) (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
-// samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
+// samples from `first` on. Played to someone (heard: playground.js tellSystemValues), each block is a sound of
 // the signal's handle, computed when the voice holds less than SIGNAL_AHEAD_SECONDS, the wait a sleep (no runaway
 // time); else all of them at once, one sound. Its handle
 function playedSignal(holder, seconds, rate, channels, block, blockOf) {
 	const total = Math.round(Math.max(0, Number(seconds)) * rate);
-	const paced = Boolean(self.pageSystemValues?.window_open);
+	const paced = Boolean(self.pageSystemValues?.heard);
 	let samples = [];
 	let handle;
 	const played = () => {
@@ -302,7 +302,7 @@ addHostPart({
 		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
 		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
-			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
+			while (self.pageSystemValues?.heard && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
 			const sound = { samples: onBus(holder, samples, rate, channels), rate, channels };
 			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)

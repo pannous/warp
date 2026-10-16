@@ -1,13 +1,15 @@
 //! The system's live MIDI devices through midir (CoreMIDI), macOS only for now like the sound engine (Cargo.toml: Linux
 //! would link ALSA); src/sound/midi.rs has the stand-in elsewhere, which finds no devices.
 
-use super::midi::{chosen_port, CLIENT};
+use super::midi::chosen_port;
 use midir::{MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 
 /// OUTPUTS' key of the virtual source, no device's name
 const VIRTUAL_KEY: &str = "";
+/// The name the system shows for warp's MIDI client and its connections
+pub const CLIENT: &str = "warp";
 /// The outputs opened by name, kept open for the run
 static OUTPUTS: LazyLock<Mutex<HashMap<String, MidiOutputConnection>>> = LazyLock::new(Default::default);
 /// The inputs opened by name, their messages queued
