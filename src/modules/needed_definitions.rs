@@ -59,7 +59,12 @@ impl ProgramWords {
 
 /// `use sound; def play(x) := …`: a program function taking a module function's arguments replaces it for the
 /// program's calls, which is never silent (card use-sound-def); the module's own code keeps its own (shadowed_apart)
-pub(crate) fn warn_replaced(definitions: &[Node], words: &ProgramWords, module: &str) {
+pub(crate) fn warn_replaced(
+	definitions: &[Node],
+	words: &ProgramWords,
+	module: &str,
+	level: crate::errors::diagnostic::Level,
+) {
 	let mut warned = HashSet::new();
 	for definition in definitions {
 		let Some((head, _, _)) = crate::type_tests::function_definition(definition) else { continue };
@@ -72,6 +77,7 @@ pub(crate) fn warn_replaced(definitions: &[Node], words: &ProgramWords, module: 
 			);
 			crate::errors::diagnostic::say(
 				crate::errors::diagnostic::Diagnostic::at(replacing, message)
+					.level(level)
 					.about(REPLACED_MODULE_FUNCTION_TOPIC, &name),
 			);
 		}
