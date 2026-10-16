@@ -4,7 +4,7 @@ Repo-wide leftovers: oversized files (cleanup-big-files), never-called functions
 fmt/clippy drift (cargo-fmt, clippy-reports), probe-script proliferation (cleanup-probe-scripts), stale notes
 (cleanup-stale-notes).
 
-Dead scan (cleanup-dead-scan, 2026-10-13, probes/dead_scan.py): 15 never-used pub functions removed, unused in the default,
+Dead scan (cleanup-dead-scan, 2026-10-13, probes/cleanup/dead_scan.py): 15 never-used pub functions removed, unused in the default,
 all-features and wasm32 builds alike. Removed: TypeManager len/is_empty/next_type_idx/user_type_indices_mut,
 StringTable next_offset/table, ImportManager is_empty, Scope child, Real is_exact, Signature merge, Node get_op/from_json,
 text_node/error_node/key_op. Kept: function.rs builders, set_hint_file and create_host_linker (in-file unit tests or
@@ -525,3 +525,35 @@ card's −700: reflection's fields/methods/dir code is feature code, not `of` ha
 `params of f`, `a of xs` (a field of every element), `name of p + "b"`.
 Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
 way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.
+
+## Final pass (final-repo, 2026-10-16): dead scan, probes, notes, playground JS, lib/
+- Dead scan (probes/cleanup/dead_scan.py, now keeping glob re-exports and those naming items used outside, which made
+  97 false hits under src/law and the CLI's users): across default, all-features and wasm32 only the kept items of
+  the first pass are left (gc_traits reading API, last_item, set_hint_file) plus `Exact::standard_part`
+  (src/extensions/reals.rs; removed on branch final-media). Two re-exports nothing read went.
+- Probes: the code-cleanup tools live in probes/cleanup/ (dead_scan, similar_names, duplicate_constants,
+  drop_function, call_to_method, move_module_joins); the shared-checkout hunk selector and the early Lean probes
+  went; the reusable checks nobody listed are in notes/probes_layout.md. Still unreferenced by notes, tests, probes
+  or board try lines: 132 one-off .warp inputs (list: data/cleanup/unref_probes2.txt); kept, they cost nothing.
+- Notes: `probes/cleanup/dead_note_paths.py --fix` follows git's renames (and x.rs → x/mod.rs) to rewrite stale
+  paths, leaving lines that name the old path on purpose ("was", "gone", "removed"). 98 dead paths remain, nearly
+  all of deleted files in history notes (done.md, code_quality.md's audit table, cloud_tasks.md).
+- Playground JS (jscpd: 0.2% exact duplication): gpu_compute's two routes share one compute pass and the buffer
+  helpers; worker.js reuses host-compiler's passedBytes.
+- lib/: `round_to` is defined in lib/prelude.warp and lib/math.warp alike; dropping math's would take it out of
+  `dir(math)`, so it stays (card). lib/compiler's lexer `is_blank` is prelude's `is_space`, kept as the Rust twin's name.
+## Final pass (final-emitter, 2026-10-16): src/wasm_emitter/, src/run/, src/type_kinds.rs
+Behaviour-preserving, +352 −587 lines. Byte check: every probe and sample compiles to the same wasm as before
+(probes/cleanup/same_wasm.sh), except the intended superset below and embedded doc text naming moved sample paths.
+- Runtime function dependencies (src/wasm_emitter/runtime_dependencies.rs): each module declares `dependencies()`
+  (`Dependency`, `any`/`all`), `require_dependencies()` closes them to a fixed point. The old ordered if chain missed
+  `function_text` when `list_join` was required late; vector_shader, zero_argument_shader, math_signatures and
+  warp_compiled_wgsl_shader now also emit it. A new runtime function = one line in its module's table.
+- `Kind::of_field` / `Kind::ALL` replace tag comparisons in wasm_reader; RawFieldValue conversions by one macro;
+  unused `AstKind` gone.
+- WasmGcEmitter, TypeManager, ImportManager derive Default (−120 lines of initializers); one `emit_struct_types`.
+- Emitter words via `words::GLOBAL_WORD` / `RETURN_WORD` / `host::FETCH_WORD`; BUILTIN_CALLS no longer repeats
+  NODE_ARGUMENT_CALLS.
+Left for later (cards): emit_kind_globals' hand-written name table (derive from Kind::ALL); module_cache and
+program_cache each hash to hex (one shared hex_digest, also modules/cargo_crates); host/native.rs and
+host/tasks/values.rs could match Kind::of_field (host area); list_emitter KNOWN_WORDS as a mechanism.

@@ -682,6 +682,7 @@ PASSED:
   ✓ control::test_signal_values::two_subscriptions_both_run_in_order
   ✓ control::test_signal_values::writes_before_the_subscription_are_not_seen
   ✓ control::test_signal_values::writes_in_loops_and_functions_notify
+  ✓ control::test_slow_handler::a_handler_slower_than_its_period_does_not_call_itself
   ✓ control::test_soft_tests::a_plain_run_skips_the_tests
   ✓ control::test_soft_tests::a_program_naming_test_keeps_its_word
   ✓ control::test_soft_tests::under_test_the_value_is_the_summary
@@ -2780,6 +2781,10 @@ PASSED:
   ✓ numbers::test_exact_parameters::float64_is_the_word_float
   ✓ numbers::test_exponent_texts::float_of_an_exponent_text
   ✓ numbers::test_exponent_texts::int_of_an_exponent_text
+  ✓ numbers::test_fast_int::a_fast_int_variable_wraps
+  ✓ numbers::test_fast_int::a_fast_loop_counts_as_the_exact_one
+  ✓ numbers::test_fast_int::int64_wraps_and_traps_only_when_strict
+  ✓ numbers::test_fast_int::nested_fast_operations_wrap
   ✓ numbers::test_fast_math::fast_words_are_close_to_the_c_library
   ✓ numbers::test_fast_math::fast_words_reach_the_math_module_and_stay_out_of_other_programs
   ✓ numbers::test_fast_math::warp_fast_uses_fast_math_also_for_a_kept_program_file
@@ -3537,6 +3542,7 @@ PASSED:
   ✓ parser::test_meta::test_meta_field
   ✓ parser::test_meta::test_parent
   ✓ parser::test_meta::test_parent_context
+  ✓ parser::test_named_argument_lambda::a_listed_entry_holds_the_lambda
   ✓ parser::test_named_argument_lambda::a_named_argument_holds_the_lambda
   ✓ parser::test_newline_precedence::a_method_call_starting_the_next_line_continues_the_expression
   ✓ parser::test_newline_precedence::test_fibonacci_auto_param_newline
@@ -6153,4 +6159,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6148 passed, 0 failed, 6148 total tested
+13 ignored, 6154 passed, 0 failed, 6154 total tested

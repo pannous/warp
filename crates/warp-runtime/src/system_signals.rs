@@ -153,6 +153,9 @@ fn add_timer(handler: String, repeat: Repeat, trigger: Trigger) {
 thread_local! {
 	/// the timers of the run on this thread
 	static TIMERS: RefCell<Vec<Timer>> = const { RefCell::new(Vec::new()) };
+	/// the handlers running now on this thread: a due one still running skips its turn, else its loop's signal poll
+	/// would call it again inside itself, without end (card timer-handler)
+	static RUNNING_HANDLERS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 static STAYING_ALLOWED: AtomicBool = AtomicBool::new(false);
 
@@ -343,8 +346,12 @@ pub fn run_due_handlers<S: AsContextMut>(
 	let handles_interrupt = export(store, INTERRUPT_HANDLER).is_some();
 	let shared_checks = export(store, SHARED_HANDLER).map(|_| SHARED_HANDLER.to_string());
 	for name in due_handlers(handles_interrupt).into_iter().chain(shared_checks) {
-		let Some(handler) = export(store, &name) else { continue };
-		call_handler(store, handler, None, &mut export)?;
+		let running = RUNNING_HANDLERS.with(|running| running.borrow().contains(&name));
+		let Some(handler) = export(store, &name).filter(|_| !running) else { continue };
+		RUNNING_HANDLERS.with(|running| running.borrow_mut().push(name.clone()));
+		let outcome = call_handler(store, handler, None, &mut export);
+		RUNNING_HANDLERS.with(|running| running.borrow_mut().retain(|other| *other != name));
+		outcome?;
 	}
 	Ok(())
 }
