@@ -115,6 +115,16 @@ impl WarpParser {
 			.is_some_and(|last| before[line_start + last] == '?')
 	}
 
+	/// The word before the blank here is a keyword, not an operand: `do add 4 to xs`, `return add …`
+	fn after_keyword(&self) -> bool {
+		let before = &self.chars[..self.pos];
+		let word_end = before.iter().rposition(|ch| !ch.is_whitespace()).map_or(0, |end| end + 1);
+		let word_start =
+			before[..word_end].iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
+		let word: String = before[word_start..word_end].iter().collect();
+		crate::operators::is_operator_word(&word) || word == crate::words::RETURN_WORD
+	}
+
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
 	fn spelled_here(&self, spelling: &str) -> bool {
 		let length = spelling.chars().count();
@@ -141,6 +151,13 @@ impl WarpParser {
 			"//" | "//=" => self.at_floor_division(),                            // `x // note` stays a comment
 			// `div{…}` and `div {…}` are the html tag, and data never computes
 			"div" => !self.options.data_mode && !self.word_opens_block("div"),
+			// `2 add 3` between operands only: `xs.add(…)`, `{add: 7}`, a program's own add keep the word
+			"add" | "subtract" => {
+				!self.options.data_mode
+					&& prev != '.' && self.operand_after(spelling.len())
+					&& !self.program_functions.contains(spelling)
+					&& !self.after_keyword()
+			}
 			// `xs contains x` in code only, data keeps the words as they are
 			"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
 			// `a .5` is a list of two values, `a.5` a member access
