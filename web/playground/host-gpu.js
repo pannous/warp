@@ -594,21 +594,31 @@ addHostPart({
 			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
+		const computed = (shader, numbers, workgroups) => {
+			const code = plain(shader), given = plain(numbers);
+			// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
+			const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
+			if (given !== null && typeof given === "object" && isPlainObject(given)) {
+				const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
+				const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
+				const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
+				const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
+				return buildValue(program(), { kind: CURLY_LIST, items: entries });
+			}
+			const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
+			return list(values, item(gpuElements(code)));
+		};
+		const rendered = (shader, width, height, values) => {
+			const pixels = holder.gpuRendered(plain(shader), width, height, values);
+			return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
+		};
+		// a WGSL error inside a `try` is the program's to catch
+		const catchable = word => (...given) => {
+			try { return word(...given); } catch (failure) { raisedInProgram(program(), failure); }
+		};
 		return {
-			gpu_compute: (shader, numbers, workgroups) => {
-				const code = plain(shader), given = plain(numbers);
-				// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
-				const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
-				if (given !== null && typeof given === "object" && isPlainObject(given)) {
-					const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
-					const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
-					const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
-					const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
-					return buildValue(program(), { kind: CURLY_LIST, items: entries });
-				}
-				const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
-				return list(values, item(gpuElements(code)));
-			},
+			gpu_compute: catchable(computed),
+			gpu_render: catchable(rendered),
 			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
 			gpu_compute_linear: (shader, block, workgroups) => {
 				const cells = linearCells(program().memory, block);
@@ -620,10 +630,6 @@ addHostPart({
 			gpu_map_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, false, keeping),
 			// `s = sum(xs.map(x => …) @gpu)`, min, max: each workgroup's partial result, left after the values, into target
 			gpu_reduce_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, true, keeping),
-			gpu_render: (shader, width, height, values) => {
-				const pixels = holder.gpuRendered(plain(shader), width, height, values);
-				return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
-			},
 			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
