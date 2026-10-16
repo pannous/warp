@@ -717,6 +717,7 @@ fn test_squares() {
 fn test_old_random_bugs() {
 	// ≈ test_recent_random_bugs();
 	// some might break due some testBadInWasm() BEFORE!
+	is!("-42", -42); // OK!?!
 	skip!(
 
 		is!("x:=41;if x>1 then 2 else 3", 2);
@@ -915,6 +916,7 @@ fn test_recent_random_bugs() {
 		is!("use math; square(3*42) > square(2*3)", 1); // warp's meaning (decision 2026-10-09): use math, parentheses
 	}
 	//			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is !a I32, in function at index 0
+	is!("42/2", 21); // in WEBAPP
 
 	// main returns int, should be pointer to value! let array_header_32 : result => smart pointer!
 	//			Ambiguous mixing of functions `ƒ 1 + ƒ 1 ` can be read as `ƒ(1 + ƒ 1)` or `ƒ(1) + ƒ 1`
@@ -1000,6 +1002,9 @@ fn test_round_floor_ceiling() {
 fn test_wasm_typed_globals() {
 	//    is!("global int k", 7);//   empty global initializer for int
 	//    is!("global int k=7", 7); // type mismatch
+	is!("global const int k=7", 7); //   all globals without value are imports??
+	is!("global mutable int k=7", 7); //   all globals without value are imports??
+	is!("global mut int k=7", 7); //   all globals without value are imports??
 }
 
 #[test]
@@ -1008,7 +1013,8 @@ fn test_wasm_mutable_global() {
 	//    is!("k::=7", 7);// global variable !visually marked as global, !as good as:
 	is!("global k=7", 7); // python style, as always the best
 	is!("global k:=7", 7); //  global or function?
-						//    is!("global.k=7", 7);//  currently all globals are exported
+	is!("global k;k = 7", 7); // python style, as always the best
+						   //    is!("global.k=7", 7);//  currently all globals are exported
 	skip!(testWasmMutableGlobal2());
 	skip!(testWasmTypedGlobals());
 	//    test_wasm_mutable_global_imports();
@@ -1019,8 +1025,12 @@ fn test_wasm_mutable_global2() {
 	is!("export k=7", 7); //  all exports are globals, naturally.
 	is!("export f:=7", 7); //  exports can be functions too.
 	is!("global export k=7", 7); //  todo warn("redundant keyword global: all exports are globals");
+	is!("global int k=7", 7); // python style, as always the best
+	is!("global int k:=7", 7); //  global or function?
 	is!("export int k=7", 7); //  all exports are globals, naturally.
 	is!("export int f:=7", 7); //  exports can be functions too.
+	is!("global int k", 0); // todo error without init value?
+	is!("export int k", 0); //
 }
 
 #[test]
@@ -1049,7 +1059,9 @@ fn test_wasm_mutable_global_imports() {
 fn test_custom_operators() {
 	is!("suffix operator ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
 	is!("suffix ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
+	is!("suffix operator ³ := it*it*it; 3³", 27); // define inside warp!
 	is!("suffix operator ³ := it*it*it; .5³", 0.125); // user P53: 1 / 8 was Rust integer division (0)
+	is!("suffix ³ := it*it*it; 3³", 27); // define inside warp!
 
 	//	is!(("alias to let third : the = ³"),1);
 	//	is!(("3⁴"),9*9);
@@ -1118,7 +1130,9 @@ fn test_is() {
 	// before. now assert! that it works with runtime
 	//    test_wasm_runtime_extension();
 
+	is!("x=123;x + 4 is 127", true); //  is! sometimes causes Heap corruption! test earlier
 	is!("x='123';x is '123'", true); // ok
+	is!("'hello';(1 2 3 4);10", 10); // -> data array […;…;10] ≠ 10
 	{
 		is!("x='123';x + '4' is '1234'", true); // ok
 		is!("'123' + '4' is '1234'", true); // ok needs runtime for concat();
