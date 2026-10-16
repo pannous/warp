@@ -525,3 +525,33 @@ card's −700: reflection's fields/methods/dir code is feature code, not `of` ha
 `params of f`, `a of xs` (a field of every element), `name of p + "b"`.
 Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
 way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.
+## Final pass (final-media): src/sound/, src/graphics/, numbers and units (2026-10-16)
+Done (behaviour-preserving, no test edits):
+- sound: one `Chain::process_changing` runs a chain whose effects change at sample indices, for save sound
+  (effects::processed) and the live buses (sound_engine Bus::process) alike; `Comb::gap`; one per-channel maker in
+  Stage::new; the non-macOS engine stubs are one `mod output`; `paced_when_heard` (rest and sounded); `added_into` for
+  render's two mix additions; one FORMATS list (players, probes, the "not a sound file" message); `signal_pcm` shared
+  with audio_files (its `scaled` was the same); adapters' `whole_of`; midi receive flattened.
+- `extensions::utils::numbered_temporary_file`: sound's WAVs and paint's PNGs (`<stem>.<ext>`, then `<stem>-N.<ext>`
+  in the temporary folder) share one writer.
+- paint: `shown()` holds the window attempt of paint, paint_rgba and paint_shader; `rgba_pixels`.
+- gpu: `validated()` pops a validation scope for checked_values, render_texture and read_backs; `readback_of` and
+  `image_texture` make every readback buffer and image texture; shader_holes::mentions (a name not continued by a
+  name character) serves the alias hints and gpu's reads_value.
+- numbers: the overflow trap names and the ± run-time function names are derived from the type or word by
+  `width!` / `interval_word!` (concat!, so they stay &'static str for the emitter) instead of spelled twice; one
+  generic `deserialize_leaked`; Div's ratio arm by is_rational; Monomial::times extracts square and cube roots in one
+  loop; Interval::truncated; Exact::standard_part removed (st(x) is gone, user 2026-10-14).
+Left, because open branches change these files (2026-10-16): src/numbers/units.rs, units/static_units*,
+units/definitions.rs and lib/units.warp (fix-field-unit, fix-live-loops, fix-unit-hint, program-units,
+runtime-quantities, display-names); src/graphics/gpu_canvas.rs and paint_window.rs (draw-shader-warp, paper-shape);
+src/numbers/real.rs (why-sqrt). A later pass should look at them once those land.
+Seen, not worth it or not mine:
+- gpu.rs with_builtin_values matches the built-in hole names a second time beside shader_holes::BUILTIN_HOLES; a
+  table of (name, value) needs the frame's locals, so the match stays.
+- audio_files CONVERTERS and sound/mod.rs Command (players, probes) are two "first command the system has that knows
+  the format" lookups with different shapes (arguments around the input and output paths vs before the file).
+- extensions/lists.rs: `find2` has one caller (node/indexing.rs), `Filter` for Vec/Node none found in src; the file
+  is the user's extension style, left for the user.
+- Number's Display and exact_decimal each call terminating_decimal; uncertain.rs unsaid_ordering and overlap_warning
+  spell the three readings each (a shared helper came out longer after rustfmt, so it was dropped).
