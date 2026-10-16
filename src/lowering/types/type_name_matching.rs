@@ -281,9 +281,7 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 		return None;
 	};
 	let (head, type_name) = match target.drop_meta() {
-		Node::Key(head, Op::As | Op::Colon, type_name) => {
-			(head.as_ref().clone(), type_name.as_ref().clone())
-		}
+		Node::Key(head, Op::As | Op::Colon, type_name) => (head.as_ref().clone(), type_name.as_ref().clone()),
 		// `square(x) as int or text := …`
 		target => {
 			let (head, union) = crate::declarations::as_union_result(target)?;
