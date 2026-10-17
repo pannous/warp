@@ -278,9 +278,7 @@ fn refused_definition(program: &Node, values: &HashSet<String>) -> Option<Node> 
 	});
 	definitions.iter().find_map(|statement| {
 		let (object, property, _, _) = definition(statement).filter(|(object, ..)| values.contains(object))?;
-		let reason = format!(
-			"{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field"
-		);
+		let reason = format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field");
 		Some(Diagnostic::at(statement, reason).into_error())
 	})
 }

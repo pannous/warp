@@ -190,13 +190,21 @@ codegen-units = 16
 debug = "line-tables-only" # full DWARF is 53 MB; lines and function names are what the debugger and traces need
 strip = false
 
+# the native compiler (brew, the GitHub releases, crates.io): optimized for speed. Measured 2026-10-17 against
+# opt-level z: compiling 3.3x faster (a 300-function program 5.0 s → 1.5 s), the binary 15.5 → 28.9 MB, the
+# standalone executables' warp-runtime stub 1.02 → 1.22 MB
 [profile.release]
 incremental = false    # Release doesn't need incremental
-opt-level = "z"        # Optimize for size
+opt-level = 3
 lto = true             # Full LTO for maximum treeshaking
 codegen-units = 1      # Single codegen unit for best optimization
 panic = "abort"        # Smaller binary, no unwinding
 strip = true           # Strip symbols
+
+# web/playground's warp.wasm, which every visitor downloads: optimized for size (build.sh)
+[profile.web-release]
+inherits = "release"
+opt-level = "z"
 
 # the native runtime runs the programs: its GC and libcalls at full speed (a size-optimized wasmtime ran a GC-heavy
 # map program 2.5× slower than the wasmtime CLI); the web build has no wasmtime, so its size is untouched

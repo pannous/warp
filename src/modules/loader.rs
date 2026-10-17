@@ -439,7 +439,7 @@ impl<'a> Loader<'a> {
 				false => Err(self.not_found(name, import)),
 			};
 		};
-		use crate::errors::diagnostic::{Diagnostic, report};
+		use crate::errors::diagnostic::{report, Diagnostic};
 		let shadows = |shadowed: String| Diagnostic::at(statement, format!("{} shadows {shadowed}", path.display()));
 		// only what warp knows without fetching: a local module is no reason to ask the network
 		let is_known_package = import == Import::Use && known_package(name);

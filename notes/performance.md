@@ -13,8 +13,11 @@ host's side; compile time with probes/perf/xctrace_summary.py (unstripped build:
 - **GC collector**: Cargo.toml enables `gc-copying` and `Collector::Auto` picks it (wasmtime's DRC collector ran ~3×
   slower and collects no cycles). **Initial GC heap** util.rs GC_HEAP_INITIAL_BYTES = 1 GB, reserved and committed
   lazily: the copying collector grows its heap too little, so a growing live set is copied again at every collection.
-- **wasmtime's own build** `[profile.*.package.wasmtime] opt-level = 3`: release is size-optimized (`opt-level = "z"`,
-  for the web build) and dev unoptimized, both ran the host side of GC-heavy programs 2.5–10× slower.
+- **wasmtime's own build** `[profile.*.package.wasmtime] opt-level = 3`: dev is unoptimized and web-release
+  size-optimized; they ran the host side of GC-heavy programs 2.5–10× slower.
+- **The native release is opt-level 3** (card release-profile-slower, 2026-10-17): at opt-level z the compiler itself
+  lowered and emitted 3.3× slower (a 300-function program 5.0 s → 1.5 s user); the binary grew 15.5 → 28.9 MB. Only
+  the playground's warp.wasm, downloaded by every visitor, keeps z (profile web-release).
 - **Map variables are hash tables** (wasm_emitter/map_backend.rs): `m = {}` followed by `m[k] = v` with name keys is
   a `$NodeMap` (insertion-ordered keys and values, open-addressing slots, FNV-1a of the key's letters). It becomes
   the cons-list Node wherever the map is a value (a fresh copy, so value semantics hold); a lookup it cannot answer
