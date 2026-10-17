@@ -225,12 +225,12 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 	report(word, &differences_of(cases, part));
 }
 
-/// The analyzer's twin (card inferred-kinds, notes/self_hosting.md step 14): every source the pipeline lowers goes to
+/// The analyzer's twin (card inferred-kinds, notes/self_hosting.md step 14): each source the pipeline lowers goes to
 /// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its text compared with src/analyzer/inferred_kinds.rs
-/// on the same program; `dropped` as for pass_differential
-pub fn analyzer_differential(dropped: &[&str]) {
-	let cases = twin_sources(dropped).into_iter().filter_map(|path| {
-		let (program, kinds) = analyzed(&std::fs::read_to_string(&path).ok()?)?;
+/// on the same program
+pub fn analyzer_differential(paths: &[PathBuf]) {
+	let cases = paths.iter().filter_map(|path| {
+		let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
 		let call = format!("inferred_kinds(node_of({}))", json_argument(&program));
 		Some(Case { path: path.display().to_string(), call, expected: warp_list(kinds.iter().map(|kind| Node::text(kind))) })
 	});

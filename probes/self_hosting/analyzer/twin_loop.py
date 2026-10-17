@@ -12,13 +12,15 @@ CASES = "data/self_analyzer/cases.jsonl"
 CASE_FOLDER = "scratch/analyzer_cases"
 WARP = "scratch/warp"
 SEPARATOR = " | "
+# the sources whose kinds match, written by each run
+MATCHING = "data/self_analyzer/matching.txt"
 
 
 def arguments():
     args = sys.argv[1:]
     option = lambda name, default: int(args[args.index(name) + 1]) if name in args else default
     words = [a for i, a in enumerate(args) if not a.startswith("--") and (i == 0 or not args[i - 1].startswith("--"))]
-    return (words[0] if words else ""), option("--limit", 10**9), option("--chunk", 16)
+    return (words[0] if words else ""), option("--limit", 10**9), option("--chunk", 48)
 
 
 def warp_kinds(chunk):
@@ -53,6 +55,9 @@ def main():
             expected = SEPARATOR.join(case["kinds"])
             if got != expected:
                 differing.append((case["path"], got, expected))
+    differing_paths = {path for path, _, _ in differing}
+    with open(MATCHING, "w") as out:
+        out.writelines(case["path"] + "\n" for case in cases if case["path"] not in differing_paths)
     words = collections.Counter()
     for path, got, expected in differing:
         print(f"## {path}\n  warp: {got[:400]}\n  rust: {expected[:400]}")
