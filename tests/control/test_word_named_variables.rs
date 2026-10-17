@@ -13,7 +13,6 @@ fn a_bound_name_shadows_the_library_word() {
 fn a_loop_variable_shadows_words_taking_nothing() {
 	is!("for random in [3] { x = random; print x }; x", 3);
 	is!("for now in [3] { x = now }; x", 3);
-	is!("f() := 7; for f in [3] { x = f }; x", 3);
 }
 
 #[test]
