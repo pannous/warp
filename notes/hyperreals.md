@@ -1,4 +1,4 @@
-# Hyperreal numbers ε, ω (wiki/hyperreals.md, wiki_features row 36)
+# Hyperreal numbers ε, ω (wiki/hyperreals.md)
 
 Representation: the exact-real normal form (src/extensions/reals.rs) gets one more generator, `Generator::Epsilon`,
 with any integer exponent; ω is ε⁻¹ and prints as ω, ω². A hyperreal is a Laurent polynomial in ε whose coefficients
@@ -15,6 +15,6 @@ are exact reals (ℚ with π, ℯ, √, ∛), the same shape as the Lean model (
   and ε in non-constant programs (functions, loops: the WASM path lowers reals to f64) are loud errors.
 - Evaluated by `real::answer` at compile time like every exact real; there is no WASM GC representation yet.
 
-Open (asked the Interviewer): inverse of sums by truncated series, dual-number mode (ε² = 0), `≈`/halo (D8),
+Open: inverse of sums by truncated series, dual-number mode (ε² = 0), `≈`/halo (D8),
 hyperreals at run time.
 Tests: tests/numbers/test_hyperreals.rs.
