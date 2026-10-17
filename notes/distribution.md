@@ -1,6 +1,6 @@
-# Distribution (2026-10-05)
+# Distribution
 
-Our own answer to a "growth" cold email: README is repositioned (README.md), these are the channels and drafts.
+Where to announce warp and post drafts; README.md carries the positioning.
 README examples are verified by probes/readme/*.warp (run each with `warp <file>`).
 
 ## Positioning
