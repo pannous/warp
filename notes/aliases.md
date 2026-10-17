@@ -13,11 +13,10 @@ Each kind of word has one alias table. Add a spelling to its table, not a new li
 | foreign keywords (`constant`, `new P`, `enum class`) | src/warp_parser/atoms.rs foreign_form | note_alias_at gives the note the word's own position |
 | pragmas (`use relaxed`/`lenient`/`loose`, `use script mode`) | src/errors/diagnostic/mod.rs RELAXED_PRAGMAS, PRAGMA_SUFFIX | any pragma may end in `mode`; is_pragma (program) and says_pragma (source lines) both read it |
 
-Lessons (cards operator-spelling, synonyms-table, alias-hint-position, 2026-10-14):
+Gotchas:
 - A word operator needs an operand after it (operand_follows). Otherwise `use same;` reads `same` as `===`.
 - A table entry changes what predicates say about a word: is_library_word and is_operand_word read SYNONYMS. Before
   adding a statement word, check the binding.
 - A note raised in the parser must set its own position (note_alias_at); the hint position is otherwise stale.
 
-Folded (card rs-private, 2026-10-14): welcome_forms' RUBY_METHODS and LINQ_METHODS and the sumOf entry of
-BLOCK_REDUCTIONS are one METHOD_ALIASES table; R's and PHP's iteration functions live in lib/R.warp and lib/PHP.warp.
+Ruby, LINQ and sumOf method spellings are one METHOD_ALIASES table (welcome_forms); R's and PHP's iteration functions live in lib/R.warp and lib/PHP.warp.
