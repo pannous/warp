@@ -380,7 +380,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	}
 	if std::env::var_os(REFUSALS_REPORT).is_some() {
 		let mut ranked: Vec<_> = refusals.into_iter().collect();
-		ranked.sort_by(|a, b| b.1.cmp(&a.1));
+		ranked.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
 		eprintln!("{} inside; outside the core:", inside.len());
 		ranked.iter().for_each(|(refusal, count)| eprintln!("{count:5} {refusal}"));
 	}
