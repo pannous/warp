@@ -49,6 +49,7 @@ parser-keyword-table. Target shapes:
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
   knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+  Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
   restoring by hand.
 - parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
