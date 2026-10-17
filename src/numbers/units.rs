@@ -1088,14 +1088,15 @@ fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
 	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(duration, message)])
 }
 
-/// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
+/// A constant duration in milliseconds, to the nearest one: `1000 ms`, `2 s`, `1 min`, `2 seconds`, `16.7 ms` (17), a
+/// duration of the time module; the timers and sleep count whole milliseconds
 pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	if let Node::Data(data) = node.drop_meta() {
 		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
 		Ok(Some((seconds, signature))) if signature == [(Dimension::duration(), 1)] => {
-			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
+			nearest(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
 		}
 		_ => None,
 	}

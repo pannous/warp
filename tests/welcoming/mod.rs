@@ -57,6 +57,7 @@ mod test_shell_words; // card unix-words
 mod test_slash_comment_after_value;
 mod test_slash_comment_needs_space;
 mod test_slash_comment_prose_operators; // card comment-after
+mod test_sleep_fractions; // card playground-tour
 mod test_sleep_seconds;
 mod test_sleep_unit_shadow;
 mod test_sleep_unit_warning;
