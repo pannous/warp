@@ -3764,7 +3764,6 @@ PASSED:
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
-  ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6347,6 +6346,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
 
 SUMMARY:
-16 ignored, 6344 passed, 0 failed, 6344 total tested
+16 ignored, 6343 passed, 1 failed, 6344 total tested

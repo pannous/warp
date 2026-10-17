@@ -1,0 +1,8 @@
+// The tree shapes parser.warp writes and the sugar pass reads, as node_view writes them (tests/common/twins.rs)
+
+def listed(bracket, separator, nodes) := ["list", bracket, separator] + nodes
+def is_symbol(node) := node is list and node.length == 2 and node#1 == "symbol"
+def is_call_head(node) := node is list and node.length > 3 and node#1 == "list" and node#2 == "("
+
+// The words that define a function: `def f(x) {…}`
+FUNCTION_KEYWORDS = ["fun", "fn", "def", "define", "function", "func"]

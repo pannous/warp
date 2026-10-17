@@ -32,7 +32,7 @@ Decision self-hosting:
 - Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
   result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
   warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
-  (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
+  (notes/self_hosting_dropped.md, the component's "deviations" section, with an example each), and the Rust side gets a bug card or,
   when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
   quirks before its Rust part is removed.
 - The same holds for structurally unsound decisions, not only bugs: special cases for single words, passes that undo
@@ -55,9 +55,13 @@ parser-keyword-table. Target shapes:
 - parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
   `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
   each; the twin compares after that pass.
+  Done (lib/compiler/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
+  `loop {…}`. Count words wait for parser-scope-pass (a program's own `twice`); `1e3`, `2x`, `x⁻¹`, `global int n`
+  already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
   knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+  Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
   restoring by hand.
 - parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
