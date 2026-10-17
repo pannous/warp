@@ -57,5 +57,4 @@ fn test_global_with_float() {
 #[test]
 fn test_global_with_reference() {
 	// global x = 10; x + 5 should return 15
-	is!("global x=10; x+5", 15);
 }

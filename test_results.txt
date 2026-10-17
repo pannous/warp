@@ -462,6 +462,7 @@ PASSED:
   ✓ control::test_match_type_arms::a_named_type_binds_the_subject
   ✓ control::test_match_type_arms::a_type_word_tests_the_type
   ✓ control::test_match_type_arms::a_variable_named_like_a_type_stays_a_value
+  ✓ control::test_match_type_arms::is_reads_an_unparenthesized_union_as_the_type
   ✓ control::test_match_type_arms::is_tests_a_type_union
   ✓ control::test_match_type_arms::types_and_values_as_alternatives
   ✓ control::test_match_whole_value::a_variable_named_value_wins
@@ -819,8 +820,6 @@ PASSED:
   ✓ control::test_threads::a_stop_handler_runs_once_the_task_stopped
   ✓ control::test_threads::a_task_nobody_awaits_finishes_before_the_program_ends
   ✓ control::test_threads::a_task_of_a_list_parameter_runs_where_it_starts
-  ✓ control::test_threads::a_task_of_other_values_runs_where_it_starts
-  ✓ control::test_threads::an_error_in_a_task_is_the_error_of_await
   ✓ control::test_threads::an_exact_number_crosses_to_a_task
   ✓ control::test_threads::await_binds_its_task_inside_an_expression
   ✓ control::test_threads::await_gives_the_result_of_the_thread
@@ -833,7 +832,6 @@ PASSED:
   ✓ control::test_time_of_day::a_time_of_day_must_be_one
   ✓ control::test_time_of_day::one_host_word_starts_every_timer
   ✓ control::test_time_of_day::the_delay_until_a_weekday_skips_the_other_days
-  ✓ control::test_times_count_once::a_trailing_if_guards_the_whole_assignment
   ✓ control::test_times_count_once::times_evaluates_its_count_once
   ✓ control::test_times_count_once::trailing_while_stays_a_plain_while_with_a_hint
   ✓ control::test_top_level_block::test_branch_block_yields_its_last_item
@@ -1663,6 +1661,7 @@ PASSED:
   ✓ functions::test_multi_value::test_int_divmod_returns_both_results
   ✓ functions::test_named_arguments::a_bare_flag_name_in_a_call_sets_it
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
+  ✓ functions::test_named_arguments::a_shallow_copy_of_an_instance_shares_its_lists
   ✓ functions::test_named_arguments::named_arguments_follow_the_parameter_order_of_a_python_colon_def
   ✓ functions::test_named_arguments::named_arguments_run_as_written
   ✓ functions::test_named_arguments::named_arguments_set_free_variables_of_the_body
@@ -2238,6 +2237,7 @@ PASSED:
   ✓ lists::test_object_list_walk::walking_a_list_of_objects_takes_linear_steps
   ✓ lists::test_one_entry_map_parts::a_one_entry_map_keeps_its_fields
   ✓ lists::test_one_entry_map_parts::a_one_entry_map_misses_a_field_like_a_bigger_map
+  ✓ lists::test_one_entry_map_parts::a_one_entry_map_reads_a_field_named_like_a_changing_method
   ✓ lists::test_one_entry_map_parts::a_pair_keeps_its_parts
   ✓ lists::test_one_entry_map_text::print_keeps_the_braces_of_a_one_entry_map
   ✓ lists::test_one_entry_map_text::the_text_of_a_one_entry_map_keeps_its_braces
@@ -4193,6 +4193,9 @@ PASSED:
   ✓ text::test_backtick_templates::an_unclosed_backtick_says_so
   ✓ text::test_brace_hole::a_backslash_brace_gets_no_hint
   ✓ text::test_brace_hole::a_backslash_brace_is_a_hole
+  ✓ text::test_byte_loop_inline::a_byte_loop_over_a_text_parameter
+  ✓ text::test_byte_loop_inline::a_character_is_read_as_its_text
+  ✓ text::test_byte_loop_inline::an_inline_byte_read_stays_in_bounds
   ✓ text::test_case_table::every_cased_code_point_maps_as_rust_does
   ✓ text::test_case_table::upper_and_lower_map_as_rust_does
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
@@ -4855,7 +4858,6 @@ PASSED:
   ✓ types::test_real_references::a_map_built_by_its_entries_shares
   ✓ types::test_real_references::a_new_field_grows_the_same_instance
   ✓ types::test_real_references::an_alias_sees_a_changed_field
-  ✓ types::test_real_references::copy_makes_an_independent_map
   ✓ types::test_real_references::each_construction_is_a_new_instance
   ✓ types::test_real_references::maps_share
   ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
@@ -5017,7 +5019,6 @@ PASSED:
   ✓ types::test_traits::test_conformance_to_a_declared_trait_is_a_type_test
   ✓ types::test_traits::test_instances_are_equatable_by_their_fields
   ✓ types::test_traits::test_min_and_max_of_a_user_type
-  ✓ types::test_traits::test_mixed_kinds_stay_not_comparable
   ✓ types::test_traits::test_ordering_a_type_without_compare_is_a_compile_error
   ✓ types::test_traits::test_sorting_a_type_without_compare_names_the_trait_and_the_fix
   ✓ types::test_traits::test_trait_synonyms_declare_a_trait
@@ -5115,7 +5116,6 @@ PASSED:
   ✓ types::test_typed_list_elements::a_bracketed_list_parameter_holds_its_element_type
   ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
   ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
-  ✓ types::test_types_scope::test_data_key_is_a_scope
   ✓ types::test_types_scope::test_kebab_key_that_is_also_subtraction_warns
   ✓ types::test_types_scope::test_plural_type_word_denotes_a_list
   ✓ types::test_types_scope::test_type_of_list_names_its_element_type
@@ -5351,7 +5351,6 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
-  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -6182,6 +6181,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
 
 SUMMARY:
-13 ignored, 6179 passed, 0 failed, 6179 total tested
+13 ignored, 6178 passed, 1 failed, 6179 total tested

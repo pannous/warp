@@ -1,3 +1,0 @@
-class C{size: float}
-xs: [C] = [C(3.5)]
-xs#1.size

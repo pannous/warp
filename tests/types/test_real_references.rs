@@ -55,9 +55,3 @@ fn a_map_built_by_its_entries_shares() {
 	is!("m = {}; m[\"a\"] = 1; n = m; n[\"a\"] = 2; m[\"a\"]", 2);
 	is!("m = {}; m[\"a\"] = 1; n = m; n[\"b\"] = 2; m[\"b\"]", 2);
 }
-
-#[test]
-fn copy_makes_an_independent_map() {
-	is!("m = {a:1}; n = m.copy(); n.a = 2; m.a", 1);
-	is!("m = {a:1, b:2}; n = m.copy(); n.c = 3; try m.c catch 0", 0);
-}

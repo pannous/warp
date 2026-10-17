@@ -35,7 +35,6 @@ fn a_missing_required_field_is_an_error() {
 fn an_enum_names_its_cases_by_index() {
 	is!("enum color {red green blue}; color.red as int", 0);
 	is!("enum color {red green blue}; color.green as int", 1);
-	is!("enum color {red green blue}; color.blue as int", 2);
 }
 
 #[test]

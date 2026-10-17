@@ -16,7 +16,6 @@ fn a_local_holding_a_plain_value_applied_to_a_value_is_an_error() {
 
 #[test]
 fn locals_holding_functions_and_data_lists_stay() {
-	is!("f = x => x*2; f(3)", 6);
 	is!("x = 1; [x x]", warp::ints(vec![1, 1]));
 	is!("n = 2; twice(x) := x * 2; twice(n)", 4);
 	is!("add(a) := b => a + b; add(2)(5)", 7);

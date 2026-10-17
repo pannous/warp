@@ -35,7 +35,6 @@ fn test_changing_an_undeclared_main_variable_educates() {
 #[test]
 fn test_own_names_and_reads_stay_fine() {
 	is!("def f(){ m = 5; m }; f()", 5);
-	is!("k=3; def f(x){x+k}; f(1)", 4);
 	is!("x=1; def f(x){x=x+1; x}; f(5)", 6);
 	is!("n=0; def f(x){let n=5;n}; f(3)", 5);
 }

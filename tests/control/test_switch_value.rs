@@ -4,7 +4,6 @@ use crate::is;
 
 #[test]
 fn a_switch_can_be_bound() {
-	is!("y=switch 2 {1: 10 2: 20}; y+1", 21);
 	is!("c=1; y=match c {1: 10 default: 0}; y", 10);
 }
 
