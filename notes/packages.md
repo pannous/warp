@@ -4,7 +4,7 @@
   package: an entry of `packages.warp` (repository root, compiled in with `include_str!`) or a folder of the default
   registry github.com/pannous/warp-packages; else an FFI library. A package is fetched once into `packages/<name>`
   below the working directory (gitignored) and its `<name>.warp` loaded like any module; without it, it only brings files.
-- Default registry (card build-sh, user 2026-10-17; packages.rs `registered`): one folder per package, `<name>/<name>.warp`
+- Default registry (packages.rs `registered`): one folder per package, `<name>/<name>.warp`
   plus the manifest `<name>/package.warp`; versions are tags `<name>@1.2.3`. Its default branch is cloned to
   `~/.cache/warp/packages/.registry`, refreshed when older than an hour (a missing folder does not force a fetch, so a C
   library's `use sqlite3` asks at most hourly). Latest = the clone's folder, linked as packages/<name>; a pin clones the

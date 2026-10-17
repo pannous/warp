@@ -1,6 +1,6 @@
 # Patterns as values: `find` as a plain warp function (card pattern-parameters)
 
-Question (user, 2026-10-17, parser-rewrite context): can `tree find {type: "image", src}` be a pure warp function,
+Question: can `tree find {type: "image", src}` be a pure warp function,
 the pattern passed unevaluated like a `block`/`data` argument ("pattern as a subtype of data")?
 
 ## How it works today

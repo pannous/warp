@@ -32,8 +32,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
     `gh variable set PYPI_PUBLISH -R pannous/warp -b true`. AUR: account on aur.archlinux.org with an ssh public key
     (`ssh-keygen -t ed25519 -f ~/.ssh/aur -N ''`, paste ~/.ssh/aur.pub in My Account), then
     `gh secret set AUR_SSH_KEY -R pannous/warp < ~/.ssh/aur` (set; aur.archlinux.org has registration paused, card
-    register-lang), then `gh variable set AUR_PUBLISH -R pannous/warp -b true`. PyPI is live since v1.3.0
-    (2026-10-17). Once the AUR is too, the README's Install gets
+    register-lang), then `gh variable set AUR_PUBLISH -R pannous/warp -b true`. PyPI is live since v1.3.0. Once the AUR is too, the README's Install gets
     `yay -S warp-lang-bin` (the .deb/.rpm line is there).
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
 - crates.io: `cargo install --locked warp-lang warp-runtime` (live since v1.3.0). Packages `warp-lang`

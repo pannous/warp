@@ -8,5 +8,5 @@ Pushing only `main` never shows on the web wiki.
 - The user's checkout /Users/me/dev/angles/warp/wiki keeps a local `main` that tracks and pushes to `master`
   (`branch.main.merge=refs/heads/master`, `remote.origin.push=refs/heads/main:refs/heads/master`).
 - A remote `main` is a leftover: the user deletes it (`git push origin --delete main` in the wiki checkout; the
-  git-destructive hook blocks agents). The one there now (33635e2, 2026-10-05) is contained in master.
+  git-destructive hook blocks agents). Any one there is contained in master.
 - No server-side mirror: wiki repos run no Actions or hooks, and a `gollum`-event Action fires only for web edits.
