@@ -189,7 +189,9 @@ pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserF
 	// `number sine(number x){ x = x % turn …` with a float turn: the `number` parameter holds a float throughout
 	let mut params = params;
 	let mut widened = false;
-	for param in params.iter_mut().filter(|param| scope.locals.get(&param.name).is_some_and(|local| local.kind.is_float())) {
+	for param in
+		params.iter_mut().filter(|param| scope.locals.get(&param.name).is_some_and(|local| local.kind.is_float()))
+	{
 		if param.annotation.as_ref().is_some_and(|declared| declared.name() == NUMBER_WORD) {
 			param.annotation = Some(Node::Symbol(FLOAT_WORD.to_string()));
 			widened = true;
