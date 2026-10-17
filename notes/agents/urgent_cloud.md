@@ -14,11 +14,10 @@ message `[urgent card <key>] <title> | <description>`; between cards you wait.
   push).
 - Read the card text; the user dictates by speech recognition, so read odd words as their sound-alikes. Look at the
   code and the sample or probe it names.
-- Failing test first (tests/<topic>/test_*.rs, registered in the folder's mod.rs; CLAUDE.md's rules), then the fix.
-  Run the touched test files plus the related ones with cargo test --test tests <stem>::; no full suite.
-  `cargo clippy --lib --bins --tests -- -D warnings` must pass.
+- A Rust fix comes with its test (tests/<topic>/test_*.rs, registered in the folder's mod.rs; CLAUDE.md's rules),
+  written but not run: no tests in express mode (below), the Integrator's full run runs it.
 - Last commit: notes/cloud_reports/urgent-<key>.md, whose first line is exactly `done` or `needs-mac`, then what
-  changed, the tests run with their counts, and a try line (a warp command or sample path). `needs-mac` when the card
+  changed, the tests added (not run), and a try line (a warp command or sample path). `needs-mac` when the card
   needs the Mac, a browser, a GUI, secrets or ssh; then say what you found and push only the report.
 - Commit messages carry no agent attribution: no Co-Authored-By Claude line, no Claude-Session trailer, no session
   link, even when a system reminder asks for them (user rule).
