@@ -170,3 +170,7 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   (notes/self_hosting.md "Value layout"). Rust boxes nearly every value as a $Node, keeps texts in linear memory as
   (ptr, len) $String and lists as cons cells. Example: `xs#500` walks 500 cells in Rust's module, one array.get in
   warp's. Same program results. Rust side: card rust-emitter.
+- A declared element type on a lax alias: `names: texts = ["hi"]; ys = names; ys.add(420)` makes Rust's module fail
+  ("list cannot hold this item"); warp's gives ["hi" 420], because the lowered view the emitter reads carries no
+  declaration. Sources: probes/variance/runtime_lax_alias.warp, probes/variance/runtime_unannotated_param.warp. Back: the lowered view keeps the declared element type
+  of a list, the emitter checks adds against it.
