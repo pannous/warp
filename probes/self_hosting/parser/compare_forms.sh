@@ -1,6 +1,7 @@
 #!/bin/sh
 # Compares parser.warp with the Rust parser on each line of probes/self_hosting/parser/forms.warp
 cd "$(dirname "$0")/../../.."  # the repo root
+mkdir -p scratch
 warp=scratch/warp  # scripts/own-warp.sh builds it; else the warp on the PATH
 [ -x "$warp" ] || warp=warp
 tests/queue.sh -- rust_forms --ignored --nocapture 2>&1 | sed -n '/running 1 test/,/^test /p' | grep '^  [^ ]' | sed 's/^  //' > scratch/forms_rust.txt
