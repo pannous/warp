@@ -43,3 +43,38 @@ fn an_overloaded_name_given_as_a_function_is_the_variant_called() {
 	is!("f() := 1\nf(a, b) := a + b\n[1, 2, 3].reduce(f)", 6);
 	is!("f() := 7\nf(x) := x\ny = f\ny + 1", 8);
 }
+
+// card point-label: x.f, x.f(y) and x.f = v of f overloaded by arity call the variant counting x too
+#[test]
+fn an_overloaded_name_called_on_a_receiver_is_the_variant_counting_it() {
+	is!("f(x) := x * 2; f(x, y) := x + y; 3.f + 3.f(4)", 13);
+	is!("class P{name: text}\nf(it: P) := it.name\nf(it: P, v) := { it.name = v; it }\np = P(\"ab\")\np.f = \"cd\"\np.f", "cd");
+	is!("class P{f: int}\nf(x) := x * 2\nf(x, y) := x + y\nP(5).f", 5);
+}
+
+// card point-label (reviewer veto): only an instance of the class the setter takes sets through it; a map's field
+// named like an overloaded function is the map's own
+#[test]
+fn a_map_field_named_like_an_overloaded_function_is_set_on_the_map() {
+	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1}\nm.pick = 5\nm.pick", 5);
+	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1, other: 2}\nm.pick = 5\nm.other", 2);
+	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1}\nm.pick", 1);
+}
+
+// card point-label (reviewer veto 2): the receiver decides, not the name: a map elsewhere with a key label leaves a
+// class's getter and setter of instances in place
+#[test]
+fn an_unrelated_map_key_leaves_a_class_setter_in_place() {
+	let point = "class Point { x: int; name: text }\nPoint.label := it.name + \"!\"\nPoint.label(v) := it.name = v\n";
+	is!(&format!("{point}cfg = {{label: 3}}\np = Point(1, \"a\")\np.label = \"b\"\np.label"), "b!");
+	is!(&format!("{point}cfg = {{label: 3}}\ncfg.label = 4\ncfg.label"), 4);
+}
+
+// card point-label (reviewer veto 3): an untyped f never turns `m.f = v` into a call, wherever the map comes from
+#[test]
+fn an_untyped_overload_never_turns_a_field_assignment_into_a_call() {
+	let pick = "pick(a, b) := b\npick(a) := a\n";
+	is!(&format!("{pick}f(m) := {{ m.pick = 5; m }}\nf({{pick: 1, other: 2}}).other"), 2);
+	is!(&format!("{pick}f(m) := {{ m.pick = 5; m }}\nf({{pick: 1, other: 2}}).pick"), 5);
+	is!(&format!("{pick}ms = [{{pick: 1}}]\nfor m in ms {{ m.pick = 5 }}\nms#1.pick"), 5);
+}
