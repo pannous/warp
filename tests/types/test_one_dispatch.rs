@@ -177,6 +177,8 @@ fn a_local_name_leaves_the_keyword_to_the_top_level() {
 fn a_unit_named_by_a_local_is_the_unit_elsewhere() {
 	is!("f(s) := s + 1; str(2000ms as s) + str(f(1))", "2s2");
 	is!("f() := { m = 2; m }; str(300 cm as m)", "3m");
+	// a module alias named like a unit stays the alias (integrator bounce, test_use_modules)
+	is!("use math as mm\nmm.floor(4.5)", 4);
 }
 
 // a function's own variable named like a store word or cast word stays its variable, while the top level keeps the

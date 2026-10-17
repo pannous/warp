@@ -122,10 +122,13 @@ fn with_units_after_numbers(program: Node) -> Node {
 	let variables: std::collections::HashSet<String> = names.difference(&callables).cloned().collect();
 	let shadowed = ShadowedUnits { names, variables, units_used };
 	let program = marked_after_numbers(program, &shadowed);
-	// `2000ms as s` where the program binds s only elsewhere (a function's parameter, a field): there it is the unit
+	// `2000ms as s` where only a function binds s (its parameter): elsewhere it is the unit. A module alias
+	// `use math as mm` stays the alias
+	let local_names = crate::program_names::bound_in_functions(&program);
 	crate::program_names::rewritten_by_scope(program, &|node, scope| match node {
 		Node::Key(value, Op::As, unit) if is_unit_type(&unit) => {
-			let names = shadowed.names.iter().filter(|name| !scope.takes(name)).cloned().collect();
+			let is_free_local = |name: &&String| local_names.contains(*name) && !scope.takes(name);
+			let names = shadowed.names.iter().filter(is_free_local).cloned().collect();
 			let free = ShadowedUnits { names, variables: shadowed.variables.clone(), units_used };
 			Node::Key(value, Op::As, Box::new(marked_unit(*unit, &free)))
 		}

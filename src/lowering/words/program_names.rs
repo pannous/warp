@@ -66,6 +66,13 @@ impl ProgramNames {
 	}
 }
 
+/// The names any function of the program binds inside (bound_in_function)
+pub fn bound_in_functions(program: &Node) -> HashSet<String> {
+	let mut bound = HashSet::new();
+	program.visit(&mut |part| bound.extend(function_head(part).iter().flat_map(bound_in_function)));
+	bound
+}
+
 /// The names a function binds inside: its parameters, the names its body assigns and its loop variables
 fn bound_in_function(head: &FunctionHead) -> HashSet<String> {
 	let mut bound: HashSet<String> = head.parameters().into_iter().filter_map(parameter_name).collect();
