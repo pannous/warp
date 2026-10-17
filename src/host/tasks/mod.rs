@@ -21,9 +21,7 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use wasmtime::{
-	AsContextMut, Caller, Engine, Func, Global, Linker, Memory, Module, StoreContextMut, UpdateDeadline, Val, ValType,
-};
+use wasmtime::{AsContextMut, Caller, Engine, Func, Global, Linker, Memory, Module, StoreContextMut, Val, ValType};
 
 mod channels;
 use channels::*;
@@ -36,8 +34,6 @@ pub use values::*;
 const CELL_BYTES: usize = 8;
 /// How often the engine's epoch ticks while tasks run: a stop or pause takes effect within about this long
 const EPOCH_TICK: Duration = Duration::from_millis(5);
-/// The main program's epoch deadline: it never stops at an epoch check
-pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
 
@@ -60,14 +56,14 @@ impl TaskControl {
 	}
 
 	/// At an epoch check: a paused task waits for resume (or stop), a stopped one ends with `task stopped`
-	fn checkpoint(&self) -> wasmtime::Result<UpdateDeadline> {
+	fn checkpoint(&self) -> wasmtime::Result<()> {
 		let mut state = self.state.lock().expect("task control");
 		while *state == Control::Pause {
 			state = self.changed.wait(state).expect("task control");
 		}
 		match *state {
 			Control::Stop => Err(task_failure(STOPPED.to_string())),
-			_ => Ok(UpdateDeadline::Continue(1)),
+			_ => Ok(()),
 		}
 	}
 
@@ -406,9 +402,9 @@ impl TaskTable {
 	) -> Result<(wasmtime::Store<HostState>, wasmtime::Instance)> {
 		let mut state = HostState::new();
 		state.in_task = true;
-		let mut store = crate::util::fueled_store(&self.engine, state);
-		store.epoch_deadline_callback(move |_| control.checkpoint());
-		store.set_epoch_deadline(1);
+		let (fuel, time) = (crate::util::fuel_budget(), crate::util::time_limit());
+		let mut store =
+			warp_runtime::engine::checked_store(&self.engine, state, fuel, time, move || control.checkpoint());
 		let mut linker = Linker::new(&self.engine);
 		crate::run::wasm_reader::link_imports(&mut linker, &self.engine, &self.module, self.imports)?;
 		if let Some(shared) = &self.shared {
