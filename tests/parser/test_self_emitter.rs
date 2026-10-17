@@ -4,8 +4,8 @@ use crate::common::twins::{checked_sources, emitter_differential, sources};
 use std::path::PathBuf;
 
 const CORE_PROGRAMS: &str = "probes/self_hosting/emitter/core";
-/// The checked share of samples and probes inside the core, at least: a floor that only rises
-const LEAST_SOURCES_INSIDE: usize = 3;
+/// Programs of the checked share of samples and probes inside the core, at least (24 on 2026-10-17): a floor that only rises
+const LEAST_SOURCES_INSIDE: usize = 10;
 
 #[test]
 fn core_programs_run_as_rust_runs_them() {

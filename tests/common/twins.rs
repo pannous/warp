@@ -311,7 +311,8 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	let (mut inside, mut differing) = (vec![], vec![]);
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
 		let calls: Vec<String> = cases.iter().map(|(_, call, _)| call.clone()).collect();
-		for ((path, _, text), module) in cases.iter().zip(warp_values("emitter", &calls)) {
+		let values = warp_values("emitter", &calls);
+		for ((path, _, text), module) in cases.iter().zip(values) {
 			if module.text_value().is_some_and(|text| text.starts_with(OUTSIDE_THE_CORE)) {
 				continue;
 			}

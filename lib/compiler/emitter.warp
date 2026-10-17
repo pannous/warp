@@ -27,8 +27,12 @@ compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}
 smallest_int = -9223372036854775808
 largest_int = 9223372036854775807
+# (a refusal is thrown; a word ends with its value, not with `refuse`, whose kind would become the word's: card
+# is-early-return)
 # the kind of a recursive call before its function's body is read: it takes the kind of what it meets
 pending = "?"
+# what a refusal says first: the twin harness counts such a program as outside the core
+outside_the_core = "outside the core: "
 no_kind = "none"
 
 ## bytes
@@ -68,13 +72,21 @@ section(id: int, content: any) := [id] + uleb(#content) + content
 
 ## the program's functions
 class Function { name: text; parameters: any; annotations: any; body: any; index: int; kinds: any; result: text; code: any; locals: any; local_names: any }
-class Module { functions: any; order: any; refusal: any }
+class Module { functions: any; order: any }
 
-module = Module({}, [], ø)
+module = Module({}, [])
 
 refuse(why: text) := {
-	if module.refusal == ø { module.refusal = why }
-	[no_kind, []]
+	throw outside_the_core + why
+}
+
+# a refused form in a few words: `key :=`, `group ( memo_known`, a name
+form_of(n: any) := {
+	if type(n) is key { return "key " + op_of(n) }
+	if n is symbol { return name_of(n) }
+	if is_group(n) and #n > 0 and n#1 is symbol { return "group " + bracket_of(n) + " " + name_of(n#1) }
+	if is_group(n) { return "group " + bracket_of(n) }
+	"a " + type(n)
 }
 
 parameter_symbol(p: any) := if type(p) is key and op_of(p) == ":" then key_of(p) else p
@@ -134,18 +146,18 @@ joint_kind(a: text, b: text) := {
 # code of kind `from` as kind `to`
 converted(value: any, to: text) := {
 	from = value#1
-	if from == to or from == pending { return value#2 }
 	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
 	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
-	refuse("a " + from + " where a " + to + " is needed")#2
+	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
+	value#2
 }
 # a value as a yes/no condition: non-zero is yes
 condition(value: any) := {
 	kind = value#1
-	if kind == "bool" { return value#2 }
 	if kind == "int" { return value#2 + [op.i64_eqz, op.i32_eqz] }
 	if kind == "float" { return value#2 + [op.f64_const] + le64(0) + [float_ops["!="]] }
-	refuse("a " + kind + " as a condition")#2
+	if kind != "bool" { refuse("a " + kind + " as a condition") }
+	value#2
 }
 
 number_value(n: any) := {
@@ -185,7 +197,7 @@ euclidean_remainder(body: Body, a: any, b: any) := {
 }
 
 assignment(body: Body, target: any, value: any) := {
-	if not (target is symbol) { return refuse("an assignment to " + view_of(target)) }
+	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	kind = value#1
 	if kind == "bool" { return refuse("a yes/no variable") }
@@ -235,12 +247,11 @@ sequence(body: Body, items: any) := {
 }
 
 expression(body: Body, n: any) := {
-	if module.refusal != ø { return [no_kind, []] }
 	if n is number { return number_value(n) }
 	if n is symbol { return local_value(body, n) }
 	if type(n) is key { return key_expression(body, n) }
-	if is_group(n) { return group_expression(body, n) }
-	refuse("the value " + view_of(n))
+	if not is_group(n) { refuse("the value " + form_of(n)) }
+	group_expression(body, n)
 }
 
 group_expression(body: Body, n: any) := {
@@ -248,8 +259,8 @@ group_expression(body: Body, n: any) := {
 		return call(body, module.functions[name_of(n#1)], n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
-	if bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";" { return sequence(body, n.map(x => x)) }
-	refuse("the group " + view_of(n))
+	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
+	sequence(body, n.map(x => x))
 }
 
 key_expression(body: Body, n: any) := {
@@ -272,8 +283,8 @@ right_of_if(n: any) := value_of(n)
 
 negation(value: any) := {
 	if value#1 == "float" { return ["float", value#2 + [op.f64_neg]] }
-	if value#1 == "int" { return ["int", [op.i64_const, 0] + value#2 + [int_ops["-"]]] }
-	refuse("the negation of a " + value#1)
+	if value#1 != "int" { refuse("the negation of a " + value#1) }
+	["int", [op.i64_const, 0] + value#2 + [int_ops["-"]]]
 }
 # `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
 logical(body: Body, symbol: text, left: any, right: any) := {
@@ -345,10 +356,13 @@ module_bytes(functions: any) := {
 wasm_module(program: any) := {
 	module.functions = {}
 	module.order = []
-	module.refusal = ø
 	main = Function("main", [], [], ø, -1, ø, pending, ø, ø, ø)
-	main.body = separated(bracketed(collect_functions(program), ""), ";")
-	compile_function(main, [])
-	if module.refusal != ø { return "outside the core: " + module.refusal }
-	module_bytes(module.order)
+	try {
+		main.body = separated(bracketed(collect_functions(program), ""), ";")
+		compile_function(main, [])
+		module_bytes(module.order)
+	} catch refusal {
+		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+		"" + refusal
+	}
 }
