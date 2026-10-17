@@ -96,7 +96,7 @@ instead of bending the code.
      `todo note <card>` first, as one line in this fixed form:
      `card | branch | tip (full sha) | filters | passed/failed (queue or cloud) | clippy+wasm32 ok`, then prose if needed.
      Never message warp-integrator with FYIs or swap notices: the card is the merge request. Express (the user or the Supervisor asked for your result fast, a crash fix):
-     `todo ready <card> --express` (or a note saying "express"): the Integrator runs it alone and next (notes/roles.md).
+     `todo ready <card> --express` (or a note saying "express"): the Integrator pushes it to main untested at once, the gate follows (notes/roles.md).
   4. Optional: one line to warp-reviewer by SendMessage ("<card> ready"); it reads `todo list Ready` anyway. Report
      one line to the Supervisor.
   The Integrator merges only Ready cards and closes them (`todo done <card> <commit>`). A bounce (failing test,
