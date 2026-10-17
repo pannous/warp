@@ -1107,16 +1107,26 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	names
 }
 
-/// The program's functions, methods and classes: after a number their name is the unit, never a value to multiply by
-/// (`h(d) := d + 2 h` adds two hours)
+/// The program's functions, methods, classes and module aliases (`use list as l`): after a number their name is the
+/// unit, never a value to multiply by (`h(d) := d + 2 h` adds two hours)
 fn collect_callable_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	if let Some(definition) = crate::lowering::function_head(node) {
 		names.insert(definition.name.to_string());
 	}
-	if let Node::Type { name, .. } = node.drop_meta() {
-		if let Node::Symbol(name) = name.drop_meta() {
-			names.insert(name.clone());
+	match node.drop_meta() {
+		Node::Type { name, .. } => {
+			if let Node::Symbol(name) = name.drop_meta() {
+				names.insert(name.clone());
+			}
 		}
+		Node::List(words, _, _) => {
+			if let [keyword, used] = words.as_slice() {
+				if let Some((_, alias)) = crate::lowering::welcome_forms::aliased_module(keyword, used) {
+					names.insert(alias);
+				}
+			}
+		}
+		_ => {}
 	}
 	node.drop_meta().parts().into_iter().for_each(|child| collect_callable_names(child, names));
 }

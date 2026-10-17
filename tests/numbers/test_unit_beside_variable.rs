@@ -24,3 +24,8 @@ fn a_function_named_like_a_unit_leaves_the_unit_after_a_number() {
 	is!("m() := 1\nstr(3m)", "3m");
 	is!("h(d) := d + 2 h\nstr(h(3 h))", "5h");
 }
+
+#[test]
+fn a_module_alias_named_like_a_unit_is_no_variable_after_a_number() {
+	fails_with("use list as l\nstr(3l)", "l is the litre unit here; add `use units`");
+}
