@@ -22,3 +22,10 @@ fn json_parse_reads_json5() {
 fn json_of_warp_data_is_that_data() {
 	is!("x = json{ 'a':1 }; x.a", 1);
 }
+
+#[test]
+fn strict_json_and_warp_literals_read_alike() {
+	is!("x = json(\"{\\\"a\\\":1}\"); x.a", 1);
+	is!("x = {'a':1, // note\n 'b':[2,3,],}\nx.b", warp::warp_parser::parse("[2 3]"));
+	is!("use json\nx = parse_json(\"{'a':1, // note\\n 'b':[2,3,],}\")\nx.b", warp::warp_parser::parse("[2 3]"));
+}

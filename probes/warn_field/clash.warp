@@ -1,6 +1,0 @@
-class Box { size: int }
-size(b:Box) := b.size * 10
-b = Box(3)
-print(b.size)
-print(size(b))
-print(b.size())

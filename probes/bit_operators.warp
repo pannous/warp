@@ -1,6 +1,0 @@
-// card operator-shall: & and | combine the bits of whole numbers, and/or stay logical
-n = 624485
-print n & 127      // the low seven bits: 101
-print 101 | 128    // adds bit 7: 229
-print 12 and 10    // the logical and gives its last truthy operand: 10
-if 8 & 4 { print "never" } else { print "no shared bits" }  // warns: write 8 and 4, or (8 & 4) != 0

@@ -71,9 +71,7 @@ pub(super) fn block_function_names(program: &Node) -> HashSet<String> {
 
 pub(super) fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node {
 	match node {
-		Node::Key(name, Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(name) if blocks.contains(name)) => {
-			Node::Empty
-		}
+		Node::Key(name, Op::Define, _) if name.symbol_name().is_some_and(|name| blocks.contains(name)) => Node::Empty,
 		other => children_rewritten(other, |child| without_block_bodies(child, blocks)),
 	}
 }
@@ -150,7 +148,7 @@ pub(super) fn declares_local(body: &Node, name: &str) -> bool {
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if let [keyword, declaration] = items.as_slice() {
-				declared |= matches!(keyword.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
+				declared |= keyword.symbol_name().is_some_and(is_declaration_word)
 					&& global_binding(declaration, &Scope::new()).is_some_and(|binding| binding.name == name);
 			}
 		}

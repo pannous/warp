@@ -576,8 +576,12 @@ fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
 		crate::host::RUN_BLOCK)).weak()])
 }
 
-/// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.
+/// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding; an
+/// instance with unit fields (`Run(5 km)`) too, whose units only the standard module carries
 fn raw_struct_module(node: &Node) -> Option<Vec<u8>> {
+	if crate::numbers::units::static_units::has_result_units() {
+		return None;
+	}
 	let mut type_registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut type_registry, node);
 	let (type_def, field_values) = find_struct_instantiation(&type_registry, node)?;

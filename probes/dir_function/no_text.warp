@@ -1,3 +1,0 @@
-area(width: int, height: int) := width * height
-print area.params
-print dir(area)

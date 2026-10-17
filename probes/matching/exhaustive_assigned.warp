@@ -1,5 +1,0 @@
-// card exhaustive-assigned: c only ever holds cases of Coin, so its match must cover the cases assigned to it
-enum Coin { Penny, Nickel, Dime }
-c = Penny
-c = Dime
-match c { Penny: 1; Nickel: 5 }

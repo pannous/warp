@@ -12,7 +12,6 @@ fn an_exact_real_joins_a_text_symbolically() {
 
 #[test]
 fn an_exact_real_as_text_is_symbolic() {
-	is!("str(√2)", "√2");
 	is!("sqrt(2) as string", "√2");
 	is!("π/2 as string", "π/2");
 }

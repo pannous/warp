@@ -1,7 +1,0 @@
-# tree replace: every match rewritten at any depth, children first (card tree-replace, tree-patterns step 5)
-xs = [[1, 2], [3, [1, 5]]]
-ys = xs replace [1, x] with x
-page = {top: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
-linked = page replace {type: "image", src} with {type: "link", href: src}
-simplify(code) := code replace data($a * 1) with a
-[ys, linked, str(simplify(data (n * 1 + k * 1)))]

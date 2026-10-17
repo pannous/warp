@@ -259,6 +259,15 @@ const SCRIPT_MODULES: [&str; 4] = ["os", "file", "net", "shell"];
 const COMMENTS_PRAGMA: &str = "comments";
 /// `use reflection` (or `use reflection mode`): function values answer where and how they were made
 const REFLECTION_PRAGMA: &str = "reflection";
+/// `use fuel`: the program's runs count fuel steps instead of stopping at the time limit (decision fuel-metering)
+const FUEL_PRAGMA: &str = "fuel";
+
+/// The pragmas that turn on a switch of the compile context while the program compiles
+const FLAG_PRAGMAS: [(&str, compile_context::Flag); 3] = [
+	(COMMENTS_PRAGMA, |context| &mut context.comments_as_meta),
+	(REFLECTION_PRAGMA, |context| &mut context.reflection_mode),
+	(FUEL_PRAGMA, |context| &mut context.counts_fuel),
+];
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
 const ACKNOWLEDGED: &str = "acknowledged";
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
@@ -491,14 +500,13 @@ fn is_pragma(node: &Node, word: &str) -> bool {
 	}
 }
 
-/// A source line saying `use <word>` (or `use <word> mode`)
 /// `use strict` in the program or `--strict`, not any warnings-as-errors mode: what also makes an i64 overflow trap
 /// (decision i64-wraps)
 pub fn is_strict() -> bool {
-	matches!(warning_mode(), WarningMode::Strict(_))
-		|| compile_context::read(|context| context.source.lines().any(|line| says_pragma(line, STRICT_PRAGMA[1])))
+	matches!(warning_mode(), WarningMode::Strict(_)) || compile_context::read(|context| context.says_strict)
 }
 
+/// A source line saying `use <word>` (or `use <word> mode`)
 fn says_pragma(line: &str, word: &str) -> bool {
 	let words: Vec<&str> = line.split_whitespace().collect();
 	words == [PRAGMA_WORD, word] || words == [PRAGMA_WORD, word, PRAGMA_SUFFIX]
@@ -549,10 +557,14 @@ pub fn without_strict_pragma(program: Node) -> (Node, bool) {
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,
 /// so the warnings of parse-time Asks obey it too
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
-	compile_context::change(|context| context.source = code.to_string());
 	let says = |word: &str| code.lines().any(|line| says_pragma(line, word));
+	let strict = says(STRICT_PRAGMA[1]);
+	compile_context::change(|context| {
+		context.source = code.to_string();
+		context.says_strict = strict;
+	});
 	let relaxed = RELAXED_PRAGMAS.into_iter().chain([SCRIPT_PRAGMA]).any(says);
-	match says(STRICT_PRAGMA[1]) {
+	match strict {
 		true => with_warning_mode(warning_mode().strictened(), || relaxed_if(relaxed, body)),
 		false => relaxed_if(relaxed, body),
 	}
@@ -576,25 +588,21 @@ fn without_relaxed_pragma(program: Node) -> (Node, bool) {
 
 /// Run `body` with warnings as errors when the program says `use strict`, and comments as meta information when it
 /// says `use comments`, and without hints when it says `use relaxed` or `use script`; `use reflection` turns on
-/// reflection mode
+/// reflection mode, `use fuel` fuel counting
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
-	let (program, reflection) = without_pragma(program, REFLECTION_PRAGMA);
-	compile_context::scoped(|context| &mut context.reflection_mode, reflection, || in_written_mode(program, body))
+	let (program, flags) = FLAG_PRAGMAS.into_iter().fold((program, vec![]), |(program, mut flags), (word, flag)| {
+		let (program, said) = without_pragma(program, word);
+		flags.push((flag, said));
+		(program, flags)
+	});
+	compile_context::scoped_flags(&flags, || in_written_mode(program, body))
 }
 
 fn in_written_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
-	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
 	let (program, script) = with_script_modules(program);
 	let (program, relaxed) = without_relaxed_pragma(program);
-	let relaxed = relaxed || script;
-	compile_context::scoped(
-		|context| &mut context.comments_as_meta,
-		comments,
-		|| {
-			relaxed_if(relaxed, || match without_strict_pragma(program) {
-				(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
-				(program, false) => body(program),
-			})
-		},
-	)
+	relaxed_if(relaxed || script, || match without_strict_pragma(program) {
+		(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
+		(program, false) => body(program),
+	})
 }

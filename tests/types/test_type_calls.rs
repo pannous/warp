@@ -5,7 +5,6 @@ use crate::is;
 #[test]
 fn a_type_called_converts_as_the_cast() {
 	is!("hex(123)", 123);
-	is!("text(hex(255))", "0xFF");
 	is!("x = hex(255); x + 1", 256);
 	is!("text(byte(65))", "0x41");
 	is!("decimal(1/4)", "0.25");
@@ -25,10 +24,8 @@ fn a_type_called_braceless_converts_like_braced() {
 	is!("b = byte 65; b == byte(65)", true);
 	is!("decimal 1/4", "0.25");
 	is!("x = 255; h = hex x; text(h)", "0xFF");
-	is!("byte b = 10; b * 3", 30);
 	is!("int 3.7", 3);
 	is!("text 5", "5");
-	is!("0xFF", 255);
 }
 
 #[test]

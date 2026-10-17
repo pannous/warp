@@ -277,7 +277,6 @@ pub(super) fn with_trailing_block(assignment: Node, block: Node) -> Node {
 	}
 }
 
-/// Read and parse a WARP file
 /// The body block at the end of an `if`/`while` header: `c {b}` is the pair [c {b}], and in `i < n {b}` the
 /// block juxtaposes only with the rightmost operand `n`, so it is split off the right spine of the comparison
 pub(super) fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, Node)> {
@@ -308,7 +307,6 @@ pub(super) fn split_trailing_block(header: &Node, empty_is_block: bool) -> Optio
 	}
 }
 
-/// `while condition body`: the loop head `ø while condition` applied `do` to its body
 /// Statements as a `{…}` block body
 pub(super) fn curly_block(statements: Node) -> Node {
 	match statements {

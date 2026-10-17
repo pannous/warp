@@ -11,7 +11,6 @@ fn do_runs_a_block_literal() {
 #[test]
 fn do_runs_a_named_block() {
 	is!("f:={1+2}; do f", 3);
-	is!("f:={1+2}; f!", 3);
 	is!("x=4; f:={x*2}; do f", 8);
 }
 

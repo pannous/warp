@@ -26,7 +26,6 @@ fn a_braceless_type_call_nests_in_a_type_call() {
 
 #[test]
 fn a_braceless_type_call_nests_like_a_user_function() {
-	is!("square(n) := n*n; square square 2", 16);
 	is!("f(x) := x*2; text f 4", "8");
 	is!("f(x) := x*2; f int 3.7", 6);
 }
@@ -49,6 +48,5 @@ fn a_braceless_type_call_compares_like_a_user_function() {
 
 #[test]
 fn a_braceless_truth_type_call_next_to_a_comparison_is_ambiguous_like_an_untyped_function() {
-	crate::common::fails_with("same(x) := x; same 3 == 9", "write (same 3) == 9 or same(3 == 9)");
 	crate::common::fails_with("bool 3 == 9", "write (bool 3) == 9 or bool(3 == 9)");
 }

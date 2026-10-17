@@ -54,7 +54,7 @@ fn constraint_names(node: &Node) -> Option<Vec<String>> {
 }
 
 fn is_effect_name(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if EffectSet::named(&[name]).is_some())
+	node.symbol_name().is_some_and(|name| EffectSet::named(&[name]).is_some())
 }
 
 /// `definition ! Effects` → (definition, allowed effects)

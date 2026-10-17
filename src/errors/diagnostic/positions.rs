@@ -149,7 +149,10 @@ pub fn shown_excerpt(line: usize, column: usize) -> Option<String> {
 /// when a lowering pass rebuilt it with compiler temporaries (`range_value·item`), which the program never wrote
 pub fn written_text(node: &Node) -> String {
 	let serialized = node.serialize().trim().to_string();
-	if !serialized.contains(crate::analyzer::TEMPORARY_SEPARATOR) {
+	// a temporary `x·1` or the item `loop_item_1` of an inlined lambda: the program wrote another name (card map-odd-errors)
+	let is_generated = serialized.contains(crate::analyzer::TEMPORARY_SEPARATOR)
+		|| serialized.split(|c: char| !c.is_alphanumeric() && c != '_').any(crate::lambdas::is_inlined_loop_variable);
+	if !is_generated {
 		return serialized;
 	}
 	written_statement(node).unwrap_or(serialized)

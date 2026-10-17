@@ -35,7 +35,7 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 [dependencies]
 miniz_oxide = { version = "0.9", optional = true } # the carried machine code is deflated (standalone.rs)
 serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"], optional = true } # foreign calls speak JSON lines (foreign.rs)
-wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "gc", "gc-copying", "runtime", "std"], optional = true }
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "call-hook", "gc", "gc-copying", "runtime", "std"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 wry = { version = "0.57", optional = true, default-features = false }

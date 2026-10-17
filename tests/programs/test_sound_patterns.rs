@@ -60,7 +60,6 @@ fn a_live_loop_is_a_voice_that_repeats() {
 }
 
 #[test]
-#[ignore = "fixnow: fixnow-live_loops_play_along: Error(\"task go block 1: wasm trap: null reference at 5:1\")"]
 fn live_loops_play_along() {
 	let program = "use sound\ntempo = 120\nlive_loop 2 { pattern(\"c4 e4\", 1 beat) }\nplay(G3, 1 bar)\nawait live_voice\nsave sound as: \"SONG\"";
 	let (seconds, _) = rendered("along", program);

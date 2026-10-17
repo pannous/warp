@@ -19,6 +19,11 @@ fn a_class_parameter_names_its_fields() {
 }
 
 #[test]
+fn pattern_names_leave_a_global_of_the_same_name_alone() {
+	is!(&format!("{POINT}; total(Point{{x, y}}) := x + y; x = 10; total(Point{{x: 3, y: 4}}) + x"), 17);
+}
+
+#[test]
 fn a_value_of_another_shape_is_an_error() {
 	fails_with("add_pair([a, b]) := a + b; add_pair([1, 2, 3])", "no case");
 }
