@@ -90,6 +90,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - unicode-symbols: warp parses Unicode symbol characters (arrows, math) as free operator names; an undefined use is "operator ⇔ is not defined". Arrow spellings of existing operators are alias lines in lib/math.warp with a "prefer ->" hint.
 - operator-alias: math spellings of operators are alias lines in lib/math.warp keeping the precedence (`operator × := *`, `prefix operator √ := sqrt`).
 - implicit-words-reserved: `it`, `self`, `this` are reserved: binding one warns (error under use strict); as the explicit parameter (`f(it) := …`) it is allowed.
+- data-reserved (2026-10-17, user, told to warp-self-splice): `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
 - exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
