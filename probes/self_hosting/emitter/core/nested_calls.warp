@@ -1,0 +1,5 @@
+# emitter core: functions calling functions, several parameters
+# 25
+plus(a, b) := a + b
+twice(x) := plus(x, x)
+plus(twice(5), plus(7, 8))
