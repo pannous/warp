@@ -12,16 +12,15 @@ pub(crate) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		}
 		// stop(handle), play's handle; handle 0: all of them
 		("stop", [handle]) if number_of(handle)? == 0.0 => crate::sound::stop(),
-		("stop", [handle]) => crate::sound::stop_one(number_of(handle)?.max(0.0) as usize)?,
+		("stop", [handle]) => crate::sound::stop_one(whole_of(handle)?)?,
 		("fade", [handle, gain, seconds]) => {
-			crate::sound::fade(number_of(handle)?.max(0.0) as usize, number_of(gain)?, number_of(seconds)?)?
+			crate::sound::fade(whole_of(handle)?, number_of(gain)?, number_of(seconds)?)?
 		}
 		("at", [seconds]) => crate::sound::at(number_of(seconds)?),
 		// card shared-buses: bus(number, [[name, settings…] …]) its effects (number 0: a new bus), send(bus) the next sounds, returning the bus before
 		("bus", [bus, effects]) => {
 			let effects = effects.as_items().iter().map(effect_of).collect::<Result<Vec<_>, String>>()?;
-			return crate::sound::define_bus(number_of(bus)?.max(0.0) as usize, effects)
-				.map(|bus| Node::int(bus as i64));
+			return crate::sound::define_bus(whole_of(bus)?, effects).map(|bus| Node::int(bus as i64));
 		}
 		// effect([name, settings…], signal, rate, full scale): a list signal through the bus DSP (card shared-buses stage 2)
 		("effect", [effect, signal, rate, full_scale]) => {
@@ -34,7 +33,7 @@ pub(crate) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			);
 			return Ok(Node::list(processed.into_iter().map(Node::float).collect()));
 		}
-		("send", [bus]) => return Ok(Node::int(crate::sound::send_to(number_of(bus)?.max(0.0) as usize) as i64)),
+		("send", [bus]) => return Ok(Node::int(crate::sound::send_to(whole_of(bus)?) as i64)),
 		("at_end", []) => crate::sound::at_end(),
 		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),
@@ -79,9 +78,14 @@ pub(crate) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 
 /// The levels of `bands` bands from low to high Hz in the window (src/sound/spectrum.rs), as a list
 fn band_levels(window: &[f64], rate: f64, bands: &Node, low: &Node, high: &Node) -> Result<Node, String> {
-	let bands = number_of(bands)?.max(0.0) as usize;
+	let bands = whole_of(bands)?;
 	let levels = crate::sound::spectrum::window_levels(window, rate, bands, number_of(low)?, number_of(high)?);
 	Ok(Node::list(levels.into_iter().map(Node::float).collect()))
+}
+
+/// A handle, bus or count: a number cut to a whole one, 0 at least
+fn whole_of(node: &Node) -> Result<usize, String> {
+	Ok(number_of(node)?.max(0.0) as usize)
 }
 
 /// A file's path, beside the program when it is there

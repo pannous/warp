@@ -4,7 +4,7 @@
 //! a loop over such a list. A unit field read of an instance it cannot see is a loud error, never a silent SI number.
 
 use super::list_units::CALLS_FOLLOWED;
-use super::{returned_value, shown, Fields, Inference, Signature, Stop};
+use super::{shown, Fields, Inference, Signature, Stop};
 use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -121,13 +121,10 @@ fn in_unit(field: &str, unit: &str, written: &Node, value: Node) -> Option<Node>
 	let one_unit = crate::numbers::units::unit_expression(&crate::warp_parser::parse(expression))?;
 	let per_unit = crate::numbers::units::scale(&one_unit, |factor| super::base_unit(factor.unit.dimension));
 	let text = written.serialize().trim().to_string();
-	let amount = match written.drop_meta() {
-		Node::Number(_) | Node::Symbol(_) => text.clone(),
-		_ => format!("({text})"),
-	};
-	let message = format!("{field} holds {unit}: write the unit, `{amount} {unit}`");
+	let with_unit = super::with_unit_written(written, unit);
+	let message = format!("{field} holds {unit}: write the unit, `{with_unit}`");
 	let warning = crate::errors::diagnostic::Diagnostic::at(written, message);
-	crate::errors::diagnostic::say(warning.offer("the field's unit", text, format!("{amount} {unit}")));
+	crate::errors::diagnostic::say(warning.offer("the field's unit", text, with_unit));
 	Some(Node::Key(Box::new(value), Op::Mul, Box::new(super::number_node(&per_unit)?)))
 }
 
@@ -283,17 +280,16 @@ impl Inference {
 		if let Some(class) = self.named_construction_class(node) {
 			return Some(class);
 		}
+		if let Some(table) = crate::database_tables::element_table(node) {
+			return self.class_lists.get(&table).cloned();
+		}
 		match node.drop_meta() {
 			Node::Symbol(name) => self.instances.get(name).cloned(),
 			Node::List(items, Bracket::Round, _) => match items.first().map(Node::drop_meta) {
 				Some(Node::Symbol(class)) if self.classes.contains_key(class) => Some(class.clone()),
-				_ if calls_left > 0 && self.called_definition(items).is_some() => {
-					let body = &self.called_definition(items).expect("guarded").body;
-					returned_value(body).and_then(|last| self.instance_class_within(last, calls_left - 1))
-				}
-				_ => {
-					crate::database_tables::element_table(node).and_then(|table| self.class_lists.get(&table).cloned())
-				}
+				_ => self
+					.returned_by_call(items, calls_left)
+					.and_then(|last| self.instance_class_within(last, calls_left - 1)),
 			},
 			Node::Key(list, Op::Hash, _) => self.class_lists.get(&list.drop_meta().name()).cloned(),
 			_ => None,
@@ -424,6 +420,9 @@ impl Inference {
 				lowered.push(argument.clone());
 				continue;
 			}
+			if let Some(stop) = self.unit_after_variable(argument, arguments.get(index + 1)) {
+				return Some(Err(stop));
+			}
 			// `Run(distance: 5 km)`: a named argument has its field's signature
 			let named = match argument.drop_meta() {
 				Node::Key(name, Op::Colon, value) => {
@@ -446,6 +445,17 @@ impl Inference {
 			});
 		}
 		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), Signature::plain())))
+	}
+
+	/// `D(n inch)`, `D{diagonal: p.n inch}`: the unit after a value not written as a number is read as the next value, as
+	/// units bind only after a number (notes/decisions.md); the error names the way that works
+	fn unit_after_variable(&mut self, value: &Node, next: Option<&Node>) -> Option<Stop> {
+		let unit = next.filter(|unit| self.unit_word(unit).is_some())?;
+		match self.is_unbound_amount(value) {
+			Ok(true) => Some(Stop::Error(format!("DimensionError: {}", super::unit_after_name_advice(value, unit)))),
+			Ok(false) => None,
+			Err(stop) => Some(stop),
+		}
 	}
 
 	/// `Run` and the fields of a construction with named fields `Run{distance: 5 km}` of a class with unit fields; the
@@ -476,11 +486,14 @@ impl Inference {
 			return None;
 		};
 		let mut lowered = vec![];
-		for entry in entries {
+		for (index, entry) in entries.iter().enumerate() {
 			let Node::Key(field, op, value) = entry.drop_meta() else {
 				lowered.push(entry.clone());
 				continue;
 			};
+			if let Some(stop) = self.unit_after_variable(value, entries.get(index + 1)) {
+				return Some(Err(stop));
+			}
 			let held = fields.iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, held)| held);
 			let key = format!("{class}.{}", field.drop_meta().name());
 			let value = match self.field_value(&key, &key, held, value) {

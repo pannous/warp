@@ -42,10 +42,14 @@ const KEY_PLACEHOLDER: &str = "storage_key";
 const VALUE_PLACEHOLDER: &str = "storage_value";
 
 pub fn lower(program: Node) -> Node {
-	let stores = stores_used(&program);
-	let program = if stores.is_empty() { program } else { storage_accesses(program, &stores) };
+	// each store word where the program leaves it free: a function's own `local` is its variable
+	let program = stores_used(&program).into_iter().fold(program, |program, store| {
+		crate::program_names::rewritten_where_free(program, store.0, &|free| {
+			storage_accesses(free, std::slice::from_ref(&store))
+		})
+	});
 	let stores = crate::warp_parser::mentions(&program, STORED_WORD)
-		&& !crate::soft_keywords::program_names(&program, STORED_WORD);
+		&& !crate::program_names::ProgramNames::of(&program).takes(STORED_WORD);
 	let dev = crate::pipeline::compile_mode().for_dev;
 	if !stores && !dev {
 		return program;
@@ -129,7 +133,7 @@ fn stored_statement(statement: &Node, file: &str) -> Option<Vec<Node>> {
 /// the dev store (the page's sessionStorage), so the page shows the same state after a reload
 fn dev_kept(statement: &Node, changed: &HashSet<String>, kept_names: &mut HashSet<String>) -> Option<Vec<Node>> {
 	let (name, default) = main_level_assignment(statement)?;
-	(changed.contains(name) && kept_names.insert(name.clone())).then(|| kept(name, default, DEV_STORE))
+	(changed.contains(name) && kept_names.insert(name.to_string())).then(|| kept(name, default, DEV_STORE))
 }
 
 /// `x = std_io("store", "declare", ["x", v, file])` (v kept when x isn't yet) and the listener saving each change of x
@@ -144,13 +148,11 @@ fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
 	vec![load, save]
 }
 
-fn main_level_assignment(statement: &Node) -> Option<(&String, &Node)> {
+fn main_level_assignment(statement: &Node) -> Option<(&str, &Node)> {
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
+	let name = target.symbol_name()?;
 	Some((name, value))
 }
 
@@ -169,24 +171,20 @@ fn changed_names(statements: &[Node]) -> HashSet<String> {
 	};
 	for statement in statements {
 		match main_level_assignment(statement) {
-			Some((name, value)) if assigned.insert(name.clone()) => collect(value),
+			Some((name, value)) if assigned.insert(name) => collect(value),
 			_ => collect(statement),
 		}
 	}
 	changed
 }
 
-/// The store words the program uses and does not name itself, with the file of each store
+/// The store words the program uses, with the file of each store
 fn stores_used(program: &Node) -> Vec<(&'static str, String)> {
 	let (local, database) = (store_file(), database_file());
 	let words =
 		LOCAL_WORDS.iter().map(|word| (*word, local.clone())).chain([(SESSION_WORD, SESSION_STORE.to_string())]);
 	let words = words.chain([(DATABASE_WORD, database)]);
-	words
-		.filter(|(word, _)| {
-			crate::warp_parser::mentions(program, word) && !crate::soft_keywords::program_names(program, word)
-		})
-		.collect()
+	words.filter(|(word, _)| crate::warp_parser::mentions(program, word)).collect()
 }
 
 /// Each access of a store word as the store's call

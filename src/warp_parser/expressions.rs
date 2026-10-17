@@ -113,44 +113,16 @@ impl WarpParser {
 
 			// a whole statement or assigned value, never an operand inside it: `ys = xs.map(f) @parallel` marks the map call
 			let whole_expression = min_bp <= Op::Assign.binding_power().1;
-			if let Some(annotated) = whole_expression.then(|| self.try_parse_trailing_attribute(&lhs)).flatten() {
-				lhs = annotated;
-				continue;
-			}
-
-			// Step 2: Suffix (led)
 			// P48: a declared suffix operator wins over the built-in one of the same glyph (`suffix operator ³`)
-			if let Some(updated) =
-				self.try_parse_user_suffix(&lhs, min_bp).or_else(|| self.try_parse_suffix(&lhs, min_bp))
-			{
-				lhs = updated;
-				continue;
-			}
-			if let Some(updated) = self.try_parse_user_infix(&lhs, min_bp) {
-				lhs = updated;
-				continue;
-			}
-
-			// `(() => 7)()`: a parenthesized function called with no arguments, the `()` glued to the group
-			let parenthesized = matches!(lhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1);
-			if parenthesized && self.prev_char() == ')' && self.current_char() == '(' && self.peek_char(1) == ')' {
-				self.advance_by(2);
-				lhs = Node::List(
-					vec![lhs, Node::List(vec![], Bracket::Round, Separator::None)],
-					Bracket::None,
-					Separator::Space,
-				);
-				continue;
-			}
-
-			// Step 2b: Subscript (tight, like Op::Hash)
-			if let Some(updated) = self.try_parse_subscript(&lhs, min_bp, SUBSCRIPT_BP) {
-				lhs = updated;
-				continue;
-			}
-
-			if let Some(updated) = self
-				.try_parse_rust_macro(&lhs)
+			if let Some(updated) = whole_expression
+				.then(|| self.try_parse_trailing_attribute(&lhs))
+				.flatten()
+				.or_else(|| self.try_parse_user_suffix(&lhs, min_bp))
+				.or_else(|| self.try_parse_suffix(&lhs, min_bp))
+				.or_else(|| self.try_parse_user_infix(&lhs, min_bp))
+				.or_else(|| self.try_parse_empty_call(&lhs))
+				.or_else(|| self.try_parse_subscript(&lhs, min_bp, SUBSCRIPT_BP))
+				.or_else(|| self.try_parse_rust_macro(&lhs))
 				.or_else(|| self.try_parse_evaluate_bang(&lhs, min_bp))
 				.or_else(|| self.try_parse_times(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
@@ -359,7 +331,7 @@ impl WarpParser {
 			let bitwise = deferred_hint
 				&& crate::lowering::nodes::may_be_whole_number(&lhs)
 				&& crate::lowering::nodes::may_be_whole_number(&rhs);
-			let rhs = match bare_symbol.filter(|_| deferred_hint) {
+			let mut rhs = match bare_symbol.filter(|_| deferred_hint) {
 				Some(_) if self.in_arm_key() => rhs, // `1 | 2 =>`: alternatives, no pipe, no bit hint
 				Some(_) if may_pipe && crate::pipes::may_be_stage(&rhs) => self.pipe_operand(rhs, op_line, op_column),
 				// any operand after `|` may be a pipe stage (`n | f(x)` or `xs | sort`): pipes.rs decides, by the functions
@@ -374,12 +346,8 @@ impl WarpParser {
 				None => rhs,
 			};
 			// a type word compares as its type on either side of == and != (`int != integer` is no)
-			let rhs = if op.is_equality() && written != IS_WORD {
-				crate::type_tests::equality_operand(&lhs, rhs)
-			} else {
-				rhs
-			};
 			if op.is_equality() && written != IS_WORD {
+				rhs = crate::type_tests::equality_operand(&lhs, rhs);
 				lhs = crate::type_tests::equality_operand(&rhs, lhs);
 			}
 			if op == Op::Eq && written == IS_WORD {
@@ -415,6 +383,17 @@ impl WarpParser {
 		}
 
 		lhs
+	}
+
+	/// `(() => 7)()`: a parenthesized function called with no arguments, the `()` glued to the group
+	fn try_parse_empty_call(&mut self, lhs: &Node) -> Option<Node> {
+		let parenthesized = matches!(lhs.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1);
+		if !(parenthesized && self.prev_char() == ')' && self.current_char() == '(' && self.peek_char(1) == ')') {
+			return None;
+		}
+		self.advance_by(2);
+		let no_arguments = Node::List(vec![], Bracket::Round, Separator::None);
+		Some(Node::List(vec![lhs.clone(), no_arguments], Bracket::None, Separator::Space))
 	}
 
 	/// The right operand of `op` without a block: a branch, a glued pair's value or an expression

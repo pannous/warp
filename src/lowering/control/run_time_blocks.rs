@@ -6,7 +6,7 @@
 
 use super::nodes::{call, for_in_variable};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const UNRESOLVED_TOPIC: &str = "unresolved-block";
@@ -89,7 +89,9 @@ fn occurrences(node: &Node, name: &str) -> usize {
 /// `run_block(e, "a b", [a, b], data [definitions])`: the main-level variables assigned before it (a snapshot the
 /// block reads) and the program's function definitions (the block may call them)
 pub fn lower_interpret(program: Node) -> Node {
-	lower_statements(program, &mentions_interpret, &|site: &Site, node: Node| site.interpreted(node))
+	lower_statements(program, &|node: &Node| node.mentions(INTERPRET), &|site: &Site, node: Node| {
+		site.interpreted(node)
+	})
 }
 
 /// `x!` that blocks.rs did not run (wiki/charged.md §5, user decision P73: `!` forces, the kind decides): a block known
@@ -184,9 +186,10 @@ fn known_at_run_time(value: &Node, lists: &[String], context: &crate::compiler::
 			matches!(list.drop_meta(), Node::Symbol(list) if lists.contains(list))
 				|| known_at_run_time(list, lists, context)
 		}
-		Node::List(items, _, Separator::None | Separator::Space) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(function)) if context.user_functions.contains_key(function))
-		}
+		Node::List(items, _, Separator::None | Separator::Space) => items
+			.first()
+			.and_then(Node::symbol_name)
+			.is_some_and(|function| context.user_functions.contains_key(function)),
 		_ => false,
 	}
 }
@@ -211,7 +214,7 @@ fn is_mutating_call(node: &Node) -> bool {
 }
 
 pub(crate) fn is_data(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == crate::blocks::DATA_WORD))
+	node.is_call_of(crate::blocks::DATA_WORD)
 }
 
 /// A `!` mark this pass runs at run time: on an expression but a name or a field, or on a name holding data.
@@ -239,10 +242,6 @@ fn has_bang(node: &Node) -> bool {
 		}
 }
 
-fn mentions_interpret(node: &Node) -> bool {
-	node.mentions(INTERPRET)
-}
-
 /// `interpret e` / `interpret(e)`: e; `interpret(data n+k)`: the phrase `data n+k`
 fn interpret_argument(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
@@ -252,10 +251,6 @@ fn interpret_argument(node: &Node) -> Option<Node> {
 		}),
 		_ => None,
 	}
-}
-
-fn as_data(node: Node) -> Node {
-	Node::List(vec![symbol(crate::blocks::DATA_WORD), node], Bracket::None, Separator::Space)
 }
 
 impl Site {
@@ -285,7 +280,8 @@ impl Site {
 			Bracket::Square,
 			Separator::Comma,
 		);
-		let definitions = as_data(Node::List(self.definitions.clone(), Bracket::Square, Separator::Comma));
+		let definitions =
+			crate::blocks::as_data(Node::List(self.definitions.clone(), Bracket::Square, Separator::Comma));
 		call(crate::host::RUN_BLOCK, vec![block, names, values, definitions])
 	}
 

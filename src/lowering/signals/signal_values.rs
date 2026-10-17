@@ -1,7 +1,7 @@
 //! Signals as values (notes/signals.md phase 5): a listener inside a function on one of its parameters, or on a
 //! main-level variable the function does not assign, subscribes when the function runs and stays after it returns:
 //! `watch(s) := on change s {print value}; x = 1; watch(x); x = 2` prints 2. Such a variable escapes into a $Signal, a
-//! cell with a list of listener closures (wasm_emitter/cells.rs); every other variable stays plain (P109).
+//! cell with a list of listener closures (wasm_emitter/functions/cells.rs); every other variable stays plain (P109).
 //! `subscribe` (before variable_signals) turns the listener into `signal_listeners_set(s, signal_listeners(s) +
 //! [(value, old) => {check; 0}])`. `lower` (after it) finds the escaping variables (the subscribed parameters, and
 //! through every call the variables passed for them) and makes their first main-level write `x = signal_new(e)`, every
@@ -13,7 +13,7 @@
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
 use super::listeners;
-use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
+use super::nodes::{any_part, block, call, children_rewritten, for_in_variable, if_then, key};
 use crate::declarations::word;
 use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -160,14 +160,10 @@ impl SharedPolls {
 
 	/// A listener on watched values: it runs when one differs from the value seen last
 	fn on_change(&mut self, polling: String, listener_word: ListenerWord, subject: Node, body: Node) {
-		let watched = unique(
-			symbols(&subject)
-				.into_iter()
-				.filter(|name| self.shared.contains(name) || self.main_variables.contains(name))
-				.collect(),
-		);
-		let seen: Vec<(String, String)> = watched
+		let seen: Vec<(String, String)> = subject
+			.symbols_read()
 			.into_iter()
+			.filter(|name| self.shared.contains(name) || self.main_variables.contains(name))
 			.map(|name| {
 				self.seen_count += 1;
 				(name, format!("{SEEN_PREFIX}{}", self.seen_count - 1))
@@ -308,7 +304,7 @@ fn watched_names(listener_word: ListenerWord, subject: &Node) -> Vec<String> {
 		(ListenerWord::Set | ListenerWord::Change, _) => {
 			Some(signal_name(subject)).filter(|name| !name.is_empty()).into_iter().collect()
 		}
-		_ => unique(symbols(subject)),
+		_ => subject.symbols_read(),
 	}
 }
 
@@ -331,9 +327,7 @@ fn removal(statement: &Node) -> Option<(String, String)> {
 }
 
 fn contains_removal(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= removal(part).is_some());
-	found
+	any_part(node, |part| removal(part).is_some())
 }
 
 /// A removal inside a function or a block (`stop() := { remove b from listeners of t }`): the places it changes are
@@ -562,7 +556,7 @@ impl Subscriptions {
 	}
 }
 
-/// `(value, signal·old) => {check; 0}`: every listener closure of one arity returns one kind (wasm_emitter/closures.rs)
+/// `(value, signal·old) => {check; 0}`: every listener closure of one arity returns one kind (wasm_emitter/functions/closures.rs)
 fn listener_closure(globals: Vec<Node>, check: Node) -> Node {
 	// a sequence, not a block: the declarations move to the main level, and a block of the check alone reads as data
 	let closure_check = Node::List(globals.into_iter().chain([check]).collect(), Bracket::Round, Separator::Semicolon);
@@ -743,7 +737,7 @@ impl Signals {
 			_ => key(call(CELL_GET, vec![target.clone()]), op.base_op(), self.rewrite(value, signals, main)),
 		};
 		if main && self.escaping.contains(&name) && self.made.insert(name) {
-			return Node::Key(Box::new(target), Op::Assign, Box::new(call(SIGNAL_NEW, vec![value])));
+			return key(target, Op::Assign, call(SIGNAL_NEW, vec![value]));
 		}
 		call(SET_FUNCTION, vec![target, value])
 	}
@@ -1039,28 +1033,25 @@ fn named_items(list: &Node) -> Vec<String> {
 
 /// The main-level `xs = [a, b]` assignments: each variable and its list literal
 fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
-	let mut lists = vec![];
-	visit_main_level(program, &mut |node| {
-		if let Node::Key(target, Op::Assign, value) = node {
-			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (target.drop_meta(), value.drop_meta()) {
-				lists.push((name.clone(), value.as_ref().clone()));
-			}
-		}
-	});
-	lists
+	main_literals(program, |value| matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)).then_some(value))
 }
 
 /// The main-level `x = {…}` assignments: each variable and its object literal
 fn main_object_literals(program: &Node) -> Vec<(String, Node)> {
-	let mut objects = vec![];
+	main_literals(program, object_literal)
+}
+
+/// The main-level `x = literal` assignments whose value `literal_of` accepts: each variable and that literal
+fn main_literals(program: &Node, literal_of: impl Fn(&Node) -> Option<&Node>) -> Vec<(String, Node)> {
+	let mut literals = vec![];
 	visit_main_level(program, &mut |node| {
 		if let Node::Key(target, Op::Assign, value) = node {
-			if let (Node::Symbol(name), Some(literal)) = (target.drop_meta(), object_literal(value)) {
-				objects.push((name.clone(), literal.clone()));
+			if let (Some(name), Some(literal)) = (target.symbol_name(), literal_of(value)) {
+				literals.push((name.to_string(), literal.clone()));
 			}
 		}
 	});
-	objects
+	literals
 }
 
 /// An object literal `{age: 1, …}`, also of one entry, which arrives as its map `map_of_entry({age: 1})` (one_entry_maps.rs)
@@ -1265,12 +1256,7 @@ fn visit_main_level<'a>(node: &'a Node, action: &mut dyn FnMut(&'a Node)) {
 
 /// The names the main level assigns
 fn main_variables(program: &Node) -> HashSet<String> {
-	match program.drop_meta() {
-		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(bracket, separator) => {
-			crate::event_signals::main_level_variables(items)
-		}
-		statement => crate::event_signals::main_level_variables(std::slice::from_ref(statement)),
-	}
+	crate::event_signals::main_level_variables(&crate::variable_signals::main_statements(program).0)
 }
 
 /// The names a function body assigns (its locals, unless declared global), not those of the functions nested in it
@@ -1289,9 +1275,4 @@ fn assigned_names(body: &Node) -> HashSet<String> {
 /// `global x` of one of the names
 fn declares_global_of(statement: &Node, names: &HashSet<String>) -> bool {
 	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, name) if word(keyword) == GLOBAL_WORD && names.contains(&word(name)))
-}
-
-fn unique(names: Vec<String>) -> Vec<String> {
-	let mut seen = HashSet::new();
-	names.into_iter().filter(|name| seen.insert(name.clone())).collect()
 }

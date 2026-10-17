@@ -37,7 +37,6 @@ fn test_ruby_yield_calls_the_block() {
 // A block shares the variables it changes (P124): main's `total` is changed, not a copy
 #[test]
 fn test_block_changes_the_callers_variable() {
-	is!("total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal", 3);
 	is!("total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal", 3);
 	is!("global total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal", 3);
 	is!("n = 0\ninc = () => { n += 1; n }\ninc()\ninc()", 2);

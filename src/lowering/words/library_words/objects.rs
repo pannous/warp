@@ -1,5 +1,44 @@
 //! Objects and their fields: `object.name`, `name of object`, `object["name"]`, field assignments and `?.`, the variables only ever holding object literals
 use super::*;
+use crate::lowering::nodes::word_headed;
+
+/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
+/// otherwise` (word(x)), so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a
+/// list (`[{first: 2}]`) is held as a key, which has that key too
+pub(crate) fn map_field_or(receiver: &Node, name: &str, word_node: &Node, otherwise: Node) -> Node {
+	if !is_pure_read(receiver) {
+		return otherwise;
+	}
+	let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
+	let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
+	let contains = symbol(COLLECTION_CONTAINS).with_meta_of(word_node);
+	let has_key = parens(vec![contains, receiver.clone(), text(name)]);
+	if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), otherwise)
+}
+
+/// The keys of the map literals in the program: `size` of `{size: 9}`
+pub(super) fn entry_names(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	node.visit(&mut |node| {
+		if let Node::List(items, Bracket::Curly, _) = node.drop_meta() {
+			let keys = items.iter().filter_map(|item| match item.drop_meta() {
+				Node::Key(key, Op::Colon, _) => field_name(key),
+				_ => None,
+			});
+			names.extend(keys);
+		}
+	});
+	names
+}
+
+/// An uncalled word without arguments on a value that may be a map reads the map's entry of that name first: a
+/// counting word (`info.size`), or any other word but a map's own (`m.keys`) or one whose list or text result the code
+/// after it types (`it.chars.map(…)`), where a field read would hide that type (cards map-field, map-read)
+pub(crate) fn reads_entry_first(name: &str, word: &str) -> bool {
+	let keeps_word =
+		crate::members::MAP_MEMBERS.contains(&name) || result_kind(word).or_else(|| result_kind(name)).is_some();
+	crate::analyzer::is_counting_property(name) || !keeps_word
+}
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 pub(super) fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
@@ -112,13 +151,23 @@ pub(super) fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjec
 	}
 }
 
+/// The names some value of the program may hold as a member of its own: the entries of its object literals and the
+/// fields of its class bodies (`{first: 1}`, `class P{first:int}`)
+pub(super) fn member_names(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	node.visit(&mut |part| {
+		if let Some(entries) = object_entries(part) {
+			names.extend(entries.into_iter().map(|(name, _)| name));
+		}
+	});
+	names
+}
+
 /// An element, a field, a call's result or an object literal
 pub(super) fn may_hold_object(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Key(_, Op::Hash | Op::Dot, _) => true,
-		Node::List(items, Bracket::Round, Separator::None) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-		}
+		Node::List(items, Bracket::Round, Separator::None) => word_headed(items).is_some(),
 		other => object_entries(other).is_some(),
 	}
 }
@@ -176,11 +225,13 @@ pub(super) fn bind_read_data_objects(program: Node) -> Node {
 	Node::List(items, bracket, separator)
 }
 
-/// The names the program defines, as variables or functions: an alias word never shadows one (P142)
+/// The names the program defines or binds, as variables, functions, parameters or loop variables: an alias or library
+/// word never shadows one (P142, card library-word)
 pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
-	let mut defined = HashSet::new();
+	let mut defined: HashSet<String> = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
 	collect_assigned_names(node, &mut defined);
 	let context = crate::analyzer::function_definitions(node);
+	defined.extend(context.parameter_names());
 	defined.extend(context.user_functions.into_keys());
 	// a method lowered from a class or Go's `func (p Point) Sum()`: `(Sum self:Point) := …`
 	node.visit(&mut |part| {

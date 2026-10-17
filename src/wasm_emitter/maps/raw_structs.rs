@@ -177,7 +177,7 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	let module_id = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes).ok();
 
 	let engine = gc_engine();
-	let mut store = crate::util::fueled_store(&engine, ());
+	let mut store = crate::util::limited_store(&engine, ());
 	let module =
 		crate::run::module_cache::compiled_module(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
 
@@ -228,17 +228,9 @@ pub(in crate::wasm_emitter) fn find_instantiation_recursive(
 					}
 				}
 			}
-			// Recurse into right
 			find_instantiation_recursive(registry, right)
 		}
-		Node::List(items, _, _) => {
-			for item in items {
-				if let Some(result) = find_instantiation_recursive(registry, item) {
-					return Some(result);
-				}
-			}
-			None
-		}
+		Node::List(items, _, _) => items.iter().find_map(|item| find_instantiation_recursive(registry, item)),
 		_ => None,
 	}
 }

@@ -44,7 +44,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::GlobalGet(late.global), I::RefAsNonNull, I::CallRef(late.function_type)]);
 	}
 
-	/// At the start of main: every late-called function into its global
+	/// In the start function: every late-called function into its global
 	pub(in crate::wasm_emitter) fn emit_late_call_installation(&mut self, func: &mut Function) {
 		for late in self.late_calls.clone() {
 			match self.late_index(&late) {

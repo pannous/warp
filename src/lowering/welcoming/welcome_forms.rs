@@ -7,7 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{call, children_rewritten, is_kinded_type_word, key};
+use super::nodes::{call, children_rewritten, is_call_head, is_kinded_type_word, key};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -155,10 +155,10 @@ fn named_reserved(target: &Node, destructures: bool) -> Option<(Node, String)> {
 /// `set x to 5` is `x = 5` for any assignment target, with a style hint (decision setter-calls); after of_lookups
 /// `set width of canvas to 12` is `set canvas.width to 12`, so `canvas.width = 12`. A program's own `set` wins
 pub fn lower_set_phrases(node: Node) -> Node {
-	if !node.mentions_any(&[SET_WORD]) || crate::library_words::defined_names(&node).contains(SET_WORD) {
+	if !node.mentions_any(&[SET_WORD]) {
 		return node;
 	}
-	set_phrases(node)
+	crate::program_names::rewritten_where_free(node, SET_WORD, &set_phrases)
 }
 
 fn set_phrases(node: Node) -> Node {
@@ -192,18 +192,13 @@ pub fn lower_arrow_result_types(node: Node) -> Node {
 	match node {
 		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
 			let target = match *target {
-				Node::Key(head, Op::Arrow, result) if is_named_head(&head) => key(*head, Op::Colon, *result),
+				Node::Key(head, Op::Arrow, result) if is_call_head(&head) => key(*head, Op::Colon, *result),
 				other => lower_arrow_result_types(other),
 			};
-			Node::Key(Box::new(target), op, Box::new(lower_arrow_result_types(*body)))
+			key(target, op, lower_arrow_result_types(*body))
 		}
 		other => other.map_children(lower_arrow_result_types),
 	}
-}
-
-/// `x(p:P)`: a function's name and parameters in round brackets
-fn is_named_head(head: &Node) -> bool {
-	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|name| matches!(name.drop_meta(), Node::Symbol(_))))
 }
 
 /// The names assigned a lambda: `f = x => …`, `f = { |x| … }`
@@ -442,10 +437,7 @@ fn named_subject(item: &Node) -> Option<(Node, Node)> {
 	if !matches!(name.drop_meta(), Node::Symbol(_)) || !super::nodes::is_block(cases) || expression.is_empty() {
 		return None;
 	}
-	let expression = match expression {
-		[single] => single.clone(),
-		many => Node::List(many.to_vec(), bracket.clone(), separator.clone()),
-	};
+	let expression = Node::single_or_list(expression.to_vec(), bracket.clone(), separator.clone());
 	Some((key(name.as_ref().clone(), Op::Assign, expression), cases.clone()))
 }
 
@@ -595,7 +587,7 @@ fn aliased_event(items: &[Node], own: &HashSet<String>) -> Option<Vec<Node>> {
 	if !listener.is_symbol(ON_WORD) && !listener.is_symbol(ONCE_WORD) {
 		return None;
 	}
-	let Node::Symbol(name) = event.drop_meta() else { return None };
+	let name = event.symbol_name()?;
 	let (meant, released) = aliased_event_name(name)?;
 	note_event_alias(event, name, meant, released);
 	Some([vec![listener.clone(), symbol(meant)], rest.to_vec()].concat())
@@ -619,13 +611,13 @@ fn aliased_event_name(name: &str) -> Option<(&'static str, bool)> {
 
 /// `onclick`: the written word, the warp event its DOM attribute name stands for, whether it names a release
 fn attribute_event(word: &Node) -> Option<(String, &'static str, bool)> {
-	let Node::Symbol(written) = word.drop_meta() else { return None };
+	let written = word.symbol_name()?;
 	let name = written.strip_prefix(ON_WORD)?;
 	let (event, released) = match PAGE_EVENTS.iter().find(|event| **event == name) {
 		Some(event) => (*event, false),
 		None => aliased_event_name(name)?,
 	};
-	Some((written.clone(), event, released))
+	Some((written.to_string(), event, released))
 }
 
 /// The one warning of every `when`, its fix the word this shape means
@@ -823,17 +815,16 @@ fn unaliased_uses(node: Node, aliases: &mut Vec<String>) -> Node {
 	node.map_children(|child| unaliased_uses(child, aliases))
 }
 
-fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
+/// `use list as l`: the module and the program's name for it
+pub(crate) fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
 	let Node::Key(module, Op::As, alias) = used.drop_meta() else {
 		return None;
 	};
 	let is_use =
 		matches!(keyword.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str()));
-	let Node::Symbol(alias) = alias.drop_meta() else {
-		return None;
-	};
+	let alias = alias.symbol_name()?;
 	(is_use && crate::modules::names_a_module(&crate::modules::path_of(module)?))
-		.then(|| (module.as_ref().clone(), alias.clone()))
+		.then(|| (module.as_ref().clone(), alias.to_string()))
 }
 
 pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
@@ -1074,10 +1065,7 @@ fn function_parameters(head: &Node) -> Option<Node> {
 				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
 				_ => None,
 			}).collect();
-			match names.as_slice() {
-				[single] => Some(single.clone()),
-				_ => Some(Node::List(names, Bracket::Round, Separator::Comma)),
-			}
+			Some(Node::single_or_list(names, Bracket::Round, Separator::Comma))
 		}
 	}
 }

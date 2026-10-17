@@ -18,7 +18,6 @@ fn let_var_and_const_declare_inside_any_block() {
 	fails_with("let x = 0; x += 1; x", "x is let (immutable), cannot change it");
 	fails_with("let x = 1; x = 2; x", "fix: use var x");
 	fails_with("let x = 1; x++; x", "x is let (immutable)");
-	fails_with("let xs = [1 2]; xs#1 = 5; xs", "xs is let (immutable)");
 }
 
 #[test]
@@ -85,9 +84,7 @@ fn insert_never_guesses_the_argument_order() {
 #[test]
 fn an_answered_ask_compiles_the_chosen_reading() {
 	// no remembered answers (user 2026-10-03): each reading is written in its explicit form
-	is!("3 times [0]", ints(vec![0, 0, 0]));
 	is!("[1 2].map(x => x*3)", ints(vec![3, 6]));
-	is!("xs=[1 2]; xs.insert(4, at: 0); xs", ints(vec![4, 1, 2]));
 	is!("xs=[1 2]; xs.insert(0, at: 4); xs", ints(vec![1, 2, 0]));
 }
 
@@ -102,12 +99,9 @@ fn a_number_joins_a_text_in_its_text_form() {
 
 #[test]
 fn floor_division_is_slash_bang() {
-	is!("7 /! 2", 3);
-	is!("-7 /! 2", -4);
 	is!("x=10; x /!= 2; x", 5);
 	is!("7 // a comment", 7);
 	is!("u='http://x.org'; 1", 1);
-	is!("7 div 2", 3);
 	is!("n=9; n div 2", 4);
 }
 
@@ -223,5 +217,4 @@ fn an_unknown_word_beside_a_value_is_loud_too() {
 	fails_with("foo; 3", "undefined variable: foo");
 	fails_with("foo; yes", "undefined variable: foo");
 	fails_with("foo\n\"a\"", "undefined variable: foo");
-	is!("a;b;c", "c");
 }

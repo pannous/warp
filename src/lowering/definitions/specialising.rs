@@ -6,6 +6,7 @@
 //! for: a call's head is the function anyway); a copy's own calls are specialised in turn (`fold(f, xs) := … fold(f,
 //! rest)`), up to a cap.
 
+use super::inlining::renamed_names;
 use super::nodes::{children_rewritten, key, parameter_name};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -48,7 +49,7 @@ impl Definition {
 		Definition {
 			name: copy_name(&self.name, passed),
 			params,
-			body: renamed(self.body.clone(), &param, passed),
+			body: renamed_names(self.body.clone(), &HashSet::from([param]), &|_| passed.to_string()),
 			op: self.op,
 		}
 	}
@@ -66,7 +67,8 @@ impl Definition {
 }
 
 fn copy_name(function: &str, passed: &str) -> String {
-	format!("{function}{NAME_SEPARATOR}{passed}")
+	// the program's `each·any` beside the library's each copies to `each·ink`, the name as written
+	format!("{}{NAME_SEPARATOR}{passed}", crate::lowering::typed_library_words::written(function))
 }
 
 enum Use {
@@ -95,16 +97,6 @@ fn visit_uses(node: &Node, name: &str, found: &mut dyn FnMut(Use)) {
 		}
 		Node::List(items, _, _) => items.iter().for_each(|item| visit_uses(item, name, found)),
 		_ => {}
-	}
-}
-
-fn renamed(node: Node, from: &str, to: &str) -> Node {
-	match node {
-		Node::Symbol(word) if word == from => Node::Symbol(to.to_string()),
-		// a key `{f: …}` and a field `p.f` keep their names
-		Node::Key(left, Op::Colon, right) => Node::Key(left, Op::Colon, Box::new(renamed(*right, from, to))),
-		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(renamed(*left, from, to)), Op::Dot, right),
-		other => children_rewritten(other, |child| renamed(child, from, to)),
 	}
 }
 

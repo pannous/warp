@@ -5,6 +5,7 @@
 //! in page_tests.rs. `expect 30 10+20` is the soft check `test 10+20 == 30` (card expect-make).
 
 use crate::lowering::library_words::substitute;
+use crate::lowering::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
@@ -23,11 +24,9 @@ const NAMED_TEST: &str = r#"tests_run_ += 1; try { body_; 0 } catch test_error_ 
 const SUMMARY: &str = r#"if tests_failed_ > 0 then raise(str(tests_failed_) + " of " + str(tests_run_) + " failed"); "✓ " + str(tests_run_) + (if tests_run_ == 1 then " test" else " tests") + " passed""#;
 
 pub fn lower(program: Node) -> Node {
-	// soft keywords: a program naming test or expect itself keeps that word
-	let words: Vec<&str> = [TEST_WORD, EXPECT_WORD]
-		.into_iter()
-		.filter(|word| !crate::soft_keywords::program_names(&program, word))
-		.collect();
+	// soft keywords: a program taking test or expect itself keeps that word
+	let names = crate::program_names::ProgramNames::of(&program);
+	let words: Vec<&str> = [TEST_WORD, EXPECT_WORD].into_iter().filter(|word| !names.takes(word)).collect();
 	let written = program.body_statements();
 	if !written.iter().any(|statement| test_of(statement, &words).is_some()) {
 		return program;
@@ -62,7 +61,7 @@ fn test_of<'a>(statement: &'a Node, words: &[&str]) -> Option<Test<'a>> {
 	}
 	if head.is_symbol(EXPECT_WORD) {
 		let (expected, actual) = rest.split_first()?;
-		return Some(Test::Soft(Node::Key(Box::new(phrase(actual)?), Op::Eq, Box::new(expected.clone()))));
+		return Some(Test::Soft(key(phrase(actual)?, Op::Eq, expected.clone())));
 	}
 	if let [name, body] = rest {
 		if let (Node::Text(name), Node::List(_, Bracket::Curly, _)) = (name.drop_meta(), body.drop_meta()) {

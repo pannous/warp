@@ -1,6 +1,7 @@
 //! `class dog extends animal {…}` (P117): dog takes in the fields and methods of animal and of its mixins (`include
 //! Walker`), its own ones override them; `super.speak()` calls the version dog would inherit
 use super::*;
+use crate::lowering::nodes::word_headed;
 use crate::words::SELF_WORD;
 
 /// Every class with the items of the mixins it takes in (`class Duck with Walker {…}`, `include Walker` in its body)
@@ -154,9 +155,7 @@ pub(super) fn super_calls(node: Node, class: &str, called: &mut Vec<String>) -> 
 	}
 	let member = match member.drop_meta().clone() {
 		Node::Symbol(name) => parent_version(name, class, called),
-		Node::List(items, Bracket::Round, separator)
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-		{
+		Node::List(items, Bracket::Round, separator) if word_headed(&items).is_some() => {
 			let arguments: Vec<Node> =
 				items[1..].iter().cloned().map(|argument| super_calls(argument, class, called)).collect();
 			let name = parent_version(items[0].drop_meta().name(), class, called);

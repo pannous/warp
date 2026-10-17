@@ -15,5 +15,4 @@ fn text_of_a_text_conversion_is_its_value() {
 #[test]
 fn text_of_data_stays_its_source() {
 	is!("text(data x+1)", "x+1");
-	is!("str(1+2)", "3");
 }

@@ -36,6 +36,15 @@ pub const EXACT_ARITHMETIC: &str = "exact_arithmetic";
 /// The exported Int operations a host builds an exact number beyond the fixnums with (tasks.rs Builders, host.js
 /// exactHandle): shift, add, subtract, divide
 pub const EXACT_BUILDERS: [&str; 4] = ["int_shift_left", "exact_add", "exact_sub", "exact_div"];
+/// The operators a fast region computes on machine i64s across a whole expression (card fast-int)
+const MACHINE_OPS: [Op; 8] = [Op::Add, Op::Sub, Op::Mul, Op::Mod, Op::Rem, Op::Xor, Op::BitAnd, Op::BitOr];
+/// The declared types of an Int that wraps at 2^63 (decision i64-wraps; `x: fast int` parses to i64); the fixed
+/// width they trap as under `use strict`
+const WRAPPING_TYPES: [&str; 2] = ["i64", "int64"];
+const STRICT_WRAPPING_WIDTH: &str = "int64";
+/// Builtins whose Int is one byte, 0…255
+const BYTE_WORDS: [&str; 2] =
+	[crate::wasm_emitter::text::text_builtins::BYTE_AT, crate::wasm_emitter::text::text_builtins::MEMORY_BYTE];
 pub const FIXNUM_OFFSET: i64 = (1 << 62) - 1;
 pub const FIXNUM_MIN: i128 = -((1 << 62) - 1);
 pub const FIXNUM_MAX: i128 = 1 << 62;
@@ -141,6 +150,9 @@ impl WasmGcEmitter {
 			Node::False => Some((0, 0)),
 			Node::Char(_) => Some((0, char::MAX as i128)),
 			Node::Symbol(name) if self.bounded_counters.contains(name) => Some((0, i32::MAX as i128)),
+			Node::List(items, _, _) if items.first().is_some_and(|word| self.is_byte_builtin(word)) => {
+				Some((0, u8::MAX as i128))
+			}
 			Node::Key(left, op, right) if left.is_empty_node() && (op.is_prefix() || *op == Op::Hash) => match op {
 				Op::Neg => self.int_range(right).map(|(low, high)| (-high, -low)),
 				Op::Not => Some((0, 1)),
@@ -165,6 +177,11 @@ impl WasmGcEmitter {
 			}
 			_ => None,
 		}
+	}
+
+	fn is_byte_builtin(&self, word: &Node) -> bool {
+		matches!(word.drop_meta(), Node::Symbol(name)
+			if BYTE_WORDS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════
@@ -414,6 +431,116 @@ impl WasmGcEmitter {
 		self.emit_int_from_machine(func);
 	}
 
+	/// In a fast region, `left op right` of Ints on machine i64s as a whole expression (card fast-int): its operands
+	/// reduced mod 2^64 once at the leaves, no unbounded-Int test between nested operations
+	pub(in crate::wasm_emitter) fn computes_on_machine(&self, left: &Node, op: &Op, right: &Node) -> bool {
+		self.wrapping_ints
+			&& self.int_runtime()
+			&& (MACHINE_OPS.contains(op) || op.is_comparison())
+			&& !left.is_empty_node()
+			&& [left, right].iter().all(|side| {
+				self.get_type(side) == crate::type_kinds::Kind::Int && self.declared_fixed_width(side).is_none()
+			})
+	}
+
+	/// The machine expression `left op right`, its result an Int again (a comparison: its i64 0 or 1). When every leaf
+	/// is a proven fixnum or an Int local, one test of those locals (and of the result) picks plain i64 code, as the
+	/// exact operations test once; a conversion per leaf is the cold path. Each test is a branch, and fuel charges each
+	pub(in crate::wasm_emitter) fn emit_machine_root(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+	) {
+		let Some(mut tested) = self.machine_leaf_locals(left, right) else {
+			return self.emit_machine_expression(func, left, op, right, true);
+		};
+		if op.is_comparison() {
+			if tested.is_empty() {
+				return self.emit_machine_expression(func, left, op, right, false);
+			}
+		} else {
+			let raw = self.scratch(2);
+			self.emit_machine_expression(func, left, op, right, false);
+			func.instruction(&I::LocalSet(raw));
+			tested.insert(0, raw);
+		}
+		self.emit_fixnum_test(func, &tested);
+		func.instruction(&I::If(BlockType::Result(ValType::I64)));
+		if op.is_comparison() {
+			self.emit_machine_expression(func, left, op, right, false);
+		} else {
+			func.instruction(&I::LocalGet(tested[0]));
+		}
+		func.instruction(&I::Else);
+		self.emit_machine_expression(func, left, op, right, true);
+		func.instruction(&I::End);
+	}
+
+	/// `left op right` on machine i64s; `convert`: each leaf reduced mod 2^64 and the result an Int again, else the
+	/// leaves are fixnums and the raw i64 stays
+	fn emit_machine_expression(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node, convert: bool) {
+		self.emit_machine_operands(func, left, op, right, convert);
+		if op.is_comparison() {
+			Self::emit_list(func, &[Self::machine_compare(op), I::I64ExtendI32U]);
+		} else {
+			self.emit_machine_int_op(func, op);
+			if convert {
+				self.emit_int_from_machine(func);
+			}
+		}
+	}
+
+	fn emit_machine_operands(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node, convert: bool) {
+		for side in [left, right] {
+			match side.drop_meta() {
+				Node::Key(inner_left, inner_op, inner_right)
+					if self.is_machine_operation(inner_left, inner_op, inner_right) =>
+				{
+					self.emit_machine_operands(func, inner_left, inner_op, inner_right, convert);
+					self.emit_machine_int_op(func, inner_op);
+				}
+				_ => {
+					// comparisons keep a character's code point (`c >= '0'`); arithmetic refuses it (P65)
+					if op.is_comparison() {
+						self.emit_numeric_value(func, side);
+					} else {
+						self.emit_arithmetic_operand(func, side);
+					}
+					if convert && !is_fixnum_range(self.int_range(side)) {
+						self.emit_int_to_machine(func);
+					}
+				}
+			}
+		}
+	}
+
+	fn is_machine_operation(&self, left: &Node, op: &Op, right: &Node) -> bool {
+		MACHINE_OPS.contains(op) && self.computes_on_machine(left, op, right)
+	}
+
+	/// The locals to test when each leaf of the machine expression is a proven fixnum or an Int local; None otherwise
+	fn machine_leaf_locals(&self, left: &Node, right: &Node) -> Option<Vec<u32>> {
+		let mut locals = vec![];
+		for side in [left, right] {
+			match side.drop_meta() {
+				Node::Key(inner_left, inner_op, inner_right)
+					if self.is_machine_operation(inner_left, inner_op, inner_right) =>
+				{
+					locals.extend(self.machine_leaf_locals(inner_left, inner_right)?)
+				}
+				_ if is_fixnum_range(self.int_range(side)) => {}
+				Node::Symbol(name) if !name.starts_with('$') => {
+					let local = self.scope.lookup(name).filter(|local| local.kind == crate::type_kinds::Kind::Int)?;
+					locals.push(local.position);
+				}
+				_ => return None,
+			}
+		}
+		Some(locals)
+	}
+
 	/// `value as i64`: machine arithmetic inside, the result reduced mod 2^64
 	pub(crate) fn emit_wrapping_int(&mut self, func: &mut Function, value: &Node) {
 		let outer = std::mem::replace(&mut self.wrapping_ints, true);
@@ -532,8 +659,13 @@ impl WasmGcEmitter {
 		let Node::Symbol(name) = node.drop_meta() else {
 			return None;
 		};
-		let type_node = self.scope.lookup(name)?.type_node.as_ref()?;
-		crate::numbers::fixed_width::fixed_width(&type_node.name())
+		let type_name = self.scope.lookup(name)?.type_node.as_ref()?.name();
+		if WRAPPING_TYPES.contains(&type_name.as_str()) {
+			return crate::errors::diagnostic::is_strict()
+				.then(|| crate::numbers::fixed_width::fixed_width(STRICT_WRAPPING_WIDTH))
+				.flatten();
+		}
+		crate::numbers::fixed_width::fixed_width(&type_name)
 	}
 
 	/// Is the variable `node` declared a whole-number type (`int`, `long`, `byte` …, not `exact`)
@@ -561,6 +693,24 @@ impl WasmGcEmitter {
 		}
 		let width = self.declared_fixed_width(target);
 		self.emit_fixed_width_check(func, width);
+		if self.declared_wrapping(target) && self.int_runtime() {
+			self.emit_int_to_machine(func);
+			self.emit_int_from_machine(func);
+		}
+	}
+
+	/// Is the variable `node` declared `i64` or `int64` (`x: fast int` too): an Int that wraps at 2^63 (decisions
+	/// fast-scope, i64-wraps); under `use strict` it traps as int64 instead (declared_fixed_width)
+	pub(in crate::wasm_emitter) fn declared_wrapping(&self, node: &Node) -> bool {
+		let Node::Symbol(name) = node.drop_meta() else {
+			return false;
+		};
+		!crate::errors::diagnostic::is_strict()
+			&& self
+				.scope
+				.lookup(name)
+				.and_then(|local| local.type_node.as_ref())
+				.is_some_and(|type_node| WRAPPING_TYPES.contains(&type_node.name().as_str()))
 	}
 
 	/// Stack [Int] → [Int], trapping in `overflow_of_<type>` when the Int leaves the range of `width`

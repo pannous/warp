@@ -11,6 +11,7 @@
 use crate::element_events::{element_items, with_element_items};
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::host::FETCH_WORD;
+use crate::lowering::nodes::key;
 use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -89,8 +90,7 @@ fn with_live_regions(node: Node, names: &[String]) -> Node {
 		let sets_live = items
 			.iter()
 			.any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(LIVE_ATTRIBUTE)));
-		let live = (!sets_live)
-			.then(|| Node::Key(Box::new(symbol(LIVE_ATTRIBUTE)), Op::Colon, Box::new(Node::Text(POLITE.to_string()))));
+		let live = (!sets_live).then(|| key(symbol(LIVE_ATTRIBUTE), Op::Colon, Node::Text(POLITE.to_string())));
 		live.into_iter().chain(items).collect()
 	})
 }
@@ -106,15 +106,13 @@ fn async_fetch(statement: &Node) -> Option<Fetched> {
 	let Node::Key(target, Op::Define, value) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
+	let name = target.symbol_name()?;
 	let (fetch, default) = match value.drop_meta() {
 		Node::Key(fetch, Op::Coalesce, default) => (fetch.as_ref(), Some(default.as_ref().clone())),
 		fetch => (fetch, None),
 	};
 	match crate::host::fetch_call(fetch)? {
-		(url, None) => Some(Fetched { name: name.clone(), url, default }),
+		(url, None) => Some(Fetched { name: name.to_string(), url, default }),
 		_ => None,
 	}
 }

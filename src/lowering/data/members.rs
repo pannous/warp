@@ -26,6 +26,13 @@ pub const NUMBER_MEMBERS: [&str; 10] =
 	["string", "int", "float", "round", "floor", "ceil", "abs", "sqrt", "cbrt", "norm"];
 const LIST_WORD: &str = "list";
 const TEXT_WORD: &str = "text";
+/// The builtin methods by the type they belong to (library_signatures::library_types)
+pub const MEMBERS_BY_TYPE: [(&str, &[&str]); 4] = [
+	(LIST_WORD, &LIST_MEMBERS),
+	(TEXT_WORD, &TEXT_MEMBERS),
+	(MAP_WORD, &MAP_MEMBERS),
+	(crate::words::NUMBER_WORD, &NUMBER_MEMBERS),
+];
 /// The variable the receiver is assigned to, so the passes that know variables (instance classes, map keys) know it
 const RECEIVER: &str = "completion·receiver";
 /// How many variables `ys = xs; zs = ys` is followed through to its value

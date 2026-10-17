@@ -97,14 +97,18 @@ pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<Pat
 }
 
 fn rgba_png_file(rgba: &[u8], width: usize, height: usize) -> Result<PathBuf, String> {
-	let pixels: Vec<u64> = crate::graphics::gpu::opaque_colors(rgba).map(u64::from).collect();
-	png_file(&pixels, width, height)
+	png_file(&rgba_pixels(rgba), width, height)
+}
+
+/// RGBA bytes as pixel values, each an opaque color
+fn rgba_pixels(rgba: &[u8]) -> Vec<u64> {
+	crate::graphics::gpu::opaque_colors(rgba).map(u64::from).collect()
 }
 
 /// Whether a shader can paint (system value GPU_PAINTS): in a window the window's process renders it, else this process's
 /// GPU does; without one a warp function paints on the CPU, said once
 pub fn paints_shaders() -> bool {
-	if WINDOWS.load(Ordering::Relaxed) {
+	if shows_windows() {
 		return true;
 	}
 	match crate::graphics::gpu::available() {
@@ -124,13 +128,10 @@ pub fn paint_shader(
 	height: u32,
 	values: &[crate::graphics::gpu::ShaderValue],
 ) -> Result<Option<PathBuf>, String> {
-	if WINDOWS.load(Ordering::Relaxed) {
+	if shows_windows() {
 		let values = crate::graphics::gpu::checked_values(shader, width, height, values)?;
-		match crate::graphics::paint_window::show(&crate::graphics::paint_window::shader_message(
-			width, height, shader, &values,
-		)) {
-			Ok(()) => return Ok(None),
-			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
+		if shown(&crate::graphics::paint_window::shader_message(width, height, shader, &values)) {
+			return Ok(None);
 		}
 	}
 	let rgba = crate::graphics::gpu::render_rgba(shader, width, height, values)?;
@@ -142,23 +143,22 @@ fn shown_or_written(
 	frame: impl FnOnce() -> Vec<u8>,
 	write: impl FnOnce() -> Result<PathBuf, String>,
 ) -> Result<Option<PathBuf>, String> {
-	if WINDOWS.load(Ordering::Relaxed) {
-		match crate::graphics::paint_window::show(&frame()) {
-			Ok(()) => return Ok(None),
-			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
-		}
+	if shows_windows() && shown(&frame()) {
+		return Ok(None);
 	}
 	write().map(Some)
 }
 
+/// Whether the window shows the message; its failure said, as the picture goes to a PNG instead
+fn shown(message: &[u8]) -> bool {
+	crate::graphics::paint_window::show(message).map_err(|failure| eprintln!("{failure}, so it goes to a PNG")).is_ok()
+}
+
 /// The image as a PNG in the temporary folder
 fn png_file(pixels: &[u64], width: usize, height: usize) -> Result<PathBuf, String> {
-	let folder = std::env::temp_dir().join(FOLDER);
-	std::fs::create_dir_all(&folder)
-		.map_err(|failure| format!("paint: cannot create {}: {failure}", folder.display()))?;
-	let path = folder.join(file_name(PAINTED.fetch_add(1, Ordering::Relaxed) + 1));
-	std::fs::write(&path, png(pixels, width, height))
-		.map_err(|failure| format!("paint: cannot write {}: {failure}", path.display()))?;
+	let call = PAINTED.fetch_add(1, Ordering::Relaxed) + 1;
+	let png = png(pixels, width, height);
+	let path = crate::extensions::utils::numbered_temporary_file(FOLDER, FILE_STEM, call, "png", &png, "paint")?;
 	eprintln!("painted {width}×{height}: {}", path.display());
 	Ok(path)
 }
@@ -173,17 +173,7 @@ pub fn save_png(pixels: &[u64], width: usize, height: usize, path: &str) -> Resu
 
 /// A picture the GPU drew (gpu_canvas::snapshot) as a PNG at that path
 pub fn save_rgba_png(rgba: &[u8], width: usize, height: usize, path: &str) -> Result<(), String> {
-	let pixels: Vec<u64> = crate::graphics::gpu::opaque_colors(rgba).map(u64::from).collect();
-	save_png(&pixels, width, height, path)
-}
-
-/// paint.png for the first call of a run, paint-2.png for the second …
-fn file_name(call: usize) -> String {
-	if call == 1 {
-		format!("{FILE_STEM}.png")
-	} else {
-		format!("{FILE_STEM}-{call}.png")
-	}
+	save_png(&rgba_pixels(rgba), width, height, path)
 }
 
 /// A grayscale PNG of ink and paper, a truecolor one when a pixel has a color

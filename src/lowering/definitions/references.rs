@@ -13,7 +13,7 @@ const ID_KEY: &str = "id";
 const REFERENCE_WORD: &str = "ref";
 
 pub fn lower(node: Node) -> Node {
-	let word_is_free = !crate::library_words::defined_names(&node).contains(REFERENCE_WORD);
+	let word_is_free = !crate::program_names::ProgramNames::of(&node).takes(REFERENCE_WORD);
 	let node = named_references(node, &mut Vec::new(), word_is_free);
 	let literals = referencing_literals(&node);
 	if literals.is_empty() {
@@ -151,14 +151,12 @@ fn followed_paths(node: Node, literals: &HashMap<String, Node>) -> Node {
 fn dot_chain(node: &Node) -> Option<(String, Vec<String>)> {
 	match node.drop_meta() {
 		Node::Key(reader, Op::Dot, field) => {
-			let Node::Symbol(field) = field.drop_meta() else {
-				return None;
-			};
+			let field = field.symbol_name()?;
 			let (variable, mut fields) = match reader.drop_meta() {
 				Node::Symbol(variable) => (variable.clone(), Vec::new()),
 				other => dot_chain(other)?,
 			};
-			fields.push(field.clone());
+			fields.push(field.to_string());
 			Some((variable, fields))
 		}
 		_ => None,

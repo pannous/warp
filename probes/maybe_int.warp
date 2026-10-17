@@ -1,2 +1,0 @@
-x: maybe int = 1
-x  # 1: maybe int is int? (card maybe-int)

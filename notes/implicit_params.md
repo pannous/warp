@@ -35,7 +35,7 @@ branch wiki-references (on main 7d1f05c79); "→" is what warp gives today.
   emit_numeric_symbol), so `$0` is "local 0" of the compiled function. That is the wasm meaning, and it is why a
   Swift closure that captures values is lifted with the captures first (`closure_lambda(k, $0)` renames them).
   Imported modules: a parameter without a name in the module's name section is called `$0`, `$1` …
-  (src/modules/wasm_modules.rs, Export.parameters); function equality renames parameters to `$0`, `$1` to compare bodies
+  (src/modules/wasm_modules/mod.rs, Export.parameters); function equality renames parameters to `$0`, `$1` to compare bodies
   (src/compiler/function_equality.rs). WAT identifiers `$add`, `$main` keep their sigil (tests/parser/test_dollar_names.rs).
 - CLASH, nested closures: `[[1,2],[3]].map{ $0.map{ $0*10 } }` → error: which closure's `$0`? (Swift forbids it.)
 - CLASH, block with declared parameters: `g(a, b) := { $0 - $1 }; g(5, 2)` → `closure_lambda_1` (a closure value),

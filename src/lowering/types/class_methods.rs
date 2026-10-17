@@ -87,12 +87,11 @@ const REDUCE_WORD: &str = "reduce";
 const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];
 /// P212: a class defining the method of only one of these operators has it serve the other too
 const INTERCHANGEABLE_OPERATORS: [(Op, Op); 2] = [(Op::Similar, Op::Rough), (Op::Rough, Op::Similar)];
-/// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
+/// The run-time choice of an interval-field method by the receiver's class (dispatched_by_class)
 const DISPATCH_TEMPLATE: &str = "if SELF_WORD is CLASS then METHOD else OTHERWISE";
 /// Ruby's `include Walker` in a class body takes in a mixin
 const INCLUDE_WORD: &str = "include";
-/// The prefix of a method named like a type or library word: `method·double`, `method·sum` (a prefix: a name
-/// `sum·T` reads as the witness of sum for T and would shadow the library's sum)
+/// The prefix of a method named like an interval's field: `method·low` (a prefix: a name `low·T` reads as a witness)
 const METHOD_PREFIX: &str = "method·";
 
 /// A method named by an operator's glyph, `+(o) := …`: the operator's method `plus`
@@ -118,7 +117,7 @@ pub fn lower(node: Node) -> Node {
 		Err(error) => return error,
 	};
 	let node = method_aliases(node);
-	let node = renamed_type_word_methods(node);
+	let node = renamed_interval_field_methods(node);
 	let (node, likenesses) = match inherit(node) {
 		Ok(inherited) => inherited,
 		Err(error) => return error,
@@ -129,6 +128,7 @@ pub fn lower(node: Node) -> Node {
 	let mut changing = Changing::default();
 	let statics = static_members(&node);
 	let setters = property_setters(&node);
+	let instance_fields = class_typed_fields(&node);
 	let node = lower_classes(node, &mut changing);
 	let node = if setters.is_empty() { node } else { setter_calls(node, &setters) };
 	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
@@ -137,7 +137,11 @@ pub fn lower(node: Node) -> Node {
 	let node = if shared.is_empty() && changing.is_empty() {
 		node
 	} else {
-		method_calls(node, &shared, &changing, &Counter::starting_at(1))
+		method_calls(
+			node,
+			&MethodCalls { called: &shared, changing: &changing, instance_fields: &instance_fields },
+			&Counter::starting_at(1),
+		)
 	};
 	match (traits.is_empty(), node) {
 		(true, node) => node,
@@ -322,34 +326,22 @@ fn first_parameter_class(head: &Node) -> Option<(String, String)> {
 /// The variable holding what is taken apart: `{x, y} = p` is `(parts·from = p; x = parts·from.x; y = parts·from.y)`
 const PARTS_WORD: &str = "parts·from";
 
-/// A method named like a type word (`double() := x*2`, P142: class methods are always allowed) or like a list
-/// mutation (`pop() := items.pop()`) under the name `method·double`, so its calls never read as the conversion
-/// `double(c)` or the list's own `xs.pop()`. A type word is renamed wherever it is called as a method; a list word only
-/// on what holds an instance of a class defining it (a variable assigned one, `p:Stack`, self) and called bare in a
-/// class body, so `s.items.pop()` and `xs.pop()` of lists stay list mutations
-fn renamed_type_word_methods(node: Node) -> Node {
-	let is_type_word = |name: &String| !is_witness_method(name) && crate::analyzer::type_word_kind(name).is_some();
-	let clashes = |name: &String| {
-		is_type_word(name)
-			|| !is_witness_method(name)
-				&& (crate::list_mutations::is_list_mutating_method(name)
-					|| crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
-	};
-	let (mut defined_by, mut declares_classes): (Vec<(String, String)>, bool) = (vec![], false);
+/// A method named like an interval's field (`low() := …`) under the name `method·low`, so its calls never read as the
+/// field of an uncertain number: renamed on what holds an instance of a class defining it (a variable assigned one,
+/// `p:Stack`, self) and called bare in a class body. Methods named like type or library words (`double()`, `pop()`)
+/// keep their names and join the generic function, whose fallback is the library word (generics.rs)
+fn renamed_interval_field_methods(node: Node) -> Node {
+	let clashes =
+		|name: &String| !is_witness_method(name) && crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str());
+	let mut defined_by: Vec<(String, String)> = vec![];
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
-			declares_classes = true;
 			let class = name.drop_meta().name();
 			let methods: Vec<String> =
 				class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name).collect();
 			defined_by.extend(methods.into_iter().filter(clashes).map(|method| (method, class.clone())));
 		}
 	});
-	// `def double(p:P)` outside the class is P's method too (card one-method-form)
-	if declares_classes {
-		let outside = first_parameter_methods(&node).into_iter().filter(|(_, name)| is_type_word(name));
-		defined_by.extend(outside.map(|(class, method)| (method, class)));
-	}
 	if defined_by.is_empty() {
 		return node;
 	}
@@ -370,8 +362,8 @@ struct MethodNames {
 	defined_by: Vec<(String, String)>,
 }
 
-/// The receiver of no known class calls a library-word method (`x.count()`) that classes define: the class's method
-/// when x is one of them at run time, else the library word (card class-method)
+/// The receiver of no known class calls an interval-field method (`x.low`) that classes define: the class's method
+/// when x is one of them at run time, else the field (card class-method)
 fn dispatched_by_class(receiver: &Node, member: Node, methods: &MethodNames, renamed_member: Node) -> Node {
 	let name = leading_name(&member);
 	let library_call = key(receiver.clone(), Op::Dot, member);
@@ -398,8 +390,8 @@ fn method_name(name: &str) -> String {
 	format!("{METHOD_PREFIX}{name}")
 }
 
-/// The clashing methods renamed where they are defined and called: `c.double`, `c.pop()`, and in a class body
-/// `double()` and the definition `double() := …`
+/// The clashing methods renamed where they are defined and called: `c.low`, `c.low()`, and in a class body
+/// `low()` and the definition `low() := …`
 fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node {
 	let renamed = |name: &Node| match name.drop_meta() {
 		Node::Symbol(word) if methods.names.contains(word) => Some(Node::Symbol(method_name(word))),
@@ -412,38 +404,21 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 	};
 	let is_instance = |receiver: &Node| match receiver.drop_meta() {
 		Node::Symbol(variable) => methods.instances.contains(variable),
-		// `Stack([]).count()`, a construction
+		// `Range(1, 2).low()`, a construction
 		Node::List(items, Bracket::Round, _) => {
 			items.first().is_some_and(|class| methods.classes.contains(&class.drop_meta().name()))
 		}
 		Node::Key(class, Op::None | Op::Colon, _) => methods.classes.contains(&class.drop_meta().name()),
 		_ => false,
 	};
-	// a type word is a method on anything but a literal value (`3.double()`, `"42".int()` stay the conversion), a list
-	// word on an instance
-	let calls_method = |receiver: &Node, member: &Node| {
-		let name = match member.drop_meta() {
-			Node::List(items, Bracket::Round, _) => {
-				items.first().map(|first| first.drop_meta().name()).unwrap_or_default()
-			}
-			other => other.name(),
-		};
-		match is_library_method(&name) || crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()) {
-			true => is_instance(receiver),
-			false => !matches!(
-				receiver.drop_meta(),
-				Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _)
-			),
-		}
-	};
 	let recurse = |child: Node| with_method_names(child, methods, in_class);
 	match node {
 		Node::Type { name, body } => Node::Type { name, body: Box::new(with_method_names(*body, methods, true)) },
-		Node::Key(receiver, Op::Dot, member) if calls_method(&receiver, &member) => {
+		Node::Key(receiver, Op::Dot, member) if is_instance(&receiver) => {
 			let member = renamed(&member).or_else(|| renamed_call(&member)).unwrap_or_else(|| recurse(*member));
 			key(recurse(*receiver), Op::Dot, member)
 		}
-		// `x.count()`, `x.pop()` of an x of no known class, outside the classes (whose fields have declared types)
+		// `x.low` of an x of no known class, outside the classes (whose fields have declared types)
 		Node::Key(receiver, Op::Dot, member)
 			if !in_class
 				&& matches!(receiver.drop_meta(), Node::Symbol(variable) if !methods.instances.contains(variable))
@@ -453,9 +428,9 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			let renamed_member = renamed(&member).or_else(|| renamed_call(&member)).expect("guarded");
 			dispatched_by_class(&receiver, member, methods, renamed_member)
 		}
-		// `items.pop()` of a list: the member keeps its name, its arguments may call methods
+		// `r.low` of an uncertain number: the member keeps its name, its arguments may call methods
 		Node::Key(receiver, Op::Dot, member) => key(recurse(*receiver), Op::Dot, with_arguments(*member, recurse)),
-		// `double(p)` of an instance is `p.double()` (card one-method-form: x.f() ≡ f(x))
+		// `low(p)` of an instance is `p.low()` (card one-method-form: x.f() ≡ f(x))
 		Node::List(items, Bracket::Round, separator)
 			if !in_class && items.len() > 1 && renamed(&items[0]).is_some() && is_instance(&items[1]) =>
 		{
@@ -470,14 +445,14 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			};
 			Node::List(items.into_iter().map(recurse).collect(), bracket, separator)
 		}
-		// `pop() := …`, or a getter `double := …`
+		// `low() := …`, or a getter `low := …`
 		Node::Key(head, Op::Define, body)
 			if in_class && (renamed(&head).is_some() || renamed_call(&head).is_some()) =>
 		{
 			let head = renamed(&head).or_else(|| renamed_call(&head)).expect("guarded");
 			key(head, Op::Define, recurse(*body))
 		}
-		// `double(p:P) := …` outside the class
+		// `low(p:P) := …` outside the class
 		Node::Key(head, op @ (Op::Define | Op::Assign), body)
 			if !in_class
 				&& renamed_call(&head).is_some()
@@ -581,9 +556,11 @@ fn trait_operation(declaration: &Node) -> Option<String> {
 
 /// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`; of a method changing its object, on a variable,
 /// the update `x = m(x, args)`; each call's pair is a temp of its own, `pop·result·1`, so a call inside a method shares
-/// no name with one in main
-fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Counter) -> Node {
-	let recurse = |child: Node| method_calls(child, called, changing, calls);
+/// no name with one in main. A library word's method on a field of no declared class (`items.pop()` in
+/// `pop() := items.pop()`) stays the library word
+fn method_calls(node: Node, methods: &MethodCalls, calls: &Counter) -> Node {
+	let MethodCalls { called, changing, instance_fields } = methods;
+	let recurse = |child: Node| method_calls(child, methods, calls);
 	let Node::Key(receiver, Op::Dot, member) = node else {
 		return node.map_children(recurse);
 	};
@@ -595,7 +572,9 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Coun
 		}
 		_ => return key(receiver, Op::Dot, recurse(*member)),
 	};
-	if !called.contains(&name) && !changing.contains(&name) {
+	let library_call_on_field = is_library_method(&name)
+		&& matches!(receiver.drop_meta(), Node::Key(_, Op::Dot, field) if !instance_fields.contains(&field.drop_meta().name()));
+	if library_call_on_field || !called.contains(&name) && !changing.contains(&name) {
 		return key(receiver, Op::Dot, recurse(*member));
 	}
 	let call = parens([Node::Symbol(name.clone()), receiver.clone()].into_iter().chain(arguments).collect());
@@ -618,6 +597,30 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Coun
 		Node::Symbol(_) if changing.itself.contains(&name) => key(receiver, Op::Assign, call),
 		_ => call,
 	}
+}
+
+/// What method_calls rewrites: the shared methods, the changing ones, and the fields that may hold an instance
+struct MethodCalls<'a> {
+	called: &'a [String],
+	changing: &'a Changing,
+	instance_fields: &'a [String],
+}
+
+/// The fields some class declares with a class type (`top: Node`, not `items: list`, `[Point]` or `items = []`)
+fn class_typed_fields(node: &Node) -> Vec<String> {
+	let mut fields = vec![];
+	node.visit(&mut |part| {
+		if let Node::Type { body, .. } = part {
+			for item in class_items(body).iter().filter(|item| method_parts(item).is_none()) {
+				let type_name = field_type_name(item);
+				let is_class = !type_name.is_empty()
+					&& !type_name.starts_with('[')
+					&& crate::type_tests::builtin_type_name(&type_name).is_none();
+				fields.extend(declared_field_name(item).filter(|_| is_class));
+			}
+		}
+	});
+	fields
 }
 
 /// The methods changing their object: those giving it back (`inc() := n += 1`) and those giving a value besides
@@ -842,9 +845,7 @@ fn gives_value(body: &Node) -> bool {
 		Node::Key(then, Op::Else, otherwise) => gives_value(then) || gives_value(otherwise),
 		// a nested sequence gives what its last statement gives
 		Node::List(_, Bracket::Round, Separator::Semicolon) | Node::List(_, Bracket::Curly, _) => gives_value(&last),
-		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => {
-			false
-		}
+		Node::Key(_, op, _) if *op == Op::Define || op.is_write() => false,
 		// a body giving its object back already (a constructor)
 		Node::Symbol(name) if name == SELF_WORD => false,
 		Node::Key(_, Op::Dot, call) => {
@@ -870,7 +871,9 @@ struct Readable<'a> {
 /// Java), `this` as self; the member name right of a dot stays as it is
 fn receiver_reads(node: Node, readable: &Readable) -> Node {
 	let on_receiver = |member: Node| key(symbol(readable.receiver), Op::Dot, member);
-	let is_call_of = |items: &[Node], names: &[&String]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if names.contains(&name));
+	let is_call_of = |items: &[Node], names: &[&String]| {
+		items.first().and_then(Node::symbol_name).is_some_and(|name| names.iter().any(|known| *known == name))
+	};
 	match node {
 		Node::Symbol(name) if readable.statics.contains(&&name) => Node::Symbol(static_name(readable.class, &name)),
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
@@ -892,10 +895,7 @@ fn changes_fields_of(body: &Node, variable: &str) -> bool {
 	body.visit(&mut |part| {
 		changes |= match part {
 			Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
-			Node::Key(target, op, _) => {
-				(*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec))
-					&& is_field_of(target, variable)
-			}
+			Node::Key(target, op, _) => op.is_write() && is_field_of(target, variable),
 			_ => false,
 		};
 	});
@@ -915,5 +915,5 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::list_mutations::is_list_mutating_method(name)))
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(crate::list_mutations::is_list_mutating_method))
 }

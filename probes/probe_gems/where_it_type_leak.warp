@@ -1,6 +1,0 @@
-// a later typed list changes the type of `it` in an earlier where: Member is not Comparable at 3:22
-numbers = [3, -1, 2]
-print(numbers where it > 0)
-class Member { name: text; years: int }
-members: [Member] = [Member{name: "Al", years: 30}, Member{name: "Bo", years: 10}]
-count(members without years > 20)

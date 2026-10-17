@@ -280,13 +280,11 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 	let Node::Key(target, op @ (Op::Assign | Op::Define), body) = node.drop_meta() else {
 		return None;
 	};
-	let (head, type_name) = match target.drop_meta() {
-		Node::Key(head, Op::As | Op::Colon, type_name) => (head.as_ref().clone(), type_name.as_ref().clone()),
-		// `square(x) as int or text := …`
-		target => {
-			let (head, union) = crate::declarations::as_union_result(target)?;
-			(head, symbol(&crate::analyzer::union_of_types(&union, &|_| true)?))
-		}
+	let (head, type_name) = crate::declarations::result_typed_head(target)?;
+	// `square(x) as int or text := …`
+	let type_name = match type_name.drop_meta() {
+		union @ Node::Key(_, Op::Or, _) => symbol(&crate::analyzer::union_of_types(union, &|_| true)?),
+		_ => type_name,
 	};
 	// `f(w) as any := …`: a value of any kind converts to nothing (card def); `y: any = yes` stays a declaration
 	if type_name.is_symbol(ANY_TYPE) && is_call_head(&head) {

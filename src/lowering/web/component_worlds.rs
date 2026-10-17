@@ -212,10 +212,8 @@ fn declaration(node: &Node, word: &str) -> Option<(String, Node)> {
 	};
 	let declares = matches!(keyword.drop_meta(), Node::Symbol(keyword) if keyword == word)
 		&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _));
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
-	declares.then(|| (name.clone(), body.drop_meta().clone()))
+	let name = name.symbol_name()?;
+	declares.then(|| (name.to_string(), body.drop_meta().clone()))
 }
 
 /// `import host: {…}` or `export api: calculator`: the direction, the name and the members (a block or an interface name)

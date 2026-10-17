@@ -1,7 +1,0 @@
-# Schemas (card schemas, tree-patterns step 6): a map pattern of types, `debug?:` may be missing
-pattern Config = {port: int, host: text, debug?: bool}
-loaded = json('{"port": 8080, "host": "localhost"}')
-print [loaded is Config, {port: "80", host: "x"} is Config, {port: 80, host: "x", debug: 3} is Config]
-# `as` converts field by field where it can: port 80
-print({port: "80", host: "x"} as Config)
-loaded as Config

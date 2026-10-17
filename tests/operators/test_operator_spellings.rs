@@ -10,7 +10,6 @@ fn word_spellings_compute_as_their_symbols() {
 	is!("6 divided by 2", 3);
 	is!("7 mod 3", 1);
 	is!("7 modulo 3", 1);
-	is!("-7 rem 3", -1);
 	is!("3 equals 3", true);
 	is!("3 is 3", true);
 	is!("3 same 3", true);

@@ -42,6 +42,7 @@ mod test_parser_sugar;
 mod test_path_after_function; // card name-after
 mod test_path_literal; // card play-mozart
 mod test_references;
+mod test_rust_items; // card rust-items
 mod test_rust_macros;
 mod test_rust_paths;
 mod test_scheme_relative_url;
@@ -58,7 +59,6 @@ mod test_spaced_children;
 mod test_spaced_optional_type;
 mod test_spaced_required_fields;
 mod test_statement_phrases;
-mod test_statement_sequence;
 mod test_statement_terminators;
 mod test_statements_after_type;
 mod test_superscript_signs;

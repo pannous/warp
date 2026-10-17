@@ -89,6 +89,8 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
+	// `if let Some(v) = o`, a match of `Some(v) =>` and `None =>` arms (rust_options.rs), before the arms below
+	crate::lowering::rust_options::lower,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
 	// `x(p:P) -> int := …` is `x(p:P): int := …` (welcome_forms.rs) before any pass reads a definition's head
@@ -262,6 +264,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 const MODULE_PASSES: &[Pass] = &[
 	// `random(1, 6)`, `random int`: the prelude words they call, which resolve then loads, and only those
 	crate::host::lower_random_forms,
+	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
+	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,
@@ -443,10 +447,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	crate::errors::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = SOURCE_PHASES.iter().fold(node, |node, phase| run_passes(node, phase));
-	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
-		return Err(error);
-	}
+	let node = without_located_errors(SOURCE_PHASES.iter().fold(node, |node, phase| run_passes(node, phase)))?;
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
 	}
@@ -466,18 +467,12 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::numbers::real::answer(&node) {
 		return Err(crate::numbers::units::static_units::with_answer_units(answer));
 	}
-	let node = run_passes(node, MEANING_PASSES);
-	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
-		return Err(error);
-	}
+	let node = without_located_errors(run_passes(node, MEANING_PASSES))?;
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
-	let node = effects.answer_queries(node);
-	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
-		return Err(error);
-	}
+	let node = without_located_errors(effects.answer_queries(node))?;
 	if let Some((name, capability)) = effects.denied(compile_context::read(|context| context.granted)) {
 		return Err(crate::node::error(&if crate::host::sandbox::is_sandboxed() {
 			crate::host::sandbox::denial(&name, capability.name())
@@ -496,8 +491,18 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	warnings.retain(|warning| !warning.file.as_deref().is_some_and(crate::modules::is_std_source));
 	crate::errors::diagnostic::report(&warnings)?;
 	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(crate::lowering::inlining::lower(
-		crate::lowering::declaration_forms::lower_declarations(crate::lowering::kebab_names::resolve_data_scope(node)),
+		crate::lowering::for_loop::lifted_walked_literals(crate::lowering::declaration_forms::lower_declarations(
+			crate::lowering::kebab_names::resolve_data_scope(node),
+		)),
 	)))
+}
+
+/// The node, or the first error a pass left in it at a source position
+fn without_located_errors(node: Node) -> Result<Node, Node> {
+	match crate::errors::diagnostic::first_located_error(&node) {
+		Some(error) => Err(error),
+		None => Ok(node),
+	}
 }
 
 /// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value
@@ -573,8 +578,12 @@ fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
 		crate::host::RUN_BLOCK)).weak()])
 }
 
-/// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding.
+/// `TypeName:{field:value, ...}` compiles to a raw struct module, everything else to the standard Node encoding; an
+/// instance with unit fields (`Run(5 km)`) too, whose units only the standard module carries
 fn raw_struct_module(node: &Node) -> Option<Vec<u8>> {
+	if crate::numbers::units::static_units::has_result_units() {
+		return None;
+	}
 	let mut type_registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut type_registry, node);
 	let (type_def, field_values) = find_struct_instantiation(&type_registry, node)?;

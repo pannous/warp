@@ -3,10 +3,11 @@
 //! name wins with a got-it note ("send is a keyword; here it is your variable"); redefining one at the top level is a
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
-use super::nodes::parameter_name;
+use super::nodes::{parameter_name, word_headed};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::type_name_matching::is_preposition;
 
 pub const HARD_KEYWORDS: [&str; 26] = [
 	"if", "then", "else", "while", "for", "in", "return", "break", "continue", // control flow
@@ -103,13 +104,6 @@ pub fn lower(program: Node) -> Node {
 	program
 }
 
-/// Whether the program names `word` itself: a variable, parameter, field or function of that name
-pub fn program_names(program: &Node, word: &str) -> bool {
-	let mut named = false;
-	walk_names(program, &mut |name, _| named |= name == word);
-	named
-}
-
 /// Every name the program gives: its variables, parameters, fields and functions
 pub fn names_given(program: &Node) -> std::collections::HashSet<String> {
 	let mut names = std::collections::HashSet::new();
@@ -158,11 +152,9 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 	}
 }
 
-use crate::type_name_matching::is_preposition;
-
 /// A call `f a for=b` or `f(a, for=b)`: a function's name, then an argument named by a preposition
 fn preposition_arguments(items: &[Node]) -> bool {
-	matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
+	word_headed(items).is_some()
 		&& items[1..]
 			.iter()
 			.any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Assign, _) if is_preposition(name)))

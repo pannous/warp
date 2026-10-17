@@ -9,7 +9,7 @@
 use super::nodes::{assign, key, Counter};
 use crate::analyzer::{
 	added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list,
-	inserted_item, list_element_type,
+	inserted_item, list_element_type, union_parts, UNION_JOINER,
 };
 use crate::declaration_forms::of_type_declaration;
 use crate::library_words::substitute;
@@ -104,6 +104,13 @@ impl ElementChecks {
 					return Node::Key(target, op, Box::new(value));
 				};
 				self.declared.insert(name.clone(), type_name.clone());
+				// checked after the store: the value stays in the declaration, where the compiler refuses a known misfit
+				if let Some(test) = union_test(&name, &type_name).filter(|_| computed_literal_kind(&value).is_none()) {
+					let store = Node::Key(target, op, Box::new(value));
+					let stored = Node::Symbol(name);
+					let statements = vec![store, item_check(&stored, &test), stored];
+					return Node::List(statements, Bracket::None, Separator::Semicolon);
+				}
 				match element_test(&name, &type_name) {
 					Some(test) => self.checked_store(&[test], &Node::Symbol(name), *target, op, value),
 					None => Node::Key(target, op, Box::new(value)),
@@ -285,6 +292,27 @@ fn element_test(name: &str, type_name: &str) -> Option<ElementTest> {
 	let type_word = if kind == Kind::Float { NUMBER_WORD.to_string() } else { element.to_string() };
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}");
 	Some(ElementTest { type_word, message, guard: None, stores_floats: crate::type_tests::is_float_type_word(element) })
+}
+
+/// `x: int or text = f()`, the result of `f(x): int or text`: the value checked as a list item is (card union-result).
+/// Only unions of builtin types; a union holding an error or ø admits what its error rules say (card error-writes)
+fn union_test(name: &str, type_name: &str) -> Option<ElementTest> {
+	let parts = union_parts(type_name)?;
+	let words = parts
+		.iter()
+		.map(|part| match builtin_type_kind(part)? {
+			Kind::Error | Kind::Empty => None,
+			Kind::Float => Some(NUMBER_WORD),
+			_ => Some(*part),
+		})
+		.collect::<Option<Vec<_>>>()?;
+	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold a value that is no {type_name}");
+	Some(ElementTest {
+		type_word: format!("({})", words.join(UNION_JOINER)),
+		message,
+		guard: None,
+		stores_floats: false,
+	})
 }
 
 /// `"a"`: a literal no number, refused by the compile-time check, not converted
