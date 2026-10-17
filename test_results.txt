@@ -1238,7 +1238,7 @@ PASSED:
   ✓ functions::test_arity_and_type_overloads::a_type_overload_beside_several_arities_keeps_them_all
   ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
   ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
-  ✓ functions::test_arity_overloads::an_overload_may_call_another_one
+  ✓ functions::test_arity_overloads::an_overload_may_call_another_one_and_log_keeps_its_types
   ✓ functions::test_arity_overloads::an_overloaded_name_given_as_a_function_is_the_variant_called
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
@@ -2211,12 +2211,12 @@ PASSED:
   ✓ lists::test_min_max_lists::test_several_arguments_still_work
   ✓ lists::test_min_max::test_a_float_max_accumulates_in_a_loop
   ✓ lists::test_min_max::test_many_extremum_arguments_compile_linearly
+  ✓ lists::test_min_max::test_min_keeps_its_types
   ✓ lists::test_min_max::test_min_max_arguments_must_be_side_effect_free
   ✓ lists::test_min_max::test_min_max_of_floats_and_mixed
   ✓ lists::test_min_max::test_min_max_of_ints
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
-  ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
   ✓ lists::test_nested_comprehension::a_where_condition_starts_with_a_count
   ✓ lists::test_nested_comprehension::filters_sit_between_and_after_the_clauses
   ✓ lists::test_nested_comprehension::two_for_clauses_nest
@@ -2542,7 +2542,7 @@ PASSED:
   ✓ modules::test_std_net::use_net_posts_a_text
   ✓ modules::test_std_prelude::a_local_named_like_a_prelude_word_is_the_local
   ✓ modules::test_std_prelude::a_module_word_inside_an_interpolation_comes_along
-  ✓ modules::test_std_prelude::a_programs_own_prelude_word_wins
+  ✓ modules::test_std_prelude::a_prelude_word_keeps_its_types
   ✓ modules::test_std_prelude::dir_lists_the_prelude
   ✓ modules::test_std_prelude::methods_and_other_spellings_reach_the_prelude_words
   ✓ modules::test_std_prelude::the_prelude_words_work_without_use
@@ -2594,6 +2594,8 @@ PASSED:
   ✓ modules::test_use_several::a_use_with_a_version_stays_one_module
   ✓ modules::test_use_several::a_use_with_commas_uses_each_module
   ✓ modules::test_use_several::a_use_with_spaces_uses_each_module
+  ✓ modules::test_used_module_bare_words::a_used_modules_word_is_called_bare
+  ✓ modules::test_used_module_bare_words::without_the_use_or_with_an_own_parse_the_word_keeps_its_meaning
   ✓ modules::test_versions::a_package_used_twice_is_loaded_once
   ✓ modules::test_versions::an_empty_symbol_is_no_version
   ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
@@ -2810,6 +2812,7 @@ PASSED:
   ✓ numbers::test_fast_scope::a_fast_module_makes_its_functions_fast
   ✓ numbers::test_fast_scope::a_fast_program_is_machine_arithmetic
   ✓ numbers::test_fast_scope::fast_types_are_machine_types
+  ✓ numbers::test_final_construction_units::a_final_construction_shows_its_units
   ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
   ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
   ✓ numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
@@ -2878,7 +2881,7 @@ PASSED:
   ✓ numbers::test_hyperreals::test_powers_expand_exactly
   ✓ numbers::test_implicit_libm::test_libm_in_a_function_without_import
   ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
-  ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
+  ✓ numbers::test_implicit_libm::test_sin_keeps_its_types
   ✓ numbers::test_infinity::infinity_is_a_float_value
   ✓ numbers::test_int_division::int_division_is_euclidean
   ✓ numbers::test_int_division::int_programs_skip_the_ratio_runtime
@@ -3069,6 +3072,7 @@ PASSED:
   ✓ numbers::test_shift_operators::test_shift_precedence_and_variables
   ✓ numbers::test_shift_operators::test_shift_right_floors_by_a_power_of_two
   ✓ numbers::test_shift_operators::test_shifts_of_big_exact_ints
+  ✓ numbers::test_spaced_number_quantity::a_spaced_number_before_a_quantity_says_how_to_multiply
   ✓ numbers::test_sqrt_quantity_unit::a_square_root_keeps_the_unit
   ✓ numbers::test_sqrt_quantity_unit::an_irrational_root_shows_as_a_float_with_the_unit
   ✓ numbers::test_static_units_compiled::test_a_compiled_quantity_carries_its_unit
@@ -4012,6 +4016,7 @@ PASSED:
   ✓ programs::test_sound_patterns::chance_drops_some_cycles_the_same_each_run
   ✓ programs::test_sound_patterns::elongation_holds_a_step_longer
   ✓ programs::test_sound_patterns::euclid_spreads_three_notes_over_eight_steps
+  ✓ programs::test_sound_patterns::live_loops_play_along
   ✓ programs::test_sound_patterns::named_live_loops_are_awaited_each
   ✓ programs::test_sound_patterns::nested_alternation_turns_on_its_own_visits
   ✓ programs::test_sound_patterns::pattern_samples_ends_each_event_at_its_cumulated_seconds
@@ -4658,12 +4663,12 @@ PASSED:
   ✓ types::test_dispatch::a_method_named_like_a_field_keeps_both_and_warns
   ✓ types::test_dispatch::a_method_named_like_any_standard_function_keeps_it
   ✓ types::test_dispatch::a_value_of_run_time_type_dispatches_at_run_time
-  ✓ types::test_dispatch::an_untyped_definition_is_the_fallback
   ✓ types::test_dispatch::classes_sharing_a_library_named_method_keep_the_library_function
   ✓ types::test_dispatch::every_positional_argument_dispatches_at_run_time
   ✓ types::test_dispatch::every_positional_argument_picks_the_method
   ✓ types::test_dispatch::methods_of_several_classes_share_a_name
   ✓ types::test_dispatch::no_method_for_a_type_is_a_welcoming_error
+  ✓ types::test_dispatch::sort_keeps_its_types
   ✓ types::test_dispatch::the_method_closest_at_every_position_wins
   ✓ types::test_dispatch::the_most_specific_method_wins
   ✓ types::test_dispatch::two_equally_specific_methods_are_an_ambiguity_error
@@ -4831,6 +4836,25 @@ PASSED:
   ✓ types::test_number_keeps_exact::a_float_variable_still_converts
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_float
   ✓ types::test_number_keeps_exact::a_number_variable_keeps_a_ratio
+  ✓ types::test_one_dispatch::a_class_member_or_variable_may_take_a_library_word
+  ✓ types::test_one_dispatch::a_class_method_named_like_a_library_word_joins_its_generic_function
+  ✓ types::test_one_dispatch::a_conversion_word_beside_a_field_of_that_name
+  ✓ types::test_one_dispatch::a_destructured_parameter_named_like_a_canvas_side
+  ✓ types::test_one_dispatch::a_field_named_like_a_canvas_side_binds_only_inside_its_class
+  ✓ types::test_one_dispatch::a_field_named_like_a_library_word_is_written
+  ✓ types::test_one_dispatch::a_host_word_bound_inside_a_function_stays_the_hosts_outside
+  ✓ types::test_one_dispatch::a_library_word_keeps_its_types
+  ✓ types::test_one_dispatch::a_member_is_read_with_or_without_parentheses
+  ✓ types::test_one_dispatch::a_method_form_call_takes_the_receiver_first
+  ✓ types::test_one_dispatch::a_program_word_shadows_only_its_own_arities
+  ✓ types::test_one_dispatch::a_property_is_called_in_function_form
+  ✓ types::test_one_dispatch::a_setter_writing_its_own_field_stores_it
+  ✓ types::test_one_dispatch::a_typed_redefinition_of_a_library_word_is_refused
+  ✓ types::test_one_dispatch::a_used_module_word_gives_way_per_scope_and_arity
+  ✓ types::test_one_dispatch::an_instance_of_unknown_class_reads_its_own_member_at_run_time
+  ✓ types::test_one_dispatch::every_library_parameter_type_chooses
+  ✓ types::test_one_dispatch::parse_bound_inside_a_function_stays_the_code_outside
+  ✓ types::test_one_dispatch::the_library_word_keeps_a_lists_call_with_a_hint
   ✓ types::test_operation_type::a_pair_stays_a_key
   ✓ types::test_operation_type::an_operation_is_a_key_and_an_expression
   ✓ types::test_operation_type::an_operator_node_is_an_operation
@@ -4859,6 +4883,7 @@ PASSED:
   ✓ types::test_plain_enum::case_statement_then_type_test
   ✓ types::test_plain_enum::other_languages_enums_are_plain_enums_too
   ✓ types::test_printable_items::an_instance_of_run_time_type_shows_its_text
+  ✓ types::test_printable_items::an_instance_shows_its_text_in_a_task
   ✓ types::test_printable_items::list_items_show_their_text
   ✓ types::test_printable_items::methods_of_the_text_type
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
@@ -5162,6 +5187,7 @@ PASSED:
   ✓ types::test_types::test_types_simple2
   ✓ types::test_types::test_user_type_wasm_emission
   ✓ types::test_union_returns::a_union_mismatch_offers_the_wider_union
+  ✓ types::test_union_returns::a_union_place_checks_a_value_known_only_at_run_time
   ✓ types::test_union_returns::a_union_result_gives_back_each_part
   ✓ types::test_union_returns::a_union_result_refuses_a_value_fitting_no_part
   ✓ types::test_union_returns::as_spells_a_union_result_with_or_without_a_block
@@ -5268,6 +5294,7 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
   ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
+  ✓ wasm::test_start_function_name::the_start_function_is_named_install
   ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ wasm::test_wasm_emitter::test_emit_gc_types
   ✓ wasm::test_wasm_emitter::test_function_usage_tracking
@@ -5921,6 +5948,7 @@ PASSED:
   ✓ welcoming::test_footguns::test_norm_bars_are_brackets
   ✓ welcoming::test_footguns::test_norway_problem_in_data
   ✓ welcoming::test_footguns::test_not_binds_weaker_than_comparison
+  ✓ welcoming::test_footguns::test_null_left_early_needs_no_other_check
   ✓ welcoming::test_footguns::test_null_needs_a_check
   ✓ welcoming::test_footguns::test_number_declaration_spellings_agree
   ✓ welcoming::test_footguns::test_number_of_bytes_in_text
@@ -6086,6 +6114,7 @@ PASSED:
   ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
   ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
   ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
+  ✓ welcoming::test_unknown_word_error::test_an_unknown_function_passed_to_an_iteration_word_is_named_when_compiled
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_in_a_condition_is_an_error
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
@@ -6203,4 +6232,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6198 passed, 0 failed, 6198 total tested
+13 ignored, 6227 passed, 0 failed, 6227 total tested
