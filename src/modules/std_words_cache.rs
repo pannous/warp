@@ -1,7 +1,6 @@
 //! The standard modules' words and the prelude's heads kept on disk between runs (card cache-lowered): reading them
 //! out of the sources parsed lib/*.warp at every start, about half the compile of a small program. Kept in the module
 //! cache (run/module_cache.rs), keyed by the sources and the warp binary, whose parser reads them
-#![cfg_attr(not(feature = "native"), allow(dead_code, unused_imports))] // the browser has no module cache
 use super::*;
 
 /// The extension of the kept words in the module cache
@@ -22,10 +21,8 @@ pub(super) fn kept_words() -> Option<&'static KeptWords> {
 	KEPT.get_or_init(read_kept_words).as_ref()
 }
 
-#[cfg(feature = "native")]
 fn read_kept_words() -> Option<KeptWords> {
-	let bytes = crate::run::module_cache::kept_bytes(&words_key()?, WORDS_EXTENSION)?;
-	let text = String::from_utf8(bytes).ok()?;
+	let text = kept_text(WORDS_EXTENSION)?;
 	let lines: Vec<&str> = text.lines().collect();
 	let (heads_line, word_lines) = lines.split_last()?;
 	if word_lines.len() != STD_MODULES.len() {
@@ -43,27 +40,38 @@ fn read_kept_words() -> Option<KeptWords> {
 	Some(KeptWords { words: words.collect(), heads })
 }
 
-#[cfg(not(feature = "native"))]
-fn read_kept_words() -> Option<KeptWords> {
-	None
-}
-
 /// Keep the words for the next runs, unless the cache is off
-#[cfg(feature = "native")]
 pub(super) fn keep_words(words: &[Vec<String>], heads: &[(String, usize, usize)]) {
-	let Some(key) = words_key() else { return };
 	let word_lines = words.iter().map(|module| module.join(&WORD_SEPARATOR.to_string()));
 	let heads_line = heads
 		.iter()
 		.map(|(name, arity, defaults)| format!("{name}{HEAD_SEPARATOR}{arity}{HEAD_SEPARATOR}{defaults}"))
 		.collect::<Vec<_>>()
 		.join(&WORD_SEPARATOR.to_string());
-	let text = word_lines.chain([heads_line]).collect::<Vec<_>>().join("\n");
-	crate::run::module_cache::keep_bytes(&key, WORDS_EXTENSION, text.as_bytes());
+	keep_text(WORDS_EXTENSION, &word_lines.chain([heads_line]).collect::<Vec<_>>().join("\n"));
+}
+
+/// The text a run before this one kept under `extension` for these sources and this binary
+#[cfg(feature = "native")]
+pub(super) fn kept_text(extension: &str) -> Option<String> {
+	String::from_utf8(crate::run::module_cache::kept_bytes(&words_key()?, extension)?).ok()
 }
 
 #[cfg(not(feature = "native"))]
-pub(super) fn keep_words(_: &[Vec<String>], _: &[(String, usize, usize)]) {}
+pub(super) fn kept_text(_: &str) -> Option<String> {
+	None
+}
+
+/// Keep the text under `extension` for the next runs, unless the cache is off
+#[cfg(feature = "native")]
+pub(super) fn keep_text(extension: &str, text: &str) {
+	if let Some(key) = words_key() {
+		crate::run::module_cache::keep_bytes(&key, extension, text.as_bytes());
+	}
+}
+
+#[cfg(not(feature = "native"))]
+pub(super) fn keep_text(_: &str, _: &str) {}
 
 /// The sources the words come from and the binary whose parser read them (its path, size and time)
 #[cfg(feature = "native")]
