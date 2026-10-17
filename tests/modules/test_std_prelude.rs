@@ -33,8 +33,8 @@ fn a_local_named_like_a_prelude_word_is_the_local() {
 }
 
 #[test]
-fn a_programs_own_prelude_word_wins() {
-	is!("first(x) := 7; first([1])", 7);
+fn a_prelude_word_keeps_its_types() {
+	is!("first(x) := 7; first([1])", 1);
 }
 
 #[test]

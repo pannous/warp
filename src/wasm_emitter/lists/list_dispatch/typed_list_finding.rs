@@ -204,7 +204,6 @@ impl WasmGcEmitter {
 		Some([part(left)?, part(right)?].concat())
 	}
 
-	/// The source of `target = value`
 	/// Whether an append to `name` (`xs = xs + [v]`) can run while another variable holds its list: after an assignment
 	/// between it and another (`ys = xs`, `xs = ys`) or in a loop around one. A list aliased only once its appends are
 	/// done (`d = (out = ø; for … { out = out + [x] }; out)`, every lowered map and filter) grows in place (card map-typed),

@@ -98,6 +98,7 @@ mod test_handler_globals;
 mod test_handler_unwinding; // card on-error-abort
 mod test_held_key; // card held-key
 mod test_help_word;
+mod test_host_word_failures; // card host-word
 mod test_if_call_condition;
 mod test_if_empty_branch;
 mod test_if_instance_branches; // card if-instance-branch
@@ -111,6 +112,7 @@ mod test_key_down; // card keyboard-state
 mod test_key_name_case; // key names in any case
 mod test_key_names; // card key-if
 mod test_library_signatures; // card reflect-library-signatures
+mod test_lifted_loop_literals; // card loop-literal-list
 mod test_list_without; // people without team (card people-where)
 mod test_listener_removal;
 mod test_listener_removal_in_functions;
@@ -182,6 +184,7 @@ mod test_signal_in_loop;
 mod test_signal_lists;
 mod test_signal_reflection;
 mod test_signal_values;
+mod test_slow_handler; // card timer-handler
 mod test_soft_tests;
 mod test_split_kernel; // card go-split-kernel
 mod test_storage;

@@ -7,7 +7,7 @@ use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, PRINT_WORD, REAL_WORD};
 pub(super) fn is_update(node: &Node) -> bool {
 	match node {
 		Node::Key(target, Op::Assign, value) => {
-			matches!(target.drop_meta(), Node::Symbol(name) if crate::warp_parser::mentions(value, name))
+			target.symbol_name().is_some_and(|name| crate::warp_parser::mentions(value, name))
 		}
 		Node::Key(target, op, _) if matches!(op, Op::Inc | Op::Dec) || op.is_compound_assign() => {
 			matches!(target.drop_meta(), Node::Symbol(_))
@@ -16,16 +16,13 @@ pub(super) fn is_update(node: &Node) -> bool {
 	}
 }
 
-/// Infer the Kind for an expression
-/// Returns Int, Float, Text, etc. based on the expression's result type
-/// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
-/// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
-/// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
 /// A value whose kind is known only at run time, held as a Node: maybe a number, maybe a ± interval
 pub fn is_run_time_kind(kind: &Kind) -> bool {
 	matches!(kind, Kind::Data | Kind::Empty)
 }
 
+/// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
+/// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
 pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
 	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || is_run_time_kind(kind);
 	// a value of run-time kind added to a list: node_add concatenates when it is a list too
@@ -41,6 +38,7 @@ pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str>
 		.map(|(name, _, _)| *name)
 }
 
+/// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if node_arithmetic(left, op, right).is_some() {
 		return Kind::Data; // Int or Float, decided at run time
@@ -134,7 +132,6 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::numbers::uncertain::INTERVAL_WORDS)
 /// The number a text literal spells: `"4"` is 4
 pub fn literal_number(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
@@ -144,6 +141,7 @@ pub fn literal_number(value: &Node) -> Option<Node> {
 	}
 }
 
+/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::numbers::uncertain::INTERVAL_WORDS)
 fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 	if is_run_time_kind(&infer_type(argument, scope)) {
 		Kind::Data
@@ -328,10 +326,9 @@ fn loop_kind(body: &Node, scope: &Scope) -> Kind {
 /// `print x`, `puts x`: an output word applied to one value
 pub(crate) fn is_output_call(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
-		if matches!(word.drop_meta(), Node::Symbol(name) if crate::wasm_emitter::OUTPUT_CALLS.contains(&name.as_str()))))
+		if word.symbol_name().is_some_and(|name| crate::wasm_emitter::OUTPUT_CALLS.contains(&name))))
 }
 
-/// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
 /// The type word of a cast `int 4`, `int("5")`, `double 2`: a type word applied to one value. A list `[int, 4]`, a comma
 /// group `(int, 4)` or a variable named like a type word (`int = 3; int 4`) casts nothing (card variable-named)
 pub fn type_cast_of<'a>(
@@ -361,6 +358,7 @@ pub fn applied_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separa
 	(!listed && !declared).then_some((name.as_str(), value))
 }
 
+/// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
 pub(super) fn infer_list_type(
 	node: &Node,
 	items: &[Node],
@@ -578,7 +576,6 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 	}
 }
 
-/// A branch `{a; b}` is worth its last statement
 /// A branch that is `error …` (or a block ending in it): the bottom kind, it never gives a value to its if
 pub(crate) fn raises_error(branch: &Node) -> bool {
 	match branch.drop_meta() {
@@ -621,6 +618,7 @@ fn choice_kind(then_expr: &Node, else_expr: &Node, scope: &Scope) -> Kind {
 	}
 }
 
+/// A branch `{a; b}` is worth its last statement
 pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	if let Some(result) = block_result(branch) {
 		return branch_kind(&result, scope);

@@ -1,5 +1,6 @@
 //! `to_json(p)` of a class instance, and other languages' serializer calls
 use super::*;
+use crate::lowering::nodes::any_part;
 
 /// json's word for a program with classes (lib/json.warp): the classes' names go along, so an instance is its fields
 const TO_JSON_WORD: &str = "to_json";
@@ -67,12 +68,8 @@ fn with_json_classes(node: Node, classes: &Node, json_word: &str) -> Node {
 
 /// Whether the program says `use json` (std_aliases writes it for `x.json` and JSON.stringify)
 fn uses_json(program: &Node) -> bool {
-	let mut found = false;
-	program.visit(&mut |part| {
-		if let Node::List(items, ..) = part.drop_meta() {
-			found |= items.first().is_some_and(|word| word.drop_meta().name() == USE_WORD)
-				&& items.iter().any(|item| item.drop_meta().name() == JSON_MODULE);
-		}
-	});
-	found
+	any_part(
+		program,
+		|part| matches!(part.drop_meta(), Node::List(items, ..) if items.first().is_some_and(|word| word.drop_meta().name() == USE_WORD) && items.iter().any(|item| item.drop_meta().name() == JSON_MODULE)),
+	)
 }

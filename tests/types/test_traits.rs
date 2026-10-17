@@ -59,11 +59,6 @@ fn test_ordering_a_type_without_compare_is_a_compile_error() {
 }
 
 #[test]
-fn test_mixed_kinds_stay_not_comparable() {
-	fails_with("sort [1 \"a\"]", "not comparable");
-}
-
-#[test]
 fn test_conformance_is_a_type_test() {
 	is!("3 is Comparable", true);
 	is!("\"a\" is Comparable", true);

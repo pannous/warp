@@ -4,7 +4,7 @@
 //! untyped; an object written at a call (`f({name:"Dick"})`) that lacks a required field, or holds a literal of
 //! another type than its field's, is a compile error.
 
-use super::nodes::key;
+use super::nodes::{key, round_call, word_headed};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -58,14 +58,8 @@ fn unshaped(node: Node, shapes: &mut Shapes) -> Node {
 
 /// `(f p:{…} …)`: the function's name and its parameters, when one of them is shaped
 fn shaped_head(head: &Node) -> Option<(String, Vec<Node>)> {
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	let (name, parameters) = items.split_first()?;
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
-	parameters.iter().any(|parameter| shape(parameter).is_some()).then(|| (name.clone(), parameters.to_vec()))
+	let (name, parameters) = round_call(head)?;
+	parameters.iter().any(|parameter| shape(parameter).is_some()).then(|| (name.to_string(), parameters.to_vec()))
 }
 
 /// The fields of `p:{name, title?}`
@@ -130,10 +124,7 @@ fn refused_argument(call: &Node, shapes: &Shapes) -> Option<String> {
 	let Node::List(items, Bracket::Round | Bracket::None, _) = call.drop_meta() else {
 		return None;
 	};
-	let (name, arguments) = items.split_first()?;
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let (name, arguments) = word_headed(items)?;
 	shapes.get(name)?.iter().zip(constructions(arguments)).find_map(|(fields, argument)| {
 		let given = object_entries(&argument)?;
 		fields.as_ref()?.iter().find_map(|field| match given.iter().find(|(key, _)| *key == field.name) {

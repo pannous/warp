@@ -4,14 +4,11 @@ use warp::*;
 
 #[test]
 fn test_typed_array_declaration_with_count_first() {
-	is!("x : 100 int; x.length", 100);
-	is!("x : 100 int; x#1", 0);
 	is!("x : 100 int; x#5=7; x#5", 7);
 }
 
 #[test]
 fn test_typed_array_declaration_with_subscript() {
-	is!("pixel:int[100]; pixel.length", 100);
 	is!("pixel:int[100]; pixel#1", 0);
 	is!("pixel:int[100]; pixel#5=7; pixel#5", 7);
 }

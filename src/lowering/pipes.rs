@@ -5,7 +5,7 @@
 //! `then` pipes the same way into a function missing its argument (`xs then sort`, P158); otherwise it is the
 //! condition, also without `if`.
 
-use super::nodes::{if_then, key};
+use super::nodes::{if_then, key, phrase_words};
 use crate::analyzer::counting_function;
 use crate::compiler::context::Context;
 use crate::node::{parens, Bracket, Node, Separator};
@@ -195,7 +195,7 @@ impl Pipes {
 	/// `square numbers then filter(p)`: a braceless call whose last argument pipes on with `then`
 	fn then_pipes_braceless_call(&self, items: &[Node]) -> bool {
 		let head_is_function =
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.names_function(name, 0));
+			items.first().and_then(Node::symbol_name).is_some_and(|name| self.names_function(name, 0));
 		head_is_function
 			&& items.len() >= 2
 			&& matches!(items.last().map(Node::drop_meta), Some(Node::Key(argument, Op::Then, stage)) if !is_truth_value(argument) && self.then_call(stage, argument).is_some())
@@ -223,7 +223,7 @@ impl Pipes {
 			Node::List(items, Bracket::None, Separator::Space) | Node::List(items, Bracket::Round, Separator::None)
 				if items.len() >= 2 =>
 			{
-				let mut words: Vec<Node> = items.iter().flat_map(spread).collect();
+				let mut words = phrase_words(items);
 				(pipe_stage(words.remove(0)), words)
 			}
 			Node::Key(left, op, operand)
@@ -245,14 +245,14 @@ impl Pipes {
 	fn chain_applied(&self, chain: Node, argument: Node) -> Node {
 		match chain.drop_meta().clone() {
 			Node::Key(value, Op::Or, stage) => self.applied(&stage, self.chain_applied(*value, argument)),
-			function => called(function, argument),
+			function => parens(vec![function, argument]),
 		}
 	}
 
 	/// The stage applied to the piped value: the call `f(value)`, or the operator `√value`
 	fn applied(&self, stage: &Node, value: Node) -> Node {
 		match self.function(stage) {
-			Some(function) => called(function, value),
+			Some(function) => parens(vec![function, value]),
 			None => key(Node::Empty, operator_stage(stage).expect("a stage"), grouped(value)),
 		}
 	}
@@ -260,9 +260,7 @@ impl Pipes {
 	/// The function a marked stage names: the word itself, unless it is a variable
 	fn function(&self, stage: &Node) -> Option<Node> {
 		let Node::Meta { node, .. } = stage else { return None };
-		let Node::Symbol(name) = node.drop_meta() else {
-			return None;
-		};
+		let name = node.symbol_name()?;
 		let is_user_function =
 			self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
 				|| self.spaced_functions.contains(name);
@@ -336,16 +334,4 @@ fn grouped(value: Node) -> Node {
 		Node::List(items, Bracket::None, separator) => Node::List(items, Bracket::Round, separator),
 		other => other,
 	}
-}
-
-/// The words of an unbracketed list, nested ones too (`(sq 1) 2`), any other node alone
-fn spread(node: &Node) -> Vec<Node> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Space) => items.iter().flat_map(spread).collect(),
-		_ => vec![node.clone()],
-	}
-}
-
-fn called(function: Node, argument: Node) -> Node {
-	parens(vec![function, argument])
 }

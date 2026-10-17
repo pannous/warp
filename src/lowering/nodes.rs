@@ -1,4 +1,5 @@
-//! The small node forms many lowering passes build and test: a call of a word, a word
+//! The small node forms many lowering passes build and take apart: calls, keys, blocks, conditions, words, the parts
+//! of a function definition
 
 use crate::analyzer::call_name;
 use crate::extensions::numbers::Number;
@@ -206,6 +207,15 @@ pub(crate) fn is_kinded_type_word(node: &Node) -> bool {
 	node.symbol_name().is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
 }
 
+/// C#'s and Java's one parameter `int x`, `int[] xs` (`[int] xs` as parsed): a type, then the name
+fn is_typed_parameter(words: &[Node]) -> bool {
+	let is_type = |word: &Node| match word.drop_meta() {
+		Node::List(element, Bracket::Square, _) => matches!(element.as_slice(), [only] if is_kinded_type_word(only)),
+		_ => is_kinded_type_word(word),
+	};
+	matches!(words, [kind, name] if is_type(kind) && matches!(name.drop_meta(), Node::Symbol(_)))
+}
+
 /// An operand `&` and `|` may combine bit by bit (card operator-shall): a whole number, a name, a call or an
 /// arithmetic; a truth value, comparison, text, list, float or type is no whole number, where they are and/or
 pub(crate) fn may_be_whole_number(node: &Node) -> bool {
@@ -347,8 +357,23 @@ impl<'a> FunctionHead<'a> {
 	pub fn parameters(&self) -> Vec<&'a Node> {
 		match self.written_parameters {
 			[only] if only.is_nothing() => vec![],
+			[group @ Node::List(typed, Bracket::Round, Separator::Space)] if is_typed_parameter(typed) => vec![group],
+			// `got(int[] xs)` arrives as `got [int] xs`: one parameter, by its name
+			[_, name] if is_typed_parameter(self.written_parameters) => vec![name],
 			[Node::List(grouped, Bracket::Round, _)] => grouped.iter().collect(),
 			parameters => parameters.iter().collect(),
+		}
+	}
+
+	/// The fewest and most values it takes: `f(a, b = 2)` (1, 2), `f(a, xs...)` (1, unbounded)
+	pub fn arity(&self) -> (usize, usize) {
+		let parameters = self.parameters();
+		let is_rest = |parameter: &&Node| crate::lowering::variadic::is_rest_parameter(parameter);
+		let has_default = |parameter: &&Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));
+		let required = parameters.iter().filter(|parameter| !has_default(parameter) && !is_rest(parameter)).count();
+		match parameters.iter().any(is_rest) {
+			true => (required, usize::MAX),
+			false => (required, parameters.len()),
 		}
 	}
 
@@ -434,11 +459,20 @@ fn viewed<'a>(
 	})
 }
 
-/// `(f x): int`, `(f x) as int`: the head and its result type
+/// `(f x): int`, `(f x) as int`, `(f x) -> int`: the head and its result type
 fn typed_head(target: &Node) -> (&Node, Option<&Node>) {
-	match target.drop_meta() {
-		Node::Key(head, Op::Colon | Op::As, result) if is_word_head(head) => (head, Some(result)),
+	match result_typed(target) {
+		Some((head, result)) if is_word_head(head) => (head, Some(result)),
 		_ => (target, None),
+	}
+}
+
+/// `head as T`, `head: T`, `head -> T`: the head and what its result operator holds, the one split of a typed head
+/// (declarations::result_typed_head adds the unions `as int or text`)
+pub(crate) fn result_typed(target: &Node) -> Option<(&Node, &Node)> {
+	match target.drop_meta() {
+		Node::Key(head, Op::As | Op::Colon | Op::Arrow, result) => Some((head, result)),
+		_ => None,
 	}
 }
 
@@ -459,13 +493,32 @@ fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
 	}
 }
 
+/// Whether some part of the tree, as `Node::visit` walks it (class code, no metadata), is one `wanted` accepts
+pub(crate) fn any_part(node: &Node, wanted: impl Fn(&Node) -> bool) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= wanted(part));
+	found
+}
+
+/// `f a b` taken apart: the word heading the items and the items after it
+pub(crate) fn word_headed(items: &[Node]) -> Option<(&str, &[Node])> {
+	let (head, rest) = items.split_first()?;
+	Some((head.symbol_name()?, rest))
+}
+
+/// `f(a, b)` (round brackets, any separator) taken apart: the word called and its arguments
+pub(crate) fn round_call(node: &Node) -> Option<(&str, &[Node])> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => word_headed(items),
+		_ => None,
+	}
+}
+
 /// The function a list calls: `f(a, b)`, or spaced `f a b`
 pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
-	let Node::Symbol(name) = items.first()?.drop_meta() else {
-		return None;
-	};
+	let (name, _) = word_headed(items)?;
 	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
-	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
+	(call_name(items, bracket, separator).is_some() || spaced).then_some(name)
 }
 
 /// The statements of a template with its placeholders filled in, its match arms in the form the passes read

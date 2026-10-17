@@ -65,3 +65,14 @@ fn a_module_looking_beyond_the_keyed_folders_is_not_kept() {
 	assert_eq!(printed(&folder), "3");
 	assert_eq!(cached_programs(&folder), 0);
 }
+
+// card program-cache-own-output: the key lists the folder's module files only, so a program's own output beside it
+// (`save "x.png"`, `write("out.txt", …)`) does not compile it again
+#[test]
+fn a_file_the_program_writes_beside_it_keeps_its_cached_module() {
+	let folder = folder("program_cache_own_output");
+	std::fs::write(folder.join("program.warp"), "write(\"out.txt\", \"made\")\nprint 5").unwrap();
+	assert_eq!(printed(&folder), "5");
+	assert_eq!(printed(&folder), "5");
+	assert_eq!(cached_programs(&folder), 1);
+}

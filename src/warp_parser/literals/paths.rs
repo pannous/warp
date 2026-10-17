@@ -35,11 +35,10 @@ pub fn path_variables(node: &Node) -> std::collections::HashSet<String> {
 
 /// A path written without quotes, or one of the `path_variables`: a Path where a method takes one
 pub fn is_written_path(argument: &Node, path_variables: &std::collections::HashSet<String>) -> bool {
-	is_path_literal(argument) || matches!(argument.drop_meta(), Node::Symbol(name) if path_variables.contains(name))
+	is_path_literal(argument) || argument.symbol_name().is_some_and(|name| path_variables.contains(name))
 }
 
 impl WarpParser {
-	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	/// A file path without quotes starts here, glued to what follows and not to an operand before it (card unix-words):
 	/// `./mozart.mp3`, `../songs/a.wav`, `./` alone (`ls ./`; `xs ./ 2` and `xs./2` divide each element); `~/notes.txt`, and `~` alone (`cd ~`;
 	/// `a ~ b` stays the comparison); `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`) or after
@@ -116,8 +115,6 @@ impl WarpParser {
 		Node::Text(path).with_meta_data(PathLiteral)
 	}
 
-	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
-	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
 	/// The soft keyword `version` before digits takes them as written: `version 1.10` is one value, not the float 1.1
 	pub(crate) fn version_operand(&mut self, symbol: &str) -> Option<Node> {
 		if symbol != crate::words::VERSION_KEYWORD || self.options.data_mode {

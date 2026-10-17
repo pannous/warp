@@ -5,6 +5,7 @@
 //! assignment, a loop variable) ungroups; any other name stays a call: `f().b`, `today().year`, `point().x`, `mk().a`
 //! of `mk = () => …`, and the functions of an imported module
 
+use crate::lowering::nodes::key;
 use std::collections::HashSet;
 
 use crate::node::{Bracket, Node};
@@ -47,7 +48,7 @@ fn ungrouped_receivers(node: Node, variables: &HashSet<String>) -> Node {
 				Some(name) if variables.contains(name.symbol_name().unwrap_or_default()) => name.clone(),
 				_ => receiver,
 			};
-			Node::Key(Box::new(receiver), Op::Dot, Box::new(ungrouped_receivers(*member, variables)))
+			key(receiver, Op::Dot, ungrouped_receivers(*member, variables))
 		}
 		other => other.map_children(|child| ungrouped_receivers(child, variables)),
 	}

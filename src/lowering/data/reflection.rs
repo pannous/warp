@@ -597,7 +597,7 @@ fn component_exports(node: &Node) -> HashMap<String, Vec<String>> {
 		.collect()
 }
 
-/// `import lib/fourty_two`: the names fourty_two exports (wasm_modules.rs), sorted; not the setters derived for its globals.
+/// `import lib/fourty_two`: the names fourty_two exports (modules/wasm_modules/), sorted; not the setters derived for its globals.
 /// A module warp compiled names its own functions in warp.meta: its exports are those (not warp's runtime exports), and
 /// that entry is kept by the module's alias for `m.f.params`, its `classes` entry for `m.P.fields`
 fn module_objects(node: &Node) -> Objects {

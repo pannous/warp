@@ -57,6 +57,7 @@ pub(super) fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: us
 	diagnostic.offer("floor division", written, format!("{} {FLOOR_DIVISION} {}", text[before], text[after]))
 }
 
+/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
 pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
 	let closer = closer.into();
 	Diagnostic::default()
@@ -234,21 +235,18 @@ impl WarpParser {
 
 			let c1 = self.current_char();
 
-			// # line comment (shell-style) at line start: `# note`, `#!`, `##`, `#use …`; `#x`, `#(…)`, `#a-1` count
-			if c1 == '#' && self.is_at_line_start() && self.at_hash_comment() {
-				self.advance();
-				let text = self.consume_rest_of_line();
-				if !text.is_empty() {
-					comments.push(text);
-				}
-				had_newline = true;
-				after_line_comment = true;
-				continue;
-			}
-			// // line comment (but not :// URL scheme)
-			if c1 == '/' && self.at_line_comment() {
+			// # line comment (shell-style) at line start: `# note`, `#!`, `##`, `#use …`; `#x`, `#(…)`, `#a-1` count;
+			// a // line comment (but not :// URL scheme)
+			let marker_width = if c1 == '#' && self.is_at_line_start() && self.at_hash_comment() {
+				Some(1)
+			} else if c1 == '/' && self.at_line_comment() {
 				self.warn_on_floor_division_comment();
-				self.advance_by(2);
+				Some(2)
+			} else {
+				None
+			};
+			if let Some(width) = marker_width {
+				self.advance_by(width);
 				let text = self.consume_rest_of_line();
 				if !text.is_empty() {
 					comments.push(text);

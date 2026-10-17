@@ -6,7 +6,7 @@
 //! a function divides (card declared-word)
 
 use super::nodes::{call, called_name, key};
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::LOG_WORD;
 use std::collections::HashSet;
@@ -31,17 +31,29 @@ pub fn lower(node: Node) -> Node {
 /// `divides(3, 12)` after `infix operator divides(d, n) := …` is `operator_divides(3, 12)`; a function the program
 /// names divides wins. Runs once the used modules joined, so their operators have call forms too
 pub fn lower_call_forms(node: Node) -> Node {
-	let defined = crate::library_words::defined_names(&node);
-	let call_forms: HashSet<String> = defined
-		.iter()
-		.filter_map(|name| name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX))
-		.filter(|word| word.starts_with(char::is_alphabetic) && !defined.contains(*word))
-		.map(str::to_string)
-		.collect();
+	let call_forms = call_forms(&node);
 	if call_forms.is_empty() {
 		return node;
 	}
 	operator_calls(node, &call_forms)
+}
+
+/// The same for the definitions of the standard modules, before the words of a module only other modules use are
+/// renamed apart: shell's `matches(line, pattern)` of its `use regex` (card matches-call)
+pub fn lower_call_forms_in(definitions: Vec<Node>) -> Vec<Node> {
+	let call_forms = call_forms(&Node::List(definitions.clone(), Bracket::None, Separator::Newline));
+	definitions.into_iter().map(|definition| operator_calls(definition, &call_forms)).collect()
+}
+
+/// `divides` of a defined `operator_divides` and no defined `divides`
+fn call_forms(node: &Node) -> HashSet<String> {
+	let defined = crate::library_words::defined_names(node);
+	defined
+		.iter()
+		.filter_map(|name| name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX))
+		.filter(|word| word.starts_with(char::is_alphabetic) && !defined.contains(*word))
+		.map(str::to_string)
+		.collect()
 }
 
 fn operator_calls(node: Node, call_forms: &HashSet<String>) -> Node {

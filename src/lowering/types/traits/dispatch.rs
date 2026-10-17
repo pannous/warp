@@ -76,7 +76,7 @@ pub(super) fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[Dispat
 	let parameters: Vec<Node> = (0..arity).map(|index| Node::Symbol(format!("dispatched_{index}"))).collect();
 	let method = |variant: &str| witness_call(operation, variant, parameters.clone());
 	let (checked, otherwise) = match fallback {
-		true => (cases, call(operation, parameters.clone())),
+		true => (cases, crate::lowering::typed_library_words::library_call(operation, parameters.clone())),
 		false => {
 			let (last, checked) = cases.split_last().expect("two or more methods");
 			(checked, method(&last.1))
@@ -373,10 +373,8 @@ impl Dispatch {
 			self.declared.borrow_mut().last_mut().expect("main's scope").insert(name.clone(), declared.clone());
 			return Some((name, declared));
 		}
-		let Node::Symbol(name) = target.drop_meta() else {
-			return None;
-		};
-		self.declared.borrow().last()?.get(name).map(|declared| (name.clone(), declared.clone()))
+		let name = target.symbol_name()?;
+		self.declared.borrow().last()?.get(name).map(|declared| (name.to_string(), declared.clone()))
 	}
 
 	/// `b.content = v` is `b = field_with(b, "content", v)` here: the error of a value the field's declared class does not take

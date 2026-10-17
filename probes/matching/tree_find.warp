@@ -1,8 +1,0 @@
-# tree find: a pattern matched at any depth (card tree-find, tree-patterns step 5)
-page = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg", alt: "a cat"}]}
-sources = page find {type: "image", src}
-described = page find {src, alt}
-texts = count(page find {type: "text"})
-xs = [[1, 2], [3, [1, 5]]]
-seconds = xs find [1, x]
-[sources, described, texts, seconds]

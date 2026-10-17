@@ -1,3 +1,0 @@
-class Bag{items:[int]; size() := count(items)}
-b = Bag([1 2 3])
-size(b) // 3

@@ -1,8 +1,0 @@
-class Stack{items:list; pop() := 42}
-f(x) := x.pop()
-print(f(Stack([1])))
-print(f([1, 2, 3]))
-for s in [Stack([1]), [7, 8]] { print(s.pop()) }
-xs = [1, 2, 3]
-xs.pop()
-print(xs)

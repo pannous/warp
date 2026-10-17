@@ -1,5 +1,0 @@
-f(n) := match n {
-  1 => "one"
-  else => "many"
-}
-f(3)

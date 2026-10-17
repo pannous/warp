@@ -101,7 +101,7 @@ impl WarpParser {
 			Node::List(_, Bracket::None, _) => true, // Function call from implicit application
 			_ => false,
 		};
-		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
+		let lhs_is_defined_function = lhs.symbol_name().is_some_and(|name| self.functions.contains(name));
 		// application binds tighter than the logical, comparison and additive operators: `1 + count xs` is
 		// `1 + count(xs)` for any name (card count-xs); a `:` operand keeps `a: b c d` apart, and an argument takes no
 		// call of its own: `on change s` is one call with two arguments; in a loop header only its last word is an argument

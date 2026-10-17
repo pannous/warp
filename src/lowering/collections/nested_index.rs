@@ -60,7 +60,7 @@ fn changed_place(node: &Node) -> Option<&Node> {
 	let Node::Key(target, op, value) = node.drop_meta() else {
 		return None;
 	};
-	if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) {
+	if op.is_write() {
 		return Some(target);
 	}
 	let Node::List(items, _, _) = value.drop_meta() else {

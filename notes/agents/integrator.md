@@ -12,12 +12,20 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   Only one gate runs at a time (the machine's single test queue): when W is free, bring the prepared batch over
   (`git -C "$W" checkout --detach <P's HEAD>`) and gate it there. Never wait idle on a test run.
 - The queue is the board (user, 2026-10-16): `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
-  cards are merged, each at the tip its card names (`git merge <tip>`, not `origin/<branch>`: the worker may have
-  pushed since). A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
+  cards are merged, each at origin/<branch> when that descends from the tip its card names (owners push newer tips
+  without updating the card; a stale tip re-resolved a hand-resolved conflict), else at the card tip; the tip is fixed
+  once merged, push_tested.sh's ancestry check catches a push during the run. A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
   branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
   and tell the Supervisor about lost-looking work.
 - Batches of at most ~8 Ready cards (user, 2026-10-16). Express cards (and crash fixes) go alone and next. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
+- Scripts (card integrator-scripts): `integrator_tools/batch_build.sh [--worktree "$P"] [--base <ref>] [--cloud]
+  [<card>…]` assembles a batch from the Ready cards (express alone, ≤8 tips, held tips in ../integrate_held.txt
+  skipped), merges them with merge_batch.sh (`<branch>@<tip>`), runs keywords.py, native + wasm32 cargo check and fmt,
+  writes ../<worktree>_batch.txt and prints the bounces as todo commands (~2 min). After push_tested.sh,
+  `integrator_tools/batch_close.sh [--dry-run] [<batch file>]` closes each landed card with its merge commit, deletes
+  the landed remote branches in one push and removes the landed worktrees of owners in ../integrate_retired.txt (or
+  of none) when only the tweak/leftovers are uncommitted and nothing is newer than 2 h. The steps below are what they do.
 - Per batch: `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only origin/main`,
   merge each card's tip. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the result is not
   empty and tests/main.rs has no duplicate lines). Other trivial conflicts you resolve yourself (merge or rebase):
@@ -70,7 +78,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 - Bisecting: integrator_tools/bisect_test.sh <test> under `git bisect run --first-parent` (it resets the tracked
   test_results.txt that queue.sh rewrites, else bisect stops after one step); integrator_tools/tour_at.sh <commit>
   <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
-  TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
+  TaskStop a running gate before re-merging there. gate.sh always tests the `integrate` worktree (it cds there): a batch
+  rebuilt in integrate2 must be checked out in integrate (`git checkout --detach <tip>`) before the gate, else the
+  gate re-tests the old batch. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
 - Small fixes first (user, 2026-10-16): when a failure comes from a worker's change and the fix looks like a couple of
   lines (a stale path, `//` → `/!`, a missing cfg, a test's spelling after a decided syntax change, a renamed name),

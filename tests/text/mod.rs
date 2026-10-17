@@ -2,6 +2,7 @@ mod test_add_to_text;
 mod test_ascii_index_costs;
 mod test_backtick_templates;
 mod test_brace_hole; // card brace-hole
+mod test_byte_loop_inline; // card loop-calls
 mod test_case_table;
 mod test_cast_to_string;
 mod test_char_parameter_type; // chars-codepoints follow-up
@@ -71,6 +72,7 @@ mod test_text_plus_printable; // card print-oldest
 mod test_text_repeat;
 mod test_text_runtime;
 mod test_text_search;
+mod test_text_slices; // cards text-slice, long-text
 mod test_text_type_words; // card cleanup-closed-lists
 mod test_text_unit_lists; // decision text-unit-plurals
 mod test_text_variable_assignment;

@@ -102,15 +102,8 @@ impl Node {
 			Text(t) => quoted(t),
 			Char(c) => quoted_by(&c.to_string(), '\''),
 			List(nodes, bracket, separator) => {
-				let close = bracket.closing();
-				if nodes.is_empty() {
-					format!("{}{}", bracket, close)
-				} else if nodes.len() == 1 {
-					format!("{}{}{}", bracket, nodes[0].item_text(bracket), close)
-				} else {
-					let items: Vec<String> = nodes.iter().map(|node| node.item_text(bracket)).collect();
-					format!("{}{}{}", bracket, items.join(&separator.joint()), close)
-				}
+				let items: Vec<String> = nodes.iter().map(|node| node.item_text(bracket)).collect();
+				format!("{bracket}{}{}", items.join(&separator.joint()), bracket.closing())
 			}
 			// the operand a prefix or suffix operator lacks is ø in the tree, not in the text: `#x`, `not x`, `x++`
 			Key(_, op, v) if self.is_prefix_form() => {
@@ -131,11 +124,9 @@ impl Node {
 			Key(k, Op::Hash, v) if matches!(v.drop_meta(), Key(..)) && !v.is_prefix_form() => {
 				format!("{}#({})", k.operand_text(meta), v.serialize_recurse(meta))
 			}
-			Key(k, op, v) if v.is_prefix_form() => {
-				format!("{}{}{} {}", v.attribute_prefix(), k.key_text(op, meta), op, v.serialize_with(meta, false))
-			}
 			Key(k, op, v) => {
-				format!("{}{}{}{}", v.attribute_prefix(), k.key_text(op, meta), op, v.serialize_with(meta, false))
+				let space = if v.is_prefix_form() { " " } else { "" };
+				format!("{}{}{op}{space}{}", v.attribute_prefix(), k.key_text(op, meta), v.serialize_with(meta, false))
 			}
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),

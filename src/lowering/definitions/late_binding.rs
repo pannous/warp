@@ -12,7 +12,7 @@
 //! its captures as they are at each call the enclosing body makes (directly, through a sibling or passed as a value:
 //! wasm_emitter `refresh_enclosing_captures`); a variable inner writes lives in a cell (nonlocal_cells.rs).
 
-use super::nodes::children_rewritten;
+use super::nodes::{any_part, children_rewritten, word_headed};
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
 use crate::compiler::context::{Context, UserFunctionDef};
@@ -174,9 +174,7 @@ fn is_nonlocal_declaration(node: &Node) -> bool {
 
 /// The program without its `nonlocal y` declarations: once its cells are made they have no code
 fn without_nonlocal_declarations(program: Node) -> Node {
-	let mut found = false;
-	program.visit(&mut |node| found |= is_nonlocal_declaration(node));
-	if !found {
+	if !any_part(&program, is_nonlocal_declaration) {
 		return program;
 	}
 	without_statements(program, &is_nonlocal_declaration)
@@ -242,9 +240,7 @@ pub(crate) fn functions_in(statement: &Node) -> Vec<UserFunctionDef> {
 	}
 	let is_definition = match statement.drop_meta() {
 		Node::Key(_, Op::Define | Op::Assign, _) => true,
-		Node::List(items, _, _) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word))
-		}
+		Node::List(items, _, _) => items.first().and_then(Node::symbol_name).is_some_and(is_function_keyword),
 		_ => false,
 	};
 	if !is_definition {
@@ -342,9 +338,7 @@ fn reads_any(node: &Node, names: &dyn Fn(&str) -> bool) -> bool {
 /// `3*4` for the body, `clock()` for the call `(clock)`, as it was written
 fn call_as_written(node: &Node) -> String {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, Separator::None)
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-		{
+		Node::List(items, Bracket::Round, Separator::None) if word_headed(items).is_some() => {
 			let arguments: Vec<String> = items[1..].iter().map(call_as_written).collect();
 			format!("{}({})", items[0].drop_meta().serialize().trim(), arguments.join(", "))
 		}
@@ -363,7 +357,7 @@ fn note_charging(
 ) -> Result<(), Node> {
 	let function = &definition.function;
 	let statement = &statements[definition.index];
-	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
+	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if items.first().and_then(Node::symbol_name).is_some_and(is_function_keyword));
 	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables, `o·s` is an entry
 															// the standard modules' getters read at every read on purpose (`cwd := …` after `cd`): they warn no program using them
 	let in_std_module = crate::errors::diagnostic::line_info(statement)

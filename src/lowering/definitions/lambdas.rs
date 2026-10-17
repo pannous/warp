@@ -120,7 +120,9 @@ fn lowering(node: Node, strict: bool) -> Node {
 	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
 	let path_variables = crate::warp_parser::path_variables(&node);
-	Lowering { context, classes, path_variables, counter: Counter::starting_at(first_fresh), strict }.expand(node)
+	let bound = crate::lowering::module_properties::bound_names(&node);
+	Lowering { context, classes, path_variables, bound, counter: Counter::starting_at(first_fresh), strict }
+		.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -522,7 +524,7 @@ fn member_lambda(dot_word: &Node) -> Node {
 
 /// `age` of `.age`
 fn member_of(node: &Node) -> Option<&str> {
-	let Node::Symbol(name) = node.drop_meta() else { return None };
+	let name = node.symbol_name()?;
 	name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))
 }
 
@@ -538,13 +540,9 @@ pub(crate) fn is_iteration_word(name: &str) -> bool {
 }
 
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
-	let Node::Symbol(name) = word.drop_meta() else {
-		return None;
-	};
-	let canonical = ITERATION_SPELLINGS
-		.iter()
-		.find(|(_, spellings)| spellings.contains(&name.as_str()))
-		.map_or(name.as_str(), |(word, _)| word);
+	let name = word.symbol_name()?;
+	let canonical =
+		ITERATION_SPELLINGS.iter().find(|(_, spellings)| spellings.contains(&name)).map_or(name, |(word, _)| word);
 	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
 }
 
@@ -983,11 +981,21 @@ struct Lowering {
 	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
 	classes: HashSet<String>,
 	path_variables: HashSet<String>,
+	/// the names the program gives (module_properties::bound_names): a function value may be any of them
+	bound: HashSet<String>,
 	counter: Counter,
 	strict: bool,
 }
 
 impl Lowering {
+	/// A word no variable, parameter, function or library word of the program is
+	fn names_nothing(&self, name: &str) -> bool {
+		!self.bound.contains(name)
+			&& !self.path_variables.contains(name)
+			&& !self.context.user_functions.contains_key(name)
+			&& crate::lowering::library_signatures::library_signature(name).is_none()
+	}
+
 	fn fresh(&self, prefix: &str) -> String {
 		let number = self.counter.next_number();
 		format!("{prefix}_{number}")
@@ -1268,6 +1276,10 @@ impl Lowering {
 					Ok(call(crate::library_words::canonical_spelling(name), arguments.to_vec()))
 				}
 				Node::Symbol(_) if !self.strict => Err(None),
+				// `xs.map(odd)` of an odd nothing defines: named now, not a run-time "not a function" (card map-odd)
+				Node::Symbol(name) if self.names_nothing(name) => {
+					Err(Some(crate::ffi::undefined_function_diagnostic(function, name).into_error()))
+				}
 				// a function value known only at run time: a variable or parameter holding a closure, or a call returning one
 				_ if crate::closures::may_be_function_value(function) => {
 					Ok(crate::closures::closure_call(function.clone(), arguments.to_vec()))

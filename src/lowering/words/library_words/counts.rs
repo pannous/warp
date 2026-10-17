@@ -96,10 +96,7 @@ pub(super) fn count_in(items: &[Node]) -> Option<Node> {
 	if !count.is_symbol(COUNT_WORD) || !in_word.is_symbol(IN_WORD) || haystack.is_empty() {
 		return None;
 	}
-	let haystack = match haystack {
-		[single] => single.clone(),
-		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-	};
+	let haystack = Node::single_or_list(haystack.to_vec(), Bracket::None, Separator::Space);
 	if let Some(unit) =
 		matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten()
 	{

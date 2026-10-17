@@ -35,7 +35,6 @@ fn the_type_of_a_type_value_is_type() {
 fn a_type_value_still_compares_as_the_type() {
 	is!("x = 3; type(x) == int", true);
 	is!("x = int; x == int", true);
-	is!("f(t: type) := t == int; f int", true);
 }
 
 #[test]

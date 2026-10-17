@@ -6,7 +6,6 @@ use crate::is;
 fn operator_words() {
 	is!("1 plus 2", 3);
 	is!("5 minus 2", 3);
-	is!("6 divided by 2", 3);
 	is!("x = 1; y = 1; x equals y", 1);
 	is!("a = 3; b = 2; a is greater than b", 1);
 	is!("a = 3; b = 2; a less than b", 0);

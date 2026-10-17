@@ -1,4 +1,0 @@
-seen = "none"
-on key { if key == "Escape" { seen = "esc" } }
-emit key{key:"Escape"}
-seen

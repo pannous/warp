@@ -1,6 +1,0 @@
-simplify(code) := match code {
-	data($a * 1) => a
-	_ => code
-}
-simplify(data (g(y, z)))
-simplify(data (n * 1))

@@ -9,7 +9,7 @@
 //! `length of characters in text` is `text.characters.length`; otherwise `x in xs` stays the membership test, and the
 //! walk `print words in t` prints each word.
 
-use super::nodes::{call, children_rewritten, spaced_statement};
+use super::nodes::{call, children_rewritten, key, spaced_statement};
 use crate::analyzer::is_counting_property;
 use crate::lowering::comprehensions::{WHERE_KEYWORD, WITHOUT_WORD, WITH_WORD};
 use crate::node::{Bracket, Node, Separator};
@@ -208,7 +208,7 @@ fn member_of(object: Node, member: Node) -> Node {
 		Node::Key(left, op, right) if *op != Op::Dot && !op.is_prefix() && !matches!(left.drop_meta(), Node::Empty) => {
 			Node::Key(Box::new(member_of(left.as_ref().clone(), member)), *op, right.clone())
 		}
-		_ => Node::Key(Box::new(object), Op::Dot, Box::new(member)),
+		_ => key(object, Op::Dot, member),
 	}
 }
 

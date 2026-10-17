@@ -137,9 +137,6 @@ impl Node {
 			other => panic!("can't remove without children: {other:?}"),
 		}
 	}
-	pub fn strings(p0: Vec<&str>) -> Node {
-		List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
-	}
 	pub fn first(&self) -> Node {
 		match self.drop_meta() {
 			List(xs, _, _) => xs.first().cloned().unwrap_or(Empty),
@@ -362,9 +359,6 @@ impl Node {
 	}
 	pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self {
 		Data(DataValue::new(value))
-	}
-	pub fn number(n: Number) -> Self {
-		Node::Number(n)
 	}
 	pub fn int(n: i64) -> Self {
 		Node::Number(Number::Int(n))
@@ -634,14 +628,6 @@ impl Node {
 				}
 			},
 			_ => {}
-		}
-	}
-
-	// get_meta data directly or Empty
-	pub fn get_meta(&self) -> &Node {
-		match self {
-			Meta { data, .. } => data.as_ref(),
-			_ => &Empty,
 		}
 	}
 
@@ -981,10 +967,6 @@ pub fn print(p0: String) {
 	println!("{}", p0);
 }
 
-pub fn node(p0: &str) -> Node {
-	Text(p0.s())
-}
-
 // ============ Free Convenience Constructors ============
 // Short, ergonomic functions for creating Node values
 
@@ -1105,19 +1087,13 @@ fn writes_as_prefix(op: &Op) -> bool {
 /// An item of a class body that is code, a method in any of its forms (`f() := …`, `fn f() {…}`, `f = x => …`), not a
 /// field declaration (`name: text`, `age: int = 0`): the lowering passes reach it as they reach a function
 fn is_class_code(item: &Node) -> bool {
-	let is_name = |node: &Node| matches!(node.drop_meta(), Symbol(_));
+	let is_name = |node: &Node| node.symbol_name().is_some();
 	match item.drop_meta() {
 		Key(name, Op::Colon, _) if is_name(name) => return false,
 		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => {
 			return false;
 		}
-		List(words, _, _)
-			if words.first().is_some_and(
-				|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word)),
-			) =>
-		{
-			return true;
-		}
+		List(words, _, _) if words.first().and_then(Node::symbol_name).is_some_and(is_function_keyword) => return true,
 		_ => {}
 	}
 	let mut code = false;

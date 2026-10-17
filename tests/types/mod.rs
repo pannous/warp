@@ -59,6 +59,7 @@ mod test_declared_int_of_float_expression;
 mod test_declared_list_marks;
 mod test_dispatch;
 mod test_duration_comparison; // cards day-day, day-hours
+mod test_duration_units; // card time-module
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
@@ -96,6 +97,7 @@ mod test_list_element_types;
 mod test_list_test_of_a_map;
 mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
+mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
 mod test_match_exhaustive; // card match-exhaustive
@@ -104,12 +106,14 @@ mod test_match_static_variant;
 mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
 mod test_method_result_text; // card instance-result
+mod test_mixed_list_parameter_kinds; // card infers-int
 mod test_multi_word_class; // card multi-word-class
 mod test_mutating_methods;
 mod test_nested_type_calls; // text hex 255 is text(hex(255))
 mod test_number_converts; // card number-converts
 mod test_number_field; // card number-field
 mod test_number_keeps_exact; // card number-keeps-exact
+mod test_one_dispatch; // card one-dispatch
 mod test_operation_type; // card parse-type
 mod test_optional_casts;
 mod test_optional_list_items;

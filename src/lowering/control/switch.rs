@@ -5,7 +5,7 @@
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
-use super::blocks::{quoted_data, DATA_WORD};
+use super::blocks::{as_data, quoted_data, DATA_WORD};
 use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{
@@ -37,7 +37,7 @@ const ITEM_WORD: &str = "item";
 const HELD_WORD: &str = "held";
 /// `$a` in a code pattern `data($a + 0)`: a hole that binds the subtree there (card code-holes)
 const HOLE_PREFIX: &str = "$";
-/// The parts of a key a code pattern reads (wasm_emitter/node_api.rs)
+/// The parts of a key a code pattern reads (wasm_emitter/reflection/node_api.rs)
 const OP_FIELD: &str = "op";
 const KEY_FIELD: &str = "key";
 const VALUE_FIELD: &str = "value";
@@ -115,10 +115,8 @@ impl Lowering<'_> {
 			let switch = self.switch(&[head.clone(), subject.clone(), block.clone()])?;
 			return Some(with_leftmost_operand(cases.clone(), switch));
 		}
-		let Node::Symbol(word) = head.drop_meta() else {
-			return None;
-		};
-		if !self.words.contains(&word.as_str()) {
+		let word = head.symbol_name()?;
+		if !self.words.contains(&word) {
 			return None;
 		}
 		let number = self.switches.next_number();
@@ -515,11 +513,7 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 				code_tests(part, item(&path, index + 1), tests, bindings);
 			}
 		}
-		_ => tests.push(key(
-			path,
-			Op::Eq,
-			Node::List(vec![Node::Symbol(DATA_WORD.to_string()), code.clone()], Bracket::None, Separator::Space),
-		)),
+		_ => tests.push(key(path, Op::Eq, as_data(code.clone()))),
 	}
 }
 
