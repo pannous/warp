@@ -1670,6 +1670,7 @@ PASSED:
   ✓ functions::test_map_phrase::test_map_a_function_on_a_list
   ✓ functions::test_map_phrase::test_map_a_function_reference_on_a_list
   ✓ functions::test_map_real_function::sin_maps_over_floats
+  ✓ functions::test_match_subject_not_called::a_match_subject_is_no_braceless_closure_call
   ✓ functions::test_math_broadcast::math_words_map_over_a_list
   ✓ functions::test_math_broadcast::one_number_stays_one
   ✓ functions::test_math_broadcast::prefix_operators_map_over_a_parenthesized_list
@@ -2459,6 +2460,7 @@ PASSED:
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_node_json::json_of_code_keeps_its_operations
   ✓ modules::test_node_json::json_writes_numbers_exactly_or_says_so
+  ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
   ✓ modules::test_package_forms::a_bare_name_is_a_folder_of_the_default_registry
   ✓ modules::test_package_forms::a_full_url_stays_as_written
   ✓ modules::test_package_forms::an_owner_and_repository_are_on_github
@@ -6348,7 +6350,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ modules::test_node_json::the_browser_spells_each_operator_code_alike
 
 SUMMARY:
-16 ignored, 6345 passed, 1 failed, 6346 total tested
+16 ignored, 6347 passed, 0 failed, 6347 total tested
