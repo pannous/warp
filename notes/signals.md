@@ -2,7 +2,6 @@
 
 Roadmap card: signals (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 Spec: wiki/signal.md, wiki/thread.md, wiki/charged.md. System signals (OS, devices, page): notes/system_signals.md.
-The original investigation (comparison with Solid, Svelte, Vue, Elm, Qt, Go channels): notes/OLD/signals_investigation.md.
 
 warp has push (listeners run after writes) and pull (getters compute on read): the push-pull model of Preact/Solid
 signals, done at compile time like Svelte 5's compiler, with runtime objects only where a signal escapes. An event

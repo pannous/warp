@@ -9,7 +9,7 @@ opaque_word = "view·opaque"
 
 kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
-is_group(n: any) := n.bracket != ø
+is_group(n: any) := bracket_of(n) != ø
 
 # the node a view stands for
 node_of(view: any) := {
@@ -18,6 +18,7 @@ node_of(view: any) := {
 	if kind == "text" or kind == "char" { return view#2 }
 	if kind == "key" { return key(node_of(view#3), view#2, node_of(view#4)) }
 	if kind == "list" { return separated(bracketed(view[3..].map(node_of), view#2), view#3) }
+	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
 	if kind == "" { return view }
 	key(symbol(opaque_word), ":", view)
 }
@@ -25,19 +26,19 @@ node_of(view: any) := {
 # the view of a node
 view_of(n: any) := {
 	if type(n) is key {
-		if n.key == symbol(opaque_word) { return n.value }
-		return ["key", n.op, view_of(n.key), view_of(n.value)]
+		if key_of(n) == symbol(opaque_word) { return value_of(n) }
+		return ["key", op_of(n), view_of(key_of(n)), view_of(value_of(n))]
 	}
-	if n is symbol { return ["symbol", n.name] }
+	if n is symbol { return ["symbol", name_of(n)] }
 	if n is text { return ["text", n] }
-	if is_group(n) { return ["list", n.bracket, n.separator] + n.map(view_of) }
+	if is_group(n) { return ["list", bracket_of(n), separator_of(n)] + n.map(view_of) }
 	n
 }
 
 # a node with f applied to each of its children
 children(n: any, f: any) := {
-	if type(n) is key and n.key != symbol(opaque_word) { return key(f(n.key), n.op, f(n.value)) }
-	if is_group(n) { return separated(bracketed(n.map(f), n.bracket), n.separator) }
+	if type(n) is key and key_of(n) != symbol(opaque_word) { return key(f(key_of(n)), op_of(n), f(value_of(n))) }
+	if is_group(n) { return separated(bracketed(n.map(f), bracket_of(n)), separator_of(n)) }
 	n
 }
 
@@ -46,3 +47,21 @@ bottom_up(n: any, f: any) := f(children(n, x => bottom_up(x, f)))
 
 # the node itself: the bridge's own twin, which every pass twin relies on
 unchanged(n: any) := n
+
+# What a pass twin reports, as its Rust twin's hints and warnings are compared (card carries-line): `report(n,
+# message, preferred)` says it at n's position and gives n; pass_differential's call is `reported(view)`, the view
+# with the reports said meanwhile, [line, column, message, preferred] each
+global said = []
+# where n was written, ø for a node without a position (one a pass made)
+line_of(n: any) := try n.line else ø
+column_of(n: any) := try n.column else ø
+is_positioned(n: any) := line_of(n) != ø
+report(n: any, message: any, preferred: any) := {
+	said += [[line_of(n), column_of(n), message, preferred]]
+	n
+}
+reported(view: any) := {
+	found = said
+	said = []
+	[view, found]
+}

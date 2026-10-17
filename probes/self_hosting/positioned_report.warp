@@ -1,0 +1,7 @@
+use "lib/compiler/walk.warp"
+v = json("[\"at\", 2, 5, [\"symbol\", \"one\"]]")
+n = node_of(v)
+print n.line
+print view_of(n)
+print reported(view_of(report(n, "a number is written in digits", "1")))
+print reported(3)

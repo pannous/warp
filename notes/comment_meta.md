@@ -2,7 +2,7 @@
 
 samples/hello/comments.warp: "Comments attach to the next element as metadata".
 
-- The parser already keeps a comment as a Meta layer `comment: "…"` on the first word of the next statement (lines of
+- The parser keeps a comment as a Meta layer `comment: "…"` on the first word of the next statement (lines of
   consecutive comments joined by newlines).
 - meta_entries.rs (source pass): for a commented binding `x: …` / `x = …` / `x := …`, `x.@comment` is the comment
   text and `x.meta` the map `{comment: "…"}`, resolved at compile time (the value itself carries no meta at run time).

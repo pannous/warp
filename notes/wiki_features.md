@@ -1,8 +1,7 @@
 # Wiki feature survey: row index
 
 A survey of `wiki/` against the binary numbered the features the spec plans (rows 1-40), the questions it raised
-(D1-D16) and the ideas too vague or big to build (T1-T12). Notes, tests and cards cite these numbers; the full survey
-with examples and the original findings is notes/OLD/wiki_features.md.
+(D1-D16) and the ideas too vague or big to build (T1-T12). Notes, tests and cards cite these numbers.
 
 ## Rows: all implemented except 38 and 40
 | # | feature | limits that remain |

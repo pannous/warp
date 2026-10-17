@@ -17,6 +17,18 @@ def spans_in(source) {
 	found
 }
 
+// The source with its comments and texts blanked out, a space each
+// Rust twin: declaration_scan.rs code_only
+def code_only(source) {
+	parts = []
+	at = 0
+	for span in spans_in(source) {
+		parts += [source[at .. span#1], " "]
+		at = span#2
+	}
+	join(parts + [source[at .. source.length]], "")
+}
+
 // The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `at`, else `at`
 def span_end(source, at, n) {
 	c = source[at]
@@ -249,6 +261,14 @@ def any_word_at(source, at, width, words) {
 def name_end(source, from, n) {
 	at = from
 	while at < n and is_name_char(source[at]) { at = at + 1 }
+	at
+}
+
+// `full-name`: a hyphen in a name joins the word after it; `x-1` and `i--` end the name at the hyphen
+// Rust twin: warp_parser/atoms.rs parse_symbol, hyphen_joins_word
+def symbol_end(source, from, n) {
+	at = name_end(source, from, n)
+	while at + 1 < n and source[at] == '-' and is_name_start(source[at + 1]) { at = name_end(source, at + 1, n) }
 	at
 }
 

@@ -2,7 +2,7 @@
 
 Roadmap card: connectors (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 Goal: lots of functionality soon, through FFI, Python, JavaScript, Rust, WebAssembly and native libraries, with a mode
-that allows access to anything. The original survey and options table: notes/OLD/stdlib_connectors_plan.md.
+that allows access to anything.
 
 ## Overview
 | ecosystem | how | where |

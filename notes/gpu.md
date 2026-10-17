@@ -212,13 +212,10 @@ block has that place, says `<word>: why at line:column` in the program, which th
 Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
 GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
 
-## GLSL from twigl.app: removed
-twigl and shadertoy shaders (`twigl { … }`, `paint(twigl(code))`, shadertoy(code), lib/draw.warp glsl_shader) are gone
-from the compiler, to keep Rust lean: naga's GLSL front end (crates/warp-glsl, in the browser a 705 KB glsl.wasm loaded
-on first use), the parser's dialect block, the draw.glsl_wgsl adapter, samples/twigl.warp, tests/programs/test_twigl*.rs
-and probes/twigl. The last state with all of it is commit b04da3e2c (`git show b04da3e2c:notes/gpu.md` has this
-section in full): a `use twigl` module can come back from there (card twigl-module). Translating GLSL to WGSL helps no
-WebGL-only browser: its WGSL still needs WebGPU.
+## GLSL (twigl, shadertoy)
+Not in the compiler, to keep Rust lean (naga's GLSL front end alone was a 705 KB glsl.wasm). Commit b04da3e2c has the
+last full implementation; a `use twigl` module can come back from there (card twigl-module). Translating GLSL to WGSL
+helps no WebGL-only browser: its WGSL still needs WebGPU.
 
 ## Paint window, default canvas, probes
 - src/graphics/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes

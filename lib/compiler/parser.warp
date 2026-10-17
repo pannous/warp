@@ -7,7 +7,7 @@ class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound:
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: []}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source)}
 	items(p, ' ', "")
 }
 
@@ -159,10 +159,11 @@ def continued(p, left, min_power) {
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
-			index = expression(p, 0)
+			index = slice_from_start(p)
+			if index == ø { index = expression(p, 0) }
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
-			left = ["key", "#", left, one_based(index)]
+			left = subscript(left, index)
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)
@@ -212,6 +213,62 @@ def bound_key(p, op, left, right_power) {
 	p.bound = outer
 	if binding and bound_name(left) != ø { p.bound = p.bound + [bound_name(left)] }
 	["key", op, left, right]
+}
+
+// The functions a source defines anywhere, `f(x) := …`, `def f(x) {…}`, `f = x => …`: their names stay their own
+// before their definition too (`x = twice "ab"` calls a twice defined below)
+// Rust twin: declaration_scan.rs scan_function_names
+def program_functions(source) {
+	names = []
+	for line in split(code_only(source), "\n") {
+		for statement in split(line, ";") {
+			name = definition_in(statement)
+			if name != ø and not (names contains name) { names = names + [name] }
+		}
+	}
+	names
+}
+
+// The name of the function `statement` defines: `def f(x)`, `f(x) := …`, `f = x => …`, else ø
+// Rust twin: declaration_scan.rs definition_in, starts_as_function
+def definition_in(statement) {
+	n = statement.length
+	start = text_blank_end(statement, 0, n)
+	first_end = start
+	while first_end < n and not is_blank(statement[first_end]) { first_end = first_end + 1 }
+	if start == first_end { return ø }
+	if FUNCTION_KEYWORDS contains statement[start .. first_end] { return leading_name(statement, first_end, n) }
+	define = index_of(statement, ":=", 0, n)
+	if define < n { return leading_name(statement, 0, define) }
+	assign = index_of(statement, "=", 0, n)
+	if assign >= n { return ø }
+	head = leading_name(statement, 0, assign)
+	if head == ø or text_blank_end(statement, start + head.length, assign) < assign { return ø }
+	if starts_as_function(statement, text_blank_end(statement, assign + 1, n), n) then head else ø
+}
+
+// The plain name after the blanks from `from`, ending before `end`, else ø
+def leading_name(text, from, end) {
+	start = text_blank_end(text, from, end)
+	stop = name_end(text, start, end)
+	if stop == start then ø else text[start .. stop]
+}
+
+def text_blank_end(text, from, end) {
+	at = from
+	while at < end and is_blank(text[at]) { at = at + 1 }
+	at
+}
+
+// A value from `at` that starts as a function: `x => …`, `(a, b) -> …`, `function (a) {…}`
+def starts_as_function(text, at, n) {
+	word_end = name_end(text, at, n)
+	if FUNCTION_KEYWORDS contains text[at .. word_end] { return true }
+	head_end = word_end
+	if is_at(text, at, '(', n) { head_end = index_of(text, ")", at, n) + 1 }
+	if head_end <= at or head_end > n { return false }
+	arrow = text_blank_end(text, head_end, n)
+	starts_at(text, "=>", arrow) or starts_at(text, "->", arrow)
 }
 
 // The name `x = …` or `f(a) := …` binds, else ø
@@ -401,6 +458,43 @@ OPERAND_POWERS = [91, 141]
 // A braceless argument takes arithmetic and ranges, stops at comparisons: `f 3-1 > 5`, `y = sum 1..4`
 ARGUMENT_POWER = 130
 
+// `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
+// Rust twin: warp_parser subscript
+def subscript(target, index) {
+	bounds = slice_bounds(index)
+	if bounds != ø { return listed("(", "", [["symbol", "slice"], target] + bounds) }
+	["key", "#", target, one_based(index)]
+}
+
+// The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
+// Rust twin: subscripts.rs slice_bounds
+def slice_bounds(index) {
+	if not (index is list) or index.length != 4 or index#1 != "key" { return ø }
+	op = index#2
+	if op == ":" or op == ".." { return [index#3, index#4] }
+	if op != "to" { return ø }
+	if index#4 == ø { return [index#3, ø] }
+	[index#3, ["key", "+", index#4, 1]]
+}
+
+// The marks of a slice from the start, `xs[:3]`, `xs[...3]`, each with its operator
+// Rust twin: subscripts.rs SLICE_FROM_START
+SLICE_FROM_START = [[":", ":"], ["…", "to"], ["...", "to"], ["..", ".."]]
+
+// `[:end]`, `[...last]`, `[..end]`, `[:]`: a slice from the start, `ø:end`, else ø with nothing read
+// Rust twin: subscripts.rs parse_slice_from_start
+def slice_from_start(p) {
+	for mark in SLICE_FROM_START {
+		if starts_at(p.code, mark#1, p.at) {
+			p.at = p.at + mark#1.length
+			skip_blanks(p)
+			if is_at(p.code, p.at, ']', p.n) { return ["key", mark#2, ø, ø] }
+			return ["key", mark#2, ø, expression(p, 0)]
+		}
+	}
+	ø
+}
+
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
 def one_based(index) {
@@ -483,6 +577,10 @@ def prefixed(p) {
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
+	declared = type_declaration(p)
+	if declared != ø { return declared }
+	declared = global_declaration(p)
+	if declared != ø { return declared }
 	if keyword_at(p, "loop") {
 		endless = endless_loop(p)
 		if endless != ø { return endless }
@@ -826,7 +924,7 @@ ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 // A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
 // Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call
 def named(p) {
-	end = name_end(p.code, p.at, p.n)
+	end = symbol_end(p.code, p.at, p.n)
 	word = p.code[p.at .. end]
 	p.at = end
 	if TRUE_WORDS.contains(word.lower()) { return true }
@@ -860,6 +958,138 @@ def spread(arguments) {
 	if arguments == ø { return [] }
 	if arguments is list and arguments#1 == "list" { return arguments[3 .. arguments.length] }
 	[arguments]
+}
+
+// The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type
+// word types it, `global int n = 0` is `n:int = 0`
+// Rust twin: mod.rs DECLARATION_MODIFIERS, words.rs CONSTANT_KEYWORDS, analyzer type_word_kind
+DECLARATION_MODIFIERS = ["export", "mutable", "mut", "const", "constant", "final", "val"]
+DECLARED_TYPE_WORDS = ["int", "float", "number", "text", "string", "bool", "char", "byte"]
+
+// `global x = 1`, `global n`, `export api: clock` as `global: x = 1`, a module-level variable; `global a, b` declares
+// each; `export` without a name after it stays a word
+// Rust twin: definitions/variables.rs try_parse_global_declaration, skip_declaration_modifiers, typed_global
+def global_declaration(p) {
+	keyword = if keyword_at(p, "global") then "global" else if keyword_at(p, "export") then "export" else ""
+	if keyword == "" { return ø }
+	at = blank_end(p, p.at + keyword.length)
+	if at == p.at + keyword.length or not is_name_start(peek(p.code, at, p.n)) { return ø }
+	p.at = at
+	type_word = ø
+	while true {
+		end = name_end(p.code, p.at, p.n)
+		word = p.code[p.at .. end]
+		after = blank_end(p, end)
+		if not (DECLARATION_MODIFIERS contains word or DECLARED_TYPE_WORDS contains word) or not is_name_start(peek(p.code, after, p.n)) { break }
+		if DECLARED_TYPE_WORDS contains word { type_word = word }
+		p.at = after
+	}
+	declaration = expression(p, 0)
+	if type_word != ø and declaration is list and declaration#1 == "key" and declaration#2 == "=" and is_symbol(declaration#3) {
+		declaration = ["key", "=", ["key", ":", declaration#3, ["symbol", type_word]], declaration#4]
+	}
+	names = [declaration]
+	while keyword == "global" and is_symbol(names#(names.length)) and is_at(p.code, p.at, ',', p.n) {
+		p.at = p.at + 1
+		skip_spaces(p)
+		names = names + [atom(p)]
+	}
+	declared = [["key", ":", ["symbol", "global"], name] for name in names]
+	if declared.length == 1 { return declared#1 }
+	listed("", ";", declared)
+}
+
+// The words that declare a type: `class V {…}`, `struct P {…}`, `type Point {…}`
+// Rust twin: mod.rs TYPE_DECLARATION_WORDS, types/declarations.rs declares_type
+TYPE_WORDS = ["class", "struct", "type"]
+// What follows the name of a lowercase `type`: `type point {…}`, `type size = u32`, `type pair<T>`
+TYPE_BODY_STARTS = "{=:<"
+// The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
+// Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
+CODE_MEMBER_WORDS = FUNCTION_KEYWORDS + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]
+
+// `class V { x: int }` as ["type", name, body], else ø with nothing read
+def type_declaration(p) {
+	if p.at > 0 and p.code[p.at - 1] == '.' { return ø }
+	for word in TYPE_WORDS {
+		if keyword_at(p, word) and declares_type(p, word) { return declared_type(p, word) }
+	}
+	ø
+}
+
+// `class:"btn"`, `type = "text"` are keys and `type(x)`, `type 3.5` the type of a value: a declaration names its type,
+// after `type` a capital name or a name with its body
+// Rust twin: types/declarations.rs declares_type, type_declaration_follows
+def declares_type(p, word) {
+	at = blank_end(p, p.at + word.length)
+	c = peek(p.code, at, p.n)
+	if (c == ':' or c == '=') and peek(p.code, at + 1, p.n) != '=' { return false }
+	if word != "type" { return true }
+	if not is_name_start(c) { return false }
+	end = symbol_end(p.code, at, p.n)
+	after = blank_end(p, end)
+	body_follows = TYPE_BODY_STARTS.contains(peek(p.code, after, p.n)) and peek(p.code, after + 1, p.n) != '='
+	c.upper() == c or body_follows or p.code[at .. end] == "of"
+}
+
+def blank_end(p, from) {
+	at = from
+	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	at
+}
+
+// The name and `{fields}` of a type declaration; `class Dog extends Animal` carries its parent on the name, a bare
+// `class Marker` is marked and gets an empty body
+// Rust twin: types/declarations.rs parse_class_declaration, parse_type_declaration_body
+def declared_type(p, word) {
+	p.at = p.at + word.length
+	skip_blanks(p)
+	end = symbol_end(p.code, p.at, p.n)
+	name = ["symbol", p.code[p.at .. end]]
+	p.at = end
+	ends_statement = ";}\n".contains(peek(p.code, blank_end(p, p.at), p.n))
+	skip_blanks(p)
+	if keyword_at(p, "extends") {
+		p.at = p.at + 7
+		skip_blanks(p)
+		end = symbol_end(p.code, p.at, p.n)
+		name = ["attribute", "extends", ["symbol", p.code[p.at .. end]], name]
+		p.at = end
+		skip_blanks(p)
+	}
+	if is_at(p.code, p.at, '{', p.n) {
+		p.at = p.at + 1
+		return ["type", name, typed_fields(items(p, '}', "{"))]
+	}
+	if not ends_statement { return ["type", name, ø] }
+	if word == "class" { name = ["attribute", "bare_class", true, name] }
+	["type", name, ["list", "{", ""]]
+}
+
+// A class body's fields with their types, `x: int` holding the type int; a method keeps its code
+// Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type
+def typed_fields(node) {
+	if not (node is list) { return node }
+	if node#1 == "key" {
+		if node#2 == ":=" { return node }
+		value = node#4
+		if is_symbol(value) { value = ["type", value, ø] }
+		return ["key", node#2, node#3, value]
+	}
+	if node#1 != "list" or node.length < 4 or starts_code(node#4) { return node }
+	members = [typed_fields(member) for member in node[3 .. node.length]]
+	// the line `left: Node` is the one field
+	if node#2 == "" and members.length == 1 and members#1 is list and members#1#1 == "key" and members#1#2 == ":" {
+		return members#1
+	}
+	listed(node#2, node#3, members)
+}
+
+// `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
+// Rust twin: lookahead.rs starts_code
+def starts_code(first) {
+	if is_symbol(first) { return CODE_MEMBER_WORDS contains first#2 }
+	is_call_head(first) and is_symbol(first#4)
 }
 
 // The digits of a number in `base` (`_` between binary digits), read

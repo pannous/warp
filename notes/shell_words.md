@@ -7,7 +7,7 @@ ls hides dotfiles; grep is a regex; paths expanded at use, not at parse.
 ## Path literals (src/warp_parser/literals/paths.rs `starts_path_literal`)
 
 A path literal is a Text, glued to what follows and not to an operand before it:
-- `./x`, `../x` (older, card play-mozart)
+- `./x`, `../x`
 - `~/x`, and `~` alone when no operand follows (`cd ~`; `a ~ b` stays Op::Rough)
 - `/x` where no operand stands before it (`x = /tmp`, `print(/etc)`, `[/a, /b]`), after another path (`cp /a /b`,
   parser field path_end) or after a word that is no variable assigned so far but a function: the program's (parser

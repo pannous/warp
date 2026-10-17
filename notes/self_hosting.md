@@ -96,7 +96,14 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   lib/compiler/walk.warp has the bridge (`node_of`, `view_of`; an error, a type or sealed data stays opaque) and the
   shared walk (`children(n, f)`, `bottom_up(n, f)`; a group is `n.bracket != ø`). Both sides drop literal and attribute
   layers, read a character as a text and an empty group as ø (card empty-group-node, open). `bridge_differential`
-  checks the bridge alone. Twins so far: times_phrases.warp, number_words.warp (hints not compared yet: carries-line).
+  checks the bridge alone. Twins so far: times_phrases.warp, number_words.warp (with its hints).
+- Positions and reports (card carries-line): where the Rust pass hints, warns or makes an error, pass_differential
+  gives the twin the positioned view, ["at", line, column, view] around each positioned node (twins.rs
+  positioned_view); walk.warp node_of makes it `positioned(node, line, column)`, read back by `line_of(n)` /
+  `column_of(n)` (ø for a node a pass made; `n.line` itself fails there). The twin says `report(n, message,
+  preferred)`, and the call `reported(view)` compares [view, reports] with [view after the Rust pass, its hints and
+  warnings as [line, column, message, preferred]] (pipeline::around_source_pass_reporting). Trees are compared
+  without positions. First twin with reports: number_words.warp.
 - The analyzer: its result is the kind of each definition and value, not a tree. It needs scopes (text-key maps work).
 - The emitter: needs byte output and float bits; its twin compares run results, not bytes.
 
@@ -129,3 +136,65 @@ bench_find_builtin.warp vs bench_find_warp.warp (20 000 finds in a 2 KB text), `
 find is 1.7x the builtin (0.50 s vs 0.29 s); module size equal. Left: the matches_at call per offset and fuel (card
 fuel-metering). Rerun once that lands, then decide whether find moves to warp; TEXT_FIND's second caller, `in` /
 contains (fields_and_keys.rs), then needs a late_call.
+
+## Library sweep: Rust that becomes lib warp (card library-sweep, 2026-10-17)
+Survey of src/wasm_emitter runtime functions and src/lowering source expansions that are plain logic. Of ~33k
+emitter lines ~5k are movable; the rest is CORE (GC layout, hash tables, list cells and cursors, big-int limbs, host
+imports, inline instruction selection). Every move is a card in topic self-hosted; features they wait on are cards too.
+Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words are card-3):
+
+| # | Card | Rust lines | Waits on |
+|---|------|-----------|----------|
+| 1 | uncertain-warp + uncertain-text-warp (numbers/uncertain.rs) | ~760 | ± literals build the class |
+| 2 | time-arithmetic, time-zones, time-text, time-fields, duration, civil-days-dup (time/) | ~990 | time-primitives |
+| 3 | exact-text, exact-rounding, ratio-gcd, exact-pow (numbers/exact.rs) | ~670 | lib-from-runtime (print path), speed |
+| 4 | list-text-warp (list_join's loop) | ~380 | kind-reflection |
+| 5 | float-text-warp + float-as-exact-warp | ~365 | float-only-ops |
+| 6 | shared-array-class (lowering/collections/shared_arrays.rs) | ~350 | index operators, Iterable |
+| 7 | number-parsing-warp (text_as_float/int/number) | ~335 | correctly rounded scaling |
+| 8 | sort-warp (merge sort + node_order) | ~225 | mutable-array |
+| 9 | library-word-tables (library_words.rs tables) | ~170 | word alias declaration |
+| 10 | case-table-warp, min-max-lib, type-name-warp | ~150 each | lib-constant-tables, lib-inlining, kind-reflection |
+| 11 | range-type, deep-copy, paired-lists, channel-class, map-entries, slice, graphemes | 90-120 each | various (cards name them) |
+| 12 | split, live-loop, try-assert, swizzle, text-set-char, contains, tree-walk-lib, parallel-map, signals | 60-80 each | |
+| 13 | text-quoted, insert-at, element-children, node-codes, reverse, log-root, zero-fill, pop-clear, codepoint-count, builtin-signatures, small-dispatch | 15-55 each | |
+
+Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
+lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
+arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
+Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
+text search words above).
+
+## Speed of a warp-written compiler (user discussion, 2026-10-17)
+No fundamental reason for "several times slower". Measured: warp `find` 1.7x the hand-emitted builtin (both wasm),
+parser.warp tree of 100 KB ~0.6 s. The only fixed cost is wasm vs native: Cranelift optimizes less than LLVM, GC
+objects cost more than Rust's stack values; typically 1.2-2x, less for allocation-heavy tree walking (a compiler);
+`wasm-opt` (supports GC) narrows it. The rest is today's code generation, fixable and good for every user program:
+
+| Cost today | Why | Fix |
+|---|---|---|
+| Node fields are `anyref` | a checked cast on every read | typed structs for typed values |
+| Numbers boxed (`$i64box`) | an allocation per number | unboxed i64 fields, i31ref |
+| Lists are cons cells | `n#i` is O(i) | wasm GC arrays |
+| `text[i]` walks graphemes | ~300 fuel per ASCII step | byte indexing (`byte_at`) |
+| Unbounded ints | overflow checks/masks per operation | i64 path when the type is known (card int-i64) |
+| Fuel metering on | a counter per loop and call | off for trusted code (card fuel-metering) |
+| Little inlining | small functions stay calls | emitter inlining or wasm-opt |
+
+Host after self-hosting: the native `warp` stays a Rust shell (wasmtime, host words, FFI, graphics, sound) embedding
+`compiler.wasm` precompiled to .cwasm; the playground loads the same file. New interface: compiler imports for
+reading `use`d files, FFI signatures, the host-word list.
+
+## Ahead-of-time executables and a host made of FFI (2026-10-17)
+Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
+(wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
+`warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
+(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
+(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
+modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
+shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
+(audio callbacks: a wasmtime Store is single-threaded → ring buffer in shared memory), GC refs never cross to C
+(copies or handles, notes/ffi_handles.md), macOS windows on the main thread.
+wasmtime stays bundled in every executable: even with the program precompiled (.cwasm) it is the GC, the loader and
+the trap handling. Replacing it (WAMR's wamrc AOT with its own GC; wasm2c lacks GC) is not on the table.

@@ -55,6 +55,11 @@ mod test_self_differential; // card self-differential
 mod test_self_lexer; // card self-lexer
 #[cfg(feature = "native")]
 mod test_self_parser; // card self-parser
+#[cfg(feature = "native")]
+mod test_self_parser_survey; // card self-parser
+#[cfg(feature = "native")]
+mod test_self_pass_reports; // card carries-line
+#[cfg(feature = "native")]
 mod test_self_passes; // card twin-harness
 #[cfg(feature = "native")]
 mod test_self_serializer; // card self-serializer
