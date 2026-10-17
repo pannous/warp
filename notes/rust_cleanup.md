@@ -9,7 +9,8 @@ structural decisions in its own stage (one stage per worker keeps conflicts low)
 ports the cleaned design. The scope is the decided restructurings below, not an open-ended refactor. The measure is
 src/ shrinking (each step states its net src/ delta) while the suite stays mostly green: a cleanup branch may break
 up to 10% of the tests when they are edge cases (rare forms, historic detours), never core behaviour. The branch
-lists the tests it breaks with a one-line reason each; the Integrator accepts it, records them as known failures so
+lists the tests it breaks in notes/known_failures.md, one line each `- <module::test> | <card> | <reason>`, in its
+own commits (push_tested.sh accepts exactly those); the Integrator accepts it, records them as known failures so
 other branches aren't blamed, and on demand turns them into cards for the stage's worker.
 
 | stage | worker | steps (cards) |
