@@ -63,7 +63,7 @@ impl WasmGcEmitter {
 		if self.next_global_idx > 0 {
 			self.module.section(&self.globals);
 		}
-		self.module.section(&self.exports);
+		self.module.section(self.exports.section());
 		if let Some(function_index) = self.start_index {
 			self.module.section(&StartSection { function_index });
 		}

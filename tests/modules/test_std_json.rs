@@ -6,7 +6,7 @@ use warp::warp_parser::parse;
 #[test]
 fn use_json_parses_and_writes_json() {
 	is!("use json; parse_json(\"[1, 2, 3]\")", parse("[1 2 3]"));
-	is!("use json; data = parse_json(\"{\\\"name\\\": \\\"Ann\\\", \\\"age\\\": 30}\"); data.age", 30);
+	is!("use json; person = parse_json(\"{\\\"name\\\": \\\"Ann\\\", \\\"age\\\": 30}\"); person.age", 30);
 	is!("use json; count(parse_json(\"[1, null, 2]\"))", 3);
 	is!("use json; count(parse_json(\"[1, null]\"))", 2);
 	is!("use json; to_json(parse_json(\"[null, 1]\"))", "[null,1]");

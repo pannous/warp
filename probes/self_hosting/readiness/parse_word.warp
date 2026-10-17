@@ -1,0 +1,6 @@
+// every pass: a parsed source as a Node (real Nodes, not the parser.warp view)
+// +, 1, 2
+n = parse("1 + 2")
+print(n.op)
+print(n.key)
+print(n.value)

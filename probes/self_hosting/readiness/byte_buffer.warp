@@ -1,0 +1,9 @@
+// emitter: a module is a growing list of bytes, then a file; a list of ints is the byte buffer
+// 8, 0, 97
+buf = []
+for b in [0, 97, 115, 109, 1, 0, 0, 0] { buf += [b] }
+print(#buf)
+write_bytes("scratch/readiness_empty.wasm", buf)
+back = read_bytes("scratch/readiness_empty.wasm")
+print(back#1)
+print(back#2)

@@ -1,0 +1,8 @@
+// pipeline: passes as first-class functions in a list, folded over a tree
+// 7
+inc(x) := x + 1
+dbl(x) := x * 2
+passes = [inc, dbl, inc]
+v = 2
+for p in passes { v = p(v) }
+print(v)

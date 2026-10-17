@@ -1,7 +1,7 @@
 //! Variables and scope: collecting a program's variables, main-level bindings, the Scope of locals
 
 use super::*;
-use crate::words::{ANY_TYPE, FLOAT_WORD, LET_WORD, MAP_WORD};
+use crate::words::{ANY_TYPE, FLOAT_WORD, LET_WORD, MAP_WORD, NUMBER_WORD};
 use std::collections::HashSet;
 
 /// `var x = 1` announces a reassignable variable, plain `x = 1`
@@ -358,9 +358,11 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
 	let is_local = scope.locals.contains_key(name);
-	if let Some(local) =
-		scope.own_binding_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none())
-	{
+	// a `number` parameter holds a float too (user_function then declares it float)
+	let widens = |local: &&mut Local| {
+		local.type_node.as_deref().is_none_or(|declared| local.is_param && declared.name() == NUMBER_WORD)
+	};
+	if let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::Int && widens(local)) {
 		if float_value {
 			local.kind = Kind::Float;
 			// a read before this write (`y = x * 2` earlier in the loop) is a float too, once collected again

@@ -5,6 +5,10 @@
 // {endTaskWorker: id} stops one. The program's Worker, terminated, takes its task Workers with it as before. What a task
 // Worker posts itself (its sounds) reaches the program Worker's listeners, as if that Worker had said it.
 
+const CSS_PIXELS_PER_INCH = 96; // CSS fixes 96 px to the inch; devicePixelRatio device pixels make one (display.dpi)
+// the screen, which a Worker cannot see: the page tells it (host.js system_value), the playground's and the tests' alike
+const displayValues = () => ({ display_width: screen.width, display_height: screen.height, display_dpi: Math.round(CSS_PIXELS_PER_INCH * devicePixelRatio) });
+
 // call before setting programWorker.onmessage: these messages are answered here and reach no other listener
 function serveTaskWorkers(programWorker) {
 	const taskWorkers = new Map();

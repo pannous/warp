@@ -1,0 +1,14 @@
+// every pass: parse ~100 KB of warp and visit every node twice (size, rebuild; a word named node_count clashes with a runtime export, card export-name-clash)
+// 46001 twice; 3.6 s with the release warp, nearly all of it parse() (the walks take < 0.2 s); (parse of lib/compiler/parser.warp itself fails: its class is a TypeDef that "cannot cross to
+// another task yet", card parse-typedef)
+line = "f(x) := if x > 1 then g(x - 1) * 2 else [x, x + 1]\n"
+source = 2000 times line
+bracket_of(n) := try { n.bracket } catch e { "" }
+group(n) := n is list or bracket_of(n) != ""
+// bracketed([], "(") is "not a list" (warp's empty list is ø, card bracketed-empty); a parsed {…} has #n and n#i but no map and no for (card parsed-kinds)
+items(n) := { out = []; i = 1; while i <= #n { out += [n#i]; i += 1 }; out }
+size(n) := if n is key then 1 + size(n.key) + size(n.value) else if group(n) then 1 + items(n).map(size).sum() else 1
+rebuilt(n) := if n is key then key(rebuilt(n.key), n.op, rebuilt(n.value)) else if group(n) and #n > 0 then bracketed(items(n).map(rebuilt), bracket_of(n)) else n
+tree = parse(source)
+print(size(tree))
+print(size(rebuilt(tree)))

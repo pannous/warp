@@ -1,0 +1,10 @@
+// gap (higher-order recursion): a generic walk passes the rewrite f down; a lambda calling the walk with f fails
+// y, [y z]   (today: "not a function" at f(n); `xs.map(x => f(x))` alone: "undefined function: f")
+walk(n, f) := {
+	if type(n) is key { return f(key(walk(n.key, f), n.op, walk(n.value, f))) }
+	if n is list { return f(n.map(x => walk(x, f))) }
+	f(n)
+}
+drop_zero(n) := if type(n) is key and n.op == "+" and n.value == 0 then n.key else n
+print(walk(key(symbol("y"), "+", 0), drop_zero))
+print(walk([key(symbol("y"), "+", 0), symbol("z")], drop_zero))

@@ -1,0 +1,12 @@
+// analyzer: scopes as text-key maps, nested scopes, membership, iteration
+// int, yes, no, 2, x y
+scope = {}
+scope["x"] = "int"
+scope["y"] = "text"
+print(scope["x"])
+print("x" in scope)
+print("z" in scope)
+print(#scope)
+names = []
+for k in scope.keys() { names += [k] }
+print(names.join(" "))

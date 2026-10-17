@@ -98,6 +98,7 @@ function runner(queue, total) {
 				start();
 				record({ name: current.name, passed: false, output: failure });
 			};
+			worker.postMessage({ system: displayValues() }); // task-workers.js
 			worker.postMessage({ type: "compile", url: wasmUrl });
 		};
 		const send = () => {

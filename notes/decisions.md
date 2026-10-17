@@ -9,6 +9,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Process
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
 - ready-queue: the board's Ready column is the merge queue (`todo ready <card>`, refuses only a branch that doesn't merge cleanly into origin/main); batches of ≤ ~8 cards, wide refactors and carrier branches alone and first; the Integrator resolves only trivial conflicts, others go back to the owner (card to Now + note with the hunk); a reviewer veto moves the card back to Now.
+- urgent-direct (2026-10-17, user, agreed with warp-urgent): warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
 - fix-forward: the Integrator may ignore up to 10 failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the owner (notes/roles.md "Fix forward").
 - crash-fixes-first: crash fixes merge with the highest priority. small-changes-on-main: small or non-conflicting changes may go on main without a worktree. session-names: a session is named for its current task.
 - matching-first: the matching roadmap comes before further self-hosting. self-hosting: parser first, each warp part a twin of its Rust part with a differential test over every sample; gaps are fixed in the language. self-hosting-postponed (lifted 2026-10-17): no new steps until topic parser-features and the cleanup are done;
@@ -90,6 +91,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - unicode-symbols: warp parses Unicode symbol characters (arrows, math) as free operator names; an undefined use is "operator ⇔ is not defined". Arrow spellings of existing operators are alias lines in lib/math.warp with a "prefer ->" hint.
 - operator-alias: math spellings of operators are alias lines in lib/math.warp keeping the precedence (`operator × := *`, `prefix operator √ := sqrt`).
 - implicit-words-reserved: `it`, `self`, `this` are reserved: binding one warns (error under use strict); as the explicit parameter (`f(it) := …`) it is allowed.
+- data-reserved (2026-10-17, user, told to warp-self-splice): `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
 - exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
@@ -252,6 +254,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
 - `pixels size` works like `size of pixels`.
 - swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
+- curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø` (Interviewer's decision).
 
 ## Control flow, matching and errors
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.

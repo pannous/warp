@@ -443,6 +443,11 @@ pub struct WarpParser {
 	path_end: Option<usize>,
 	/// The functions the source defines anywhere, found by a pre-scan: ` /name` after one is a path (card name-after)
 	program_functions: std::collections::HashSet<String>,
+	/// Whether the source uses `end` as a name (`end = 3`), found by a pre-scan: then no `end` closes a block
+	names_end: bool,
+	/// The `end`s and openers of the source per set of openers, indexed once on the first search for a closing `end`,
+	/// so each `do`/`def` costs a lookup instead of a scan of the rest of the source
+	closing_ends: std::cell::RefCell<std::collections::HashMap<String, blocks::ClosingEnds>>,
 	/// The parameters of the definitions around: ` /name` after one divides, as after a variable; each definition's
 	/// until the statement holding it ends (card path-parameter-scope)
 	parameters_in_scope: Vec<String>,
@@ -543,7 +548,10 @@ impl WarpParser {
 		} else {
 			Default::default()
 		};
+		let names_end = blocks::names_end(&chars);
 		WarpParser {
+			names_end,
+			closing_ends: Default::default(),
 			user_operators,
 			source_aliases,
 			declared_types,
