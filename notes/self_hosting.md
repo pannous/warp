@@ -33,6 +33,24 @@ Decision self-hosting:
 Size of the job (Rust lines, 2026-10-12): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
 src ~59k.
 
+## Parser restructuring (review 2026-10-17, topic self-hosted)
+parser.warp leaves the Rust parser's structure where it is unsound. Order: parser-tokens and parser-desugar-pass first,
+then parser-scope-pass and parser-application with warp-self-passes, then parser-typed-fields, parser-context,
+parser-keyword-table. Target shapes:
+- parser-tokens: lexer.warp yields tokens, each with "blank before" and "newline before" bits; the parser reads tokens
+  and asks no character lookahead (operand_after, operand_follows, expression_ends, ends_line,
+  only_blanks_before_newline, line_blanks go).
+- parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
+  `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
+  each; the twin compares after that pass.
+- parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
+  knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
+- parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+- parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
+  restoring by hand.
+- parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
+  div as tag, unit words, membership, global/export, type words), in the format of library-word-tables.
+
 ## Language support the twins rely on
 - Mutable parser state in an object, char-by-char scanning, growing token lists, computed keys `{(n): 3}`,
   `data (x: 3)` with `.x` (probes/self_hosting/).
