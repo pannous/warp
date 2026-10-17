@@ -30,6 +30,11 @@ instead of bending the code.
   being replaced, renamed or resumed, not even "no action needed". A received swap notice ("Swap: … was replaced by
   me") gets an EMPTY reply: no text at all, no acknowledgement, no summary. Peers still get the swap message; the
   user hears only about work.
+- Never degrade the input to suit a tool: when a tool (a compiler stage, the parser, a test harness) can't handle
+  something, fix or card the tool, or fall back to one that can; never weaken the source, a test or an idiom to get
+  past it. "X doesn't support Y, switching to Z" is a bug report against X, not a plan. Warp source, the compiler's
+  own included, uses the language's full features and reads like a good sample program. warp-reviewer holds tips
+  that downgrade an idiom (for → while with a counter, hand-expanded sugar, a weakened assertion).
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
 - Never ask the user yourself (questions go through the Supervisor or the Interviewer): no AskUserQuestion, no

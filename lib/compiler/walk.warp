@@ -5,8 +5,6 @@
 # the Rust pass.
 
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
-use "words.warp"
-
 opaque_word = "view·opaque"
 
 kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
@@ -114,48 +112,6 @@ head_name(view: any) := {
 	""
 }
 
-# the parameter names of a definition head `f(x, y: int)`
-head_parameters(head: any) := {
-	names = []
-	if kind_of(head) != "list" { return names }
-	at = 5
-	while at <= #head {
-		parameter = head#at
-		if kind_of(parameter) == "list" and parameter#2 == "(" { names += head_parameters(["list", "(", "", ["symbol", ""]] + parameter[3..]) }
-		else { names += [head_name(parameter)] }
-		at += 1
-	}
-	names
-}
-
-# the names a list view binds after a word: `for x in …` the loop variable, `def f(x) {…}` the function and its
-# parameters
-names_after_words(view: any, words: any, with_parameters: bool) := {
-	names = []
-	if kind_of(view) != "list" { return names }
-	at = 4
-	while at < #view {
-		if kind_of(view#at) == "symbol" and words contains view#at#2 {
-			names += [head_name(view#(at + 1))]
-			if with_parameters { names += head_parameters(view#(at + 1)) }
-		}
-		at += 1
-	}
-	names
-}
-
-loop_variables_of(view: any) := names_after_words(view, ["for"], no)
-
-# the names a view binds: `x = …`, `f(x) := …` with its parameters, `def f(x) {…}`, `for x in …`
-names_bound_by(view: any) := {
-	if kind_of(view) == "key" and (view#2 == "=" or view#2 == ":=") {
-		names = [head_name(view#3)]
-		if view#2 == ":=" { names += head_parameters(view#3) }
-		return names
-	}
-	names_after_words(view, ["for"] + function_keywords, yes)
-}
-
 # every list in a view, the view itself first: the parts a whole-program question walks
 views_in(n: any) := {
 	views = []
@@ -164,17 +120,11 @@ views_in(n: any) := {
 		view = unvisited#(#unvisited)
 		unvisited = unvisited[0 ..< #unvisited - 1]
 		views += [view]
-		for part in view {
-			if part is list { unvisited += [part] }
+		if view is list {
+			for part in view {
+				if part is list { unvisited += [part] }
+			}
 		}
 	}
 	views
-}
-
-# the names a program binds (Rust twin, roughly: library_words/objects.rs defined_names): assigned and defined names,
-# definition parameters, loop variables
-defined_names(n: any) := {
-	names = []
-	for view in views_in(n) { names += names_bound_by(view) }
-	names
 }

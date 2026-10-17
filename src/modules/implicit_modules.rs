@@ -78,9 +78,8 @@ pub(crate) const MODULES_COMPILED_AS_PROGRAM: [&str; 1] = [UNITS_MODULE];
 pub(crate) fn with_implicit_class_modules(mut program: Node) -> Node {
 	for (module, needed) in IMPLICIT_MODULES {
 		if MODULES_COMPILED_AS_PROGRAM.contains(&module) && needed(&program) {
-			let source = std_module(module).expect("an implicit module is embedded");
 			// lib/units.warp's unit_definitions block as the tables its functions read, before they are picked by name
-			let parsed = crate::normalize::without_hints(|| WarpParser::parse(source));
+			let parsed = parsed_std_module(module).expect("an implicit module is embedded");
 			let definitions = statements(crate::numbers::units::with_run_time_unit_tables(parsed));
 			program = with_needed_definitions(without_use_of(program, module), definitions);
 		}

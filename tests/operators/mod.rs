@@ -1,5 +1,6 @@
 mod test_add_subtract_words; // card add-subtract
 mod test_add_to;
+mod test_alike_in_warp; // card lists-maps
 mod test_approximately; // cards approximately, approximately-all
 mod test_bar_pipe;
 mod test_bar_pipe_module_calls; // card pipes-after

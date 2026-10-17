@@ -22,7 +22,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   exclusion list. Sizeable syntax drops go to the user as questions.
 - self-parser-drops: lib/compiler/parser.warp leaves out foreign syntax (Rust macros, Python
   generators/yield from, Ruby blocks), music `go {…}`, phrase definitions (`to get price of item := …`), CSS in style;
-  silently also WGSL shader holes, `$a` pattern names, error nodes. Code is data: music and CSS need no parser syntax and
+  silently also WGSL shader holes and error nodes (`$a` pattern names stay: pattern-roadmap). Code is data: music and CSS need no parser syntax and
   must still work as library data DSLs (`tune d:data := play d` → `tune { c4 e4 g4 }`, note names are sound-library
   constants; `style {…}` reads its block as data).
 - sugar-twins-drops: lib/compiler/passes.warp leaves out Rust Option forms (`if let Some`, `match o {Some/None}`,
@@ -297,6 +297,11 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ now floor division: julia-floor-divide).
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
+- pattern-roadmap (user 2026-10-17, notes/matching.md ★): pattern-clauses: functions whose parameters are patterns are
+  clauses tried in order (`simplify(data($a * 1)) := a; simplify(n) := n`); binding-alternatives: `|` branches bind when
+  every branch binds the same names; whole-binding: `as` inside a pattern names the (sub)pattern
+  (`data($f($inner) as call)`), outside it casts; text-patterns: `"0x" + rest`, at most one hole per side, plus
+  prefix/suffix and character classes.
 
 ## Classes, objects and enums
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).

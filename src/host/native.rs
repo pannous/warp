@@ -93,8 +93,7 @@ impl HostState {
 	pub fn new() -> Self {
 		HostState {
 			next_alloc: 65536, // Start allocation after initial memory region
-			// the environment as `use os; env(name)` reads it natively, for wasi_environment()
-			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().inherit_env().build_p1(),
+			wasi: wasi_context(),
 			c_handles: Default::default(),
 			wasm_modules: Default::default(),
 			in_task: false,
@@ -965,6 +964,30 @@ fn page_path(mut caller: Caller<'_, HostState>) -> wasmtime::Result<HostNode> {
 
 thread_local! {
 	static NATIVE_PAGE_PATH: std::cell::RefCell<String> = std::cell::RefCell::new(ROOT_PATH.to_string());
+	/// Where the runs on this thread write their stdout instead of the process's (with_captured_stdout)
+	static CAPTURED_STDOUT: std::cell::RefCell<Option<MemoryOutputPipe>> = const { std::cell::RefCell::new(None) };
+}
+use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
+/// The most a captured stdout keeps
+const CAPTURED_STDOUT_BYTES: usize = 16 << 20;
+
+/// WASI of a run: stdout and stderr the process's, or stdout captured (with_captured_stdout); the process environment
+/// as `use os; env(name)` reads it natively, for wasi_environment()
+fn wasi_context() -> wasmtime_wasi::p1::WasiP1Ctx {
+	let mut context = wasmtime_wasi::WasiCtxBuilder::new();
+	context.inherit_stderr().inherit_env();
+	match CAPTURED_STDOUT.with(|captured| captured.borrow().clone()) {
+		Some(pipe) => context.stdout(pipe),
+		None => context.inherit_stdout(),
+	};
+	context.build_p1()
+}
+
+/// `body`'s value and what the runs it makes on this thread wrote to stdout (the emitter twin compares prints)
+pub fn with_captured_stdout<R>(body: impl FnOnce() -> R) -> (R, String) {
+	let pipe = MemoryOutputPipe::new(CAPTURED_STDOUT_BYTES);
+	let value = crate::util::scoped(&CAPTURED_STDOUT, Some(pipe.clone()), body);
+	(value, String::from_utf8_lossy(&pipe.contents()).into_owned())
 }
 const ROOT_PATH: &str = "/";
 
