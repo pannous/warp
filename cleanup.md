@@ -144,3 +144,10 @@
 - Apply the standard-library-wide rule there, without hiding hints from the user's program.
 - Run the focused test before and after, then formatting, clippy, and the wasm32 check.
 - Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.
+
+# Simple guide card cleanup
+
+- Reproduce the guide grouping with the existing focused playground/page test before changing it.
+- Classify the `simple` example by the same data-driven rule as the other beginner examples; avoid a title-specific UI exception.
+- Keep the guide ordering and rendering unchanged outside that group.
+- Run the focused guide test, formatting, clippy, and the wasm32 check, then verify the Playground workflow.
