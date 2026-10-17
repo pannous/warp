@@ -179,10 +179,30 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	defining.iter().find(|module| crate::type_tests::is_builtin_type_word(module)).or(defining.first()).copied()
 }
 
+/// A standard module's text parsed, once per thread (Nodes stay on theirs): the passes reading its definitions and
+/// classes share it, where each parsed it again (the prelude took 7 ms each prelude call, prelude_arguments)
+pub(crate) fn parsed_std_module(name: &str) -> Option<Node> {
+	thread_local!(static PARSED: std::cell::RefCell<HashMap<String, Node>> = std::cell::RefCell::default());
+	let source = std_module(name)?;
+	if let Some(parsed) = PARSED.with_borrow(|parsed| parsed.get(name).cloned()) {
+		return Some(parsed);
+	}
+	let shown = shown_path(&std_path(name));
+	let parsed = crate::normalize::without_hints(|| {
+		crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source))
+	});
+	PARSED.with_borrow_mut(|cache| cache.insert(name.to_string(), parsed.clone()));
+	Some(parsed)
+}
+
+/// The statements of a standard module, none for no standard module
+pub(crate) fn std_module_statements(name: &str) -> Vec<Node> {
+	parsed_std_module(name).map(statements).unwrap_or_default()
+}
+
 /// The classes a standard module declares (text's Cursor): no methods of the type the module is named after
 pub fn std_module_classes(module: &str) -> Vec<String> {
-	let Some(source) = std_module(module) else { return vec![] };
-	let statements = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
+	let statements = std_module_statements(module);
 	statements.iter().filter(|statement| is_class(statement)).filter_map(name_declared_by).collect()
 }
 
@@ -237,8 +257,7 @@ pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 
 /// The parameters and the body of the prelude word's definition (`paint_each(f, width, height) := …`)
 pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
-	let source = std_module(PRELUDE_MODULE).unwrap_or_default();
-	statements(crate::normalize::without_hints(|| WarpParser::parse(source))).into_iter().find_map(|statement| {
+	std_module_statements(PRELUDE_MODULE).into_iter().find_map(|statement| {
 		match statement.drop_meta() {
 			Node::Key(head, Op::Define, body) if leftmost_symbol(head).as_deref() == Some(word) => {
 				match head.drop_meta() {
@@ -302,9 +321,10 @@ pub fn prelude_name(word: &str) -> Option<String> {
 	prelude_word_arity(word).map(|_| format!("{PRELUDE_MODULE}{QUALIFIER}{word}"))
 }
 
-/// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
+/// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing.
+/// Only that statement is parsed: markup's lists are read by every program calling a function (is_element_tag)
 pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
-	let source = std_module(module).unwrap_or_default();
+	let source = std_module(module).and_then(|source| list_statement(source, list)).unwrap_or_default();
 	statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
 		.iter()
 		.find_map(|statement| match statement.drop_meta() {
@@ -315,6 +335,25 @@ pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 			_ => None,
 		})
 		.unwrap_or_default()
+}
+
+/// `list = […]` at the start of a line of `source`, through its closing bracket
+fn list_statement<'a>(source: &'a str, list: &str) -> Option<&'a str> {
+	let head = format!("{list} = [");
+	let start = source.match_indices(&head).map(|(at, _)| at).find(|&at| at == 0 || source[..at].ends_with('\n'))?;
+	let (mut depth, mut quoted) = (0, false);
+	for (offset, character) in source[start + head.len() - 1..].char_indices() {
+		match character {
+			'"' => quoted = !quoted,
+			'[' if !quoted => depth += 1,
+			']' if !quoted => depth -= 1,
+			_ => {}
+		}
+		if depth == 0 {
+			return Some(&source[start..start + head.len() + offset]);
+		}
+	}
+	None
 }
 
 /// The file of the program's folder or search directories that `use module` finds before the standard module of
