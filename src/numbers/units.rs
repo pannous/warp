@@ -279,11 +279,10 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
 	let program = with_units_after_numbers(lower_unit_aliases(with_run_time_unit_tables(program)));
-	let names = crate::program_names::ProgramNames::of(&program);
-	let program = match QUANTITY_CAST_WORDS.iter().any(|word| names.takes(word)) {
-		true => program,
-		false => with_quantity_casts(program),
-	};
+	// each cast word where the program leaves it free: a function's own `unit` is its variable
+	let program = QUANTITY_CAST_WORDS.into_iter().fold(program, |program, word| {
+		crate::program_names::rewritten_where_free(program, word, &|free| with_quantity_casts(free, word))
+	});
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
 }
 
@@ -408,12 +407,12 @@ fn quantity_line_word(statement: &Node) -> Option<&str> {
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
 const QUANTITY_CAST_WORDS: [&str; 2] = [RUN_TIME_QUANTITY_WORD, "unit"];
 
-fn with_quantity_casts(node: Node) -> Node {
-	let node = node.map_children(with_quantity_casts);
+fn with_quantity_casts(node: Node, cast_word: &str) -> Node {
+	let node = node.map_children(|child| with_quantity_casts(child, cast_word));
 	let Node::Key(value, Op::As, target) = node.drop_meta() else {
 		return node;
 	};
-	let Some(word) = target.drop_meta().symbol_name().filter(|word| QUANTITY_CAST_WORDS.contains(word)) else {
+	let Some(word) = target.drop_meta().symbol_name().filter(|word| *word == cast_word) else {
 		return node;
 	};
 	if word != RUN_TIME_QUANTITY_WORD {

@@ -42,8 +42,10 @@ const KEY_PLACEHOLDER: &str = "storage_key";
 const VALUE_PLACEHOLDER: &str = "storage_value";
 
 pub fn lower(program: Node) -> Node {
-	let stores = stores_used(&program);
-	let program = if stores.is_empty() { program } else { storage_accesses(program, &stores) };
+	// each store word where the program leaves it free: a function's own `local` is its variable
+	let program = stores_used(&program).into_iter().fold(program, |program, store| {
+		crate::program_names::rewritten_where_free(program, store.0, &|free| storage_accesses(free, &[store.clone()]))
+	});
 	let stores = crate::warp_parser::mentions(&program, STORED_WORD)
 		&& !crate::program_names::ProgramNames::of(&program).takes(STORED_WORD);
 	let dev = crate::pipeline::compile_mode().for_dev;
@@ -174,14 +176,13 @@ fn changed_names(statements: &[Node]) -> HashSet<String> {
 	changed
 }
 
-/// The store words the program uses and does not name itself, with the file of each store
+/// The store words the program uses, with the file of each store
 fn stores_used(program: &Node) -> Vec<(&'static str, String)> {
 	let (local, database) = (store_file(), database_file());
 	let words =
 		LOCAL_WORDS.iter().map(|word| (*word, local.clone())).chain([(SESSION_WORD, SESSION_STORE.to_string())]);
 	let words = words.chain([(DATABASE_WORD, database)]);
-	let names = crate::program_names::ProgramNames::of(program);
-	words.filter(|(word, _)| crate::warp_parser::mentions(program, word) && !names.takes(word)).collect()
+	words.filter(|(word, _)| crate::warp_parser::mentions(program, word)).collect()
 }
 
 /// Each access of a store word as the store's call

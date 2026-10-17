@@ -6,7 +6,7 @@
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
-use crate::analyzer::call_name;
+use crate::analyzer::{call_name, function_definitions};
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
@@ -203,7 +203,9 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 pub fn lower_infix_iterations(program: Node) -> Node {
 	let labels = parameter_labels(&program);
 	let names = crate::program_names::ProgramNames::of(&program);
-	infix_iterations(program, &ProgramWords { names, labels: &labels })
+	// `def square := it * it` is a function, though no head shows it
+	let functions: HashSet<String> = function_definitions(&program).user_functions.into_keys().collect();
+	infix_iterations(program, &ProgramWords { names, functions: &functions, labels: &labels })
 }
 
 /// `names`: the names in scope, whose variables and parameters may hold the list before an iteration word; any other
@@ -211,6 +213,7 @@ pub fn lower_infix_iterations(program: Node) -> Node {
 /// function's parameter labels, `f(xs, each y)`, which stay labels in a call of that function, `f [1 2 3] each 2`
 struct ProgramWords<'a> {
 	names: crate::program_names::ProgramNames,
+	functions: &'a HashSet<String>,
 	labels: &'a HashMap<String, HashSet<String>>,
 }
 
@@ -233,11 +236,11 @@ fn parameter_labels(program: &Node) -> HashMap<String, HashSet<String>> {
 }
 
 fn infix_iterations(node: Node, words: &ProgramWords) -> Node {
-	let inner = words.names.inside(&node).map(|names| ProgramWords { names, labels: words.labels });
+	let inner = words.names.inside(&node).map(|names| ProgramWords { names, ..*words });
 	let words = inner.as_ref().unwrap_or(words);
-	let is_variable = |name: &str| words.names.binds(name) || name == IMPLICIT_PARAMETER;
-	let is_list_operand =
-		|node: &Node| is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(is_variable);
+	let is_variable =
+		|name: &str| words.names.binds(name) && !words.functions.contains(name) || name == IMPLICIT_PARAMETER;
+	let is_list_operand = |node: &Node| is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(is_variable);
 	match node {
 		// `ys = sort xs by >`: the parser hung the phrase on the operator, `(sort xs by) > ø`
 		Node::Key(..) if dangling_sort_operator(&node).is_some_and(|(words, label)| sorts_before(&words[..label])) => {

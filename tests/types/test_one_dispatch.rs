@@ -178,3 +178,12 @@ fn a_unit_named_by_a_local_is_the_unit_elsewhere() {
 	is!("f(s) := s + 1; str(2000ms as s) + str(f(1))", "2s2");
 	is!("f() := { m = 2; m }; str(300 cm as m)", "3m");
 }
+
+// a function's own variable named like a store word or cast word stays its variable, while the top level keeps the
+// word (playground gpu_visualizer_warp's `local`); `def square := it * it` is a function before `all` (functions sample)
+#[test]
+fn a_local_named_like_a_store_word_is_the_variable() {
+	is!("f() := { local = 3; local + 1 }; f()", 4);
+	is!("g() := { unit = 2; unit }; g()", 2);
+	is!("def square := it * it; numbers = [1, 2]; result = (square all numbers); string(result)", "[1 4]");
+}
