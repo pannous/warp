@@ -474,7 +474,8 @@ pub(crate) fn code_pattern(pattern: &Node) -> Option<Node> {
 	has_hole(&code).then_some(code)
 }
 
-fn hole_name(part: &Node) -> Option<&str> {
+/// `$a` in quoted code: a, the name it binds in a pattern and splices in a template
+pub(crate) fn hole_name(part: &Node) -> Option<&str> {
 	part.drop_meta().symbol_name()?.strip_prefix(HOLE_PREFIX).filter(|name| !name.is_empty())
 }
 
