@@ -347,29 +347,22 @@ fn bridge_differential_of(given: fn(&Node) -> Node) {
 /// the program's value run by Rust. A program outside the core (a text "outside the core: …") is no case; fails
 /// unless at least `least` programs are inside it. Returns the paths inside the core
 pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
-	let cases: Vec<(String, String, String)> = paths
-		.iter()
-		.filter_map(|path| {
-			let text = std::fs::read_to_string(path).ok()?;
-			let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
-			// a failure stays this program's value: one failing program would otherwise recompile its chunk in halves
-			let view = json_argument(&plain_view(&lowered));
-			let call =
-				format!("try {{ wasm_module(node_of({view})) }} catch failure {{ \"warp failed: \" + failure }}");
-			Some((path.display().to_string(), call, text))
-		})
-		.collect();
+	let cases = in_parallel(paths.to_vec(), |path| {
+		let text = std::fs::read_to_string(path).ok()?;
+		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
+		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
+	});
+	let twin = TwinProgram::new("emitter", "wasm_module(node_of(json(argument)))");
 	let (mut inside, mut differing) = (vec![], vec![]);
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
-		let calls: Vec<String> = cases.iter().map(|(_, call, _)| call.clone()).collect();
-		let values = warp_values("emitter", &calls);
-		for ((path, _, text), module) in cases.iter().zip(values) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
+		for ((path, _, text), module) in cases.iter().zip(twin.values(&arguments)) {
 			if module.text_value().is_some_and(|text| text.starts_with(OUTSIDE_THE_CORE)) {
 				continue;
 			}
 			inside.push(path.clone());
 			let warp_value = module_value(&module);
-			let rust_value = eval(text).drop_meta().clone();
+			let rust_value = warp::wasm_emitter::eval(text).drop_meta().clone();
 			if !same_value(&warp_value, &rust_value) {
 				differing.push((path.clone(), warp_value.serialize(), rust_value.serialize()));
 			}
