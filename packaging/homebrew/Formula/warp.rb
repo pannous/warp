@@ -6,6 +6,7 @@ class Warp < Formula
   desc "Wasm-first programming language and data notation (Rust implementation of Wasp)"
   homepage "https://github.com/pannous/warp"
   version "1.3.0"
+  license all_of: ["AGPL-3.0-or-later", "MIT"]
 
   RELEASE = "https://github.com/pannous/warp/releases/download/v#{version}/warp-v#{version}".freeze
 

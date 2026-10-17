@@ -14,7 +14,7 @@ description: |-
   Ships warp and warp-runtime, the stub of the standalone executables `warp build` makes.
 vendor: pannous
 homepage: https://warp.pannous.com/
-license: LicenseRef-Proprietary # unlicensed, all rights reserved (open_decisions P150)
+license: AGPL-3.0-or-later AND MIT # the compiler AGPL, warp-runtime MIT (CONTRIBUTING.md)
 contents:
   # warp, warp-runtime and (since the page stub) warp-page-runtime: all next to each other
   - src: ./warp*

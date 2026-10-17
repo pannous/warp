@@ -120,3 +120,8 @@ Experimental and moving fast. 2036 tests pass (`cargo test`). The language spec 
 [Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script).
 
 Feedback, issues and especially "this surprised me" reports are welcome.
+
+## License
+The compiler is licensed under the [GNU AGPL v3 or later](LICENSE); the runtime `crates/warp-runtime`, which goes into
+every program built with warp, under the [MIT license](crates/warp-runtime/LICENSE), so your programs are yours.
+Commercial licenses of the compiler: info@pannous.com. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

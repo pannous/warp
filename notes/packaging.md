@@ -11,8 +11,7 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
 - GitHub release per tag v<Cargo version>: .github/workflows/release.yml attaches
   warp-<tag>-<target>.tar.gz (warp + warp-runtime) for aarch64/x86_64-apple-darwin (Intel cross-built on the arm
   runner), x86_64/aarch64-unknown-linux-gnu.
-- PyPI, .deb/.rpm, AUR (P150: unlicensed, so no crates.io; license fields say
-  `LicenseRef-Proprietary`, the AUR `custom`). All three repackage the release tarballs, jobs `packages`, `pypi`, `aur`
+- PyPI, .deb/.rpm, AUR (license fields `AGPL-3.0-or-later AND MIT`: the compiler AGPL, warp-runtime MIT). All three repackage the release tarballs, jobs `packages`, `pypi`, `aur`
   of release.yml after `binaries`; `gh workflow run release.yml -f tag=v<version> -f repackage=true` reruns only them
   from the existing tarballs (their sha256 stay, so the formula stays valid). Each one ships warp-runtime next to warp.
   - PyPI `pip install warp-language` (warp-lang is NVIDIA's Warp on PyPI):
@@ -37,11 +36,10 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
     (2026-10-17). Once the AUR is too, the README's Install gets
     `yay -S warp-lang-bin` (the .deb/.rpm line is there).
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
-- crates.io, prepared, not uploaded: packages `warp-lang` (`warp` is the web framework; the library is
-  still `warp`, the binary `warp`) and `warp-runtime` (1.2.3, same version). `cargo package --workspace` verifies both. Skipped (P150: warp stays unlicensed; crates.io refuses a crate
-  without `license`). If that changes: `license = "…"` in both Cargo.toml, a LICENSE file, then
-  `CARGO_NET_OFFLINE=false cargo publish --workspace`, and the README's Cargo line becomes `cargo install warp-lang`
-  (it installs warp; warp-runtime is a second `cargo install warp-runtime`).
+- crates.io: packages `warp-lang` (AGPL-3.0-or-later; `warp` is the web framework there; the library is still `warp`,
+  the binary `warp`) and `warp-runtime` (MIT, same version). `cargo package --workspace` verifies both. Publish:
+  `CARGO_NET_OFFLINE=false cargo publish --workspace` (needs `cargo login` with a crates.io token); then the README's
+  Cargo line becomes `cargo install warp-lang` (warp-runtime is a second `cargo install warp-runtime`).
 - Every channel ships warp-runtime too: `warp <file>` builds the standalone executable from the warp-runtime next to
   warp (src/main.rs runtime_stub_path); without it warp tries to build it from its source checkout, gone after install.
   Built on its own (`-p warp-runtime`) it has no Cranelift.

@@ -22,7 +22,7 @@ PACKAGE_NAME = "warp-language"
 SUMMARY = "Warp: a data notation that is also a programming language, compiled to WebAssembly GC"
 HOMEPAGE = "https://warp.pannous.com/"
 REPOSITORY = "https://github.com/pannous/warp"
-LICENSE_EXPRESSION = "LicenseRef-Proprietary"  # unlicensed, all rights reserved (open_decisions P150)
+LICENSE_EXPRESSION = "AGPL-3.0-or-later AND MIT"  # the compiler AGPL, warp-runtime MIT (CONTRIBUTING.md)
 # macOS minimum versions are Rust's defaults per architecture (otool -l: minos); Linux reads glibc from the binary
 MACOS_PLATFORMS = {
     "aarch64-apple-darwin": "macosx_11_0_arm64",
