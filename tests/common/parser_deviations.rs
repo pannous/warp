@@ -1,6 +1,6 @@
 //! The Rust parser's quirks that parser.warp does not copy (notes/self_hosting_dropped.md, section Deviations): the Rust
 //! tree rewritten to the clean shape, so the parser twins compare at the level where both agree
-use warp::{Bracket, Node, Op, Separator};
+use warp::{Bracket, Node, Separator};
 
 /// The Rust tree with each listed quirk in its clean shape
 pub fn clean_rust_tree(node: &Node) -> Node {
@@ -13,18 +13,10 @@ pub fn clean_rust_tree(node: &Node) -> Node {
 		Node::Error(inner) => Node::Error(Box::new(clean_rust_tree(inner))),
 		other => other.clone(),
 	};
-	power_written_as_caret(&cleaned)
-		.or_else(|| definition_head_spread(&cleaned))
+	definition_head_spread(&cleaned)
 		.or_else(|| bare_return_alone(&cleaned))
 		.or_else(|| colon_body_unwrapped(&cleaned))
 		.unwrap_or(cleaned)
-}
-
-/// `x²` is `x ^ 2`, `x³` is `x ^ 3`, as `x⁴` is `x ^ 4` (deviation square-cube)
-fn power_written_as_caret(node: &Node) -> Option<Node> {
-	let Node::Key(left, op @ (Op::Square | Op::Cube), right) = node else { return None };
-	let exponent = if *op == Op::Square { 2 } else { 3 };
-	matches!(right.drop_meta(), Node::Empty).then(|| Node::Key(left.clone(), Op::Pow, Box::new(Node::int(exponent))))
 }
 
 /// `f(x, y) { body }` has the head `f(x, y)` of a call, its parameters spread (deviation definition-head)

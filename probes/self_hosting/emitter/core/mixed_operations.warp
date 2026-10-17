@@ -1,0 +1,13 @@
+xs = [1, "b", 2.5, "d", 4]
+print "n=" + 3
+print 1 + "a"
+print "is " + (2 < 3)
+print xs#1 + xs#5
+print xs#2 + xs#4
+print xs#3 * xs#1 > 2
+print xs#1 < xs#5
+print xs#2 < xs#4
+print "ab" < "b"
+print "b" == "b"
+print xs#5 - 1
+"x" + 7

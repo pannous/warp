@@ -42,12 +42,10 @@ spaced_words(parts: any) := {
 	last = parts#(#parts)
 	if type(last) is not key or (op_of(last) != "=" and op_of(last) != ":=") { return ø }
 	words = []
-	at = 1
-	while at < #parts {
+	for at in 1 ..< #parts {
 		word = if at == #parts - 1 then key_of(last) else parts[at]
 		if word is not symbol { return ø }
 		words += [name_of(word)]
-		at += 1
 	}
 	words
 }

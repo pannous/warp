@@ -17,7 +17,7 @@ impl Op {
 		match self {
 			// Suffix operators (no right operand), below member access and indexing: `xs#1++`, `bags#1.n++` change the
 			// whole place and `p.x²` squares it, not its index or field name
-			Op::Square | Op::Cube | Op::Inc | Op::Dec => (SUFFIX_BP, 0),
+			Op::Inc | Op::Dec => (SUFFIX_BP, 0),
 
 			// Member access (tightest infix)
 			Op::Dot | Op::SafeDot => (180, 181),

@@ -96,7 +96,7 @@ impl WarpParser {
 		Some((exponent, length, negative))
 	}
 
-	/// `x⁴` is x^4, `x⁻¹` is 1/x, `2ⁿ` is 2^n; the single digits ² and ³ keep their dedicated square and cube operators
+	/// `x⁴` is x^4, `x⁻¹` is 1/x, `2ⁿ` is 2^n; a lone ² or ³ is x^2 or x^3 binding as tight as a suffix (`-x²` is -(x^2))
 	pub(super) fn try_parse_superscript_power(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		if let Some((exponent, length, negative)) = self.superscript_variable_exponent() {
 			if Op::Pow.binding_power().0 < min_bp {
@@ -107,16 +107,12 @@ impl WarpParser {
 			return Some(if negative { Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power)) } else { power });
 		}
 		let (exponent, length, signed) = self.superscript_exponent()?;
-		let (op, right) = match (exponent, length, signed) {
-			(2, 1, false) => (Op::Square, Empty),
-			(3, 1, false) => (Op::Cube, Empty),
-			_ => (Op::Pow, Node::int(exponent.abs())),
-		};
-		if op.binding_power().0 < min_bp {
+		let binding_op = if matches!((exponent, length, signed), (2 | 3, 1, false)) { Op::Inc } else { Op::Pow };
+		if binding_op.binding_power().0 < min_bp {
 			return None;
 		}
 		self.advance_by(length);
-		let power = Node::Key(Box::new(lhs.clone()), op, Box::new(right));
+		let power = Node::Key(Box::new(lhs.clone()), Op::Pow, Box::new(Node::int(exponent.abs())));
 		Some(if exponent < 0 { Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power)) } else { power })
 	}
 }
