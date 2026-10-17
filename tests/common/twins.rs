@@ -4,6 +4,7 @@
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
+use warp::host::with_captured_stdout;
 use warp::warp_parser::parse;
 use warp::{Bracket, Node, Number, Op, Separator};
 
@@ -339,14 +340,64 @@ fn mentions_error(view: &Node) -> bool {
 }
 
 /// The analyzer's twin (card inferred-kinds, notes/self_hosting.md step 14): each source the pipeline lowers goes to
-/// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its text compared with src/analyzer/inferred_kinds.rs
-/// on the same program
+/// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its kinds compared with src/analyzer/inferred_kinds.rs
+/// on the same program slot by slot: warp's kind is Rust's or a more general one (`covers`), never a narrower one
 pub fn analyzer_differential(paths: &[PathBuf]) {
-	let cases = paths.iter().filter_map(|path| {
-		let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
-		Some(Case::new(path, view_json(&program), warp_list(kinds.iter().map(|kind| Node::text(kind)))))
-	});
-	report("inferred_kinds", &differences_of(cases, "analyzer", "inferred_kinds(node_of(json(argument)))"));
+	let cases: Vec<(String, String, Vec<String>)> = paths
+		.iter()
+		.filter_map(|path| {
+			let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
+			Some((path.display().to_string(), view_json(&program), kinds))
+		})
+		.collect();
+	let twin = TwinProgram::new("analyzer", "inferred_kinds(node_of(json(argument)))");
+	let mut differing = vec![];
+	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, argument, _)| argument.as_str()).collect();
+		for ((path, _, rust), value) in cases.iter().zip(twin.values(&arguments)) {
+			let warp: Vec<String> = match value.drop_meta() {
+				Node::List(items, ..) => items.iter().filter_map(Node::text_value).collect(),
+				other => vec![other.serialize()],
+			};
+			if !covers(&kind_slots(&warp), &kind_slots(rust)) {
+				differing.push((path.clone(), warp.join(" | "), rust.join(" | ")));
+			}
+		}
+	}
+	report("inferred_kinds", &differing);
+}
+
+/// Each slot's kind in an inferred kinds text: `f(0)` for f's first parameter, `f()` its result, a variable by name,
+/// `=` the program's value
+fn kind_slots(lines: &[String]) -> std::collections::BTreeMap<String, String> {
+	let mut slots = std::collections::BTreeMap::new();
+	for line in lines {
+		if let Some(value) = line.strip_prefix("= ") {
+			slots.insert("=".to_string(), value.to_string());
+		} else if let Some((signature, result)) = line.split_once(") -> ") {
+			let (name, params) = signature.split_once('(').unwrap_or((signature, ""));
+			for (index, kind) in params.split(", ").filter(|kind| !kind.is_empty()).enumerate() {
+				slots.insert(format!("{name}({index})"), kind.to_string());
+			}
+			slots.insert(format!("{name}()"), result.to_string());
+		} else if let Some((name, kind)) = line.rsplit_once(": ") {
+			slots.insert(name.to_string(), kind.to_string());
+		}
+	}
+	slots
+}
+
+/// The same slots, each of warp's kinds Rust's or a more general one: a node (empty) holds any value, a number of
+/// run-time kind (data) any number; a narrower kind would hold a value Rust's may not fit
+fn covers(
+	warp: &std::collections::BTreeMap<String, String>,
+	rust: &std::collections::BTreeMap<String, String>,
+) -> bool {
+	let general = |warp: &str, rust: &str| {
+		warp == rust || warp == "empty" || (warp == "data" && (rust == "int" || rust == "float"))
+	};
+	warp.len() == rust.len()
+		&& rust.iter().all(|(slot, kind)| warp.get(slot).is_some_and(|warp_kind| general(warp_kind, kind)))
 }
 
 /// The view of the program after every lowering pass and the kinds the Rust analyzer infers in it; None for a program
@@ -407,10 +458,11 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 				continue;
 			}
 			inside.push(path.clone());
-			let warp_value = module_value(&module);
-			let rust_value = warp::wasm_emitter::eval(text).drop_meta().clone();
-			if !same_value(&warp_value, &rust_value) {
-				differing.push((path.clone(), warp_value.serialize(), rust_value.serialize()));
+			let (warp_value, warp_output) = with_captured_stdout(|| module_value(&module));
+			let (rust_value, rust_output) = with_captured_stdout(|| warp::wasm_emitter::eval(text).drop_meta().clone());
+			if !same_value(&warp_value, &rust_value) || warp_output != rust_output {
+				let shown = |value: &Node, output: &str| format!("{} printing {output:?}", value.serialize());
+				differing.push((path.clone(), shown(&warp_value, &warp_output), shown(&rust_value, &rust_output)));
 			}
 		}
 	}
@@ -434,7 +486,7 @@ const OUTSIDE_THE_CORE: &str = "outside the core";
 /// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
 const REFUSALS_REPORT: &str = "EMITTER_REFUSALS";
 
-/// The value main of a module given as a list of bytes returns, or the failure as a text
+/// The value main of a module given as a list of bytes returns (its prints through WASI), or the failure as a text
 fn module_value(module: &Node) -> Node {
 	let Node::List(items, ..) = module.drop_meta() else {
 		return Node::text(&format!("no module: {}", module.serialize()));
@@ -444,7 +496,8 @@ fn module_value(module: &Node) -> Node {
 		_ => None,
 	};
 	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
-	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes(&bytes)) {
+	let wasi = warp::run::wasm_reader::Imports { wasi: true, ..Default::default() };
+	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes_with_imports(&bytes, wasi)) {
 		Some(Ok(value)) => value,
 		Some(Err(failure)) => Node::text(&format!("{MODULE_FAILED}{failure}")),
 		None => Node::text("a module byte beyond 0..255"),
