@@ -5,8 +5,11 @@ use "interpolation.warp"
 use "welcome_forms.warp"
 use "times_phrases.warp"
 use "number_words.warp"
+use "of_lookups.warp"
+use "grouped_receivers.warp"
+use "broadcasting.warp"
 
-passes = [interpolation, match_arms, arrow_result_types, times_phrases, number_words_pass]
+passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
 # a node after every pass, in order
 lowered_node(n: any) := {

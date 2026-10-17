@@ -9,7 +9,6 @@ switch_words = [symbol("switch"), symbol("match")]
 default_word = "default"
 
 is_switch_word(n: any) := switch_words contains n
-group_like(n: any, items: any) := separated(bracketed(items, bracket_of(n)), separator_of(n))
 last_of(items: any) := items#(#items)
 
 # `alle = (f(3) {cases})` as [alle = f(3), {cases}], else ø

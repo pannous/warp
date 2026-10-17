@@ -568,12 +568,13 @@ impl<'a> Loader<'a> {
 		}
 		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
 		// a program's own `first(xs) := …` takes its calls from the prelude's: a hint, as a used module's is a warning
-		let declarations: Vec<Node> = statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
-			.into_iter()
-			.filter(is_declaration)
-			.collect();
+		let declarations: Vec<Node> = statements(parsed_prelude(source)).into_iter().filter(is_declaration).collect();
 		warn_replaced(&declarations, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
-		let definitions = self.load_unhinted(std_path(PRELUDE_MODULE), source)?;
+		let reached =
+			reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat(), declarations);
+		let module = Node::List(reached, Bracket::None, Separator::Semicolon);
+		let definitions =
+			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))?;
 		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
 		// n: int)` overloads it by parameter type (card easy-add)
 		let qualified_words: Vec<&String> =
@@ -645,6 +646,20 @@ impl<'a> Loader<'a> {
 		if let Some(failure) = module.first_error() {
 			return Err(crate::errors::diagnostic::located_in_file(failure, &shown));
 		}
+		self.load_parsed(import, path, file, module)
+	}
+
+	/// lib/prelude.warp's definitions the program reaches, already parsed (use_prelude)
+	fn load_module(&mut self, import: Import, path: PathBuf, module: Node) -> Result<Vec<Node>, Node> {
+		let file = path.canonicalize().unwrap_or_else(|_| path.clone());
+		match self.loaded.insert(file.clone()) {
+			true => self.load_parsed(import, path, file, module),
+			false => Ok(vec![]),
+		}
+	}
+
+	fn load_parsed(&mut self, import: Import, path: PathBuf, file: PathBuf, module: Node) -> Result<Vec<Node>, Node> {
+		let shown = shown_path(&path);
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use
 			&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(&file));
@@ -888,5 +903,59 @@ fn imported_statements(node: &Node) -> Option<Vec<Node>> {
 	match node {
 		Node::Meta { node, data } if data.is_symbol(IMPORTED_STATEMENTS) => Some(statements(*node.clone())),
 		_ => None,
+	}
+}
+
+thread_local! {
+	/// lib/prelude.warp as parsed, with the source it was parsed from: most programs load a few of its words, and a
+	/// process compiling many (the tests, `warp dev`) parses it once
+	static PARSED_PRELUDE: std::cell::RefCell<Option<(String, Node)>> = const { std::cell::RefCell::new(None) };
+}
+
+fn parsed_prelude(source: &str) -> Node {
+	PARSED_PRELUDE.with(|parsed| {
+		if let Some((_, module)) = parsed.borrow().as_ref().filter(|(parsed_source, _)| parsed_source == source) {
+			return module.clone();
+		}
+		let shown = shown_path(&std_path(PRELUDE_MODULE));
+		let module = crate::normalize::without_hints(|| {
+			crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source))
+		});
+		*parsed.borrow_mut() = Some((source.to_string(), module.clone()));
+		module
+	})
+}
+
+/// The prelude's definitions the program's statements reach, and those their bodies reach once lowered (a pass may
+/// write a call of another prelude word): lowering all of lib/prelude.warp for each program cost more than compiling
+/// a small one (card cache-lowered)
+fn reached_prelude_definitions(program: &[Node], declarations: Vec<Node>) -> Vec<Node> {
+	let mut reached =
+		needed_definitions(&Node::List(program.to_vec(), Bracket::None, Separator::Semicolon), &declarations);
+	// a look ahead: the program's own fresh names and hints are not this lowering's
+	let lowered_aside = |definitions: Vec<Node>| {
+		let fresh_number = crate::compiler::compile_context::read(|context| context.fresh_number);
+		crate::compiler::compile_context::scoped(
+			|context| &mut context.fresh_number,
+			fresh_number,
+			|| {
+				crate::normalize::without_hints(|| {
+					statements(crate::pipeline::lower_module_source(Node::List(
+						definitions,
+						Bracket::None,
+						Separator::Semicolon,
+					)))
+				})
+			},
+		)
+	};
+	loop {
+		let lowered = lowered_aside(reached.clone());
+		let callers = Node::List([program, &lowered].concat(), Bracket::None, Separator::Semicolon);
+		let more = needed_definitions(&callers, &declarations);
+		if more.len() == reached.len() {
+			return reached;
+		}
+		reached = more;
 	}
 }
