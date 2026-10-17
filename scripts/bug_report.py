@@ -54,7 +54,7 @@ CREATE_ISSUE = """mutation($repository: ID!, $title: String!, $body: String) {
 ADD_ITEM = """mutation($project: ID!, $content: ID!) {
   addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id databaseId } } }"""
 UPDATE_BODY = """mutation($issue: ID!, $body: String!) { updateIssue(input: {id: $issue, body: $body}) { issue { id } } }"""
-CARD_LINK = f"Board card: https://github.com/users/{OWNER}/projects/{BOARD_NUMBER}?pane=issue&itemId=%s"  # as todo's
+BOARD_CARD_URL = f"https://github.com/users/{OWNER}/projects/{BOARD_NUMBER}?pane=issue&itemId=%s"  # as todo's link
 SET_COLUMN = """mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
   updateProjectV2ItemFieldValue(input: {projectId: $project, itemId: $item, fieldId: $field,
     value: {singleSelectOptionId: $option}}) { projectV2Item { id } } }"""
@@ -99,16 +99,17 @@ def graphql(query, **variables):
 
 
 def make_card(report):
-    """the report's card on the board: an issue in Next, or Now for express; its url"""
+    """the report's card on the board: an issue in Next, or Now for express; the issue's and the card's urls"""
     title, body = card_of(report)
     board = graphql(BOARD_QUERY, owner=OWNER, name=REPOSITORY_NAME, number=BOARD_NUMBER)
     project, status = board["user"]["projectV2"]["id"], board["user"]["projectV2"]["field"]
     issue = graphql(CREATE_ISSUE, repository=board["repository"]["id"], title=title, body=body)["createIssue"]["issue"]
     item = graphql(ADD_ITEM, project=project, content=issue["id"])["addProjectV2ItemById"]["item"]
-    graphql(UPDATE_BODY, issue=issue["id"], body=body + "\n\n" + CARD_LINK % item["databaseId"])
+    board_card = BOARD_CARD_URL % item["databaseId"]
+    graphql(UPDATE_BODY, issue=issue["id"], body=f"{body}\n\nBoard card: {board_card}")
     option = next(option["id"] for option in status["options"] if option["name"] == COLUMNS[report["express"]])
     graphql(SET_COLUMN, project=project, item=item["id"], field=status["id"], option=option)
-    return issue["url"]
+    return {"card": issue["url"], "board": board_card}
 
 
 def kept_report(fields):
@@ -152,13 +153,13 @@ class ReportHandler(BaseHTTPRequestHandler):
         # queued only when making the card fails: a report queued while its card was being made got a second card
         # from the Mac's pull (card-made-2)
         try:
-            card = make_card(report)
+            urls = make_card(report)
         except Exception as failure:
             (STATE / f"{report_id}.json").write_text(json.dumps(report))
             print(f"{report_id}: no card ({failure}); queued for the Mac's pull", file=sys.stderr, flush=True)
             return self.reply(200, {"queued": report_id})
         (STATE / DONE / f"{report_id}.json").write_text(json.dumps(report))
-        self.reply(200, {"card": card})
+        self.reply(200, urls)
 
 
 def serve():
