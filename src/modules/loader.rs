@@ -567,7 +567,8 @@ impl<'a> Loader<'a> {
 			return Ok(());
 		}
 		// a program's own `first(xs) := …` takes its calls from the prelude's: a hint, as a used module's is a warning
-		let declarations: Vec<Node> = std_module_statements(PRELUDE_MODULE).into_iter().filter(is_declaration).collect();
+		let declarations: Vec<Node> =
+			std_module_statements(PRELUDE_MODULE).into_iter().filter(is_declaration).collect();
 		warn_replaced(&declarations, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
 		let reached =
 			reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat(), declarations);

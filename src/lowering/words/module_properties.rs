@@ -107,7 +107,11 @@ fn standard_objects() -> &'static HashSet<String> {
 	static OBJECTS: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
 	OBJECTS.get_or_init(|| {
 		let lines = crate::modules::STD_MODULES.iter().flat_map(|(_, source)| source.lines());
-		lines.filter(|line| defines_property(line)).filter_map(|line| line.split('.').next()).map(String::from).collect()
+		lines
+			.filter(|line| defines_property(line))
+			.filter_map(|line| line.split('.').next())
+			.map(String::from)
+			.collect()
 	})
 }
 

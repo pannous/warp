@@ -257,16 +257,12 @@ pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 
 /// The parameters and the body of the prelude word's definition (`paint_each(f, width, height) := …`)
 pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
-	std_module_statements(PRELUDE_MODULE).into_iter().find_map(|statement| {
-		match statement.drop_meta() {
-			Node::Key(head, Op::Define, body) if leftmost_symbol(head).as_deref() == Some(word) => {
-				match head.drop_meta() {
-					Node::List(items, _, _) => Some((items[1..].to_vec(), body.as_ref().clone())),
-					_ => None,
-				}
-			}
+	std_module_statements(PRELUDE_MODULE).into_iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(head, Op::Define, body) if leftmost_symbol(head).as_deref() == Some(word) => match head.drop_meta() {
+			Node::List(items, _, _) => Some((items[1..].to_vec(), body.as_ref().clone())),
 			_ => None,
-		}
+		},
+		_ => None,
 	})
 }
 
