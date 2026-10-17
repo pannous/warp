@@ -3800,7 +3800,9 @@ PASSED:
   ✓ programs::test_compute_toys::a_compute_toy_paints_each_pixel_with_rows_from_the_top
   ✓ programs::test_compute_toys::a_compute_toy_storing_elsewhere_paints_magenta
   ✓ programs::test_compute_toys::a_compute_toy_with_passes_says_it_needs_their_engine
+  ✓ programs::test_compute_toys::no_sample_or_library_is_a_third_party_shader
   ✓ programs::test_compute_toys::the_book_of_shaders_names_are_holes
+  ✓ programs::test_compute_toys::the_own_compute_toy_samples_render
   ✓ programs::test_data_structure_fixes::test_data_key_read_as_a_variable
   ✓ programs::test_data_structure_fixes::test_list_comprehension
   ✓ programs::test_data_structure_fixes::test_named_tuple_fields
@@ -6263,4 +6265,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6258 passed, 0 failed, 6258 total tested
+13 ignored, 6260 passed, 0 failed, 6260 total tested
