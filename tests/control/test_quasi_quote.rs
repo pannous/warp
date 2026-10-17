@@ -67,3 +67,27 @@ fn a_template_in_a_lambda_splices_its_parameter() {
 		true
 	);
 }
+
+#[test]
+fn a_quoted_literal_is_the_literal() {
+	is!("n = data(3)\nn", 3);
+	is!("data(3) + 1", 4);
+	is!("t = data(\"s\")\nt", "s");
+	is!("f(x) := x\nf(data(3))", 3);
+}
+
+#[test]
+fn the_value_after_an_assignment_takes_the_whole_phrase() {
+	is!("f(a) := a\nx = f([1, 2]) where it > 1\nx", warp::ints(vec![2]));
+	is!("x = data(y * 1) replace data($a * 1) with a\nx == data y", true);
+}
+
+#[test]
+fn a_replacement_walks_into_quoted_blocks() {
+	is!("data(f {print 1}) replace data($q) with data(7)", 7);
+	is!(
+		"(data(3 times {print 1}) replace data($n times $b) with data(for i in 0..$n $b)) == data(for i in 0..3 {print 1})",
+		true
+	);
+	is!("m = {a: 1}\nm is map", true);
+}

@@ -4,6 +4,9 @@ use super::*;
 
 /// The operands a braceless call binds in: from the right side of `or` to the right side of `+`; a `*` operand keeps
 /// `h*w int` the typed array `(h*w) int`
+/// Words whose subject is the glued call before them in an assigned value: `x = f(y) where it > 1`, `x = f(y) replace …`
+const SUBJECT_PHRASE_WORDS: [&str; 2] =
+	[crate::comprehensions::WHERE_KEYWORD, crate::lowering::tree_walks::REPLACE_WORD];
 const OPERAND_APPLICATION_BPS: std::ops::RangeInclusive<u8> = Op::Or.binding_power().1..=Op::Add.binding_power().1;
 
 impl WarpParser {
@@ -96,9 +99,17 @@ impl WarpParser {
 		argument_bp: u8,
 		max_bp_for_application: u8,
 	) -> Option<Node> {
+		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let lhs_is_callable = match lhs.drop_meta() {
 			Node::Symbol(_) => true,
 			Node::List(_, Bracket::None, _) => true, // Function call from implicit application
+			// `x = f(y) where it > 1`: the assigned value is the whole phrase, as `x = xs where it > 1` (card replace-level);
+			// any other word after a glued call is its own (`f = func(x int) int {…}`)
+			Node::List(items, Bracket::Round, Separator::None) => {
+				in_assignment_context
+					&& items.first().is_some_and(|head| head.symbol_name().is_some())
+					&& SUBJECT_PHRASE_WORDS.iter().any(|word| self.matches_keyword(word))
+			}
 			_ => false,
 		};
 		let lhs_is_defined_function = lhs.symbol_name().is_some_and(|name| self.functions.contains(name));
@@ -111,7 +122,6 @@ impl WarpParser {
 			&& min_bp != argument_bp
 			&& if self.in_for_header { self.word_ends_header() } else { !self.word_begins_item() };
 		let ch = self.current_char();
-		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier =
 			ch.is_numeric()
 				|| self.number_starts_at(0)

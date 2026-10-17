@@ -210,12 +210,21 @@ fn written_quote(node: &Node) -> Option<Node> {
 	}
 }
 
-/// Every sealed `data e` open again
+/// Every sealed `data e` open again; a quoted literal is the literal, so `n = data(3)` is a number where a number is
+/// typed (card quoted-number)
 pub fn unsealed(node: Node) -> Node {
-	match sealed_code(&node) {
-		Some(code) => code.clone(),
-		None => children_rewritten(node, unsealed),
+	if let Some(code) = sealed_code(&node) {
+		return code.clone();
 	}
+	match prefixed(&node, &[DATA_WORD]).and_then(sealed_code).map(Node::drop_meta) {
+		Some(literal @ (Node::Number(_) | Node::Text(_) | Node::Char(_))) => literal.clone(),
+		_ => children_rewritten(node, unsealed),
+	}
+}
+
+/// The code of sealed quoted data as written, for messages: `n = data a+1`
+pub(crate) fn sealed_text(data: &crate::compiler::meta::DataValue) -> Option<String> {
+	data.downcast_ref::<QuotedCode>().map(|QuotedCode(code)| code.serialize())
 }
 
 /// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,

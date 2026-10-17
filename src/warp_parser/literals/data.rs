@@ -5,13 +5,8 @@ impl WarpParser {
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
 	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
 	pub(crate) fn try_parse_data(&mut self) -> Option<Node> {
-		// `data = [4 2]; for x in data {…}`: a variable named data is read, not a prefix
-		let is_variable = self.variables.contains(DATA_KEYWORD);
-		if is_variable
-			|| self.options.data_mode
-			|| !self.matches_keyword(DATA_KEYWORD)
-			|| self.peek_char(DATA_KEYWORD.len()) != ' '
-		{
+		// data is a keyword (card data-reserved): `data = …` is refused by soft_keywords.rs, never read as a variable
+		if self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
 			return None;
 		}
 		let before_keyword = self.mark();

@@ -9,12 +9,16 @@ use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_name_matching::is_preposition;
 
-pub const HARD_KEYWORDS: [&str; 26] = [
+pub const HARD_KEYWORDS: [&str; 27] = [
 	"if", "then", "else", "while", "for", "in", "return", "break", "continue", // control flow
 	"def", "fun", "fn", "class", "var", "let", "const", "val", "global", // declarations
 	"true", "false", "ø", "null", "nil", // literal values
 	"use", "import", "include", // modules
+	"data",    // quoted code (user, card data-reserved)
 ];
+/// The hard keywords refused also as a parameter or loop variable; the others head arms and lambdas there
+/// (`else -> 20`, PHP's `fn($x) => …`)
+const UNBOUND_KEYWORDS: [&str; 1] = ["data"];
 /// emit's aliases fire, trigger and signal stay out: a program may define them (P163, test_event_footguns; asked)
 pub const SOFT_KEYWORDS: [&str; 12] =
 	["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners", "stored", "undo", "redo"];
@@ -122,6 +126,9 @@ pub fn names_given_with_kinds(program: &Node) -> Vec<(String, &'static str)> {
 
 /// A hard keyword assigned anywhere, a soft one defined at the top level: the loud error
 fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
+	if let Some(name) = bound_names(node).into_iter().find(|name| UNBOUND_KEYWORDS.contains(&name.as_str())) {
+		return Some(Diagnostic::at(node, format!("{name} is a keyword: give it another name")).into_error());
+	}
 	if let Some(name) = node.defined_name() {
 		let refused = HARD_KEYWORDS.contains(&name.as_str()) || top_level && SOFT_KEYWORDS.contains(&name.as_str());
 		if refused {
@@ -149,6 +156,22 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 		Node::Key(left, _, right) => first_refused(left, false).or_else(|| first_refused(right, false)),
 		Node::List(items, _, _) => items.iter().find_map(|item| first_refused(item, false)),
 		_ => None,
+	}
+}
+
+/// The parameters a definition or lambda binds, the variable of a `for … in` loop
+fn bound_names(node: &Node) -> Vec<String> {
+	match node.drop_meta() {
+		Node::Key(head, Op::Define | Op::Assign, _) => match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.iter().skip(1).filter_map(parameter_name).collect(),
+			_ => vec![],
+		},
+		Node::Key(parameters, Op::Arrow, _) => match parameters.drop_meta() {
+			Node::List(items, _, _) => items.iter().filter_map(parameter_name).collect(),
+			other => parameter_name(other).into_iter().collect(),
+		},
+		Node::List(words, _, _) => super::nodes::for_in_variable(words).into_iter().collect(),
+		_ => vec![],
 	}
 }
 

@@ -44,6 +44,7 @@ pub(in crate::wasm_emitter) fn every_dependency() -> Vec<Dependency> {
 		reflection::node_api::dependencies(),
 		numbers::uncertain::dependencies(),
 		lists::list_ops::node_arithmetic_dependencies(),
+		lists::list_ops::type_test_dependencies(),
 		text::similarity::dependencies(),
 		text::text_builtins::dependencies(),
 	]
