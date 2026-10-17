@@ -915,7 +915,7 @@ fn statements_reads(statements: Vec<Node>, readable: &Readable) -> Vec<Node> {
 }
 
 /// The name `let name = …` binds
-pub(super) fn let_binding(statement: &Node) -> Option<String> {
+fn let_binding(statement: &Node) -> Option<String> {
 	let Node::List(items, _, Separator::Space) = statement.drop_meta() else {
 		return None;
 	};

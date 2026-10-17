@@ -1,7 +1,6 @@
 //! card receiver-field-assign: in a method a bare field name reads and writes its receiver's field (P115), until a
-//! `let` gives the method a local of that name; a plain `body = …` in an outside method `def x(f: F)`, whose fields
-//! the text never shows, changes the field with a warning naming both readings
-use crate::common::warns_with;
+//! `let` gives the method a local of that name; a plain `body = …` changes the field, in an outside method `x(f: F)`
+//! as in the class body, silently in both (decisions.md receiver-field-assign)
 use crate::is;
 
 const OUTSIDE: &str = "class F { name: text; body: any }\nfresh(f: F) := {\n";
@@ -19,7 +18,7 @@ fn a_let_local_starts_after_its_value() {
 }
 
 #[test]
-fn an_outside_method_writing_a_bare_field_warns() {
-	let code = format!("{OUTSIDE}\tbody = 99\n\tbody\n}}\nf = F(\"main\", 42)\nfresh(f)\nf.body");
-	warns_with(&code, 99, "make a new local");
+fn a_bare_field_write_changes_the_field() {
+	is!(&format!("{OUTSIDE}\tbody = 99\n\tbody\n}}\nf = F(\"main\", 42)\nfresh(f)\nf.body"), 99);
+	is!(&format!("{INSIDE}\tbody = 99\n\tbody\n}} }}\nf = F(\"main\", 42)\nf.fresh()\nf.body"), 99);
 }
