@@ -1,4 +1,5 @@
-use std::time::{Duration, Instant};
+use super::test_big_literals::thread_cpu_time;
+use std::time::Duration;
 use warp::warp_parser::WarpParser;
 
 const FEW: usize = 500;
@@ -6,9 +7,10 @@ const GROWTH: usize = 4;
 /// Linear parsing grows as the plain assignments do, GROWTH times for GROWTH times the lines, quadratic GROWTH times
 /// more; the margin absorbs noise. While quadratic, 2000 one-line definitions took 9.5 s in a debug build, 500 took 0.6 s
 const GROWTH_MARGIN: f64 = 2.0;
-/// Each size parses this often and counts its fastest run: a busy machine (the full suite's parallel tests) only slows
-/// some runs, so the fastest is the parse's own time (card linear-time)
-const RUNS: usize = 5;
+/// Each size parses this often and counts its fastest run, timed in the CPU time of the parsing thread: the gate's load
+/// stretched wall-clock time unevenly (10.3 and 10.8 times for 4 times the definitions, assignments 4.0), even with
+/// the four sources taking turns in each round (card linear-time)
+const RUNS: usize = 9;
 
 /// The source line number `index`
 type Line = fn(usize) -> String;
@@ -18,19 +20,31 @@ const ASSIGNMENT: Line = |index| format!("x{index} = {index}");
 /// A block closed by `end` after all the definitions: every definition's search for its closing `end` could run to it
 const LATE_END_BLOCK: &str = "items.each do |item|\n\tprint item\nend\n";
 
-fn time_parse(line: Line, count: usize, tail: &str) -> Duration {
-	let source: String = (1..=count).map(|index| line(index) + "\n").collect::<String>() + tail;
-	let time_once = || {
-		let started = Instant::now();
-		WarpParser::parse(&source);
-		started.elapsed()
-	};
-	(0..RUNS).map(|_| time_once()).min().unwrap()
+fn source_of(line: Line, count: usize, tail: &str) -> String {
+	(1..=count).map(|index| line(index) + "\n").collect::<String>() + tail
 }
 
-/// How many times as long GROWTH times the lines take
-fn growth(line: Line, tail: &str) -> f64 {
-	time_parse(line, FEW * GROWTH, tail).as_secs_f64() / time_parse(line, FEW, tail).as_secs_f64()
+fn time_parse(source: &str) -> Duration {
+	let started = thread_cpu_time();
+	WarpParser::parse(source);
+	thread_cpu_time() - started
+}
+
+/// How many times as long GROWTH times the lines take, for the definitions and for the assignments
+fn growths(definition: Line, tail: &str) -> (f64, f64) {
+	let sources: Vec<String> =
+		[(definition, FEW), (definition, FEW * GROWTH), (ASSIGNMENT, FEW), (ASSIGNMENT, FEW * GROWTH)]
+			.iter()
+			.map(|&(line, count)| source_of(line, count, tail))
+			.collect();
+	let mut fastest = [Duration::MAX; 4];
+	for _ in 0..RUNS {
+		for (time, source) in fastest.iter_mut().zip(&sources) {
+			*time = (*time).min(time_parse(source));
+		}
+	}
+	let growth = |few: Duration, many: Duration| many.as_secs_f64() / few.as_secs_f64();
+	(growth(fastest[0], fastest[1]), growth(fastest[2], fastest[3]))
 }
 
 /// Many one-line function definitions parse in time proportional to their count, as plain assignments do
@@ -42,7 +56,7 @@ fn assert_linear(tail: &str) {
 		("typed", |index| format!("def f{index}(x: int) -> int = x + {index}")),
 	];
 	for (name, definition) in forms {
-		let (definitions, assignments) = (growth(definition, tail), growth(ASSIGNMENT, tail));
+		let (definitions, assignments) = growths(definition, tail);
 		assert!(
 			definitions < assignments * GROWTH_MARGIN,
 			"{name}: {GROWTH} times the definitions took {definitions:.1} times as long, assignments {assignments:.1}"

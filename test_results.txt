@@ -484,6 +484,9 @@ PASSED:
   ✓ control::test_member_completion::an_unknown_receiver_offers_nothing
   ✓ control::test_member_completion::every_offered_builtin_is_a_method_of_its_type
   ✓ control::test_member_completion::literals_offer_their_type_s_methods
+  ✓ control::test_method_let_shadows_field::a_bare_field_write_changes_the_field
+  ✓ control::test_method_let_shadows_field::a_let_local_hides_the_field
+  ✓ control::test_method_let_shadows_field::a_let_local_starts_after_its_value
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
@@ -1454,6 +1457,8 @@ PASSED:
   ✓ functions::test_dot_lambda::a_leading_dot_number_stays_a_number
   ✓ functions::test_dot_lambda::a_parameter_s_number_word_method_is_the_word
   ✓ functions::test_each_spellings::for_each_spellings_are_each
+  ✓ functions::test_early_return_kind::a_word_ending_with_a_throwing_call_gives_its_other_values
+  ✓ functions::test_early_return_kind::an_early_return_of_another_kind_is_tested_at_run_time
   ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
   ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
   ✓ functions::test_effects_value::effects_of_a_parameter_reads_its_field
@@ -3656,6 +3661,7 @@ PASSED:
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
   ✓ parser::test_parameter_scope::a_parameter_divides_only_inside_its_definition
+  ✓ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
   ✓ parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
@@ -6321,7 +6327,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
 
 SUMMARY:
-14 ignored, 6318 passed, 1 failed, 6319 total tested
+14 ignored, 6324 passed, 0 failed, 6324 total tested
