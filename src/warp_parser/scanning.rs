@@ -64,6 +64,11 @@ impl WarpParser {
 		letter.is_alphabetic() || letter == '_'
 	}
 
+	/// A bound name `$h` at the offset: a hole of a code pattern, or a reference
+	pub(super) fn is_hole_start(&self, offset: usize) -> bool {
+		self.peek_char(offset) == '$' && self.is_identifier_start(offset + 1)
+	}
+
 	pub(super) fn peek_char(&self, offset: usize) -> char {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}

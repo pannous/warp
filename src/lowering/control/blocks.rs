@@ -185,11 +185,27 @@ pub(crate) fn quote(code: Node) -> Node {
 	as_data(code)
 }
 
-/// Every `data e` sealed, so the passes after blocks leave e as written
+/// Every `data e` sealed, so the passes after blocks leave e as written; `data(e)` too, which the parser keeps as a
+/// call until blocks::lower reads it (card data-pattern-sealed)
 pub fn seal_quoted(node: Node) -> Node {
-	match prefixed(&node, &[DATA_WORD]) {
-		Some(code) => quote(code.clone()),
+	match written_quote(&node) {
+		Some(code) => quote(code),
 		None => children_rewritten(node, seal_quoted),
+	}
+}
+
+/// The code of `data e`, `data(e)` and `data(a of b)`, whose words the parser keeps as the items after data
+fn written_quote(node: &Node) -> Option<Node> {
+	let grouped = prefixed_group(node);
+	let Node::List(items, Bracket::None, Separator::Space) = grouped.as_ref().unwrap_or(node).drop_meta() else {
+		return None;
+	};
+	match items.as_slice() {
+		[prefix, code] if prefix.is_symbol(DATA_WORD) => Some(code.clone()),
+		[prefix, words @ ..] if prefix.is_symbol(DATA_WORD) && words.len() > 1 => {
+			Some(Node::List(words.to_vec(), Bracket::None, Separator::Space))
+		}
+		_ => None,
 	}
 }
 
