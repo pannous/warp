@@ -3,6 +3,8 @@
 use crate::common::twins::{around_difference, differences, node_view, sources};
 use warp::WarpParser;
 
+/// The sources needing a form parser.warp drops (notes/self_hosting_dropped.md): path, tab, form
+const DROPPED: &str = "tests/parser/self_parser_dropped.txt";
 /// Each differing source and both trees around its first difference, written by parser_differences
 const DIFFERENCES: &str = "data/self_parser/differences.txt";
 
@@ -11,7 +13,10 @@ const DIFFERENCES: &str = "data/self_parser/differences.txt";
 #[ignore]
 fn parser_differences() {
 	let rust_tree = |text: &str| node_view(&WarpParser::parse(text));
-	let report: Vec<String> = differences(&sources(), "parser", "tree", rust_tree)
+	let listed = std::fs::read_to_string(DROPPED).unwrap();
+	let dropped: Vec<&str> = listed.lines().filter_map(|line| line.split('\t').next()).collect();
+	let kept: Vec<_> = sources().into_iter().filter(|path| !dropped.contains(&path.to_str().unwrap())).collect();
+	let report: Vec<String> = differences(&kept, "parser", "tree", rust_tree)
 		.iter()
 		.map(|(path, warp_text, rust_text)| {
 			format!(
@@ -23,5 +28,5 @@ fn parser_differences() {
 		.collect();
 	std::fs::create_dir_all(std::path::Path::new(DIFFERENCES).parent().unwrap()).unwrap();
 	std::fs::write(DIFFERENCES, report.join("\n") + "\n").unwrap();
-	println!("{} differing sources, listed in {DIFFERENCES}", report.len());
+	println!("{} of {} kept sources differ, listed in {DIFFERENCES}", report.len(), kept.len());
 }
