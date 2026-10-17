@@ -116,7 +116,15 @@ fn with_units_after_numbers(program: Node) -> Node {
 	if shadowed.is_empty() {
 		return program;
 	}
-	marked_after_numbers(program, &shadowed)
+	let program = marked_after_numbers(program, &shadowed);
+	// `2000ms as s` where the program binds s only elsewhere (a function's parameter, a field): there it is the unit
+	crate::program_names::rewritten_by_scope(program, &|node, names| match node {
+		Node::Key(value, Op::As, unit) if is_unit_type(&unit) => {
+			let free = shadowed.iter().filter(|name| !names.takes(name)).cloned().collect();
+			Node::Key(value, Op::As, Box::new(marked_unit(*unit, &free)))
+		}
+		other => other,
+	})
 }
 
 fn marked_after_numbers(node: Node, shadowed: &std::collections::HashSet<String>) -> Node {

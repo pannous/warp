@@ -170,3 +170,11 @@ fn a_local_name_leaves_the_keyword_to_the_top_level() {
 	is!("o = {undo: 5}; x = 1; x = 2; undo x; x + o.undo", 6);
 	is!("g() := { set = 2; set }; set x to 5; x + g()", 7);
 }
+
+// a unit word is the program's only where its name is in scope: a parameter s of f leaves `as s` elsewhere the unit
+// (slice 9)
+#[test]
+fn a_unit_named_by_a_local_is_the_unit_elsewhere() {
+	is!("f(s) := s + 1; str(2000ms as s) + str(f(1))", "2s2");
+	is!("f() := { m = 2; m }; str(300 cm as m)", "3m");
+}
