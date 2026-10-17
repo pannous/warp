@@ -45,6 +45,9 @@ view_of(n: any) := {
 	n
 }
 
+# a group of the items, bracketed and separated as n
+group_like(n: any, items: any) := separated(bracketed(items, bracket_of(n)), separator_of(n))
+
 # the call `name(arguments…)`
 call_of(name: text, arguments: any) := bracketed([symbol(name)] + arguments, "(")
 
@@ -77,4 +80,18 @@ reported(view: any) := {
 	found = said
 	said = []
 	[view, found]
+}
+
+# whether the symbol `word` occurs anywhere in n, inside an opaque view too
+mentions(n: any, word: text) := view_has(view_of(n), part => part == ["symbol", word])
+
+# whether `found` holds for the view or a part of it
+view_has(view: any, found: any) := {
+	if found(view) { return yes }
+	if view is list {
+		for part in view {
+			if view_has(part, found) { return yes }
+		}
+	}
+	no
 }

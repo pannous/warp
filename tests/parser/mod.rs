@@ -63,6 +63,8 @@ mod test_self_passes; // card twin-harness
 mod test_self_pipeline; // card parser-tree
 #[cfg(feature = "native")]
 mod test_self_serializer; // card self-serializer
+#[cfg(feature = "native")]
+mod test_self_words; // card library-word-tables
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;
