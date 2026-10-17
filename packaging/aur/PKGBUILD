@@ -12,6 +12,7 @@ license=('custom') # unlicensed, all rights reserved (open_decisions P150)
 depends=('glibc' 'gcc-libs')
 provides=('warp-lang')
 conflicts=('warp-lang')
+options=('!strip' '!debug') # prebuilt, already stripped
 _release="https://github.com/pannous/warp/releases/download/v$pkgver/warp-v$pkgver"
 source_x86_64=("$_release-x86_64-unknown-linux-gnu.tar.gz")
 source_aarch64=("$_release-aarch64-unknown-linux-gnu.tar.gz")

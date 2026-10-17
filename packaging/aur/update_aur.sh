@@ -25,7 +25,7 @@ write_srcinfo() {
   echo "pkgbase = $pkgname"
   field pkgdesc "$pkgdesc"; field pkgver "$pkgver"; field pkgrel "$pkgrel"; field url "$url"
   field arch "${arch[@]}"; field license "${license[@]}"; field depends "${depends[@]}"
-  field provides "${provides[@]}"; field conflicts "${conflicts[@]}"
+  field provides "${provides[@]}"; field conflicts "${conflicts[@]}"; field options "${options[@]}"
   for target in "${arch[@]}"; do
     local sources="source_$target[@]" sums="sha256sums_$target[@]"
     field "source_$target" "${!sources}"; field "sha256sums_$target" "${!sums}"

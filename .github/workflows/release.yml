@@ -48,7 +48,8 @@ jobs:
         include:
         - { os: macos-latest, target: aarch64-apple-darwin }
         - { os: macos-latest, target: x86_64-apple-darwin }
-        - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+        # pinned: the runner's glibc is the oldest the binaries run on (ubuntu-latest becomes 26.04, glibc 2.43)
+        - { os: ubuntu-24.04, target: x86_64-unknown-linux-gnu }
         - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
     runs-on: ${{ matrix.os }}
     steps:
@@ -89,17 +90,21 @@ jobs:
     - name: deb and rpm
       run: |
         curl -sSfL "$NFPM" | sudo tar -xz -C /usr/local/bin nfpm
+        mkdir -p dist/linux # nfpm writes a file of that name when the directory is missing
         for arch in x86_64:amd64 aarch64:arm64; do
           target=${arch%:*}-unknown-linux-gnu
-          mkdir -p "dist/$target" && tar -xzf "dist/tarballs/warp-$TAG-$target.tar.gz" -C "dist/$target"
+          mkdir -p "dist/$target"
+          tar -xzf "dist/tarballs/warp-$TAG-$target.tar.gz" -C "dist/$target"
           for format in deb rpm; do
             (cd "dist/$target" && VERSION=${TAG#v} ARCH=${arch#*:} nfpm package -f "$GITHUB_WORKSPACE/packaging/linux/nfpm.yaml" -p "$format" -t "$GITHUB_WORKSPACE/dist/linux")
           done
         done
     - name: check the amd64 .deb and wheel
       run: |
-        sudo dpkg -i dist/linux/warp-lang_*_amd64.deb && warp eval '6*7' | grep -q 42
-        pip install --no-deps --break-system-packages --target "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl && "$RUNNER_TEMP/pip/bin/warp" eval '6*7' | grep -q 42
+        sudo dpkg -i dist/linux/warp-lang_*_amd64.deb
+        warp eval '6*7' | grep -q 42
+        pip install --no-deps --break-system-packages --target "$RUNNER_TEMP/pip" dist/wheels/*manylinux*_x86_64.whl
+        "$RUNNER_TEMP/pip/bin/warp" eval '6*7' | grep -q 42
     - name: upload
       run: gh release upload "$TAG" dist/wheels/*.whl dist/linux/* --clobber
     - uses: actions/upload-artifact@v7
@@ -146,15 +151,20 @@ jobs:
     - name: makepkg
       # makepkg refuses root
       run: |
-        useradd -m builder && cp -r packaging/aur /home/builder/aur && chown -R builder /home/builder/aur
+        useradd -m builder
+        cp -r packaging/aur /home/builder/aur
+        chown -R builder /home/builder/aur
         su builder -c 'cd ~/aur && makepkg --printsrcinfo | diff - .SRCINFO && makepkg --noconfirm'
         pacman -U --noconfirm /home/builder/aur/warp-lang-bin-*.pkg.tar.zst
         warp eval '6*7' | grep -q 42
     - name: push to the AUR
       if: env.AUR_SSH_KEY != ''
       run: |
-        mkdir -p ~/.ssh && echo "$AUR_SSH_KEY" > ~/.ssh/aur && chmod 600 ~/.ssh/aur
+        mkdir -p ~/.ssh
+        echo "$AUR_SSH_KEY" > ~/.ssh/aur
+        chmod 600 ~/.ssh/aur
         ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
         printf 'Host aur.archlinux.org\n  User aur\n  IdentityFile ~/.ssh/aur\n' > ~/.ssh/config
-        git config --global user.name pannous && git config --global user.email info@pannous.com
+        git config --global user.name pannous
+        git config --global user.email info@pannous.com
         packaging/aur/update_aur.sh "${TAG#v}" --push
