@@ -145,6 +145,8 @@ pub(super) fn infer_function_return_kind(body: &Node, scope: &Scope) -> Kind {
 		},
 	};
 	match returned_nodes.as_slice() {
+		// `if c { return "out" }; [1, 2]`: a list here, a text there, known only at run time
+		nodes if last_kind.is_ref() && nodes.iter().any(|kind| *kind != last_kind) => Kind::Empty,
 		_ if last_kind.is_ref() => last_kind,
 		[] => last_kind,
 		[Kind::Empty] => Kind::Empty,
