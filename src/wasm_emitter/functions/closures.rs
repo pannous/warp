@@ -364,7 +364,7 @@ impl WasmGcEmitter {
 		self.function_body(vec![], |s, rebuild| {
 			for (target, entry, _, _) in s.closures.entry_functions.clone() {
 				rebuild.instruction(&I::LocalGet(0));
-				s.emit_string_call(rebuild, &target, "new_symbol");
+				s.emit_symbol_node(rebuild, &target);
 				s.emit_call(rebuild, super::super::reflection::equality::VALUES_EQUAL);
 				rebuild.instruction(&I::If(BlockType::Empty));
 				Self::emit_list(
@@ -372,7 +372,7 @@ impl WasmGcEmitter {
 					&[I::I64Const(s.function_kind(&target)), I::RefFunc(entry), I::LocalGet(1), I::StructNew(closure)],
 				);
 				// the name from this module's string table, as closure_new makes it (function_text finds it there)
-				s.emit_string_call(rebuild, &target, "new_symbol");
+				s.emit_symbol_node(rebuild, &target);
 				Self::emit_list(rebuild, &[I::StructNew(node_type), I::Return, I::End]);
 			}
 			s.emit_call(rebuild, "new_empty");
@@ -733,7 +733,7 @@ impl WasmGcEmitter {
 		}
 		self.ctx.user_globals.retain(|name, _| !name.starts_with(CAPTURE_VALUE_PREFIX));
 		func.instruction(&I::StructNew(self.closure_type()));
-		self.emit_string_call(func, target, "new_symbol");
+		self.emit_symbol_node(func, target);
 		func.instruction(&I::StructNew(self.type_manager.node_type));
 	}
 }
@@ -921,14 +921,14 @@ impl WasmGcEmitter {
 	/// the target's name in the string table (closure_new, closure_rebuild: one place each). A value that is no function
 	/// or a target of another module gives `miss`
 	fn emit_function_table(&mut self, name: &'static str, value_of: impl Fn(&Self, &str, usize) -> Node, miss: Miss) {
-		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		let (node, string) = (self.type_manager.node_type, self.type_manager.text_type);
 		let result = Ref(self.node_ref(miss == Miss::Null));
 		let values: Vec<((u32, u32), Node)> = self
 			.ctx
 			.closure_targets
 			.clone()
 			.into_iter()
-			.map(|(target, captured)| (self.allocate_string(&target), value_of(self, &target, captured)))
+			.map(|(target, captured)| (self.string_table.literal(&target), value_of(self, &target, captured)))
 			.collect();
 		let name_local = 1;
 		let locals = vec![Ref(RefType { nullable: true, heap_type: HeapType::Concrete(string) })];
@@ -939,7 +939,7 @@ impl WasmGcEmitter {
 					f.instruction(&I::RefNull(HeapType::Concrete(node)));
 				}
 				Miss::KindName => {
-					s.emit_string_call(f, crate::type_kinds::Kind::Function.to_string().as_str(), "new_text")
+					s.emit_text_node(f, crate::type_kinds::Kind::Function.to_string().as_str())
 				}
 			};
 			if miss == Miss::Null {
@@ -961,13 +961,13 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node))]);
 			f.instruction(&I::StructGet { struct_type_index: node, field_index: NODE_DATA_FIELD });
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(string)), I::LocalSet(name_local)]);
-			for ((pointer, length), value) in &values {
-				Self::field(f, name_local, string, 0);
-				Self::emit_list(f, &[I::I32Const(*pointer as i32), I::I32Eq]);
-				Self::field(f, name_local, string, 1);
-				Self::emit_list(f, &[I::I32Const(*length as i32), I::I32Eq, I::I32And, I::If(BlockType::Empty)]);
+			for (target, value) in &values {
+				Self::emit_list(f, &[I::LocalGet(name_local), I::RefAsNonNull]);
+				s.emit_literal_text(f, *target);
+				s.call(f, crate::wasm_emitter::TEXT_BYTES_EQUAL);
+				f.instruction(&I::If(BlockType::Empty));
 				match value {
-					Node::Text(text) => s.emit_string_call(f, text, "new_text"),
+					Node::Text(text) => s.emit_text_node(f, text),
 					value => s.emit_node_instructions(f, value),
 				}
 				Self::emit_list(f, &[I::Return, I::End]);

@@ -480,7 +480,7 @@ impl WasmGcEmitter {
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let mut locals = vec![ValType::I64; 5];
 		locals.extend([ValType::I32; 3]);
-		let units = ["month", "day", "hour", "minute", "second"].map(|unit| self.allocate_string(&format!(" {unit}")));
+		let units = ["month", "day", "hour", "minute", "second"].map(|unit| self.memory_string(&format!(" {unit}")));
 		self.runtime_function(DURATION_TEXT, vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (nanos, seconds, amount, fraction, power, position, address, start) = (1, 2, 3, 4, 5, 6, 7, 8);
 			let advance = |f: &mut Function, count: &[I<'static>]| {
@@ -687,8 +687,8 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(ZONE_NAMES) {
 			return None;
 		}
-		let names = ZONES.iter().map(|zone| self.allocate_string(&format!("[{}]", zone.name))).collect();
-		Some((names, self.allocate_string(&format!("[_tzdata={}]", BUILTIN_RULES.version))))
+		let names = ZONES.iter().map(|zone| self.memory_string(&format!("[{}]", zone.name))).collect();
+		Some((names, self.memory_string(&format!("[_tzdata={}]", BUILTIN_RULES.version))))
 	}
 
 	/// The position of the time node in `local`

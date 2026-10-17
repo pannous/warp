@@ -9,7 +9,7 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::{any_heap_type, Kind, KIND_MASK};
-use crate::wasm_emitter::layout::BYTE;
+use crate::wasm_emitter::{TEXT_BYTES_EQUAL, TEXT_FLAT};
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
@@ -290,7 +290,7 @@ impl WasmGcEmitter {
 	/// is_meta_entry(entry: anyref) -> i32: 1 for a meta entry `@name:value`, which is never a field, not counted and
 	/// ignored by == (user decision "Meta information on objects")
 	pub(crate) fn emit_is_meta_entry(&mut self) {
-		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		let (node, string) = (self.type_manager.node_type, self.type_manager.text_type);
 		let string_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(string) });
 		let (entry, key, name) = (0, 1, 2);
 		self.runtime_function(
@@ -315,12 +315,12 @@ impl WasmGcEmitter {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::RefCastNonNull(HeapType::Concrete(string)), I::LocalSet(name),
-					I::LocalGet(name), I::StructGet { struct_type_index: string, field_index: 1 }, I::I32Eqz,
+					I::LocalGet(name), I::ArrayLen, I::I32Eqz,
 				]);
 				Self::return_if(f, 0);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
-					I::LocalGet(name), I::StructGet { struct_type_index: string, field_index: 0 }, I::I32Load8U(BYTE),
+					I::LocalGet(name), I::I32Const(0), I::ArrayGetU(string),
 					I::I32Const(crate::node::ATTRIBUTE_MARK as i32), I::I32Eq,
 				]);
 			},
@@ -514,7 +514,7 @@ impl WasmGcEmitter {
 	fn emit_values_equal(&mut self) {
 		let recurse = self.next_func_idx;
 		let node = self.type_manager.node_type;
-		let string = self.type_manager.string_type;
+		let string = self.type_manager.text_type;
 		let (i64_box, f64_box, big_int) =
 			(self.type_manager.i64_box_type, self.type_manager.f64_box_type, self.type_manager.big_int_type);
 		let ratio = self.type_manager.ratio_type;
@@ -555,6 +555,14 @@ impl WasmGcEmitter {
 			if !s.ctx.closure_targets.is_empty() {
 				s.emit_closures_equal(f, recurse);
 			}
+			// texts by their bytes: a rope (text_append) holds them in pieces
+			Self::emit_list(f, &[I::LocalGet(2), I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Empty)]);
+			for local in [0, 1] {
+				Self::emit_list(f, &[I::LocalGet(local), I::RefCastNonNull(HeapType::Concrete(node))]);
+				s.call(f, TEXT_FLAT);
+			}
+			s.call(f, TEXT_BYTES_EQUAL);
+			Self::emit_list(f, &[I::Return, I::End]);
 			// `{…}` objects are maps: their entries may come in any order
 			for kind in [2, 3] {
 				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Eq]);
@@ -585,27 +593,11 @@ impl WasmGcEmitter {
 			Self::test(f, 1, HeapType::Concrete(string));
 			f.instruction(&I::I32Eqz);
 			Self::return_if(f, 0);
-			Self::field(f, 0, string, 1);
-			Self::field(f, 1, string, 1);
-			f.instruction(&I::I32Ne);
-			Self::return_if(f, 0);
-			for (from, field_index, to) in [(0, 0, 4), (1, 0, 5), (0, 1, 6)] {
-				Self::field(f, from, string, field_index);
-				f.instruction(&I::LocalSet(to));
+			for local in [0, 1] {
+				Self::emit_list(f, &[I::LocalGet(local), I::RefCastNonNull(HeapType::Concrete(string))]);
 			}
-			Self::emit_list(
-				f,
-				&[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(6), I::I32Eqz, I::BrIf(1)],
-			);
-			for pointer in [4, 5] {
-				Self::emit_list(f, &[I::LocalGet(pointer), I::I32Load8U(BYTE)]);
-			}
-			f.instruction(&I::I32Ne);
-			Self::return_if(f, 0);
-			for (local, step) in [(4, 1), (5, 1), (6, -1)] {
-				Self::emit_list(f, &[I::LocalGet(local), I::I32Const(step), I::I32Add, I::LocalSet(local)]);
-			}
-			Self::emit_list(f, &[I::Br(0), I::End, I::End, I::I32Const(1), I::Return, I::End]);
+			s.call(f, TEXT_BYTES_EQUAL);
+			Self::emit_list(f, &[I::Return, I::End]);
 
 			// Ints exactly, Int and Float numerically
 			Self::test(f, 0, HeapType::Concrete(i64_box));
@@ -647,7 +639,7 @@ impl WasmGcEmitter {
 	fn emit_is_truthy(&mut self) {
 		let recurse = self.next_func_idx;
 		let node = self.type_manager.node_type;
-		let string = self.type_manager.string_type;
+		let string = self.type_manager.text_type;
 		let (i64_box, f64_box) = (self.type_manager.i64_box_type, self.type_manager.f64_box_type);
 		let i32t = ValType::I32;
 		self.runtime_function(IS_TRUTHY, vec![Self::any_ref()], vec![i32t], vec![ValType::I64], |_, f| {
@@ -692,9 +684,13 @@ impl WasmGcEmitter {
 				I::End,
 			]);
 			Self::test(f, 0, HeapType::Concrete(string));
-			f.instruction(&I::If(BlockType::Empty));
-			Self::field(f, 0, string, 1);
-			Self::emit_list(f, &[I::I32Const(0), I::I32Ne, I::Return, I::End]);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::If(BlockType::Empty),
+					I::LocalGet(0), I::RefCastNonNull(HeapType::Concrete(string)), I::ArrayLen, I::I32Const(0), I::I32Ne,
+					I::Return,
+				I::End,
+			]);
 			Self::test(f, 0, HeapType::Concrete(i64_box));
 			f.instruction(&I::If(BlockType::Empty));
 			Self::field(f, 0, i64_box, 0);

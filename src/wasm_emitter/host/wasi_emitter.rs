@@ -58,13 +58,13 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
 		// Get string data pointer and length
 		let (str_ptr, str_len) = match arg.drop_meta() {
-			Node::Text(s) => self.allocate_string(s),
+			Node::Text(s) => self.memory_string(s),
 			Node::Symbol(var_name) => match self.scope.lookup(var_name) {
 				// a text variable with its stored data
 				Some(local) if local.data_pointer > 0 => (local.data_pointer, local.data_length),
 				// any other variable: its value at run time (writing the name, or nothing, was a silent wrong answer)
 				Some(_) => return self.emit_runtime_puts(func, arg),
-				None => self.allocate_string(var_name),
+				None => self.memory_string(var_name),
 			},
 			_ => return self.emit_runtime_puts(func, arg),
 		};
@@ -213,8 +213,8 @@ impl WasmGcEmitter {
 		}
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let (empty, _) = self.allocate_string("");
-		let newline = self.allocate_string(PRINT_TERMINATOR);
+		let (empty, _) = self.memory_string("");
+		let newline = self.memory_string(PRINT_TERMINATOR);
 		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (value, text) = (0, 1);
 			let write =
@@ -253,7 +253,7 @@ impl WasmGcEmitter {
 	/// Emit WASI puti, putl and putf: write a number to stdout, without a newline; a run-time value through put_value
 	pub(in crate::wasm_emitter) fn emit_wasi_put_number(&mut self, func: &mut Function, arg: &Node) {
 		if let Node::Number(n) = arg.drop_meta() {
-			let (str_ptr, str_len) = self.allocate_string(&n.to_string());
+			let (str_ptr, str_len) = self.memory_string(&n.to_string());
 			if self.emit_stdout_write(func, str_ptr, str_len) {
 				func.instruction(&I::Drop);
 			}

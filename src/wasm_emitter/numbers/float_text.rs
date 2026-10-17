@@ -47,7 +47,7 @@ impl WasmGcEmitter {
 		self.emit_text_heap_global();
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let [zero, infinity, negative_infinity, not_a_number] =
-			["0", "∞", "-∞", "NaN"].map(|text| self.allocate_string(text));
+			["0", "∞", "-∞", "NaN"].map(|text| self.memory_string(text));
 		let mut locals = vec![ValType::I32; 3];
 		locals.extend([ValType::I64, ValType::I32, ValType::I32, ValType::I32]);
 		self.runtime_function(FLOAT_TEXT, vec![ValType::F64], vec![node_ref], locals, |s, f| {

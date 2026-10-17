@@ -20,7 +20,8 @@ pub(crate) use host::wasi_emitter::{OUTPUT_CALLS, OUTPUT_WORDS};
 pub(crate) use lists::list_sharing::reads_collection;
 pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
-pub use constructors::{NEW_BOOL, NEW_TYPE};
+pub use constructors::{NEW_BOOL, NEW_SYMBOL_OF, NEW_TEXT_OF, NEW_TYPE};
+pub(crate) use constructors::{TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY};
 pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
 mod config;
 mod function_builder;
@@ -36,6 +37,7 @@ pub use maps::map_backend::MAP_COPY_SUFFIX;
 pub(crate) mod reflection;
 mod runtime_dependencies;
 mod string_table;
+pub(crate) use string_table::TEXT_SEGMENT;
 pub(crate) mod text;
 mod type_manager;
 pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
@@ -186,7 +188,6 @@ pub struct WasmGcEmitter {
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
-	text_room_globals: Option<u32>, // the first global of the rooms texts grow into (text_rooms.rs)
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
@@ -328,38 +329,35 @@ impl WasmGcEmitter {
 	// Helper methods for clean, DRY code
 	// ═══════════════════════════════════════════════════════════════════════════
 
-	/// Emit string lookup from table and call constructor
-	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
-		let (ptr, len) = self.allocate_string(s); // a text the pre-scan did not see is added to the table, never read from offset 0
-		Self::emit_list(func, &[I32Const(ptr as i32), I32Const(len as i32)]);
-		self.emit_call(func, constructor);
+	/// The Text node of the literal `s`
+	fn emit_text_node(&mut self, func: &mut Function, s: &str) {
+		self.emit_text_literal(func, s);
+		self.emit_call(func, NEW_TEXT_OF);
+	}
+
+	/// The Symbol node of the literal `s`
+	fn emit_symbol_node(&mut self, func: &mut Function, s: &str) {
+		self.emit_text_literal(func, s);
+		self.emit_call(func, NEW_SYMBOL_OF);
 	}
 
 	/// The type value `name` (`int`, `Person`): its symbol marked TYPE_VALUE_MARK, which printing shows as `class int`
 	pub(crate) fn emit_type_value(&mut self, func: &mut Function, name: &str) {
-		let prefix = crate::type_kinds::TYPE_VALUE_PREFIX.len() as u32;
-		let (shown, shown_len) = self.allocate_string(&format!("{}{name}", crate::type_kinds::TYPE_VALUE_PREFIX));
-		let (ptr, len) = (shown + prefix, shown_len - prefix);
-		let (node_type, string) = (self.type_manager.node_type, self.type_manager.string_type);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::I64Const(crate::type_kinds::TYPE_VALUE_KIND), I32Const(ptr as i32), I32Const(len as i32),
-			I::StructNew(string), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
-		]);
+		func.instruction(&I::I64Const(crate::type_kinds::TYPE_VALUE_KIND));
+		self.emit_text_literal(func, name);
+		func.instruction(&I::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+		func.instruction(&I::StructNew(self.type_manager.node_type));
 	}
 
-	/// The text `class int` of the type value in Node local `local`: its name widened over the prefix stored before it
-	pub(crate) fn emit_type_value_text(&self, func: &mut Function, local: u32) {
-		let prefix = I32Const(crate::type_kinds::TYPE_VALUE_PREFIX.len() as i32);
+	/// The text `class int` of the type value in Node local `local`: the prefix (the literal of TYPE_VALUE_PREFIX)
+	/// joined with its name
+	pub(crate) fn emit_type_value_text(&self, func: &mut Function, local: u32, prefix: (u32, u32)) {
 		func.instruction(&I::I64Const(Kind::Text as i64));
-		self.emit_text_field(func, local, 0);
-		Self::emit_list(func, &[prefix.clone(), I::I32Sub]);
-		self.emit_text_field(func, local, 1);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			prefix, I::I32Add, I::StructNew(self.type_manager.string_type),
-			I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::StructNew(self.type_manager.node_type),
-		]);
+		self.emit_literal_text(func, prefix);
+		self.emit_text_bytes(func, local);
+		self.call(func, TEXT_BYTES_JOIN);
+		func.instruction(&I::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+		func.instruction(&I::StructNew(self.type_manager.node_type));
 	}
 
 	/// Whether the Node in local `local` is a type value (TYPE_VALUE_MARK), as an i32
@@ -383,14 +381,6 @@ impl WasmGcEmitter {
 		crate::type_tests::is_builtin_type_word(word)
 			|| word == crate::type_tests::TYPE_WORD
 			|| self.ctx.type_registry.types().iter().any(|t| t.name == word)
-	}
-
-	/// Append String struct field names (ptr, len) to an IndirectNameMap
-	fn append_string_field_names(type_field_names: &mut IndirectNameMap, type_idx: u32) {
-		let mut names = NameMap::new();
-		names.append(0, "ptr");
-		names.append(1, "len");
-		type_field_names.append(type_idx, &names);
 	}
 
 	/// Infer the Kind for an expression
@@ -663,9 +653,9 @@ impl WasmGcEmitter {
 		self.string_table.allocate_bytes(name, bytes)
 	}
 
-	/// Allocate a string in linear memory
-	fn allocate_string(&mut self, s: &str) -> (u32, u32) {
-		self.string_table.allocate(s)
+	/// Place the text `s` in linear memory, for a host or C function that reads it by address: (ptr, len)
+	fn memory_string(&mut self, s: &str) -> (u32, u32) {
+		self.string_table.in_memory(s)
 	}
 
 	/// Node locals not first assigned by a statement of the body itself (`if c { n = "a" } else { n = "b" }; n`) start
@@ -882,7 +872,7 @@ impl WasmGcEmitter {
 				}
 			},
 			Node::Text(s) => {
-				self.emit_string_call(func, s, "new_text");
+				self.emit_text_node(func, s);
 			}
 			Node::Char(c) => {
 				func.instruction(&I32Const(*c as i32));
@@ -943,7 +933,7 @@ impl WasmGcEmitter {
 					self.emit_type_value(func, s);
 					return;
 				}
-				self.emit_string_call(func, s, "new_symbol");
+				self.emit_symbol_node(func, s);
 			}
 			Node::Key(left, op, right) => {
 				self.emit_key_node(func, left, op, right);
@@ -952,7 +942,7 @@ impl WasmGcEmitter {
 				self.emit_list_node(func, items, bracket, separator);
 			}
 			Node::Data(dada) => {
-				self.emit_string_call(func, &dada.type_name, "new_symbol");
+				self.emit_symbol_node(func, &dada.type_name);
 			}
 			Node::Meta { .. } => {
 				self.emit_call(func, "new_empty");

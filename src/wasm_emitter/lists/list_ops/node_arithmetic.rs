@@ -250,7 +250,7 @@ impl WasmGcEmitter {
 						is_text(f, 1);
 						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 						let node_type = s.type_manager.node_type;
-						let empty = s.allocate_string("");
+						let empty = s.memory_string("");
 						for operand in [0, 1] {
 							s.emit_structure_as_literal(
 								f,
@@ -271,7 +271,7 @@ impl WasmGcEmitter {
 								I::StructNew(node_type),
 							],
 						);
-						let (pointer, length) = s.allocate_string("");
+						let (pointer, length) = s.memory_string("");
 						Self::emit_list(f, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 						s.call(f, "new_text");
 						s.call(f, super::super::super::reflection::library_ops::LIST_JOIN);

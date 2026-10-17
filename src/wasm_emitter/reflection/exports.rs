@@ -19,7 +19,7 @@ impl WasmGcEmitter {
 		let tm = &self.type_manager;
 		let (node_type, string, int, float, big, ratio, limbs, floats) = (
 			tm.node_type,
-			tm.string_type,
+			tm.text_type,
 			tm.i64_box_type,
 			tm.f64_box_type,
 			tm.big_int_type,
@@ -41,17 +41,12 @@ impl WasmGcEmitter {
 			&[I::LocalGet(0), I::RefCastNonNull(HeapType::I31), I::I31GetU],
 		);
 		self.reflect(
-			"reflect_text_ptr",
-			vec![any],
+			"reflect_text_byte",
+			vec![any, ValType::I32],
 			vec![ValType::I32],
-			&[I::LocalGet(0), cast(string), field(string, 0)],
+			&[I::LocalGet(0), cast(string), I::LocalGet(1), I::ArrayGetU(string)],
 		);
-		self.reflect(
-			"reflect_text_len",
-			vec![any],
-			vec![ValType::I32],
-			&[I::LocalGet(0), cast(string), field(string, 1)],
-		);
+		self.reflect("reflect_text_len", vec![any], vec![ValType::I32], &[I::LocalGet(0), cast(string), I::ArrayLen]);
 		self.reflect("reflect_negative", vec![any], vec![ValType::I32], &[I::LocalGet(0), cast(big), field(big, 0)]);
 		self.reflect(
 			"reflect_limb_count",

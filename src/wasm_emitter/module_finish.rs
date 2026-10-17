@@ -50,7 +50,8 @@ impl WasmGcEmitter {
 
 	/// The module bytes, or the validation failure as an error message
 	pub fn try_finish(mut self) -> Result<Vec<u8>, String> {
-		// WASM section order: types, imports, functions, memory, globals, exports, start, elements, code, data, names
+		// WASM section order: types, imports, functions, memory, globals, exports, start, elements, data count, code, data,
+		// names
 		self.module.section(self.type_manager.types());
 		if self.ctx.func_registry.import_count() > 0 || !self.ctx.imported_entities.is_empty() {
 			self.module.section(self.import_manager.imports());
@@ -80,8 +81,9 @@ impl WasmGcEmitter {
 			elements.declared(Elements::Functions(declared_functions.into()));
 			self.module.section(&elements);
 		}
+		self.module.section(&DataCountSection { count: self.string_table.segment_count() });
 		self.module.section(&self.code);
-		self.module.section(self.string_table.data_section());
+		self.module.section(&self.string_table.data_section());
 		let c_calls = crate::modules::wasm_modules::c_calls(self.ctx.ffi_imports.values());
 		if !c_calls.is_empty() {
 			self.module.section(&CustomSection {
@@ -175,7 +177,7 @@ impl WasmGcEmitter {
 
 		let tm = &self.type_manager;
 		let mut types = vec![
-			(tm.string_type, "String"),
+			(tm.text_type, "Text"),
 			(tm.i64_box_type, "i64box"),
 			(tm.f64_box_type, "f64box"),
 			(tm.node_type, "Node"),
@@ -221,7 +223,6 @@ impl WasmGcEmitter {
 
 		let mut fields: Vec<(u32, Vec<(u32, &str)>)> = vec![
 			(tm.node_type, vec![(0, "kind"), (1, "data"), (2, "value")]),
-			(tm.string_type, vec![(0, "ptr"), (1, "len")]),
 			(tm.i64_box_type, vec![(0, "value")]),
 			(tm.f64_box_type, vec![(0, "value")]),
 			(tm.int_list_type, vec![(0, "length"), (1, "items")]),

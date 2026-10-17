@@ -444,7 +444,6 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let string_type = self.type_manager.string_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
 		// list_with_at(list, index, value node): the cell at index takes the value in place, so every holder of the list sees
@@ -561,7 +560,7 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 0);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(copy), I::LocalGet(length), I::StructNew(string_type),
+				I::LocalGet(copy), I::LocalGet(length), I::Call(s.func_index(TEXT_FROM_MEMORY)),
 				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
 			]);
 		});

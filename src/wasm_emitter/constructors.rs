@@ -95,6 +95,19 @@ impl WasmGcEmitter {
 pub const NEW_BOOL: &str = "new_bool";
 /// new_type(name, body): a type declaration in code, `class P {x: int}` (Kind::TypeDef)
 pub const NEW_TYPE: &str = "new_type";
+/// new_text_of(text) / new_symbol_of(text): a Text or Symbol node of the $Text
+pub const NEW_TEXT_OF: &str = "new_text_of";
+pub const NEW_SYMBOL_OF: &str = "new_symbol_of";
+/// text_from_memory(ptr, len) -> $Text: the bytes a host or a builder left in linear memory, copied
+pub const TEXT_FROM_MEMORY: &str = "text_from_memory";
+/// text_address($Text) -> ptr: a copy of the bytes in linear memory, for a host or C function reading by address
+pub const TEXT_ADDRESS: &str = "text_address";
+/// text_bytes_join($Text, $Text) -> $Text
+pub const TEXT_BYTES_JOIN: &str = "text_bytes_join";
+/// text_flat(node) -> $Text: the bytes of a text node, a rope flattened
+pub const TEXT_FLAT: &str = "text_flat";
+/// text_bytes_equal($Text, $Text) -> i32
+pub const TEXT_BYTES_EQUAL: &str = "text_bytes_equal";
 /// `as_bool(node) -> ref $Node`: an Int 1/0 as the bool it stands for, any other node as it is
 pub const AS_BOOL: &str = "as_bool";
 
@@ -103,8 +116,9 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 	use Instruction::{LocalGet, RefNull, StructNew};
 	use KindField::{Plain, WithInfo};
 	let types = &emitter.type_manager;
-	let (node_type, i64_box, f64_box, string) =
-		(types.node_type, types.i64_box_type, types.f64_box_type, types.string_type);
+	let (node_type, i64_box, f64_box) = (types.node_type, types.i64_box_type, types.f64_box_type);
+	let text_ref = emitter.text_ref();
+	let from_memory = I::Call(emitter.func_index(TEXT_FROM_MEMORY));
 	let node = Ref(emitter.node_ref(false));
 	let nullable_node = Ref(emitter.node_ref(true));
 	let no_value = || RefNull(HeapType::Concrete(node_type));
@@ -137,9 +151,12 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 		Plain,
 		vec![LocalGet(0), I::RefI31, no_value()],
 	);
-	let text = || vec![LocalGet(0), LocalGet(1), StructNew(string), no_value()];
-	emitter.emit_node_constructor("new_text", Kind::Text, vec![ValType::I32, ValType::I32], Plain, text());
-	emitter.emit_node_constructor("new_symbol", Kind::Symbol, vec![ValType::I32, ValType::I32], Plain, text());
+	let in_memory = || vec![LocalGet(0), LocalGet(1), from_memory.clone(), no_value()];
+	let int_pair = || vec![ValType::I32, ValType::I32];
+	emitter.emit_node_constructor("new_text", Kind::Text, int_pair(), Plain, in_memory());
+	emitter.emit_node_constructor("new_symbol", Kind::Symbol, int_pair(), Plain, in_memory());
+	emitter.emit_node_constructor(NEW_TEXT_OF, Kind::Text, vec![text_ref], Plain, vec![LocalGet(0), no_value()]);
+	emitter.emit_node_constructor(NEW_SYMBOL_OF, Kind::Symbol, vec![text_ref], Plain, vec![LocalGet(0), no_value()]);
 	emitter.emit_node_constructor(
 		"new_key",
 		Kind::Key,

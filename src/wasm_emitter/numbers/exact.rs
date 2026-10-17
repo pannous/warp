@@ -844,7 +844,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_text_heap_global();
 		let (i64t, i32t, node_ref) = (ValType::I64, ValType::I32, ValType::Ref(self.node_ref(false)));
-		let constant = |s: &mut Self, text: &str| s.allocate_string(text);
+		let constant = |s: &mut Self, text: &str| s.memory_string(text);
 		let [minus, dot, slash, empty, infinity, negative_infinity, not_a_number] =
 			["-", ".", "/", "", "∞", "-∞", "NaN"].map(|text| constant(self, text));
 		let push_text = |s: &Self, f: &mut Function, (address, length): (u32, u32)| {

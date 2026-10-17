@@ -438,7 +438,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, kind);
 		Self::emit_list(func, &[I::I32And, I::If(BlockType::Empty)]);
 		for (entry, text) in written {
-			let (pointer, length) = self.allocate_string(text);
+			let (pointer, length) = self.memory_string(text);
 			#[rustfmt::skip]
 			Self::emit_list(func, &[
 				I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty),
@@ -486,7 +486,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalTee(text));
 		self.call(func, coder);
 		Self::emit_list(func, &[I::LocalTee(code), I::I64Const(-1), I::I64Eq, I::If(BlockType::Empty)]);
-		let (pointer, length) = self.allocate_string(prefix);
+		let (pointer, length) = self.memory_string(prefix);
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.call(func, "new_text");
 		func.instruction(&I::LocalGet(text));

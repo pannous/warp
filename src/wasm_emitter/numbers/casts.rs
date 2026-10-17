@@ -262,7 +262,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND)]);
 		self.emit_entry_in_braces(func, held);
 		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
-		let (pointer, length) = self.allocate_string("");
+		let (pointer, length) = self.memory_string("");
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_text");
 		self.emit_call(func, reflection::library_ops::LIST_TEXT);
@@ -456,14 +456,14 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_cast_to_text(&mut self, func: &mut Function, value: &Node) {
 		// `string(data x+1)` is "x+1"
 		if let Some(quoted) = crate::blocks::quoted_data(value) {
-			return self.emit_string_call(func, &quoted.serialize(), "new_text");
+			return self.emit_text_node(func, &quoted.serialize());
 		}
 		match value.drop_meta() {
-			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
-			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
-			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
+			Node::Number(n) => self.emit_text_node(func, &n.to_string()),
+			Node::Char(c) => self.emit_text_node(func, &c.to_string()),
+			Node::Text(s) => self.emit_text_node(func, s),
 			// `str(data a and b)`: quoted data reads as written
-			_ if let Some(source) = quoted_source(value) => self.emit_string_call(func, &source, "new_text"),
+			_ if let Some(source) = quoted_source(value) => self.emit_text_node(func, &source),
 			_ => self.emit_runtime_text_cast(func, value),
 		}
 	}

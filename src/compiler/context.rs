@@ -130,6 +130,8 @@ impl Context {
 				"new_float",
 				"new_text",
 				"new_symbol",
+				"new_text_of",
+				"new_symbol_of",
 				"new_codepoint",
 				"new_key",
 				"new_list",

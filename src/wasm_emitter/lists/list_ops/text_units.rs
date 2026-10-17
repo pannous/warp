@@ -524,6 +524,174 @@ impl WasmGcEmitter {
 }
 
 impl WasmGcEmitter {
+	/// The functions every text operation builds on: text_from_memory(ptr, len) copies bytes a host or a builder left in
+	/// linear memory into a new $Text, text_bytes_join, text_bytes_equal and text_flat
+	pub(in crate::wasm_emitter) fn emit_text_foundation(&mut self) {
+		let (int, text) = (ValType::I32, self.text_ref());
+		let text_type = self.type_manager.text_type;
+		self.runtime_function(TEXT_FROM_MEMORY, vec![int, int], vec![text], vec![text, int], |_, f| {
+			let (pointer, length, bytes, index) = (0, 1, 2, 3);
+			Self::emit_list(f, &[I::LocalGet(length), I::ArrayNewDefault(text_type), I::LocalSet(bytes)]);
+			let condition = [I::LocalGet(index), I::LocalGet(length), I::I32LtU];
+			#[rustfmt::skip]
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(bytes), I::LocalGet(index), I::LocalGet(pointer), I::LocalGet(index), I::I32Add,
+				I::I32Load8U(BYTE), I::ArraySet(text_type),
+				I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+			]);
+			Self::emit_list(f, &[I::LocalGet(bytes), I::RefAsNonNull]);
+		});
+		self.runtime_function(TEXT_BYTES_JOIN, vec![text, text], vec![text], vec![text], |_, f| {
+			let (first, second, joined) = (0, 1, 2);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(first), I::ArrayLen, I::LocalGet(second), I::ArrayLen, I::I32Add,
+				I::ArrayNewDefault(text_type), I::LocalTee(joined),
+				I32Const(0), I::LocalGet(first), I32Const(0), I::LocalGet(first), I::ArrayLen,
+				I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+				I::LocalGet(joined), I::LocalGet(first), I::ArrayLen, I::LocalGet(second), I32Const(0),
+				I::LocalGet(second), I::ArrayLen,
+				I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+				I::LocalGet(joined), I::RefAsNonNull,
+			]);
+		});
+		self.emit_text_bytes_equal();
+		self.emit_text_flat();
+	}
+
+	/// text_bytes_equal($Text, $Text) -> i32: the same bytes
+	pub(in crate::wasm_emitter) fn emit_text_bytes_equal(&mut self) {
+		let (text, text_type) = (self.text_ref(), self.type_manager.text_type);
+		self.runtime_function(TEXT_BYTES_EQUAL, vec![text, text], vec![ValType::I32], vec![ValType::I32], |_, f| {
+			let (first, second, index) = (0, 1, 2);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(first), I::ArrayLen, I::LocalGet(second), I::ArrayLen, I::I32Ne,
+				I::If(BlockType::Empty), I32Const(0), I::Return, I::End,
+			]);
+			let condition = [I::LocalGet(index), I::LocalGet(first), I::ArrayLen, I::I32LtU];
+			#[rustfmt::skip]
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(first), I::LocalGet(index), I::ArrayGetU(text_type),
+				I::LocalGet(second), I::LocalGet(index), I::ArrayGetU(text_type), I::I32Ne,
+				I::If(BlockType::Empty), I32Const(0), I::Return, I::End,
+				I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+			]);
+			f.instruction(&I32Const(1));
+		});
+	}
+
+	/// text_flat(node) -> $Text: the bytes of a Text, Symbol or Error node; a rope (text_append: data the last piece,
+	/// value the text before it) is flattened once, its node then holding the whole text
+	fn emit_text_flat(&mut self) {
+		let (node, text_type) = (self.type_manager.node_type, self.type_manager.text_type);
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let (text, int) = (self.text_ref(), ValType::I32);
+		let nullable_text = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(text_type) });
+		self.runtime_function(TEXT_FLAT, vec![node_ref], vec![text], vec![nullable, int, nullable_text, int], |s, f| {
+			let (rope, piece, length, flat, piece_length) = (0, 1, 2, 3, 4);
+			let data = |f: &mut Function, local: u32| {
+				Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+				Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 1 }]);
+				f.instruction(&I::RefCastNonNull(HeapType::Concrete(text_type)));
+			};
+			let rest = |f: &mut Function, local: u32| {
+				Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+				Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 2 }, I::LocalSet(local)]);
+			};
+			s.emit_field(f, rope, 2);
+			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
+			data(f, rope);
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(rope), I::LocalSet(piece)]);
+			let walk = |f: &mut Function, body: &dyn Fn(&mut Function)| {
+				let condition = [I::LocalGet(piece), I::RefIsNull, I::I32Eqz];
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				Self::emit_list(f, &condition);
+				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1)]);
+				body(f);
+				rest(f, piece);
+				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+			};
+			walk(f, &|f| {
+				data(f, piece);
+				Self::emit_list(f, &[I::ArrayLen, I::LocalGet(length), I::I32Add, I::LocalSet(length)]);
+			});
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(length), I::ArrayNewDefault(text_type), I::LocalSet(flat),
+				I::LocalGet(rope), I::LocalSet(piece),
+			]);
+			walk(f, &|f| {
+				data(f, piece);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::ArrayLen, I::LocalTee(piece_length), I::LocalGet(length), I::LocalGet(piece_length), I::I32Sub,
+					I::LocalSet(length), I::Drop,
+					I::LocalGet(flat), I::LocalGet(length),
+				]);
+				data(f, piece);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I32Const(0), I::LocalGet(piece_length),
+					I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+				]);
+			});
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(rope), I::LocalGet(flat), I::StructSet { struct_type_index: node, field_index: 1 },
+				I::LocalGet(rope), I::RefNull(HeapType::Concrete(node)), I::StructSet { struct_type_index: node, field_index: 2 },
+				I::LocalGet(flat), I::RefAsNonNull,
+			]);
+		});
+	}
+
+	/// Push the $Text of the Text or Symbol node in local `node`
+	pub(in crate::wasm_emitter) fn emit_text_bytes(&self, func: &mut Function, node: u32) {
+		Self::emit_list(func, &[I::LocalGet(node), I::RefAsNonNull]);
+		self.call(func, TEXT_FLAT);
+	}
+
+	/// text_address(text): a copy of the text's bytes in the heap, for a host or C function reading by address; after
+	/// the runtime errors, out_of_memory among them
+	pub(in crate::wasm_emitter) fn emit_text_address(&mut self) {
+		self.emit_text_heap_global();
+		let (int, text) = (ValType::I32, self.text_ref());
+		let text_type = self.type_manager.text_type;
+		self.runtime_function(TEXT_ADDRESS, vec![text], vec![int], vec![int; 3], |s, f| {
+			let (bytes, length, address, index) = (0, 1, 2, 3);
+			Self::emit_list(f, &[I::LocalGet(bytes), I::ArrayLen, I::LocalSet(length)]);
+			s.emit_text_allocation(f, length, address);
+			let condition = [I::LocalGet(index), I::LocalGet(length), I::I32LtU];
+			#[rustfmt::skip]
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(address), I::LocalGet(index), I::I32Add, I::LocalGet(bytes), I::LocalGet(index),
+				I::ArrayGetU(text_type), I::I32Store8(BYTE),
+				I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+			]);
+			f.instruction(&I::LocalGet(address));
+		});
+	}
+
+	/// (ref $Text)
+	pub(in crate::wasm_emitter) fn text_ref(&self) -> ValType {
+		Ref(RefType { nullable: false, heap_type: HeapType::Concrete(self.type_manager.text_type) })
+	}
+
+	/// Push the literal `s` as a new $Text, from the literal segment
+	pub(in crate::wasm_emitter) fn emit_text_literal(&mut self, func: &mut Function, s: &str) {
+		let literal = self.string_table.literal(s);
+		self.emit_literal_text(func, literal);
+	}
+
+	/// Push the literal at (offset, length) of the literal segment (StringTable::literal) as a new $Text
+	pub(in crate::wasm_emitter) fn emit_literal_text(&self, func: &mut Function, (offset, length): (u32, u32)) {
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I32Const(offset as i32), I32Const(length as i32),
+			I::ArrayNewData { array_type_index: self.type_manager.text_type, array_data_index: TEXT_SEGMENT },
+		]);
+	}
+
 	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
 	pub(in crate::wasm_emitter) fn emit_text_heap_global(&mut self) {
 		if self.text_heap_global.is_some() {
@@ -553,21 +721,6 @@ impl WasmGcEmitter {
 			I::End,
 			I::GlobalGet(heap), I::LocalTee(address), I::LocalGet(length), I::I32Add, I::GlobalSet(heap),
 		]);
-	}
-
-	/// Grow the memory, when needed, until `length` more bytes fit after the heap global (new pages come at the end)
-	pub(in crate::wasm_emitter) fn emit_memory_room(&self, func: &mut Function, heap: u32, length: u32) {
-		const PAGE_BITS: i32 = 16;
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::GlobalGet(heap), I::LocalGet(length), I::I32Add, I::MemorySize(0), I32Const(PAGE_BITS), I::I32Shl,
-			I::I32GtU, I::If(BlockType::Empty),
-				I::GlobalGet(heap), I::LocalGet(length), I::I32Add, I::MemorySize(0), I32Const(PAGE_BITS), I::I32Shl,
-				I::I32Sub, I32Const(PAGE_BITS), I::I32ShrU, I32Const(1), I::I32Add, I::MemoryGrow(0), I32Const(-1),
-				I::I32Eq,
-		]);
-		self.emit_fail_if(func, "out_of_memory");
-		func.instruction(&I::End);
 	}
 
 	pub(in crate::wasm_emitter) fn emit_is_text(&self, func: &mut Function) {

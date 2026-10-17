@@ -273,26 +273,26 @@ impl WasmGcEmitter {
 		// a nested list keeps its written brackets and separator (card print-shows): `(a; b)`, `[a, b]`, `{a; b}`
 		let bracket_texts = [Bracket::Curly, Bracket::Square, Bracket::Round, Bracket::Less].map(|bracket| {
 			let info = crate::wasm_emitter::bracket_info(&bracket);
-			let open = self.allocate_string(&bracket.opening().to_string());
-			(info, open, self.allocate_string(&bracket.closing().to_string()))
+			let open = self.memory_string(&bracket.opening().to_string());
+			(info, open, self.memory_string(&bracket.closing().to_string()))
 		});
-		let no_bracket = self.allocate_string("");
+		let no_bracket = self.memory_string("");
 		let separator_texts =
 			[Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab].map(|separator| {
-				(crate::wasm_emitter::separator_code(&separator), self.allocate_string(&separator.joint()))
+				(crate::wasm_emitter::separator_code(&separator), self.memory_string(&separator.joint()))
 			});
-		let space = self.allocate_string(" ");
+		let space = self.memory_string(" ");
 		// only a program whose Keys hold operators beyond `:` carries their texts (web::test_bundle_budget)
 		let operator_texts =
 			(self.written_operator_bound() > op_to_code(&Op::Colon)).then(|| self.allocate_operator_texts());
-		let instance_texts = [self.allocate_string(""), self.allocate_string(Op::Colon.as_str())];
-		let empty_text = self.allocate_string(EMPTY_TEXT);
-		let type_word = self.allocate_string(TYPE_DECLARATION_WORD);
+		let instance_texts = [self.memory_string(""), self.memory_string(Op::Colon.as_str())];
+		let empty_text = self.memory_string(EMPTY_TEXT);
+		let type_word = self.memory_string(TYPE_DECLARATION_WORD);
 		// the unbracketed, space-separated list that line is joined as
 		let type_line_kind =
 			(crate::wasm_emitter::list_info(&Bracket::None, &Separator::Space) << KIND_BITS) | Kind::List as i64;
-		let empty = self.allocate_string("");
-		let bool_texts = [self.allocate_string(crate::node::NO), self.allocate_string(crate::node::YES)];
+		let empty = self.memory_string("");
+		let bool_texts = [self.memory_string(crate::node::NO), self.memory_string(crate::node::YES)];
 		let i64_box = self.type_manager.i64_box_type;
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
@@ -303,6 +303,7 @@ impl WasmGcEmitter {
 		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		let radix_texts = self.radix_text_calls();
 		let text_witness = self.text_witness_table();
+		let type_value_prefix = self.string_table.literal(crate::type_kinds::TYPE_VALUE_PREFIX);
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind) =
@@ -384,7 +385,7 @@ impl WasmGcEmitter {
 					// a type value as `class int` (emit_type_value_text)
 					s.emit_is_type_value(f, element);
 					f.instruction(&I::If(BlockType::Empty));
-					s.emit_type_value_text(f, element);
+					s.emit_type_value_text(f, element, type_value_prefix);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 					// a symbol (a map's key) as its name
 					is_kind(f, Kind::Symbol);

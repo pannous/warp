@@ -6,7 +6,7 @@ use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::wasm_emitter::lists::list_dispatch::Slot;
-use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, VALUES_EQUAL};
+use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_SEGMENT, VALUES_EQUAL};
 use crate::words::MAP_WORD;
 use wasm_encoder::*;
 use Instruction as I;
@@ -907,16 +907,15 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 	}
 
-	/// Push field `field_index` (0 ptr, 1 len) of the $String inside text node `local`
+	/// Push the address (0) of a copy in memory or the byte length (1) of the text in node `local`
 	pub(in crate::wasm_emitter) fn emit_text_field(&self, func: &mut Function, local: u32, field_index: u32) {
-		self.emit_field(func, local, 1);
-		Self::emit_list(
-			func,
-			&[
-				I::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)),
-				I::StructGet { struct_type_index: self.type_manager.string_type, field_index },
-			],
-		);
+		self.emit_text_bytes(func, local);
+		match field_index {
+			0 => self.call(func, TEXT_ADDRESS),
+			_ => {
+				func.instruction(&I::ArrayLen);
+			}
+		}
 	}
 
 	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range, naming the index

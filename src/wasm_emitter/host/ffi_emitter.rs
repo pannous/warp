@@ -239,7 +239,7 @@ impl WasmGcEmitter {
 		}
 		let (pointer, length) = match self.compile_time_string(node) {
 			CompileTimeString::Stored(pointer, length) => (pointer, length),
-			CompileTimeString::Spelled(text) => self.allocate_string(&text),
+			CompileTimeString::Spelled(text) => self.memory_string(&text),
 		};
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 	}
@@ -253,7 +253,7 @@ impl WasmGcEmitter {
 		}
 		let pointer = match self.compile_time_string(node) {
 			CompileTimeString::Stored(pointer, _) => pointer,
-			CompileTimeString::Spelled(text) => self.allocate_string(&format!("{text}\0")).0,
+			CompileTimeString::Spelled(text) => self.memory_string(&format!("{text}\0")).0,
 		};
 		func.instruction(&I::I32Const(pointer as i32));
 	}

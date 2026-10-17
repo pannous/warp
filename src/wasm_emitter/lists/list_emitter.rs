@@ -949,7 +949,7 @@ impl WasmGcEmitter {
 		]);
 		self.emit_field(func, instance_local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-		let (pointer, length) = self.allocate_string(type_name);
+		let (pointer, length) = self.memory_string(type_name);
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_symbol");
 		self.emit_call(func, super::super::VALUES_EQUAL);

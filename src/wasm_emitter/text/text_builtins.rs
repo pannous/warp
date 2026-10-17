@@ -7,7 +7,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::runtime_dependencies::{all, any, Dependency};
-use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
+use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR, TEXT_BYTES_JOIN, TEXT_FROM_MEMORY};
 use crate::words::{CHR_WORD, ERROR_WORD, IS_ERROR_WORD, RAISE_WORD};
 use std::collections::HashSet;
 use wasm_encoder::*;
@@ -510,7 +510,7 @@ impl WasmGcEmitter {
 	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
 		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
 		let node_type = self.type_manager.node_type;
-		let (pointer, length) = self.allocate_string("");
+		let (pointer, length) = self.memory_string("");
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
 		self.emit_structure_as_literal(func, held, &STRUCTURE_KINDS, (pointer, length));
@@ -601,7 +601,7 @@ impl WasmGcEmitter {
 
 	/// An Error node carrying `reason`, the way a failed fetch reports
 	fn emit_runtime_error_value(&mut self, func: &mut Function, reason: &str) {
-		let (ptr, len) = self.allocate_string(reason);
+		let (ptr, len) = self.memory_string(reason);
 		Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(-(len as i32))]);
 		let (length, pointer) = (self.scratch(0), self.scratch(1));
 		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(length), I::I64ExtendI32U, I::LocalSet(pointer)]);
@@ -615,7 +615,7 @@ impl WasmGcEmitter {
 			I::I64Const(Kind::Error as i64), I::I64Const(Kind::Text as i64), I::LocalGet(length), I::I64Const(0),
 			I::I64LtS, I::Select, I::LocalGet(pointer), I::I32WrapI64, I::I64Const(0), I::LocalGet(length), I::I64Sub,
 			I::LocalGet(length), I::LocalGet(length), I::I64Const(0), I::I64LtS, I::Select, I::I32WrapI64,
-			I::StructNew(self.type_manager.string_type), I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
+			I::Call(self.func_index(TEXT_FROM_MEMORY)), I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
 			I::StructNew(self.type_manager.node_type),
 		]);
 	}
@@ -626,7 +626,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let (placeholder, _) = self.allocate_string(" ");
+		let (placeholder, _) = self.memory_string(" ");
 		self.runtime_function(TEXT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
 			s.emit_field(f, 0, 0);
 			#[rustfmt::skip]
@@ -942,16 +942,16 @@ impl WasmGcEmitter {
 	}
 
 	/// text_concat(left, right): a fresh text, left's bytes then right's; an Error operand is the result, errors
-	/// propagate. text_append, called for a variable's text, also grows texts into rooms (text_rooms.rs)
-	fn emit_text_joiner(&mut self, name: &'static str, grows_in_rooms: bool) {
+	/// propagate. text_append, called for a variable's text (`t += x`), gives a rope instead: the new Text node holds
+	/// right's bytes and left as its value, flattened once when read (text_flat), so a loop of appends is linear
+	fn emit_text_joiner(&mut self, name: &'static str, as_rope: bool) {
 		if !self.should_emit_function(name) {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let int = ValType::I32;
-		self.emit_text_heap_global();
-		let (left_length, right_length, length, copy, room) = (2, 3, 4, 5, 6);
-		self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![int; 5], |s, f| {
+		let node_type = self.type_manager.node_type;
+		let type_value_prefix = self.string_table.literal(crate::type_kinds::TYPE_VALUE_PREFIX);
+		self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![], |s, f| {
 			for side in 0..2 {
 				s.emit_field(f, side, 0);
 				#[rustfmt::skip]
@@ -968,68 +968,20 @@ impl WasmGcEmitter {
 				// a type value joins as it prints, `class int` (decision type-print)
 				s.emit_is_type_value(f, side);
 				f.instruction(&I::If(BlockType::Empty));
-				s.emit_type_value_text(f, side);
+				s.emit_type_value_text(f, side, type_value_prefix);
 				Self::emit_list(f, &[I::LocalSet(side), I::End]);
 			}
-			s.emit_text_field(f, 0, 1);
-			f.instruction(&I::LocalTee(left_length));
-			s.emit_text_field(f, 1, 1);
-			Self::emit_list(f, &[I::LocalTee(right_length), I::I32Add, I::LocalSet(length)]);
-			let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-			let heap = s.text_heap_global.expect("emit_text_heap_global before text_concat");
-			// a left text ending where the heap starts (`t += "x"` in a loop) grows in place: its own bytes stay as they
-			// are, right's follow them, so building a text is linear, not quadratic. Right made just now (a character's
-			// bytes) already follows left: nothing to copy
-			s.emit_text_field(f, 0, 0);
-			Self::emit_list(f, &[I::LocalTee(copy), I::LocalGet(left_length), I::I32Add]);
-			s.emit_text_field(f, 1, 0);
-			Self::emit_list(f, &[I::I32Eq]);
-			s.emit_text_field(f, 1, 0);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(right_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::I32And, I::LocalGet(left_length),
-				I::I32Const(0), I::I32Ne, I::I32And,
-			]);
-			Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(copy), I::LocalGet(left_length), I::I32Add, I::GlobalGet(heap), I::I32Eq,
-				I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And,
-			]);
-			f.instruction(&I::If(BlockType::Empty));
-			s.emit_memory_room(f, heap, right_length);
-			f.instruction(&I::GlobalGet(heap));
-			s.emit_text_field(f, 1, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(right_length),
-					copy_bytes.clone(),
-					I::GlobalGet(heap),
-					I::LocalGet(right_length),
-					I::I32Add,
-					I::GlobalSet(heap),
-				],
-			);
-			// a left text ending where its room is used up grows there (text_rooms.rs); else both are copied
-			Self::emit_list(f, &[I::Else, I::Block(BlockType::Empty)]);
-			if grows_in_rooms {
-				s.emit_grow_in_room(f, copy, left_length, right_length, room, 0);
+			f.instruction(&I::I64Const(Kind::Text as i64));
+			if as_rope {
+				s.emit_text_bytes(f, 1);
+				f.instruction(&I::LocalGet(0));
+			} else {
+				s.emit_text_bytes(f, 0);
+				s.emit_text_bytes(f, 1);
+				s.call(f, TEXT_BYTES_JOIN);
+				f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
 			}
-			s.emit_text_allocation(f, length, copy);
-			f.instruction(&I::LocalGet(copy));
-			s.emit_text_field(f, 0, 0);
-			Self::emit_list(
-				f,
-				&[I::LocalGet(left_length), copy_bytes.clone(), I::LocalGet(copy), I::LocalGet(left_length), I::I32Add],
-			);
-			s.emit_text_field(f, 1, 0);
-			Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes]);
-			if grows_in_rooms {
-				s.emit_room_behind(f, copy, length, room);
-			}
-			Self::emit_list(f, &[I::End, I::End, I::End, I::LocalGet(copy), I::LocalGet(length)]);
-			s.call(f, "new_text");
+			f.instruction(&I::StructNew(node_type));
 		});
 	}
 }

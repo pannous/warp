@@ -402,7 +402,7 @@ fn struct_node<T>(
 		Some(Kind::Int) => int_node(store, &data, high_byte),
 		Some(Kind::Float) => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
 		Some(Kind::Codepoint) => char_node(store, &data),
-		Some(Kind::Text) => Node::Text(text_of(store, &data, memory)),
+		Some(Kind::Text) => Node::Text(rope_text(store, data, child, memory)),
 		Some(Kind::Symbol) if kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
 			Node::type_value(&text_of(store, &data, memory))
 		}
@@ -540,6 +540,19 @@ fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<
 
 /// The letters of a `$String(ptr, len)` in linear memory
 /// A text's bytes: a `$String` (ptr, len) in memory, or a GC byte array `(array i8)` (lib/compiler/emitter.warp)
+/// The text of a Text node: its bytes, after those of the texts before it when it is a rope (text_append: data the last
+/// piece, the value field the text before it)
+fn rope_text<T>(store: &mut StoreContextMut<'_, T>, data: Val, before: Val, memory: Option<wasmtime::Memory>) -> String {
+	let mut pieces = vec![text_of(store, &data, memory)];
+	let mut before = before;
+	while let Some(structref) = before.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) {
+		let Some((_, data, earlier)) = node_fields(&structref, store) else { break };
+		pieces.push(text_of(store, &data, memory));
+		before = earlier;
+	}
+	pieces.into_iter().rev().collect()
+}
+
 fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: Option<wasmtime::Memory>) -> String {
 	let read = |store: &mut StoreContextMut<'_, T>| -> Option<String> {
 		if let Ok(Some(bytes)) = data.unwrap_anyref()?.as_array(&*store) {
