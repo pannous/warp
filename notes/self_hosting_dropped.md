@@ -35,7 +35,7 @@ how to bring it back.
 ## passes (SUGAR_PASSES, card sugar-twins; decision sugar-twins-drops)
 - sql and sh templates: `sql "SELECT … $name"`, `exec sh "ls"` as parameterized calls (src/text/injection.rs
   lower_templates, run first by interpolation.rs lower_program). Sources: probes/docs_sync/sandbox_exec.warp,
-  probes/sandbox/exec.warp, samples/system/crontab.warp. Left out for now: a library feature, not text building.
+  probes/sandbox/escape.warp, probes/sandbox/exec.warp, samples/system/crontab.warp. Left out for now: a library feature, not text building.
   Back: port lower_templates in front of lib/compiler/interpolation.warp.
 - Rust Option forms: `if let Some(v) = o { A } else { B }`, `match o { Some(v) => A, None => B }`, `o.unwrap_or(d)`,
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
@@ -44,6 +44,13 @@ how to bring it back.
 - `set x to 5`, `set width of p to 12` (decision setter-calls: `p.width = 12` with a style hint). Sources:
   probes/english_setter.warp. Left out as a compiler pass: comes back as a library code template, not a pass (card
   set-set). Back meanwhile: port welcome_forms.rs lower_set_phrases after `a of b`.
+- `print words in t` (the walk `for part in t.words {print part}`) and `byte count of t` (the count in a unit,
+  `t.bytes`) in of_lookups (decision sugar-triage). Sources: none in today's corpus differs. Back: port of_lookups.rs
+  print_walk and the text_unit branch of looked_up.
+- `(function f).dump` in grouped_receivers: a function reference in parentheses keeps its group. The bridge's plain
+  view drops the function-reference mark (an attribute layer), so the twin sees `(f)` and ungroups it when f is a loop
+  variable. Sources: probes/joinable_error.warp. Back: keep the function-reference mark in plain views (twins.rs
+  plain, walk.warp plain).
 
 ### SUGAR_PASSES triage (card sugar-twins)
 Sources changed = probes and samples whose program the pass changes (tests/parser/test_sugar_survey.rs,
@@ -96,3 +103,25 @@ next-direction self-hosted modules), not ported; drop = left out; merge = one wa
 | 49 | doc_strings | 149 | 0 | keep |
 | 52 | word_operators | 116 | 0 | keep |
 | 53 | pipes | 337 | 4 | keep |
+
+### Simplified shape (proposal, warp-self-passes 2026-10-17)
+Rust passes that only repair an earlier stage go once that stage writes the clean form:
+- grouped_receivers exists because the parser gives the call `f()` and the group `(f)` one form; it then guesses
+  from program-wide bindings (not scopes). With parser-application (`f()` a call, `(f)` a group) the pass goes.
+- of_lookups repairs two parser shapes: `type of x` read as a declaration head (type_of_called) and `x = sum of xs`
+  grouped as `sum (of xs)` (as_one_phrase). With the parser-keyword-table row for `of` both repairs go; what stays is
+  one rule: `a of b` and `<selector> in|from b` are `b.a`. Its selector check is program-wide (a `words = …` anywhere
+  turns `words in t` back into membership); a scope pass would decide per use.
+- Word phrases into one pass: of_lookups, member_phrases, times_phrases and number_words each scan word phrases
+  for an English form; one phrase pass with a table (word → rewrite) replaces four walks, in the
+  library-word-tables format.
+- Checks are no lowering: match_exhaustive, switch unit names, index_positions (check) and check_unit_names belong to
+  the analyzer after the lowering.
+- Already merged in the table: plain_enums + sum_variants, the two lambda passes, markup and serve groups.
+Target order: parser (clean tree) → desugar table pass → scope pass (calls, bindings) → phrase pass → structural
+passes (test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipes, quasi_quote, tree_walks) →
+analyzer checks.
+
+## Deviations
+Where a warp twin keeps a cleaner result than its Rust twin, with an example; the differential reads these as expected.
+(none yet: of_lookups and grouped_receivers match Rust on every source but the dropped ones above)

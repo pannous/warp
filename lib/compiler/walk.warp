@@ -66,6 +66,13 @@ bottom_up(n: any, f: any) := f(children(n, x => bottom_up(x, f)))
 # the node itself: the bridge's own twin, which every pass twin relies on
 unchanged(n: any) := n
 
+# a group's items as a list
+items_of(n: any) := {
+	gathered = []
+	for item in n { gathered += [item] }
+	gathered
+}
+
 # What a pass twin reports, as its Rust twin's hints and warnings are compared (card carries-line): `report(n,
 # message, preferred)` says it at n's position and gives n; pass_differential's call is `reported(view)`, the view
 # with the reports said meanwhile, [line, column, message, preferred] each
@@ -121,42 +128,53 @@ head_parameters(head: any) := {
 	names
 }
 
-# the names a view binds: `x = …`, `f(x) := …` with its parameters, `def f(x) {…}`, `for x in …`
-names_bound_by(view: any) := {
-	kind = kind_of(view)
-	if kind == "key" and (view#2 == "=" or view#2 == ":=") {
-		names = [head_name(view#3)]
-		if view#2 == ":=" { names += head_parameters(view#3) }
-		return names
-	}
+# the names a list view binds after a word: `for x in …` the loop variable, `def f(x) {…}` the function and its
+# parameters
+names_after_words(view: any, words: any, with_parameters: bool) := {
 	names = []
-	if kind != "list" { return names }
+	if kind_of(view) != "list" { return names }
 	at = 4
 	while at < #view {
-		word = head_name(view#at)
-		if kind_of(view#at) == "symbol" and (word == "for" or function_keywords contains word) {
+		if kind_of(view#at) == "symbol" and words contains view#at#2 {
 			names += [head_name(view#(at + 1))]
-			names += head_parameters(view#(at + 1))
+			if with_parameters { names += head_parameters(view#(at + 1)) }
 		}
 		at += 1
 	}
 	names
 }
 
+loop_variables_of(view: any) := names_after_words(view, ["for"], no)
+
+# the names a view binds: `x = …`, `f(x) := …` with its parameters, `def f(x) {…}`, `for x in …`
+names_bound_by(view: any) := {
+	if kind_of(view) == "key" and (view#2 == "=" or view#2 == ":=") {
+		names = [head_name(view#3)]
+		if view#2 == ":=" { names += head_parameters(view#3) }
+		return names
+	}
+	names_after_words(view, ["for"] + function_keywords, yes)
+}
+
+# every list in a view, the view itself first: the parts a whole-program question walks
+views_in(n: any) := {
+	views = []
+	unvisited = [view_of(n)]
+	while #unvisited > 0 {
+		view = unvisited#(#unvisited)
+		unvisited = unvisited[0 ..< #unvisited - 1]
+		views += [view]
+		for part in view {
+			if part is list { unvisited += [part] }
+		}
+	}
+	views
+}
+
 # the names a program binds (Rust twin, roughly: library_words/objects.rs defined_names): assigned and defined names,
 # definition parameters, loop variables
 defined_names(n: any) := {
 	names = []
-	pending = [view_of(n)]
-	while #pending > 0 {
-		view = pending#(#pending)
-		pending = pending[0 ..< #pending - 1]
-		names += names_bound_by(view)
-		if view is list {
-			for part in view {
-				if part is list { pending += [part] }
-			}
-		}
-	}
+	for view in views_in(n) { names += names_bound_by(view) }
 	names
 }

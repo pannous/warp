@@ -2,7 +2,7 @@
 //! parser.warp's tree, then the pass twins in pipeline order, against the Rust parse after the same Rust passes, over
 //! the sources parser.warp parses as Rust does
 use super::test_self_parser::PARSED_SOURCES;
-use super::test_self_passes::SQL_AND_SH;
+use super::test_self_passes::{FUNCTION_REFERENCES, SQL_AND_SH};
 use crate::common::twins::chain_differential;
 use std::path::PathBuf;
 
@@ -14,8 +14,15 @@ fn the_warp_pipeline_lowers_as_rust() {
 		warp::lowering::welcome_forms::lower_match_arms,
 		warp::lowering::welcome_forms::lower_arrow_result_types,
 		warp::lowering::of_lookups::lower,
+		warp::lowering::grouped_receivers::lower,
 		warp::lowering::times_phrases::lower,
 		warp::lowering::number_words::lower,
 	];
-	chain_differential(&paths, "passes", "lowered", &rust_passes, &SQL_AND_SH);
+	chain_differential(
+		&paths,
+		"passes",
+		"lowered",
+		&rust_passes,
+		&[SQL_AND_SH.as_slice(), &FUNCTION_REFERENCES].concat(),
+	);
 }

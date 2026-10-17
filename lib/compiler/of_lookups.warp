@@ -8,7 +8,7 @@ use "walk.warp"
 use "words.warp"
 
 of_word = "of"
-type_word = "type"
+type_call_word = "type"
 qualifier_words = ["where", "with", "without"]
 selecting_words = ["in", "from"]
 # the selector words the program at hand does not bind, set by of_lookups
@@ -129,8 +129,8 @@ type_of_called(parts: any) := {
 	if at == #parts { return parts }
 	body = type_of_body(parts[at])
 	rest = parts[at + 1 ..]
-	if body != ø and #rest == 0 { return parts[0 .. at] + [call_of(type_word, [body])] }
-	if body == ø and #rest > 0 { return parts[0 .. at] + [call_of(type_word, [noun_phrase(rest)])] }
+	if body != ø and #rest == 0 { return parts[0 .. at] + [call_of(type_call_word, [body])] }
+	if body == ø and #rest > 0 { return parts[0 .. at] + [call_of(type_call_word, [noun_phrase(rest)])] }
 	parts
 }
 
@@ -138,8 +138,8 @@ is_phrase_group(n: any) := is_group(n) and ["", "(", "{"] contains bracket_of(n)
 
 rewrite(n: any) := {
 	n = children(as_one_phrase(n), rewrite)
-	if is_phrase_group(n) and not is_spaced_definition(n.map(unchanged)) {
-		parts = looked_up(type_of_called(n.map(unchanged)))
+	if is_phrase_group(n) and not is_spaced_definition(items_of(n)) {
+		parts = looked_up(type_of_called(items_of(n)))
 		if #parts == 1 and bracket_of(n) == "" { return parts#1 }
 		return group_like(n, parts)
 	}

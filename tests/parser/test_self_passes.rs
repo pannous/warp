@@ -5,8 +5,14 @@ use crate::common::twins::{bridge_differential, pass_differential};
 use warp::pipeline::around_source_pass;
 
 /// The sources of sql and sh templates, which the interpolation twin leaves out (notes/self_hosting_dropped.md)
-pub(super) const SQL_AND_SH: [&str; 3] =
-	["probes/docs_sync/sandbox_exec.warp", "probes/sandbox/exec.warp", "samples/system/crontab.warp"];
+pub(super) const SQL_AND_SH: [&str; 4] = [
+	"probes/docs_sync/sandbox_exec.warp",
+	"probes/sandbox/escape.warp",
+	"probes/sandbox/exec.warp",
+	"samples/system/crontab.warp",
+];
+/// The sources of `(function f).dump`, whose function-reference mark the bridge drops (notes/self_hosting_dropped.md)
+pub(super) const FUNCTION_REFERENCES: [&str; 1] = ["probes/joinable_error.warp"];
 
 #[test]
 fn a_source_pass_is_seen_before_and_after() {
@@ -55,4 +61,14 @@ fn arrow_result_types_match_their_rust_twin() {
 #[test]
 fn of_lookups_match_their_rust_twin() {
 	pass_differential(warp::lowering::of_lookups::lower, "of_lookups", "of_lookups", &[]);
+}
+
+#[test]
+fn grouped_receivers_match_their_rust_twin() {
+	pass_differential(
+		warp::lowering::grouped_receivers::lower,
+		"grouped_receivers",
+		"grouped_receivers",
+		&FUNCTION_REFERENCES,
+	);
 }
