@@ -26,7 +26,7 @@ unknown static type (`value:any`) is told apart by boolness only. `1.0` is lower
 `1 === 1.0` is yes (`1 === (1.0 as float)` is no).
 
 ## Arithmetic
-P195: `true + 1` is 2, literal or variable (the analyzer error "arithmetic on a boolean" is gone).
+P195: `true + 1` is 2, literal or variable.
 
 ## Rust side
 `Node::True == 1` and `Node::False == 0` (PartialEq<i64>), so `is!(…, 1)` tests pass.

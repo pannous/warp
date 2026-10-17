@@ -23,7 +23,7 @@ Left as is, and why:
   `exact_is_nan`, `exact_infinity_rank`, `exact_neg`, `exact_pow`; small win, not done.
 - smart pointers (src/smarty.rs, `WarpSmartPointers`): not used by the emitter; wiki/multi-value.md already calls them
   obsolete.
-- Language level: built afterwards as tuple returns, see below.
+- Language level: tuple returns, below.
 
 ## Measurements
 Program (first entry of probes/multi_value/bench.rs, copy to examples/ to run it): digit sum of 1000!
@@ -39,7 +39,7 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
 - Replacing the global by a second result alone is neutral (a global.set/get against the stack, lost in noise) and
   3 bytes smaller; it mainly removes a global and lets wasm-opt see the data flow.
 - The win comes from what a two-result division enables: `f /! 10` is `(f - f%10)/10`, and the exact division of a big
-  integer used to run a gcd loop of big divisions before ratio_new; now it is one divmod. About -26 % on this program.
+  integer is one divmod instead of a gcd loop of big divisions before ratio_new. About -26 % on this program.
 - `a /! b` is the pseudo-call `floor_quotient(a, b)` (warp_parser.rs `floor_division`), emitted
   as `exact_euclid_div` (exact_div, then exact_floor; ceil for a negative divisor) or the f64 quotient rounded the same
   way: each operand evaluated once. Building it on `int_divmod_slow` directly would save the gcd of exact_div.

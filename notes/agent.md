@@ -4,7 +4,7 @@
   src/modules.rs, like units), so hello world does not grow. One POST to https://api.anthropic.com/v1/messages, the
   answer's first text block. Default model claude-sonnet-5-5.
 - Key: `env("ANTHROPIC_API_KEY")`; missing → an error naming the variable. A wrong key → the API's own reason
-  (`net.post: HTTP status 401: {… "invalid x-api-key"}`): post now carries the body of a failed answer (native and browser).
+  (`net.post: HTTP status 401: {… "invalid x-api-key"}`): post carries the body of a failed answer (native and browser).
 - `post(url, body, headers)` of lib/net.warp: a map of texts as the request's headers (std_adapters header_pairs,
   host-files.js postSync).
 - Browser: no proxy needed; the API answers browsers that send `anthropic-dangerous-direct-browser-access: true`, and

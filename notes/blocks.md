@@ -9,8 +9,8 @@
   so its names resolve at the `!` (`y = 3; w : y*y; y = 4; w!` → 16).
 - A bare `x` is the block as data (`data e`); `x` in arithmetic or a comparison is the type error "x is a block (1+2),
   no value: run it with x!, or write x = 1+2 for its value". `x = …` ends the block.
-- `data e` is e as written, nothing evaluated: WasmGcEmitter::emit_literal; every operator now has a code in a Key's kind
-  (operators.rs OP_CODES, codes 0-4 unchanged), so `data 1+2` reads back as 1+2.
+- `data e` is e as written, nothing evaluated: WasmGcEmitter::emit_literal; every operator has a code in a Key's kind
+  (operators.rs OP_CODES), so `data 1+2` reads back as 1+2.
 
 ## Blocks in braces and object entries
 - `x = {1+2}`, `x = {a = 1; a*2}`: statements in braces (several, or one computed expression) are a block, silently;
