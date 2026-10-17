@@ -149,11 +149,6 @@ pub fn differential_on(paths: &[PathBuf], part: &str, word: &str, rust_twin: imp
 	report(word, &differences(&checked_share(paths), part, word, rust_twin));
 }
 
-/// The sources a gate run checks: all in the nightly run, every GATE_SHARE-th otherwise
-pub fn checked_sources() -> Vec<PathBuf> {
-	checked_share(&sources())
-}
-
 /// All sources in the nightly run, every GATE_SHARE-th otherwise, starting at the day's offset: the gates of four
 /// days sweep every source at the cost of one share
 fn checked_share(paths: &[PathBuf]) -> Vec<PathBuf> {
@@ -443,7 +438,7 @@ fn same_value(warp_value: &Node, rust_value: &Node) -> bool {
 
 /// The checked share of the sources without the dropped ones, which DROPPED_NOTES must name; TWIN_ONLY=<path suffix>
 /// checks only the sources ending so (one source while fixing a twin)
-fn twin_sources(dropped: &[&str]) -> Vec<PathBuf> {
+pub fn twin_sources(dropped: &[&str]) -> Vec<PathBuf> {
 	twin_sources_of(&sources(), dropped)
 }
 

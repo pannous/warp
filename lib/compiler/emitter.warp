@@ -283,6 +283,7 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	if name == "kind_code" { return ["int", kind_code_of(values#1#2)] }
 	if name == "unboxed_int" { return ["int", unboxed(values#1#2, gc.int_box)] }
 	if name == "marked_kind" { return ["int", as_node(values#1#2) + gc_code("struct_get", [gc.node, 0])] }
+	if name == "unboxed_list" { return ["list", payload(values#1#2, gc.list)] }
 	if name == "unboxed_text" { return ["text", payload(values#1#2, gc.text)] }
 	if name == "unboxed_char" { return ["char", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [i31_type]) + gc_code("i31_get_u", [])] }
 	if name == "char_of" { return ["char", index_code(values#1)] }
@@ -319,7 +320,7 @@ intrinsic(body: Body, name: text, arguments: any) := {
 }
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
-	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, fail: 0, is_null: 1,
+	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2}
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
@@ -345,6 +346,8 @@ code_point(value: any) := ["int", value#2 + [op.i64_extend_i32_u]]
 shown_text(value: any) := {
 	kind = value#1
 	if kind == "text" { return value }
+	if kind == pending { return ["text", value#2] }
+	if kind == "list" { return runtime_call("list_text", [value]) }
 	if kind == "int" { return runtime_call("int_text", [value]) }
 	if kind == "char" { return runtime_call("char_text", [value]) }
 	if kind == "node" { return runtime_call("node_text", [value]) }
@@ -395,9 +398,10 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
 }
 
-# an operator on boxed values, by the kinds they hold at run time: with a text or character, `+` joins their texts and
-# a comparison between two orders them as texts; two ints stay ints; any other two are floats
+# an operator on boxed values, by the kinds they hold at run time: `+` is the runtime word node_add; a comparison
+# between two texts or characters orders them as texts; two ints stay ints; any other two are floats
 node_operation(body: Body, symbol: text, a: any, b: any) := {
+	if symbol == "+" { return runtime_call("node_add", [["node", a], ["node", b]]) }
 	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	right = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	ints = operation(body, symbol, ["int", unboxed(left#2, gc.int_box)], ["int", unboxed(right#2, gc.int_box)])
@@ -405,11 +409,10 @@ node_operation(body: Body, symbol: text, a: any, b: any) := {
 	kind = if ints#1 == "bool" then "bool" else "node"
 	numbers = both_of_kind(left#2, right#2, node_kind_codes.int) + chosen(kind, ints, floats)
 	code = a + [op.local_set] + left#2[1..] + b + [op.local_set] + right#2[1..]
-	if not (symbol == "+" or symbol in comparisons) { return [kind, code + numbers] }
+	if not (symbol in comparisons) { return [kind, code + numbers] }
 	texts = operation(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
-	joined_by = if symbol == "+" then op.i32_or else op.i32_and
-	[kind, code + textual(left) + textual(right) + [joined_by] + chosen(kind, texts, [kind, numbers])]
+	[kind, code + textual(left) + textual(right) + [op.i32_and] + chosen(kind, texts, [kind, numbers])]
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
 chosen(kind: text, a: any, b: any) := [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]
