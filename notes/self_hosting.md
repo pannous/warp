@@ -19,12 +19,9 @@ Decision self-hosting:
   is!/samples suite through the warp pipeline and reports the pass count; that count is the progress number. A warp
   stage becomes the default when the suite passes with it. 80–90% passing is fine at the start: breadth over the
   long tail, the failing rest is a ranked list, not a blocker.
-- The Rust compiler stays as fallback and reference implementation, and it is cleaned up FIRST, stage by stage, so
-  the port starts from a clean basis and doesn't meet the same historic detours again: each structural decision of
-  the rewrite (the parser simplifications S1–S7, the target pipeline, the flow analyzer, the value layout, retiring
-  library words, cards rust-*) lands in Rust first or together with its warp stage, by that stage's worker; the warp
-  stage then ports the cleaned design. Where warp is already ahead (flow analyzer, value layout), the design goes
-  back into Rust.
+- The Rust compiler stays as fallback and reference implementation, and gets an intermediate cleanup phase now
+  (notes/rust_cleanup.md): every worker finishes its current card, applies the rewrite's structural decisions to the
+  Rust side of its stage, then self-hosting resumes and ports the cleaned design.
 - Twins (a warp part next to its Rust original, compared over every source) are scaffolding only: kept where a warp
   stage hands its result to a Rust stage, because the Rust side needs a compatible shape, and dropped as soon as the
   stages on both sides are warp. No new intermediate twin is written where the suite can already judge.
