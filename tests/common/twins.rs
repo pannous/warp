@@ -252,10 +252,11 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 
 /// The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): `word(source text)` of
 /// lib/compiler/<part>.warp parses with parser.warp and runs the pass twins in pipeline order; compared with the Rust
-/// parse of the same text after the Rust twins of those passes in that order (only those: the others have no twin yet)
+/// parse of the same text after the Rust twins of those passes in that order (only those: the others have no twin yet),
+/// over the day's share of the sources as the parser differential
 pub fn chain_differential(paths: &[PathBuf], part: &str, word: &str, rust_passes: &[fn(Node) -> Node]) {
-	let cases = paths.iter().filter_map(|path| {
-		let text = std::fs::read_to_string(path).ok()?;
+	let cases = checked_share(paths).into_iter().filter_map(|path| {
+		let text = std::fs::read_to_string(&path).ok()?;
 		let lowered =
 			std::panic::catch_unwind(|| rust_passes.iter().fold(parse(&text), |node, pass| pass(node))).ok()?;
 		let call = format!("{word}(read(\"{}\"))", path.display());
