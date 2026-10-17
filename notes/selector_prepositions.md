@@ -1,4 +1,4 @@
-# Selector prepositions: of, in, from (card of-in-chain, 2026-10-15)
+# Selector prepositions: of, in, from
 
 `of` selects a part: `a of b` is `b.a`, right associative (`length of words of t` is `t.words.length`).
 `in` and `from` select the same way when a selector word stands before them and the program does not bind that word
