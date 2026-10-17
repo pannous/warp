@@ -196,5 +196,5 @@ modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, c
 shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
 (audio callbacks: a wasmtime Store is single-threaded → ring buffer in shared memory), GC refs never cross to C
 (copies or handles, notes/ffi_handles.md), macOS windows on the main thread.
-Fully native without wasmtime would need a wasm-GC-capable AOT compiler with its own GC (WAMR's wamrc supports GC;
-wasm2c does not): not worth it while the 1.7 MB stub works.
+wasmtime stays bundled in every executable: even with the program precompiled (.cwasm) it is the GC, the loader and
+the trap handling. Replacing it (WAMR's wamrc AOT with its own GC; wasm2c lacks GC) is not on the table.
