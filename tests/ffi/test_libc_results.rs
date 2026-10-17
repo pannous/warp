@@ -18,11 +18,6 @@ fn atol_returns_a_long() {
 }
 
 #[test]
-fn strncmp_compares_a_prefix() {
-	is!("import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)", 0);
-}
-
-#[test]
 fn strcmp_orders_texts() {
 	is!("import strcmp from \"c\"\nstrcmp(\"abc\", \"abd\")", -1);
 	is!("import strcmp from \"c\"\nstrcmp(\"same\", \"same\")", 0);

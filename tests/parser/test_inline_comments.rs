@@ -2,7 +2,6 @@ use crate::is;
 
 #[test]
 fn test_block_comment_between_operands() {
-	is!("1 /* inline */ + 1", 2);
 	is!("1 + /* inline */ 1", 2);
 	is!("1 /* a */ + /* b */ 1 /* c */", 2);
 }

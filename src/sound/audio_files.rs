@@ -141,8 +141,8 @@ fn amplitudes(format: &[u8], data: &[u8]) -> Result<(u32, u16, Vec<i16>), String
 		(PCM, 16) => |b| i16::from_le_bytes([b[0], b[1]]),
 		(PCM, 24) => |b| i16::from_le_bytes([b[1], b[2]]),
 		(PCM, 32) => |b| i16::from_le_bytes([b[2], b[3]]),
-		(IEEE_FLOAT, 32) => |b| scaled(f32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64),
-		(IEEE_FLOAT, 64) => |b| scaled(f64::from_le_bytes(b[0..8].try_into().unwrap_or_default())),
+		(IEEE_FLOAT, 32) => |b| super::signal_pcm(f32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f64),
+		(IEEE_FLOAT, 64) => |b| super::signal_pcm(f64::from_le_bytes(b[0..8].try_into().unwrap_or_default())),
 		_ => {
 			return Err(format!(
 				"its format {tag} with {bits} bits is not supported (PCM 8, 16, 24, 32 or float 32, 64)"
@@ -150,10 +150,6 @@ fn amplitudes(format: &[u8], data: &[u8]) -> Result<(u32, u16, Vec<i16>), String
 		}
 	};
 	Ok((rate, channels, data.chunks_exact(width).map(amplitude).collect()))
-}
-
-fn scaled(amplitude: f64) -> i16 {
-	(amplitude.clamp(-1.0, 1.0) * i16::MAX as f64).round() as i16
 }
 
 fn u16_at(bytes: &[u8], at: usize) -> u16 {

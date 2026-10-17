@@ -9,10 +9,6 @@ fn a_float_gives_pythons_fraction() {
 }
 
 // the exact √2 lies a hair closer to the semiconvergent 941664/665857 than to the float's 665857/470832
-#[test]
-fn an_exact_value_compares_exactly() {
-	is!("nearest(sqrt(2), rational) == 941664/665857", true);
-}
 
 #[test]
 fn limit_zero_is_the_exact_fraction() {

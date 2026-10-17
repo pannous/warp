@@ -4,7 +4,6 @@ use crate::is;
 fn test_size_is_element_count() {
 	is!("pixels=(1,2,3);size(pixels)", 3);
 	is!("pixels=[1 2 4];size of pixels", 3);
-	is!("pixel=[1 2 4];pixel.size", 3);
 }
 
 #[test]

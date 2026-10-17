@@ -173,6 +173,7 @@ mod test_run_tests; // card run-tests
 mod test_run_time_block_cache;
 mod test_run_time_blocks;
 mod test_rust_inclusive_range;
+mod test_rust_option; // card rust-option
 mod test_schema_cast; // card loaded-config
 mod test_schemas; // card schemas
 mod test_scoped_handlers;

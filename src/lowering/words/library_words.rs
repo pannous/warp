@@ -1156,10 +1156,14 @@ impl Lowering {
 	}
 
 	/// A word a value answers other than by a field: a count, a list change, a user function, or `f.effects` of a
-	/// function (not of a variable), the query effects.rs answers
+	/// function (not of a variable, a parameter or an object: `b.effects` of those reads the field), the query effects.rs
+	/// answers
 	fn is_known_method(&self, receiver: &Node, name: &str) -> bool {
 		let is_effects_query = name == crate::analyzer::effects::EFFECTS_WORD
-			&& receiver.symbol_name().is_some_and(|function| !self.plain.contains(function));
+			&& !self.is_parameter(receiver)
+			&& receiver
+				.symbol_name()
+				.is_some_and(|function| !self.plain.contains(function) && !self.objects.contains_key(function));
 		counting_method(name, &self.context).is_some()
 			|| is_list_mutating_method(name)
 			|| self.context.user_functions.contains_key(name)
