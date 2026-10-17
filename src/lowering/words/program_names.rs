@@ -46,6 +46,11 @@ impl ProgramNames {
 		self.binds(word) || self.function_takes(word, arguments) == Some(true)
 	}
 
+	/// The uniform call: is `x.word(args)` the program's `word(x, args)`, a function of it taking args + 1 values
+	pub fn takes_method_call(&self, word: &str, arguments: usize) -> bool {
+		self.function_takes(word, arguments + 1) == Some(true)
+	}
+
 	/// Does the program's function `word` take that many arguments; None when the program defines no function `word`
 	pub fn function_takes(&self, word: &str, arguments: usize) -> Option<bool> {
 		let arities = self.functions.get(word)?;
