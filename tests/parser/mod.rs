@@ -48,6 +48,8 @@ mod test_rust_macros;
 mod test_rust_paths;
 mod test_scheme_relative_url;
 #[cfg(feature = "native")]
+mod test_self_analyzer; // card inferred-kinds
+#[cfg(feature = "native")]
 mod test_self_differential; // card self-differential
 #[cfg(feature = "native")]
 mod test_self_lexer; // card self-lexer
