@@ -10,8 +10,10 @@ use warp::WarpParser;
 pub(super) const PARSED_SOURCES: &str = "tests/parser/self_parser_sources.txt";
 /// Every source parser.warp reads as the Rust parser does, written by parser_progress
 const MATCHING: &str = "data/self_parser/matching.txt";
-/// One form per line that parser.warp is learning, shown by rust_forms; ⏎ and ⇥ write a form's line breaks and tabs
+/// One form per line that parser.warp is learning, shown by rust_forms
 const FORMS: &str = "probes/self_hosting/parser/forms.warp";
+/// The forms of several lines, ⏎ and ⇥ writing their line breaks and tabs (not a source: Rust reads ⏎ as an operator)
+const BLOCK_FORMS: &str = "tests/parser/self_parser_block_forms.txt";
 /// Differences shown by parser_progress
 const SHOWN: usize = 20;
 
@@ -35,7 +37,8 @@ fn the_listed_sources_parse_as_in_rust() {
 #[test]
 #[ignore]
 fn rust_forms() {
-	for line in std::fs::read_to_string(FORMS).unwrap().lines() {
+	let forms = std::fs::read_to_string(FORMS).unwrap() + &std::fs::read_to_string(BLOCK_FORMS).unwrap();
+	for line in forms.lines() {
 		println!("{line}\n  {}", rust_tree(&lines_of_form(line)).serialize().replace('\n', "⏎"));
 	}
 }

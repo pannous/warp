@@ -2,12 +2,12 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false}
 	items(p, ' ', "")
 }
 
@@ -41,11 +41,16 @@ def items(p, closer, bracket) {
 	grouped(found, bracket)
 }
 
-// The blanks before the parser's position on its line
+// The indent of the parser's position on its line: its tabs, its spaces too inside a block indented by spaces
+// Rust twin: scanning.rs skip_whitespace
 def line_indent(p) {
 	at = p.at
-	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') { at = at - 1 }
-	p.at - at
+	indent = 0
+	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') {
+		at = at - 1
+		if p.code[at] == '\t' or p.spaces { indent = indent + 1 }
+	}
+	indent
 }
 
 // The items of the lines indented below, the parser at the line they end before
@@ -64,13 +69,24 @@ def lines_below(p) {
 // Rust twin: blocks.rs parse_indented_block, curly_block
 def indented_block(p) {
 	before = p.at
-	if not skip_blanks(p) or line_indent(p) <= p.indent {
+	outer_spaces = p.spaces
+	newline = skip_blanks(p)
+	p.spaces = outer_spaces or p.code[p.at - line_blanks(p) .. p.at].contains(" ")
+	if not newline or line_indent(p) <= p.indent {
+		p.spaces = outer_spaces
 		p.at = before
 		return ø
 	}
 	block = lines_below(p)
+	p.spaces = outer_spaces
 	if is_list_of(block, "") { return listed("{", block#3, block[3 ..]) }
 	listed("{", "", [block])
+}
+
+def line_blanks(p) {
+	at = p.at
+	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') { at = at - 1 }
+	p.at - at
 }
 
 // Only blanks follow `at` on its line
