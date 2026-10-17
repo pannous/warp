@@ -5,7 +5,7 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
-(none)
+- rust-cleanup-drops (warp-self-passes): the warp compiler drops Rust Option forms (rust_options.rs, 160 lines: `if let Some(v) = o`, `match o {Some/None}`, `unwrap_or`), the `set x to y` phrase pass and scoped_handlers (decisions sugar-twins-drops, cleanup-cuts). Drop them from the Rust compiler too in the cleanup phase (recommended: same language on both compilers, their tests retired), or keep them Rust-only? Default until answered: kept; the cleanup goes on elsewhere.
 
 ## Parked
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
