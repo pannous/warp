@@ -115,3 +115,19 @@ n = n >> 7
 f = [function twice]
 map function square on xs
 q = "say \"hi\"\tthere"
+for 1…100: x
+for i in xs:⏎⇥x⏎⇥y⏎z
+while c:⏎⇥x⏎⇥y⏎z
+if c:⏎⇥x⏎⇥y⏎z
+f(n):⏎⇥x⏎⇥y
+def f(n):⏎⇥x⏎⇥y
+def f(n)⏎⇥x⏎⇥y
+repeat⏎⇥x
+for x in xs:⏎⇥if x:⏎⇥⇥y⏎⇥z⏎w
+a:⏎b
+a:⏎⇥b c
+repeat⏎⇥a b
+for args:print it
+if c: x
+while c: x
+for c in s: print ord c
