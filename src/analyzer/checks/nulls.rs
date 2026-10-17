@@ -64,7 +64,13 @@ pub(crate) fn check_null_use(
 			if let Node::Symbol(name) = condition.drop_meta() {
 				narrowed.remove(name);
 			}
-			check_null_use(condition, nullable, lists).or_else(|| check_null_use(then, &mut narrowed, lists))
+			let found =
+				check_null_use(condition, nullable, lists).or_else(|| check_null_use(then, &mut narrowed, lists));
+			// `if x == ø { return … }`: after it, x holds a value
+			if let (Some(name), true) = (null_tested(condition), leaves(then)) {
+				nullable.remove(&name);
+			}
+			found
 		}
 		// ø is the empty list: appending to it or concatenating a list needs no check (`a=(); a.add(1)`), nor popping a
 		// stack built in a loop (`st=[]; for t in ts { if … { st.pop() } else { st.add(t) } }`)
@@ -95,6 +101,29 @@ pub(crate) fn check_null_use(
 		Node::List(items, _, _) => items.iter().find_map(|item| check_null_use(item, nullable, lists)),
 		_ => None,
 	}
+}
+
+/// The variable a condition `x == ø` tests for null
+fn null_tested(condition: &Node) -> Option<String> {
+	match condition.drop_meta() {
+		Node::Key(left, Op::Eq, right) => match (left.drop_meta(), right.drop_meta()) {
+			(Node::Symbol(name), Node::Empty) | (Node::Empty, Node::Symbol(name)) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// A branch ending in `return …` or `raise …`: the code after its `if` runs only when the condition was false
+fn leaves(branch: &Node) -> bool {
+	let Node::List(items, bracket, _) = branch.drop_meta() else {
+		return false;
+	};
+	let leaving = |word: &Node| {
+		let word = word.name();
+		word == crate::words::RETURN_WORD || crate::errors::run_time::RAISE_WORDS.contains(&word.as_str())
+	};
+	items.first().is_some_and(leaving) || (*bracket == Bracket::Curly && items.last().is_some_and(leaves))
 }
 
 fn both_checked(

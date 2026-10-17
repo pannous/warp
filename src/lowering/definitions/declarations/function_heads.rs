@@ -1,6 +1,6 @@
 //! Function heads: result types (`-> int`, `as int or text`, curried, function and tuple results), parameter labels and types, Ruby's `end` and bodiless definitions
 use super::*;
-use crate::lowering::nodes::{is_call_head, result_typed};
+use crate::lowering::nodes::{is_call_head, result_typed, round_call, word_headed};
 use crate::node::parens;
 use crate::words::ANY_TYPE;
 
@@ -95,12 +95,7 @@ pub(super) fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
 	let Node::List(_, Bracket::Round, _) = second.drop_meta() else {
 		return None;
 	};
-	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	if !matches!(head_items.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
-		return None;
-	}
+	round_call(head)?;
 	let lambda = Node::Key(Box::new(second.clone()), Op::Arrow, body.clone());
 	Some(key(head.clone(), Op::Define, lambda))
 }
@@ -204,10 +199,8 @@ pub(super) fn is_type_tuple(node: &Node) -> bool {
 
 /// Swift's `label name: T`: the label (`_` for none)
 pub(super) fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a str> {
-	let Node::Symbol(label) = label.drop_meta() else {
-		return None;
-	};
-	typed_parameter_name(typed).is_some().then_some(label.as_str())
+	let label = label.symbol_name()?;
+	typed_parameter_name(typed).is_some().then_some(label)
 }
 
 /// The name of a typed parameter `name: T`, also of a function type `name: (Int) -> Int`
@@ -274,7 +267,7 @@ pub(super) fn with_label_names(body: Node, labeled_names: Vec<Node>) -> Node {
 
 /// Go's parameter `x int` (the name, then its type) is `x:int`
 pub(super) fn name_then_type(parameter: Node) -> Node {
-	let is_function_type = |node: &Node| matches!(node.drop_meta(), Node::List(words, _, _) if matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
+	let is_function_type = |node: &Node| matches!(node.drop_meta(), Node::List(words, _, _) if words.first().and_then(Node::symbol_name).is_some_and(is_function_keyword));
 	match parameter.drop_meta() {
 		// Go's function parameter `f func(int) int`: the name, a function (its calls tell the rest)
 		Node::List(parts, _, Separator::Space)
@@ -342,7 +335,7 @@ pub(super) fn bodiless_definition(statement: &Node) -> Option<(Node, Node)> {
 	let [keyword, head] = items.as_slice() else { return None };
 	let is_head = |head: &Node| {
 		matches!(head.drop_meta(), Node::Symbol(_))
-			|| matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if matches!(parts.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+			|| matches!(head.drop_meta(), Node::List(parts, Bracket::Round, _) if word_headed(parts).is_some())
 	};
 	let is_typed_head = matches!(head.drop_meta(), Node::Key(inner, Op::Colon, _) if is_head(inner));
 	(is_function_keyword(&keyword.drop_meta().name()) && (is_head(head) || is_typed_head))

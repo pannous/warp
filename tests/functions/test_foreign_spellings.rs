@@ -24,7 +24,7 @@ fn foreign_method_names_are_warps_methods() {
 fn a_field_of_a_foreign_method_name_stays_the_field() {
 	is!("type P { Count: int; b: int }; p = P(3, 1); p.Count", 3);
 	is!("xs = [1, 2, 3]; xs.Count()", 3);
-	is!("last(list) := list.length - 1; last([4, 5, 6])", 2);
+	is!("last_index(list) := list.length - 1; last_index([4, 5, 6])", 2);
 }
 
 #[test]

@@ -32,10 +32,11 @@ pub use lowering::{
 	lazy_ranges, library_words, list_mutations, markup_tags, members, memoization, meta_entries, min_max, music_words,
 	mutation, named_arguments, negated_calls, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps,
 	optional_casts, overloads, page_html, parallel, parameter_shapes, phrase_words, picked_calls, pipes, printable,
-	references, reflection, result_word, routes, run_time_blocks, scoped_handlers, select_options, serve,
-	shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals,
-	system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests,
-	undo_history, variable_signals, variadic, versions, welcome_forms, word_help, word_operators,
+	program_names, references, reflection, result_word, routes, run_time_blocks, scoped_handlers, select_options,
+	serve, shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch,
+	system_signals, system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching,
+	type_tests, typed_library_words, undo_history, variable_signals, variadic, versions, welcome_forms, word_help,
+	word_operators,
 };
 pub mod errors;
 pub mod ffi;

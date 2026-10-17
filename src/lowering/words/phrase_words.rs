@@ -2,7 +2,7 @@
 //! `do block` and `do name` run the block on the spot, like `{…}!` and `f!`: the word is dropped;
 //! `add x to list` is the method call `list.add(x)`.
 
-use super::nodes::children_rewritten;
+use super::nodes::{children_rewritten, word_headed};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::ADD_WORD;
@@ -37,16 +37,13 @@ impl Phrases {
 	}
 
 	fn phrase(&self, items: &[Node]) -> Option<Node> {
-		let (word, rest) = items.split_first()?;
-		let Node::Symbol(word) = word.drop_meta() else {
-			return None;
-		};
+		let (word, rest) = word_headed(items)?;
 		// `do add 4 to pixel`: the phrase after `do` is lowered first
 		if word == DO_WORD && self.do_is_free && rest.len() > 1 {
 			return self.phrase(rest);
 		}
 		let [argument] = rest else { return None };
-		match word.as_str() {
+		match word {
 			DO_WORD if self.do_is_free => evaluated_block(argument),
 			ADD_WORD if self.add_is_free => appended_to(argument),
 			_ => None,

@@ -641,6 +641,13 @@ fn test_optional_local_runs() {
 	is!("x=ø; x=3; x+1", 4);
 }
 
+// `if x == ø { return … }` checks x for the rest of the block (samples/advanced/raytracer.warp)
+#[test]
+fn test_null_left_early_needs_no_other_check() {
+	is!("f(n) := { x = ø; if n > 0 { x = n }; if x == ø { return 0 }; x + 1 }; f(2) + f(0)", 3);
+	fails_with("x=ø; if x == ø { print 1 }; x+1", "x may be ø");
+}
+
 #[test] // Swift/Kotlin `Int?`: T? declares an optional, a plain T refuses ø
 fn test_optional_type_declaration() {
 	is!("x:int?=ø; if x {x+1} else {2}", 2); // was a parse error: Unexpected character '='

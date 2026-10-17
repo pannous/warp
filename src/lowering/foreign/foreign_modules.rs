@@ -4,7 +4,7 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{any_part, call, children_rewritten, key, round_call, word_headed};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::FOR_WORD;
@@ -132,7 +132,7 @@ fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node,
 		_ => return None,
 	};
 	let alias = alias.unwrap_or_else(|| symbol(&name.replace('-', "_")));
-	Some(crate_component(&name).map(|path| Node::Key(Box::new(Node::Text(path)), Op::As, Box::new(alias))))
+	Some(crate_component(&name).map(|path| key(Node::Text(path), Op::As, alias)))
 }
 
 #[cfg(feature = "native")]
@@ -236,10 +236,8 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	if !word.is_symbol(USE_WORD) {
 		return None;
 	}
-	let Node::Symbol(runtime) = runtime.drop_meta() else {
-		return None;
-	};
-	if !FOREIGN_RUNTIMES.contains(&runtime.as_str()) {
+	let runtime = runtime.symbol_name()?;
+	if !FOREIGN_RUNTIMES.contains(&runtime) {
 		return None;
 	}
 	let name = |node: &Node| match node.drop_meta() {
@@ -262,7 +260,7 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 		}
 	};
 	let module = if runtime == COMPONENT_RUNTIME { crate::modules::beside_program(&module) } else { module };
-	Some((alias, (runtime.clone(), module)))
+	Some((alias, (runtime.to_string(), module)))
 }
 
 /// The modules `use` names, and the variables holding a value of another runtime (`d = datetime.date(2020, 1, 2)`):
@@ -334,9 +332,7 @@ fn component_operator(op: &Op) -> Option<&'static str> {
 /// The items of a method call `name(arguments…)` after a dot
 fn called_method(member: &Node) -> Option<&Vec<Node>> {
 	match member.drop_meta() {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			Some(items)
-		}
+		Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => Some(items),
 		_ => None,
 	}
 }
@@ -467,7 +463,7 @@ impl Foreign<'_> {
 			}
 			// `for x in a { … }`: over the items of a, as a list
 			Node::List(items, bracket, separator)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD)
+				if items.first().and_then(Node::symbol_name).is_some_and(|word| word == FOR_WORD)
 					&& items.len() >= 4 =>
 			{
 				let iterated = self.rewrite(items[3].clone());
@@ -578,13 +574,7 @@ impl Foreign<'_> {
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
 	/// the interface
 	fn constructed(&mut self, node: &Node) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
-			return None;
-		};
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = round_call(node)?;
 		let (runtime, module) = self.modules.get(name).filter(|(runtime, _)| runtime == JS_RUNTIME)?.clone();
 		if let Err(problem) = crate::formats::web_idl::check_constructor(&module, arguments.len()) {
 			return Some(crate::errors::diagnostic::Diagnostic::at(node, problem).into_error());
@@ -605,9 +595,7 @@ impl Foreign<'_> {
 		let Node::Key(receiver, Op::Dot, member) = target.drop_meta() else {
 			return None;
 		};
-		let Node::Symbol(member) = member.drop_meta() else {
-			return None;
-		};
+		let member = member.symbol_name()?;
 		let receiver = self.rewrite(receiver.as_ref().clone());
 		let (runtime, module) = self.receiver(&receiver)?;
 		let checked = match runtime == JS_RUNTIME {
@@ -631,13 +619,10 @@ impl Foreign<'_> {
 
 	/// Does the node name a used foreign module or a variable holding a foreign value
 	fn mentions_foreign_name(&self, node: &Node) -> bool {
-		let mut found = false;
-		node.visit(&mut |part| {
-			if let Node::Symbol(name) = part {
-				found |= self.modules.contains_key(name) || self.values.contains_key(name);
-			}
-		});
-		found
+		any_part(
+			node,
+			|part| matches!(part, Node::Symbol(name) if self.modules.contains_key(name) || self.values.contains_key(name)),
+		)
 	}
 
 	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names

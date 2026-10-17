@@ -510,7 +510,6 @@ fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
 	}
 }
 
-/// The route's body after the statements reading the program's tables anew
 /// `post "/todos/:id:int/toggle" {…}`, at the top level or in `serve PORT {…}`, with its path's parameters bound;
 /// before lower_where reads the block's variables (a table's filter sends `id` to SQL as a value, card todo-app)
 pub fn bind_path_parameters(program: Node) -> Node {
@@ -571,8 +570,6 @@ fn bound_routes(words: Vec<Node>) -> Vec<Node> {
 	bound
 }
 
-/// The route's block with its path's parameters bound from the request's path, as a page's route binds them from
-/// page_path() (routes.rs route_body); web_server.rs route_at picks the route
 /// `$title` → `request.body.title` (or `request.query.title`); `$1` stays a positional parameter
 fn with_request_fields(body: Node, part: &str) -> Node {
 	match body {
@@ -586,6 +583,8 @@ fn with_request_fields(body: Node, part: &str) -> Node {
 	}
 }
 
+/// The route's block with its path's parameters bound from the request's path, as a page's route binds them from
+/// page_path() (routes.rs route_body); web_server.rs route_at picks the route
 fn with_path_parameters(path: &Node, body: Node) -> Node {
 	let pattern = match path.drop_meta() {
 		Node::Text(text) => text.clone(),
@@ -602,6 +601,7 @@ fn with_path_parameters(path: &Node, body: Node) -> Node {
 	Node::List(bound.collect(), Bracket::Curly, Separator::Newline)
 }
 
+/// The route's body after the statements reading the program's tables anew
 fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 	if tables.is_empty() {
 		return body;
@@ -917,10 +917,8 @@ fn defined_as(statement: &Node, call: &Node) -> Option<String> {
 	let Node::Key(target, Op::Define, value) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
-	(value.serialize() == call.serialize()).then(|| name.clone())
+	let name = target.symbol_name()?;
+	(value.serialize() == call.serialize()).then(|| name.to_string())
 }
 
 /// The calls of server functions in the page's code, each once, outer before inner

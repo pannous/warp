@@ -1,5 +1,6 @@
 //! Objects and their fields: `object.name`, `name of object`, `object["name"]`, field assignments and `?.`, the variables only ever holding object literals
 use super::*;
+use crate::lowering::nodes::word_headed;
 
 /// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
 /// otherwise` (word(x)), so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a
@@ -150,13 +151,23 @@ pub(super) fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjec
 	}
 }
 
+/// The names some value of the program may hold as a member of its own: the entries of its object literals and the
+/// fields of its class bodies (`{first: 1}`, `class P{first:int}`)
+pub(super) fn member_names(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	node.visit(&mut |part| {
+		if let Some(entries) = object_entries(part) {
+			names.extend(entries.into_iter().map(|(name, _)| name));
+		}
+	});
+	names
+}
+
 /// An element, a field, a call's result or an object literal
 pub(super) fn may_hold_object(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Key(_, Op::Hash | Op::Dot, _) => true,
-		Node::List(items, Bracket::Round, Separator::None) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-		}
+		Node::List(items, Bracket::Round, Separator::None) => word_headed(items).is_some(),
 		other => object_entries(other).is_some(),
 	}
 }

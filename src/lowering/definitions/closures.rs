@@ -1,10 +1,10 @@
 //! Real closures: a function as a run-time value. Unless an iteration word inlines it (lambdas.rs), a lambda is lifted to a top-level function whose first parameters are the variables it captures (by value,
 //! decision D7), and the lambda becomes `closure_new(lifted, captured…)`: at run time a $Node of Kind::Function holding a
 //! $Closure struct (a typed function reference plus the captured values). Calling a variable that holds one, `f(x)`,
-//! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
+//! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/functions/closures.rs).
 //! notes/closures.md describes the representation.
 
-use super::nodes::{call, children_rewritten, is_return, key, parameter_name};
+use super::nodes::{any_part, call, children_rewritten, is_return, key, parameter_name, word_headed};
 use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -179,9 +179,7 @@ pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix
 pub fn may_be_function_value(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(_) | Node::Key(_, Op::Hash, _) => true,
-		Node::List(items, Bracket::Round, Separator::None) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-		}
+		Node::List(items, Bracket::Round, Separator::None) => word_headed(items).is_some(),
 		other => arrow_lambda(other).is_some(),
 	}
 }
@@ -406,7 +404,7 @@ fn lift_closures(program: Node) -> Node {
 
 /// `h = mk(1)`, a variable that only ever holds closures of one target, assigned once and called later: its captured
 /// values are read once, `h·capture·0 = closure_lambda_1·captured·0(h)`, typed as the target's parameters; a closure
-/// call of h passes them to the target itself (wasm_emitter/closures.rs emit_direct_closure_call), unboxed
+/// call of h passes them to the target itself (wasm_emitter/functions/closures.rs emit_direct_closure_call), unboxed
 fn hoist_captures(program: Node) -> Node {
 	let mut context = Context::new();
 	crate::analyzer::defined_functions(&mut context, &program);
@@ -487,9 +485,7 @@ fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) 
 }
 
 fn calls_closure(node: &Node, variable: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |inner| found |= called_closure(inner) == Some(variable));
-	found
+	any_part(node, |inner| called_closure(inner) == Some(variable))
 }
 
 /// The last statement of a body: its value
@@ -560,7 +556,12 @@ impl FunctionValues {
 			}
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
 			Node::Key(list, Op::Hash, _) => self.is_function_list(list),
-			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => {
+			Node::List(items, Bracket::Round, Separator::None)
+				if items
+					.first()
+					.and_then(Node::symbol_name)
+					.is_some_and(|name| self.returning.contains(name) || self.variables.contains(name)) =>
+			{
 				true
 			}
 			// `half(f)(half(f))`: the call of the function value a call returns may give one in turn
@@ -572,7 +573,14 @@ impl FunctionValues {
 				true
 			}
 			// `g(y => y*2)` of `g = x => x`: the function value it was given
-			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.passing_through.get(name).and_then(|index| items.get(index + 1)).is_some_and(|argument| self.is_function_value(argument))) => {
+			Node::List(items, Bracket::Round, _)
+				if items.first().and_then(Node::symbol_name).is_some_and(|name| {
+					self.passing_through
+						.get(name)
+						.and_then(|index| items.get(index + 1))
+						.is_some_and(|argument| self.is_function_value(argument))
+				}) =>
+			{
 				true
 			}
 			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::warp_parser::TRY_MARKER)) => {
@@ -742,10 +750,7 @@ fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec
 	};
 	match head.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::None) => {
-			let (name, params) = items.split_first()?;
-			let Node::Symbol(name) = name.drop_meta() else {
-				return None;
-			};
+			let (name, params) = word_headed(items)?;
 			functions.contains(name).then(|| params.iter().filter_map(parameter_name).collect())
 		}
 		Node::Symbol(name) if functions.contains(name) => Some(vec![IMPLICIT_PARAMETER.to_string()]),
@@ -1325,7 +1330,7 @@ fn settle_closure_variable_targets(context: &Context, program: &Node) -> HashMap
 
 /// The fast path of closure calls: when every closure of an arity has one signature of numbers (Ints and Floats, the
 /// same for all), its `closure_call_n` passes and returns them as i64 / f64 and the entries take them as they are, no
-/// Node box per argument and result (wasm_emitter/closures.rs `typed_entry`)
+/// Node box per argument and result (wasm_emitter/functions/closures.rs `typed_entry`)
 pub fn type_closure_calls(context: &mut Context) {
 	let helpers: Vec<(String, usize)> = context
 		.user_functions

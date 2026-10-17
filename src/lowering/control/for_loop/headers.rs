@@ -4,7 +4,7 @@
 //! walks the text by that unit, `for word in text`, `for line in text` and `for byte in text` by words, lines and bytes.
 
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-use crate::lowering::nodes::arguments_rewritten;
+use crate::lowering::nodes::{arguments_rewritten, key};
 use crate::node::{call, parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, mentions};
@@ -175,20 +175,14 @@ impl Headers {
 		};
 		let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
 		let type_test = self.type_test(&it, type_name)?;
-		let parity = |op: Op| {
-			Node::Key(
-				Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))),
-				op,
-				Box::new(Node::int(0)),
-			)
-		};
+		let parity = |op: Op| key(key(it.clone(), Op::Mod, Node::int(2)), op, Node::int(0));
 		let adjective_test = match adjective.as_str() {
 			word if self.functions.contains(word) => call(word, vec![it.clone()]),
 			EVEN_WORD => parity(Op::Eq),
 			ODD_WORD => parity(Op::Ne),
 			word => call(word, vec![it.clone()]),
 		};
-		Some(Node::Key(Box::new(type_test), Op::And, Box::new(adjective_test)))
+		Some(key(type_test, Op::And, adjective_test))
 	}
 
 	/// `value is T` for a loop filter: a declared type by its instances, a type word by its runtime kind; None for any other word
@@ -217,12 +211,8 @@ impl Headers {
 			return parts;
 		}
 		let part = Node::Symbol(format!("{unit}·part"));
-		let non_empty = Node::Key(
-			Box::new(part.clone()),
-			Op::Arrow,
-			Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))),
-		);
-		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
+		let non_empty = key(part.clone(), Op::Arrow, key(part, Op::Ne, Node::Text(String::new())));
+		key(parts, Op::Dot, call(FILTER_WORD, vec![non_empty]))
 	}
 
 	/// A text literal or a variable given a text
@@ -279,8 +269,7 @@ fn type_filtered_body(
 
 /// `{ if test then body }`, the body of a filtering loop
 fn guarded_body(test: Node, body: Node) -> Node {
-	let guarded =
-		Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
+	let guarded = key(key(Node::Empty, Op::If, test), Op::Then, body);
 	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }
 
@@ -309,7 +298,9 @@ pub(crate) fn filter_loop_block(test: &str) -> String {
 fn item_named(node: Node, name: &str, item: &Node) -> Node {
 	match node {
 		Node::Symbol(symbol) if symbol == name => item.clone(),
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == name) => {
+		Node::List(items, Bracket::Round, Separator::None)
+			if items.first().and_then(Node::symbol_name).is_some_and(|head| head == name) =>
+		{
 			arguments_rewritten(items, Bracket::Round, Separator::None, |part| item_named(part, name, item))
 		}
 		other => other.map_children(|child| item_named(child, name, item)),
@@ -336,13 +327,11 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 /// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
 /// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
 fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
-	let Node::Symbol(word) = variable.drop_meta() else {
-		return None;
-	};
-	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || body.mentions(word) {
+	let word = variable.symbol_name()?;
+	if !UNIT_LOOP_WORDS.contains(&word) || body.mentions(word) {
 		return None;
 	}
-	let walked = match word.as_str() {
+	let walked = match word {
 		BYTES_WORD => bytes_of(iterable),
 		CODE_POINTS_WORD => code_points_of(iterable),
 		_ => call(crate::library_words::CHARS_WORD, vec![iterable.clone()]),
@@ -358,8 +347,8 @@ fn code_points_of(text: &Node) -> Node {
 /// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
 fn bytes_of(text: &Node) -> Node {
 	let offset = Node::Symbol("byte·offset".to_string());
-	let count = Node::Key(Box::new(text.clone()), Op::Dot, Box::new(Node::Symbol(BYTES_WORD.to_string())));
-	let offsets = Node::Key(Box::new(Node::int(0)), Op::Range, Box::new(count));
-	let byte = Node::Key(Box::new(offset.clone()), Op::Arrow, Box::new(call("byte_at", vec![text.clone(), offset])));
-	Node::Key(Box::new(parens(vec![offsets])), Op::Dot, Box::new(call("map", vec![byte])))
+	let count = key(text.clone(), Op::Dot, Node::Symbol(BYTES_WORD.to_string()));
+	let offsets = key(Node::int(0), Op::Range, count);
+	let byte = key(offset.clone(), Op::Arrow, call("byte_at", vec![text.clone(), offset]));
+	key(parens(vec![offsets]), Op::Dot, call("map", vec![byte]))
 }

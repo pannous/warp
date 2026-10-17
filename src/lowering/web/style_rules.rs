@@ -1,6 +1,6 @@
 //! Styles written as CSS inside a style block (card web-styles, notes/web_framework.md step 7): selectors without
 //! quotes (`.card { … }`, `ul > li { … }`, `h1, h2 { … }`, `a:hover { … }`, `#main { … }`) become the text keys
-//! html.rs renders (`".card": { … }`), and lengths with a unit (`8px`, `1.5em`, `50%`, `-2px`) the texts they are,
+//! web/markup.rs renders (`".card": { … }`), and lengths with a unit (`8px`, `1.5em`, `50%`, `-2px`) the texts they are,
 //! where warp would read `8px` as `8 * px`. A value after a declaration continues it: `padding: 8px 4px`.
 //! A class or id selector with a lone value is its color: `#done = "red"`, `.done: "red"` (card style-selectors).
 //! In a style sheet the parser keeps a blank before `.x` or `#x` (`#main .x`, the descendant combinator) as the next item.

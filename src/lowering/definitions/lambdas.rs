@@ -522,7 +522,7 @@ fn member_lambda(dot_word: &Node) -> Node {
 
 /// `age` of `.age`
 fn member_of(node: &Node) -> Option<&str> {
-	let Node::Symbol(name) = node.drop_meta() else { return None };
+	let name = node.symbol_name()?;
 	name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))
 }
 
@@ -538,13 +538,9 @@ pub(crate) fn is_iteration_word(name: &str) -> bool {
 }
 
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
-	let Node::Symbol(name) = word.drop_meta() else {
-		return None;
-	};
-	let canonical = ITERATION_SPELLINGS
-		.iter()
-		.find(|(_, spellings)| spellings.contains(&name.as_str()))
-		.map_or(name.as_str(), |(word, _)| word);
+	let name = word.symbol_name()?;
+	let canonical =
+		ITERATION_SPELLINGS.iter().find(|(_, spellings)| spellings.contains(&name)).map_or(name, |(word, _)| word);
 	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
 }
 

@@ -3,7 +3,7 @@
 //! that assigns `result` itself keeps its own variable. A print gives ø, so a statement ending in a print remembers
 //! the printed value: `if c: print "hi" else: print "ho"; result` is "hi" (card result-keyword).
 
-use super::nodes::{children_rewritten, key};
+use super::nodes::{any_part, children_rewritten, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{print_arguments_of, print_call, starts_print};
@@ -18,11 +18,10 @@ pub fn lower(node: Node) -> Node {
 }
 
 fn assigns_result(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		found |= matches!(part, Node::Key(target, Op::Assign | Op::Define, _) if target.is_symbol(RESULT_WORD))
-	});
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::Key(target, Op::Assign | Op::Define, _) if target.is_symbol(RESULT_WORD)),
+	)
 }
 
 fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {

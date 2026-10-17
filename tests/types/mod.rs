@@ -113,6 +113,7 @@ mod test_nested_type_calls; // text hex 255 is text(hex(255))
 mod test_number_converts; // card number-converts
 mod test_number_field; // card number-field
 mod test_number_keeps_exact; // card number-keeps-exact
+mod test_one_dispatch; // card one-dispatch
 mod test_operation_type; // card parse-type
 mod test_optional_casts;
 mod test_optional_list_items;
