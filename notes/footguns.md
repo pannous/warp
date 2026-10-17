@@ -30,8 +30,7 @@
 - **Warp/uniscript:** the LaTeX reading wins (`\:asymp` ≍, `\:circ` ∘, `\:cdot` ⋅, `\:varepsilon` ε), except for Latin
   letters with a diacritic, which take the HTML one (`\:ocirc` ô, `\:oslash` ø; also `\:imath` ı, `\:jmath` ȷ). The letter rule means letters with
   diacritics, not math names that happen to be letters (exceptions cdot, varepsilon, varphi). A Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘).
-  In uniscript since 131b627 (after v1.0.4); warp reads it once its pin is raised past 1.0.4 (src/text/uniscript_entities.tsv,
-  tests/parser/test_entity_table.rs).
+  Table: src/text/uniscript_entities.tsv, tests/parser/test_entity_table.rs.
 - Generated, not hand-written: `python3 probes/entities_index/html_latex.py ~/dev/uniscript` (latex.warp keeps the
   LaTeX readings HTML wins over as commented `// name: …` lines).
 

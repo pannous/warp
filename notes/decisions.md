@@ -12,7 +12,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - urgent-direct (2026-10-17, user): warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
 - fix-forward: the Integrator may ignore up to 10 failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the owner (notes/roles.md "Fix forward").
 - crash-fixes-first: crash fixes merge with the highest priority. small-changes-on-main: small or non-conflicting changes may go on main without a worktree. session-names: a session is named for its current task.
-- matching-first: the matching roadmap comes before further self-hosting. self-hosting: parser first, each warp part a twin of its Rust part with a differential test over every sample; gaps are fixed in the language.
+- self-hosting: parser first, each warp part a twin of its Rust part with a differential test over the samples' kept forms (exclusion list, self-hosting-minimal); gaps are fixed in the language.
   self-hosting-resumed (2026-10-17, user): self-hosting is the fleet's next big task; workers
   finish their current work, then switch to it, starting with a readiness survey (warp-self-survey: are all the
   language parts there, or should macros or a cheaper feature come first so the warp compiler doesn't bloat).
