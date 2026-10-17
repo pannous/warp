@@ -308,6 +308,14 @@ fn link_library_words(linker: &mut Linker<HostState>) -> Result<()> {
 		crate::graphics::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32)
 	})?;
 	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
+	linker.func_wrap(HOST_LIBRARY, DRAW_SHADER, |mut caller: Caller<'_, HostState>, code: HostNode| {
+		let code = given_node(&mut caller, code)?;
+		let shader = code
+			.text_value()
+			.ok_or_else(|| task_failure(format!("{DRAW_SHADER} takes a text, got {}", code.serialize())))?;
+		crate::graphics::gpu_canvas::use_shader(shader);
+		Ok(())
+	})?;
 	linker.func_wrap(HOST_LIBRARY, SAVE_PICTURE, save_picture)?;
 	linker.func_wrap(HOST_LIBRARY, SOUND, sound)?;
 	Ok(())
@@ -358,14 +366,25 @@ fn paint(
 	height: i64,
 	shader_values: HostNode,
 ) -> wasmtime::Result<()> {
+	let result = paint_or_failure(&mut caller, pixels, width, height, shader_values);
+	raised(&mut caller, result)
+}
+
+fn paint_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	pixels: HostNode,
+	width: i64,
+	height: i64,
+	shader_values: HostNode,
+) -> wasmtime::Result<()> {
 	warp_runtime::system_signals::end_at_first_frame()?;
-	let memory = module_memory(&mut caller, "paint")?;
+	let memory = module_memory(caller, "paint")?;
 	let size = (width.max(0) as usize, height.max(0) as usize);
-	let values = match list_values(&mut caller, memory, pixels, size.0 * size.1)? {
+	let values = match list_values(caller, memory, pixels, size.0 * size.1)? {
 		Ok(values) => values,
 		Err(crate::node::Node::Text(shader)) => {
 			let failure = gpu_failure(PAINT);
-			let (width, height, values) = shader_request(&mut caller, width, height, shader_values, &failure)?;
+			let (width, height, values) = shader_request(caller, width, height, shader_values, &failure)?;
 			return crate::graphics::paint::paint_shader(&shader, width, height, &values).map(|_| ()).map_err(failure);
 		}
 		Err(other) => {
@@ -387,14 +406,25 @@ fn save_picture(
 	height: i64,
 	file: HostNode,
 ) -> wasmtime::Result<()> {
-	let path = match given_node(&mut caller, file)? {
+	let result = save_picture_or_failure(&mut caller, pixels, width, height, file);
+	raised(&mut caller, result)
+}
+
+fn save_picture_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	pixels: HostNode,
+	width: i64,
+	height: i64,
+	file: HostNode,
+) -> wasmtime::Result<()> {
+	let path = match given_node(caller, file)? {
 		Node::Text(path) => path,
 		other => return Err(task_failure(format!("save: the file is a text, got {}", other.serialize()))),
 	};
-	let memory = module_memory(&mut caller, SAVE_PICTURE)?;
+	let memory = module_memory(caller, SAVE_PICTURE)?;
 	let size = (width.max(0) as usize, height.max(0) as usize);
 	let on_gpu = warp_runtime::system_values::read(warp_runtime::host_words::GPU_DRAWING) == Ok(1);
-	let saved = match list_values(&mut caller, memory, pixels, size.0 * size.1)? {
+	let saved = match list_values(caller, memory, pixels, size.0 * size.1)? {
 		_ if on_gpu => crate::graphics::gpu_canvas::snapshot(size.0, size.1)
 			.and_then(|rgba| crate::graphics::paint::save_rgba_png(&rgba, size.0, size.1, &path)),
 		Ok(values) => crate::graphics::paint::save_png(&values, size.0, size.1, &path),
@@ -491,8 +521,19 @@ fn run_block(
 	values: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	definitions: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	let result = run_block_or_failure(&mut caller, block, names, values, definitions);
+	raised(&mut caller, result)
+}
+
+fn run_block_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	block: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	names: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	values: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	definitions: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
 	use crate::host::tasks::TaskValue;
-	let memory = module_memory(&mut caller, "run_block")?;
+	let memory = module_memory(caller, "run_block")?;
 	let mut store = caller.as_context_mut();
 	let [block, names, values, definitions] = [block, names, values, definitions]
 		.map(|value| crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
@@ -500,7 +541,7 @@ fn run_block(
 		crate::compiler::run_time_blocks::eval_block(block, &names, &values, &definitions).map_err(task_failure)?;
 	let value = TaskValue::of(&result)
 		.map_err(|_| task_failure(crate::compiler::run_time_blocks::cannot_hand_back(&result)))?;
-	build_in_program(&mut caller, &value, &task_failure)
+	build_in_program(caller, &value, &task_failure)
 }
 
 /// The host side of parse_code: the code of a text, or the parse failure the program's `try` catches
@@ -550,8 +591,20 @@ fn foreign_call(
 	call: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+	let result = foreign_call_or_failure(&mut caller, runtime, module, member, call, arguments);
+	raised(&mut caller, result)
+}
+
+fn foreign_call_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	runtime: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	module: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	member: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	call: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+	arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
+) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
 	use crate::host::tasks::{Builders, TaskValue};
-	let memory = module_memory(&mut caller, "foreign_call")?;
+	let memory = module_memory(caller, "foreign_call")?;
 	let mut store = caller.as_context_mut();
 	let functions = function_arguments(&mut store, arguments)?;
 	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments]
@@ -569,16 +622,16 @@ fn foreign_call(
 			.map_err(|problem| problem.to_string())?;
 		let mut result = [Val::AnyRef(None)];
 		apply
-			.call(&mut caller, &[Val::AnyRef(Some(function)), values], &mut result)
-			.map_err(|trap| raised_message(&mut caller).unwrap_or_else(|| trap.root_cause().to_string()))?;
-		given_node(&mut caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
+			.call(&mut *caller, &[Val::AnyRef(Some(function)), values], &mut result)
+			.map_err(|trap| raised_message(caller).unwrap_or_else(|| trap.root_cause().to_string()))?;
+		given_node(caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
 	};
 	let answer =
 		crate::modules::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments, &mut callback);
 	let answer = match answer {
 		Ok(answer) => answer,
 		// raised in the program (emit_ffi_result), as a failed std word's: `try` catches a crate's Err too
-		Err(problem) => return error_in_program(&mut caller, &problem),
+		Err(problem) => return error_in_program(caller, &problem),
 	};
 	let value = TaskValue::of(&answer).map_err(|problem| task_failure(problem.to_string()))?;
 	let built =
@@ -804,19 +857,29 @@ fn std_call(
 	member: HostNode,
 	arguments: HostNode,
 ) -> wasmtime::Result<HostNode> {
-	let [module, member, arguments] = [module, member, arguments].map(|value| given_node(&mut caller, value));
+	let result = std_call_or_failure(&mut caller, module, member, arguments);
+	raised(&mut caller, result)
+}
+
+fn std_call_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	module: HostNode,
+	member: HostNode,
+	arguments: HostNode,
+) -> wasmtime::Result<HostNode> {
+	let [module, member, arguments] = [module, member, arguments].map(|value| given_node(caller, value));
 	let (module, member) = (module?.name(), member?.name());
 	let answer = match (module.as_str(), member.as_str()) {
-		("table", "select") => queried_rows(&mut caller, &arguments?)?,
-		("sound", "signal") => played_signal(&mut caller, &arguments?)?,
-		("sound", "blocks") => played_blocks(&mut caller, &arguments?)?,
+		("table", "select") => queried_rows(caller, &arguments?)?,
+		("sound", "signal") => played_signal(caller, &arguments?)?,
+		("sound", "blocks") => played_blocks(caller, &arguments?)?,
 		_ => match crate::modules::std_adapters::call(&module, &member, &arguments?) {
 			Ok(answer) => answer,
 			// the program raises it (emit_ffi_result): `try` catches it, uncaught it ends the run with this reason
-			Err(problem) => return error_in_program(&mut caller, &problem),
+			Err(problem) => return error_in_program(caller, &problem),
 		},
 	};
-	built_in_program(&mut caller, &answer, &format!("{module}.{member}"))
+	built_in_program(caller, &answer, &format!("{module}.{member}"))
 }
 
 /// The ids a filter's query keeps (database.rs select), its warp_call calling the program's functions back; a function
@@ -896,8 +959,13 @@ fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<
 
 /// `clipboard`: the clipboard's text, read now (warp-runtime system_values.rs)
 fn clipboard_text(mut caller: Caller<'_, HostState>) -> wasmtime::Result<HostNode> {
+	let result = clipboard_text_or_failure(&mut caller);
+	raised(&mut caller, result)
+}
+
+fn clipboard_text_or_failure(caller: &mut Caller<'_, HostState>) -> wasmtime::Result<HostNode> {
 	let text = warp_runtime::system_values::clipboard_text().map_err(task_failure)?;
-	built_in_program(&mut caller, &Node::Text(text), "clipboard")
+	built_in_program(caller, &Node::Text(text), "clipboard")
 }
 
 /// The path of the page natively: "/", or the one a render for a request is made for (with_page_path)
@@ -938,8 +1006,17 @@ fn built_in_program(caller: &mut Caller<'_, HostState>, value: &Node, word: &str
 
 /// `broadcast value on "chat"`: the value as warp text to every listener of the channel
 fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: HostNode) -> wasmtime::Result<()> {
-	let channel = given_node(&mut caller, channel)?;
-	let message = given_node(&mut caller, message)?;
+	let result = channel_send_or_failure(&mut caller, channel, message);
+	raised(&mut caller, result)
+}
+
+fn channel_send_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	channel: HostNode,
+	message: HostNode,
+) -> wasmtime::Result<()> {
+	let channel = given_node(caller, channel)?;
+	let message = given_node(caller, message)?;
 	if crate::web::web_sockets::is_socket_address(&channel.name()) {
 		return crate::web::web_sockets::send(&channel.name(), &message).map_err(task_failure);
 	}
@@ -956,7 +1033,12 @@ fn dispatch_event(mut caller: Caller<'_, HostState>, name: HostNode, detail: Hos
 
 /// `notify "text"`: a desktop notification of the text (a value other than a text as warp writes it)
 fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result<()> {
-	let text = match given_node(&mut caller, text)? {
+	let result = notify_or_failure(&mut caller, text);
+	raised(&mut caller, result)
+}
+
+fn notify_or_failure(caller: &mut Caller<'_, HostState>, text: HostNode) -> wasmtime::Result<()> {
+	let text = match given_node(caller, text)? {
 		Node::Text(text) => text,
 		other => other.serialize(),
 	};
