@@ -1,0 +1,6 @@
+// compiler parts split over files: functions and tables from two modules
+// b, mul
+use "probes/self_hosting/readiness/modules/walker.warp"
+use "probes/self_hosting/readiness/modules/kinds.warp"
+print(rename(symbol("a"), "a", "b"))
+print(operators["*"])

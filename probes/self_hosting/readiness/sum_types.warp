@@ -1,0 +1,7 @@
+// analyzer/emitter: sum types with values for kinds and instructions, exhaustive match
+// 4, 0, 7
+enum Shape { Circle(r), Dot, Rect(w, h) }
+area(s: Shape) := match s { Circle(r) => r * r; Dot => 0; Rect(w, h) => w + h }
+print(area(Circle(2)))
+print(area(Dot))
+print(area(Rect(3, 4)))

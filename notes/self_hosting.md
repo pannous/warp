@@ -4,6 +4,9 @@ Roadmap card: self-hosted (board topic; its sub-cards are the steps below, notes
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
+Readiness survey (2026-10-17): notes/self_hosting_readiness.md, which features come before the port (no macros;
+forward-function, data-splice, data-pattern-sealed, parsed-kinds).
+
 POSTPONED (decision self-hosting-postponed): no further steps until the language features are implemented cleanly
 (topic parser-features) and the Rust code is cleaned up (topic cleanup). The twins on main stay and keep being tested.
 

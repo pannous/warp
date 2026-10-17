@@ -1,0 +1,6 @@
+// emitter: a 1 MB module built byte by byte (warp's own wasm output is ~1 MB) and written (1.2 s release)
+// 1000000
+buf = []
+for i in 0..1000000 { buf += [i % 256] }
+write_bytes("scratch/readiness_big.wasm", buf)
+print(#read_bytes("scratch/readiness_big.wasm"))
