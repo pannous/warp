@@ -1,19 +1,12 @@
 # Traits (interfaces, protocols, typeclasses)
 
-User request (2026-10-03), verbatim:
-> sort ["b" "a"] perfect time to implement capabilities or aspects or whatever they are called in Rust. Similar to
-> prototypes and interfaces in other languages.
-
-User decision (2026-10-03), verbatim: "add all the synonyms we discussed before and add feature to interface protocol and
-I think trait as the standard cannoic is fine because it's short"
-
 What other languages call it: Rust traits, Haskell typeclasses, Swift protocols, Java/Go/TypeScript interfaces, JS
 prototypes. Warp's canonical word is **trait**; `interface` (wiki/struct.md, WIT), `protocol`, `typeclass`, `prototype`,
 `capability`, `aspect` and `feature` declare the same and hint toward `trait` (`traits::TRAIT_KEYWORDS`, first = canonical).
 Note: the C++ wasp listed `prototype` and `interface` among its class kinds (Keywords.cpp); warp never had them as class
 keywords, so they are free for traits.
 
-## Decisions (forks T1–T5, approved by impl-text as recommended; T1 then set by the user)
+## Decisions T1–T5
 - T1 keyword: `trait`, with the synonyms above.
 - T2 conformance is structural: a type conforms by defining the operations, retroactively (Go/Haskell instance by
   definition, Swift extension). An explicit claim `class dot{x:int} is Comparable` is optional and checked: a claim
@@ -76,16 +69,16 @@ area·square(x)` picks the witness at run time (traits::with_dispatchers; `insta
   turns each printable instance at any depth of lists and entries into the symbol of its text. Dispatched witnesses
   take Nodes, no struct or array convention (list_abi.rs directly_called_functions).
 
-## Default methods (2026-10-04)
+## Default methods
 `trait shape{area; describe(s) := area(s) * 2}`: a requirement written as a definition is an operation with a default
 body (`Operation::default`). `traits::with_default_methods` defines it, first parameter typed, for every type that defines
 the other operations (`area(s:square)`) but not this one; lower_conformances then makes it the witness `describe·square`.
 
-## Membership through equals (2026-10-04)
+## Membership through equals
 `x in xs` (position) and `xs.has(x)` of an instance whose type overrides `equals` search the list with `equals·T`
 (traits::position_by_equals, a loop lowered in lower_dispatch); without an override they compare structurally.
 
-## Generic constraints (2026-10-04)
+## Generic constraints
 `smallest(xs: Comparable list) := (sort xs)#1`: the annotation `xs: T list` (analyzer::with_list_annotation; the parser
 leaves `list` as the next signature item) is `list of T`, T a type word, a declared type or a trait. A list of a trait
 holds Nodes; where the function is called with a list of instances of a known type, each operation of the trait must
@@ -93,11 +86,7 @@ have its witness (Dispatch::admit, the check every declared parameter type gets;
 <trait>` annotations): `dot is not Comparable: [dot{x:3}] needs compare(a:dot, b:dot)`.
 Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` reads the same.
 
-## Fixed on the way
-`x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
-`(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
-
-## Printable and Iterable (2026-10-04, lowering/data/printable.rs)
+## Printable and Iterable (lowering/data/printable.rs)
 `text(p:person)` (P31) and `iterate(b:bag)` become the witnesses `text·person`, `iterate·bag`; where an instance's type
 is known, `as text` / str / print / interpolation call the first, `for x in b` and `x in b` walk what the second gives.
 The pass runs right after type_constructor: later passes would read `for x in b` of an instance as a walk of its keys.
@@ -112,9 +101,8 @@ The pass runs right after type_constructor: later passes would read `for x in b`
 - Declarations as other languages write them: the spaced `trait Shape { area }`, Java's `double area();`, Kotlin's
   `fun area(): Int`, Swift's `func area() -> Double`, Go's `Area() float64` and `type Shape interface {…}`,
   TypeScript's `area(): number`, Rust's `fn area(&self) -> f64` (traits::foreign_signature: the receiver implicit).
-- A class naming its traits, `implements Shape` (Java, TypeScript), `: Shape` (Swift, Kotlin), is skipped with a got-it
-  note (topic conformance-list): conformance is structural (T2). Not a checked claim yet.
+- A class naming its traits, `implements Shape` (Java, TypeScript), `: Shape` (Swift, Kotlin), is a checked claim
+  (P177, warp_parser types/declarations.rs skip_conformances): "Sq claims Shape but defines no area(x:Sq)".
 
 ## Later
 - `<` defined directly (`a:person < b:person := …`)
-- `implements Shape` as a checked claim (claim_error) instead of a note
