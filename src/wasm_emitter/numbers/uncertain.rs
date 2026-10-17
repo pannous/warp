@@ -76,18 +76,10 @@ const UNCERTAIN_FIELDS: [(i32, &str); 4] = [
 const UNCERTAIN_TEXT_WORD: &str = "prelude·uncertain_text";
 const UNCERTAIN_TEXT_NAME: &str = "uncertain_text";
 
-/// The prelude word that prints ± values, for modules::resolve where the statements write ±: the printer calls it,
+/// The prelude word that prints ± values, where the program writes ± (modules IMPLIED_WORDS): the printer calls it,
 /// the program does not
-pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
-	let writes_plus_minus = statements.iter().any(|statement| {
-		let mut found = false;
-		statement.visit(&mut |node| found |= matches!(node.drop_meta(), Node::Key(_, Op::PlusMinus, _)));
-		found
-	});
-	match writes_plus_minus {
-		true => vec![UNCERTAIN_TEXT_NAME.to_string()],
-		false => vec![],
-	}
+pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
+	matches!(node.drop_meta(), Node::Key(_, Op::PlusMinus, _)).then_some(UNCERTAIN_TEXT_NAME)
 }
 
 /// A program that makes uncertain values gets the whole family: any arithmetic may meet one

@@ -20,28 +20,19 @@ pub(crate) const LIST_TIMES_TOPIC: &str = "list-times";
 
 pub(crate) const LIST_PLUS_TOPIC: &str = "list-plus";
 
-/// The prelude word the statements' filled lists need, for modules::resolve: `n times [x]` (lowered already), a text
-/// repeat (`n times "ab"`, `"ab" * n`), a filled list joined. `int[n]` and `x: n int` are mostly typed arrays, which need
+/// The prelude word a filled list needs, for modules IMPLIED_WORDS: `n times [x]` (lowered already), a text repeat
+/// (`n times "ab"`, `"ab" * n`), a filled list joined. `int[n]` and `x: n int` are mostly typed arrays, which need
 /// none: where one is a plain list after all, pipeline::loading_compiler_words compiles again (card zero-fill-lib)
-pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
+pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
 	let is_text = |node: &Node| matches!(node.drop_meta(), Node::Text(_) | Node::Char(_));
-	let mut fills = false;
-	for statement in statements {
-		statement.visit(&mut |node| {
-			fills |= match node {
-				Node::List(items, _, _) => items
-					.first()
-					.is_some_and(|call| [ZERO_FILL_CALL, TEXT_TIMES].iter().any(|word| call.is_symbol(word))),
-				Node::Key(left, Op::Mul, right) => is_text(left) || is_text(right),
-				_ => false,
-			}
-		});
-	}
-	if fills {
-		vec![FILLED_LIST_WORD.to_string()]
-	} else {
-		vec![]
-	}
+	let fills = match node {
+		Node::List(items, _, _) => {
+			items.first().is_some_and(|call| [ZERO_FILL_CALL, TEXT_TIMES].iter().any(|word| call.is_symbol(word)))
+		}
+		Node::Key(left, Op::Mul, right) => is_text(left) || is_text(right),
+		_ => false,
+	};
+	fills.then_some(FILLED_LIST_WORD)
 }
 
 /// The zero value of an element type word (`int`, `ints`, `float`, `text` …)
