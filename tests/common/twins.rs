@@ -294,9 +294,15 @@ fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> +
 /// The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): `word(source text)` of
 /// lib/compiler/<part>.warp parses with parser.warp and runs the pass twins in pipeline order; compared with the Rust
 /// parse of the same text after the Rust twins of those passes in that order (only those: the others have no twin yet),
-/// over the day's share of the sources as the parser differential
-pub fn chain_differential(paths: &[PathBuf], part: &str, word: &str, rust_passes: &[fn(Node) -> Node]) {
-	let cases = checked_share(paths).into_iter().filter_map(|path| {
+/// over the day's share of the sources as the parser differential, without the `dropped` ones (twin_sources)
+pub fn chain_differential(
+	paths: &[PathBuf],
+	part: &str,
+	word: &str,
+	rust_passes: &[fn(Node) -> Node],
+	dropped: &[&str],
+) {
+	let cases = twin_sources_of(paths, dropped).into_iter().filter_map(|path| {
 		let text = std::fs::read_to_string(&path).ok()?;
 		let lowered =
 			std::panic::catch_unwind(|| rust_passes.iter().fold(parse(&text), |node, pass| pass(node))).ok()?;
@@ -343,13 +349,17 @@ fn bridge_differential_of(given: fn(&Node) -> Node) {
 /// The checked share of the sources without the dropped ones, which DROPPED_NOTES must name; TWIN_ONLY=<path suffix>
 /// checks only the sources ending so (one source while fixing a twin)
 fn twin_sources(dropped: &[&str]) -> Vec<PathBuf> {
+	twin_sources_of(&sources(), dropped)
+}
+
+fn twin_sources_of(paths: &[PathBuf], dropped: &[&str]) -> Vec<PathBuf> {
 	let notes = std::fs::read_to_string(DROPPED_NOTES).unwrap_or_default();
 	let unexplained: Vec<&&str> = dropped.iter().filter(|source| !notes.contains(**source)).collect();
 	assert!(unexplained.is_empty(), "dropped sources not named in {DROPPED_NOTES}: {unexplained:?}");
 	let kept = |path: &PathBuf| !dropped.iter().any(|source| path.ends_with(source));
 	match std::env::var("TWIN_ONLY") {
-		Ok(only) => sources().into_iter().filter(|path| path.ends_with(&only)).collect(),
-		Err(_) => checked_share(&sources()).into_iter().filter(kept).collect(),
+		Ok(only) => paths.iter().filter(|path| path.ends_with(&only)).cloned().collect(),
+		Err(_) => checked_share(paths).into_iter().filter(kept).collect(),
 	}
 }
 
