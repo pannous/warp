@@ -14,8 +14,14 @@ forward-function, data-splice, data-pattern-sealed, parsed-kinds).
 Decision self-hosting:
 - Purpose: dogfooding (the compiler in warp shows what the language lacks), independence from Rust, a showcase.
 - Scope: the parser first (lexer, parser, serializer); then section Next phase.
-- Integration: twins, checked. Each warp part runs next to its Rust twin, and a differential test over every sample
-  compares them. The Rust part goes only when its twin matches everywhere.
+- Success-driven: the measure is the existing test suite and samples passing through the warp-written compiler
+  (program results, errors, output), not agreement with Rust's intermediate trees. Card warp-pipeline-suite runs the
+  is!/samples suite through the warp pipeline and reports the pass count; that count is the progress number. A Rust
+  part goes when the suite passes without it. 80–90% passing is fine at the start: breadth over the long tail, the
+  failing rest is a ranked list, not a blocker.
+- Twins (a warp part next to its Rust original, compared over every source) are scaffolding only: kept where a warp
+  stage hands its result to a Rust stage, because the Rust side needs a compatible shape, and dropped as soon as the
+  stages on both sides are warp. No new intermediate twin is written where the suite can already judge.
 - Language gaps are fixed in the language as cards of this topic, never worked around in the warp code.
 - Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
   result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
