@@ -49,7 +49,7 @@ stdev(xs) := sqrt(variance(xs))
 index_where(xs, f) := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
 last_n(xs, n) := drop(xs, max(count(xs) - n, 0))
 // n copies of value: fill(3, 0) is [0 0 0]
-fill(n, value) := { out = []; for i in 1 to n { out = out + [value] }; out }
+fill(n, value) := filled_list(n, value)
 // [smallest, greatest]
 minmax(xs) := [min(xs), max(xs)]
 // Python's list methods (card python-stdlib): extend appends each of ys in place, index is the position from 0

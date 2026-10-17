@@ -239,7 +239,6 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
 	use crate::wasm_emitter::time::times::TIME_FIELD;
 	match word {
-		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
 		crate::time::INSTANT_AT => {
 			&[crate::time::INSTANT_AT, TIME_FIELD, crate::wasm_emitter::lists::list_ops::RETURNED_ERROR]
 		}
