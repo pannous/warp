@@ -22,6 +22,8 @@ static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync
 const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
 /// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
 const BLOCK_COLON_WORDS: [&str; 3] = ["then", "else", "do"];
+/// Rust's item words and `let`: after a closing `}` on the same line they start the next statement (card rust-items)
+const STATEMENT_WORDS_AFTER_BRACE: [&str; 7] = ["let", "fn", "struct", "enum", "impl", "trait", "const"];
 
 impl WarpParser {
 	/// Check if current character can start an atom (for implicit application)
@@ -242,6 +244,15 @@ impl WarpParser {
 			}
 		}
 		false
+	}
+
+	/// `struct P { … } let p = …`: a Rust item ends at its closing brace, and a `let` or item word after any closing
+	/// brace starts a statement
+	pub(super) fn ends_statement_after_brace(&self, in_item: bool) -> bool {
+		let before_blanks = self.chars[..self.pos].iter().rev().find(|c| !matches!(c, ' ' | '\t'));
+		self.in_code()
+			&& before_blanks == Some(&'}')
+			&& (in_item || STATEMENT_WORDS_AFTER_BRACE.iter().any(|word| self.matches_keyword(word)))
 	}
 
 	/// `and print "x"`: an `and` followed by a statement, a word with an argument after it

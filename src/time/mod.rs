@@ -238,8 +238,7 @@ pub fn lower(program: Node) -> Node {
 	if !mentions_time(&program) {
 		return program;
 	}
-	let times = temporal_variables(&program);
-	let program = with_unit_durations(program, &times);
+	let program = with_unit_durations(program);
 	if !needs_folding(&program) {
 		return program;
 	}
@@ -261,9 +260,106 @@ fn temporal_variables(program: &Node) -> HashSet<String> {
 }
 
 /// `2 hours + 1 h`, `now + 90 min`, `1 h == 60 minutes`: an amount of a time unit beside a time or a duration is the
-/// exact duration it is (decision duration-units); elsewhere it stays a quantity of the units
-fn with_unit_durations(node: Node, times: &HashSet<String>) -> Node {
-	let node = node.map_children(|child| with_unit_durations(child, times));
+/// exact duration it is (decision duration-units); elsewhere it stays a quantity of the units. Each function sees its
+/// own names (reviewer: a `d = 1 day` in one function is no other's `d`) and a parameter some call passes a time
+fn with_unit_durations(program: Node) -> Node {
+	let outer = TimeScope::of(&without_functions(&program));
+	let timed_parameters = timed_parameters(&program, &outer.times);
+	durations_in(program, &outer, &timed_parameters)
+}
+
+/// The names that hold a time or duration where code runs, and those that hold an amount of a time unit (`y = 1 h`)
+struct TimeScope {
+	times: HashSet<String>,
+	time_quantities: HashSet<String>,
+}
+
+impl TimeScope {
+	fn of(code: &Node) -> Self {
+		let mut time_quantities = HashSet::new();
+		code.visit(&mut |part| {
+			if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+				if let (Node::Symbol(name), Some(_)) =
+					(target.drop_meta(), crate::numbers::units::duration_quantity(value))
+				{
+					time_quantities.insert(name.clone());
+				}
+			}
+		});
+		TimeScope { times: temporal_variables(code), time_quantities }
+	}
+
+	/// The scope of a function's body: the outer names its parameters don't hide, the parameters some call passes a
+	/// time, and the body's own
+	fn inside(&self, parameters: &[String], timed: Option<&HashSet<usize>>, body: &Node) -> Self {
+		let visible = |names: &HashSet<String>| -> Vec<String> {
+			names.iter().filter(|name| !parameters.contains(name)).cloned().collect()
+		};
+		let own = TimeScope::of(body);
+		let passed =
+			parameters.iter().enumerate().filter(|(index, _)| timed.is_some_and(|timed| timed.contains(index)));
+		TimeScope {
+			times: visible(&self.times)
+				.into_iter()
+				.chain(passed.map(|(_, name)| name.clone()))
+				.chain(own.times)
+				.collect(),
+			time_quantities: visible(&self.time_quantities).into_iter().chain(own.time_quantities).collect(),
+		}
+	}
+}
+
+/// `f(x) := body`: the function's name and parameter names
+fn function_parameters(node: &Node) -> Option<(String, Vec<String>)> {
+	let Node::Key(head, Op::Define, _) = node else {
+		return None;
+	};
+	let Node::List(items, _, _) = head.drop_meta() else {
+		return None;
+	};
+	let names: Option<Vec<String>> =
+		items.iter().map(|item| item.drop_meta().symbol_name().map(str::to_string)).collect();
+	let mut names = names?;
+	(!names.is_empty()).then(|| (names.remove(0), names))
+}
+
+/// The program outside its function bodies
+fn without_functions(program: &Node) -> Node {
+	fn strip(node: Node) -> Node {
+		match function_parameters(&node) {
+			Some(_) => Node::Empty,
+			None => node.map_children(strip),
+		}
+	}
+	strip(program.clone())
+}
+
+/// Function name → the parameter positions some call passes a time or duration: `f(now)`, `f(2 hours)`
+fn timed_parameters(program: &Node, times: &HashSet<String>) -> HashMap<String, HashSet<usize>> {
+	let mut timed: HashMap<String, HashSet<usize>> = HashMap::new();
+	program.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			if let Some(name) = items.first().and_then(|head| head.drop_meta().symbol_name()) {
+				for (index, argument) in items[1..].iter().enumerate() {
+					if mentions_time(argument) || holds_time(argument, times) {
+						timed.entry(name.to_string()).or_default().insert(index);
+					}
+				}
+			}
+		}
+	});
+	timed
+}
+
+fn durations_in(node: Node, scope: &TimeScope, timed_parameters: &HashMap<String, HashSet<usize>>) -> Node {
+	let inner = match (function_parameters(&node), &node) {
+		(Some((name, parameters)), Node::Key(_, _, body)) => {
+			Some(scope.inside(&parameters, timed_parameters.get(&name), body))
+		}
+		_ => None,
+	};
+	let scope = inner.as_ref().unwrap_or(scope);
+	let node = node.map_children(|child| durations_in(child, scope, timed_parameters));
 	let Node::Key(left, op, right) = node.drop_meta() else {
 		return node;
 	};
@@ -271,10 +367,21 @@ fn with_unit_durations(node: Node, times: &HashSet<String>) -> Node {
 		return node;
 	}
 	// `2 hours in minutes == 120 min` compares quantities
-	let temporal = |side: &Node| (mentions_time(side) || holds_time(side, times)) && !is_unit_conversion(side);
-	let as_duration = |side: &Node, other: &Node| match crate::numbers::units::duration_quantity(side) {
-		Some(duration) if temporal(other) => Node::data(duration),
-		_ => side.clone(),
+	let temporal = |side: &Node| (mentions_time(side) || holds_time(side, &scope.times)) && !is_unit_conversion(side);
+	let as_duration = |side: &Node, other: &Node| {
+		if !temporal(other) {
+			return side.clone();
+		}
+		match (crate::numbers::units::duration_quantity(side), side.drop_meta()) {
+			(Some(duration), _) => Node::data(duration),
+			// `y = 1 h; x + y`: its seconds times a duration of one second, at run time
+			(None, Node::Symbol(name)) if scope.time_quantities.contains(name) => {
+				let one_second = Node::data(Duration { months: 0, days: 0, nanos: calendar::SECOND });
+				let seconds = crate::numbers::units::seconds_of(side.clone());
+				Node::Key(Box::new(seconds), Op::Mul, Box::new(one_second))
+			}
+			_ => side.clone(),
+		}
 	};
 	let (new_left, new_right) = (as_duration(left, right), as_duration(right, left));
 	if new_left == **left && new_right == **right {

@@ -4,7 +4,7 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/functions/closures.rs).
 //! notes/closures.md describes the representation.
 
-use super::nodes::{any_part, call, children_rewritten, is_return, key, parameter_name, word_headed};
+use super::nodes::{any_part, assign, call, children_rewritten, is_return, key, parameter_name, word_headed};
 use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -475,7 +475,7 @@ fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) 
 						&format!("{closure_target}{CAPTURE_READER_MARK}{position}"),
 						vec![Node::Symbol(variable.clone())],
 					);
-					statements.push(key(Node::Symbol(capture_local(variable, position)), Op::Assign, reader));
+					statements.push(assign(Node::Symbol(capture_local(variable, position)), reader));
 				}
 			}
 			Node::List(statements, bracket, separator)

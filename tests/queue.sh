@@ -36,6 +36,9 @@ TEST_TIME_LIMIT_SECONDS="${WARP_TEST_TIME_LIMIT:-600}"
 TEST_BINARY_PATTERN='^[^ ]*/deps/[^/ ]+-[0-9a-f]{16}( |$)' # the executable of cargo's test runs: …/deps/<crate>-<hash>
 # panics provoked by tests file no to-do board cards (src/diagnostics/crash_card.rs); test.sh runs through here too
 export WARP_CRASH_CARDS=0
+# test temp files churn on the Junk volume, which fseventsd keeps no log of (notes/churn_volume.md)
+JUNK_TMPDIR=/Volumes/Junk/tmp
+[ -d "${JUNK_TMPDIR%/*}" ] && mkdir -p "$JUNK_TMPDIR" && export TMPDIR="$JUNK_TMPDIR/"
 # rustup's toolchain (nightly, with the wasm32 targets) goes ahead of Homebrew's rust formula, whose cargo and rustc
 # win in a PATH that lists /opt/homebrew/bin first (cron, Codex) and lack the wasm32 std (card homebrew-rustc)
 RUSTUP_BIN="$HOME/.cargo/bin"

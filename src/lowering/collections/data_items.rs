@@ -6,7 +6,7 @@
 //! `f(xs: [int?])`), a field `x: int or error` of the instance's class.
 //! Only lists as written are marked: the lists later passes build (`guarded_call`'s arguments) hold what they are given
 
-use crate::lowering::nodes::key;
+use crate::lowering::nodes::assign;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -126,7 +126,7 @@ impl Marker<'_> {
 			),
 			Node::Key(target, Op::Assign, value) => {
 				let value = self.written(&target, *value);
-				key(with_declared_type_unmarked(*target), Op::Assign, value)
+				assign(with_declared_type_unmarked(*target), value)
 			}
 			// `a, b = e, 2` parses as `a, (b = e), 2`: values bound to variables, no tuple stored
 			Node::List(items, bracket, Separator::Comma) if items.iter().any(is_assignment) => {

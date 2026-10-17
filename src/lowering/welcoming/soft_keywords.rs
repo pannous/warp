@@ -104,13 +104,6 @@ pub fn lower(program: Node) -> Node {
 	program
 }
 
-/// Whether the program names `word` itself: a variable, parameter, field or function of that name
-pub fn program_names(program: &Node, word: &str) -> bool {
-	let mut named = false;
-	walk_names(program, &mut |name, _| named |= name == word);
-	named
-}
-
 /// Every name the program gives: its variables, parameters, fields and functions
 pub fn names_given(program: &Node) -> std::collections::HashSet<String> {
 	let mut names = std::collections::HashSet::new();

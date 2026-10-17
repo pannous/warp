@@ -24,11 +24,9 @@ const NAMED_TEST: &str = r#"tests_run_ += 1; try { body_; 0 } catch test_error_ 
 const SUMMARY: &str = r#"if tests_failed_ > 0 then raise(str(tests_failed_) + " of " + str(tests_run_) + " failed"); "✓ " + str(tests_run_) + (if tests_run_ == 1 then " test" else " tests") + " passed""#;
 
 pub fn lower(program: Node) -> Node {
-	// soft keywords: a program naming test or expect itself keeps that word
-	let words: Vec<&str> = [TEST_WORD, EXPECT_WORD]
-		.into_iter()
-		.filter(|word| !crate::soft_keywords::program_names(&program, word))
-		.collect();
+	// soft keywords: a program taking test or expect itself keeps that word
+	let names = crate::program_names::ProgramNames::of(&program);
+	let words: Vec<&str> = [TEST_WORD, EXPECT_WORD].into_iter().filter(|word| !names.takes(word)).collect();
 	let written = program.body_statements();
 	if !written.iter().any(|statement| test_of(statement, &words).is_some()) {
 		return program;

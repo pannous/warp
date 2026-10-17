@@ -13,7 +13,7 @@ const ID_KEY: &str = "id";
 const REFERENCE_WORD: &str = "ref";
 
 pub fn lower(node: Node) -> Node {
-	let word_is_free = !crate::library_words::defined_names(&node).contains(REFERENCE_WORD);
+	let word_is_free = !crate::program_names::ProgramNames::of(&node).takes(REFERENCE_WORD);
 	let node = named_references(node, &mut Vec::new(), word_is_free);
 	let literals = referencing_literals(&node);
 	if literals.is_empty() {

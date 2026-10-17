@@ -8,7 +8,9 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
-use super::nodes::{any_part, call, called_name, children_rewritten, if_then_else, key, parameter_name, word_headed};
+use super::nodes::{
+	any_part, assign, call, called_name, children_rewritten, if_then_else, key, parameter_name, word_headed,
+};
 use crate::analyzer::call_name;
 use crate::named_arguments::named_argument;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -290,7 +292,7 @@ fn arguments_in_order(arguments: &[Node], fixed: &[String], object: &str) -> Vec
 	let others = named
 		.iter()
 		.filter(|(name, _)| !fixed.contains(name))
-		.map(|(name, value)| key(Node::Symbol(name.clone()), Op::Assign, value.clone()));
+		.map(|(name, value)| assign(Node::Symbol(name.clone()), value.clone()));
 	positional.into_iter().cloned().chain(filled).chain(others).collect()
 }
 

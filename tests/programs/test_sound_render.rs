@@ -22,7 +22,7 @@ fn run(program: &str) -> String {
 }
 
 fn wav_path(name: &str) -> std::path::PathBuf {
-	std::env::temp_dir().join(format!("warp-render-{name}-{}.wav", std::process::id()))
+	crate::common::scratch_root().join(format!("render-{name}.wav"))
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn save_sound_as_a_file_writes_the_sounds() {
 
 #[test]
 fn save_text_as_a_file_writes_it() {
-	let path = std::env::temp_dir().join(format!("warp-save-text-{}.txt", std::process::id()));
+	let path = crate::common::scratch_root().join("save-text.txt");
 	run(&format!("use file\nsave \"hi\" as: \"{}\"", path.display()));
 	assert_eq!(std::fs::read_to_string(&path).unwrap(), "hi");
 }

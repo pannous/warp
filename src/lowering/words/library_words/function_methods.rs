@@ -20,16 +20,15 @@ pub fn lower_function_methods(node: Node) -> Node {
 			|| is_text_builtin
 			|| is_libm(name)
 	};
-	// the uniform call: `x.f(args)` is `f(x, args)` when the program's f takes args + 1 values (method_call's rule
-	// too); `xs.map(square)` of a user function map(list, fn) before function values are made (function_values.rs),
-	// which would otherwise see map(square)
-	let takes_receiver = |name: &str, arguments: usize| program.function_takes(name, arguments + 1) == Some(true);
+	// the uniform call (method_call's rule too): `xs.map(square)` of a user function map(list, fn) before function
+	// values are made (function_values.rs), which would otherwise see map(square)
 	// `p.first()` of a value that may have a member first of its own: method_call's one lookup decides
 	let members = member_names(&node);
 	let node = list_constructor_calls(node, &defined);
 	function_methods_as_calls(node, &defined, &members, &|name, arguments, defined| {
 		let may_be_member = arguments == 0 && members.contains(name);
-		!may_be_member && ((is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments))
+		!may_be_member
+			&& ((is_builtin(name, arguments) && !defined.contains(name)) || program.takes_method_call(name, arguments))
 	})
 }
 

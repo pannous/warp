@@ -785,7 +785,6 @@ fn is_number_literal(amount: &Node) -> bool {
 	}
 }
 
-/// The last statement of a program or block
 /// What a call of a function with this body gives: its last statement, of a `def f(x) { body }` block too
 fn returned_value(body: &Node) -> Option<&Node> {
 	match body.drop_meta() {
@@ -794,6 +793,7 @@ fn returned_value(body: &Node) -> Option<&Node> {
 	}
 }
 
+/// The last statement of a program or block
 fn last_statement(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().and_then(last_statement),

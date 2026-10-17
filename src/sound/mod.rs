@@ -11,11 +11,13 @@
 //! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
 // DONE turn this into a module, albeit built-in one: the sound module is lib/sound.warp (its words), this folder (the
-// engine, effects, MIDI, audio files), adapters.rs (its std_io words, a child of modules/std_adapters.rs) and
-// host_words.rs (its native host words, a child of host/native.rs); both children by path, kept here (card turn-src)
+// engine, effects, MIDI, audio files), adapters.rs (its std_io words, which modules/std_adapters.rs
+// answers through) and host_words.rs (its native host words, which host/native.rs links) (cards turn-src, src-sound)
 
+pub(crate) mod adapters;
 pub mod audio_files;
 pub mod effects;
+pub(crate) mod host_words;
 pub mod midi;
 #[cfg(target_os = "macos")]
 mod midi_devices;
@@ -33,8 +35,10 @@ use std::time::{Duration, Instant};
 
 /// The samples cross as whole numbers ≥ 0: amplitude + 32768 (lib/sound.warp sample_offset)
 pub const SAMPLE_OFFSET: i64 = 32_768;
-const FOLDER: &str = "warp-sound";
-const FILE_STEM: &str = "sound";
+/// Where the WAVs go below the temp dir, named <FILE_STEM>-<process id>[-<handle>].wav (tests sweep those of ended
+/// processes, tests/common scratch_root)
+pub const FOLDER: &str = "warp-sound";
+pub const FILE_STEM: &str = "sound";
 const PCM_FORMAT: u16 = 1;
 const MONO: u16 = 1;
 const BITS_PER_SAMPLE: u16 = 16;

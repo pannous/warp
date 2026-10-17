@@ -1,5 +1,6 @@
 //! Instances: `object as Point` and its checked cast, and which variables and functions hold an instance of which class
 use super::*;
+use crate::lowering::nodes::assign;
 use crate::node::parens;
 
 pub(super) fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Node {
@@ -42,17 +43,14 @@ pub(super) fn checked_cast(object: Node, class: &str) -> Node {
 	let message = format!("{} is no {class}", object.serialize());
 	let check =
 		crate::warp_parser::parse_generated(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
-	let statements = vec![
-		key(held.clone(), Op::Assign, object),
-		crate::library_words::substitute(check, CAST_PLACEHOLDER, &held),
-		held,
-	];
+	let statements =
+		vec![assign(held.clone(), object), crate::library_words::substitute(check, CAST_PLACEHOLDER, &held), held];
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 
 pub(super) fn instance_from(object: Node, class: &str, fields: &ClassFields) -> Node {
 	let source = Node::Symbol(format!("{class}{FROM_SUFFIX}"));
-	let mut statements = vec![key(source.clone(), Op::Assign, object)];
+	let mut statements = vec![assign(source.clone(), object)];
 	statements.extend(built_instance(&source, class, fields).body_statements());
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
@@ -81,7 +79,7 @@ pub(super) fn instance_of(path: &Node, class: &str, fields: &ClassFields, lists:
 			(true, _) => instance_of(&value, field_type, fields, lists),
 			(false, Some(element_class)) => {
 				let elements = Node::Symbol(format!("{ELEMENTS_WORD}·{}", lists.len() + 1));
-				lists.push(key(elements.clone(), Op::Assign, instances_of(value, element_class, fields)));
+				lists.push(assign(elements.clone(), instances_of(value, element_class, fields)));
 				elements
 			}
 			(false, None) => value,

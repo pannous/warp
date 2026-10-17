@@ -15,7 +15,7 @@ fn value_of(program: &str) -> String {
 
 /// A WAV of half a second of 440 Hz, written by warp's own render_sound
 fn tone_file(name: &str) -> PathBuf {
-	let path = std::env::temp_dir().join(format!("warp-sample-{name}-{}.wav", std::process::id()));
+	let path = crate::common::scratch_root().join(format!("sample-{name}.wav"));
 	assert_eq!(value_of(&format!("use sound\ntone(440Hz, 0.5s)\nsave sound as: \"{}\"", path.display())), "0.5");
 	path
 }
@@ -84,7 +84,7 @@ fn other_formats_go_through_a_converter() {
 
 #[test]
 fn not_audio_fails_loudly() {
-	let path = std::env::temp_dir().join(format!("warp-sample-text-{}.txt", std::process::id()));
+	let path = crate::common::scratch_root().join("sample-text.txt");
 	std::fs::write(&path, "no sound here").unwrap();
 	let said = value_of(&of_sample(&path, "kick"));
 	assert!(said.contains("is not a sound file"), "{said}");

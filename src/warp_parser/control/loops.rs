@@ -128,6 +128,15 @@ impl WarpParser {
 				Separator::Space,
 			));
 		};
+		// `for pi in xs` binds no name, as `pi = 4` assigns none (P130, card library-word)
+		if let Symbol(name) = variable.drop_meta() {
+			if check_constants(name, self.options.data_mode).is_some() {
+				let message = format!("{name} is a constant");
+				return Some(
+					crate::errors::diagnostic::Diagnostic::at(&variable, message).fix("another name").into_error(),
+				);
+			}
+		}
 		let key_variable = match variable.drop_meta() {
 			Symbol(name) if iterates_keys(&iterable) => Some(name.clone()),
 			_ => None,

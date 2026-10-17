@@ -121,8 +121,16 @@ Landed on branch one-dispatch: slices 1, 3, 4, 5 and Q2.
   the library word (`items = []` parses to ø, so only a class-typed field `top: Node` may hold an instance). An
   untyped field holding an instance calls the library word, as before slice 7. gpu_visualizer_warp and the wgsl
   shader fail without a GPU on main too (WARP_GPU=off; card filed), environmental in the cloud.
-Next: 9 (units, type words), rest of 3 (lambdas lower_infix_iterations, soft_keywords `program_names` users,
-type_tests, needed_definitions, modules.rs).
+- Slice 2: one uniform-call rule, `ProgramNames::takes_method_call`, for function_methods and method_call.
+- Rest of 3: soft keywords (test, expect, undo, stored, store words, quantity casts) ask `ProgramNames::takes` at the
+  top level; infix iterations read the names in scope; ref, form routes, set phrases and operator aliases are
+  `rewritten_where_free`. music_words::defined_names deleted. Program-wide on purpose: std_aliases and rust_paths
+  (a field `Count` keeps its name), of_lookups (one rewrite for all selectors), markup tags (main-level statements),
+  operator call forms (function names are global), type_tests' Names, needed_definitions.
+- 9: a unit word bound only in another scope (`f(s) := …`) is the unit in a conversion target elsewhere
+  (`2000ms as s`, rewritten_by_scope in units::with_units_after_numbers); after a number it always was. A top-level
+  variable `m` still takes `as m`. Q2 covered the type words. Card parameter-unit: `f(x) := x as ms` loses the
+  conversion at run time (main too).
 
 ## Answered questions (user, 2026-10-16; decisions dispatch-untyped-library-words, type-words-reserved, field-forms)
 - Q1 untyped `first(x) := x*2`: dispatch. The library's `first(list)` is more specific than the program's untyped

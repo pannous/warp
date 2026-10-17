@@ -3,10 +3,9 @@
 use super::*;
 
 mod gpu;
+use crate::sound::host_words::*;
 use gpu::*;
-#[path = "../sound/host_words.rs"]
-mod sound_words; // the sound module's host words, kept in src/sound (a child here for the linker's helpers)
-use sound_words::*;
+pub(crate) use gpu::{linear_doubles, module_memory, number_of}; // the sound module's host words call them too
 
 /// A program value as a host word gets and gives it: a reference to a Node of the instance
 pub(crate) type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
@@ -444,7 +443,7 @@ fn draw_show(width: i64, height: i64) -> wasmtime::Result<()> {
 
 /// The first `room` values of a list, read in one call by ints_of_list or else node by node; the value itself when it is
 /// no list
-fn list_values(
+pub(crate) fn list_values(
 	caller: &mut Caller<'_, HostState>,
 	memory: Memory,
 	list: HostNode,
@@ -886,7 +885,7 @@ fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtim
 
 /// What a host word computes calling the program back: a call that fails fails the word with its own error (the trap,
 /// whose trap_detail says what went wrong), any other failure is the word's
-fn calling_back<T>(
+pub(crate) fn calling_back<T>(
 	word: &str,
 	compute: impl FnOnce(&mut dyn FnMut(wasmtime::Error) -> String) -> Result<T, String>,
 ) -> wasmtime::Result<T> {

@@ -156,7 +156,7 @@ impl InstanceCalls {
 	fn dispatched(&self, head: &Node, arguments: &[Node]) -> Node {
 		if !matches!(head.drop_meta(), Node::Symbol(_)) {
 			let callee = Node::Symbol(format!("callee·{}", crate::lowering::nodes::fresh_number()));
-			let binding = key(callee.clone(), Op::Assign, head.clone());
+			let binding = assign(callee.clone(), head.clone());
 			let dispatch = self.dispatched(&callee, arguments);
 			return Node::List(vec![binding, dispatch], Bracket::Round, Separator::Semicolon);
 		}

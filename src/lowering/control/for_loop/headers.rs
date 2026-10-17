@@ -4,7 +4,7 @@
 //! walks the text by that unit, `for word in text`, `for line in text` and `for byte in text` by words, lines and bytes.
 
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-use crate::lowering::nodes::{arguments_rewritten, key};
+use crate::lowering::nodes::{arguments_rewritten, block, if_then, key};
 use crate::node::{call, parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, mentions};
@@ -269,8 +269,7 @@ fn type_filtered_body(
 
 /// `{ if test then body }`, the body of a filtering loop
 fn guarded_body(test: Node, body: Node) -> Node {
-	let guarded = key(key(Node::Empty, Op::If, test), Op::Then, body);
-	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
+	block(vec![if_then(test, body)])
 }
 
 /// `for int in xs` as the explicit filter `for xs.filter(it is int)`, the body unchanged; None when the body

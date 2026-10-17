@@ -6,8 +6,10 @@ use midir::{MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnec
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc, LazyLock, Mutex};
 
+/// OUTPUTS' key of the virtual source, no device's name
+const VIRTUAL_KEY: &str = "";
 /// The name the system shows for warp's MIDI client and its connections
-const CLIENT: &str = "warp";
+pub const CLIENT: &str = "warp";
 /// The outputs opened by name, kept open for the run
 static OUTPUTS: LazyLock<Mutex<HashMap<String, MidiOutputConnection>>> = LazyLock::new(Default::default);
 /// The inputs opened by name, their messages queued
@@ -16,7 +18,11 @@ static INPUTS: LazyLock<Mutex<HashMap<String, Input>>> = LazyLock::new(Default::
 /// The message to its output, connected once and kept open for the run
 pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 	let mut outputs = OUTPUTS.lock().map_err(|_| "the MIDI outputs are poisoned")?;
-	let name = chosen_port(port, &port_names(&midi_output()?), "output")?;
+	let names = port_names(&midi_output()?);
+	if port.is_empty() && names.is_empty() {
+		return virtual_sent(&mut outputs, bytes);
+	}
+	let name = chosen_port(port, &names, "output")?;
 	if !outputs.contains_key(&name) {
 		let output = midi_output()?;
 		let device = port_named(&output, &name, "output")?;
@@ -26,6 +32,25 @@ pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 	}
 	let connection = outputs.get_mut(&name).expect("connected above");
 	connection.send(bytes).map_err(|failure| format!("cannot send to MIDI output {name}: {failure}"))
+}
+
+/// No output device and none named (card midi-send): the message goes out on warp's own virtual source, opened once
+/// and announced on stderr, which a synth app or DAW can listen to
+fn virtual_sent(outputs: &mut HashMap<String, MidiOutputConnection>, bytes: &[u8]) -> Result<(), String> {
+	if !outputs.contains_key(VIRTUAL_KEY) {
+		outputs.insert(VIRTUAL_KEY.to_string(), virtual_output()?);
+		eprintln!("midi: no MIDI output devices found: sending on the virtual source {CLIENT}, which a synth app can listen to");
+	}
+	let connection = outputs.get_mut(VIRTUAL_KEY).expect("opened above");
+	connection.send(bytes).map_err(|failure| format!("cannot send on the virtual MIDI source {CLIENT}: {failure}"))
+}
+
+/// warp's virtual MIDI source, named CLIENT: other programs see it as a MIDI input
+pub fn virtual_output() -> Result<MidiOutputConnection, String> {
+	use midir::os::unix::VirtualOutput;
+	midi_output()?
+		.create_virtual(CLIENT)
+		.map_err(|failure| format!("cannot open the virtual MIDI source {CLIENT}: {failure}"))
 }
 
 pub fn output_names() -> Result<Vec<String>, String> {

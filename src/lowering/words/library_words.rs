@@ -1111,8 +1111,7 @@ impl Lowering {
 		// the uniform call: `x.f(args)` is `f(x, args)` when the program's f takes args + 1 values
 		let is_users =
 			|name: &str| self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty());
-		let takes_receiver = self.program.function_takes(name, arguments.len() + 1) == Some(true);
-		if !is_other_modules_word && is_users(name) && takes_receiver {
+		if !is_other_modules_word && is_users(name) && self.program.takes_method_call(name, arguments.len()) {
 			return call(word_call(word_node, receiver, arguments.to_vec()));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled

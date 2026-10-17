@@ -5,7 +5,7 @@
 //! Only functions whose meaning cannot change by moving their body: not recursive, no free variables (every name is a
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
-use super::nodes::{children_rewritten, for_in_variable, key, Counter};
+use super::nodes::{assign, children_rewritten, for_in_variable, Counter};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{GLOBAL_WORD, RETURN_WORD};
@@ -183,7 +183,7 @@ fn inlined_call(
 		.parameters
 		.iter()
 		.zip(arguments)
-		.map(|(parameter, argument)| key(Node::Symbol(rename(parameter)), Op::Assign, argument.clone()));
+		.map(|(parameter, argument)| assign(Node::Symbol(rename(parameter)), argument.clone()));
 	let body =
 		bindings.chain(function.statements.iter().map(renamed)).chain(std::iter::once(renamed(&function.result)));
 	Some(Node::List(body.collect(), Bracket::Round, Separator::Semicolon))

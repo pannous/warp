@@ -11,7 +11,7 @@
 //! `before test {…}` before it.
 
 use super::listeners;
-use super::nodes::{block, children_rewritten, if_then, key, Counter};
+use super::nodes::{assign, block, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
 use crate::lowering::signals::event_signals::FIRED_PREFIX;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -95,7 +95,7 @@ impl Listener {
 			Some(fired) => {
 				let not_fired = key(Node::Empty, Op::Not, Node::Symbol(fired.clone()));
 				let condition = key(not_fired, Op::And, condition.clone());
-				if_then(condition, block(vec![assign(fired, Node::True), self.body.clone()]))
+				if_then(condition, block(vec![assign_variable(fired, Node::True), self.body.clone()]))
 			}
 		}
 	}
@@ -106,7 +106,11 @@ impl Listener {
 pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
 	let not_before = key(Node::Empty, Op::Not, symbol(was));
 	let became_true = key(symbol(held), Op::And, not_before);
-	let parts = vec![assign(was, symbol(held)), assign(held, condition), if_then(became_true, block(vec![body]))];
+	let parts = vec![
+		assign_variable(was, symbol(held)),
+		assign_variable(held, condition),
+		if_then(became_true, block(vec![body])),
+	];
 	Node::List(parts, Bracket::Round, Separator::Semicolon)
 }
 
@@ -306,9 +310,9 @@ impl Signals {
 		let held =
 			(word == ListenerWord::Whenever).then(|| (self.fresh_name(HELD_PREFIX), self.fresh_name(WAS_PREFIX)));
 		let start = match (&fired, &held) {
-			(Some(fired), _) => Some(assign(fired, Node::False)),
+			(Some(fired), _) => Some(assign_variable(fired, Node::False)),
 			(_, Some((held, was))) => Some(Node::List(
-				vec![assign(held, Node::False), assign(was, Node::False)],
+				vec![assign_variable(held, Node::False), assign_variable(was, Node::False)],
 				Bracket::Round,
 				Separator::Semicolon,
 			)),
@@ -354,8 +358,8 @@ impl Signals {
 				let last = self.fresh_name(LAST_PREFIX);
 				let (remembered, body) = self.remembering_old(with_old, &last);
 				(
-					block([remembered, vec![assign(&last, variable.clone()), body]].concat()),
-					Some(assign(&last, variable.clone())),
+					block([remembered, vec![assign_variable(&last, variable.clone()), body]].concat()),
+					Some(assign_variable(&last, variable.clone())),
 				)
 			}
 			None => (body, None),
@@ -383,7 +387,7 @@ impl Signals {
 		let body = self.lower(with_value(&body, &variable), &[]);
 		let changed = key(variable.clone(), Op::Ne, Node::Symbol(last.clone()));
 		// a copy: a list or map changed in place (`x.add(2)`, P200b) is no longer the one remembered
-		let remember = || assign(&last, crate::library_words::copy_call(variable.clone(), Node::False));
+		let remember = || assign_variable(&last, crate::library_words::copy_call(variable.clone(), Node::False));
 		Some(Listener {
 			trigger: Trigger::Write(self.sources(&variable)),
 			condition: Some(changed),
@@ -397,7 +401,7 @@ impl Signals {
 	/// A body reading `old` (made by with_old): `change_old_0 = last` first, the body reading it
 	fn remembering_old(&mut self, with_old: impl Fn(&Node) -> Node, last: &str) -> (Vec<Node>, Node) {
 		let old = self.fresh_name(OLD_PREFIX);
-		(vec![assign(&old, symbol(last))], with_old(&Node::Symbol(old)))
+		(vec![assign_variable(&old, symbol(last))], with_old(&Node::Symbol(old)))
 	}
 
 	/// `after tested: body`, `before test {body}`: test must be a function of the program
@@ -731,6 +735,6 @@ fn statement_write(statement: &Node) -> Option<String> {
 	}
 }
 
-pub(crate) fn assign(name: &str, value: Node) -> Node {
-	key(symbol(name), Op::Assign, value)
+pub(crate) fn assign_variable(name: &str, value: Node) -> Node {
+	assign(symbol(name), value)
 }

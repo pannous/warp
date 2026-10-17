@@ -1,6 +1,7 @@
 //! Classes as other languages write them: Rust's `impl Point {…}`, Go's `func (p Point) Sum() int {…}`, Ruby's
 //! `Point.new(1, 2)`, and the text, equality and order methods by their other names (`toString`, `__eq__`, `compareTo`)
 use super::*;
+use crate::lowering::nodes::block;
 use crate::node::parens;
 use crate::words::SELF_WORD;
 
@@ -28,14 +29,7 @@ pub(super) fn taking_in_impls(node: Node, impls: &[(String, Vec<Node>)]) -> Node
 				impls.iter().filter(|(owner, _)| *owner == class).flat_map(|(_, items)| items.clone()).collect();
 			match added.is_empty() {
 				true => Node::Type { name, body },
-				false => Node::Type {
-					name,
-					body: Box::new(Node::List(
-						[class_items(&body), added].concat(),
-						Bracket::Curly,
-						Separator::Semicolon,
-					)),
-				},
+				false => Node::Type { name, body: Box::new(block([class_items(&body), added].concat())) },
 			}
 		}
 		Node::List(items, bracket, separator) => {
@@ -60,6 +54,10 @@ pub(super) fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
 		return None;
 	};
 	let (class, block) = match words.as_slice() {
+		// `impl Area for S {…}` parses as `impl Area (for S {…})`
+		[word, _, clause] if word.drop_meta().name() == IMPL_WORD && for_clause(clause).is_some() => {
+			for_clause(clause)?
+		}
 		[word, class, block] if word.drop_meta().name() == IMPL_WORD => (class, block),
 		// `impl Point {…}` of a declared Point reads like the spaced construction `Point {…}`
 		[word, construction] if word.drop_meta().name() == IMPL_WORD => match construction.drop_meta() {
@@ -76,6 +74,17 @@ pub(super) fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
 	let class = class.symbol_name()?;
 	match block.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => Some((class.to_string(), class_items(block))),
+		_ => None,
+	}
+}
+
+/// `for S {…}`: the class and the block
+fn for_clause(clause: &Node) -> Option<(&Node, &Node)> {
+	match clause.drop_meta() {
+		Node::List(words, _, _) => match words.as_slice() {
+			[for_word, class, block] if for_word.drop_meta().name() == "for" => Some((class, block)),
+			_ => None,
+		},
 		_ => None,
 	}
 }
@@ -116,7 +125,7 @@ pub(super) fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 		&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space),
 		&bindings,
 	);
-	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
+	Some((class.clone(), class_items(&block(vec![method]))))
 }
 
 /// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note

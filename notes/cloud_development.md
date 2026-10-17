@@ -1,263 +1,83 @@
-# Developing warp in the cloud (evaluation 2026-10-03)
+# Developing warp in the cloud
 
-Question (user): "we have some spare cloud tokens: can we develop features in the cloud with them?"
-Short answer: YES. The "spare cloud tokens" are the **Cloud session credits**: $250 included with Max, expiring
-2026-11-05 08:59 GMT+1. On claude.ai/settings/usage the card reads: "Applies automatically to cloud sessions. After it's
-used or expires, your plan's regular usage applies." It pays for **cloud sessions** (`claude --cloud`, claude.ai/code,
-the app) but NOT for routines (RemoteTrigger / `/schedule`). Verified: a 23-min routine left it untouched, while one
-`claude --cloud` probe moved it $0.47 → $0.83. Cloud work also unloads the Mac.
+The Cloud session credit ($250 with Max, expires 2026-11-05) pays for **cloud sessions** (`claude --cloud`,
+claude.ai/code, the app), not for routines (RemoteTrigger / `/schedule`), which draw on the plan limits. Check it on
+claude.ai/settings/usage or with `~/dev/bin/claude-usage.sh` (the CLI's `/usage` doesn't show it). Without the credit,
+cloud sessions and routines share the subscription's limits. Cloud work also unloads the Mac.
 
-## 1. Cloud execution options for this account
+## Execution options
 
-| Option | Works here? | Notes |
-|---|---|---|
-| **Cloud sessions** (claude.ai/code, mobile app, `claude --cloud "<task>"`) | yes, **paid by the $250 credit** | `claude --cloud` needs a TTY ("--cloud requires an interactive terminal"), so from an agent run it in detached tmux and read the `View: https://claude.ai/code/session_…` line. It clones the GitHub remote at the current branch/commit (push first). Follow-ups: `claude -p "msg" --cloud <session-id>` (posts and exits). The user can steer from the browser or phone. `claude --teleport <id>` pulls one back into a local terminal. |
-| **Routines** via `RemoteTrigger` (`create` + `run_once_at`, or `/schedule`) | yes, but **plan limits**, not the credit | Readable run log (`list_runs` / `get_run_log`), no TTY needed. Caps: 100 scheduled runs/h, 30 "run now"/h. Use them after the credit is gone or expired. |
-| Agent tool `isolation: "remote"` | unreliable | On 2026-09-29 it silently fell back to local worktrees (plan usage, Mac load). Don't use it for cloud work. |
-| `claude ultrareview` | available | Cloud-hosted multi-agent review of a branch: a cheap second opinion before merging cloud branches. |
-| GitHub Actions `claude-code-action` | not set up | pannous/warp has no Anthropic secrets. It could run on the subscription (`claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN` secret) or on API credits (`ANTHROPIC_API_KEY`). It gives nothing a routine doesn't, and GitHub runners have 2 to 4 cores. |
-| Managed Agents / Messages API | needs a Console API key + API credits | Separate pay-as-you-go billing. Not worth it for this repo. |
-| `--remote-control` (claude-remote.sh) | local | Runs on the Mac; only the UI is remote. It does not reduce load. |
-
-Sandbox (routine run 2026-10-03): Ubuntu x86_64, 4 vCPU / 16 GB / 30 GB, rustc 1.94.1, lean NOT installed.
-Network: crates.io and static.rust-lang.org return 403 "Host not in allowlist" (probe routine 2026-09-30, environment
-env_011CUKr7fLEneY74cFok55eT). The docs say the default "Trusted" level allows crates.io, so the environment's network
-setting is probably Custom or None. **Where to edit it** (the user found it 2026-10-03): open a cloud session at
-claude.ai/code → the chevron next to the session title → **Edit cloud environment**. The docs' path is the cloud icon
-showing the environment name in the row above the message box → Cloud → hover the environment → gear icon. There is no
-settings page or URL for it. The dialog holds the name, Network access (None / Trusted / Custom / Full), env vars
-(e.g. `BASH_MAX_TIMEOUT_MS=1800000`, since the suite takes ~9 min) and a setup script. A setup script that runs
-`git fetch origin vendor && git archive origin/vendor vendor | tar -x` and pre-builds would be cached if it finishes in
-~5 min. `/remote-env` in the CLI picks the default environment for `claude --cloud`.
-
-**Environments in use (2026-10-03)**: the user edited the environment **"Microsoft"**: Custom network with
-`*.pannous.com`, `pannous.com`, `index.crates.io`, `crates.io`, … plus "Also include default list of common package managers".
-In a new session there, crates.io works (a crate download returns 200; only the bare root of static.crates.io gives 403).
-`cargo build --tests --config net.offline=false` takes 138 s without the vendor branch, and rustc is 1.97.0. In the user's words
-it "works much better than the default one". `claude --cloud` from this Mac lands there automatically. Environment changes
-apply to NEW sessions only: an open session keeps its old network rules. The user keeps two sessions open,
-**Cloud-Microsoft** and **Cloud-Default**. ListAgents lists them by those names, but **SendMessage to them does NOT
-work for giving tasks**. A session whose permission mode differs from the sender's (ours run in bypass mode, cloud sessions don't) HOLDS
-cross-session messages until its user approves them in the claude.ai UI, and they may expire. Its log shows
-`system/peer_message_hold`, and the agent never starts a turn. This is a deliberate guard against one agent injecting
-work into another's session. Seen 2026-10-03: 13 held events, and two tasks sat unprocessed for 15+ min.
-**Use instead** `claude -p "<message>" --cloud <session_id>`: it posts a real user message (your own login), starts a
-turn at once, and works from any shell. A session's id is in its `View:` URL; `claude --teleport` lists titles but not ids.
-Cloud sessions cannot reply. Their transcripts can be read with `RemoteTrigger get_run_log <session_id>` (it works for any cloud session, not
-only routines). The `vendor` branch (notes/cloud_offline_build.md) remains the fallback for environments without
-crates.io. Its known gap, `miniz_oxide` for the package sub-builds, stays unfixed (supervisor decision 2026-10-03).
-Lean is disabled in the cloud (user decision 2026-10-03): `requires!(LEAN)` skips the Lean-proving tests when
-`CLAUDE_CODE_REMOTE=true`. The test gate hook and tests/queue.sh lock are Mac-local; cloud sessions are exempt (notes/roles.md).
-
-**Session and environment ids** (from the cloud's own `mcp__claude-code-remote__list_sessions`):
-
-| Session | Session id | Environment | Model | crates.io | pannous.com |
-|---|---|---|---|---|---|
-| Cloud-Microsoft | session_01EkeRuTptsZvLBGsKoRGxip | env_011CUKrgcRXmXGnc5XA1kuYK ("Microsoft", Custom) | Opus 5.5 | 200 | 200 |
-| Cloud-Default | session_01TonobYUriX5FEEciaKZ46j | env_011CUKq4dJkNg2L8R6uJFKZb (Default, Trusted) | Sonnet 5.5 | 200 | 403 |
-
-The old routines ran in a third environment, env_011CUKr7fLEneY74cFok55eT, with no crates.io. Both open environments build
-from crates.io now. "Microsoft works much better" is most likely the **model**: Cloud-Microsoft runs Opus, while Cloud-Default
-runs Sonnet. Network access only differs for pannous.com.
-
-**Remaining cloud-only test failures**: 3 package/uniscript tests need the `wasm32-wasip1` Rust target. Fix it in each
-environment's **setup script**: `rustup target add wasm32-wasip1` (static.rust-lang.org is reachable). Cloud-Microsoft,
-2026-10-03: the suite was 1464 passed, 3 failed; after the rustup line those 3 tests pass (targeted run, 4/4 ok).
-
-**Cloud sessions can talk out**: they have the `claude-code-remote` MCP (`list_sessions`, `send_message`, behind a permission
-prompt). Cloud-Microsoft used it to find and brief the "fixer" session. When the USER tells a cloud session to merge
-into main, it does so itself (5747140, claude/no-lean-in-cloud). Our rule stays: cloud work goes to the Integrator.
-After an approved `send_message`, the stop hook complains about an uncommitted `.claude/settings.local.json`. Don't commit it.
-
-## 2. Billing: what draws from where
-
-Measured with `~/dev/bin/claude-usage.sh`. It reads the OAuth usage endpoint with the keychain token and never prints it.
-
-Account: Max 20x (keychain `Claude Code-credentials-0bd83d07`). At 2026-10-03 10:42Z:
-- `five_hour` 9 %, `seven_day` 59 %: the plan limits shared by ALL Claude Code use (local and cloud).
-  `seven_day_breakdown`: Claude Code 98 %, Cowork 2 %.
-- **Cloud session credits** (usage API key `iguana_necktie`): $250, resets/expires 2026-11-05, a promo for Pro ($100) and
-  Max ($250) subscribers that was claimable until 2026-10-07 (`/claim-credit`); this account has already claimed it. The CLI's
-  `/usage` does not show it. claude.ai/settings/usage and `~/dev/bin/claude-usage.sh` do. Measured: the routine pilot
-  (10:46–11:10Z) left it at $0.467345, and a `claude --cloud` probe session at 11:32Z moved it to $0.833833. So it
-  pays for cloud sessions only, not routines.
-- `extra_usage` (pay-as-you-go usage credits): `user_disabled: true`, `credits_ever_enabled: true`. The user turned
-  overage off. Turning it on lets work continue past the 5-hour limit, at a cost.
-- A second keychain login exists: a **Pro** account (`Claude Code-credentials-fe6e0099`, token expired 2026-09-28).
-  It has its own, separate limits. Logging into it on claude.ai/code would give a second, independent cloud budget
-  (Pro limits are small, and it needs GitHub access to pannous/warp).
-
-Without the credit, cloud sessions and routines share the subscription's limits (code.claude.com/docs/en/claude-code-on-the-web#limitations). There is no separate compute charge for the VM, and API keys don't work for
-cloud sessions. Check usage with `/usage` in the CLI, claude.ai/settings/usage, or `~/dev/bin/claude-usage.sh`.
-
-So: until 2026-11-05, cloud SESSIONS are effectively free (up to $250), and every cloud run saves the Mac. Each cloud run compiles and tests on its own 4-core VM.
-The 2026-09-28 limit crash came from SIX parallel **Opus** runs. Sonnet 5.5 costs much less of the limit per run.
-
-## 3. Pilot (2026-10-03): routine `trig_01HMT7SPg8Ggzm4XmGm4a5uU`
-
-Task: shared `KIND_MASK` / `BYTE MemArg` constants (refactor, no behaviour change). Model: Sonnet 5.5.
-Session: https://claude.ai/code/session_01QMSxkvhC3Pxcs5gFWEv1wr. Result: branch **`claude/shared-kind-constants`**
-(987dd412 refactor, bb972476 report). 13 files, +43/−31: one `pub const KIND_MASK` in src/type_kinds.rs and one
-`pub(crate) const BYTE` in src/wasm_emitter/mod.rs. The `kind & 0xFF` tag masks in node.rs, wasm_reader.rs,
-wasmtime_runner.rs and mod.rs now use KIND_MASK. `(kind >> 8) & 0xFF` is untouched.
-
-| Step | Time |
+| Option | Notes |
 |---|---|
-| sandbox allocated → Claude running | 5 s |
-| clone + fetch vendor + checkout | 15 s |
-| cold build + full suite (offline, vendor) | 729 s (build ≈ 185 s, tests ≈ 544 s) |
-| refactor | ~1 min |
-| incremental rebuild + full suite | 544 s (rebuild 29 s) |
-| total wall time, fire → pushed | 23 min |
+| **Cloud sessions** (`claude --cloud "<task>"`) | Needs a TTY: from an agent run it in detached tmux and read the `View: https://claude.ai/code/session_…` line. Clones the GitHub remote at the current branch/commit (push first). Steer with `claude -p "msg" --cloud <session-id>`. `claude --teleport <id>` pulls one into a local terminal. |
+| **Routines** (`RemoteTrigger create` + `run_once_at`) | Plan limits, not the credit. Readable run log (`list_runs` / `get_run_log`). Caps: 100 scheduled runs/h, 30 "run now"/h. |
+| Agent tool `isolation: "remote"` | Unreliable: has silently fallen back to local worktrees. Don't use it for cloud work. |
+| `claude ultrareview` | Cloud multi-agent review of a branch. |
+| `--remote-control` (claude-remote.sh) | Runs on the Mac; only the UI is remote. |
 
-Suite in the cloud: 1442 passed, 7 failed, 81 ignored, the same before and after. The 7 failures are environmental:
-- lean missing: test_law ×2, test_footguns::test_proof_model_matches_unbounded_int
-- package sub-builds need `miniz_oxide`, missing from the vendor branch: test_package_tools ×2,
-  test_uniscript::the_index_matches_the_readable_entities, test_package_pin::header_signatures_are_parsed_once.
-  Fix: vendor the packages' own lockfiles into the `vendor` branch as well.
+## Environments
+- Edit one: open a cloud session at claude.ai/code → the chevron next to the session title → **Edit cloud environment**
+  (name, Network access None/Trusted/Custom/Full, env vars, setup script). No settings page or URL exists.
+  `/remote-env` in the CLI picks the default environment for `claude --cloud`. Changes apply to new sessions only.
+- The environment "Microsoft" (Custom network: `*.pannous.com`, `pannous.com`, crates.io + the default package-manager
+  list) is the one `claude --cloud` from this Mac lands in. Sandbox: Ubuntu x86_64, 4 vCPU, ~15 GB, no Lean.
+- Lean tests skip in the cloud: `requires!(LEAN)` checks `CLAUDE_CODE_REMOTE=true`. The test gate hook and the
+  tests/queue.sh lock are Mac-local; cloud sessions are exempt.
+- The package/uniscript tests need `rustup target add wasm32-wasip1` (put it in the setup script).
+- The `vendor` branch (notes/cloud_offline_build.md) is the fallback for environments without crates.io.
 
-Plan usage: `five_hour` went 9 → 21 % during the run, but ~6 local sessions were working at the same time, so the
-cloud share can't be isolated. The $250 bucket did not move.
-Reporting: the run cannot message back. The channel is the pushed branch (with a report file) plus the run log
-(`RemoteTrigger get_run_log`). GitHub "Rust CI" also starts on every claude/* push. It ran twice here (one push per
-commit), so a cloud task should push all its commits once at the end, or once per step.
+## Gotchas
+- **SendMessage to a cloud session does not deliver tasks**: a session whose permission mode differs from the sender's
+  holds cross-session messages until its user approves them (`system/peer_message_hold` in its log). Use
+  `claude -p "<message>" --cloud <session_id>`: a real user message that starts a turn at once. The id is in the
+  `View:` URL. Read transcripts with `RemoteTrigger get_run_log <session_id>` (works for any cloud session).
+- Cloud sessions cannot reply; the channel is the pushed branch (with a report file) plus the run log.
+- The user may archive sessions any time; archived ones reject messages. Ping before assigning.
+- Each cloud worktree's build output is ~5 GB: keep ≤ 2 worktrees per VM.
+- An old branch (many merges behind) is redone on current main by intent, not rebased blindly.
+- Push all commits once per step: GitHub "Rust CI" runs on every claude/* push.
+- After an approved `send_message`, the stop hook complains about an uncommitted `.claude/settings.local.json`. Don't
+  commit it.
 
-### Batch 2026-10-03 afternoon (cloud steward cloud-eval → Integrator)
-Ten branches from 3 cloud sessions, all green in the cloud before handoff: object-arguments, try-exits-and-naming,
-like-keyword (+ typed-variables follow-up), remove-named-else, type-word-user-function, zero-warnings (redone as
-zero-warnings-2 on current main), plus the earlier pilot branches. Credit: about $22 of $250 for all of it, roughly
-$2–4 per feature with Opus.
-Lessons:
-- **Limits**: five_hour went 82 → 100 % while 3 cloud sessions and ~4 local ones ran; the credit moved only about $1 per
-  10 min. Local sessions are the main 5-hour consumer, but BOSS suspects cloud also counts toward the WEEKLY limit.
-  Keep at most 2 cloud sessions busy when weekly is above ~70 %.
-- **Disk**: each cloud worktree's `target/` is about 5 GB. The VM's free space ran out with 4 worktrees, which killed two
-  suites mid-run. Tell sessions to keep ≤ 2 worktrees and delete `target/` of finished ones.
-- **Classifier stalls**: the cloud's auto-mode classifier once denied a read-only grep as "Irreversible Local
-  Destruction", and the session stopped and asked. Resume with `claude -p "continue …" --cloud <id>`.
-- **Old branches don't merge**: a branch based on a main that is 25 merges old conflicts (zero-warnings-0h6ky3). Redo it
-  on current main by intent, using the old commit messages as the spec, rather than rebasing blindly.
-- **Decisions arrive mid-task**: send them right away as a `claude -p` message. The sessions adapt (D1 switched from
-  shadow + warning to clash error). A decision that reverses already-merged work needs a new branch from main (M4).
-- **The user may archive sessions** at any time, and archived sessions reject messages. Check ListAgents (cloud rows) or
-  a `claude -p` ping before assigning.
-- **Integrator renames**: it was warp-6c, later warp-7f. Find it via tmux `warp-warp-integrator` / ListAgents.
+## Cloud tasks
+- Cloud-suitable: pure Rust in src/ and tests/ that needs no Mac and no secrets (parser, analyzer, emitter, refactors,
+  tests). Keep local: Lean proofs, macOS/iOS apps, anything reading ~/ or needing secrets, fast back-and-forth.
+- Launch: `tmux new-session -d -s cloud-<task> -c <clean checkout> 'claude --cloud "<prompt>"; sleep 300'`, then
+  `tmux capture-pane -p -t cloud-<task>` for the URL. Give the URL to the user. Killing the pane does not stop the
+  session.
+- Prompt: task with file pointers, branch `claude/<task-id>` from origin/main, red test first, commit and push per
+  step, no merge, report file `notes/cloud_reports/<task-id>.md`. The Integrator merges claude/* branches after a
+  local gate and deletes them.
+- At most 2–3 busy cloud sessions when the weekly limit is high.
 
-## 4. Recommended workflow (supervisor → cloud)
+## Cloud test lane (`scripts/cloud-test.sh`)
 
-1. **Pick cloud-suitable tasks**: pure Rust in src/ and tests/ that needs no Mac and no network (parser, analyzer,
-   emitter, refactors, new tests, ignored-test sweeps). **Keep local**: uniscript, packages and headers (until vendor
-   carries the package lockfiles), Lean proofs (no lean in the sandbox), macOS/iOS apps, anything that reads ~/ or
-   needs secrets, and tasks that need fast back-and-forth.
-2. **Launch** one cloud SESSION per task (credit-funded) from a pushed commit:
-   `tmux new-session -d -s cloud-<task> -c <clean checkout> 'claude --cloud "<prompt>"; sleep 300'`, then
-   `tmux capture-pane -p -t cloud-<task>` to get the `View:` URL and session id. Give that URL to the user. Killing the
-   tmux pane does not stop the cloud session. Steer with `claude -p "<msg>" --cloud <session-id>` (never SendMessage: held, see above). After the credit is
-   used up or expires: routines via `RemoteTrigger create` (`run_once_at` = now + 1 min; job_config.ccr as in the pilot:
-   environment env_011CUKr7fLEneY74cFok55eT, source github.com/pannous/warp, model `claude-sonnet-5-5`, tools
-   Bash/Read/Write/Edit/Glob/Grep).
-3. **Prompt template** (the rules part is in notes/cloud_tasks.md; refer to it instead of repeating it):
-   ```
-   Repository pannous/warp. Task <ID>: <what, with file pointers and decisions>.
-   Branch claude/<task-id> from origin/main. Follow notes/cloud_tasks.md (rules) and notes/cloud_offline_build.md
-   (offline build from the vendor branch; run the suite with run_in_background, it takes ~9 min).
-   Record baseline totals first; red test first in tests/test_<topic>.rs; never edit existing tests.
-   Commit per step, conventional commits, no Claude co-author/session lines. Push after every step. Do NOT merge.
-   Report: commit notes/cloud_reports/<task-id>.md (start/end UTC, baseline vs final totals, changes, open items).
-   ```
-4. **Parallelism**: while the credit lasts, the budget is dollars. The tiny probe cost ~$0.37, so a 20–30 min
-   Sonnet task is probably a few dollars. Estimate after the first real batch with `~/dev/bin/claude-usage.sh`.
-   Start with 3 parallel sessions, and watch both the credit and five_hour: it is unverified whether credit-funded
-   sessions also count toward the 5-hour limit. Every run pushes after every step, so a limit cut loses at most one
-   step: resume with a follow-up message (`claude -p … --cloud <id>`) or a RESUME prompt that names the branch.
-5. **Collect**: session status at claude.ai/code (routines: `RemoteTrigger list_runs` / `get_run_log`). The result is the branch and its report file.
-   The Integrator (warp-6c) merges the claude/* branch after a local full suite (`tests/queue.sh`). It drops the
-   report file, or moves it into notes/, and then deletes the remote branch.
-6. **Cheap wins to do first**: (a) user: Edit cloud environment → Network access Trusted (crates.io), so runs build
-   without the vendor branch and the package tests pass, and add `BASH_MAX_TIMEOUT_MS=1800000`; (b) add the packages'
-   lockfiles to the vendor refresh workflow; (c) spend the credit before 2026-11-05: it is lost afterwards.
-
-## 5. Cloud test lane (card cloud-test-lane, 2026-10-16)
-
-The Mac has one test queue (tests/queue.sh, 3 slots) and held ~37 waiting runs; each cloud session is a VM of its own
-(Ubuntu x86_64, 4 cores, 15 GB, rustc 1.97), paid by the Cloud session credit. `scripts/cloud-test.sh` runs a
-branch's tests there:
+Runs a branch's tests on a cloud VM instead of the Mac's queue:
 
     scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] <branch> <tip> [filters…|--full]
     scripts/cloud-test.sh --result [--card <card>] <branch> <tip>      # collect a --no-wait run later
 
-- The tip must be pushed (a full commit id from `git rev-parse`): the cloud tests commits, never a worktree's
-  uncommitted edits. Filters as for tests/queue.sh; `--full` = test.sh's flags (--all-features, warp-lang at opt-level 2).
-  `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
-- How: `claude --cloud` in detached tmux (it needs a TTY) with a fixed prompt; the session fetches
-  scripts/cloud-test.sh from origin/main (the tip may predate it) and calls it with `--run-here` until it prints
-  CLOUD TEST DONE (each call waits ≤ 9 min, under the cloud Bash tool's 10 min). The run itself is detached: it checks
-  out the tip in a worktree, adds the wasm32 targets (no setup script in the environment), builds from crates.io (the
-  `vendor` branch only when its Cargo.lock matches), tests with --no-fail-fast and pushes `result.md` + `log.txt.gz`
-  as one commit to `cloud-results/<branch>-<tip8>` (no CI trigger: rust.yml runs on main and claude/* only).
-- The Mac side polls that branch once a minute (`git ls-remote`, cheap on the API quota), saves the result to
-  data/cloud/<run>/ (launch.txt with the session URL and credit before, result.md, log.txt.gz), deletes the results
-  branch, prints the result and, with `--card`, adds a `todo note`. Exit status 0 = green.
-- At most 3 runs at once: a launch waits while 3 launches younger than 3 h have no result.
-- Environmental failures: scripts/cloud-test-environmental.txt, one regex per line with its reason; matching failures
-  are listed apart and don't make the verdict red. Grown only from real runs. Current reasons: the cloud's TLS proxy
-  (webpki roots reject its issuer), no SDL2, no Lean, no GPU adapter, no wrangler, glibc's erf last digit, /usr/bin/sh,
-  the VM runs as root (/no/such/folder gets created, card tests-as-root), Linux's stack (card linux-deep-recursion).
-  `scripts/cloud-test.sh --summarize <log> [list]` re-summarizes a saved log after the list changed.
-- `CLOUD_TEST_FAST=1` (off by default; user 2026-10-16: turned on from 2026-11-02 to use up the credit before it
-  expires 11-05): passes `--settings '{"fastMode": true}'` to `claude --cloud`. Undocumented whether a cloud session
-  takes CLI settings. Fast mode speeds up the model's output only; the runner session spends its time waiting for
-  cargo, so the tests run no faster, the credit just goes faster. `CLOUD_TEST_MODEL=<model>` likewise. Pilot: the
-  fast run's log shows nothing about fast mode and cost the same as its normal twin, so whether it took is unverified.
-
-### Pilot numbers (2026-10-16)
-
-| run | wall (build + tests) | credit | result |
-|---|---|---|---|
-| linux-build 37842b28, test_midi | 360 s (329 + 12, cold build) | $0.30 | 10 passed |
-| linux-build a01f9c22 (= main + the Linux fix), --full | 1496 s (611 + 866) | $0.49 | 6037 passed, 33 failed, 168 ignored |
-| types-queue 318778ea on linux-build, its 8 queued filters | 349 s (293 + 31) | $0.33 (two runs together $0.66) | 111 passed, 1 environmental |
-| time-module 13770295 on linux-build, its 3 queued filters, CLOUD_TEST_FAST=1 | 427 s (393 + 4) | $0.33 | 15 passed |
-
-- The first find: warp did not build on Linux at all (midir is a macOS-only dependency, src/sound/midi.rs used it
-  everywhere; also why the vendor refresh and the nightly Rust CI failed: card github-rust, branch linux-build).
-- Full run vs the Mac (baseline 74c5faff9, 18:03Z, about the same main): Mac 6088 passed, 0 failed, 13 ignored, gate
-  15–18 min plus its queue wait; cloud 25 min, 155 more ignored (tests that skip themselves off macOS). Of the 33
-  failures 22 are environmental (list above), 8 were the crate wrappers' missing wasm32-wasip2 target (now added by
-  the runner) and 3 a real bug a fresh machine hits (card package-build-workspace: a package built inside the warp
-  repo is taken for a member of its cargo workspace).
-- Cost: ~$0.30 per targeted run, ~$0.50 per full run: the credit is charged for the session's tokens, not for VM
-  time. $219 left ≈ 400+ runs; the remaining limit is the account's (≤ 3 cloud sessions at once).
-- Speed: a targeted run's 5–6 min is mostly the cold build (no cache between sessions); the Mac's queue wait was
-  30–60 min. A setup script that pre-builds would be cached by the environment (section 1), not tried yet.
-
-### Lean sessions and the pool (2026-10-16 evening)
-- The cloud session reads and writes one line per call: one combined command, `CLOUD TEST RUNNING (n tests so far)` or
-  `CLOUD TEST DONE: <verdict>, <counts>`; the result and log reach the Mac through git only. Look deeper on demand in
-  data/cloud/<run>/log.txt.gz on the Mac, no cloud tokens needed.
-- `--model` carries to cloud sessions (the log's init line read claude-haiku-5-5), so the runner defaults to Haiku.
-- Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message
-  (`claude -p … --cloud <id>`); its VM keeps the checkout (tmp/cloud-test/tree) and cargo's output. Measured: the same
-  branch's second job built in 0 s, 11 s in total, against 350 s cold. Up to 5 busy at once (MAX_PARALLEL_RUNS, user 2026-10-16) and
-  8 sessions in total (MAX_CLOUD_SESSIONS, pool files plus starting ones): every session stays in the user's session
-  list until archived there, and the CLI can't archive. After 30 jobs a session gets `claude -p /clear --cloud <id>`
-  (a command, 0 turns) and goes on, instead of a fresh session. A session that refuses a job or never answers (3 h)
-  is dropped, loudly, into data/cloud/dropped-sessions.txt: archive those in the web UI.
-- New sessions are named "Cloud Test Lane" (`--name` carries to the cloud); the pool addresses them by session_id only.
-- The prompt is two short lines whatever the filters: the job's arguments go to the branch cloud-jobs/<job> (pushed
-  by the Mac, deleted with the result), the session runs `cloud-test.sh --job <job>`. The job commit also carries the
-  launching script, which the cloud runs: a job launched between my commit and push once met an origin/main script
-  without --job and never answered. A second launch of a pending run (same branch and tip) only waits for its result:
-  two owners relaunching at once made two jobs racing for one results branch. A job without a result frees its
-  session after 90 min. A filter list of 80 test files
-  used to fill the prompt and every repeated command (~2,000 characters each).
-- A session keeps the model it was created with: `--model` on a follow-up message doesn't switch it, a `/model haiku`
-  message does (0 turns). Every reused session gets `/model` before its job; early pool sessions had run on Opus.
-- A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
-  killed after 40 min, or once no test finished for 15 min (STALL_SECONDS), with the tests that never finished named.
-  batch-3's --full run hung 85 min in parser::test_self_parser::the_listed_sources_parse_as_in_rust at 222% CPU; the
-  same test alone on main took 227 s in the cloud (131–150 s on the Mac), and main's --full passed it (tests 780 s
-  in all): batch-3's content or a one-off. Main's cloud-only reds: package-build-workspace, gpu-visualizer-cpu,
-  sample-never (cards).
-  Killing cargo by hand (`pkill cargo`) left the test binary running: the watchdog kills timeout's process group.
-- The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).
+- The tip must be pushed (a full commit id from `git rev-parse`). Filters as for tests/queue.sh; `--full` = test.sh's
+  flags. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
+- How: `claude --cloud` in detached tmux with a two-line prompt; the job's arguments go to the branch
+  cloud-jobs/<job>, the session runs `cloud-test.sh --job <job>` (calls wait ≤ 9 min, under the cloud Bash tool's
+  10 min) until it prints CLOUD TEST DONE. The detached run checks out the tip, adds the wasm32 targets, builds from
+  crates.io, tests with --no-fail-fast and pushes `result.md` + `log.txt.gz` to `cloud-results/<branch>-<tip8>`.
+- The Mac polls that branch once a minute (`git ls-remote`), saves to data/cloud/<run>/ (launch.txt, result.md,
+  log.txt.gz), deletes the branch, prints the result and, with `--card`, adds a `todo note`. Exit status 0 = green.
+- Environmental failures: scripts/cloud-test-environmental.txt, one regex per line with its reason; matches are listed
+  apart and don't make the verdict red. Grown only from real runs. `--summarize <log> [list]` re-summarizes a saved log.
+- Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message and keeps
+  its checkout and cargo output (a repeat build of the same branch: ~0 s vs ~350 s cold). Up to 5 busy
+  (MAX_PARALLEL_RUNS), 8 sessions in total (MAX_CLOUD_SESSIONS). After 30 jobs a session gets `/clear`. A session that
+  refuses or never answers (3 h) is dropped into data/cloud/dropped-sessions.txt: archive those in the web UI. New
+  sessions are named "Cloud Test Lane".
+- Model: defaults to Haiku. A session keeps the model it was created with; reused sessions get a `/model` message
+  before each job. `CLOUD_TEST_MODEL=<model>`; `CLOUD_TEST_FAST=1` passes fast mode (from 2026-11-02, to use up the
+  credit; whether it takes effect is unverified).
+- A second launch of a pending run (same branch and tip) only waits for its result. A job without a result frees its
+  session after 90 min. A run that can't reach its tests pushes a red result naming why; the test run is killed after
+  40 min, or once no test finished for 15 min (STALL_SECONDS). `pkill cargo` leaves the test binary running: the
+  watchdog kills timeout's process group.
+- Cost: ~$0.30 per targeted run, ~$0.50 per full run (tokens, not VM time). A targeted run takes 5–6 min, mostly the
+  cold build. A full run is ~25 min and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).

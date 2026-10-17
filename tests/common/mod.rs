@@ -16,6 +16,12 @@ const SAMPLE_SLICES: usize = 4;
 const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection", "network error"];
 /// How it reads when the host answered: a wrong answer, never retried
 const ANSWERED: &str = "http status";
+/// The folder below the temp dir holding each test process's scratch_root, named by its process id
+#[cfg(feature = "native")]
+const SCRATCH_ROOTS: &str = "warp-tests";
+/// The TMPDIR of the warp processes a test starts, inside its scratch_root
+#[cfg(feature = "native")]
+const CHILD_TMPDIR: &str = "tmp";
 #[cfg(feature = "native")]
 const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
 /// Set by test.sh once it built the runtime stubs (built_stub)
@@ -314,12 +320,63 @@ fn percent_encoded(text: &str) -> String {
 		.collect()
 }
 
-/// A directory for the scratch files of `name`, unique to this test process: below the system's temp dir, or below /tmp
+/// The scratch files of this test process, also the TMPDIR of the warp processes it starts (warp_command): one folder
+/// per process below SCRATCH_ROOTS. Tests leave what they write (card tests-leak: 475809 WAVs in ten days); the next
+/// test process removes the roots of ended ones, and the headless sound WAVs ended processes left in the temp dir
+#[cfg(feature = "native")]
+pub fn scratch_root() -> &'static std::path::Path {
+	static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	ROOT.get_or_init(|| {
+		let temp = std::env::temp_dir();
+		let roots = temp.join(SCRATCH_ROOTS);
+		let running = running_processes();
+		remove_left_by_ended(&roots, &running, |name| name.parse().ok());
+		remove_left_by_ended(&temp.join(warp::sound::FOLDER), &running, sound_file_process);
+		let root = roots.join(std::process::id().to_string());
+		std::fs::create_dir_all(root.join(CHILD_TMPDIR)).expect("the test scratch root is writable");
+		root
+	})
+}
+
+/// The ids of the running processes (ps); none known when ps fails, so nothing is swept
+#[cfg(feature = "native")]
+fn running_processes() -> Option<std::collections::HashSet<u32>> {
+	let listed = std::process::Command::new("ps").args(["-A", "-o", "pid="]).output().ok()?;
+	listed.status.success().then(|| {
+		String::from_utf8_lossy(&listed.stdout).split_whitespace().filter_map(|pid| pid.parse().ok()).collect()
+	})
+}
+
+/// The entries of `folder` whose name names a process (`process_of`) that has ended, removed
+#[cfg(feature = "native")]
+fn remove_left_by_ended(
+	folder: &std::path::Path,
+	running: &Option<std::collections::HashSet<u32>>,
+	process_of: impl Fn(&str) -> Option<u32>,
+) {
+	let (Some(running), Ok(entries)) = (running, std::fs::read_dir(folder)) else { return };
+	for entry in entries.flatten() {
+		let ended = process_of(&entry.file_name().to_string_lossy()).is_some_and(|pid| !running.contains(&pid));
+		if ended {
+			let path = entry.path();
+			let _ = if path.is_dir() { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+		}
+	}
+}
+
+/// The process that wrote a sound WAV: sound-<process>.wav or sound-<process>-<handle>.wav (src/sound/mod.rs wav_file)
+#[cfg(feature = "native")]
+fn sound_file_process(name: &str) -> Option<u32> {
+	let rest = name.strip_prefix(warp::sound::FILE_STEM)?.strip_prefix('-')?.strip_suffix(".wav")?;
+	rest.split('-').next()?.parse().ok()
+}
+
+/// A directory for the scratch files of `name`, unique to this test process: below scratch_root, or below /tmp
 /// of the browser's in-memory file system (web/playground/wasi.js; every browser test is an instance of its own), where
 /// std::env::temp_dir and std::process::id panic
 pub fn scratch_directory(name: &str) -> std::path::PathBuf {
 	#[cfg(feature = "native")]
-	return std::env::temp_dir().join(format!("{name}_{}", std::process::id()));
+	return scratch_root().join(name);
 	#[cfg(not(feature = "native"))]
 	return std::path::PathBuf::from(
 		std::env::var("TMPDIR").expect("the browser test page names its temp dir (wasi.js)"),
@@ -489,6 +546,8 @@ pub fn warp_command() -> std::process::Command {
 	command.env("WARP_HINTS", "1");
 	// a sample that paints writes PNGs here, no window (src/graphics/paint.rs)
 	command.env(warp::graphics::paint::NO_WINDOW_VARIABLE, "1");
+	// its temporary files (headless sound WAVs, painted PNGs, compiled modules) go where the next test run sweeps them
+	command.env("TMPDIR", scratch_root().join(CHILD_TMPDIR));
 	command
 }
 

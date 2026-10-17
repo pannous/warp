@@ -113,6 +113,7 @@ mod test_trailing_symbol; // card trailing-symbol
 mod test_unbounded_int;
 mod test_unit_after_expression; // reviewer on card decisions-md
 mod test_unit_after_variable_hint; // card diagonal-holds
+mod test_unit_beside_variable; // card unit-glued
 mod test_unit_columns; // card units-stress
 mod test_unit_composites;
 mod test_unit_conversion;

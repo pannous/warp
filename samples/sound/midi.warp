@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
 # MIDI (lib/sound.warp): a Standard MIDI File written and read back, and messages to a MIDI device.
 # Notes are [start, pitch, length, velocity]: seconds, a note or frequency, seconds, 1 to 127.
-# The playground sends through Web MIDI (allow it when the browser asks); the warp command needs `sendmidi`
-# (brew install gbevin/tools/sendmidi) and says so when it is missing.
+# The playground sends through Web MIDI (allow it when the browser asks); the warp command to the first MIDI output,
+# or, when there is none, to its own virtual source "warp" that a synth app can listen to.
 
 use sound
 

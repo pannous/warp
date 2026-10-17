@@ -11,6 +11,8 @@
 
 #[cfg(target_os = "macos")]
 use super::midi_devices as devices;
+#[cfg(target_os = "macos")]
+pub use super::midi_devices::{virtual_output, CLIENT};
 
 /// Live MIDI devices come through midir on macOS only so far (src/sound/midi_devices.rs); elsewhere there are none,
 /// so listing finds nothing and opening one is the loud "no MIDI … devices found"

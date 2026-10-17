@@ -181,7 +181,7 @@ fn is_letter(bound: &Node) -> bool {
 fn letter_loop(variable: &Node, start: &Node, op: Op, end: &Node, body: Vec<Node>) -> Node {
 	let code = symbol(&format!("{}{CODE_SUFFIX}", variable.name()));
 	let codepoint = |letter: &Node| call(ORD_WORD, vec![letter.clone()]);
-	let letter = key(variable.clone(), Op::Assign, call(CHR_WORD, vec![code.clone()]));
+	let letter = assign(variable.clone(), call(CHR_WORD, vec![code.clone()]));
 	counting_loop(&code, &codepoint(start), op, &codepoint(end), [vec![letter], body].concat())
 }
 
@@ -224,9 +224,10 @@ fn loop_names(variable: &Node) -> Option<Vec<Node>> {
 fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 	let element = symbol(&names.iter().map(Node::name).collect::<Vec<_>>().join("·"));
 	let entries = call(crate::library_words::MAP_ENTRIES, vec![iterable]);
-	let parts = names.iter().enumerate().map(|(position, name)| {
-		key(name.clone(), Op::Assign, key(element.clone(), Op::Hash, int(position as i64 + 1)))
-	});
+	let parts = names
+		.iter()
+		.enumerate()
+		.map(|(position, name)| assign(name.clone(), key(element.clone(), Op::Hash, int(position as i64 + 1))));
 	walking_loop(&element, entries, parts.chain(body).collect())
 }
 
@@ -242,11 +243,11 @@ fn for_it(items: &[Node]) -> Option<Node> {
 fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {
 	let test_op = if range == Op::To { Op::Le } else { Op::Lt };
 	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
-	let mut statements = vec![key(variable.clone(), Op::Assign, start.clone())];
+	let mut statements = vec![assign(variable.clone(), start.clone())];
 	let is_literal = matches!(end.drop_meta(), Node::Number(_) | Node::Char(_));
 	let end = if !is_literal {
 		let end_variable = symbol(&format!("{}{END_SUFFIX}", variable.name()));
-		statements.push(key(end_variable.clone(), Op::Assign, end.clone()));
+		statements.push(assign(end_variable.clone(), end.clone()));
 		end_variable
 	} else {
 		end.clone()
@@ -272,16 +273,12 @@ pub(crate) fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>)
 	};
 	let (items, index) = (symbol(&format!("{name}{ITEMS_SUFFIX}")), symbol(&format!("{name}{INDEX_SUFFIX}")));
 	let element = key(items.clone(), Op::Hash, key(index.clone(), Op::Add, int(1)));
-	let mut statements = vec![key(variable.clone(), Op::Assign, element)];
+	let mut statements = vec![assign(variable.clone(), element)];
 	statements.append(&mut body);
 	statements.push(mark_step(key(index.clone(), Op::Inc, Node::Empty)));
 	let test = key(index.clone(), Op::Lt, key(Node::Empty, Op::Hash, items.clone()));
 	statement_list(
-		vec![
-			key(items, Op::Assign, walked_units(iterable)),
-			key(index, Op::Assign, int(FIRST_INDEX)),
-			while_do(test, block(statements)),
-		],
+		vec![assign(items, walked_units(iterable)), assign(index, int(FIRST_INDEX)), while_do(test, block(statements))],
 		Bracket::None,
 	)
 }

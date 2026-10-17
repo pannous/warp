@@ -42,6 +42,7 @@ mod test_parser_sugar;
 mod test_path_after_function; // card name-after
 mod test_path_literal; // card play-mozart
 mod test_references;
+mod test_rust_items; // card rust-items
 mod test_rust_macros;
 mod test_rust_paths;
 mod test_scheme_relative_url;

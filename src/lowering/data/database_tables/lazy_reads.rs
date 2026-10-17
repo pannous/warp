@@ -1,5 +1,6 @@
 //! Lazy reads: a table read as its load, a row, a slice or a page of positions, foreign keys resolved to their rows
 use super::*;
+use crate::lowering::nodes::block;
 
 /// The code with each placeholder as its node and the generated variables named
 pub(super) fn generated<'a>(code: &str, placeholders: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
@@ -213,8 +214,7 @@ pub(super) fn paged_loop(element: &str, variable: &str, class: &str, body: Node)
 	};
 	// the body's statements follow the element's in one block: a nested block of expressions would read as a list
 	let element_read = generated(&format!("{element}: {class} = {STREAMED}({LOOP_POSITION})"), names());
-	let statements =
-		Node::List([vec![element_read], body.body_statements()].concat(), Bracket::Curly, Separator::Semicolon);
+	let statements = block([vec![element_read], body.body_statements()].concat());
 	let code = format!("{LOOP_END} = {COUNTED}()\nfor {LOOP_POSITION} in 1 to {LOOP_END} {VALUE_PLACEHOLDER}");
 	let lowered = generated(&code, names().chain([(VALUE_PLACEHOLDER, statements)]));
 	Node::List(lowered.children(), Bracket::None, Separator::Semicolon)

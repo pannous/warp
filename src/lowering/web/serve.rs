@@ -6,7 +6,7 @@
 //! shows a page serves that page too, at / (src/web/site.rs); its page build leaves the serving out and asks the server
 //! for a server function's value (without_serving).
 
-use super::nodes::{call, key};
+use super::nodes::{arguments_rewritten, assign, call, key};
 use crate::database_tables::{stored_table, table_store};
 use crate::declarations::word;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
@@ -606,9 +606,8 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 	if tables.is_empty() {
 		return body;
 	}
-	let reads = tables
-		.iter()
-		.flat_map(|(name, table)| [global(name), key(Node::Symbol(name.clone()), Op::Assign, table.clone())]);
+	let reads =
+		tables.iter().flat_map(|(name, table)| [global(name), assign(Node::Symbol(name.clone()), table.clone())]);
 	prepended(reads.collect(), body)
 }
 
@@ -1058,9 +1057,7 @@ fn with_any_parameters(definition: Node) -> Node {
 		Node::Symbol(_) => key(parameter, Op::Colon, symbol(ANY_TYPE)),
 		_ => parameter,
 	};
-	let mut items = items.into_iter();
-	let head: Vec<Node> = items.next().into_iter().chain(items.map(any)).collect();
-	Node::Key(Box::new(Node::List(head, bracket, separator)), Op::Define, body)
+	key(arguments_rewritten(items, bracket, separator, any), Op::Define, *body)
 }
 
 /// POST /rpc/f of a function marked `server`: f called with the items of the request's JSON array

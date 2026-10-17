@@ -7,10 +7,7 @@ use crate::node::Node;
 #[path = "shell_adapters.rs"]
 mod shell_adapters; // lib/shell.warp's words of the modules file and os
 #[cfg(feature = "native")]
-#[path = "../sound/adapters.rs"]
-mod sound_adapters; // the sound module's words, kept in src/sound (a child here for this file's helpers)
-#[cfg(feature = "native")]
-use sound_adapters::{midi, sound};
+use crate::sound::adapters::{midi, sound};
 
 /// module.member applied to the arguments (a list node); each module's words below, their errors named here
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
@@ -41,16 +38,16 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 	answer.map_err(|problem| format!("{module}.{member}: {problem}"))
 }
 
-fn no_such_word(arguments: &[Node]) -> Result<Node, String> {
+pub(crate) fn no_such_word(arguments: &[Node]) -> Result<Node, String> {
 	Err(format!("no such word of {} arguments", arguments.len()))
 }
 
-fn text_of(node: &Node) -> Result<String, String> {
+pub(crate) fn text_of(node: &Node) -> Result<String, String> {
 	node.text_value().ok_or_else(|| format!("needs a text, got {}", spelled(node)))
 }
 
 #[cfg(feature = "native")]
-fn number_of(node: &Node) -> Result<f64, String> {
+pub(crate) fn number_of(node: &Node) -> Result<f64, String> {
 	match node.drop_meta() {
 		Node::Number(number) => Ok(f64::from(*number)),
 		other => Err(format!("needs a number, got {}", spelled(other))),
@@ -331,7 +328,7 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 }
 
 /// writes a file, creating its missing folders first
-fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
+pub(crate) fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
 	crate::host::sandbox::check_write(path)?;
 	let folder = std::path::Path::new(path).parent().filter(|folder| !folder.as_os_str().is_empty());
 	folder
@@ -401,7 +398,7 @@ fn typed_line(prompt: &[Node]) -> Result<Node, String> {
 
 /// The whole numbers of a list argument
 #[cfg(feature = "native")]
-fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
+pub(crate) fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 	list.as_items()
 		.iter()
 		.map(|item| match item.drop_meta() {
@@ -412,11 +409,11 @@ fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 }
 
 /// A list of texts
-fn texts(items: impl IntoIterator<Item = String>) -> Node {
+pub(crate) fn texts(items: impl IntoIterator<Item = String>) -> Node {
 	list_of(items.into_iter().map(Node::Text))
 }
 
-fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
+pub(crate) fn list_of(items: impl IntoIterator<Item = Node>) -> Node {
 	Node::List(items.into_iter().collect(), crate::node::Bracket::Square, crate::node::Separator::Space)
 }
 

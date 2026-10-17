@@ -46,6 +46,11 @@ impl ProgramNames {
 		self.binds(word) || self.function_takes(word, arguments) == Some(true)
 	}
 
+	/// The uniform call: is `x.word(args)` the program's `word(x, args)`, a function of it taking args + 1 values
+	pub fn takes_method_call(&self, word: &str, arguments: usize) -> bool {
+		self.function_takes(word, arguments + 1) == Some(true)
+	}
+
 	/// Does the program's function `word` take that many arguments; None when the program defines no function `word`
 	pub fn function_takes(&self, word: &str, arguments: usize) -> Option<bool> {
 		let arities = self.functions.get(word)?;
@@ -59,6 +64,13 @@ impl ProgramNames {
 		inner.bound.extend(bound_in_function(&head));
 		Some(inner)
 	}
+}
+
+/// The names any function of the program binds inside (bound_in_function)
+pub fn bound_in_functions(program: &Node) -> HashSet<String> {
+	let mut bound = HashSet::new();
+	program.visit(&mut |part| bound.extend(function_head(part).iter().flat_map(bound_in_function)));
+	bound
 }
 
 /// The names a function binds inside: its parameters, the names its body assigns and its loop variables
