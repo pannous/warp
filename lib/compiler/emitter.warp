@@ -1,7 +1,10 @@
 # The emitter core (card emits-wasm, notes/self_hosting.md step 15; Rust twin: src/wasm_emitter): the lowered
 # program (pipeline::lower) as a node gives a wasm module as a list of bytes, whose main returns the program's value.
-# The core knows ints (i64), floats (f64), yes/no conditions (i32), arithmetic, comparisons, locals, functions, if
-# and while. Any other form refuses the program: `wasm_module` then gives a text naming the form, and the twin harness
+# The core knows ints (i64), floats (f64), yes/no conditions (i32), characters (i32), texts (GC byte arrays), lists
+# (GC vectors), arithmetic, comparisons, locals, functions, if and while (layout: notes/self_hosting.md "Value
+# layout"). A value of a kind known only at run time, and a value main gives that is no number, is a boxed `$Node`.
+# Runtime words are warp (`runtime` below), compiled on their first call. Any other form refuses the program:
+# `wasm_module` then gives a text naming the form, and the twin harness
 # (tests/common/twins.rs emitter_differential) counts the source as outside the core. A function's parameters take
 # their kinds from their annotations, else from the first call; its result kind from its body, read twice so that a
 # recursive call knows it.
@@ -9,17 +12,34 @@ use "walk.warp"
 use math
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
-type_bytes = {int: 126, float: 124, bool: 127}
-section_ids = {custom: 0, type: 1, function: 3, export: 7, code: 10}
+type_bytes = {int: 126, float: 124, bool: 127, char: 127}
+section_ids = {custom: 0, type: 1, function: 3, globals: 6, export: 7, code: 10, data: 11, data_count: 12}
 function_type_byte = 96
 export_function_byte = 0
-names_subsections = {functions: 1, locals: 2}
+names_subsections = {functions: 1, locals: 2, types: 4, globals: 7, fields: 10}
+mutable = 1
+# the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
+# [storage type, mutable]. $text: the UTF-8 bytes; $list: a vector, its items boxed; $Node(kind i64, data anyref,
+# value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box
+gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5}
+gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0]]
+gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]]]
+# a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
+node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, bool: 257, list: 264}
+# the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
+references = {text: [99, gc.text], list: [99, gc.list], node: [110]}
+passive_segment = 1
 # block type of a block that leaves nothing
 no_value = 64
 # opcodes (WebAssembly core spec, section 5.4)
-op = {block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, call: 16, drop: 26, select: 27,
-	local_get: 32, local_set: 33, local_tee: 34, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80,
+op = {block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
+	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_const: 65, i64_const: 66, i32_sub: 107, i32_wrap_i64: 167, f64_const: 68, i32_eqz: 69, i64_eqz: 80,
 	i64_rem_s: 129, i64_extend_i32_u: 173, f64_convert_i64_s: 185, f64_neg: 154, i32_and: 113, i32_or: 114}
+# GC instructions, after their prefix 251
+gc_prefix = 251
+gc_ops = {struct_new: 0, struct_get: 2, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
+	array_len: 15, array_copy: 17, ref_i31: 28}
+ref_null = 208
 int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
@@ -72,10 +92,33 @@ section(id: int, content: any) := [id] + uleb(#content) + content
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø }
-class Module { functions: any; order: any }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no }
+# runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
+# globals: [index, kind] of each `global` variable by name, global_order their names
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = [] }
 
 module = Module({}, [])
+
+# the runtime words, warp over the intrinsics (`intrinsic` below); each is compiled on its first call
+runtime = data {
+	text_join(a: text, b: text) := {
+		out = new_text(byte_count(a) + byte_count(b))
+		copy_text(out, 0, a, 0, byte_count(a))
+		copy_text(out, byte_count(a), b, 0, byte_count(b))
+		out
+	}
+	# the characters (code points) of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
+	text_count(t: text) := {
+		count = 0
+		i = 0
+		while i < byte_count(t) {
+			b = byte_at(t, i)
+			if b < 128 or b >= 192 { count += 1 }
+			i += 1
+		}
+		count
+	}
+}
 
 refuse(why: text) := {
 	throw outside_the_core + why
@@ -109,21 +152,24 @@ statements_of(n: any) := {
 	[n]
 }
 
-collect_functions(program: any) := {
+# the definitions of a program into `functions`, the statements left
+collect_functions(program: any, functions: any) := {
 	kept = []
 	for n in statements_of(program) {
 		head = definition(n)
 		if head == ø { kept += [n] } else {
 			parameters = head[1..].map(parameter_symbol)
 			annotations = head[1..].map(annotation_of)
-			module.functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
+			functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
 		}
 	}
 	kept
 }
 
 ## one function's locals while its body is read
-class Body { names: any; kinds: any; order: any; scratch: int }
+# a runtime word's body may use the intrinsics
+# function: the one compiled, returned: the kinds its `return`s give
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any }
 
 local_index(body: Body, name: text, kind: text) := {
 	if name in body.names { return body.names[name] }
@@ -138,15 +184,18 @@ fresh_local(body: Body, kind: text) := {
 }
 
 ## expressions: each gives [kind, code]
+# the kind both values become: a number widened to float, else a value boxed; a statement and a value stay mixed
 joint_kind(a: text, b: text) := {
 	if a == pending { return b }
 	if b == pending or a == b { return a }
 	if (a == "int" and b == "float") or (a == "float" and b == "int") { return "float" }
-	"mixed"
+	if a == no_kind or b == no_kind or a == "mixed" or b == "mixed" { return "mixed" }
+	"node"
 }
 # code of kind `from` as kind `to`
 converted(value: any, to: text) := {
 	from = value#1
+	if to == "node" { return boxed(value) }
 	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
 	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
@@ -167,8 +216,75 @@ number_value(n: any) := {
 	["int", [op.i64_const] + sleb(n)]
 }
 
+# the offset of a text's bytes in the data segment, each text stored once
+text_offset(t: text) := {
+	if not (t in module.texts) {
+		module.texts[t] = #module.bytes
+		module.bytes += t.bytes
+	}
+	module.texts[t]
+}
+# a GC instruction with its immediates
+gc_code(name: text, immediates: any) := [gc_prefix] + uleb(gc_ops[name]) + joined(immediates.map(uleb))
+# a boxed value: a $Node of the kind code, its data from `payload`, no second value
+node(kind_code: int, payload: any) := [op.i64_const] + sleb(kind_code) + payload + [ref_null, gc.node] + gc_code("struct_new", [gc.node])
+# a text as its bytes; one character as its codepoint, as warp holds a literal "a"
+text_value(t: text) := {
+	if #t == 1 { return ["char", [op.i32_const] + sleb(ord(t))] }
+	bytes = [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes)
+	["text", bytes + gc_code("array_new_data", [gc.text, 0])]
+}
+# a value boxed as a $Node: a number or yes/no in its box, a character as an i31
+boxed(value: any) := {
+	kind = value#1
+	code = value#2
+	if kind == "node" { return code }
+	if kind == "text" { return node(node_kind_codes.text, code) }
+	if kind == "list" { return node(node_kind_codes.list, code) }
+	if kind == "char" { return node(node_kind_codes.codepoint, code + gc_code("ref_i31", [])) }
+	if kind == "float" { return node(node_kind_codes.float, code + gc_code("struct_new", [gc.float_box])) }
+	if kind == "bool" { return node(node_kind_codes.bool, code + [op.i64_extend_i32_u] + gc_code("struct_new", [gc.int_box])) }
+	if kind != "int" and kind != pending { refuse("a " + kind + " as a value") }
+	node(node_kind_codes.int, code + gc_code("struct_new", [gc.int_box]))
+}
+# `[a, b, c]`: a vector of its items, boxed, read in order
+list_value(body: Body, items: any) := {
+	code = [op.i32_const] + sleb(#items) + joined(items.map(item => boxed(expression(body, item))))
+	["list", code + gc_code("array_new_fixed", [gc.items, #items]) + gc_code("struct_new", [gc.list])]
+}
+# an int as an i32 index
+index_code(value: any) := converted(value, "int") + [op.i32_wrap_i64]
+# `#x`: the bytes of a text, the items of a list
+length(value: any) := {
+	if value#1 == "text" { return runtime_call("text_count", [value]) }
+	if value#1 == "list" { return ["int", value#2 + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]] }
+	refuse("the length of a " + value#1)
+}
+# `xs#i`: the i-th item, counted from 1
+element(list: any, index: any) := {
+	if list#1 != "list" { return refuse("an element of a " + list#1) }
+	items = list#2 + gc_code("struct_get", [gc.list, 1])
+	["node", items + index_code(index) + [op.i32_const, 1, op.i32_sub] + gc_code("array_get", [gc.items])]
+}
+# the words the runtime is written in, each one or two instructions
+intrinsic(body: Body, name: text, arguments: any) := {
+	values = arguments.map(a => expression(body, a))
+	if name == "new_text" { return ["text", index_code(values#1) + gc_code("array_new_default", [gc.text])] }
+	if name == "byte_count" { return ["int", values#1#2 + gc_code("array_len", []) + [op.i64_extend_i32_u]] }
+	if name == "byte_at" { return ["int", values#1#2 + index_code(values#2) + gc_code("array_get_u", [gc.text]) + [op.i64_extend_i32_u]] }
+	# copy_text(to, at, from, start, count)
+	code = values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5)
+	[no_kind, code + gc_code("array_copy", [gc.text, gc.text])]
+}
+intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2}
+runtime_call(name: text, values: any) := call_values(module.runtime[name], values)
+
 local_value(body: Body, n: any) := {
 	name = name_of(n)
+	if not (name in body.names) and name in module.globals {
+		entry = module.globals[name]
+		return [entry#2, [op.global_get] + uleb(entry#1)]
+	}
 	if not (name in body.names) { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -177,6 +293,9 @@ local_value(body: Body, n: any) := {
 operation(body: Body, symbol: text, a: any, b: any) := {
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
+	if symbol == "+" and a#1 == "text" and b#1 == "text" { return runtime_call("text_join", [a, b]) }
+	if symbol == "#" and a#1 == "list" { return element(a, b) }
+	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + kind) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
 	if symbol == "/" and kind == "int" { return refuse("int division, an exact rational") }
 	ops = if kind == "float" then float_ops else int_ops
@@ -202,6 +321,7 @@ assignment(body: Body, target: any, value: any) := {
 	name = name_of(target)
 	kind = value#1
 	if kind == "bool" { return refuse("a yes/no variable") }
+	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		kind = body.kinds#(body.names[name] + 1)
 	}
@@ -209,9 +329,32 @@ assignment(body: Body, target: any, value: any) := {
 	[kind, converted(value, kind) + [op.local_tee] + index]
 }
 
+# `global name = value` declares the module's variable name, which every function reads and writes
+declare_global(name: text, value: any) := {
+	if not (name in module.globals) {
+		module.globals[name] = [#module.global_order, value#1]
+		module.global_order += [name]
+	}
+	global_assignment(name, value)
+}
+global_assignment(name: text, value: any) := {
+	entry = module.globals[name]
+	index = uleb(entry#1)
+	[entry#2, converted(value, entry#2) + [op.global_set] + index + [op.global_get] + index]
+}
+# `return x`: x ends the function; what follows it is unreachable, of any kind
+return_value(body: Body, value: any) := {
+	body.returned += [value#1]
+	result = body.function.result
+	code = if result == pending then value#2 else converted(value, result)
+	[pending, code + [op.return]]
+}
+
 call(body: Body, f: Function, arguments: any) := {
 	if #arguments != #f.parameters { return refuse("a call of " + f.name + " with " + #arguments + " arguments") }
-	values = arguments.map(a => expression(body, a))
+	call_values(f, arguments.map(a => expression(body, a)))
+}
+call_values(f: Function, values: any) := {
 	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
 	code = []
 	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
@@ -227,7 +370,7 @@ conditional(body: Body, test: any, yes_branch: any, no_branch: any) := {
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
 	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
-	[kind, c + [op.if, type_bytes[kind]] + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
+	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
 }
 # `while c do body`: block { loop { exit unless c; body; again } }
 loop_of(body: Body, test: any, block: any) := {
@@ -248,7 +391,10 @@ sequence(body: Body, items: any) := {
 }
 
 expression(body: Body, n: any) := {
+	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
+	if n is text { return text_value(n) }
+	if n is ø { return ["node", [ref_null, gc.node]] }
 	if n is symbol { return local_value(body, n) }
 	if type(n) is key { return key_expression(body, n) }
 	if not is_group(n) { refuse("the value " + form_of(n)) }
@@ -259,26 +405,35 @@ group_expression(body: Body, n: any) := {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions {
 		return call(body, module.functions[name_of(n#1)], n[1..].map(x => x))
 	}
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and body.intrinsics {
+		return intrinsic(body, name_of(n#1), n[1..].map(x => x))
+	}
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
+	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
+	if bracket_of(n) == "[" { return list_value(body, n.map(x => x)) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
 	sequence(body, n.map(x => x))
 }
 
 key_expression(body: Body, n: any) := {
-	symbol = op_of(n)
+	operator = op_of(n)
 	left = key_of(n)
 	right = value_of(n)
-	if symbol == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
-	if symbol == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
-	if symbol == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
-	if symbol == "=" { return assignment(body, left, expression(body, right)) }
-	if symbol in compound_ops { return assignment(body, left, operation(body, compound_ops[symbol], expression(body, left), expression(body, right))) }
-	if symbol in steps and right == ø { return assignment(body, left, operation(body, steps[symbol], expression(body, left), number_value(1))) }
-	if symbol == "-" and left == ø { return negation(expression(body, right)) }
-	if symbol == "and" or symbol == "or" { return logical(body, symbol, left, right) }
-	if symbol == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
-	if left == ø or right == ø { return refuse("the operator " + symbol) }
-	operation(body, symbol, expression(body, left), expression(body, right))
+	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
+	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
+	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
+	if operator == "=" { return assignment(body, left, expression(body, right)) }
+	if operator == ":" and left is symbol and name_of(left) == "global" and type(right) is key and op_of(right) == "=" and key_of(right) is symbol {
+		return declare_global(name_of(key_of(right)), expression(body, value_of(right)))
+	}
+	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
+	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
+	if operator == "-" and left == ø { return negation(expression(body, right)) }
+	if operator == "and" or operator == "or" { return logical(body, operator, left, right) }
+	if operator == "#" and left == ø { return length(expression(body, right)) }
+	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
+	if left == ø or right == ø { return refuse("the operator " + operator) }
+	operation(body, operator, expression(body, left), expression(body, right))
 }
 right_of_if(n: any) := value_of(n)
 
@@ -299,7 +454,7 @@ logical(body: Body, symbol: text, left: any, right: any) := {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function) := {
-	scope = Body({}, [], [], 0)
+	scope = Body({}, [], [], 0, f.is_runtime, f, [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }
@@ -312,56 +467,92 @@ compile_function(f: Function, argument_kinds: any) := {
 		annotation = f.annotations[i]
 		parameter_kinds += [if annotation == ø then argument_kinds[i] else annotation]
 	}
-	for kind in parameter_kinds { if not (kind in type_bytes) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
+	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
 	# the first reading finds the result kind, the second gives the code with every recursive call knowing it
 	f.result = pending
-	f.result = expression(new_scope(f), f.body)#1
+	first = new_scope(f)
+	result = expression(first, f.body)#1
+	for kind in first.returned { result = joint_kind(result, kind) }
+	if result == no_kind or result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
+	f.result = result
 	scope = new_scope(f)
-	compiled = expression(scope, f.body)
-	if compiled#1 != "int" and compiled#1 != "float" { return refuse(f.name + " giving a " + compiled#1) }
-	f.result = compiled#1
-	f.code = compiled#2
+	f.code = converted(expression(scope, f.body), result)
 	f.locals = scope.kinds[(#f.parameters)..]
 	f.local_names = scope.order
 }
 
 ## the module
-function_type(f: Function) := [function_type_byte] + vector(f.kinds.map(k => [type_bytes[k]])) + [1, type_bytes[f.result]]
+value_type(kind: text) := if kind in references then references[kind] else [type_bytes[kind]]
+# a global's first value, before its declaration sets it
+zero_of(kind: text) := {
+	if kind == "int" { return [op.i64_const, 0] }
+	if kind == "float" { return [op.f64_const] + le64(0) }
+	if kind in references { return [ref_null] + (if kind == "node" then [110] else uleb(references[kind]#2)) }
+	[op.i32_const, 0]
+}
+global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
+function_type(f: Function) := [function_type_byte] + vector(f.kinds.map(value_type)) + [1] + value_type(f.result)
 function_body(f: Function) := {
-	content = vector(f.locals.map(k => [1, type_bytes[k]])) + f.code + [op.end]
+	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
 	uleb(#content) + content
 }
 index_name(i: int, name: text) := uleb(i) + name_bytes(name)
-local_name_map(f: Function) := uleb(f.index) + vector(range_list(#f.local_names).map(i => index_name(i, f.local_names#(i + 1))))
+name_map(names: any) := vector(range_list(#names).map(i => index_name(i, names#(i + 1))))
+local_name_map(f: Function) := uleb(f.index) + name_map(f.local_names)
 range_list(n: int) := {
 	out = []
 	for i in 0..n { out += [i] }
 	out
 }
+subsection(id: int, content: any) := [id] + uleb(#content) + content
 names_section(functions: any) := {
 	function_names = vector(functions.map(f => index_name(f.index, f.name)))
 	locals = vector(functions.map(local_name_map))
-	content = name_bytes("name") + [names_subsections.functions] + uleb(#function_names) + function_names
-	section(section_ids.custom, content + [names_subsections.locals] + uleb(#locals) + locals)
+	types = name_map(gc_names.map(t => t#1))
+	fields = vector(range_list(#gc_names).map(i => uleb(i) + name_map(gc_names#(i + 1)#2)))
+	content = subsection(names_subsections.functions, function_names) + subsection(names_subsections.locals, locals)
+	globals = name_map(module.global_order)
+	content += subsection(names_subsections.types, types) + subsection(names_subsections.globals, globals)
+	content += subsection(names_subsections.fields, fields)
+	section(section_ids.custom, name_bytes("name") + content)
 }
 
 module_bytes(functions: any) := {
-	types = section(section_ids.type, vector(functions.map(function_type)))
-	declared = section(section_ids.function, vector(functions.map(f => uleb(f.index))))
+	types = section(section_ids.type, vector(gc_types + functions.map(function_type)))
+	declared = section(section_ids.function, vector(functions.map(f => uleb(#gc_types + f.index))))
 	exported = section(section_ids.export, vector([name_bytes("main") + [export_function_byte, 0]]))
+	# the texts' bytes: one passive segment, which array.new_data reads
+	segments = section(section_ids.data_count, uleb(1))
 	codes = section(section_ids.code, vector(functions.map(function_body)))
-	wasm_header + types + declared + exported + codes + names_section(functions)
+	texts = section(section_ids.data, vector([[passive_segment] + uleb(#module.bytes) + module.bytes]))
+	globals = section(section_ids.globals, vector(module.global_order.map(global_entry)))
+	parts = [types, declared, globals, exported, segments, codes, texts]
+	wasm_header + joined(parts) + names_section(functions)
 }
 
 # the module of a lowered program, or a text naming the first form outside the core
 wasm_module(program: any) := {
 	module.functions = {}
 	module.order = []
+	module.runtime = {}
+	module.globals = {}
+	module.global_order = []
+	module.texts = {}
+	module.bytes = []
+	collect_functions(runtime, module.runtime)
+	for name in module.runtime.keys {
+		word = module.runtime[name]
+		word.is_runtime = yes
+	}
 	main = Function("main", [], [], ø)
 	try {
-		main.body = separated(bracketed(collect_functions(program), ""), ";")
+		main.body = separated(bracketed(collect_functions(program, module.functions), ""), ";")
 		compile_function(main, [])
+		if main.result != "int" and main.result != "float" {
+			main.code = boxed([main.result, main.code])
+			main.result = "node"
+		}
 		module_bytes(module.order)
 	} catch refusal {
 		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }

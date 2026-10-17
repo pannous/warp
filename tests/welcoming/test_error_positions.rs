@@ -25,6 +25,12 @@ fn an_unclosed_group_names_where_it_opened() {
 }
 
 #[test]
+fn a_wrong_or_stray_closer_is_an_error() {
+	fails_with("x = 1\ny = (1 + 2]", "`]` closes the group opened at 2:5, which needs `)`");
+	fails_with("x = 1\n]\nprint x", "`]` closes no group");
+}
+
+#[test]
 fn an_unterminated_text_names_where_it_opened() {
 	fails_with("x = 1\ny = \"abc", "the text opened at 2:5");
 }

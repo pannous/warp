@@ -66,6 +66,15 @@ pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (us
 		.into_error()
 }
 
+/// `(1 + 2]`: the closer written ends the group, the fix writes the one it needs
+pub(super) fn wrong_closer(message: String, written: char, closer: char, at: (usize, usize)) -> Node {
+	let replaced = crate::errors::fixits::fix(format!("the closing {closer}"), written, closer);
+	Diagnostic::default()
+		.message(message)
+		.offering(crate::errors::fixits::Fix { at: Some(at), ..replaced })
+		.into_error()
+}
+
 impl WarpParser {
 	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`, `#include x`, `#import f from "m"`, every import keyword) starts a comment;
 	/// `#` directly followed by anything else counts (`#s`, `#a-1`, `#f(x)`)
