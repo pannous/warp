@@ -23,6 +23,12 @@ Decision self-hosting:
   (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
   when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
   quirks before its Rust part is removed.
+- The same holds for structurally unsound decisions, not only bugs: special cases for single words, passes that undo
+  another pass's work, two mechanisms for one concept, tables duplicated across stages, pass order that exists only to
+  work around an earlier pass. The warp compiler may restructure (merge or split passes, change an internal tree
+  shape, replace special cases by one general rule). Where it does, the twin compares at the next level where both
+  agree (the tree after a later pass, or the program's result) instead of forcing the Rust structure. Each
+  restructuring is a short entry in Deviations; ones that change the language go to warp-interviewer.
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
 src ~59k.
