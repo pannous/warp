@@ -5,19 +5,9 @@
 
 use crate::type_kinds::Kind;
 
-/// The words whose tables name neither their parameters nor (for an argument-dependent result) their result; the math
-/// words warp computes itself are lib/math.warp's `from warp` lines (builtin_math_signature)
-const NAMED_SIGNATURES: [(&str, &str); 9] = [
-	("upper", "(t:text) -> text"),
-	("lower", "(t:text) -> text"),
-	("reverse", "(xs)"),
-	("sort", "(xs:list) -> list"),
-	("split", "(t:text, separator:text) -> list of text"),
-	("join", "(xs:list, separator:text) -> text"),
-	("chars", "(t:text) -> list of text"),
-	("ord", "(c:codepoint) -> int"),
-	("print", "(x)"),
-];
+/// print, which no line or table names; the words warp computes itself are lib/math.warp's and lib/prelude.warp's
+/// `from warp` lines (builtin_signature)
+const PRINT_SIGNATURE: (&str, &str) = ("print", "(x)");
 /// The builtin methods of lists, texts and maps no table above names (members.rs LIST_MEMBERS …), so each is a function
 /// value like the others (card dir-lists: methods(x) lists what dir(x) does)
 const MEMBER_SIGNATURES: [(&str, &str); 19] = [
@@ -51,8 +41,8 @@ const REST_MARK: &str = "...";
 /// that is no library word
 pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 	let word = crate::library_words::canonical_spelling(word);
-	let signature = named(&NAMED_SIGNATURES, word)
-		.or_else(|| builtin_math_signature(word))
+	let signature = named(&[PRINT_SIGNATURE], word)
+		.or_else(|| builtin_signature(word))
 		.or_else(|| prelude_signature(word))
 		.or_else(|| libm_signature(word))
 		.or_else(|| text_builtin_signature(word))
@@ -127,18 +117,20 @@ pub fn library_arity(word: &str) -> Option<(usize, usize)> {
 
 /// The library words of one typed value with a signature here or in libm: `floor`, `sin`, `upper`, `log10`
 pub fn one_value_words() -> impl Iterator<Item = &'static str> {
-	let named = NAMED_SIGNATURES.iter().map(|(name, _)| *name);
-	let builtin = crate::ffi::math_foreign_lines(crate::ffi::BUILTIN_LIBRARY).map(|line| line.name);
-	named
-		.chain(builtin)
+	builtin_lines()
+		.map(|line| line.name)
 		.chain(crate::ffi::libm_f64_functions().iter().map(|(name, _)| *name))
 		.filter(|name| typed_first_arity(name) == Some(1))
 }
 
-/// `floor(x: number): int from warp` → `(x:number) -> int`: a math word warp computes itself, as lib/math.warp writes it
-fn builtin_math_signature(word: &str) -> Option<String> {
-	let line = crate::ffi::math_foreign_lines(crate::ffi::BUILTIN_LIBRARY).find(|line| line.name == word)?;
-	Some(format!("({}) -> {}", line.parameters.replace(": ", ":"), line.result))
+/// `floor(x: number): int from warp` → `(x:number) -> int`: a word warp computes itself, as lib/math.warp or
+/// lib/prelude.warp writes it
+fn builtin_signature(word: &str) -> Option<String> {
+	builtin_lines().find(|line| line.name == word).map(|line| line.signature())
+}
+
+fn builtin_lines() -> impl Iterator<Item = crate::ffi::ForeignLine<'static>> {
+	crate::ffi::math_foreign_lines(crate::ffi::BUILTIN_LIBRARY).chain(crate::ffi::runtime_word_lines().iter().copied())
 }
 
 /// `replace(t, old, new) := …` → `(t, old, new)`
