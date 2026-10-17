@@ -29,7 +29,7 @@ Then units: `1 m + 1km` → `1001 m`, `3km+10m` → `3010 m` (unit values as ide
 unedited.
 
 ### E — undefined calls are errors, print with hidden IO (decisions #7, #8)
-Implement notes/unresolved_call_survey.md: `name(` without space, in emitted code, that no user function / import /
+Implement notes/OLD/unresolved_call_survey.md: `name(` without space, in emitted code, that no user function / import /
 builtin / type constructor resolves → `Error('undefined function: name')`; data stays data. `P(1)` for a declared type
 `P` constructs it. Add builtins `min`, `max`. Add `print x` / `print(x)`: prints and returns x; eval grants the needed IO
 capability implicitly (hidden from the user: no capability error for print). Un-ignore test_print / test_print_function
