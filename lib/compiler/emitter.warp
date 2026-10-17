@@ -71,7 +71,8 @@ name_bytes(name: text) := vector(name.bytes.map(b => [b]))
 section(id: int, content: any) := [id] + uleb(#content) + content
 
 ## the program's functions
-class Function { name: text; parameters: any; annotations: any; body: any; index: int; kinds: any; result: text; code: any; locals: any; local_names: any }
+# a function as written; compiling it gives the rest
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø }
 class Module { functions: any; order: any }
 
 module = Module({}, [])
@@ -115,7 +116,7 @@ collect_functions(program: any) := {
 		if head == ø { kept += [n] } else {
 			parameters = head[1..].map(parameter_symbol)
 			annotations = head[1..].map(annotation_of)
-			module.functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n), -1, ø, pending, ø, ø, ø)
+			module.functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
 		}
 	}
 	kept
@@ -314,6 +315,7 @@ compile_function(f: Function, argument_kinds: any) := {
 	for kind in parameter_kinds { if not (kind in type_bytes) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
 	# the first reading finds the result kind, the second gives the code with every recursive call knowing it
+	f.result = pending
 	f.result = expression(new_scope(f), f.body)#1
 	scope = new_scope(f)
 	compiled = expression(scope, f.body)
@@ -356,7 +358,7 @@ module_bytes(functions: any) := {
 wasm_module(program: any) := {
 	module.functions = {}
 	module.order = []
-	main = Function("main", [], [], ø, -1, ø, pending, ø, ø, ø)
+	main = Function("main", [], [], ø)
 	try {
 		main.body = separated(bracketed(collect_functions(program), ""), ";")
 		compile_function(main, [])
