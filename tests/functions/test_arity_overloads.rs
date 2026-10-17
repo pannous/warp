@@ -11,8 +11,8 @@ fn a_call_takes_the_definition_of_its_argument_count() {
 }
 
 #[test]
-fn an_overload_may_call_another_one() {
-	is!("def log(x) { log(x, 10) }; def log(x, base) { x/base }; log(50)", 5.0);
+fn an_overload_may_call_another_one_and_log_keeps_its_types() {
+	is!("def log(x) { log(x, 10) }; def log(x, base) { x/base }; log(50)", 3.912023005428146);
 	is!("sum3(a, b) := sum3(a, b, 0); sum3(a, b, c) := a+b+c; sum3(1, 2)", 3);
 }
 

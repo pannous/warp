@@ -49,10 +49,7 @@ pub(crate) fn check_assignment(name: &str, value: &Node, scope: &mut Scope) -> O
 }
 
 pub(crate) fn type_error(name: &str, existing: Kind, new: Kind) -> Node {
-	Node::Error(Box::new(Node::Text(format!(
-		"type mismatch: cannot assign {} to variable '{}' of type {}",
-		new, name, existing
-	))))
+	crate::node::error(&format!("type mismatch: cannot assign {new} to variable '{name}' of type {existing}"))
 }
 
 /// Check if two types are compatible for assignment

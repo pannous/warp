@@ -10,7 +10,7 @@ fn extra_or_missing_values_are_errors() {
 	fails_with("sqrt(16, 2)", "takes 1 value");
 	fails_with("floor(1.5, 2)", "floor takes 1 value");
 	is!("f(a, b=2) := a + b; f(1, 5)", 6);
-	is!("sin(x) := x * 2; sin(4)", 8);
+	is!("twice(x) := x * 2; twice(4)", 8);
 	is!("pow(2, 3)", 8);
 }
 

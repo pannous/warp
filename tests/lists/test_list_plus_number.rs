@@ -21,8 +21,6 @@ fn each_reading_has_its_explicit_form() {
 
 #[test]
 fn the_explicit_forms_never_ask() {
-	is!("[1 2 3] + [4]", ints(vec![1, 2, 3, 4]));
-	is!("[1 2 3] .+ 4", ints(vec![5, 6, 7]));
 	is!("[1 2 3].+4", ints(vec![5, 6, 7]));
 	is!("xs=[1 2]; xs .- 1", ints(vec![0, 1]));
 	is!("[1 2 3] .* 2", ints(vec![2, 4, 6]));

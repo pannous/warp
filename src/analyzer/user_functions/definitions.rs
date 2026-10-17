@@ -9,66 +9,17 @@ pub(crate) fn extract_user_functions_inner(ctx: &mut Context, node: &Node) {
 /// Nested `def` / `f() = …` inside a function body becomes a top-level UserFunctionDef named `outer·inner`, with call
 /// sites in the enclosing body rewritten to that mangled name (wiki/charged.md §3 nested defs; card g-qUkY step 1).
 pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &Node, enclosing: Option<&str>) {
-	let node = node.drop_meta();
-	match node {
-		// Pattern: name(param1, param2, ...) = body
-		Node::Key(left, Op::Assign, body) => {
-			if let Node::List(items, bracket, _) = left.drop_meta() {
-				if !items.is_empty() {
-					if let Node::Symbol(name) = items[0].drop_meta() {
-						register_user_function(ctx, name, extract_params(items, bracket), body, enclosing);
-						return;
-					}
-				}
-			}
-			extract_user_functions_in(ctx, left, enclosing);
-			extract_user_functions_in(ctx, body, enclosing);
+	match node.drop_meta() {
+		Node::Key(left, Op::Assign, body) if let Some((name, items, bracket)) = signature(left) => {
+			register_user_function(ctx, name, extract_params(items, bracket), body, enclosing);
 		}
-		// Pattern: name x := body (with explicit parameter x using $0 or `it`)
-		Node::Key(left, Op::Define, body) => {
-			if let Node::List(items, bracket, _) = left.drop_meta() {
-				if !items.is_empty() {
-					if let Node::Symbol(name) = items[0].drop_meta() {
-						let params = extract_params(items, bracket);
-						let implicit_param = uses_dollar_param(body) || uses_it(body);
-						let written_call = *bracket == Bracket::Round; // `f() := [1, 2]` defines f without parameters
-						if !params.is_empty() || implicit_param || written_call {
-							let params = if params.is_empty() && implicit_param {
-								vec![Param::untyped(crate::words::IMPLICIT_PARAMETER)]
-							} else {
-								params
-							};
-							register_user_function(ctx, name, params, body, enclosing);
-							return;
-						}
-					}
-				}
-			}
-			// Pattern: name := body (implicit `it` parameter, or none for a statement block)
-			if let Node::Symbol(name) = left.drop_meta() {
-				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
-					// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
-					let takes_it = !is_statement_block(body) || uses_it_outside_loops(body) || uses_dollar_param(body);
-					let params = if takes_it { vec![Param::untyped(crate::words::IMPLICIT_PARAMETER)] } else { vec![] };
-					register_user_function(ctx, name, params, body, enclosing);
-					return;
-				}
-			}
-			extract_user_functions_in(ctx, left, enclosing);
-			extract_user_functions_in(ctx, body, enclosing);
+		Node::Key(left, Op::Define, body) if let Some((name, params)) = defined_function(left, body) => {
+			register_user_function(ctx, name, params, body, enclosing);
 		}
-		// Check for def/fun/fn syntax
+		Node::List(items, _, _) if let Some(function) = keyword_definition(items) => {
+			register_user_function(ctx, &function.name, function.params, &function.body, enclosing);
+		}
 		Node::List(items, _, _) => {
-			if items.len() >= 2 {
-				if let Node::Symbol(s) = items[0].drop_meta() {
-					if is_function_keyword(s) {
-						if let Some(func_def) = extract_def_function(&items[1..]) {
-							register_user_function(ctx, &func_def.name, func_def.params, &func_def.body, enclosing);
-							return;
-						}
-					}
-				}
-			}
 			for item in items {
 				extract_user_functions_in(ctx, item, enclosing);
 			}
@@ -79,6 +30,44 @@ pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &N
 		}
 		_ => {}
 	}
+}
+
+/// `f(a, b)`, `f a b`: the name a signature list starts with, its items (the name first) and its bracket
+fn signature(node: &Node) -> Option<(&str, &[Node], &Bracket)> {
+	let Node::List(items, bracket, _) = node.drop_meta() else {
+		return None;
+	};
+	Some((items.first()?.symbol_name()?, items, bracket))
+}
+
+/// `def f(x) {…}`, `fn f …`: the function a statement headed by a function keyword defines
+fn keyword_definition(items: &[Node]) -> Option<UserFunctionDef> {
+	let keyword = items.first()?.symbol_name()?;
+	(items.len() >= 2 && is_function_keyword(keyword)).then(|| extract_def_function(&items[1..])).flatten()
+}
+
+/// The name and parameters of the function `left := body` defines: `f x := …`, `f() := [1, 2]` (none), `f := …it…`
+/// (`it`), `f := { statements }` (`it` when read outside its own loops); None for a value, `x := 5`
+fn defined_function<'a>(left: &'a Node, body: &Node) -> Option<(&'a str, Vec<Param>)> {
+	let implicit_param = uses_dollar_param(body) || uses_it(body);
+	let it = || vec![Param::untyped(crate::words::IMPLICIT_PARAMETER)];
+	if let Some((name, items, bracket)) = signature(left) {
+		let params = extract_params(items, bracket);
+		let written_call = *bracket == Bracket::Round;
+		return match params.is_empty() {
+			false => Some((name, params)),
+			true if implicit_param => Some((name, it())),
+			true => written_call.then_some((name, params)),
+		};
+	}
+	let name = left.symbol_name()?;
+	let statement_block = is_statement_block(body);
+	if !implicit_param && !statement_block {
+		return None;
+	}
+	// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
+	let takes_it = !statement_block || uses_it_outside_loops(body) || uses_dollar_param(body);
+	Some((name, if takes_it { it() } else { vec![] }))
 }
 
 /// Between an enclosing function and a nested `def` lifted out of its body: `outer·inner`
@@ -132,23 +121,18 @@ pub(in crate::analyzer) fn lift_nested_defs_walk(
 ) -> Node {
 	match node {
 		meta @ Node::Meta { .. } => meta.under_meta(|node| lift_nested_defs_walk(ctx, node, parent, renames)),
-		Node::Key(left, op @ (Op::Assign | Op::Define), body) => {
-			if let Node::List(items, bracket, separator) = left.drop_meta() {
-				if let Some(Node::Symbol(short)) = items.first().map(Node::drop_meta) {
-					let mangled = qualify_nested_name(Some(parent), short);
-					renames.insert(short.clone(), mangled.clone());
-					register_user_function(ctx, short, extract_params(items, bracket), &body, Some(parent));
-					// LHS must use the mangled name so emit's defined_function_name finds it in user_functions
-					let mut items = items.clone();
-					items[0] = Node::Symbol(mangled);
-					return Node::Key(Box::new(Node::List(items, bracket.clone(), separator.clone())), op, body);
-				}
+		Node::Key(ref left, op @ (Op::Assign | Op::Define), body)
+			if let Some((short, items, bracket)) = signature(left) =>
+		{
+			let mangled = qualify_nested_name(Some(parent), short);
+			renames.insert(short.to_string(), mangled.clone());
+			register_user_function(ctx, short, extract_params(items, bracket), &body, Some(parent));
+			// LHS must use the mangled name so emit's defined_function_name finds it in user_functions
+			let mut signature = left.drop_meta().clone();
+			if let Node::List(items, _, _) = &mut signature {
+				items[0] = Node::Symbol(mangled);
 			}
-			Node::Key(
-				Box::new(lift_nested_defs_walk(ctx, *left, parent, renames)),
-				op,
-				Box::new(lift_nested_defs_walk(ctx, *body, parent, renames)),
-			)
+			Node::Key(Box::new(signature), op, body)
 		}
 		Node::Key(left, op, right) => Node::Key(
 			Box::new(lift_nested_defs_walk(ctx, *left, parent, renames)),
@@ -157,24 +141,16 @@ pub(in crate::analyzer) fn lift_nested_defs_walk(
 		),
 		// quoted data (the program a run-time block carries) is not code of this body
 		quoted if crate::run_time_blocks::is_data(&quoted) => quoted,
-		Node::List(items, bracket, separator) => {
-			if items.len() >= 2 {
-				if let Node::Symbol(keyword) = items[0].drop_meta() {
-					if is_function_keyword(keyword) {
-						if let Some(func_def) = extract_def_function(&items[1..]) {
-							renames.insert(func_def.name.clone(), qualify_nested_name(Some(parent), &func_def.name));
-							register_user_function(ctx, &func_def.name, func_def.params, &func_def.body, Some(parent));
-							return Node::List(items, bracket, separator);
-						}
-					}
-				}
-			}
-			Node::List(
-				items.into_iter().map(|item| lift_nested_defs_walk(ctx, item, parent, renames)).collect(),
-				bracket,
-				separator,
-			)
+		Node::List(items, bracket, separator) if let Some(function) = keyword_definition(&items) => {
+			renames.insert(function.name.clone(), qualify_nested_name(Some(parent), &function.name));
+			register_user_function(ctx, &function.name, function.params, &function.body, Some(parent));
+			Node::List(items, bracket, separator)
 		}
+		Node::List(items, bracket, separator) => Node::List(
+			items.into_iter().map(|item| lift_nested_defs_walk(ctx, item, parent, renames)).collect(),
+			bracket,
+			separator,
+		),
 		other => other,
 	}
 }
@@ -230,7 +206,7 @@ pub(in crate::analyzer) fn extract_params(signature: &[Node], bracket: &Bracket)
 		};
 		match type_first_name {
 			Some(name) => {
-				params.push(Param { name: name.clone(), annotation: Some(item.clone()), default: None, used_as: None });
+				params.push(Param { annotation: Some(item.clone()), ..Param::untyped(name) });
 				items.next();
 			}
 			None => params.extend(extract_param(item).map(|param| with_list_annotation(param, &mut items))),
@@ -271,17 +247,8 @@ pub(in crate::analyzer) fn with_list_annotation<'a>(
 pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 	match item.drop_meta() {
 		Node::Symbol(s) => Some(Param::untyped(s)),
-		Node::Key(n, Op::Colon, type_name) => {
-			if let Node::Symbol(s) = n.drop_meta() {
-				Some(Param {
-					name: s.clone(),
-					annotation: Some(named_list_annotation(type_name)),
-					default: None,
-					used_as: None,
-				})
-			} else {
-				None
-			}
+		Node::Key(name, Op::Colon, type_name) => {
+			Some(Param { annotation: Some(named_list_annotation(type_name)), ..Param::untyped(name.symbol_name()?) })
 		}
 		// `f: (Int) -> Int` parses as `(f: (Int)) -> Int`: a function
 		Node::Key(typed, Op::Arrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
@@ -329,38 +296,25 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 		return extract_def_function(&[untyped]);
 	}
 
-	// Pattern 1: def (name params...): body, or := body
+	// def (name params...): body, or := body
 	if let Node::Key(sig, Op::Colon | Op::Define, body) = first {
-		if let Node::List(sig_items, bracket, _) = sig.drop_meta() {
-			if !sig_items.is_empty() {
-				if let Node::Symbol(name) = sig_items[0].drop_meta() {
-					return Some(user_function(name, extract_params(sig_items, bracket), body.as_ref().clone()));
-				}
-			}
+		if let Some((name, sig_items, bracket)) = signature(sig) {
+			return Some(user_function(name, extract_params(sig_items, bracket), body.as_ref().clone()));
 		}
 	}
-
-	// Pattern 2: def ((name params...) {body})
-	if let Node::List(inner_items, _, _) = first {
-		if inner_items.len() >= 2 {
-			if let Node::List(sig_items, _, _) = inner_items[0].drop_meta() {
-				if !sig_items.is_empty() {
-					if let Node::Symbol(name) = sig_items[0].drop_meta() {
-						let params: Vec<Param> = sig_items
-							.iter()
-							.skip(1)
-							.flat_map(|item| match item.drop_meta() {
-								Node::List(param_items, _, _) => {
-									param_items.iter().filter_map(extract_param).collect::<Vec<_>>()
-								}
-								_ => extract_param(item).into_iter().collect(),
-							})
-							.collect();
-						return Some(user_function(name, params, inner_items[1].clone()));
-					}
-				}
-			}
-		}
-	}
-	None
+	// def ((name params...) {body})
+	let Node::List(inner_items, _, _) = first else {
+		return None;
+	};
+	let (name, sig_items, _) = signature(inner_items.first()?)?;
+	let body = inner_items.get(1)?;
+	let params: Vec<Param> = sig_items
+		.iter()
+		.skip(1)
+		.flat_map(|item| match item.drop_meta() {
+			Node::List(param_items, _, _) => param_items.iter().filter_map(extract_param).collect::<Vec<_>>(),
+			_ => extract_param(item).into_iter().collect(),
+		})
+		.collect();
+	Some(user_function(name, params, body.clone()))
 }

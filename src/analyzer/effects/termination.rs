@@ -1,4 +1,10 @@
 //! Div: whether a recursion demonstrably shrinks a parameter toward a guarded base case, so it terminates
+//!
+//! Total if one parameter p is a measure: every recursive call sits in a branch whose guard bounds p
+//! by a number literal (`p<2 ? … : f(p-1)` bounds p ≥ 2 below) and passes `p - k` (or `p + k` toward
+//! an upper bound) at p's position, k a positive literal. p then moves by at least k per call and the
+//! call is only reached inside the bound, so every call chain is finite. p must not be assigned in the body.
+//! Assumes finite numbers: a float NaN or ∞ argument can still run away (exact numbers are the default).
 use super::*;
 
 /// Which side of a literal a guard confines a parameter to
@@ -190,9 +196,8 @@ fn assigns(node: &Node, parameter: &str) -> bool {
 					| Op::OrAssign | Op::XorAssign
 					| Op::Inc | Op::Dec
 			);
-			(writes && matches!(left.drop_meta(), Node::Symbol(name) if name == parameter))
-				|| (matches!(op, Op::Inc | Op::Dec)
-					&& matches!(right.drop_meta(), Node::Symbol(name) if name == parameter))
+			(writes && left.is_symbol(parameter))
+				|| (matches!(op, Op::Inc | Op::Dec) && right.is_symbol(parameter))
 				|| assigns(left, parameter)
 				|| assigns(right, parameter)
 		}

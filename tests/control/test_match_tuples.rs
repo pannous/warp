@@ -24,3 +24,8 @@ fn tuple_arm_checks_the_count() {
 fn literal_tuple_arm_still_compares() {
 	is!("match (1, \"a\") { (1, \"a\") => \"yes\"; _ => \"no\" }", "yes");
 }
+
+#[test]
+fn tuple_arm_in_a_loop_body() {
+	is!("total = 0\nfor p in [(1, 2), (3, 4)] {\n  total += match p { (a, b) => a * b; _ => 0 }\n}\ntotal", 14);
+}

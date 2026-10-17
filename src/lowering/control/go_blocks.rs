@@ -6,7 +6,7 @@
 //! from shared values (P106); `await job or y` is `try await job else y`.
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
-use super::nodes::{call, key, parameter_word, Counter};
+use super::nodes::{any_part, call, key, parameter_word, Counter};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, GO_WORD, RETURN_WORD};
@@ -235,9 +235,7 @@ fn starts_block_at(items: &[Node]) -> Option<usize> {
 }
 
 fn has_go_block(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::List(items, _, _) if starts_block_at(items).is_some()));
-	found
+	any_part(node, |part| matches!(part, Node::List(items, _, _) if starts_block_at(items).is_some()))
 }
 
 /// A program defining its own `go` keeps it

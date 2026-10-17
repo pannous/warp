@@ -1,3 +1,147 @@
+# One lookup for every word (card one-dispatch, user 2026-10-16, IMPORTANT)
+
+Decision default-methods, generalized: `x.word` ≡ `x.word()` ≡ `word(x)` ≡ `word x` ≡ `word of x`, all resolved by
+one lookup, multi-dispatch on the receiver's type, the most specific meaning wins; redefining a type's own library word
+for that type is a loud error. Today the answer is spread over ~20 passes, each with its own idea of "the program
+defines X" (survey below). This section is the plan and, as slices land, the record.
+
+## The rule
+A word names a generic function. `resolve(word, receiver, arity, form)` lists its meanings, most specific first:
+
+| level | meaning | examples |
+|---|---|---|
+| 0 | a variable or parameter in scope (bare words only; `x.word` never reads a variable `word`) | `random = 4; random` |
+| 1 | the receiver's own member: field of its class, entry of its literal or map, class method or method typed with its class (likeness distance: own class before a parent) | `{first: 1}.first`, `Deck(3).sort()` |
+| 2 | the program's own untyped definition (any value), at the arities it takes | `count(x) := 7`, `x.square` of `square(x)` |
+| 3 | a used module's word (`use json`: bare `parse` is json.parse) | `use json; parse t` |
+| 4 | the library word of the receiver's built-in type (list/text/map/number modules, counts, conversions, number words, `type`, swizzles) | `xs.first`, `x.round`, `t.int`, `p.zy` |
+| 5 | nothing: `undefined function: word` | `5.shout` |
+
+- Static when the receiver's type is known at compile time (instance shape, literal, plain variable); otherwise ONE
+  run-time choice between the levels that may apply: `if x has member word then member else <level 2-4 meaning>(x)`
+  (generalizing today's map_field_or, field_or_word, dispatched_by_class and `f·dispatch`).
+- Forms: a getter is the 0-argument meaning, a setter the 1-argument one; `x.word = v` ≡ `x.word(v)` ≡ `word(x, v)` ≡
+  `word of x = v` call the setter when one exists, else store the field (decisions property-accessors, setter-calls).
+- A function word used as a value is its 0-argument call (random-forms, saved-words: bare `canvas` is `canvas()`).
+- After a number, a unit symbol is level 0 for units: the unit, even beside a variable (unit-after-number).
+- Shadowing is per name and arity, scoped per function: a local `random = 4` in one function changes only that function;
+  a program `first(x)` leaves `first(xs, 3)` to the library (as cross-module-overload does for modules).
+- Uniform call: `x.f(args)` calls `f` when f takes `args + 1` arguments (one arity rule; today two).
+- `first(xs: list) := …` (a program redefining a built-in type's own library word for that type) is a loud error;
+  an untyped `first(x)` is the program's own word (level 2), see question Q1.
+
+## Where it lives
+`src/lowering/words/meanings.rs` (new): `ProgramNames` (scoped, per arity, computed once per pass from the tree) and
+`meanings(name, receiver: Receiver, arity) -> Vec<Meaning>`, `Receiver` = Known(type)/Value(kind)/MayBeObject. The
+passes keep their positions in the pipeline but ask it instead of their own tables.
+
+## Today (survey 2026-10-16, worktree one-dispatch on final-lowering fe4afbeb1)
+`x.word`: library_words.rs `method_call` (:906), in order: `pair.0` → `dict.fromkeys` → literal field :916 →
+instance field :928 → library word, or `map_field_or` :931/:1052 → declared field :947 → loaded module word
+(`field_or_word`) :953 → user function ≥1 parameter :966 → conversions :971 → `is_known_method` :1030 → maybe-object
+field or number word :988 → number word :995 → `x.type` :999 → swizzle :1007 → undefined error :1011.
+Earlier passes that already rewrite dots (pipeline.rs): of_lookups (`a of b` → `b.a`), module_properties (getter/
+setter table, inlined), channel_words, plain_enums, member lambdas, reflection words (`f.params`, `p.fields`),
+class_methods (method_aliases, `method·x` renames + dispatched_by_class, statics, `age·set`, method_calls),
+foreign_modules, std_aliases (`x.json`), welcome_forms (`.to_s`), function_methods (called form, exact arity),
+blocks (object-literal function entries), broadcasting (`names.upper`, `people.name`), lower_count_in,
+instance_calls, traits operation_calls / generic_calls (generics.rs, `Generic::method_for`).
+Bare words: units.rs (AFTER_NUMBER mark), module_properties `bare_side`, saved_words (SAVED_WORDS table),
+host/aliases.rs (random forms), modules.rs + needed_definitions (module vs program, per arity), parse_word.rs,
+getters.rs, ambiguous_forms (library word values), bare_calls.rs, type_constructor conversion_calls,
+library_words `shadowed` + `word_call`, emitter scope tables.
+"The program defines X" is computed 8 ways: library_words `shadowed` (scoped), objects.rs `defined_names`
+(everything), music_words (+ loop variables, parameters), soft_keywords `names_given` (+ fields),
+type_tests `program_names`, bare_calls (assigned + any parameter), needed_definitions (top level, per arity),
+modules.rs (top level).
+Gaps against the decisions: used-module-bare-words not built (parse_word ignores `use json`); saved-words still a
+table, no `canvas()`; `width(canvas, 12)` reaches no setter; three setter mechanisms (inlined property, `age·set`,
+`p = f(p, v)`); no error for redefining a type's library word; class-body methods named like library words take
+`method·x` + dispatched_by_class instead of the generic function; `int(x) :=` refused but `hex(x) :=` allowed.
+
+## Migration, one commit and one test per case, each special case deleted once covered
+1. method_call → `meanings` + one static/run-time choice: deletes the 6 bare-form branches (literal, instance,
+   declared, map field, loaded module word, maybe-object). Pinned by test_field_named_like_library_word,
+   test_map_field_named_like_word, test_dot_without_parens, test_dot_word_same_path, test_number_methods,
+   test_swizzles, test_type_of, test_conversion_methods, test_user_method_form, test_spaced_construction.
+2. One uniform-call arity rule (library_words :966 and function_methods :28). test_user_method_form,
+   test_conversion_methods, test_builtin_clash.
+3. `ProgramNames`, scoped and per arity, replacing the 8 "defines X" sets (parse_word, host aliases, saved_words,
+   music_words, std_aliases, type_constructor, bare_calls, library_words). test_bare_host_words, test_parse_word,
+   test_type_calls, test_builtin_clash, test_sound_use, test_window_size.
+4. Used module words bare (level 3): `use json; parse t`. New test tests/modules/test_used_module_bare_words.rs.
+5. One setter rule: properties, class `set`, `p.f = v` through the 1-argument meaning; `width(canvas, 12)` and
+   `width of canvas = 12`. test_property_definitions, test_property_access, test_window_size, test_sound_buses, new
+   test for the uniform setter.
+6. Saved words via the bare-call rule: `canvas()` in lib/draw.warp, `sound()`, SAVED_WORDS deleted.
+   test_save_painting, test_sound_render.
+7. Class-body methods named like library words join the generic function (drop `method·x` + dispatched_by_class).
+   test_class_methods, test_dispatch.
+8. Redefining a built-in type's library word for that type: loud error. New test.
+9. Units and type words through the same lookup (unit-after-number mark, type-word definitions per Q2).
+   test_units_after_numbers, test_type_calls.
+
+## Status (2026-10-16 evening)
+Landed on branch one-dispatch: slices 1, 3, 4, 5 and Q2.
+- 1: method_call = OwnMember × WordMeaning (12977c0e4).
+- 3: `ProgramNames` (src/lowering/words/program_names.rs): `of`, `takes`, `binds`, `takes_call`, `function_takes`,
+  `inside` (a function's parameters and assignments), `rewritten_where_free` (a rewrite applied where the program
+  leaves a word free) and `rewritten_by_scope` (a bottom-up rewrite given the names in scope). Users: host aliases and
+  random forms, bare_calls (scoped `Parameterless`), parse_word (parse and eval), type_constructor (conversion calls),
+  library_words `library_word_for` (per arity: `first(x)` leaves `first(xs, 2)` to the library). module_properties:
+  a field binds its name only inside its object literal or class (a class field `width` was the canvas's side inside
+  its methods), a destructured parameter `{width, height}` binds its names.
+  Still on their own sets: music_words, std_aliases, soft_keywords `program_names` users (units, test_blocks,
+  undo_history, stored_values), type_tests `program_names`, needed_definitions, modules.rs.
+- 4: used-module bare words. 5: properties by uniform call, class setter writing its own field.
+- 6 was done on main by card graphics-saved-words (canvas() := Picture(), bare overloaded names call `name·0`).
+- Q2 (type-words-reserved): every type word and conversion word is refused as a function name ("hex is a type; name
+  your function to_hex"); lib/compiler/parser.warp's decimal is decimal_number.
+- probes/dispatch/compare_binaries.py: every `is!` snippet of the given test files with two binaries, the result lines
+  compared; the quick behaviour check while the test queue is long.
+- 8 (branch one-dispatch-typed, card library-typed, decision library-words-typed): typed_library_words.rs at the start
+  of MODULE_PASSES. A typed redefinition for the library's types is an error; an untyped one `count(x) := 7` becomes
+  `count·any` with a hint, and every call `count(v)`, `count v`, `v.count`, `v.count()` of an arity the program's
+  takes is chosen: every typed library parameter (library_parameter_types; MEMBER_SIGNATURES type `f: function`,
+  `at: int`) with a value known not to fit → the program's; the receiver's kind known → library or program; else an
+  `is_type` test of the receiver at run time (never of a function argument: testing calls it). A call of an arity only
+  the library takes stays the library's (`first(xs, 2)`); a builtin method that is no library function is called on
+  its receiver (`t.add(n)`); a shared array is the program's. Suffix words: `trim·any` gives `trimmed` →
+  `typed_library_words::dispatched` (ambiguous_forms suffix_call).
+  So the rule table's level 4 (the library's word for a value of its types) now comes before level 2 (the
+  program's untyped definition).
+- Gate round 2 (2026-10-17, one-dispatch-uniform): parameters and loop variables are unknown kinds (kinds are known by
+  name program-wide); another module's bare word on what may be an object reads its field as before (`p.center`,
+  `s.words` of a component result, `f(x).title`); a field write `m.title = v` takes no word unless the program defines
+  the setter (stored tables restore rows that way); a let/const receiver of unknown kind takes the program's word over
+  a list-changing library word (route path parameters, `add(a, b)`); the null check narrows after
+  `if x == ø { return … }` (the raytracer). std_aliases asks modules::says_use (main's json-parse-literal).
+- Gate round 3: slice 7 had a class's own `pop` (which changes its object, pair protocol) also take `items.pop()` on
+  its list field; class_methods::method_calls now leaves a library word's method on a field of no declared class to
+  the library word (`items = []` parses to ø, so only a class-typed field `top: Node` may hold an instance). An
+  untyped field holding an instance calls the library word, as before slice 7. gpu_visualizer_warp and the wgsl
+  shader fail without a GPU on main too (WARP_GPU=off; card filed), environmental in the cloud.
+- Slice 2: one uniform-call rule, `ProgramNames::takes_method_call`, for function_methods and method_call.
+- Rest of 3: soft keywords (test, expect, undo, stored, store words, quantity casts) ask `ProgramNames::takes` at the
+  top level; infix iterations read the names in scope; ref, form routes, set phrases and operator aliases are
+  `rewritten_where_free`. music_words::defined_names deleted. Program-wide on purpose: std_aliases and rust_paths
+  (a field `Count` keeps its name), of_lookups (one rewrite for all selectors), markup tags (main-level statements),
+  operator call forms (function names are global), type_tests' Names, needed_definitions.
+- 9: a unit word bound only in another scope (`f(s) := …`) is the unit in a conversion target elsewhere
+  (`2000ms as s`, rewritten_by_scope in units::with_units_after_numbers); after a number it always was. A top-level
+  variable `m` still takes `as m`. Q2 covered the type words. Card parameter-unit: `f(x) := x as ms` loses the
+  conversion at run time (main too).
+
+## Answered questions (user, 2026-10-16; decisions dispatch-untyped-library-words, type-words-reserved, field-forms)
+- Q1 untyped `first(x) := x*2`: dispatch. The library's `first(list)` is more specific than the program's untyped
+  `first(x)`, so lists keep the library word, every other value takes the program's: `first(3)` → 6, `first([1,2])`
+  → 1, with the hint "first of a list stays the library word". No error. test_builtin_clash
+  library_words_stay_redefinable pinned the old meaning and is updated (user decision).
+- Q2 type words as function names: reserved, all of them. `double(x) := …` and `hex(x) := …` are errors with the fix
+  "name it to_double" / "to_hex".
+- Q3 plain fields in call forms: unchanged. Fields are read with `.` and `of` and set with `b.w = 5` / `w of b = 5`;
+  `w(b)`, `b.w(5)`, `w(b, 5)` stay errors for plain fields. Only properties (accessor definitions) answer all forms.
+
 # Dispatch on return type (D10)
 
 User decision (P17, notes/open_decisions.md): "Dispatch on return type" (un-parked). `(render "hello") as pdf` and

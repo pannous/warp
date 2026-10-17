@@ -20,6 +20,15 @@ use std::collections::{HashMap, HashSet};
 const WRITTEN: &str = "it";
 const CANVAS: &str = "canvas";
 const SIDES: [&str; 2] = ["width", "height"];
+const DENSITY_NOTE: &str = "the pixels per length, in dpi";
+
+/// Other names of a property: object, alias, the property, the note naming it (decision display-names)
+const PROPERTY_ALIASES: [(&str, &str, &str, &str); 4] = [
+	("display", "dpi", "density", DENSITY_NOTE),
+	("display", "ppi", "density", DENSITY_NOTE),
+	("display", "dimensions", "size", "dimension is a physical quantity (length, mass); size is width × height in px"),
+	("display", "resolution", "size", "resolution: density (dpi) or size (px)? size is width × height"),
+];
 
 /// `object.property`: its getter body, its setter (parameter, body), the comment above its getter, the module it needs
 #[derive(Clone, Default)]
@@ -269,14 +278,18 @@ fn without_definitions(node: Node) -> Node {
 	}
 }
 
-/// The names the program gives: variables, functions, their parameters (`def f(width) {…}` too), loop variables,
-/// fields; a property written (`canvas.width = 3`) binds no name
+/// The names the program gives: variables, functions, their parameters (`def f(width) {…}` and the destructured
+/// `area({width, height})` too), loop variables; a field binds its name only inside its object or class
+/// (Rewrite::rewritten), a property written (`canvas.width = 3`) binds no name
 pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
-	let mut bound = crate::soft_keywords::names_given(program);
-	bound.extend(destructured_names(program));
+	let names = crate::soft_keywords::names_given_with_kinds(program).into_iter();
+	let mut bound: HashSet<String> = names.filter(|(_, kind)| *kind != "field").map(|(name, _)| name).collect();
+	bound.extend(destructured_variables(program));
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
-			bound.extend(head.parameters().into_iter().filter_map(parameter_name));
+			let parameters = head.parameters();
+			bound.extend(parameters.iter().flat_map(|parameter| destructured_names(parameter)));
+			bound.extend(parameters.into_iter().filter_map(parameter_name));
 		}
 		match node {
 			Node::Key(target, op, _) if op.is_write() || *op == Op::Define => {
@@ -290,10 +303,35 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 }
 
 /// The variables the program's destructurings bind: `a, b = …`, `[a, b] = …`, `{x, y} = …`, `{x: a} = …`
-fn destructured_names(program: &Node) -> HashSet<String> {
+fn destructured_variables(program: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	program.visit(&mut |node| names.extend(crate::tuples::destructured_names(node)));
 	names
+}
+
+/// `width` and `h` of a destructuring parameter `{width, height: h}`
+fn destructured_names(parameter: &Node) -> Vec<String> {
+	let Node::List(entries, Bracket::Curly, _) = parameter.drop_meta() else { return vec![] };
+	let name = |entry: &Node| match entry.drop_meta() {
+		Node::Key(_, Op::Colon, name) => name.drop_meta().symbol_name().map(String::from),
+		other => other.symbol_name().map(String::from),
+	};
+	entries.iter().filter_map(name).collect()
+}
+
+/// The fields `{width: 5}` or `class R{width: int}` declares
+fn declared_fields(node: &Node) -> Vec<String> {
+	let entries = match node.drop_meta() {
+		Node::Type { body, .. } => body.drop_meta(),
+		literal @ Node::List(_, Bracket::Curly, _) => literal,
+		_ => return vec![],
+	};
+	let Node::List(entries, _, _) = entries else { return vec![] };
+	let field = |entry: &Node| match entry.drop_meta() {
+		Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name().map(String::from),
+		_ => None,
+	};
+	entries.iter().filter_map(field).collect()
 }
 
 /// `height` of a write's target `height` or a declared `height: length`
@@ -315,10 +353,20 @@ struct Rewrite {
 
 impl Rewrite {
 	/// The property `object.property` names (`member` the property's word), unless the program binds the object
+	/// (an other name of one, PROPERTY_ALIASES, names it with a hint)
 	fn property_of(&self, object: &Node, member: &Node) -> Option<(String, String)> {
 		let (object, property) = (object.drop_meta().symbol_name()?, member.drop_meta().symbol_name()?);
+		if self.bound.contains(object) {
+			return None;
+		}
 		let name = (object.to_string(), property.to_string());
-		(self.properties.contains_key(&name) && !self.bound.contains(object)).then_some(name)
+		if self.properties.contains_key(&name) {
+			return Some(name);
+		}
+		let (_, alias, canonical, note) =
+			PROPERTY_ALIASES.iter().find(|(of, alias, ..)| *of == object && *alias == property)?;
+		crate::normalize::hint(&format!("{object}.{alias}"), &format!("{object}.{canonical}"), note);
+		Some((object.to_string(), canonical.to_string()))
 	}
 
 	fn dotted_property(&self, node: &Node) -> Option<(String, String)> {
@@ -355,6 +403,20 @@ impl Rewrite {
 				}
 			}
 		}
+		// `width(canvas)`, `width canvas`, `width(canvas, 300)`: the uniform calls of the getter and the setter
+		// (decision setter-calls, notes/dispatch.md)
+		if let Node::List(items, Bracket::Round, Separator::None) | Node::List(items, Bracket::None, Separator::Space) =
+			node.drop_meta()
+		{
+			if let [word, object, value @ ..] = items.as_slice() {
+				if let Some(name) = self.property_of(object, word).filter(|_| value.len() <= 1) {
+					match value {
+						[value] => return self.written(&name, Op::Assign, value.clone(), &node),
+						_ => return self.read(&name).unwrap_or(node),
+					}
+				}
+			}
+		}
 		if let Some(side) = self.bare_side(&node) {
 			crate::normalize::set_position_of(&node);
 			let reason = format!("a bare {side} is the canvas's; the others: window.{side}, display.{side}");
@@ -366,7 +428,16 @@ impl Rewrite {
 			// a field's name is no read of the word: `{width: 5}`, `p.width`, `rect(width: 3)`
 			Node::Key(name, Op::Colon, value) => Node::Key(name, Op::Colon, Box::new(self.rewritten(*value))),
 			Node::Key(object, Op::Dot, member) => Node::Key(Box::new(self.rewritten(*object)), Op::Dot, member),
-			other => other.map_children(|child| self.rewritten(child)),
+			other => {
+				// a field binds its name inside the object or class declaring it, not elsewhere (`p = {width: 5}; width`)
+				let fields: Vec<String> =
+					declared_fields(&other).into_iter().filter(|field| self.bound.insert(field.clone())).collect();
+				let rewritten = other.map_children(|child| self.rewritten(child));
+				fields.iter().for_each(|field| {
+					self.bound.remove(field);
+				});
+				rewritten
+			}
 		}
 	}
 

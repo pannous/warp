@@ -11,16 +11,12 @@ const ELEMENTS_SUFFIX: &str = "·elements";
 
 pub fn lower(node: Node) -> Node {
 	match node {
-		Node::Key(target, op, value) if changes_element(&op) => match field_element(&target) {
+		Node::Key(target, op, value) if op.is_write() => match field_element(&target) {
 			Some((field, index, name)) => written_back(field, index, op, lower(*value), name),
 			None => Node::Key(target, op, Box::new(lower(*value))),
 		},
 		other => other.map_children(lower),
 	}
-}
-
-fn changes_element(op: &Op) -> bool {
-	*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
 }
 
 /// `k.counts#i`: the field `k.counts`, the index i and the name of the variable for its list

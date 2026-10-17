@@ -3,7 +3,7 @@
 
 use crate::analyzer::{assigned_names, data_binding, function_definitions};
 use crate::errors::diagnostic::Diagnostic;
-use crate::lowering::nodes::children_rewritten;
+use crate::lowering::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -102,7 +102,7 @@ fn subtract_kebab_variables(node: Node, variables: &HashSet<String>) -> Node {
 			if parts.len() > 1 && parts.iter().all(|part| variables.contains(*part)) {
 				let mut terms = parts.into_iter().map(|part| Node::Symbol(part.to_string()));
 				let first = terms.next().expect("split gives a part");
-				terms.fold(first, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(term)))
+				terms.fold(first, |difference, term| key(difference, Op::Sub, term))
 			} else {
 				Node::Symbol(name)
 			}

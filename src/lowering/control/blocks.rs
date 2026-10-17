@@ -12,7 +12,7 @@
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
-use super::nodes::{call, children_rewritten, is_block, key};
+use super::nodes::{any_part, call, children_rewritten, is_block, key, word_headed};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -90,10 +90,7 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
 		return None;
 	};
-	let (name, parameters) = items.split_first()?;
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let (name, parameters) = word_headed(items)?;
 	let parameters: Vec<(String, Takes)> = parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
@@ -110,7 +107,7 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	parameters
 		.iter()
 		.any(|(_, takes)| *takes != Takes::Value)
-		.then(|| (name.clone(), BlockFunction { parameters, body: body.as_ref().clone() }))
+		.then(|| (name.to_string(), BlockFunction { parameters, body: body.as_ref().clone() }))
 }
 
 /// The argument of a callable parameter that is code to run: `{ print 1 }`, `code e`, the rest of a call
@@ -171,10 +168,12 @@ fn sealed_code(node: &Node) -> Option<&Node> {
 
 /// `as_code(data e)`: e as code, of the type code (decision body-code)
 pub(crate) fn quoted_code(code: Node) -> Node {
-	crate::node::call(
-		crate::words::AS_CODE,
-		vec![Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)],
-	)
+	crate::node::call(crate::words::AS_CODE, vec![as_data(code)])
+}
+
+/// `data e`: e as written, data rather than code
+pub(crate) fn as_data(code: Node) -> Node {
+	Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)
 }
 
 /// `data e` with e sealed
@@ -183,7 +182,7 @@ pub(crate) fn quote(code: Node) -> Node {
 		Some(_) => code,
 		None => Node::data(QuotedCode(code)),
 	};
-	Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)
+	as_data(code)
 }
 
 /// Every `data e` sealed, so the passes after blocks leave e as written
@@ -239,9 +238,7 @@ fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
 		return parens(vec![argument.clone()]);
 	}
 	match node {
-		Node::Symbol(name) if name == parameter => {
-			Node::List(vec![symbol(DATA_WORD), argument.clone()], Bracket::None, Separator::Space)
-		}
+		Node::Symbol(name) if name == parameter => as_data(argument.clone()),
 		other => children_rewritten(other, |child| substitute_block(child, parameter, argument)),
 	}
 }
@@ -307,10 +304,8 @@ pub(crate) fn uncharged(node: &Node) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Colon, value) = node.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
-	is_computed(value).then(|| (name.clone(), value.as_ref().clone()))
+	let name = target.symbol_name()?;
+	is_computed(value).then(|| (name.to_string(), value.as_ref().clone()))
 }
 
 /// Code that computes: an operation or a call, not a literal, a word, a type or an object/list literal
@@ -466,9 +461,7 @@ fn code_entry(entry: &Node) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Colon, value) = entry.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(field) = target.drop_meta() else {
-		return None;
-	};
+	let field = target.symbol_name()?;
 	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else {
 		return None;
 	};
@@ -479,7 +472,7 @@ fn code_entry(entry: &Node) -> Option<(String, Node)> {
 		_ if *separator == Separator::Space && is_statement(&statement) => statement,
 		_ => return None,
 	};
-	Some((field.clone(), block))
+	Some((field.to_string(), block))
 }
 
 /// An entry the object lowering rewrites: a block, a function, a value entry, or a nested object holding one
@@ -496,11 +489,9 @@ fn nested_object(entry: &Node) -> Option<(String, &Node, &Vec<Node>)> {
 	let Node::Key(key, Op::Colon, value) = entry.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(field) = key.drop_meta() else {
-		return None;
-	};
+	let field = key.symbol_name()?;
 	let entries = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry))?;
-	Some((field.clone(), value, entries))
+	Some((field.to_string(), value, entries))
 }
 
 /// `o·f`: the top-level function of the function entry `f` of the object `o` (no name the parser reads)
@@ -654,7 +645,7 @@ impl Blocks {
 			Ok(lowered) => lowered,
 			Err(error) => return Some(error),
 		};
-		let object = Node::Key(Box::new(target.clone()), op, Box::new(object));
+		let object = key(target.clone(), op, object);
 		if definitions.is_empty() {
 			return Some(object);
 		}
@@ -677,7 +668,7 @@ impl Blocks {
 					Node::Key(head, _, value) if matches!(head.drop_meta(), Node::Symbol(_)) => value.as_ref().clone(),
 					whole => whole.clone(),
 				};
-				let written = Node::List(vec![symbol(DATA_WORD), written], Bracket::None, Separator::Space);
+				let written = as_data(written);
 				lowered.push(key(Node::Symbol(field), Op::Colon, written));
 				continue;
 			}
@@ -701,7 +692,7 @@ impl Blocks {
 				Some((field, block)) => {
 					let block = self.rewrite(block);
 					self.blocks.insert(format!("{path}.{field}"), block.clone());
-					let data = Node::List(vec![symbol(DATA_WORD), block], Bracket::None, Separator::Space);
+					let data = as_data(block);
 					key(Node::Symbol(field), Op::Colon, data)
 				}
 				// `s3 = a+b`, `s3 := a+b` (P71 open: now): a value entry, evaluated now
@@ -873,10 +864,7 @@ impl Blocks {
 
 	/// `f(a, b)` of a function with a `block` parameter: its body with the block arguments' code and the other parameters bound
 	fn expand(&mut self, items: &[Node]) -> Option<Node> {
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = word_headed(items)?;
 		let function = self.functions.get(name)?.clone();
 		let arguments = fitted_arguments(&function.parameters, arguments)?;
 		if self.expansions > MAX_EXPANSIONS {
@@ -945,9 +933,7 @@ impl Blocks {
 			});
 		}
 		match node {
-			Node::Symbol(name) if self.blocks.contains_key(&name) => {
-				Node::List(vec![symbol(DATA_WORD), self.blocks[&name].clone()], Bracket::None, Separator::Space)
-			}
+			Node::Symbol(name) if self.blocks.contains_key(&name) => as_data(self.blocks[&name].clone()),
 			// `x = …` ends the block named x
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 				let value = self.rewrite(*value);
@@ -991,9 +977,7 @@ pub fn lower_trailing_blocks(program: Node) -> Node {
 const YIELD_WORD: &str = "yield";
 
 pub(crate) fn contains_yield(body: &Node) -> bool {
-	let mut found = false;
-	body.visit(&mut |part| found |= part.is_symbol(YIELD_WORD));
-	found
+	any_part(body, |part| part.is_symbol(YIELD_WORD))
 }
 
 fn with_yield_parameters(node: Node) -> Node {

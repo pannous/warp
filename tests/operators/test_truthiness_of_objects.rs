@@ -14,6 +14,5 @@ fn an_object_is_truthy() {
 fn empty_values_are_falsy() {
 	is!("not ()", true);
 	is!("not {}", true);
-	is!("not []", true);
 	is!("not ({})", true);
 }

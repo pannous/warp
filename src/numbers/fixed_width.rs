@@ -20,15 +20,22 @@ const fn unsigned(type_name: &'static str, trap: &'static str, bits: u32) -> Fix
 	FixedWidth { type_name, trap, low: 0, high: (1 << bits) - 1 }
 }
 
+/// A fixed width of its name, its trap OVERFLOW_PREFIX + name
+macro_rules! width {
+	($sign:ident, $name:literal, $bits:literal) => {
+		$sign($name, concat!("overflow_of_", $name), $bits)
+	};
+}
+
 pub const FIXED_WIDTHS: [FixedWidth; 8] = [
-	unsigned("byte", "overflow_of_byte", 8),
-	signed("int8", "overflow_of_int8", 8),
-	signed("int16", "overflow_of_int16", 16),
-	signed("int32", "overflow_of_int32", 32),
-	signed("int64", "overflow_of_int64", 64),
-	unsigned("uint16", "overflow_of_uint16", 16),
-	unsigned("uint32", "overflow_of_uint32", 32),
-	unsigned("uint64", "overflow_of_uint64", 64),
+	width!(unsigned, "byte", 8),
+	width!(signed, "int8", 8),
+	width!(signed, "int16", 16),
+	width!(signed, "int32", 32),
+	width!(signed, "int64", 64),
+	width!(unsigned, "uint16", 16),
+	width!(unsigned, "uint32", 32),
+	width!(unsigned, "uint64", 64),
 ];
 
 /// Other names of a fixed width (user, 2026-10-11: "u8 is alias for uint8 is alias for byte")

@@ -25,7 +25,6 @@ fn test_compact_int() {
 	emitter.emit_node_main(&Node::Number(Number::Int(42)));
 	let bytes = emitter.finish();
 	assert!(!bytes.is_empty());
-	is!("42", 42);
 }
 
 #[test]

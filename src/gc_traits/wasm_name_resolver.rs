@@ -139,14 +139,9 @@ struct StructFieldMapping {
 }
 
 impl StructFieldMapping {
-	fn new(parsed: &ParsedStructType) -> Self {
-		let mut lookup = HashMap::new();
-		for (idx, name) in parsed.field_names.iter().enumerate() {
-			if let Some(name) = name {
-				lookup.insert(name.clone(), idx);
-			}
-		}
-		Self { type_name: parsed.type_name.clone(), names: parsed.field_names.clone(), lookup }
+	fn new(type_name: Option<String>, names: Vec<Option<String>>) -> Self {
+		let lookup = names.iter().enumerate().filter_map(|(index, name)| Some((name.clone()?, index))).collect();
+		Self { type_name, names, lookup }
 	}
 
 	fn index_of(&self, name: &str) -> Option<usize> {
@@ -158,77 +153,54 @@ impl StructFieldMapping {
 	}
 }
 
+/// A module's types as wasmparser reads them, each with the start of its recursion group (where its group-relative
+/// indices count from), and the names its name section gives them and their fields
 struct ParsedModule {
 	hash: u64,
-	types: Vec<ParsedTypeInfo>,
+	types: Vec<(wp::CompositeInnerType, u32)>,
+	type_names: HashMap<u32, String>,
+	field_names: HashMap<u32, Vec<(u32, String)>>,
 }
 
 impl ParsedModule {
 	fn parse(bytes: &[u8], hash: u64) -> Result<Self> {
-		let mut types = Vec::new();
-		let mut next_index: u32 = 0;
-		let mut field_names: HashMap<u32, Vec<(u32, String)>> = HashMap::new();
-		let mut type_names: HashMap<u32, String> = HashMap::new();
-
+		let mut module = Self { hash, types: vec![], type_names: HashMap::new(), field_names: HashMap::new() };
 		for payload in wp::Parser::new(0).parse_all(bytes) {
 			match payload? {
 				wp::Payload::TypeSection(reader) => {
-					next_index = Self::read_type_section(reader, next_index, &mut types)?;
+					for group in reader {
+						let group_start = module.types.len() as u32;
+						let types = group?.into_types().map(|subtype| (subtype.composite_type.inner, group_start));
+						module.types.extend(types);
+					}
 				}
 				wp::Payload::CustomSection(section) => {
 					if let wp::KnownCustom::Name(name_reader) = section.as_known() {
-						Self::read_name_section(name_reader, &mut field_names, &mut type_names)?;
+						module.read_name_section(name_reader)?;
 					}
 				}
 				_ => {}
 			}
 		}
-
-		let mut module = Self { hash, types };
-		module.apply_names(field_names, type_names);
 		Ok(module)
 	}
 
-	fn read_type_section(
-		reader: wp::TypeSectionReader,
-		mut next_index: u32,
-		types: &mut Vec<ParsedTypeInfo>,
-	) -> Result<u32> {
-		for group in reader {
-			let group = group?;
-			let group_start = next_index;
-			for subtype in group.into_types() {
-				types.push(ParsedTypeInfo::from_subtype(subtype, group_start)?);
-				next_index += 1;
-			}
-		}
-		Ok(next_index)
-	}
-
-	fn read_name_section(
-		reader: wp::NameSectionReader<'_>,
-		field_names: &mut HashMap<u32, Vec<(u32, String)>>,
-		type_names: &mut HashMap<u32, String>,
-	) -> Result<()> {
+	fn read_name_section(&mut self, reader: wp::NameSectionReader<'_>) -> Result<()> {
 		for entry in reader {
 			match entry? {
 				wp::Name::Type(map) => {
 					for naming in map {
 						let naming = naming?;
-						type_names.insert(naming.index, naming.name.to_string());
+						self.type_names.insert(naming.index, naming.name.to_string());
 					}
 				}
 				wp::Name::Field(map) => {
 					for naming in map {
 						let naming = naming?;
-						let type_index = naming.index;
-						let mut names = Vec::new();
+						let names = self.field_names.entry(naming.index).or_default();
 						for field in naming.names {
 							let field = field?;
 							names.push((field.index, field.name.to_string()));
-						}
-						if !names.is_empty() {
-							field_names.entry(type_index).or_default().extend(names);
 						}
 					}
 				}
@@ -238,240 +210,40 @@ impl ParsedModule {
 		Ok(())
 	}
 
-	fn apply_names(&mut self, field_names: HashMap<u32, Vec<(u32, String)>>, type_names: HashMap<u32, String>) {
-		// Apply type names
-		for (type_index, name) in type_names {
-			if let Some(ParsedTypeInfo::Struct(struct_ty)) = self.types.get_mut(type_index as usize) {
-				struct_ty.type_name = Some(name);
-			}
-		}
-		// Apply field names
-		for (type_index, entries) in field_names {
-			if let Some(ParsedTypeInfo::Struct(struct_ty)) = self.types.get_mut(type_index as usize) {
-				for (field_idx, name) in entries {
-					if let Some(slot) = struct_ty.field_names.get_mut(field_idx as usize) {
-						*slot = Some(name);
-					}
-				}
-			}
-		}
-	}
-
 	fn try_match(&self, struct_type: &StructType) -> Option<StructFieldMapping> {
-		for (idx, ty) in self.types.iter().enumerate() {
-			if let ParsedTypeInfo::Struct(parsed_struct) = ty {
-				let mut ctx = MatchContext::new(self);
-				if ctx.match_struct(idx as u32, struct_type) {
-					return Some(StructFieldMapping::new(parsed_struct));
-				}
+		self.types.iter().enumerate().find_map(|(index, (ty, _))| match ty {
+			wp::CompositeInnerType::Struct(parsed)
+				if MatchContext::new(self).match_struct(index as u32, struct_type) =>
+			{
+				Some(self.mapping(index as u32, parsed.fields.len()))
+			}
+			_ => None,
+		})
+	}
+
+	/// The names of the struct type at `index` and of its fields
+	fn mapping(&self, index: u32, field_count: usize) -> StructFieldMapping {
+		let mut names = vec![None; field_count];
+		for (field, name) in self.field_names.get(&index).into_iter().flatten() {
+			if let Some(slot) = names.get_mut(*field as usize) {
+				*slot = Some(name.clone());
 			}
 		}
-		None
-	}
-
-	fn parsed_type(&self, idx: u32) -> Option<&ParsedTypeInfo> {
-		self.types.get(idx as usize)
+		StructFieldMapping::new(self.type_names.get(&index).cloned(), names)
 	}
 }
 
-enum ParsedTypeInfo {
-	Struct(ParsedStructType),
-	Array(ParsedArrayType),
-	Func(ParsedFuncType),
-	Other,
-}
-
-impl ParsedTypeInfo {
-	fn from_subtype(subtype: wp::SubType, group_start: u32) -> Result<Self> {
-		use wp::CompositeInnerType::*;
-		match subtype.composite_type.inner {
-			Struct(ty) => Ok(Self::Struct(ParsedStructType::from_parser(ty, group_start)?)),
-			Array(ty) => Ok(Self::Array(ParsedArrayType::from_parser(ty, group_start)?)),
-			Func(ty) => Ok(Self::Func(ParsedFuncType::from_parser(ty, group_start)?)),
-			_ => Ok(Self::Other),
-		}
+/// A type index of the module, absolute: a group-relative one counts from its recursion group's start
+fn resolve_index(index: wp::UnpackedIndex, group_start: u32) -> Option<u32> {
+	match index {
+		wp::UnpackedIndex::Module(i) => Some(i),
+		wp::UnpackedIndex::RecGroup(i) => Some(group_start + i),
+		_ => None,
 	}
 }
 
-#[derive(Clone)]
-struct ParsedStructType {
-	type_name: Option<String>,
-	fields: Vec<ParsedField>,
-	field_names: Vec<Option<String>>,
-}
-
-impl ParsedStructType {
-	fn from_parser(ty: wp::StructType, group_start: u32) -> Result<Self> {
-		let mut fields = Vec::with_capacity(ty.fields.len());
-		for field in ty.fields.iter() {
-			fields.push(ParsedField::from_parser(field, group_start)?);
-		}
-		let field_names = vec![None; fields.len()];
-		Ok(Self { type_name: None, fields, field_names })
-	}
-}
-
-#[derive(Clone)]
-struct ParsedArrayType {
-	field: ParsedField,
-}
-
-impl ParsedArrayType {
-	fn from_parser(ty: wp::ArrayType, group_start: u32) -> Result<Self> {
-		Ok(Self { field: ParsedField::from_parser(&ty.0, group_start)? })
-	}
-}
-
-#[derive(Clone)]
-struct ParsedFuncType {
-	params: Vec<ParsedValType>,
-	results: Vec<ParsedValType>,
-}
-
-impl ParsedFuncType {
-	fn from_parser(ty: wp::FuncType, group_start: u32) -> Result<Self> {
-		let params =
-			ty.params().iter().map(|p| ParsedValType::from_parser(p, group_start)).collect::<Result<Vec<_>>>()?;
-		let results =
-			ty.results().iter().map(|r| ParsedValType::from_parser(r, group_start)).collect::<Result<Vec<_>>>()?;
-		Ok(Self { params, results })
-	}
-}
-
-#[derive(Clone)]
-struct ParsedField {
-	mutable: bool,
-	storage: ParsedStorageType,
-}
-
-impl ParsedField {
-	fn from_parser(field: &wp::FieldType, group_start: u32) -> Result<Self> {
-		Ok(Self { mutable: field.mutable, storage: ParsedStorageType::from_parser(&field.element_type, group_start)? })
-	}
-}
-
-#[derive(Clone)]
-enum ParsedStorageType {
-	I8,
-	I16,
-	Val(ParsedValType),
-}
-
-impl ParsedStorageType {
-	fn from_parser(ty: &wp::StorageType, group_start: u32) -> Result<Self> {
-		Ok(match ty {
-			wp::StorageType::I8 => ParsedStorageType::I8,
-			wp::StorageType::I16 => ParsedStorageType::I16,
-			wp::StorageType::Val(v) => ParsedStorageType::Val(ParsedValType::from_parser(v, group_start)?),
-		})
-	}
-}
-
-#[derive(Clone)]
-enum ParsedValType {
-	I32,
-	I64,
-	F32,
-	F64,
-	V128,
-	Ref(ParsedRefType),
-}
-
-impl ParsedValType {
-	fn from_parser(ty: &wp::ValType, group_start: u32) -> Result<Self> {
-		use wp::ValType::*;
-		Ok(match ty {
-			I32 => ParsedValType::I32,
-			I64 => ParsedValType::I64,
-			F32 => ParsedValType::F32,
-			F64 => ParsedValType::F64,
-			V128 => ParsedValType::V128,
-			Ref(r) => ParsedValType::Ref(ParsedRefType::from_parser(r, group_start)?),
-		})
-	}
-}
-
-#[derive(Clone)]
-struct ParsedRefType {
-	nullable: bool,
-	heap: ParsedHeapType,
-}
-
-impl ParsedRefType {
-	fn from_parser(ty: &wp::RefType, group_start: u32) -> Result<Self> {
-		Ok(Self { nullable: ty.is_nullable(), heap: ParsedHeapType::from_parser(&ty.heap_type(), group_start)? })
-	}
-}
-
-#[derive(Clone)]
-enum ParsedHeapType {
-	Abstract(ParsedAbstractHeapType),
-	Concrete(u32),
-}
-
-impl ParsedHeapType {
-	fn from_parser(ty: &wp::HeapType, group_start: u32) -> Result<Self> {
-		Ok(match ty {
-			wp::HeapType::Abstract { ty, .. } => ParsedHeapType::Abstract(ParsedAbstractHeapType::from_parser(*ty)),
-			wp::HeapType::Concrete(idx) | wp::HeapType::Exact(idx) => {
-				ParsedHeapType::Concrete(resolve_index(*idx, group_start)?)
-			}
-		})
-	}
-}
-
-#[derive(Clone, Copy)]
-enum ParsedAbstractHeapType {
-	Func,
-	Extern,
-	Any,
-	None,
-	NoExtern,
-	NoFunc,
-	Eq,
-	Struct,
-	Array,
-	I31,
-	#[allow(dead_code)]
-	Exn,
-	#[allow(dead_code)]
-	NoExn,
-	#[allow(dead_code)]
-	Cont,
-	#[allow(dead_code)]
-	NoCont,
-}
-
-impl ParsedAbstractHeapType {
-	fn from_parser(ty: wp::AbstractHeapType) -> Self {
-		use wp::AbstractHeapType::*;
-		match ty {
-			Func => ParsedAbstractHeapType::Func,
-			Extern => ParsedAbstractHeapType::Extern,
-			Any => ParsedAbstractHeapType::Any,
-			None => ParsedAbstractHeapType::None,
-			NoExtern => ParsedAbstractHeapType::NoExtern,
-			NoFunc => ParsedAbstractHeapType::NoFunc,
-			Eq => ParsedAbstractHeapType::Eq,
-			Struct => ParsedAbstractHeapType::Struct,
-			Array => ParsedAbstractHeapType::Array,
-			I31 => ParsedAbstractHeapType::I31,
-			Exn => ParsedAbstractHeapType::Exn,
-			NoExn => ParsedAbstractHeapType::NoExn,
-			Cont => ParsedAbstractHeapType::Cont,
-			NoCont => ParsedAbstractHeapType::NoCont,
-		}
-	}
-}
-
-fn resolve_index(index: wp::UnpackedIndex, group_start: u32) -> Result<u32> {
-	Ok(match index {
-		wp::UnpackedIndex::Module(i) => i,
-		wp::UnpackedIndex::RecGroup(i) => group_start + i,
-		_ => bail!("unsupported canonical type index"),
-	})
-}
-
+/// A structural match of a module's types against the engine's: each module type index binds to the first runtime
+/// type it meets, so a recursive type matches itself
 struct MatchContext<'a> {
 	module: &'a ParsedModule,
 	bindings: HashMap<u32, RuntimeTypeId>,
@@ -486,108 +258,91 @@ impl<'a> MatchContext<'a> {
 		if let Some(existing) = self.bindings.get(&idx) {
 			return existing.matches_struct(ty);
 		}
-		let parsed = match self.module.parsed_type(idx) {
-			Some(ParsedTypeInfo::Struct(s)) => s,
-			_ => return false,
+		let Some((wp::CompositeInnerType::Struct(parsed), group)) = self.module.types.get(idx as usize) else {
+			return false;
 		};
 		self.bindings.insert(idx, RuntimeTypeId::Struct(ty.clone()));
-		self.compare_struct(parsed, ty)
-	}
-
-	fn compare_struct(&mut self, parsed: &ParsedStructType, ty: &StructType) -> bool {
-		let mut runtime_fields = ty.fields();
-		if parsed.fields.len() != runtime_fields.len() {
-			return false;
-		}
-		for (parsed_field, runtime_field) in parsed.fields.iter().zip(runtime_fields.by_ref()) {
-			if parsed_field.mutable != runtime_field.mutability().is_var() {
-				return false;
-			}
-			if !self.match_storage_type(&parsed_field.storage, runtime_field.element_type()) {
-				return false;
-			}
-		}
-		true
+		parsed.fields.len() == ty.fields().len()
+			&& parsed.fields.iter().zip(ty.fields()).all(|(field, runtime)| self.match_field(field, &runtime, *group))
 	}
 
 	fn match_array(&mut self, idx: u32, ty: &ArrayType) -> bool {
 		if let Some(existing) = self.bindings.get(&idx) {
 			return existing.matches_array(ty);
 		}
-		let parsed = match self.module.parsed_type(idx) {
-			Some(ParsedTypeInfo::Array(a)) => a,
-			_ => return false,
+		let Some((wp::CompositeInnerType::Array(parsed), group)) = self.module.types.get(idx as usize) else {
+			return false;
 		};
 		self.bindings.insert(idx, RuntimeTypeId::Array(ty.clone()));
-		let runtime_field = ty.field_type();
-		parsed.field.mutable == runtime_field.mutability().is_var()
-			&& self.match_storage_type(&parsed.field.storage, runtime_field.element_type())
+		self.match_field(&parsed.0, &ty.field_type(), *group)
 	}
 
 	fn match_func(&mut self, idx: u32, ty: &FuncType) -> bool {
 		if let Some(existing) = self.bindings.get(&idx) {
 			return existing.matches_func(ty);
 		}
-		let parsed = match self.module.parsed_type(idx) {
-			Some(ParsedTypeInfo::Func(f)) => f,
-			_ => return false,
+		let Some((wp::CompositeInnerType::Func(parsed), group)) = self.module.types.get(idx as usize) else {
+			return false;
 		};
 		self.bindings.insert(idx, RuntimeTypeId::Func(ty.clone()));
-		if parsed.params.len() != ty.params().len() || parsed.results.len() != ty.results().len() {
-			return false;
-		}
-		for (parsed_val, runtime_val) in parsed.params.iter().zip(ty.params()) {
-			if !self.match_val_type(parsed_val, &runtime_val) {
-				return false;
-			}
-		}
-		for (parsed_val, runtime_val) in parsed.results.iter().zip(ty.results()) {
-			if !self.match_val_type(parsed_val, &runtime_val) {
-				return false;
-			}
-		}
-		true
+		parsed.params().len() == ty.params().len()
+			&& parsed.results().len() == ty.results().len()
+			&& parsed
+				.params()
+				.iter()
+				.zip(ty.params())
+				.all(|(parsed, runtime)| self.match_val_type(parsed, &runtime, *group))
+			&& parsed
+				.results()
+				.iter()
+				.zip(ty.results())
+				.all(|(parsed, runtime)| self.match_val_type(parsed, &runtime, *group))
 	}
 
-	fn match_storage_type(&mut self, parsed: &ParsedStorageType, ty: &StorageType) -> bool {
+	fn match_field(&mut self, parsed: &wp::FieldType, ty: &FieldType, group: u32) -> bool {
+		parsed.mutable == ty.mutability().is_var()
+			&& self.match_storage_type(&parsed.element_type, ty.element_type(), group)
+	}
+
+	fn match_storage_type(&mut self, parsed: &wp::StorageType, ty: &StorageType, group: u32) -> bool {
 		match (parsed, ty) {
-			(ParsedStorageType::I8, StorageType::I8) | (ParsedStorageType::I16, StorageType::I16) => true,
-			(ParsedStorageType::Val(p), StorageType::ValType(v)) => self.match_val_type(p, v),
+			(wp::StorageType::I8, StorageType::I8) | (wp::StorageType::I16, StorageType::I16) => true,
+			(wp::StorageType::Val(parsed), StorageType::ValType(ty)) => self.match_val_type(parsed, ty, group),
 			_ => false,
 		}
 	}
 
-	fn match_val_type(&mut self, parsed: &ParsedValType, ty: &ValType) -> bool {
-		use ParsedValType::*;
+	fn match_val_type(&mut self, parsed: &wp::ValType, ty: &ValType, group: u32) -> bool {
 		match (parsed, ty) {
-			(I32, ValType::I32)
-			| (I64, ValType::I64)
-			| (F32, ValType::F32)
-			| (F64, ValType::F64)
-			| (V128, ValType::V128) => true,
-			(Ref(parsed_ref), ValType::Ref(runtime_ref)) => {
-				if parsed_ref.nullable != runtime_ref.is_nullable() {
-					return false;
-				}
-				self.match_heap_type(&parsed_ref.heap, runtime_ref.heap_type())
+			(wp::ValType::I32, ValType::I32)
+			| (wp::ValType::I64, ValType::I64)
+			| (wp::ValType::F32, ValType::F32)
+			| (wp::ValType::F64, ValType::F64)
+			| (wp::ValType::V128, ValType::V128) => true,
+			(wp::ValType::Ref(parsed), ValType::Ref(ty)) => {
+				parsed.is_nullable() == ty.is_nullable()
+					&& self.match_heap_type(parsed.heap_type(), ty.heap_type(), group)
 			}
 			_ => false,
 		}
 	}
 
-	fn match_heap_type(&mut self, parsed: &ParsedHeapType, ty: &HeapType) -> bool {
-		match (parsed, ty) {
-			(ParsedHeapType::Abstract(kind), _) => matches_abstract_heap(*kind, ty),
-			(ParsedHeapType::Concrete(idx), HeapType::ConcreteStruct(s)) => self.match_struct(*idx, s),
-			(ParsedHeapType::Concrete(idx), HeapType::ConcreteArray(a)) => self.match_array(*idx, a),
-			(ParsedHeapType::Concrete(idx), HeapType::ConcreteFunc(f)) => self.match_func(*idx, f),
+	fn match_heap_type(&mut self, parsed: wp::HeapType, ty: &HeapType, group: u32) -> bool {
+		let index = match parsed {
+			wp::HeapType::Abstract { ty: kind, .. } => return matches_abstract_heap(kind, ty),
+			wp::HeapType::Concrete(index) | wp::HeapType::Exact(index) => resolve_index(index, group),
+		};
+		match (index, ty) {
+			(Some(idx), HeapType::ConcreteStruct(s)) => self.match_struct(idx, s),
+			(Some(idx), HeapType::ConcreteArray(a)) => self.match_array(idx, a),
+			(Some(idx), HeapType::ConcreteFunc(f)) => self.match_func(idx, f),
 			_ => false,
 		}
 	}
 }
 
-fn matches_abstract_heap(kind: ParsedAbstractHeapType, ty: &HeapType) -> bool {
-	use ParsedAbstractHeapType::*;
+fn matches_abstract_heap(kind: wp::AbstractHeapType, ty: &HeapType) -> bool {
+	use wp::AbstractHeapType::*;
 	matches!(
 		(kind, ty),
 		(Extern, HeapType::Extern)

@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::{children_rewritten, key, parameter_word, Counter};
+use super::nodes::{any_part, children_rewritten, key, parameter_word, word_headed, Counter};
 use crate::errors::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -188,7 +188,8 @@ fn flag_arguments(node: Node, functions: &HashMap<String, Function>, bound: &Has
 			}
 			Node::Key(head, op, Box::new(flag_arguments(*body, functions, &inner)))
 		}
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if functions.contains_key(name)) =>
+		Node::List(items, Bracket::Round, separator)
+			if items.first().and_then(Node::symbol_name).is_some_and(|name| functions.contains_key(name)) =>
 		{
 			let function = &functions[&items[0].name()];
 			let is_flag = |name: &String| {
@@ -218,9 +219,7 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 	node.visit(&mut |part| {
 		if let Node::Key(head, Op::Define | Op::Assign, _) = part {
 			match untyped_head(head).drop_meta() {
-				Node::List(items, Bracket::Round, _)
-					if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-				{
+				Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => {
 					let parameters = items[1..].iter().map(parameter_word).collect();
 					let defaults = items[1..].iter().map(parameter_default).collect();
 					let function = Function::new(parameters, defaults);
@@ -246,7 +245,7 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 
 /// `f(x)`: a name with its parameters
 fn is_function_head(head: &Node) -> bool {
-	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if word_headed(items).is_some())
 }
 
 /// `f(x): T`, `f(x) as T`: the head `f(x)` without its result type
@@ -330,12 +329,9 @@ fn call_of<'a>(node: &'a Node, functions: &HashMap<String, Function>) -> Option<
 }
 
 fn has_named_call(node: &Node, functions: &HashMap<String, Function>) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		found |=
-			call_of(part, functions).is_some_and(|(_, arguments)| arguments.iter().any(|a| named_argument(a).is_some()))
-	});
-	found
+	any_part(node, |part| {
+		call_of(part, functions).is_some_and(|(_, arguments)| arguments.iter().any(|a| named_argument(a).is_some()))
+	})
 }
 
 /// The bodies, by function name

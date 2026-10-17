@@ -23,3 +23,10 @@ fn a_pair_keeps_its_parts() {
 	is!("x=(age:2); x.name", "age");
 	is!("x=(age:2); x.value", 2);
 }
+
+#[test]
+fn a_one_entry_map_reads_a_field_named_like_a_changing_method() {
+	is!("q={pop:3}; q.pop", 3);
+	is!("q={add:3}; q.add", 3);
+	is!("m={a:1}; m.pop(\"a\"); count m", 0);
+}

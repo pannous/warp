@@ -1,0 +1,4 @@
+// card reverse-characters: whole characters reversed; card codepoint-loop-variable: a bound name shadows the word
+print reverse "👍🏽ab"        // ba👍🏽
+print "שָלוֹם".reverse       // םוֹלשָ
+for each codepoint in "ab" { x = codepoint; print x }  // a b

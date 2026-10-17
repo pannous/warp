@@ -197,9 +197,7 @@ pub(super) fn arities(parameters: &[Node]) -> (usize, usize) {
 /// `collide(a:Ship, b:Rock)` of a generic function: the method `collide·Ship·Rock`
 pub(super) fn method_of(head: &Node, registry: &TypeRegistry, generics: &HashMap<String, Generic>) -> Option<String> {
 	let items = definition_head(head)?;
-	let Node::Symbol(name) = items[0].drop_meta() else {
-		return None;
-	};
+	let name = items[0].symbol_name()?;
 	generics.contains_key(name).then_some(())?;
 	let signature = signature_of(&items[1..], registry);
 	signature.iter().any(Option::is_some).then(|| witness_name(name, &signature_variant(&signature)))

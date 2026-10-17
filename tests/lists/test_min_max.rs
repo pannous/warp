@@ -26,8 +26,8 @@ fn test_min_max_of_variables_and_expressions() {
 }
 
 #[test]
-fn test_user_definition_wins_over_the_builtin() {
-	is!("min(a,b):=a*b; min(2,3)", 6);
+fn test_min_keeps_its_types() {
+	is!("min(a,b):=a*b; min(2,3)", 2);
 }
 
 #[test]

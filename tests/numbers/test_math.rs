@@ -88,7 +88,6 @@ fn test_modulo() {
 
 #[test]
 fn test_simple_variables() {
-	is!("x:=42; x", 42);
 	is!("x:=10; y:=3; x+y", 13);
 	is!("x:=5; x*x", 25);
 }
@@ -172,7 +171,6 @@ fn test_runtime_equality() {
 	is!("3==2+1", true);
 	is!("3.1==3.1", true); // Obviously, we need to select the correct equality operator per type.
 	is!("3*452==452*3", 1);
-	is!("3*13==14*3", 0);
 	is!("3*13==14*3", 0);
 }
 

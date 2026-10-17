@@ -19,7 +19,7 @@
 //! let age: i64 = person.age()?;
 //! ```
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};

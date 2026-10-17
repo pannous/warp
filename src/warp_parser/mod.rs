@@ -75,9 +75,9 @@ const BROADCAST_ITEM: &str = "broadcast_item";
 /// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
 const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
-/// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
-const LITERAL_SUFFIXES: [(char, &str); 6] =
-	[('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
+/// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; C's `0.1l` (long double) is
+/// the litre unit instead (decision litre-suffix)
+const LITERAL_SUFFIXES: [(char, &str); 4] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float")];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
 pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
@@ -116,6 +116,8 @@ const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
 const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
 /// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/definitions/late_binding.rs)
 const NONLOCAL_WORD: &str = "nonlocal";
+/// Rust's endless `loop { … }`
+const LOOP_WORD: &str = "loop";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
@@ -349,6 +351,7 @@ pub const FLOOR_QUOTIENT: &str = "floor_quotient";
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
 
+/// Read and parse a WARP file
 pub fn parse_file(path: &str) -> Node {
 	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
 	match read_to_string(path) {

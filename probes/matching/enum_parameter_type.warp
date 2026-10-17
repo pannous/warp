@@ -1,6 +1,0 @@
-// card enum-parameter-type, plain-enum: an enum names the type of its cases, each case its own value
-enum Coin { Penny, Nickel, Dime }
-cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }
-print Coin.Dime
-print Coin.Dime as index
-cents(Coin.Nickel) + cents(2 as Coin)

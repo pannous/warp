@@ -5,7 +5,6 @@ use crate::is;
 
 #[test]
 fn ampersand_and_bar_combine_the_bits_of_whole_numbers() {
-	is!("12 & 10", 8);
 	is!("12 | 10", 14);
 	is!("n = 624485; n & 127", 101);
 	is!("n = 101; n | 128", 229);

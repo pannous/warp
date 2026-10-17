@@ -112,7 +112,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    amount is the item before the word, of an assignment its value (src/lowering/words/music_words.rs → lib beat_seconds,
    bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
    Voices built (step 5, 2026-10-10, samples/sound/voices.warp): every task (`go { }`) is a voice. It forks its starter's
-   place in time (src/sound/mod.rs Voice, joined in src/host/tasks.rs spawn), so a task's notes sound along with the
+   place in time (src/sound/mod.rs Voice, joined in src/host/tasks/mod.rs spawn), so a task's notes sound along with the
    starter's instead of after them; each queued sound plays from its own sleeping thread (overlapping players, the OS
    mixes), and render_sound mixes the sounds at their logical places (tests/programs/test_sound_voices.rs).
    In the Playground too (card playground-go): each Worker keeps its voice's end on a clock the page and the Workers
@@ -238,7 +238,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 
-## Patterns and live loops (card patterns-live, samples/patterns.warp, tests/programs/test_sound_patterns.rs)
+## Patterns and live loops (card patterns-live, samples/sound/sound_patterns.warp, tests/programs/test_sound_patterns.rs)
 Layer 6 built on the beat clock, in plain warp (lib/sound.warp), so the playground runs it too:
 `pattern "c4 e4 [g4 b4]*2 ~"` is one cycle (a bar, or `for 2 bars`) of steps sharing the cycle's seconds: `~` rest, `[ ]` a group
 in one step, `*n` n times in its step, `c4,e4,g4` a chord, `c4(3,8)` Euclidean (step i sounds when i·3 mod 8 < 3). The pattern is

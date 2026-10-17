@@ -2,9 +2,9 @@
 //! (`apply(f, x) := f(x)`) calls it round (`f x` is `f(x)`), and its calls give it a function value: a named function,
 //! `&name`, an alias (`g := double`), a lambda, an `it` expression, an operator (`+`), a block or a library word (both
 //! become functions of their own). A constant where a function is needed is a compile error. Every call passes a closure
-//! (closures.rs; one that captures nothing is made once, wasm_emitter/closures.rs).
+//! (closures.rs; one that captures nothing is made once, wasm_emitter/functions/closures.rs).
 
-use super::nodes::{call, children_rewritten, key, parameter_name};
+use super::nodes::{call, children_rewritten, key, parameter_name, word_headed};
 use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
 use crate::library_words::{arity, canonical_spelling, is_standard_function};
@@ -38,11 +38,8 @@ impl Definition {
 		let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
 			return None;
 		};
-		let (name, params) = items.split_first()?;
-		let Node::Symbol(name) = name.drop_meta() else {
-			return None;
-		};
-		Some(Definition { name: name.clone(), params: params.to_vec(), body: body.as_ref().clone() })
+		let (name, params) = word_headed(items)?;
+		Some(Definition { name: name.to_string(), params: params.to_vec(), body: body.as_ref().clone() })
 	}
 
 	pub(crate) fn param_names(&self) -> Vec<String> {
@@ -109,12 +106,11 @@ fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<No
 		}
 		let written: Vec<String> = arguments.iter().map(|argument| argument.serialize()).collect();
 		let holes = vec![PARTIAL_HOLE.to_string(); definition.params.len() - arguments.len()];
-		let partial = format!("{}({})", definition.name, [written.clone(), holes].concat().join(", "));
+		let function = crate::lowering::typed_library_words::written(&definition.name);
+		let partial = format!("{function}({})", [written.clone(), holes].concat().join(", "));
 		let message = format!(
-			"{} needs {} arguments, {name} := {} {} leaves some out",
-			definition.name,
+			"{function} needs {} arguments, {name} := {function} {} leaves some out",
 			definition.params.len(),
-			definition.name,
 			written.join(" ")
 		);
 		refused = Some(
@@ -195,7 +191,9 @@ fn collect_assigned_results(node: &Node, returning: &HashMap<String, String>, re
 /// The call of a variable of `results`: `c()`, `c(1)`
 fn called_variable<'a>(node: &'a Node, results: &HashMap<String, String>) -> Option<&'a Node> {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if results.contains_key(name)) => {
+		Node::List(items, Bracket::Round, Separator::None)
+			if items.first().and_then(Node::symbol_name).is_some_and(|name| results.contains_key(name)) =>
+		{
 			Some(node)
 		}
 		Node::Key(left, _, right) => called_variable(left, results).or_else(|| called_variable(right, results)),
@@ -238,7 +236,12 @@ fn collect_function_uses(
 	};
 	match node.drop_meta() {
 		// `switch c {cases}` parses as [switch, (c {cases})]: the subject and its cases, no call of c
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::words::SWITCH_WORDS.contains(&word.as_str())) => {
+		Node::List(items, _, _)
+			if items
+				.first()
+				.and_then(Node::symbol_name)
+				.is_some_and(|word| crate::words::SWITCH_WORDS.contains(&word)) =>
+		{
 			for item in &items[1..] {
 				match item.drop_meta() {
 					Node::List(pair, _, _) if pair.len() == 2 => {
@@ -255,7 +258,8 @@ fn collect_function_uses(
 					let is_call = (*bracket == Bracket::Round && *separator == Separator::None)
 						|| (*bracket == Bracket::None && *separator == Separator::Space);
 					// `p in xs`, `p is int`: a word joining two values, no call of p
-					let infix = matches!(arguments.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::warp_parser::joins_operands(word));
+					let infix =
+						arguments.first().and_then(Node::symbol_name).is_some_and(crate::warp_parser::joins_operands);
 					if !arguments.is_empty() && is_call && !infix {
 						used.insert(name);
 					}
@@ -281,8 +285,7 @@ fn collect_function_uses(
 		}
 		Node::Key(receiver, Op::Dot, method) => {
 			if let Node::List(items, _, _) = method.drop_meta() {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if ITERATION_WORDS.contains(&word.as_str()))
-				{
+				if items.first().and_then(Node::symbol_name).is_some_and(|word| ITERATION_WORDS.contains(&word)) {
 					if let Some(name) = items.last().and_then(is_param) {
 						used.insert(name);
 					}
@@ -454,12 +457,10 @@ impl FunctionArguments {
 	/// A library word given as a function (`f(is_letter)`, `twice(upper, t)`) is a function calling it with as many
 	/// parameters as the word takes: `lambda_value_1(argument·1) := is_letter(argument·1)`
 	fn library_word_lambda(&self, name: &str, argument: &Node) -> Option<Node> {
-		let Node::Symbol(word) = argument.drop_meta() else {
-			return None;
-		};
+		let word = argument.symbol_name()?;
 		// `sqrt`, `abs`: an operator word known by its signature
 		let operator_arity = crate::lowering::library_signatures::library_signature(word)
-			.filter(|_| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().any(|(spelled, _)| spelled == word))
+			.filter(|_| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().any(|(spelled, _)| *spelled == word))
 			.map(|(params, _)| params.len());
 		let known = is_standard_function(word) || prelude_word_arity(word).is_some() || operator_arity.is_some();
 		if !known || self.variables.contains(word) {
@@ -494,10 +495,7 @@ impl FunctionArguments {
 		separator: &Separator,
 		params: &HashMap<String, Vec<String>>,
 	) -> Option<Node> {
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = word_headed(items)?;
 		let indexes = self.higher_order.get(name)?.clone();
 		if !(*bracket == Bracket::Round && *separator == Separator::None
 			|| *bracket == Bracket::None && *separator == Separator::Space)

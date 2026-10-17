@@ -255,6 +255,18 @@ impl WasmGcEmitter {
 					I::Select, I::LocalSet(target),
 				]);
 			};
+			// a text: its graphemes from…to-1 as a text sharing its bytes, without a list of its characters
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+			s.emit_field(f, list, 0);
+			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list), I::RefAsNonNull]);
+			s.call(f, "text_grapheme_count");
+			Self::emit_list(f, &[I::LocalSet(length), I::I64Const(0), I::LocalSet(from)]);
+			clamped_bound(f, start, from, from);
+			clamped_bound(f, end, length, to);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::LocalGet(from), I::LocalGet(to)]);
+			s.call(f, crate::wasm_emitter::lists::list_ops::TEXT_SLICE);
+			Self::emit_list(f, &[I::Return, I::End, I::End]);
 			s.emit_text_as_characters(f, list, is_text);
 			s.emit_empty_as_null(f, list);
 			s.emit_require_list(f);

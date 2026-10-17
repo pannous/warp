@@ -78,7 +78,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 - Bisecting: integrator_tools/bisect_test.sh <test> under `git bisect run --first-parent` (it resets the tracked
   test_results.txt that queue.sh rewrites, else bisect stops after one step); integrator_tools/tour_at.sh <commit>
   <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
-  TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
+  TaskStop a running gate before re-merging there. gate.sh always tests the `integrate` worktree (it cds there): a batch
+  rebuilt in integrate2 must be checked out in integrate (`git checkout --detach <tip>`) before the gate, else the
+  gate re-tests the old batch. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
 - Small fixes first (user, 2026-10-16): when a failure comes from a worker's change and the fix looks like a couple of
   lines (a stale path, `//` → `/!`, a missing cfg, a test's spelling after a decided syntax change, a renamed name),

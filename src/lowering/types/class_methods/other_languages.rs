@@ -60,6 +60,10 @@ pub(super) fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
 		return None;
 	};
 	let (class, block) = match words.as_slice() {
+		// `impl Area for S {…}` parses as `impl Area (for S {…})`
+		[word, _, clause] if word.drop_meta().name() == IMPL_WORD && for_clause(clause).is_some() => {
+			for_clause(clause)?
+		}
 		[word, class, block] if word.drop_meta().name() == IMPL_WORD => (class, block),
 		// `impl Point {…}` of a declared Point reads like the spaced construction `Point {…}`
 		[word, construction] if word.drop_meta().name() == IMPL_WORD => match construction.drop_meta() {
@@ -73,11 +77,20 @@ pub(super) fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
 		}
 		_ => return go_method(words),
 	};
-	let Node::Symbol(class) = class.drop_meta() else {
-		return None;
-	};
+	let class = class.symbol_name()?;
 	match block.drop_meta() {
-		Node::List(_, Bracket::Curly, _) => Some((class.clone(), class_items(block))),
+		Node::List(_, Bracket::Curly, _) => Some((class.to_string(), class_items(block))),
+		_ => None,
+	}
+}
+
+/// `for S {…}`: the class and the block
+fn for_clause(clause: &Node) -> Option<(&Node, &Node)> {
+	match clause.drop_meta() {
+		Node::List(words, _, _) => match words.as_slice() {
+			[for_word, class, block] if for_word.drop_meta().name() == "for" => Some((class, block)),
+			_ => None,
+		},
 		_ => None,
 	}
 }

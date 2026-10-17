@@ -11,7 +11,7 @@ continuations, everything is plain calls.
 error naming the program-wide `on ask {…}`, which answers every emit. An emit nobody handles does nothing (P163) and
 gives a got-it warning "no handler for event X" (P202). Summary and history: notes/scoped_handlers.md.
 
-## Step 2: events as named effects (src/analyzer/effects.rs)
+## Step 2: events as named effects (src/analyzer/effects/mod.rs)
 - a function's effects gain event names next to the closed set (FunctionEffects.events): `emit ask` in f adds `ask`, so `effects of f` is `(IO ask)`
 - program-wide handlers do not discharge it: f still emits ask, main handles it
 - `f := … ! Pure` reports an unhandled emitted event like any other effect; a declared `! ask` allows it

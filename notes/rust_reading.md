@@ -3,7 +3,7 @@
 How close warp comes to running Rust as written. Probe: `probes/rust_reading/forms.sh [warp binary]`, 37 typical
 forms, each with its expected value (2026-10-13, branch hint-cards).
 
-## Works (27 of 37 on main, 2026-10-16)
+## Works (34 of 37 with branch rust-items, 2026-10-17)
 `let`, `let mut`, `let x: i32 = 3`, `if c { a } else { b }`, `match n { 1 => …, _ => … }` (literal arms), `for i in 0..5`,
 `1..=5` (in `for`, match arms and as a value), `while`, `fn square(x: i32) -> i32 { x * x }` (with or without `return`;
 a function named like a type word, `fn double`, is refused by decision P20), closures `|a, b| a + b`, `3.7 as i32`,
@@ -25,12 +25,13 @@ Rust form is an accepted alternative, the warp form stays canonical (the normali
 names its warp form.
 
 ## Gaps, by how much Rust they unlock
-1. Option and control (card rust-option, branch rust-option in Ready): `Some(v)`/`None`, `if let Some(v) = o`, a match
-   of Some/None arms, `unwrap_or`/`expect`/`is_some`, `Option<T>` as `T?`, `loop { … break }`. Still open: Result
-   `Ok`/`Err` and the `?` operator, `loop { break value }`.
-2. Items: `struct P { x: i32 }` followed by more code ("undefined variable: let"), `impl P { fn sum(&self) … }`,
-   `trait T { fn f(&self) -> i32; }`, `impl T for S`, `enum` before code (card rust-items). The class machinery exists
-   (classes.md); the Rust spellings need mapping onto it.
+1. Option and control: `Some(v)`/`None`, `if let Some(v) = o`, a match of Some/None arms, `unwrap_or`/`expect`/
+   `is_some`, `loop { … break }` work (card rust-option, probes/rust_reading/option.warp). Still open: Result
+   `Ok`/`Err` and the `?` operator, `loop { break value }`, `-> Option<i32>` as a return type (card rust-generic-result).
+2. Items (card rust-items): `struct P { x: i32 }`, `impl P { fn sum(&self) … }`, `trait T { fn f(&self) -> i32; }`,
+   `impl T for S {…}` and `enum` work, also on one line: a struct/enum/impl/trait statement ends at its closing `}`, and a
+   `let` or item word after any `}` starts the next statement (src/warp_parser/collections/lists.rs ITEM_WORDS,
+   lookahead.rs ends_statement_after_brace). Not mirrored in lib/compiler/parser.warp yet.
 3. `fn main() { … }` beside the program's own main: "duplicate export name main" (card rust-fn-main).
 4. Smaller cards: rust-map-insert (`m.insert(k, v)` on a map), rust-map-type (`HashMap<K, V>` as a type),
    rust-generic-result (`fn f() -> Vec<i32> { … }` leaves f undefined), rust-vec-repeat (`vec![0; n]`),

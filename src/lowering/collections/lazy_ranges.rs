@@ -6,7 +6,7 @@
 //! f whose parameter is the range of its two new parameters. Any other use (printing, returning, changing it) keeps the
 //! variable a list, collected once (declaration_forms.rs).
 
-use super::nodes::{call, key, Counter};
+use super::nodes::{any_part, call, key, Counter};
 use crate::analyzer::effects::call_arguments;
 use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
 use crate::library_words::substitute;
@@ -43,9 +43,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 fn has_range(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Key(_, Op::Range | Op::To, _)));
-	found
+	any_part(node, |part| matches!(part, Node::Key(_, Op::Range | Op::To, _)))
 }
 
 /// A range of plain bounds, seen through parentheses: its start, its end past the last number, and the range itself
@@ -217,9 +215,7 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 	let Node::Key(target, Op::Assign | Op::Define, value) = statements[position].drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
+	let name = target.symbol_name()?;
 	let range = range_of(value)?;
 	// a short range of literals is its list already (counting.rs range_elements)
 	if crate::analyzer::range_elements(&range.whole).is_some() {
@@ -236,7 +232,7 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 		&& bound_names
 			.iter()
 			.all(|bound| unchanged(bound) && !after.iter().any(|statement| is_parameter(statement, bound))))
-	.then(|| (name.clone(), parens(vec![range.whole.clone()])))
+	.then(|| (name.to_string(), parens(vec![range.whole.clone()])))
 }
 
 /// Whether `node` assigns or updates `name`, its items or its fields
@@ -244,7 +240,7 @@ fn changes(node: &Node, name: &str) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| {
 		let Node::Key(target, op, _) = part else { return };
-		let changing = matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign();
+		let changing = *op == Op::Define || op.is_write();
 		let target = match target.drop_meta() {
 			Node::Key(owner, Op::Hash | Op::Dot, _) => owner.drop_meta(),
 			other => other,
@@ -256,11 +252,7 @@ fn changes(node: &Node, name: &str) -> bool {
 
 /// Whether `name` is a parameter of a lambda in `node`, which would hide the variable a substituted range reads
 fn is_parameter(node: &Node, name: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		found |= matches!(part, Node::Key(parameters, Op::Arrow, _) if parameters.mentions_any(&[name]))
-	});
-	found
+	any_part(node, |part| matches!(part, Node::Key(parameters, Op::Arrow, _) if parameters.mentions_any(&[name])))
 }
 
 /// Whether every use of `name` in `node` reads it as a range: count, sum, index, the list of a `for` or of an iteration

@@ -120,7 +120,9 @@ fn lowering(node: Node, strict: bool) -> Node {
 	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
 	let path_variables = crate::warp_parser::path_variables(&node);
-	Lowering { context, classes, path_variables, counter: Counter::starting_at(first_fresh), strict }.expand(node)
+	let bound = crate::lowering::module_properties::bound_names(&node);
+	Lowering { context, classes, path_variables, bound, counter: Counter::starting_at(first_fresh), strict }
+		.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -199,49 +201,46 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 /// returns the mapped list, `ps sort by .a` labels the function. A function of the program calls what follows,
 /// `f sorted xs`
 pub fn lower_infix_iterations(program: Node) -> Node {
+	let labels = parameter_labels(&program);
+	let names = crate::program_names::ProgramNames::of(&program);
+	// `def square := it * it` is a function, though no head shows it
 	let functions: HashSet<String> = function_definitions(&program).user_functions.into_keys().collect();
-	let (parameters, labels) = definition_parameters(&program);
-	let variables: HashSet<String> = crate::music_words::defined_names(&program)
-		.into_iter()
-		.filter(|name| !functions.contains(name))
-		.chain(parameters)
-		.chain([IMPLICIT_PARAMETER.to_string()])
-		.collect();
-	infix_iterations(program, &ProgramWords { variables, labels })
+	infix_iterations(program, &ProgramWords { names, functions: &functions, labels: &labels })
 }
 
-/// `variables`: the words the program assigns or takes as parameters; any other word before an iteration word is
-/// a function or a module's word, `square all 1 to 5`, and the iteration stays prefix. `labels`: each function's
-/// parameter labels, `f(xs, each y)`, which stay labels in a call of that function, `f [1 2 3] each 2`
-struct ProgramWords {
-	variables: HashSet<String>,
-	labels: HashMap<String, HashSet<String>>,
+/// `names`: the names in scope, whose variables and parameters may hold the list before an iteration word; any other
+/// word there is a function or a module's word, `square all 1 to 5`, and the iteration stays prefix. `labels`: each
+/// function's parameter labels, `f(xs, each y)`, which stay labels in a call of that function, `f [1 2 3] each 2`
+struct ProgramWords<'a> {
+	names: crate::program_names::ProgramNames,
+	functions: &'a HashSet<String>,
+	labels: &'a HashMap<String, HashSet<String>>,
 }
 
-/// `f(ys:list, n, each d) := …`: the parameter names ys, n and d, typed or not, and each function's labels (f: each)
-fn definition_parameters(program: &Node) -> (Vec<String>, HashMap<String, HashSet<String>>) {
-	let (mut names, mut labels) = (Vec::new(), HashMap::<String, HashSet<String>>::new());
+/// `f(ys:list, n, each d) := …`: each function's parameter labels (f: each)
+fn parameter_labels(program: &Node) -> HashMap<String, HashSet<String>> {
+	let mut labels = HashMap::<String, HashSet<String>>::new();
 	program.visit(&mut |node| {
 		let Node::Key(head, Op::Define | Op::Assign, _) = node else { return };
 		let Some(Node::List(items, _, _)) = definition_call(head) else { return };
 		let function = crate::node::leading_name(&items[0]);
 		for parameter in &items[1..] {
-			match parameter.drop_meta() {
-				Node::List(words, Bracket::None, _) if words.len() > 1 => {
+			if let Node::List(words, Bracket::None, _) = parameter.drop_meta() {
+				if words.len() > 1 {
 					labels.entry(function.clone()).or_default().insert(crate::node::leading_name(&words[0]));
-					names.push(crate::node::leading_name(&words[words.len() - 1]));
 				}
-				_ => names.push(crate::node::leading_name(parameter)),
 			}
 		}
 	});
-	(names, labels)
+	labels
 }
 
 fn infix_iterations(node: Node, words: &ProgramWords) -> Node {
-	let is_list_operand = |node: &Node| {
-		is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(|name| words.variables.contains(name))
-	};
+	let inner = words.names.inside(&node).map(|names| ProgramWords { names, ..*words });
+	let words = inner.as_ref().unwrap_or(words);
+	let is_variable =
+		|name: &str| words.names.binds(name) && !words.functions.contains(name) || name == IMPLICIT_PARAMETER;
+	let is_list_operand = |node: &Node| is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(is_variable);
 	match node {
 		// `ys = sort xs by >`: the parser hung the phrase on the operator, `(sort xs by) > ø`
 		Node::Key(..) if dangling_sort_operator(&node).is_some_and(|(words, label)| sorts_before(&words[..label])) => {
@@ -522,7 +521,7 @@ fn member_lambda(dot_word: &Node) -> Node {
 
 /// `age` of `.age`
 fn member_of(node: &Node) -> Option<&str> {
-	let Node::Symbol(name) = node.drop_meta() else { return None };
+	let name = node.symbol_name()?;
 	name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))
 }
 
@@ -538,13 +537,9 @@ pub(crate) fn is_iteration_word(name: &str) -> bool {
 }
 
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
-	let Node::Symbol(name) = word.drop_meta() else {
-		return None;
-	};
-	let canonical = ITERATION_SPELLINGS
-		.iter()
-		.find(|(_, spellings)| spellings.contains(&name.as_str()))
-		.map_or(name.as_str(), |(word, _)| word);
+	let name = word.symbol_name()?;
+	let canonical =
+		ITERATION_SPELLINGS.iter().find(|(_, spellings)| spellings.contains(&name)).map_or(name, |(word, _)| word);
 	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
 }
 
@@ -983,11 +978,21 @@ struct Lowering {
 	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
 	classes: HashSet<String>,
 	path_variables: HashSet<String>,
+	/// the names the program gives (module_properties::bound_names): a function value may be any of them
+	bound: HashSet<String>,
 	counter: Counter,
 	strict: bool,
 }
 
 impl Lowering {
+	/// A word no variable, parameter, function or library word of the program is
+	fn names_nothing(&self, name: &str) -> bool {
+		!self.bound.contains(name)
+			&& !self.path_variables.contains(name)
+			&& !self.context.user_functions.contains_key(name)
+			&& crate::lowering::library_signatures::library_signature(name).is_none()
+	}
+
 	fn fresh(&self, prefix: &str) -> String {
 		let number = self.counter.next_number();
 		format!("{prefix}_{number}")
@@ -1268,6 +1273,10 @@ impl Lowering {
 					Ok(call(crate::library_words::canonical_spelling(name), arguments.to_vec()))
 				}
 				Node::Symbol(_) if !self.strict => Err(None),
+				// `xs.map(odd)` of an odd nothing defines: named now, not a run-time "not a function" (card map-odd)
+				Node::Symbol(name) if self.names_nothing(name) => {
+					Err(Some(crate::ffi::undefined_function_diagnostic(function, name).into_error()))
+				}
 				// a function value known only at run time: a variable or parameter holding a closure, or a call returning one
 				_ if crate::closures::may_be_function_value(function) => {
 					Ok(crate::closures::closure_call(function.clone(), arguments.to_vec()))

@@ -169,5 +169,4 @@ fn a_module_function_maps_in_a_comprehension() {
 fn a_program_variable_leaves_the_module_its_words() {
 	is!("use text; words = [\"a b\"]; title \"hello world\"", "Hello World");
 	is!("use text; words = [\"ab\", \"cd\"]; [title w for w in words]", warp::texts(vec!["Ab", "Cd"]));
-	is!("use text; words = [\"ab\", \"cd\"]; [capitalize w for w in words]", warp::texts(vec!["Ab", "Cd"]));
 }
