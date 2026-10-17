@@ -38,6 +38,9 @@ from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwx
 radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
 hex_text(n: int) := radix_text(n, 16, "0x")
 binary_text(n: int) := radix_text(n, 2, "0b")
+// n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
+// compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives
+filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
 // x as a fraction, by its continued fraction (src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first

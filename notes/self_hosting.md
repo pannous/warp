@@ -162,6 +162,10 @@ Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words a
 Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
 lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
 arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
+Load order (lib-from-runtime, landed with zero-fill-lib): code generation that calls a prelude word the program never
+named, through `compiler_word(word)` (a call it writes, `n times [x]` → filled_list) or a late_call whose callee is
+missing, notes the word; pipeline::loading_compiler_words then compiles once more with resolve loading it (hints muted).
+Only programs that need such a word pay the second compile; no implied_words detector is needed for new moves.
 Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
 text search words above).
 

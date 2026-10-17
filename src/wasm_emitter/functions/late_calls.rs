@@ -4,6 +4,7 @@
 //! does for Comparable)
 
 use super::super::WasmGcEmitter;
+use crate::modules::{PRELUDE_MODULE, QUALIFIER};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -49,9 +50,26 @@ impl WasmGcEmitter {
 		for late in self.late_calls.clone() {
 			match self.late_index(&late) {
 				Some(index) => Self::emit_list(func, &[I::RefFunc(index), I::GlobalSet(late.global)]),
-				None => self.type_errors.push(format!("{} is called by the runtime but was not compiled", late.callee)),
+				None => match late.callee.strip_prefix(PRELUDE_MODULE).and_then(|word| word.strip_prefix(QUALIFIER)) {
+					Some(word) => self.missing_compiler_words.push(word.to_string()),
+					None => {
+						self.type_errors.push(format!("{} is called by the runtime but was not compiled", late.callee))
+					}
+				},
 			}
 		}
+	}
+
+	/// The name of the prelude word `word` in the program, for a call the compiler writes (`n times [x]` calls
+	/// filled_list); None when the program did not load it: the word is noted, and the second compile loads it
+	/// (pipeline::loading_compiler_words)
+	pub(in crate::wasm_emitter) fn compiler_word(&mut self, word: &str) -> Option<String> {
+		let name = crate::modules::prelude_name(word).unwrap_or_else(|| panic!("{word} is no prelude word"));
+		if self.ctx.user_functions.contains_key(&name) {
+			return Some(name);
+		}
+		self.missing_compiler_words.push(word.to_string());
+		None
 	}
 
 	/// The late-called functions' indices, which ref.func needs declared in an element segment

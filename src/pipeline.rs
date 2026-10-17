@@ -564,22 +564,39 @@ pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 	compiled
 }
 
+/// `compile` again when code generation called prelude words the program never named, so resolve did not load them
+/// (`n times [x]` calls filled_list): the second time resolve loads them as if called (card lib-from-runtime). The
+/// first compile already hinted the program
+fn loading_compiler_words<T>(compile: impl Fn() -> Result<T, Node>) -> Result<T, Node> {
+	use crate::compiler::compile_context::{change, scoped};
+	let compiled = compile();
+	let missing = change(|context| std::mem::take(&mut context.missing_compiler_words));
+	if compiled.is_ok() || missing.is_empty() {
+		return compiled;
+	}
+	crate::normalize::without_hints(|| scoped(|context| &mut context.compiler_words, missing, compile))
+}
+
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
 	crate::errors::diagnostic::begin_program();
 	crate::errors::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
-		let source = program.clone();
-		let node = crate::lowering::folding::precompute(crate::lowering::folding::refuse_result_misfits(
-			lower_for_emission(program)?,
-		)?);
-		let reflected = crate::lowering::reflection::meta_entries(&source, &node, code);
-		warn_about_run_time_blocks(&node)?;
-		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
-		let entries: Vec<_> =
-			crate::numbers::units::static_units::result_units_entry().into_iter().chain(reflected).collect();
-		choose_module(&node).map(|module| CompiledModule {
-			bytes: crate::formats::meta_section::with_entries(module.bytes, entries),
-			..module
-		})
+		loading_compiler_words(|| compile_lowered(program.clone(), code))
+	})
+}
+
+fn compile_lowered(program: Node, code: &str) -> Result<CompiledModule, Node> {
+	let source = program.clone();
+	let node = crate::lowering::folding::precompute(crate::lowering::folding::refuse_result_misfits(
+		lower_for_emission(program)?,
+	)?);
+	let reflected = crate::lowering::reflection::meta_entries(&source, &node, code);
+	warn_about_run_time_blocks(&node)?;
+	// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
+	let entries: Vec<_> =
+		crate::numbers::units::static_units::result_units_entry().into_iter().chain(reflected).collect();
+	choose_module(&node).map(|module| CompiledModule {
+		bytes: crate::formats::meta_section::with_entries(module.bytes, entries),
+		..module
 	})
 }
 
@@ -653,18 +670,20 @@ fn eval_program(node: Node, code: &str) -> Node {
 /// none: a constant answer, a raw struct's, a type error
 fn module_to_run(node: Node, code: &str) -> Result<CompiledModule, Node> {
 	let compile = || {
-		let node = lower_for_emission(node)?;
-		#[cfg(feature = "native")]
-		if let Some(wasm_bytes) = raw_struct_module(&node) {
-			match run_raw_struct(&wasm_bytes) {
-				Ok(result) => return Err(result),
-				Err(e) => warn!("raw struct eval failed: {}", e),
+		loading_compiler_words(|| {
+			let node = lower_for_emission(node.clone())?;
+			#[cfg(feature = "native")]
+			if let Some(wasm_bytes) = raw_struct_module(&node) {
+				match run_raw_struct(&wasm_bytes) {
+					Ok(result) => return Err(result),
+					Err(e) => warn!("raw struct eval failed: {}", e),
+				}
 			}
-		}
-		// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
-		emit_module(&node).map(|module| CompiledModule {
-			bytes: crate::numbers::units::static_units::with_result_units(module.bytes),
-			..module
+			// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
+			emit_module(&node).map(|module| CompiledModule {
+				bytes: crate::numbers::units::static_units::with_result_units(module.bytes),
+				..module
+			})
 		})
 	};
 	#[cfg(feature = "native")]

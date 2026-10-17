@@ -10,9 +10,10 @@ use crate::type_kinds::Kind;
 use crate::words::FLOAT_WORD;
 use std::collections::HashSet;
 
-/// Pseudo-call `zero_fill(count, zero)`: the emitter builds the zero-filled list of `count` elements with a runtime loop,
-/// so neither the program nor the compiler grows with the size of the array
+/// Pseudo-call `zero_fill(count, zero)`: a typed array of `count` elements where one holds them, else the list
+/// lib/prelude.warp's filled_list builds, so neither the program nor the compiler grows with the size of the array
 pub const ZERO_FILL_CALL: &str = "zero_fill";
+pub const FILLED_LIST_WORD: &str = "filled_list";
 
 pub(crate) const LIST_TIMES_TOPIC: &str = "list-times";
 
