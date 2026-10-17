@@ -63,7 +63,7 @@ pip install warp-language
 
 **Cargo** (any platform with [Rust](https://rustup.rs)):
 ```bash
-cargo install --locked --git https://github.com/pannous/warp warp warp-runtime
+cargo install --locked warp-lang warp-runtime
 ```
 
 **From source:**

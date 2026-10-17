@@ -1,0 +1,81 @@
+
+⏺ warp binary: 12.3 MiB (7.1 MiB .text)
+  ┌────────┬─────────┬─────────────────────────────┐
+  │ % Text │  Size   │            Crate            │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 35.2%  │ 2.5 MiB │ cranelift_codegen           │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 10.7%  │ 777 KiB │ wast                        │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 10.4%  │ 756 KiB │ wasmparser                  │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 10.4%  │ 755 KiB │ wasmtime_internal_cranelift │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 10.0%  │ 723 KiB │ std                         │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 8.3%   │ 599 KiB │ wasmtime                    │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 2.2%   │ 159 KiB │ wasmtime_environ            │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 2.2%   │ 158 KiB │ rustyline                   │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 1.8%   │ 128 KiB │ warp (your code)            │
+  ├────────┼─────────┼─────────────────────────────┤
+  │ 1.7%   │ 125 KiB │ wasm_encoder                │
+  └────────┴─────────┴─────────────────────────────┘
+  ~77% of the binary is wasmtime/cranelift JIT compiler infrastructure. Your code is only 128 KiB (1.8%). rustyline (new REPL dependency) adds 158 KiB.
+## Night 2026-10-04 (raw finds)
+- `warp lower <code>` prints the program after all lowering passes: the fastest way to see what the emitter gets.
+- `tests/queue.sh -- filter` builds the default features: tests/ffi/* need `tests/queue.sh --all-features -- filter`
+  (test.sh uses --all-features). A colored compile error also slips past `grep ^error`: strip ANSI first.
+- The parser gives `c()` and `(c)` the same node; closures read a one-item round list of a function variable as a call.
+- `def f(x) {…}` stayed a `def` list until the emitter; declarations::keyword_definition now makes it `f(x) := …` first.
+- Programs that print and return a list read back as ø: val_to_node only knew atoms (now wasm_reader::node_of).
+- ~/.gitignore's `*_LOCAL*` matches case-insensitively on macOS: tests/control/test_branch_assigned_locals.rs was silently ignored (git add refused, mod.rs committed without it); renamed to …_variables.rs. Avoid "_locals" in tracked file names. (night 2026-10-04)
+- Night 2026-10-04 bug hunt by probing idioms (`warp eval` one-liners, probes/night/*.warp): most finds were silent wrong values, not crashes — the raw-struct module shortcut returning an instance for `f(pt(…))`, dropped arguments (`log(100,10)`, `sin(0,5)`, `f(1,2)` of f(x)), str() of a call printing its source, `#m#1` as `(#m)#1`, `w#1.upper()` as `w#(1.upper())`. Probing small realistic programs (word frequency, bank account, matrix transpose) found more than reading code. Probe one-liners first, then fix the shared rule (arity check, position fallback, node_add concat), not the one case.
+- macOS ~/.gitignore `*_LOCAL*` is case-insensitive: a tracked file named `…_locals.rs` is silently ignored by `git add`.
+- A debug warpgate build serves its UI through rust-embed from warpgate-web/dist at run time: a CI job that only downloads the binary must also get dist (test_gzip "Manifest not found").
+- Tried: one shared wasmtime Engine (LazyLock) instead of one per run: no measurable test speedup (lists:: 15 s either way), reverted. The per-test cost is the debug-build Cranelift compile of each module, not engine setup. (night 2026-10-04)
+
+## Night 2026-10-04 (threads and more), raw finds
+- wasmtime 49: GC and the threads proposal (shared memory + atomics) compile in one module (needs the cargo feature
+  `threads` and Config::shared_memory), but an imported memory takes index 0 ahead of the module's own: every memory
+  instruction of the emitter assumes 0, so shared arrays went through host words instead.
+- Browser: a Worker created while its creator's thread is blocked (a running wasm program) never starts; tasks need a
+  pool made while idle (emscripten's PTHREAD_POOL_SIZE for the same reason). Atomics.wait works in workers only.
+- V8 names wasm frames `module.function (wasm://…)` in error stacks.
+- Exact ratios and big integers travel inside an instance as i64 handles into its own memory: never pass them raw to
+  another instance (null reference trap).
+- A run-time function that calls another must be emitted after it (indices are given at emission): push before set,
+  text_concat before node arithmetic.
+- node_in read lists recursively (stack overflow at ~100k items); now a loop.
+- A Pratt-parser hook like try_parse_return is the cheap way to give a keyword unary-minus binding (`await`).
+- Wiki sweep 2026-10-07: `WARP=<private copy> probes/wiki_blocks.py` (fenced blocks) and probes/wiki_examples.py (`a` → `b`)
+  run from the main checkout (worktrees have no wiki/). Most → diffs are fragments needing the sentence's context.
+  A parameter's kind is guessed from body usage before calls are seen (user_functions::with_usage_kinds): counting
+  guessed List, so an uncalled text helper failed; joining it to a text literal now says Text.
+
+- 2026-10-09 wasmtime 49 GC heap: its growth goes through the store's ResourceLimiter::memory_growing (store/gc.rs grow_gc_heap → memory.grow(delta, limiter)); a refusal is swallowed (GcHeapGrowthFailed) and the allocation traps "GC heap out of memory". The GC heap is capped at 4 GiB anyway (1 << 32), and gc-copying uses half of it: one allocation over ~2 GB fails even unlimited. warp caps every memory at WARP_MEMORY_CAP_MB (default 2048, crates/warp-runtime/src/engine.rs cap_memory), so 1 GiB of live GC objects per run.
+- 2026-10-11 `cargo fmt --all -- --check` reports repository-wide pre-existing formatting drift; do not use it to broaden focused tickets. Board card: `cargo-fmt`.
+- 2026-10-11 delete-list: `xs.delete(v)` reached analysis as an undefined method even though class collections already treated delete as an alias of remove. Recognizing delete in the shared mutating/removal method tables makes list variables use the existing removed_value/map_without path and preserves Set.delete.
+- 2026-10-11 the readline console called `eval(input)` for every line, so it had no state between prompts. Replaying only successful declaration and mutation source makes ordinary variables persistent without replaying earlier print/query lines; effectful assignment right sides still run again until the runtime supports a persistent instance.
+2026-10-12 wasm-split: `/usr/local/bin/wasm-split` 111 shadowed Homebrew 133; 111 rejects `--multi-split`, while 133 supports the route manifest interface.
+- 2026-10-12 Codex cron lifecycle: thread 01a130c0-c3c4-7c00-bd8e-35942d3548e1 was persisted as interrupted while codex_worker.sh, codex_app_run.py and their app-server proxy stayed alive; its event stream ended at an in-progress command and had no turn/completed or .last.md. A real three-second timeout probe proved turn/interrupt produces the persisted interrupted terminal state and can be reaped without a proxy leak. Explicit app-server projectId uses an internal project id and did not place the thread in the desktop sidebar project; leave it unset and let the desktop group the main cwd (card codex-app). During a real active sleep probe, app-server emitted active but the desktop list still reported notLoaded (card codex-desktop); the wrapper's start/end notices are therefore the accurate lifecycle signal.
+- 2026-10-12 cleanup-json-nodes: headless page events had a private JSON converter that silently turned arrays into ø; `foreign::node_of` already preserves arrays and special big-integer/codepoint objects, so it is now the one converter.
+
+2026-10-13 list-text-quotes: the reported computed quote in a printed list was already fixed by `text_quoted` on main; the older regression covered literals, so the exact runtime-concatenated serializer shape now has string() and print coverage.
+- 2026-10-14 cleanup-park-phrases: the newly generalized `of_lookups` pass still asked `phrase_calls` which function
+  names owned an `of`; parking phrase calls removes that exception and leaves one unconditional `a of b` to `b.a`
+  rule. A push also printed `fatal: failed to store: -61` after successfully creating its remote branch; board card
+  `git-credential-store` tracks the credential-helper problem.
+- 2026-10-15 if-yes: library-word lowering had a shared predicate for a braceless call used as the only statement of a
+  curly block, but its main prefix-call path duplicated a narrower bracket check and never used it. Reusing
+  `is_spaced_call` and `in_block_as_written` makes `if yes {sum ...}` follow the same general call rule.
+- 2026-10-16 git-push: 'fatal: failed to store: -61' after a successful push came from Homebrew's system gitconfig
+  helper osxkeychain (errSecWrPerm: the keychain refuses writes from headless sessions) running after gh's helper.
+  ~/.config/git/config now resets the list (`helper =`) before `helper = !gh auth git-credential` for github.com and
+  gist.github.com, the form `gh auth setup-git` writes; git credential then asks gh only.
+
+- 2026-10-17 (warp-parser): object_entries must not take a square list of key: value items as one object: a one-entry map in a list is held as a bare key ([{first: 2}] is [first: 2]), so [a: 1, b: 2] is also a list of one-entry maps; generalising it broke 10 tests (list fields, possessives). Local readings (a held lambda's holder) are fine.
+
+2026-10-17 interviewer: src/extensions.rs texts! Separator::Colon edit (unknown origin, user "fix it") reverted to Comma; backup data/patches/texts-macro-colon-2026-10-17.patch

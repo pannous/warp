@@ -36,10 +36,11 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
     (2026-10-17). Once the AUR is too, the README's Install gets
     `yay -S warp-lang-bin` (the .deb/.rpm line is there).
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
-- crates.io: packages `warp-lang` (AGPL-3.0-or-later; `warp` is the web framework there; the library is still `warp`,
-  the binary `warp`) and `warp-runtime` (MIT, same version). `cargo package --workspace` verifies both. Publish:
-  `CARGO_NET_OFFLINE=false cargo publish --workspace` (needs `cargo login` with a crates.io token); then the README's
-  Cargo line becomes `cargo install warp-lang` (warp-runtime is a second `cargo install warp-runtime`).
+- crates.io: `cargo install --locked warp-lang warp-runtime` (live since v1.3.0). Packages `warp-lang`
+  (AGPL-3.0-or-later; `warp` is the web framework there; the library is still `warp`, the binary `warp`) and
+  `warp-runtime` (MIT, same version). At a release: `CARGO_NET_OFFLINE=false cargo publish --workspace` (token in
+  ~/.cargo/credentials.toml); Cargo.toml's `include` must list every file the sources include_str! (lib/, the
+  playground's *.js), `cargo package --workspace` verifies.
 - Every channel ships warp-runtime too: `warp <file>` builds the standalone executable from the warp-runtime next to
   warp (src/main.rs runtime_stub_path); without it warp tries to build it from its source checkout, gone after install.
   Built on its own (`-p warp-runtime`) it has no Cranelift.

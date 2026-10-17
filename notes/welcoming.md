@@ -5,29 +5,24 @@ Mantra:
 - If there is an ambiguity, warn with the default reading and the explicit forms (or refuse when a guess is dangerous).
 - If the preferred syntax is different, educate the user.
 
-Limit (user, 2026-10-02): implement what a newcomer expects only where it does not clash with a known footgun
-(wiki/Footguns.md). Where it clashes, the footgun decision wins and the compiler educates instead. The one exception is
-text + number concatenation. Examples: `a[-1]` stays an error with a hint to `#-1` (silent wrap), `[x]*n` is an
-ambiguity error (Python repeats, NumPy multiplies; `n times [x]` repeats), mutating a main-level variable from a function needs `global`.
+Limit: implement what a newcomer expects only where it does not clash with a known footgun (wiki/Footguns.md). Where it
+clashes, the footgun decision wins and the compiler educates instead. The one exception is text + number
+concatenation. Examples: `a[-1]` stays an error with a hint to `last(x)` / `#-1` (silent wrap), `[x]*n` is an
+ambiguity error (Python repeats, NumPy multiplies; `n times [x]` repeats), mutating a main-level variable from a
+function needs `global`.
 
 "Educate" is a hint naming the preferred warp form, never a refusal.
 
-"Ask" (the name stayed, the question went) is an ambiguity record. USER DECISION 2026-10-03: "I really love the got it
-mechanism for the warnings, the Ask mechanism is not what I expected. I thought it would rewrite the code to whatever
-the user picks; we don't want context-sensitive execution, instead turn all the Ask into a warning with the got it
-feature, plus an extra feature for later: an intelligent intent to change the code." So the same source always compiles
-the same way: nothing asks which reading was meant and no answer is remembered. Each ambiguity declares its fallback:
-a warning (take the default reading, shown until the user says "got it") or an error naming the explicit forms (too
-dangerous to guess; user, same day: "Stay loud errors").
+"Ask" (the name stayed, the question went) is an ambiguity record. The same source always compiles the same way:
+nothing asks which reading was meant and no answer is remembered (no context-sensitive execution). Each ambiguity
+declares its fallback: a warning (take the default reading, shown until the user says "got it") or an error naming the
+explicit forms (too dangerous to guess). Changing the code to the intended form is a separate action (fixes, below).
 
-## Duck typing and `like` (central philosophy, user decision 2026-10-03)
+## Duck typing and `like` (central philosophy)
 
-User, verbatim: "if it's truly unknown then this is a duck typing like a python; if it has all the fields but is a known
-different type then we should create an error and tell the user about a new keyword image like photo, so the image will
-be treated like a photo and judged by uses. We should write that as a very central philosophy."
-
-What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed variable `p:photo = …` alike (user,
-2026-10-03: "assignments to typed variables should be checked; if image is a known type we should be strict"):
+Truly unknown values are duck typed, as in Python; a value of a known different type that happens to have the fields
+is an error that teaches the keyword `like`. What a place declared `photo` accepts, a parameter `keep(p:photo)` and a
+typed variable `p:photo = …` alike (assignments to typed variables are checked):
 
 | value | result |
 |---|---|
@@ -41,23 +36,20 @@ What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed v
 the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
 of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
 fields are a decision the writer states once, in one line). Implemented in src/lowering/types/traits.rs (`Likeness`,
-`Dispatch::refused_argument`), tests/operators/test_like.rs, wiki page wiki_pages/like.md.
+`Dispatch::refused_argument`), tests/operators/test_like.rs, wiki/like.md.
 
-## Field test 2026-10-02
-Agents wrote standard algorithms (sorting, life, sieve, levenshtein, queens/hanoi, dijkstra) in their natural
-Python/JS style: samples/<name>.warp next to samples/<name>_idiomatic.warp, tests in tests/test_algo_<name>.rs.
-Fix branches fix-<topic> carry the compiler changes.
-
-User decisions from that round:
+## Forms newcomers write (decided)
+Samples of standard algorithms written in Python/JS style sit next to idiomatic ones (samples/<name>.warp,
+samples/<name>_idiomatic.warp).
 - text + number concatenates (`"F:" + 13` → "F:13")
 - floor division is `/!` (`7 /! 2`, `x /!= 2`); `//` is always a comment, glued (`7//2`) with a severe warning naming `/!`
 - `#ident` with no space is count (`#s`); `# text` stays a comment; directives (#use, #include, #!) keep working
 - `upto` excludes the end, with a warning naming the explicit forms (`..<`/`..` exclusive, `to`/`...` inclusive)
 - missing map key `m["Z"]` stays an error (as in Python); `m.get(k)`, `m.get(k, default)`, `k in m`, `m.has(k)` are the soft forms
 - an expression of `it` where a function is expected is that function: `xs.map(it * 2)`, `apply(it + 3, 1)`; inside a
-  function of one parameter its `it` stays the argument function's (card map-it, src/lowering/definitions/lambdas.rs it_function)
+  function of one parameter its `it` stays the argument function's (src/lowering/definitions/lambdas.rs it_function)
 
-## Ask: how it works (src/diagnostics/diagnostic.rs)
+## Ask: how it works (src/errors/diagnostic/asks.rs)
 - `Ask { topic, written, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;
   `ask(&Ask) -> Result<usize, Node>` returns the default reading or the error. It never asks and never remembers a reading.
 - Fallback Warning prints `warning: <question> (taking <default>) at l:c; fix: <explicit form>` and takes the default.
@@ -70,10 +62,10 @@ User decisions from that round:
   `Acknowledging(topics)` for tests, the playground's page list (src/web/mod.rs `PageAcknowledger`, report `notes`).
   Remembered as `ack:<topic> = acknowledged` in `.warp-acknowledged` (CLI, working directory). Non-interactive runs
   just show the warning, never block; `--no-ask` never prompts.
-- Scope (user, 2026-10-05): the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"
+- Scope: the prompt answers `GotIt::{This, All, No}`: `[y this / a all of this kind / n]`. "This"
   remembers one expression, `ack:<topic>@<expression> = acknowledged` (an Ask by its question, which names the
   expression; educate_once by its written text); "all" the topic. A `// got it` comment on a line silences the
-  warnings and notes of that line (diagnostic::silenced_by_comment). The playground still acknowledges whole topics.
+  warnings and notes of that line (diagnostic::silenced_by_comment). The playground acknowledges whole topics.
 - Users: `a upto b` (topic `upto`) and the for-header bound `0..n-1` (topic `kotlin-range`, Kotlin's `..` is inclusive),
   both default exclusive, fallback Warning (src/warp_parser/ `range_reading`); `local-or-global` (src/analyzer/
   `resolve_main_variable_assignments`, default a new local `let n = …`, explicit main's `global n = …`); `signed-operand`
@@ -87,43 +79,39 @@ User decisions from that round:
 - New ambiguities: build an `Ask` where the ambiguity is still visible (often the parser, which knows the written form),
   give every reading its explicit form, pick Error only when a wrong guess would silently corrupt results.
 
-## Change the code to the intended form (built 2026-10-05 for the playground: notes/fixits.md)
-Each reading is a `Fix` on the diagnostic, the playground shows it as an "I meant: …" button. Still open: `warp fix`,
-IDE quick fixes, fixes that need several edits. The original design note:
-The user's "intelligent intent to change the code": instead of a question that changes what the source means, an
-action that rewrites the source to the explicit form the user picks, so the file itself says it. Seed data is already
-there: every `Ask` keeps `written` (the ambiguous text), `line`/`column` and each reading's `explicit_form`, and the
-warning's `fix` carries the default's form. A host offers the readings as "change code" buttons (playground) or quick
-fixes (IDE/LSP code actions); the edit replaces `written` at the position with the chosen `explicit_form`, after which
-the warning is gone because the explicit form never warns. Open: positions of multi-line `written`, several readings
-whose explicit form needs surrounding context (`global n` is a declaration elsewhere), and a CLI form (`warp fix`).
+## Change the code to the intended form (notes/fixits.md)
+Instead of a question that changes what the source means, an action rewrites the source to the explicit form the user
+picks, so the file itself says it. Each reading is a `Fix` on the diagnostic (from the Ask's `written`, `line`/`column`
+and each reading's `explicit_form`); the playground shows it as an "I meant: …" button, after which the warning is gone
+because the explicit form never warns. Open: `warp fix`, IDE quick fixes, fixes that need several edits (multi-line
+`written`, `global n` as a declaration elsewhere).
 
-## Assigning a named constant (card footgun-pi, P130)
-`pi = 4; pi` gave 3.14159…: the parser read `pi` as π and dropped the assignment. P130 (user: "loud error, if it was
-declared constant before which it should be"): the named numbers (`pi`, `tau`, `euler`, their glyphs) are declared
-constants, so `pi = …` / `pi := …` is the compile error "pi is a constant; fix: another name". A field
-`class circle{pi = 3}` or `class C{pi:int}` is the type's own field, no message: the type's methods read the field
-(`f() := pi * r`), everywhere else `pi` stays the constant (parser state `type_fields`).
+## Assigning a named constant (P130)
+The named numbers (`pi`, `tau`, `euler`, their glyphs) are declared constants, so `pi = …` / `pi := …` is the compile
+error "pi is a constant; fix: another name" (it never silently stays π). A field `class circle{pi = 3}` or
+`class C{pi:int}` is the type's own field, no message: the type's methods read the field (`f() := pi * r`), everywhere
+else `pi` stays the constant (parser state `type_fields`).
 src/warp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.
 
-Control flow as other languages write it (samples/conditions/control_flow.warp, tests/control/test_match_guards_and_finally.rs):
+## Control flow as other languages write it
+(samples/conditions/control_flow.warp, tests/control/test_match_guards_and_finally.rs)
 - match guards (Rust, Scala): `n if n < 0 => "negative"` binds n to the subject and holds when the condition does;
   a list pattern takes a guard too (`[a, b] if a > b => …`). switch.rs split_guard.
 - an assigned match `d = match v {k => …, _ => …}` parses as `match (v {…})`; welcome_forms turns its arrow cases into
   `k: …` / `default: …` as for the statement form.
 - `try … catch/else/except … finally {Z}` (Java, Python): `(finally·N = try…; Z; finally·N)`, Z runs either way and
-  the value stays the try's or the catch's. lookahead.rs with_finally. `try X finally Z` without a catch is not parsed.
+  the value stays the try's or the catch's. lookahead.rs with_finally.
 - `global a, b` (Python) declares both; several `global` lines in a block are no duplicate key.
 - English operator words are aliases (samples/hello/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
   `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
   (= `to`), `is in` (= `in`), `for each x in xs`; a word operator needs a blank after it, so `plus(a, b)` stays a call.
-  `10 down to 1` is `reverse(1 to 10)`; letters make ranges (`'a' to 'e'`, `c to 'z'` counts codepoints).
-  A parenthesized filter is closed: `(xs where it > 0).slice(0, 1)` slices the filtered list.
-  Open (asked): number words (`one plus two`, then `three times four` multiplies like `3 times 4`).
+  Number words count too (`one plus two` is 3). `10 down to 1` is `reverse(1 to 10)`; letters make ranges
+  (`'a' to 'e'`, `c to 'z'` counts codepoints). A parenthesized filter is closed: `(xs where it > 0).slice(0, 1)`
+  slices the filtered list.
 - a comparison without its left side is a relational pattern in a match arm (`> 100 => "big"`, C#), elsewhere the
   error "`> 100` compares nothing".
 
-## Warning levels (decisions warning-levels, hints-are-warnings, 2026-10-13; worker defaults, undoable)
+## Warning levels (decisions warning-levels, hints-are-warnings)
 Shown from hint; `--no-hints` / `WARP_HINTS=0` show from weak; `--warnings=<level>` and the playground's "show … and
 up" select set it. `use strict` / `--strict` fail from normal, `--strict=<level>` from that level; Rust's
 `WarningMode::Error` fails on every warning, weak too. Hints never fail. HintMode::Once dedups every level.

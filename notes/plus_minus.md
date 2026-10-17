@@ -6,8 +6,8 @@ uncertainty; every generic function computes with it, the uncertainty propagates
 
 ## Today (2026-10-08, probed)
 - `±` (also ` +- `) parses as Op::PlusMinus. units.rs evaluates `1950 ± 50` and `1950 ± 50 cm` at compile time as a
-  Tolerance (integers, printed as written); `1900 - 2000 AD == 1950 AD ± 50` waits for a user decision
-  (notes/ignored_tests.md).
+  Tolerance (integers, printed as written); `1900 - 2000 AD == 1950 AD ± 50` is open: a range with a unit is a
+  subtraction, its tests are ignored as cleanup-edge (card discuss-moving).
 - Any arithmetic on it is the error "arithmetic on a value with tolerance or a range is not supported", `r ± 0.1` of a
   variable or a float is a parse error, `sqrt(4 ± 1)` too, `12 ≈ r±1` the same error.
 - `≈` (notes/approximately.md): numbers within 1e-9 relative (`tolerance`), field by field for objects.
