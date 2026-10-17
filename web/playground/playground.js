@@ -1054,14 +1054,23 @@ async function sendBugReport() {
 		if (report.token !== BUG_TOKEN) store(BUG_TOKEN_KEY, report.token);
 		$("bug-comment").value = "";
 		$("bug-express").checked = false;
-		showBugStatus(card ? `card made: ${card}` : `sent (${queued}): a card within minutes`);
+		if (card) showBugStatus("card made: ", false, card);
+		else showBugStatus(`sent (${queued}): a card within minutes`);
 	} catch (failure) {
 		showBugStatus(`not sent: ${failure.message}`, true);
 	}
 }
 
-function showBugStatus(text, failed = false) {
-	Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
+// `card`: the issue the report became, a link named #1755 after the text (card card-made)
+function showBugStatus(text, failed = false, card = null) {
+	const status = Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
+	if (card) status.append(Object.assign(document.createElement("a"), { href: card, target: "_blank", rel: "noopener", textContent: cardName(card) }));
+}
+
+// https://github.com/pannous/warp/issues/1755 → #1755, any other address as it is
+function cardName(card) {
+	const number = card.match(/\/issues\/(\d+)$/)?.[1];
+	return number ? `#${number}` : card;
 }
 
 function showVersion() {
