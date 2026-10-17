@@ -94,6 +94,16 @@
 			<a id="guide-link" class="guide-link" hidden></a>
 			<button id="ask" type="button" title="chat with Claude about this program (needs the API key in the ⋯ menu)">Ask ✦</button>
 			<button id="report" type="button" hidden title="draft a GitHub issue with this program, its output and the version">Report ⚑</button>
+			<details id="bug" class="tools bug">
+				<summary title="report a bug: your comment, this program and its output become a card on the board" aria-label="report a bug">🐞</summary>
+				<form id="bug-form" class="tools-menu bug-form">
+					<textarea id="bug-comment" rows="4" placeholder="what went wrong?" aria-label="comment"></textarea>
+					<input id="bug-token" type="password" autocomplete="off" placeholder="token (python3 scripts/bug_report.py token)" aria-label="token" hidden>
+					<label title="the program and its output go along with the comment"><input id="bug-source" type="checkbox" checked> include source</label>
+					<label title="the card goes into Now as urgent"><input id="bug-express" type="checkbox"> express</label>
+					<button>send</button> <span id="bug-status" role="status"></span>
+				</form>
+			</details>
 		</nav>
 		<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
 		<div id="editor-resizer" class="resizer rows" role="separator" aria-orientation="horizontal" aria-label="editor height" tabindex="0" title="drag to resize, double-click to reset"></div>

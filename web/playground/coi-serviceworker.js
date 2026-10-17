@@ -6,6 +6,9 @@ self.addEventListener("activate", event => event.waitUntil(self.clients.claim())
 self.addEventListener("fetch", event => {
 	const request = event.request;
 	if (request.cache === "only-if-cached" && request.mode !== "same-origin") return;
+	// isolation headers matter only on this site's own responses; a cross-origin request (the bug button's POST to
+	// pannous.com) goes to the network untouched: refetched here it failed in Safari with "Load failed"
+	if (new URL(request.url).origin !== self.location.origin) return;
 	event.respondWith(fetch(request).then(response => {
 		if (response.status === 0) return response; // opaque: nothing to add
 		const headers = new Headers(response.headers);

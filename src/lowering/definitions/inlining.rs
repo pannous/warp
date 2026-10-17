@@ -216,7 +216,21 @@ pub(crate) fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn
 		Node::Symbol(word) if names.contains(&word) => Node::Symbol(rename(&word)),
 		// a key `{x: x}` and a field `p.x` keep their names
 		Node::Key(left, Op::Colon, right) => Node::Key(left, Op::Colon, Box::new(renamed_names(*right, names, rename))),
-		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(renamed_names(*left, names, rename)), Op::Dot, right),
+		Node::Key(left, Op::Dot, right) => {
+			// a method call `xs.map(f)` keeps its method's name, its arguments are renamed
+			let right = right.under_meta(|right| match right {
+				Node::List(mut items, Bracket::Round, separator)
+					if items.first().is_some_and(|m| m.symbol_name().is_some()) =>
+				{
+					let arguments =
+						items.split_off(1).into_iter().map(|argument| renamed_names(argument, names, rename));
+					items.extend(arguments);
+					Node::List(items, Bracket::Round, separator)
+				}
+				field => field,
+			});
+			Node::Key(Box::new(renamed_names(*left, names, rename)), Op::Dot, Box::new(right))
+		}
 		other => children_rewritten(other, |child| renamed_names(child, names, rename)),
 	}
 }

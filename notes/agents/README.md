@@ -13,6 +13,8 @@ way.
    - warp-integrator (merge, full suite, push to main)
    - warp-interviewer (the only one who asks you decision questions; talk to it when you have a minute)
    - warp-fixer (small to-dos from the board `todo list`, ignored "next"/"soon" tests)
+   - warp-urgent is no tmux role: a cloud session for urgent cards, started once and kept (notes/roles.md
+     "Urgent", prompt urgent_cloud.md)
 3. At most TWO feature workers at a time (a fleet of eight stalls on the usage limit). Workers are spawned per task by the supervisor with `notes/agents/start.sh worker <name> "<task>"`.
 
 Spawned sessions get generated names (warp-6c …). Find them with ListAgents: the tmux column shows the role

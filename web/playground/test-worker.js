@@ -61,6 +61,7 @@ async function announceGpuAdapter() {
 }
 
 self.onmessage = async ({ data }) => {
+	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.type === "compile") {
 		compiled = Promise.all([WebAssembly.compileStreaming(fetch(data.url)).then(binary => { module = binary; }), announceGpuAdapter()]);
 		return;

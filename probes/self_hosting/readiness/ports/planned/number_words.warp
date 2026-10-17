@@ -1,0 +1,10 @@
+// planned (does not run yet): number_words.rs with the walk (walk.warp) and kind patterns in match (card parsed-kinds)
+number_words = {zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+	eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+	nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90}
+as_numbers(n) := match n {
+	symbol if n.name in number_words => number_words[n.name]
+	data($x.$member) => data($(as_numbers(x)).$member)
+	data($k: $v) => data($k: $(as_numbers(v)))
+	_ => children(n, as_numbers)
+}

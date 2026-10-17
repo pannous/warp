@@ -571,6 +571,19 @@ PASSED:
   ✓ control::test_print_empty_map::print_of_an_empty_map_prints_empty
   ✓ control::test_print_empty::print_empty_gives_nothing
   ✓ control::test_print_empty::print_empty_prints_it
+  ✓ control::test_quasi_quote::a_hole_is_an_operand_of_a_phrase
+  ✓ control::test_quasi_quote::a_hole_named_like_a_unit_is_the_bound_code
+  ✓ control::test_quasi_quote::a_quoted_literal_is_the_literal
+  ✓ control::test_quasi_quote::a_replacement_template_splices_the_holes
+  ✓ control::test_quasi_quote::a_replacement_walks_into_quoted_blocks
+  ✓ control::test_quasi_quote::a_rest_hole_binds_and_splices_the_remaining_items
+  ✓ control::test_quasi_quote::a_template_in_a_lambda_splices_its_parameter
+  ✓ control::test_quasi_quote::a_template_splices_a_variable
+  ✓ control::test_quasi_quote::a_template_splices_an_expression
+  ✓ control::test_quasi_quote::a_times_phrase_becomes_its_loop
+  ✓ control::test_quasi_quote::an_arm_template_splices_the_holes
+  ✓ control::test_quasi_quote::quoted_phrases_stay_as_written
+  ✓ control::test_quasi_quote::the_value_after_an_assignment_takes_the_whole_phrase
   ✓ control::test_quoted_data_untouched::a_member_read_stays_a_dot
   ✓ control::test_quoted_data_untouched::library_sugar_stays_as_written
   ✓ control::test_raise::raise_ends_the_run_with_its_message
@@ -991,6 +1004,7 @@ PASSED:
   ✓ ffi::header::tests::test_parse_header_file_math
   ✓ ffi::test_browser_dollar_names::a_dollar_global_is_used_from_javascript
   ✓ ffi::test_browser_dollar_names::a_dollar_name_is_the_element_of_that_id
+  ✓ ffi::test_browser_dollar_names::a_superfluous_dollar_keeps_the_value_with_a_warning
   ✓ ffi::test_builtin_lines::a_builtin_line_declares_and_imports_nothing
   ✓ ffi::test_builtin_lines::a_builtin_words_signature_is_its_line
   ✓ ffi::test_builtin_lines::a_programs_builtin_line_must_be_warps
@@ -1318,6 +1332,7 @@ PASSED:
   ✓ functions::test_builtin_clash::a_cast_cannot_name_a_function
   ✓ functions::test_builtin_clash::a_defined_rounding_word_is_the_programs
   ✓ functions::test_builtin_clash::a_function_keyword_names_an_infix_word
+  ✓ functions::test_builtin_clash::a_runtime_function_name_is_free_for_the_program
   ✓ functions::test_builtin_clash::an_operator_word_cannot_name_a_function
   ✓ functions::test_builtin_clash::library_words_stay_redefinable
   ✓ functions::test_builtin_function_values::a_bare_builtin_assigned_needs_its_arguments
@@ -1525,6 +1540,7 @@ PASSED:
   ✓ functions::test_function_values::test_operators_as_values
   ✓ functions::test_function_values::test_ordinary_calls_are_untouched
   ✓ functions::test_function_values::test_partial_application_of_an_iteration_word
+  ✓ functions::test_functions_passed_by_name::a_function_parameter_passed_on_in_a_method_call
   ✓ functions::test_functions_passed_by_name::a_function_passed_by_name_is_called_by_name
   ✓ functions::test_functions_passed_by_name::recursive_passed_on_and_several_functions_by_name
   ✓ functions::test_functions::test_default_params
@@ -2580,6 +2596,7 @@ PASSED:
   ✓ modules::test_std_reflection_hints::reflecting_on_standard_module_functions_gives_no_hints_from_the_module
   ✓ modules::test_std_reflection_hints::reflection_still_gives_hints_for_the_programs_own_code
   ✓ modules::test_std_regex::a_match_prints_yes_or_no
+  ✓ modules::test_std_regex::a_slashed_regex_after_matches
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
   ✓ modules::test_std_shadowed_names::a_defaulted_parameter_shadows_each_arity_it_takes
@@ -3630,6 +3647,8 @@ PASSED:
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
   ✓ parser::test_parameter_scope::a_parameter_divides_only_inside_its_definition
+  ✓ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
+  ✓ parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
@@ -5842,6 +5861,7 @@ PASSED:
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
+  ✓ welcoming::test_c_style::test_number_parameter_holds_floats
   ✓ welcoming::test_cli_error_exit::a_caught_error_and_a_value_keep_their_status
   ✓ welcoming::test_cli_error_exit::a_program_ending_in_a_float_exits_with_status_0
   ✓ welcoming::test_cli_error_exit::an_uncaught_error_exits_with_status_1
@@ -6140,6 +6160,8 @@ PASSED:
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::warp_fix_writes_the_floor_division_bang
   ✓ welcoming::test_slash_comment_prose_operators::prose_with_operator_characters_gets_no_division_note
+  ✓ welcoming::test_sleep_fractions::a_fraction_of_a_millisecond_rounds_to_the_nearest
+  ✓ welcoming::test_sleep_fractions::a_fraction_of_a_second_sleeps_its_milliseconds
   ✓ welcoming::test_sleep_seconds::a_bare_sleep_number_counts_seconds
   ✓ welcoming::test_sleep_seconds::the_bare_sleep_warning_suggests_seconds
   ✓ welcoming::test_sleep_unit_shadow::a_unit_named_variable_keeps_other_durations
@@ -6279,4 +6301,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6274 passed, 0 failed, 6274 total tested
+13 ignored, 6296 passed, 0 failed, 6296 total tested

@@ -1088,14 +1088,15 @@ fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
 	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(duration, message)])
 }
 
-/// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
+/// A constant duration in milliseconds, to the nearest one: `1000 ms`, `2 s`, `1 min`, `2 seconds`, `16.7 ms` (17), a
+/// duration of the time module; the timers and sleep count whole milliseconds
 pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	if let Node::Data(data) = node.drop_meta() {
 		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
 		Ok(Some((seconds, signature))) if signature == [(Dimension::duration(), 1)] => {
-			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
+			nearest(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
 		}
 		_ => None,
 	}
@@ -1152,6 +1153,14 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 			}
 		}
 	};
+	// `data($m + 0)`: a hole names a variable, also in the arm it binds for (card unit-hole-name)
+	if let Some(code) = crate::lowering::blocks::quoted_data(node) {
+		code.visit(&mut |part| {
+			if let Some(name) = crate::lowering::switch::hole_name(part) {
+				add_unit(&Node::Symbol(name.to_string()))
+			}
+		});
+	}
 	let mut add_parameters = |head: &Node| match head.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| match item.drop_meta() {
 			Node::Key(name, Op::Colon, _) => add_unit(name),

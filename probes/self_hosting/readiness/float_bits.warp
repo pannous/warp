@@ -1,0 +1,5 @@
+// emitter: f64.const needs the IEEE bits of a float, little-endian bytes
+// 4609434218613702656, 1.5
+use math
+print(float_bits(1.5))
+print(bits_float(4609434218613702656))

@@ -135,8 +135,11 @@ pub(super) fn quotient_node(amount: &Rational) -> Node {
 	Node::Number(Number::from_rational(amount.clone()))
 }
 
-pub(super) fn whole(amount: &Rational) -> Option<i64> {
-	amount.is_integer().then(|| amount.numerator.to_i64()).flatten()
+/// The integer nearest the amount, halves away from zero
+pub(super) fn nearest(amount: &Rational) -> Option<i64> {
+	let magnitude = (amount.numerator.magnitude() * 2u32 + amount.denominator.magnitude())
+		/ (amount.denominator.magnitude() * 2u32);
+	BigInt::from_biguint(amount.numerator.sign(), magnitude).to_i64()
 }
 
 /// The finest unit of each dimension among the factors: the unit a result counts in ("unit sums use the finer unit")

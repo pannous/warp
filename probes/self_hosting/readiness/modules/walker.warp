@@ -1,0 +1,2 @@
+// a helper module of modules.warp
+rename(n, from, to) := if n == symbol(from) then symbol(to) else n

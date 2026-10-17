@@ -58,18 +58,30 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, arg);
 				func.instruction(&I::F32DemoteF64);
 			}
-			ValType::I64 => self.emit_numeric_value(func, arg),
+			ValType::I64 => self.emit_machine_int_value(func, arg),
 			// a host word taking a value (task_spawn_values): the Node
 			ValType::Ref(_) => self.emit_node_instructions(func, arg),
 			ValType::I32 => {
 				if self.is_string_arg(arg) {
 					self.emit_string_ptr_only(func, arg);
 				} else {
-					self.emit_numeric_value(func, arg);
+					self.emit_machine_int_value(func, arg);
 					func.instruction(&I::I32WrapI64);
 				}
 			}
-			_ => self.emit_numeric_value(func, arg),
+			_ => self.emit_machine_int_value(func, arg),
+		}
+	}
+
+	/// The number as the machine integer a host or C function takes: an exact one (a fraction, a big int) truncated,
+	/// never its own encoding (`sleep(1 / 60)` once slept the handle of 50/3)
+	fn emit_machine_int_value(&mut self, func: &mut Function, arg: &Node) {
+		self.emit_numeric_value(func, arg);
+		if self.int_runtime()
+			&& self.get_type(arg) == Kind::Int
+			&& !crate::wasm_emitter::numbers::big_int::is_fixnum_range(self.int_range(arg))
+		{
+			self.emit_int_to_machine(func);
 		}
 	}
 
