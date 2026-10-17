@@ -90,6 +90,7 @@ fn standard_properties() -> Properties {
 				if !source.lines().any(defines_property) {
 					continue;
 				}
+				// parsed without the module's file: a hint about a property points at the program's use (display-names)
 				let parsed = crate::normalize::without_hints(|| crate::warp_parser::WarpParser::parse(source));
 				let needed = (module != crate::modules::PRELUDE_MODULE).then_some(module);
 				collect(&crate::modules::statements(parsed), needed, &mut properties);
@@ -98,6 +99,16 @@ fn standard_properties() -> Properties {
 		};
 	}
 	PROPERTIES.with(Properties::clone)
+}
+
+/// The objects the standard modules give properties (canvas, window, display), read off their text: a program naming
+/// none of them nor a canvas side needs none of their properties, whose parse cost a quarter of a small compile
+fn standard_objects() -> &'static HashSet<String> {
+	static OBJECTS: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
+	OBJECTS.get_or_init(|| {
+		let lines = crate::modules::STD_MODULES.iter().flat_map(|(_, source)| source.lines());
+		lines.filter(|line| defines_property(line)).filter_map(|line| line.split('.').next()).map(String::from).collect()
+	})
 }
 
 /// Does a line of a module's text start a property definition, `canvas.width := …` or `canvas.width(w) := …`
@@ -118,7 +129,9 @@ fn read_only_reason(properties: &Properties, object: &str, property: &str) -> St
 }
 
 pub fn lower(program: Node) -> Node {
-	let mut properties = standard_properties();
+	let names_standard_object = |name: &str| SIDES.contains(&name) || standard_objects().contains(name);
+	let mut properties =
+		if program.mentions_where(names_standard_object) { standard_properties() } else { Properties::new() };
 	let mut own = Properties::new();
 	let program = match with_instance_getters(program) {
 		Ok(program) => program,
