@@ -6,6 +6,9 @@ const GROWTH: u32 = 4;
 /// Linear parsing takes GROWTH times as long for GROWTH times the definitions, quadratic GROWTH²; the margin absorbs a
 /// busy machine. While quadratic, 2000 one-line definitions took 9.5 s in a debug build, 500 took 0.6 s
 const SLOWDOWN_LIMIT: u32 = GROWTH * 2;
+/// Each size parses this often and counts its fastest run: a busy machine (the full suite's parallel tests) only slows
+/// some runs, so the fastest is the parse's own time (card linear-time)
+const RUNS: usize = 5;
 
 /// The source line of definition number `index`
 type Definition = fn(usize) -> String;
@@ -14,9 +17,12 @@ const LATE_END_BLOCK: &str = "items.each do |item|\n\tprint item\nend\n";
 
 fn time_parse(definition: Definition, count: usize, tail: &str) -> Duration {
 	let source: String = (1..=count).map(|index| definition(index) + "\n").collect::<String>() + tail;
-	let started = Instant::now();
-	WarpParser::parse(&source);
-	started.elapsed()
+	let time_once = || {
+		let started = Instant::now();
+		WarpParser::parse(&source);
+		started.elapsed()
+	};
+	(0..RUNS).map(|_| time_once()).min().unwrap()
 }
 
 /// Many one-line function definitions parse in time proportional to their count, as plain assignments do
