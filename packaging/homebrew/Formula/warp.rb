@@ -33,7 +33,7 @@ class Warp < Formula
     end
     on_intel do
       url "#{RELEASE}-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "db1e9dacfe18a7ce26f5f2c998e7c7fb9e9f97338da4fccdce7f9741d582caf8"
+      sha256 "acb93de528a77cdcf456030236232281ae8b7df3ac717da5846d00ea63469717"
     end
   end
 
