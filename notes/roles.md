@@ -102,6 +102,16 @@ feature merges or once a day. It moves functions to their concept's file, merges
 functions, and folds special cases into the general machinery. Every chunk goes on its own branch to the Integrator,
 stating its net src/ delta. Feature cuts go to the Interviewer. Prompt: notes/agents/refactorer.md.
 
+## Urgent (warp-urgent, in the cloud)
+A standing `claude --cloud` session in fast mode (user, 2026-10-17) that fixes the user's urgent cards; crash cards
+keep their local worker. ~/dev/bin/urgent-card-watch sends it each new urgent card (`claude -p … --cloud <id>`, the id
+in ~/.cache/todo-board/urgent-cloud-session; SendMessage is held for approval there) and collects its pushed
+`claude/urgent-<key>` branches: a report saying `done` goes into the merge queue as express, `needs-mac` to the
+Supervisor, a direct push to main closes the card. Prompt and direct-to-main rules: notes/agents/urgent_cloud.md.
+Start (or replace) it: `tmux new-session -d -s cloud-warp-urgent -c /Users/me/dev/angles/warp "claude --model opus
+--name warp-urgent --settings '{\"fastMode\": true}' --cloud 'You are warp-urgent. Read notes/agents/urgent_cloud.md
+and AGENTS.md, then do the Priming and wait for urgent cards.'"`, then write its session id into that file.
+
 ## Workers
 - One task, one branch, one worktree: `cowtree add -b <name> /Volumes/Worktrees/<name> origin/main`, on the Worktrees
   volume (notes/churn_volume.md: Spotlight off, no fseventsd log, cowtree clones the donor /Volumes/Worktrees/warp,
