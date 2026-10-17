@@ -8,7 +8,6 @@ const SHOWN_FROM_KEY = "warp-playground-shown-from"; // the least diagnostic lev
 const HINTS_KEY = "warp-playground-hints"; // the former hints checkbox: "off" now means showing from weak
 const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostics/diagnostic.rs Level, least first
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
-const CSS_PIXELS_PER_INCH = 96; // CSS fixes 96 px to the inch; devicePixelRatio device pixels make one (display.dpi)
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
 // the most sounds sounding at once and how fast a stolen one fades out (src/sound/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
@@ -338,7 +337,7 @@ function notification(text) {
 // paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), heard: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, display_dpi: Math.round(CSS_PIXELS_PER_INCH * devicePixelRatio), ...viewSize() } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), heard: Number(!beforeUserActivation()), ...displayValues(), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
 document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
