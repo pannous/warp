@@ -60,7 +60,7 @@ impl WarpParser {
 			UPTO => format!(
 				"does `upto {end_text}` include {end_text}? (`..<` or `..` exclude it, `to` or `...` include it)"
 			),
-			EXCLUSIVE_DOTS if self.in_for_header && is_minus_one(end) => {
+			EXCLUSIVE_DOTS if self.context.in_for_header && is_minus_one(end) => {
 				format!("does the loop bound `..{end_text}` include {end_text}? (warp's `..` excludes it, Kotlin's includes it)")
 			}
 			_ => return Ok(op),

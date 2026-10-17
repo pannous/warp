@@ -1,5 +1,6 @@
 //! Subscripts: `xs[i]` as the 1-based `xs#(i+1)`, negative indexes counting from the end, slices `s[2…]` and `xs#(a..b)`
 use super::*;
+use crate::warp_parser::context::Context;
 
 /// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
 const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
@@ -166,17 +167,18 @@ impl WarpParser {
 		self.advance(); // skip '['
 		self.skip_whitespace();
 
-		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, false); // `xs[i -1]` subtracts
-		let mut indices = vec![self.parse_slice_from_start().unwrap_or_else(|| self.parse_expr(0))];
-		self.skip_whitespace();
-
-		while self.current_char() == ',' {
-			self.advance(); // skip ','
-			self.skip_whitespace();
-			indices.push(self.parse_expr(0));
-			self.skip_whitespace();
-		}
-		self.in_spaced_list = outer_spaced_list;
+		// `xs[i -1]` subtracts
+		let indices = self.within(Context { in_spaced_list: false, ..self.context }, |parser| {
+			let mut indices = vec![parser.parse_slice_from_start().unwrap_or_else(|| parser.parse_expr(0))];
+			parser.skip_whitespace();
+			while parser.current_char() == ',' {
+				parser.advance(); // skip ','
+				parser.skip_whitespace();
+				indices.push(parser.parse_expr(0));
+				parser.skip_whitespace();
+			}
+			indices
+		});
 
 		if self.current_char() != ']' {
 			self.rewind(before_bracket); // `foo [1 2 3]`: a list argument, not an index
