@@ -120,6 +120,26 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
+## Emitter core (card emits-wasm, step 15)
+lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
+node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
+the text "outside the core: <first form>". Module: type, function, export (main), code and a name section with
+function and local names. No GC types, no memory: the core needs neither.
+- Kinds: int = i64, float = f64, a condition = i32. A parameter takes its annotation, else the kind of its first
+  call's argument; a function's result is read twice, so a recursive call knows it (the pending kind takes the kind
+  it meets). `%` is Euclidean as in Rust's emitter (r + |b| for a negative truncated remainder).
+- Twin (tests/parser/test_self_emitter.rs, tests/common/twins.rs emitter_differential): the module runs
+  (wasm_reader::read_bytes) and its value is compared with eval(source); a float equals another number of exactly
+  its value (3.5 * 2 is 7.0 here, 7 in Rust). probes/self_hosting/emitter/core/ holds one program per form, all inside
+  the core; the checked share of every sample and probe must have at least a floor of programs inside.
+- Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
+- Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
+  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no result, a loop's value, texts, lists, every
+  runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
+  library words a user function's name meets (`add` becomes add·any).
+- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
+  (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word
 by index. `late_call(callee, params, results)` (src/wasm_emitter/functions/late_calls.rs) gives the callee a funcref

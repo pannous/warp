@@ -45,6 +45,9 @@ view_of(n: any) := {
 	n
 }
 
+# the call `name(arguments…)`
+call_of(name: text, arguments: any) := bracketed([symbol(name)] + arguments, "(")
+
 # a node with f applied to each of its children
 children(n: any, f: any) := {
 	if type(n) is key and key_of(n) != symbol(opaque_word) { return key(f(key_of(n)), op_of(n), f(value_of(n))) }

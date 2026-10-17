@@ -1,0 +1,8 @@
+# emitter core: locals, compound assignment, ++
+# 13
+a = 3
+b = a * 4
+b += 2
+b -= 2
+a++
+b + a - 3

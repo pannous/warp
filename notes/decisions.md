@@ -79,6 +79,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - canvas-zero: a missing setting takes a sensible default; errors only for an ambiguity too dangerous to guess.
 - P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip.
 - julia-compat (user, 2026-10-17): stay close to Julia; its syntax is beautiful and its semantics often near perfect (unlike Rust). Julia forms read with Julia's meaning; deliberate departures listed in wiki/Julia.md.
+  - julia-floor-divide: `÷` is floor division as in Julia (synonym of `/!`, `7 ÷ 2` → 3), with a hint for newcomers expecting `/`; replaces #27's normalization of `÷` to `/`.
+  - julia-pair-range: `1:4` stays a pair; iterated (for, sum, comprehensions) a pair of two numbers is the range.
+  - julia-text-times-hint: `"a" * "b"` is no concatenation; the error hints `+`.
+  - julia-dollar-interpolation: `"x is $x"` only as a toggled feature after the self-hosting migration (`$million`, `$0` clash).
 - P78 modifiers from other languages (`public`, `static`, `inline`, …) are skipped with a got-it note; words with a warp meaning keep it.
 - Word choices are not asked: the recommended word is canonical, synonyms are aliases with a note.
 - rust-forms-welcome: warp may read Rust's forms (`<T>` included) as long as each has a nicer warp form, which stays canonical.
@@ -283,7 +287,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P55 a while loop's value is its last body value. P213 a loop ending in `print` gives ø.
 - `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
-- P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized.
+- P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ now floor division: julia-floor-divide).
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
 

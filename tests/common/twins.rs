@@ -106,6 +106,9 @@ fn view(node: &Node, positions: bool) -> Node {
 
 /// A source literal (`01234`, `1.10`) and an annotation (`@name(value)`) survive, comments go
 fn meta_view(node: &Node, inner: &Node, positions: bool) -> Node {
+	if let Some(template) = warp::text::interpolation::template_of(node) {
+		return tagged("template", [Node::text(template)]);
+	}
 	if let Some(literal) = node.source_literal() {
 		return tagged("literal", [Node::text(literal), view(inner, positions)]);
 	}
@@ -143,6 +146,11 @@ pub fn differential(part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
 /// `differential` over the given sources only
 pub fn differential_on(paths: &[PathBuf], part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
 	report(word, &differences(&checked_share(paths), part, word, rust_twin));
+}
+
+/// The sources a gate run checks: all in the nightly run, every GATE_SHARE-th otherwise
+pub fn checked_sources() -> Vec<PathBuf> {
+	checked_share(&sources())
 }
 
 /// All sources in the nightly run, every GATE_SHARE-th otherwise, starting at the day's offset: the gates of four
@@ -291,9 +299,15 @@ fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> +
 /// The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): `word(source text)` of
 /// lib/compiler/<part>.warp parses with parser.warp and runs the pass twins in pipeline order; compared with the Rust
 /// parse of the same text after the Rust twins of those passes in that order (only those: the others have no twin yet),
-/// over the day's share of the sources as the parser differential
-pub fn chain_differential(paths: &[PathBuf], part: &str, word: &str, rust_passes: &[fn(Node) -> Node]) {
-	let cases = checked_share(paths).into_iter().filter_map(|path| {
+/// over the day's share of the sources as the parser differential, without the `dropped` ones (twin_sources)
+pub fn chain_differential(
+	paths: &[PathBuf],
+	part: &str,
+	word: &str,
+	rust_passes: &[fn(Node) -> Node],
+	dropped: &[&str],
+) {
+	let cases = twin_sources_of(paths, dropped).into_iter().filter_map(|path| {
 		let text = std::fs::read_to_string(&path).ok()?;
 		let lowered =
 			std::panic::catch_unwind(|| rust_passes.iter().fold(parse(&text), |node, pass| pass(node))).ok()?;
@@ -337,16 +351,84 @@ fn bridge_differential_of(given: fn(&Node) -> Node) {
 	report("view_of", &differences_of(cases, "walk", "view_of(node_of(json(argument)))"));
 }
 
+/// The emitter core's twin (card emits-wasm, notes/self_hosting.md step 15): every lowered program (pipeline::lower)
+/// goes to lib/compiler/emitter.warp `wasm_module` as a node, the module it gives runs, and its value is compared with
+/// the program's value run by Rust. A program outside the core (a text "outside the core: …") is no case; fails
+/// unless at least `least` programs are inside it. Returns the paths inside the core
+pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
+	let cases = in_parallel(paths.to_vec(), |path| {
+		let text = std::fs::read_to_string(path).ok()?;
+		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
+		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
+	});
+	let twin = TwinProgram::new("emitter", "wasm_module(node_of(json(argument)))");
+	let (mut inside, mut differing) = (vec![], vec![]);
+	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
+		for ((path, _, text), module) in cases.iter().zip(twin.values(&arguments)) {
+			if module.text_value().is_some_and(|text| text.starts_with(OUTSIDE_THE_CORE)) {
+				continue;
+			}
+			inside.push(path.clone());
+			let warp_value = module_value(&module);
+			let rust_value = warp::wasm_emitter::eval(text).drop_meta().clone();
+			if !same_value(&warp_value, &rust_value) {
+				differing.push((path.clone(), warp_value.serialize(), rust_value.serialize()));
+			}
+		}
+	}
+	report("wasm_module", &differing);
+	assert!(
+		inside.len() >= least,
+		"only {} programs inside the emitter core, {least} expected: {inside:?}",
+		inside.len()
+	);
+	inside
+}
+
+/// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
+const OUTSIDE_THE_CORE: &str = "outside the core";
+
+/// The value main of a module given as a list of bytes returns, or the failure as a text
+fn module_value(module: &Node) -> Node {
+	let Node::List(items, ..) = module.drop_meta() else {
+		return Node::text(&format!("no module: {}", module.serialize()));
+	};
+	let byte = |item: &Node| match item.drop_meta() {
+		Node::Number(Number::Int(byte)) => u8::try_from(*byte).ok(),
+		_ => None,
+	};
+	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
+	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes(&bytes)) {
+		Some(Ok(value)) => value,
+		Some(Err(failure)) => Node::text(&format!("module failed: {failure}")),
+		None => Node::text("a module byte beyond 0..255"),
+	}
+}
+
+/// Equal values; a float equals another number of exactly its value (the core's 3.5 * 2 is 7.0, Rust's 7)
+fn same_value(warp_value: &Node, rust_value: &Node) -> bool {
+	match (warp_value, rust_value) {
+		(Node::Number(a @ Number::Float(_)), Node::Number(b))
+		| (Node::Number(a), Node::Number(b @ Number::Float(_))) => f64::from(*a) == f64::from(*b),
+		_ => warp_value == rust_value,
+	}
+}
+
 /// The checked share of the sources without the dropped ones, which DROPPED_NOTES must name; TWIN_ONLY=<path suffix>
 /// checks only the sources ending so (one source while fixing a twin)
 fn twin_sources(dropped: &[&str]) -> Vec<PathBuf> {
+	twin_sources_of(&sources(), dropped)
+}
+
+fn twin_sources_of(paths: &[PathBuf], dropped: &[&str]) -> Vec<PathBuf> {
 	let notes = std::fs::read_to_string(DROPPED_NOTES).unwrap_or_default();
 	let unexplained: Vec<&&str> = dropped.iter().filter(|source| !notes.contains(**source)).collect();
 	assert!(unexplained.is_empty(), "dropped sources not named in {DROPPED_NOTES}: {unexplained:?}");
 	let kept = |path: &PathBuf| !dropped.iter().any(|source| path.ends_with(source));
 	match std::env::var("TWIN_ONLY") {
-		Ok(only) => sources().into_iter().filter(|path| path.ends_with(&only)).collect(),
-		Err(_) => checked_share(&sources()).into_iter().filter(kept).collect(),
+		Ok(only) => paths.iter().filter(|path| path.ends_with(&only)).cloned().collect(),
+		Err(_) => checked_share(paths).into_iter().filter(kept).collect(),
 	}
 }
 

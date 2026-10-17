@@ -6,7 +6,6 @@ use "walk.warp"
 times_word = "times"
 loops = 0
 
-call_of(name: text, arguments: any) := bracketed([symbol(name)] + arguments, "(")
 for_loop(counter: any, range: any, body: any) := separated(bracketed([symbol("for"), counter, symbol("in"), range, body], ""), " ")
 
 # `for times·N in 0..count body`; the count is evaluated once, before the first round
