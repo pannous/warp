@@ -7,6 +7,7 @@ mod test_big_int_bits; // card big-int
 mod test_big_int_text; // card out-fuel
 mod test_big_ratio;
 mod test_compound_accumulator; // card compound-accumulator
+mod test_conversion_unit_not_dispatched; // card print-km
 mod test_counting_units;
 mod test_data_number_words; // card hint-data-word
 mod test_decimal_units;

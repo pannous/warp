@@ -363,6 +363,7 @@ fn quantity_conversion(conversion: Node, operands: &Operands) -> (Node, Option<S
 	let (quantity, units) = crate::numbers::units::conversion(&conversion)
 		.map(|(quantity, units)| (quantity.clone(), units))
 		.expect("guarded");
+	let written = quantity.clone();
 	let (quantity, class) = with_operator_calls(quantity, operands);
 	let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
 	match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
@@ -370,7 +371,8 @@ fn quantity_conversion(conversion: Node, operands: &Operands) -> (Node, Option<S
 			method_call(quantity, CONVERSION_METHOD, vec![Node::Text(crate::numbers::units::unit_suffix(&units))]),
 			run_time.map(str::to_string),
 		),
-		false => (conversion.map_children(|child| with_operator_calls(child, operands).0), None),
+		// the unit `m/s` is no division to dispatch, only the converted value has operator calls
+		false => (conversion.map_children(|child| if child == written { quantity.clone() } else { child }), None),
 	}
 }
 
