@@ -98,6 +98,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P241 no vector type: `Vec<int>`, `vector<int>`, `Array<int>` read as `list of int` with the note "warp says list".
 - Error highlighting: CLI carets under the word; web red/amber wavy underlines with the message on hover.
 - #7/P92 unresolved calls are errors: `foo()` is "undefined function: foo"; a bare word statement naming nothing is "undefined variable: foo"; a bare `foo` in data stays a symbol.
+- constant-words (leave as is): null nul none nil nill nix nada nothing empty void true yes false no are constants in any case; `empty = 3` is `ø = 3`.
+- function-words-consume (user): every function word, not only print, takes everything right of it as arguments, nesting rightward: `show a, b` = show(a, b), `print ord c` = print(ord(c)); non-function words are unchanged.
 - P86 adding values of unknown kinds builds `a + b` lazily; evaluated operands need Addable, else a type error.
 
 ## Comments, separators and lexing
