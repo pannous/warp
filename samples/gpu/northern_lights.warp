@@ -1,0 +1,84 @@
+#!/usr/bin/env warp
+# a compute.toys kernel through compute_toy of `use compute_toys` (samples/gpu/lava_lamp.warp shows the simplest):
+# northern lights over a frozen lake. Curtains of light hang from wavy lines that drift and ripple with time, each
+# curtain its own color; stars twinkle behind them, a ridge of hills stands in front, the lake below mirrors it all.
+use compute_toys
+lights = compute_toy(shader {
+	const CURTAINS = 4;
+
+	// a number in 0 … 1 for each grid cell, scrambled by integer multiplies (sin-based hashes stripe in f32)
+	fn hash(p: float2) -> f32 {
+		var h = bitcast<u32>(vec2i(p).x) * 1597334677u ^ bitcast<u32>(vec2i(p).y) * 3812015801u;
+		h = (h ^ (h >> 16u)) * 2246822519u;
+		h = h ^ (h >> 13u);
+		return f32(h) / 4294967295.0;
+	}
+
+	// smooth noise: the hashes of the four corners of the cell, blended
+	fn noise(p: float2) -> f32 {
+		let cell = floor(p);
+		let inside = fract(p);
+		let blend = inside * inside * (3.0 - 2.0 * inside);
+		let bottom = mix(hash(cell), hash(cell + float2(1.0, 0.0)), blend.x);
+		let top = mix(hash(cell + float2(0.0, 1.0)), hash(cell + float2(1.0, 1.0)), blend.x);
+		return mix(bottom, top, blend.y);
+	}
+
+	// the hills' height at x: two octaves of noise
+	fn ridge(x: f32) -> f32 {
+		return -0.17 + 0.12 * noise(float2(x * 2.0, 3.0)) + 0.05 * noise(float2(x * 7.0, 9.0));
+	}
+
+	// light of curtain number index at the point: brightest just above its wavy hem, fading upward
+	fn curtain(at: float2, index: f32, t: f32) -> f32 {
+		let drift = t * (0.05 + 0.02 * index);
+		let hem = 0.22 + 0.07 * index + 0.15 * sin(at.x * (1.5 + index * 0.4) + drift * 6.0)
+			+ 0.08 * noise(float2(at.x * 3.0 + drift * 4.0, index * 7.0));
+		let above = at.y - hem;
+		if (above < 0.0) { return exp(above * 40.0) * 0.4; }
+		let rays = 0.3 + 0.7 * noise(float2(at.x * 40.0 + index * 13.0, t * 0.6));
+		return exp(-above * (3.0 + index)) * rays;
+	}
+
+	fn sky(at: float2, t: f32) -> float3 {
+		var color = mix(float3(0.01, 0.02, 0.06), float3(0.0, 0.0, 0.02), clamp(at.y, 0.0, 1.0));
+		// stars: one cell in a few holds one, twinkling at a pace of its own
+		let cell = floor(at * 300.0);
+		let star = hash(cell);
+		if (star > 0.996) {
+			color += float3(0.8) * (0.6 + 0.4 * sin(t * 3.0 + star * 90.0));
+		}
+		let hues = array<float3, CURTAINS>(float3(0.1, 1.0, 0.45), float3(0.15, 0.8, 0.9), float3(0.6, 0.3, 1.0), float3(1.0, 0.25, 0.5));
+		for (var i = 0; i < CURTAINS; i++) {
+			color += hues[i] * curtain(at, f32(i), t) * 0.6;
+		}
+		return color;
+	}
+
+	@compute @workgroup_size(16, 16)
+	fn main_image(@builtin(global_invocation_id) id: vec3u) {
+		let screen_size = textureDimensions(screen);
+		if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
+		// y up from the horizon two thirds of the way down; compute.toys counts pixel rows from the top
+		let at = float2(f32(id.x) - 0.5 * f32(screen_size.x), 0.65 * f32(screen_size.y) - f32(id.y)) / f32(screen_size.y);
+		let t = time.elapsed;
+		var color: float3;
+		if (at.y >= 0.0) {
+			color = sky(at, t);
+			if (at.y < ridge(at.x) + 0.2) { color = float3(0.005, 0.01, 0.02); }
+		} else {
+			// the lake mirrors the sky, darker and rippled
+			let ripple = 0.004 * sin(at.y * 300.0 + t * 2.0);
+			let mirrored = float2(at.x + ripple, -at.y);
+			color = sky(mirrored, t) * 0.45;
+			if (mirrored.y < ridge(mirrored.x) + 0.2) { color = float3(0.004, 0.008, 0.015); }
+		}
+		textureStore(screen, id.xy, float4(color, 1.0));
+	}
+})
+# ten seconds by the clock, however long a frame takes
+started = clock()
+while clock() - started < 10000 {
+	paint(lights)
+	sleep(1 / 60)
+}

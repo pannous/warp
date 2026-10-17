@@ -7,8 +7,8 @@
 // @stage(compute) syntax are compute.toys' engine, which warp does not have: compute_toy says so
 use regex
 
-// compute.toys' prelude (github compute-toys/compute.toys lib/engine/index.ts getPrelude): its type aliases, its
-// Time and Mouse, keyDown; each read from paint's built-in values
+// compute.toys' prelude (github compute-toys/compute.toys lib/engine/index.ts getPrelude, MIT © 2023 compute.toys):
+// its type aliases, its Time and Mouse, keyDown; each read from paint's built-in values
 compute_toys_prelude = "
 alias int = i32;
 alias uint = u32;

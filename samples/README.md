@@ -55,6 +55,11 @@ These samples need specific features to be implemented:
 - **webgpu.warp** - WebGPU integration
 - **visualizer.warp** - Winamp-style spectrum bars while a tune plays
 - **gpu_visualizer.warp** - the same spectrum driving a raymarched WGSL tunnel with a pulsing gem (WebGPU)
+- **gpu/lava_lamp.warp**, **gpu/northern_lights.warp** - compute.toys kernels of our own run through `compute_toy` (`use compute_toys`)
+
+Shaders by other authors (compute.toys and Shadertoy ports, which keep their authors' licenses) live in
+https://github.com/pannous/shaders, folder warp/compute_toys: `warp <file>` runs them. warp itself ships only
+shaders written for it.
 - **sdl_red_square.warp** - SDL integration
 - **test_ffi*.warp** (3 files) - FFI testing
 
