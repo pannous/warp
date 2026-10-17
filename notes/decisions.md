@@ -86,7 +86,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - julia-compat (user, 2026-10-17): stay close to Julia; its syntax is beautiful and its semantics often near perfect (unlike Rust). Julia forms read with Julia's meaning; deliberate departures listed in wiki/Julia.md.
   - julia-floor-divide: `÷` is floor division as in Julia (synonym of `/!`, `7 ÷ 2` → 3), with a hint for newcomers expecting `/`; replaces #27's normalization of `÷` to `/`.
   - julia-pair-range: `1:4` stays a pair; iterated (for, sum, comprehensions) a pair of two numbers is the range.
-  - julia-text-times-hint: `"a" * "b"` is no concatenation; the error hints `+`.
+  - julia-text-times-hint: `"a" * "b"` concatenates with a got-it warning naming `+`; an error only when a text holds a number (`"3" * "4"`).
   - julia-dollar-interpolation: `"x is $x"` only as a toggled feature after the self-hosting migration (`$million`, `$0` clash).
 - P78 modifiers from other languages (`public`, `static`, `inline`, …) are skipped with a got-it note; words with a warp meaning keep it.
 - Word choices are not asked: the recommended word is canonical, synonyms are aliases with a note.
