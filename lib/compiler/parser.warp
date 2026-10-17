@@ -1203,9 +1203,48 @@ def digits_read(p) {
 def quoted(p) {
 	quote = p.code[p.at]
 	end = text_end(p.code, p.at + 1, quote, p.n)
-	content = unescaped(p.code[p.at + 1 .. end - 1], quote == '"')
+	written = p.code[p.at + 1 .. end - 1]
 	p.at = end
+	holed = if quote == '"' then template(written) else ø
+	if holed != ø { return ["template", holed] }
+	content = unescaped(written, quote == '"')
 	[if content.length == 1 then "char" else "text", content]
+}
+
+// An interpolating text with a hole as its template: holes `\(x)` `\{x}` `$(x)` as `${x}`, escapes read, a literal
+// dollar `$$` unless a name follows it (the bare `$name` of sql and sh templates); ø without a hole. An escaped
+// dollar makes a template too: it is never a hole
+// Rust twin: literals/text.rs read_text
+def template(written) {
+	read = ""
+	holed = no
+	at = 0
+	n = written.length
+	while at < n {
+		c = written[at]
+		next = peek(written, at + 1, n)
+		if (c == '\\' or c == '$') and (next == '(' or next == '{') {
+			end = hole_end(written, at + 2, next, closing_of(next), n)
+			read = read + "\${" + written[at + 2 .. end - 1] + "}"
+			holed = yes
+			at = end
+		} else if c == '\\' and at + 1 < n and next == ':' and at + 2 < n and is_alpha(written[at + 2]) {
+			read = read + c + next
+			at = at + 2
+		} else if c == '\\' and at + 1 < n {
+			literal = escape_character(next)
+			holed = holed or literal == '$'
+			read = read + (if literal == '$' then "$$" else literal)
+			at = at + 2
+		} else if c == '$' {
+			read = read + (if is_alpha(next) or next == '_' then "$" else "$$")
+			at = at + 1
+		} else {
+			read = read + c
+			at = at + 1
+		}
+	}
+	if holed then read else ø
 }
 
 // A text's escapes read: `\n` `\t` `\r` `\e` as their characters, `\"` `\\` and the like as the character itself;
