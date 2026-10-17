@@ -2139,7 +2139,6 @@ PASSED:
   ✓ lists::test_int_map::a_number_is_found_in_a_map
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
-  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -3111,6 +3110,7 @@ PASSED:
   ✓ numbers::test_recursive_law::recursive_laws_are_proved_by_induction
   ✓ numbers::test_recursive_units::a_recursive_function_keeps_its_dimensions
   ✓ numbers::test_recursive_units::a_recursive_function_takes_quantities
+  ✓ numbers::test_repeating_decimal::decimal_text_is_the_prelude_word_the_cast_calls
   ✓ numbers::test_repeating_decimal::parentheses_after_digits_still_multiply
   ✓ numbers::test_repeating_decimal::ratios_as_decimal_overline_their_period
   ✓ numbers::test_repeating_decimal::repeating_decimal_literals_are_exact
@@ -3307,6 +3307,9 @@ PASSED:
   ✓ operators::test_add_to::add_to_an_empty_list
   ✓ operators::test_add_to::add_to_appends_an_element
   ✓ operators::test_add_to::add_to_takes_an_expression
+  ✓ operators::test_alike_in_warp::a_program_word_named_alike_leaves_the_prelude_word_be
+  ✓ operators::test_alike_in_warp::numbers_compare_inline_without_alike
+  ✓ operators::test_alike_in_warp::pairs_and_nested_entries_are_alike_part_by_part
   ✓ operators::test_approximately::a_bool_is_approximately_any_value_of_its_truthiness
   ✓ operators::test_approximately::instances_are_approximately_equal_field_by_field
   ✓ operators::test_approximately::lists_and_objects_are_approximately_equal_element_by_element
@@ -3741,7 +3744,6 @@ PASSED:
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
   ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
-  ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
   ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
@@ -6342,7 +6344,9 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ parser::test_self_lexer::numbers_match_their_rust_twin
 
 SUMMARY:
-16 ignored, 6339 passed, 1 failed, 6340 total tested
+16 ignored, 6341 passed, 3 failed, 6344 total tested
