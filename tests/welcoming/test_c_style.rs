@@ -21,3 +21,18 @@ fn test_if_assigning_a_float() {
 	is!("g(x:float) := { if (x > 1) x = x - 1.5\nreturn x }\ng(4)", 2.5);
 	is!("g(x:float) := { if x > 1 { x = x - 1.5 } else { x = 0.5 }\nreturn x }\ng(0) + g(4)", 3.0);
 }
+
+#[test] // card replacing-float: samples/numbers/sin.warp and sine.warp with `number` in place of `float`
+fn test_number_parameter_holds_floats() {
+	// a float write to a number parameter: "turn is a float where an exact Int is expected"
+	is!("number f(number x){ turn = 2.5 as float\nx = x % turn\nreturn x }\nf(7)", 2.0);
+	is!("f(x:number) := { x = x * 1.5f; x }; f(7)", 10.5);
+	// a float argument: π / 2 became the exact ratio of its digits, and the sine polynomial a 200-digit fraction
+	is!("f(x:number) := type(x)\nstr(f(π))", "class float");
+	is!("f(x:number) := x; f(2) + f(1.5f)", 3.5);
+	is!("f(x:number) := type(x)\nstr(f(1/3))", "class rational");
+	let sine = std::fs::read_to_string("samples/numbers/sine.warp").unwrap().replace("float", "number");
+	assert!(warp::wasm_emitter::eval(&sine).serialize().starts_with("1.0000000"));
+	let sin = std::fs::read_to_string("samples/numbers/sin.warp").unwrap().replace("float", "number");
+	is!(&sin, 841471);
+}

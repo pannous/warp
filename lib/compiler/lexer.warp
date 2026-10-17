@@ -252,6 +252,14 @@ def name_end(source, from, n) {
 	at
 }
 
+// `full-name`: a hyphen in a name joins the word after it; `x-1` and `i--` end the name at the hyphen
+// Rust twin: warp_parser/atoms.rs parse_symbol, hyphen_joins_word
+def symbol_end(source, from, n) {
+	at = name_end(source, from, n)
+	while at + 1 < n and source[at] == '-' and is_name_start(source[at + 1]) { at = name_end(source, at + 1, n) }
+	at
+}
+
 def number_starts(source, at) := is_digit(source[at]) and (at == 0 or not is_name_char(source[at - 1]))
 
 def number_end(source, at, n) {

@@ -13,7 +13,7 @@ planet = compute_toy(shader {
 	const RING_OUTER = 2.6;
 
 	fn hash(cell: float2) -> f32 {
-		var h = bitcast<u32>(vec2i(cell).x) * 2654435761u ^ bitcast<u32>(vec2i(cell).y) * 2246822519u;
+		var h = (bitcast<u32>(vec2i(cell).x) * 2654435761u) ^ (bitcast<u32>(vec2i(cell).y) * 2246822519u);
 		h = (h ^ (h >> 15u)) * 2246822519u;
 		return f32(h ^ (h >> 13u)) / 4294967295.0;
 	}

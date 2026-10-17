@@ -27,3 +27,14 @@ fn a_match_prints_yes_or_no() {
 	let printed = crate::common::printed("use regex; print \"abc\" matches \"a.c\"; print \"abd\" matches \"a.c$\"");
 	assert_eq!(printed.lines().collect::<Vec<_>>(), ["yes", "no"]);
 }
+
+/// Card slash-notation: `/a.c/` is a regex where one is expected, the right operand of `matches`; elsewhere a `/`
+/// starts a path (`ls /tmp`), divides or opens a comment, so the slashes stay what they were there
+#[test]
+fn a_slashed_regex_after_matches() {
+	is!("use regex; \"abc\" matches /a.c/", true);
+	is!("use regex; \"abd\" matches /a.c$/", false);
+	is!("use regex; \"a/b\" matches /a\\/b/", true);
+	is!("use regex; \"order 66\" matches /[0-9]+ ?$/ and 2 > 1", true);
+	is!("x = 6; x /2/ 3", 1);
+}

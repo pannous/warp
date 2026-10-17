@@ -1,0 +1,32 @@
+// port of src/lowering/words/times_phrases.rs (57 Rust lines): `n times {…}` loops with a counter of its own,
+// `n times [x]` fills a list, other operands repeat with times·text
+// for times·1 in 0..3 {print 1}, (times·count·2=k;for times·2 in 0..times·count·2 {x}), times·text(3, "ab")
+// today: `0:3` for 0..3 (card built-key-print), the second group without its `;` (card self-node-separator),
+// times·text(…) as (times·text 3 "ab"); filled_list is another port
+loops = 0
+// workaround for card parsed-kinds: {…} is no list, and .bracket of a non-group throws
+bracket_of(n) := try { n.bracket } catch e { "" }
+group(n) := n is list or bracket_of(n) != ""
+call_of(name, arguments) := bracketed([symbol(name)] + arguments, "(")
+for_loop(counter, range, body) := bracketed([symbol("for"), counter, symbol("in"), range, body], "")
+rounds(count, body) := {
+	global loops
+	loops += 1
+	counter = symbol("times·" + loops)
+	if count is number { return for_loop(counter, key(0, "..", count), body) }
+	held = symbol("times·count·" + loops)
+	bracketed([key(held, "=", count), for_loop(counter, key(0, "..", held), body)], "(")
+}
+times_phrases(n) := {
+	if n is key { return key(times_phrases(n.key), n.op, times_phrases(n.value)) }
+	if not group(n) { return n }
+	n = bracketed(n.map(times_phrases), n.bracket)
+	if #n != 3 or n#2 != symbol("times") { return n }
+	count = n#1; operand = n#3
+	if bracket_of(operand) == "{" { return rounds(count, operand) }
+	if bracket_of(operand) == "[" { return call_of("filled_list", [count, operand]) }
+	call_of("times·text", [count, operand])
+}
+print(times_phrases(parse("3 times {print 1}")))
+print(times_phrases(parse("k times {x}")))
+print(times_phrases(parse("3 times \"ab\"")))

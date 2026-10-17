@@ -1,0 +1,5 @@
+// gap (node-api on parsed code): keys built from parsed nodes lose their op or fail to print
+// y+z, z   (today: y:z, then "not a joinable item: a symbol (z)")
+print(key(symbol("y"), "+", symbol("z")))
+k = key(symbol("y"), "+", parse("z"))
+print(k.value)

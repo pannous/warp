@@ -185,20 +185,46 @@ pub(crate) fn quote(code: Node) -> Node {
 	as_data(code)
 }
 
-/// Every `data e` sealed, so the passes after blocks leave e as written
+/// Every `data e` sealed, so the passes after blocks leave e as written; `data(e)` too, which the parser keeps as a
+/// call until blocks::lower reads it (card data-pattern-sealed)
 pub fn seal_quoted(node: Node) -> Node {
-	match prefixed(&node, &[DATA_WORD]) {
-		Some(code) => quote(code.clone()),
+	match written_quote(&node) {
+		Some(code) => quote(code),
 		None => children_rewritten(node, seal_quoted),
 	}
 }
 
-/// Every sealed `data e` open again
-pub fn unsealed(node: Node) -> Node {
-	match sealed_code(&node) {
-		Some(code) => code.clone(),
-		None => children_rewritten(node, unsealed),
+/// The code of `data e`, `data(e)` and `data(a of b)`, whose words the parser keeps as the items after data; a
+/// variable named data is no prefix: `data where it == 2`
+fn written_quote(node: &Node) -> Option<Node> {
+	let grouped = prefixed_group(node);
+	let Node::List(items, Bracket::None, Separator::Space) = grouped.as_ref().unwrap_or(node).drop_meta() else {
+		return None;
+	};
+	match items.as_slice() {
+		[prefix, code] if prefix.is_symbol(DATA_WORD) => Some(code.clone()),
+		[prefix, words @ ..] if prefix.is_symbol(DATA_WORD) && grouped.is_some() => {
+			Some(Node::List(words.to_vec(), Bracket::None, Separator::Space))
+		}
+		_ => None,
 	}
+}
+
+/// Every sealed `data e` open again; a quoted literal is the literal, so `n = data(3)` is a number where a number is
+/// typed (card quoted-number)
+pub fn unsealed(node: Node) -> Node {
+	if let Some(code) = sealed_code(&node) {
+		return code.clone();
+	}
+	match prefixed(&node, &[DATA_WORD]).and_then(sealed_code).map(Node::drop_meta) {
+		Some(literal @ (Node::Number(_) | Node::Text(_) | Node::Char(_))) => literal.clone(),
+		_ => children_rewritten(node, unsealed),
+	}
+}
+
+/// The code of sealed quoted data as written, for messages: `n = data a+1`
+pub(crate) fn sealed_text(data: &crate::compiler::meta::DataValue) -> Option<String> {
+	data.downcast_ref::<QuotedCode>().map(|QuotedCode(code)| code.serialize())
 }
 
 /// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,

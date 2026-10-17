@@ -7,7 +7,7 @@ string name = "Hello World"
 list numbers = [1, 2, 3]
 triple = (1, 2, 3)
 # a map (array, tuple and map as declaration words: card declaration-type-words)
-data = {key: "value"}
+config = {key: "value"}
 # PI is warp's own constant: a program does not redefine it
 float64 ratio = 3.14159
 bool flag = true

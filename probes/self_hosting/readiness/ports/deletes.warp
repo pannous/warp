@@ -1,0 +1,22 @@
+// port of mutation.rs lower_deletes + deleted_entry + nodes.rs written_entry (35 Rust lines): `delete xs#i`,
+// `delete m["k"]`, `delete m.k` become xs.pop(i - 1), m.pop("k"), m.pop("k")   (the parser writes m["k"] as m#'k'+1)
+// xs.pop(1), xs.pop(i-1), m.pop('k'), m.pop('k')   (today keys print `:`, card built-key-print)
+// the pattern $map#($k + 1) does not fit the parsed m#'k'+1 (card group-pattern), so the +1 is undone by hand
+zero_based(i) := if i is key and i.op == "+" and i.value == 1 then i.key else if i is number then i - 1 else key(i, "-", 1)
+pop_of(place, k) := key(place, ".", bracketed([symbol("pop"), k], ""))
+deleted(n) := match n {
+	data(delete $xs#$i) => pop_of(xs, zero_based(i))
+	data(delete $map.$k) => pop_of(map, k.name)
+	_ => n
+}
+// with splicing (card data-splice) each arm is its target as written: data(delete $map.$k) => data($map.pop($(k.name)))
+// a hole named like a unit ($m: metre) makes the word vanish: "undefined function: deleted" (card unit-hole-name)
+lower_deletes(n) := {
+	if n is key { return deleted(key(lower_deletes(n.key), n.op, lower_deletes(n.value))) }
+	if n is list { return deleted(bracketed(n.map(lower_deletes), n.bracket)) }
+	n
+}
+print(lower_deletes(parse("delete xs#2")))
+print(lower_deletes(parse("delete xs#i")))
+print(lower_deletes(parse("delete m[\"k\"]")))
+print(lower_deletes(parse("delete m.k")))

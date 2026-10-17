@@ -16,6 +16,8 @@ pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &N
 		Node::Key(left, Op::Define, body) if let Some((name, params)) = defined_function(left, body) => {
 			register_user_function(ctx, name, params, body, enclosing);
 		}
+		// `data f(x) := …` is code as written: it defines nothing
+		Node::List(..) if crate::blocks::quoted_data(node).is_some() => {}
 		Node::List(items, _, _) if let Some(function) = keyword_definition(items) => {
 			register_user_function(ctx, &function.name, function.params, &function.body, enclosing);
 		}

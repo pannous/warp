@@ -20,7 +20,7 @@ pub(crate) use host::wasi_emitter::{OUTPUT_CALLS, OUTPUT_WORDS};
 pub(crate) use lists::list_sharing::reads_collection;
 pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
-pub use constructors::NEW_BOOL;
+pub use constructors::{NEW_BOOL, NEW_TYPE};
 pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
 mod config;
 mod function_builder;
@@ -533,12 +533,16 @@ impl WasmGcEmitter {
 		{
 			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
 		}
+		// code joins a text as its literal (card print-parse)
 		if node.mentions_any(&[crate::words::AS_CODE]) {
 			self.ctx.required_functions.insert(crate::words::AS_CODE);
+			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
+			self.parses_code = true;
 		}
-		// code parsed at run time holds any operator and joins a text as its literal (card print-parse)
+		// code parsed at run time holds any operator
 		if node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
+			self.ctx.required_functions.insert(constructors::NEW_TYPE);
 			self.parses_code = true;
 			self.highest_key_operator = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
@@ -957,7 +961,7 @@ impl WasmGcEmitter {
 				// Emit type as a tagged block with name and fields
 				self.emit_node_instructions(func, name);
 				self.emit_node_instructions(func, body);
-				self.emit_call(func, "new_type");
+				self.emit_call(func, constructors::NEW_TYPE);
 			}
 			&Node::False => {
 				func.instruction(&I::I64Const(0));
