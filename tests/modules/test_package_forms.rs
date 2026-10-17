@@ -1,7 +1,8 @@
-//! Card packages (user): a registry entry is as short as it can be. `name/repo`, `github:name/repo` and a bare name
-//! (owner pannous) are GitHub repositories; `version: latest`, or no version, follows the default branch.
+//! Card packages (user): a registry entry is as short as it can be. `name/repo` and `github:name/repo` are GitHub
+//! repositories, a bare name the default registry's folder (user 2026-10-17, test_package_registry.rs);
+//! `version: latest`, or no version, follows the default branch.
 
-use warp::modules::{package_in, registry_entries, PACKAGE_REGISTRY};
+use warp::modules::{package_in, registry_entries, DEFAULT_REGISTRY, PACKAGE_REGISTRY};
 
 const GITHUB_UNISCRIPT: &str = "https://github.com/pannous/uniscript.git";
 
@@ -12,9 +13,9 @@ fn resolves(registry: &str, url: &str, pinned: Option<&str>) {
 }
 
 #[test]
-fn a_bare_name_is_a_repository_of_pannous() {
-	resolves("uniscript", GITHUB_UNISCRIPT, None);
-	resolves("other: \"x\"\nuniscript\n", GITHUB_UNISCRIPT, None);
+fn a_bare_name_is_a_folder_of_the_default_registry() {
+	resolves("uniscript", DEFAULT_REGISTRY, None);
+	resolves("other: \"x\"\nuniscript\n", DEFAULT_REGISTRY, None);
 }
 
 #[test]
