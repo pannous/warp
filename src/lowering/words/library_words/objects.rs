@@ -225,11 +225,13 @@ pub(super) fn bind_read_data_objects(program: Node) -> Node {
 	Node::List(items, bracket, separator)
 }
 
-/// The names the program defines, as variables or functions: an alias word never shadows one (P142)
+/// The names the program defines or binds, as variables, functions, parameters or loop variables: an alias or library
+/// word never shadows one (P142, card library-word)
 pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
-	let mut defined = HashSet::new();
+	let mut defined: HashSet<String> = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
 	collect_assigned_names(node, &mut defined);
 	let context = crate::analyzer::function_definitions(node);
+	defined.extend(context.parameter_names());
 	defined.extend(context.user_functions.into_keys());
 	// a method lowered from a class or Go's `func (p Point) Sum()`: `(Sum self:Point) := …`
 	node.visit(&mut |part| {
