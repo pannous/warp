@@ -418,6 +418,24 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 		.fold(crate::lowering::for_loop::headers::lower(module), |module, pass| pass(module))
 }
 
+/// The program just before and just after the source pass `pass`, the earlier passes run as compiling runs them: what
+/// a pass's warp twin gets and must give (card twin-harness, tests/common/twins.rs pass_differential). None for a
+/// program refused before the passes, or a pass that is no source pass.
+pub fn around_source_pass(code: &str, pass: Pass) -> Option<(Node, Node)> {
+	crate::errors::diagnostic::begin_program();
+	let program = lawful_program(code).ok()?;
+	crate::errors::diagnostic::in_program_mode(program, |program| {
+		crate::lowering::nodes::numbering_fresh_names(|| {
+			let program = crate::lowering::for_loop::headers::lower(program);
+			let program = crate::lowering::data_items::lower(crate::lowering::blocks::seal_quoted(program));
+			let passes: Vec<Pass> = SOURCE_PHASES.iter().flat_map(|phase| phase.iter().copied()).collect();
+			let index = passes.iter().position(|each| std::ptr::fn_addr_eq(*each, pass))?;
+			let before = run_passes(program, &passes[..index]);
+			Some((before.clone(), pass(before)))
+		})
+	})
+}
+
 fn run_passes(node: Node, passes: &[Pass]) -> Node {
 	passes.iter().fold(node, |node, pass| pass(node))
 }

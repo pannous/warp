@@ -1,0 +1,48 @@
+# The tree walk every lowering pass twin shares (card twin-harness, notes/self_hosting.md step 10), and the bridge
+# between a node and its plain-data view (tests/common/twins.rs node_view, the form serializer.warp documents).
+# A pass twin is a word from node to node: pass_differential (tests/common/twins.rs) hands it the program as Rust's
+# passes before it left it, as a node built by `node_of(view)`, and compares `view_of(result)` with the view after
+# the Rust pass.
+
+# a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
+opaque_word = "view·opaque"
+
+kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
+# a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
+is_group(n: any) := bracket_of(n) != ø
+
+# the node a view stands for
+node_of(view: any) := {
+	kind = kind_of(view)
+	if kind == "symbol" { return symbol(view#2) }
+	if kind == "text" or kind == "char" { return view#2 }
+	if kind == "key" { return key(node_of(view#3), view#2, node_of(view#4)) }
+	if kind == "list" { return separated(bracketed(view[3..].map(node_of), view#2), view#3) }
+	if kind == "" { return view }
+	key(symbol(opaque_word), ":", view)
+}
+
+# the view of a node
+view_of(n: any) := {
+	if type(n) is key {
+		if key_of(n) == symbol(opaque_word) { return value_of(n) }
+		return ["key", op_of(n), view_of(key_of(n)), view_of(value_of(n))]
+	}
+	if n is symbol { return ["symbol", name_of(n)] }
+	if n is text { return ["text", n] }
+	if is_group(n) { return ["list", bracket_of(n), separator_of(n)] + n.map(view_of) }
+	n
+}
+
+# a node with f applied to each of its children
+children(n: any, f: any) := {
+	if type(n) is key and key_of(n) != symbol(opaque_word) { return key(f(key_of(n)), op_of(n), f(value_of(n))) }
+	if is_group(n) { return separated(bracketed(n.map(f), bracket_of(n)), separator_of(n)) }
+	n
+}
+
+# f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
+bottom_up(n: any, f: any) := f(children(n, x => bottom_up(x, f)))
+
+# the node itself: the bridge's own twin, which every pass twin relies on
+unchanged(n: any) := n

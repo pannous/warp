@@ -89,13 +89,21 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   it matches everywhere. They take node_view data, the form parser.warp's `tree` writes
   (probes/self_hosting/next_phase/view_pass.warp rebuilds a view bottom-up). A `parse` word giving real Nodes becomes a
   card once a pass needs Meta the view cannot carry.
+- Pass twins (cards twin-harness, times-phrases; tests/parser/test_self_passes.rs): `pass_differential(pass, part,
+  word)` (tests/common/twins.rs) takes the program from `pipeline::around_source_pass(code, pass)`, the Rust source
+  passes before `pass` run as compiling runs them, hands it as view JSON to `view_of(word(node_of(…)))`, and compares
+  with the view after the Rust pass. A twin is a word from node to node on real Nodes (so data(…) templates work):
+  lib/compiler/walk.warp has the bridge (`node_of`, `view_of`; an error, a type or sealed data stays opaque) and the
+  shared walk (`children(n, f)`, `bottom_up(n, f)`; a group is `n.bracket != ø`). Both sides drop literal and attribute
+  layers, read a character as a text and an empty group as ø (card empty-group-node, open). `bridge_differential`
+  checks the bridge alone. Twins so far: times_phrases.warp, number_words.warp (hints not compared yet: carries-line).
 - The analyzer: its result is the kind of each definition and value, not a tree. It needs scopes (text-key maps work).
 - The emitter: needs byte output and float bits; its twin compares run results, not bytes.
 
 | # | Card | Step | Differential check | Builds on |
 |---|------|------|--------------------|-----------|
 | 10 | twin-harness | Pass twin harness | `pass_differential(k, part, word)`: Rust passes 0..k-1, the view as JSON to the warp word, compared with node_view after Rust pass k | 4 |
-| 11 | times-phrases | First pass twins: number_words, word_slices, times phrases | as 10 | 10 |
+| 11 | times-phrases | First pass twins: number_words, times phrases (word_slices was deleted with park-phrases) | as 10 | 10 |
 | 12 | carries-line | node_view keeps line:column where a pass reports, so hints and errors are compared too | diagnostics compared | 10 |
 | 13 | parser-tree | Chained: parser.warp `tree`, then the warp passes in pipeline order | node_view after the same Rust passes | 6, 11 |
 | 14 | inferred-kinds | Analyzer twin: the kind of each definition and top-level value, as text | the same text from src/analyzer | 10 |
