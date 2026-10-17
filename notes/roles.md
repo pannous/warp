@@ -47,8 +47,7 @@ A session that needs a decision takes the recommended option (the one most in li
 decided rules), marks it in code/notes as an assumption, keeps working, and SendMessages the Interviewer the
 question. If the answer differs, the change is undone or redone as a normal small task. Edits to existing tests count
 as such a decision: the edit goes on the branch in its own commit (named in the message), so reverting it is one
-revert. Dropping `#[ignore]` from a test that passes unedited needs no question; editing its assertions still does
-(upgrades from "not yet" to the working value are allowed: AGENTS.md "Standing permission").
+revert. Test upgrades need no question (notes/agents/common.md).
 
 ## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.
@@ -72,8 +71,7 @@ The only session that runs the full suite and the only one that pushes code to m
 - Batches of at most ~8 Ready cards per run; wide refactors and carrier branches land alone and first. Runs a
   worker's targeted check on request.
 - Express: a card readied with `--express` (the user asked for that agent's result) goes live untested, within a
-  minute (user 2026-10-17: skipping tests and checks is the default for express; a failure shows live and is fixed
-  forward): integrator_tools/express.sh merges it onto main, pushes, closes the card and deploys the Playground with
+  minute (no tests or checks; a failure shows live and is fixed forward): integrator_tools/express.sh merges it onto main, pushes, closes the card and deploys the Playground with
   skip_checks. The next batch's gate tests it; a red one is fixed forward by its owner first.
 - Crash fixes first: a crash card or a branch fixing a panic or trap is always express.
 - User changes are signals: whenever a batch or a push meets changes by the user (commits on main, uncommitted edits
@@ -103,18 +101,17 @@ functions, and folds special cases into the general machinery. Every chunk goes 
 stating its net src/ delta. Feature cuts go to the Interviewer. Prompt: notes/agents/refactorer.md.
 
 ## Urgent (warp-urgent, in the cloud)
-A standing `claude --cloud` session in fast mode (user, 2026-10-17) that fixes the user's urgent cards; crash cards
+A standing `claude --cloud` session in fast mode that fixes the user's urgent cards; crash cards
 keep their local worker. ~/dev/bin/urgent-card-watch sends it each new urgent card (`claude -p … --cloud <id>`, the id
 in ~/.cache/todo-board/urgent-cloud-session; SendMessage is held for approval there) and collects its pushed
 `claude/urgent-<key>` branches: a `done` report whose tip is on main closes the card, `needs-mac` goes to the
-Supervisor. warp-urgent pushes and merges every card to main itself, in any area, without the merge queue (user with
-warp-urgent, 2026-10-17); the Integrator's next full run checks it. Prompt: notes/agents/urgent_cloud.md.
+Supervisor. warp-urgent pushes and merges every card to main itself, in any area, without the merge queue; the Integrator's next full run checks it. Prompt: notes/agents/urgent_cloud.md.
 Start (or replace) it: `tmux new-session -d -s cloud-warp-urgent -c /Users/me/dev/angles/warp "claude --model opus
 --name warp-urgent --permission-mode bypassPermissions --settings '{\"fastMode\": true}' --cloud 'You are warp-urgent. Read notes/agents/urgent_cloud.md
 and AGENTS.md, then do the Priming and wait for urgent cards.'"`, then write its session id into that file and
 switch fast mode on: `claude -p "/fast on" --cloud <id> < /dev/null`. `--settings '{"fastMode": true}'` does not
-reach a cloud session (2026-10-17: the user had to switch it on by hand); check the session's footer once.
-It must always run in bypass permissions mode (user, 2026-10-17: it once slipped out): after every start, check
+reach a cloud session; check the session's footer once.
+It must always run in bypass permissions mode: after every start, check
 the footer shows bypass permissions; card sends pass `--permission-mode bypassPermissions` too.
 
 ## Workers
