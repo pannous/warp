@@ -4,8 +4,10 @@ Roadmap card: self-hosted (board topic; its sub-cards are the steps below, notes
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
-POSTPONED (decision self-hosting-postponed): no further steps until the language features are implemented cleanly
-(topic parser-features) and the Rust code is cleaned up (topic cleanup). The twins on main stay and keep being tested.
+ACTIVE again (decision self-hosting-resumed, 2026-10-17): self-hosting is the fleet's next big task. Workers finish
+their current work, then switch to it. The first step is a readiness survey (session warp-self-survey): are all the
+language parts there, or should macros (or a cheaper feature) come first so the warp compiler doesn't bloat? The twins
+on main stay and keep being tested.
 
 Decision self-hosting:
 - Purpose: dogfooding (the compiler in warp shows what the language lacks), independence from Rust, a showcase.
