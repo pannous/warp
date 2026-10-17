@@ -790,7 +790,7 @@ def returned(p) {
 	c = peek(p.code, p.at, p.n)
 	value = ø
 	if not (c == '}' or c == ';' or c == '\n' or c == '\r') { value = continued(p, expression(p, 59), 0) }
-	// `return` alone is the word (Rust: [return ø], Deviations bare-return)
+	// `return` alone is the word
 	if value === ø then ["symbol", "return"] else listed("", " ", [["symbol", "return"], value])
 }
 
@@ -925,7 +925,7 @@ def ranged_loop(p) {
 		body = indented_block(p)
 	}
 	if body == ø { return ø }
-	// a colon body stays bare, as in `for i in xs: x` (Rust wraps it: Deviations colon-body)
+	// a colon body stays bare, as in `for i in xs: x`
 	listed("", " ", [["symbol", "for"], iterable, body])
 }
 

@@ -70,15 +70,15 @@ pub(super) fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 	)
 }
 
-/// `for 1..4 {…}` and `for i in xs {…}`: loops that bind the implicit `it` (to the item); their iterable and body
+/// `for 1..4 {…}`, `for 1..4: …` and `for i in xs {…}`: loops that bind the implicit `it` (to the item); their iterable
+/// and body
 pub(in crate::analyzer) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
 	let (keyword, iterable, body) = match items {
 		[keyword, iterable, body] => (keyword, iterable, body),
 		[keyword, _, in_word, iterable, body] if in_word.is_symbol("in") => (keyword, iterable, body),
 		_ => return None,
 	};
-	(keyword.is_symbol("for") && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
-		.then_some((iterable, body))
+	keyword.is_symbol("for").then_some((iterable, body))
 }
 
 /// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?

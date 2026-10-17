@@ -312,12 +312,7 @@ pub fn chain_differential(
 		let text = std::fs::read_to_string(&path).ok()?;
 		let lowered =
 			std::panic::catch_unwind(|| rust_passes.iter().fold(parse(&text), |node, pass| pass(node))).ok()?;
-		// parser.warp writes the Rust parser's quirks clean (notes/self_hosting_dropped.md Deviations)
-		Some(Case::new(
-			&path,
-			path.display().to_string(),
-			plain_view(&super::parser_deviations::clean_rust_tree(&lowered)),
-		))
+		Some(Case::new(&path, path.display().to_string(), plain_view(&lowered)))
 	});
 	report(word, &differences_of(cases, part, &format!("{word}(read(argument))")));
 }
