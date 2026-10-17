@@ -57,20 +57,20 @@ next-direction self-hosted modules), not ported; drop = left out; merge = one wa
 | 1 | rust_options | 160 | 1 | drop (decided) |
 | 2 | match arms | welcome_forms | 15 | keep (ported) |
 | 3 | arrow result types | welcome_forms | 0 | keep (ported, merged into welcome_forms.warp) |
-| 4 | of_lookups | 241 | 22 | keep the core `a of b`; drop `in`/`from` selectors, print walks, unit counts |
+| 4 | of_lookups | 241 | 22 | keep `a of b` and `in`/`from` after a selector word; drop print walks, unit counts (decided, sugar-triage) |
 | 5 | set phrases | welcome_forms | 1 | drop (decided, card set-set) |
 | 6 | grouped_receivers | 69 | 1 | keep |
-| 7 | module_properties | 467 | 3 | library (graphics: window.width) |
+| 7 | module_properties | 467 | 3 | library (graphics: window.width; decided) |
 | 8 | times_phrases | 57 | 26 | keep (ported) |
 | 9 | broadcasting | 1410 | 11 | keep, minimal port |
-| 10 | shader_holes | 250 | 11 | library (gpu) |
+| 10 | shader_holes | 250 | 11 | library (gpu; decided) |
 | 11 | conversions | 93 | 0 | keep |
 | 12 | foreign_lines | 78 | 0 | keep |
 | 13 | inline_unions | 30 | 0 | keep |
-| 14 | scoped_handlers | 38 | 1 | drop (only the error for a form dropped earlier) |
-| 15 | component_worlds | 285 | 2 | library (wasm build) |
-| 16 | channel_words | 189 | 3 | library (tasks) |
-| 17, 18, 45 | markup_tags (form routes, html attributes, tags) | 357 | 1, 1, 14 | library (markup), one pass |
+| 14 | scoped_handlers | 38 | 1 | drop (only the error for a form dropped earlier; decided) |
+| 15 | component_worlds | 285 | 2 | library (wasm build; decided) |
+| 16 | channel_words | 189 | 3 | library (tasks; decided) |
+| 17, 18, 45 | markup_tags (form routes, html attributes, tags) | 357 | 1, 1, 14 | library (markup), one pass (decided) |
 | 19 | soft_keywords | 239 | 3 | keep |
 | 20 | parameter_patterns | 68 | 2 | keep |
 | 21 | index_positions | 284 | 0 | keep (check) |
@@ -79,20 +79,20 @@ next-direction self-hosted modules), not ported; drop = left out; merge = one wa
 | 24, 25 | plain_enums, sum_variants | 168, 135 | 5, 3 | keep, merge |
 | 26 | match_exhaustive | 185 | 0 | keep (check) |
 | 27 | late_binding global split | 603 | 0 | keep |
-| 28, 29, 30, 39 | serve (default routes, page routes, path parameters, serve) | 1123 | 0, 12, 8, 23 | library (web), one pass |
+| 28, 29, 30, 39 | serve (default routes, page routes, path parameters, serve) | 1123 | 0, 12, 8, 23 | library (web), one pass (decided) |
 | 31 | named_patterns | 224 | 2 | keep |
 | 32 | switch unit names | switch.rs | 0 | keep (check) |
 | 33 | tree_walks | 203 | 7 | keep |
 | 34 | quasi_quote | 102 | 6 | keep |
 | 35 | comprehensions where | 554 | 21 | keep |
-| 36 | music_words live loops | 636 | 1 | library (sound) |
-| 37 | go_blocks | 259 | 24 | keep |
+| 36 | music_words live loops | 636 | 1 | library (sound; decided) |
+| 37 | go_blocks | 259 | 24 | keep (decided) |
 | 38 | references | 193 | 0 | keep |
-| 40 | style_rules | 220 | 6 | library (markup) |
+| 40 | style_rules | 220 | 6 | library (markup; decided) |
 | 41, 42 | lambdas infix iterations, member lambdas | lambdas.rs | 5, 0 | keep, merge |
-| 43, 44, 46 | glued_attributes, select_options, transitions | 43, 81, 242 | 1, 1, 3 | library (markup) |
+| 43, 44, 46 | glued_attributes, select_options, transitions | 43, 81, 242 | 1, 1, 3 | library (markup; decided) |
 | 47 | member_phrases | 31 | 1 | keep |
-| 48, 50, 51 | introspection, word_help, reflection | 54, 217, 1022 | 3, 1, 5 | library (help and reflection) |
+| 48, 50, 51 | introspection, word_help, reflection | 54, 217, 1022 | 3, 1, 5 | library (help and reflection; decided) |
 | 49 | doc_strings | 149 | 0 | keep |
 | 52 | word_operators | 116 | 0 | keep |
 | 53 | pipes | 337 | 4 | keep |

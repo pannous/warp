@@ -5,14 +5,18 @@ use std::collections::BTreeSet;
 use warp::warp_parser::parse;
 use warp::Node;
 
-/// The texts of a warp list of lib/compiler/words.warp
-fn warp_table(name: &str) -> BTreeSet<String> {
+/// The texts of a warp list of lib/compiler/words.warp, in order
+fn warp_list(name: &str) -> Vec<String> {
 	let table = warp::pipeline::eval(&format!("use \"lib/compiler/words.warp\"; {name}"));
 	let Node::List(items, ..) = table.drop_meta() else { panic!("{name} is no list: {}", table.serialize()) };
 	items
 		.iter()
 		.map(|item| item.text_value().unwrap_or_else(|| panic!("{name}: no text {}", item.serialize())))
 		.collect()
+}
+
+fn warp_table(name: &str) -> BTreeSet<String> {
+	warp_list(name).into_iter().collect()
 }
 
 /// Every symbol the sources use, lowercase
@@ -38,4 +42,10 @@ fn type_words_are_the_rust_type_words() {
 	let missing: Vec<String> =
 		source_words().into_iter().filter(|word| is_type_word(word) && !table.contains(word)).collect();
 	assert!(missing.is_empty(), "type words missing in lib/compiler/words.warp: {missing:?}");
+}
+
+#[test]
+fn copied_tables_are_their_rust_constants() {
+	assert_eq!(warp_list("function_keywords"), warp::operators::FUNCTION_KEYWORDS);
+	assert_eq!(warp_list("selector_words"), warp::lowering::of_lookups::SELECTOR_WORDS);
 }

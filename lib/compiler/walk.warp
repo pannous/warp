@@ -5,6 +5,8 @@
 # the Rust pass.
 
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
+use "words.warp"
+
 opaque_word = "view·opaque"
 
 kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
@@ -94,4 +96,67 @@ view_has(view: any, found: any) := {
 		}
 	}
 	no
+}
+
+# the leading name of a view, `f` of `f(x)`, `x` of `x: int`, else ""
+head_name(view: any) := {
+	kind = kind_of(view)
+	if kind == "symbol" { return view#2 }
+	if kind == "key" { return head_name(view#3) }
+	if kind == "list" and #view > 3 { return head_name(view#4) }
+	""
+}
+
+# the parameter names of a definition head `f(x, y: int)`
+head_parameters(head: any) := {
+	names = []
+	if kind_of(head) != "list" { return names }
+	at = 5
+	while at <= #head {
+		parameter = head#at
+		if kind_of(parameter) == "list" and parameter#2 == "(" { names += head_parameters(["list", "(", "", ["symbol", ""]] + parameter[3..]) }
+		else { names += [head_name(parameter)] }
+		at += 1
+	}
+	names
+}
+
+# the names a view binds: `x = …`, `f(x) := …` with its parameters, `def f(x) {…}`, `for x in …`
+names_bound_by(view: any) := {
+	kind = kind_of(view)
+	if kind == "key" and (view#2 == "=" or view#2 == ":=") {
+		names = [head_name(view#3)]
+		if view#2 == ":=" { names += head_parameters(view#3) }
+		return names
+	}
+	names = []
+	if kind != "list" { return names }
+	at = 4
+	while at < #view {
+		word = head_name(view#at)
+		if kind_of(view#at) == "symbol" and (word == "for" or function_keywords contains word) {
+			names += [head_name(view#(at + 1))]
+			names += head_parameters(view#(at + 1))
+		}
+		at += 1
+	}
+	names
+}
+
+# the names a program binds (Rust twin, roughly: library_words/objects.rs defined_names): assigned and defined names,
+# definition parameters, loop variables
+defined_names(n: any) := {
+	names = []
+	pending = [view_of(n)]
+	while #pending > 0 {
+		view = pending#(#pending)
+		pending = pending[0 ..< #pending - 1]
+		names += names_bound_by(view)
+		if view is list {
+			for part in view {
+				if part is list { pending += [part] }
+			}
+		}
+	}
+	names
 }

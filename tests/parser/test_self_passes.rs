@@ -51,3 +51,8 @@ fn arrow_result_types_match_their_rust_twin() {
 		&[],
 	);
 }
+
+#[test]
+fn of_lookups_match_their_rust_twin() {
+	pass_differential(warp::lowering::of_lookups::lower, "of_lookups", "of_lookups", &[]);
+}
