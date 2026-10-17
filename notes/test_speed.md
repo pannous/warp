@@ -38,7 +38,7 @@ ffi::test_cargo_crates.
 
 ## The queue
 Targeted runs go 3 at once, a full run alone (notes/roles.md "Enforcement"). The queue builds before taking a slot,
-so slots run tests back to back. Never rename a ticket by hand: a renamed ticket (1- → 0-) was first in line while its
-process waited under the old name, and the queue deadlocked for 25 minutes.
+so slots run tests back to back. Never rename a ticket by hand: the process waits under its old name, so a renamed ticket
+deadlocks the queue.
 
 Not worth cutting: sleeps (all ≤200 ms polling for servers), the small tests (<0.3 s).
