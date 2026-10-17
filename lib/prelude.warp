@@ -1,6 +1,41 @@
 // The prelude (notes/stdlib.md §8): words every program has without `use`; only those it calls come along.
 // Each is `name(parameters) := body` (modules::prelude_word_arity reads the parameters); library_words maps other
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
+
+// Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
+alias warn = warning
+alias tuple = list
+alias keys = map_keys
+alias values = map_values
+alias contains = collection_contains
+alias has = collection_contains
+alias includes = collection_contains
+alias get = map_get_or
+// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
+alias index_of = collection_position
+// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
+// `t.graphemes`, `t.codepoints` are the lists
+alias characters = chars
+alias glyphs = chars
+alias graphemes = chars
+alias codepoints = code_point_list
+alias uppercase = upper
+alias lowercase = lower
+// the text builtin trim, Python's strip
+alias strip = trim
+alias reversed = reverse
+alias sorted = sort
+alias clone = copy
+alias ordinal = ord
+alias codepoint = ord
+alias isdigit = is_digit
+alias average = mean
+alias is_letter = is_alpha
+alias isalpha = is_alpha
+alias is_alnum = is_alphanumeric
+alias isalnum = is_alphanumeric
+alias is_whitespace = is_space
+alias isspace = is_space
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
 // Python's `list(x)`: the list itself, a text's characters

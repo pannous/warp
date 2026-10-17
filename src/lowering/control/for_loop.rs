@@ -20,7 +20,7 @@ const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 /// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
 const CODE_SUFFIX: &str = "·code";
-/// `for c in w.chars`: walked, a unit count is the list of its items, `chars(w)`, `codepoint·list(w)`
+/// `for c in w.chars`: walked, a unit count is the list of its items, `chars(w)`, `code_point_list(w)`
 const WALKED_UNITS: [(&str, &str); 2] = [
 	(crate::analyzer::GRAPHEME_COUNT, crate::library_words::CHARS_WORD),
 	(crate::analyzer::CODE_POINT_COUNT, crate::library_words::CODE_POINT_LIST),

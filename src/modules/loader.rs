@@ -663,14 +663,10 @@ impl<'a> Loader<'a> {
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use
 			&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(&file));
-		let module = match classes_early {
-			true => Node::List(
-				statements(module).into_iter().filter(|statement| !is_class(statement)).collect(),
-				Bracket::None,
-				Separator::Semicolon,
-			),
-			false => module,
-		};
+		// alias lines are the loader's (modules::resolve), no code of the module
+		let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
+		let module =
+			Node::List(statements(module).into_iter().filter(kept).collect(), Bracket::None, Separator::Semicolon);
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
 		let module = crate::pipeline::lower_module_source(module);
 		// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
