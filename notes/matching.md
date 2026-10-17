@@ -46,7 +46,7 @@ implemented in src/lowering/types/type_name_matching.rs (`parameter_slots`, used
    scan_multi_word_types, lists.rs joined_type_name), so `full name{given:"Ann"}` constructs one, `to greet a full name:`
    types its slot and names its parameter `full-name`, used in the body as `full name.given`. Only classes declared in
    the source join, so `full name` stays two words elsewhere (wiki/matching.md's "undesired matching from other contexts").
-   Not yet: referring to the parameter by its head noun alone (`name.given`). Probe: probes/matching/multi_word_class.warp.
+   Not yet: referring to the parameter by its head noun alone (`name.given`). Tests: tests/types/test_multi_word_class.rs.
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
 8. Phrase-shaped definitions are ordinary functions and use explicit calls. Elsewhere `to` stays a range and `of`
@@ -99,7 +99,7 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | matches-infix | `use regex; "abc" matches "a.c"` | done: lib/regex.warp declares `infix operator matches`; the parser scans the operators of used std modules too (declaration_scan.rs used_std_modules); gives 1/0 like `matches()` |
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above; `n.first` read the library word first until field-before-library-word (a known instance's field wins) |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
-| render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
+| render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, tests/functions/test_render_as.rs |
 | gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | parked with natural phrase calls; explicit calls name every argument |
 
 Decisions (user, via warp-interviewer):
@@ -125,7 +125,7 @@ the name stays bound) give it.
 Parameter patterns (card parameter-patterns, lowering/definitions/parameter_patterns.rs): `add_pair([a, b]) := a + b`,
 `total(Point{x, y}) := x + y`. Each pattern parameter gets a numbered name (`list·1`, `point·1: Point`), and the body
 becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
-Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
+Tests: tests/functions/test_parameter_patterns.rs. Open: a user `sum(p: Point)` called with 5 runs the library sum
 (card sum-point; its error special case was removed by cleanup-sum-point, a general fix belongs in overload dispatch).
 Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
 Class arms `Point{x, y} =>` bind with `let` too (class_methods/destructuring.rs bound_parts, card
@@ -140,8 +140,8 @@ Named patterns (step 4, card patterns-values, user: the keyword): `pattern Adult
 `Adult =>`, `it is Adult and Admin`; names inside bind. A plain `Name = …` is a value; one whose right side only a
 pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/types/named_patterns.rs,
 substitutes the pattern before lower_where).
-Probes: probes/matching/arms.warp, whole_value.warp; inventory with a fresh build: 35 of 48 before tuples, is and
-bare names.
+Tests: tests/control/test_match_*.rs (the probes of the cards became their assertions, card probes-check); inventory
+with a fresh build: 35 of 48 before tuples, is and bare names.
 
 ## Tree patterns (card tree-patterns, user 2026-10-13: "go beyond what Rust offers")
 Structural matching of whole trees, data (JSON-like maps and lists) and code alike. Design examples:
@@ -150,36 +150,35 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    In arms and `x is {…}` (with a name to bind). switch.rs pattern_tests: the value must be a map or a pair (a
    one-field map is a pair), each named field there (`collection_contains`), read by subscript `path["name"]`.
    A bare `{a, b} => …` is an arm now; the JS object-parameter lambda needs its parentheses, `({a, b}) => …`.
-   Tests: tests/control/test_match_maps.rs; probe probes/matching/map_patterns.warp.
+   Tests: tests/control/test_match_maps.rs.
 2. deep-conditions (done): conditions at any depth: `{age: >= 18}`, `{age: 13 to 17}`, `{name: text}`, `{code: 301 | 302}`,
    in lists too (`[> 3, text]`). switch.rs `condition` is the one test that binds nothing (comparison, type word,
    range, alternatives), used by a whole arm and by every part (`Matched::pattern`); a comparison makes `x is {…}` a
-   pattern. A shorthand field `{text}` binds, never tests the type. Tests: tests/control/test_match_deep_conditions.rs;
-   probe probes/matching/deep_conditions.warp.
+   pattern. A shorthand field `{text}` binds, never tests the type. Tests: tests/control/test_match_deep_conditions.rs.
 3. Item patterns over lists: `{items: [{sku}...]}` binds `sku` to the list of every item's sku.
 4. Named patterns as values: `pattern Adult = {age: >= 18}`; `x is Adult`, `people where it is Adult and Admin`.
 5. Descendants: `tree find pattern` matches at any depth (XPath `//`, jq `..`); `tree replace p with q` rewrites.
    find done (src/lowering/collections/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
-   names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
+   names, or the matching subtrees. Tests tests/control/test_tree_find.rs.
    Open: `found = [[…]] find P` parses as an assignment first (card found-find; its parser special case was removed by cleanup-found-find, the general fix belongs in assignment parsing).
    replace done (same file, renamed tree_walks.rs): `tree replace P with Q` rebuilds lists (bracketed/separated keep the
    bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
    and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`
-   as a group: `flattened` splices them. Tests tests/control/test_tree_replace.rs, probe probes/matching/tree_replace.warp.
+   as a group: `flattened` splices them. Tests tests/control/test_tree_replace.rs.
 6. Schemas: `json(text) is Config` with `pattern Config = {port: int, host: text, debug?: bool}`. Done (card schemas):
    a map pattern whose field is a type word or optional is a pattern for `is` (switch.rs has_open_part; in list
    patterns type words still compare as values). `debug?: bool` parses as the elvis `debug ? debug : bool`, recognised
    by type_kinds.rs optional_field (shared with type bodies): missing, or there and matching. Fields not named are
    allowed, as in every map pattern. Note `{port: p, host: h}` compares host with the unit h (3600), no binding.
-   Tests tests/control/test_schemas.rs, probe probes/matching/schemas.warp.
+   Tests tests/control/test_schemas.rs.
 7. Code patterns: quoted code with holes, `data($a + 0) => a`, matched against `parse("…")` or `data (…)` (card
    parse-word, notes/parse_word.md). Backticks stay template text.
    code-holes done (switch.rs code_tests): `$a` binds the subtree, a repeated hole tests equality with the first, a key
    tests `is key` and its op, a list `is list` and its count; `$f($x)` is flattened like a quoted call `g x`. A match
    in a function copies its subject: indexing the copy guesses the parameter a list, and widen_parameters
    (user_functions.rs) drops that guess when only keys (code) are passed (card alias-indexed-param). Tests
-   tests/control/test_code_holes.rs, probe probes/matching/code_holes.warp.
+   tests/control/test_code_holes.rs.
    Parsed code (2026-10-13): code patterns match `parse(t)` of a text known only at run time as they match `data (…)`.
    Quoted code of several statements stays as written: blocks.rs (lowering/control) bound `k: n * 1` of
    `parse("j: 1\nk: n * 1")`, a constant text parsed at compile time, as a block (warning, no field name); it now

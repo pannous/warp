@@ -94,3 +94,7 @@ its text moves into tests/fixtures/parser_corpus/<folder>.warp (snippets concate
   print_closure and fail_effects (card print-effects), takes_three (uniscript module), duration_as_unit,
   duration_in_unit, print_units (executable: user-touched, never deleted); the .py/.sh/.mjs/.md/.lean
   files are tools and research.
+- matching (consolidate-matching): 25 of probes/matching/ deleted, their cases asserted in tests/control/test_match_*,
+  test_tree_find, test_parameter_patterns, test_plain_enum. Kept: definition_cases (its diagnostic is cut,
+  cleanup-cuts-2), gap_feeding (phrase calls parked), tree_patterns (design examples), inventory.sh (spec inventory),
+  enum_int_fix, parameter_patterns, variant_equality (executable: user-touched, never deleted).
