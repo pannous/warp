@@ -28,6 +28,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - sugar-twins-drops: lib/compiler/passes.warp leaves out Rust Option forms (`if let Some`, `match o {Some/None}`,
   `unwrap_or`, `expect`, `is_some`; warp has `o != ø`, `o ?? d`, `o ?? raise(m)`) and the `set x to y` pass;
   setter-calls stands, `set x of y to z` comes back as a library code template.
+- sugar-triage: web + markup, media + host, help + reflection passes stay out of the warp compiler and return as library
+  code. `of`/`in` are right-associative infix operators (`length of characters in text` = `length of (characters in
+  text)`), so the of extras are no special passes; forms that aren't a right-hand infix application are dropped or carded.
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
