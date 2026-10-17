@@ -43,5 +43,7 @@ message `[urgent card <key>] <title> | <description>`; between cards you wait.
     GitHub tool actions_run_trigger (workflow pages.yml, ref main, input skip_checks: true: every card here is urgent,
     live in a minute, the hourly run checks it later). Then watch https://warp.pannous.com/version.js in the background
     (`until curl -s …/version.js | grep -q <commit>; do sleep 30; done`) and tell the user `live: <commit>`, or the
-    failed run's step when the workflow fails.
+    failed run's step when the workflow fails, also as a PushNotification (desktop, and the phone with Remote Control):
+    `live: <card> <commit>`. This session runs on Linux in the cloud: it has no `say`; a spoken note needs the Mac's
+    urgent-card-watch to speak the report's `live:` line.
 - Back to waiting. When main has moved a lot since priming, `git pull` and rebuild before the next card.
