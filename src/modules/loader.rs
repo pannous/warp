@@ -183,6 +183,8 @@ pub(super) struct Loader<'a> {
 	pub(super) loading_modules: Vec<PathBuf>,
 	/// the file module the last `use` loaded or found loaded already
 	pub(super) used_file_module: Option<PathBuf>,
+	/// the module file of each package loaded: a second `use` of the package names it again
+	pub(super) package_modules: HashMap<String, PathBuf>,
 }
 
 pub(super) struct ModuleImport {
@@ -466,7 +468,10 @@ impl<'a> Loader<'a> {
 				(Some(requirement), Some(version)) if !requirement.allows(version) => Err(error(&format!(
 					"use {name} {requirement}: {name} {version} is used already; a program uses one version of a package"
 				))),
-				_ => Ok(vec![]),
+				_ => {
+					self.used_file_module = self.package_modules.get(name).cloned();
+					Ok(vec![])
+				}
 			};
 		}
 		let package = registered_package(name).map_err(|failure| error(&failure))?;
@@ -485,10 +490,14 @@ impl<'a> Loader<'a> {
 			let binding = package.proxy.unwrap_or(directory);
 			return crate::normalize::without_hints(|| self.use_library(name, &library, &binding));
 		}
-		match package_module(&directory, name) {
-			Some(path) => crate::normalize::without_hints(|| self.load(Import::Use, name, path)),
-			None => Ok(vec![]),
+		let Some(path) = package_module(&directory, name) else {
+			return Ok(vec![]);
+		};
+		let loaded = crate::normalize::without_hints(|| self.load(Import::Use, name, path));
+		if let Some(module) = &self.used_file_module {
+			self.package_modules.insert(name.to_string(), module.clone());
 		}
+		loaded
 	}
 
 	/// A package's prebuilt library through the binding `<name>.warp` of the folder declaring it (a proxy's folder in
