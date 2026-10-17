@@ -8,7 +8,7 @@ use warp::pipeline::around_source_pass_reporting;
 fn a_source_pass_is_seen_with_its_hints() {
 	let (_, after, hints) =
 		around_source_pass_reporting("x = 2\ny = one + x", warp::lowering::number_words::lower).expect("a source pass");
-	assert!(after.serialize().contains("1 + x"), "{}", after.serialize());
+	assert!(after.serialize().contains("1+x"), "{}", after.serialize());
 	let hint = hints.first().expect("the number word hints its digits");
 	assert_eq!((hint.line, hint.column, hint.preferred.as_deref()), (2, 5, Some("1")), "{hint:?}");
 }

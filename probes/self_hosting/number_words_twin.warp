@@ -1,0 +1,6 @@
+# carries-line: the number_words twin rewrites a number word and reports its hint at the word's position
+use "lib/compiler/number_words.warp"
+v = json("[\"list\", \"\", \"\\n\", [\"at\", 1, 1, [\"key\", \"=\", [\"symbol\", \"x\"], 2]], [\"at\", 2, 1, [\"key\", \"=\", [\"symbol\", \"y\"], [\"key\", \"+\", [\"at\", 2, 5, [\"symbol\", \"one\"]], [\"symbol\", \"x\"]]]]]")
+print reported(view_of(number_words(node_of(v))))
+w = json("[\"key\", \"=\", [\"symbol\", \"one\"], [\"symbol\", \"two\"]]")
+print reported(view_of(number_words(node_of(w))))
