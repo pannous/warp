@@ -313,3 +313,18 @@ wasmtime stays bundled in every executable: even with the program precompiled (.
 the trap handling. Replacing it (WAMR's wamrc AOT with its own GC; wasm2c lacks GC) is not on the table.
 Shared runtime library (`warp build --shared`, libwarp-runtime.dylib): only an option, card exe-shared-runtime (Later):
 no total saving, loses self-contained files, and a .cwasm only runs on the exact wasmtime that compiled it.
+
+## The suite through the warp pipeline (card warp-pipeline-suite)
+`scripts/self-hosted-suite.sh [<pushed tip>]` runs the whole suite on the cloud lane with WARP_SELF_HOSTED=1 and
+prints "self-hosted: N passed / M" plus the failures grouped by cause (an assertion's left side, digits as #), the most
+frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank <log>` ranks any test log.
+- src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
+  [0, source]) and `run_program_passes` hands every source pass with a warp twin (TWINNED_PASSES, the order of
+  passes.warp `passes`) to it ([i, view]); the passes without a twin, the analyzer and the emitter stay Rust.
+- Each stage call crosses src/compiler/node_views.rs: the plain view as JSON in, the view back to a node
+  (node_of_handled_view). Data nodes (times, quantities) travel as handles ["data", "#i"]. Lost on the way: source
+  positions and literal layers (a plain view has none), so position-checking tests fail by design.
+- The stage program compiles once per worker thread (its compile has thread-local state the outer compile keeps);
+  the twin tests parser::test_self_* are skipped (they compare warp with Rust themselves).
+- The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
+  warp-lang at opt-level 2, as test.sh), branch self-hosted/<tip>, deleted after the run.

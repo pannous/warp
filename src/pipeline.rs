@@ -44,7 +44,8 @@ fn eval_source(code: &str) -> Node {
 fn lawful_program(code: &str) -> Result<Node, Node> {
 	let unit_lines = crate::numbers::units::program_unit_lines(code);
 	crate::compiler::compile_context::change(|context| context.program_unit_lines = unit_lines);
-	let parsed = crate::errors::diagnostic::in_source_mode(code, || WarpParser::parse(code));
+	let parse = || crate::compiler::self_hosted::parse(code).unwrap_or_else(|| WarpParser::parse(code));
+	let parsed = crate::errors::diagnostic::in_source_mode(code, parse);
 	let lawful = crate::law::separate_laws(crate::numbers::units::without_unit_lines(parsed)?);
 	match crate::law::assert_laws(&lawful, code) {
 		Some(violation) => Err(violation),
@@ -454,6 +455,13 @@ fn run_passes(node: Node, passes: &[Pass]) -> Node {
 	passes.iter().fold(node, |node, pass| pass(node))
 }
 
+/// `run_passes` with each pass's warp twin in its place when self-hosted (WARP_SELF_HOSTED, self_hosted.rs)
+fn run_program_passes(node: Node, passes: &[Pass]) -> Node {
+	passes
+		.iter()
+		.fold(node, |node, pass| crate::compiler::self_hosted::pass(*pass, &node).unwrap_or_else(|| pass(node)))
+}
+
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
 /// (a constant answer, an error, a denied capability).
 pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
@@ -483,7 +491,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	crate::errors::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = without_located_errors(SOURCE_PHASES.iter().fold(node, |node, phase| run_passes(node, phase)))?;
+	let node = without_located_errors(SOURCE_PHASES.iter().fold(node, |node, phase| run_program_passes(node, phase)))?;
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
 	}

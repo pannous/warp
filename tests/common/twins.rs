@@ -4,8 +4,9 @@
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
+pub use warp::compiler::node_views::{node_view, plain_view, positioned_plain_view, view_json, warp_list};
 use warp::warp_parser::parse;
-use warp::{Bracket, Node, Number, Op, Separator};
+use warp::{Node, Number, Op};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
@@ -49,92 +50,6 @@ fn collect_sources(folder: &Path, found: &mut Vec<PathBuf>) {
 			found.push(path);
 		}
 	}
-}
-
-/// A Rust twin's list as warp writes it: the empty list is ø
-pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
-	let items: Vec<Node> = items.collect();
-	if items.is_empty() {
-		return Node::Empty;
-	}
-	Node::List(items, Bracket::Square, Separator::None)
-}
-
-/// A node as plain warp data, the view the parser and serializer twins share (notes/self_hosting.md): a number,
-/// bool or ø is itself, every other node a list tagged by its kind
-pub fn node_view(node: &Node) -> Node {
-	view(node, false)
-}
-
-/// The view with the source position of each node that has one, ["at", line, column, view] (card carries-line): a pass
-/// twin reports where its Rust twin does
-pub fn positioned_view(node: &Node) -> Node {
-	view(node, true)
-}
-
-fn view(node: &Node, positions: bool) -> Node {
-	let node_view = |node: &Node| view(node, positions);
-	match node {
-		Node::True | Node::False | Node::Empty => node.clone(),
-		Node::Number(number @ (Number::Int(_) | Number::Float(_))) => Node::Number(*number),
-		Node::Number(number) => tagged("number", [Node::text(&number.to_string())]),
-		Node::Char(c) => tagged("char", [Node::Char(*c)]),
-		Node::Text(text) => tagged("text", [Node::text(text)]),
-		Node::Symbol(name) => tagged("symbol", [Node::text(name)]),
-		// an error and a type stay opaque to a pass twin (walk.warp node_of): no positions inside
-		Node::Error(inner) => tagged("error", [view(inner, false)]),
-		Node::Key(left, op, right) => tagged("key", [Node::text(op.as_str()), node_view(left), node_view(right)]),
-		Node::List(items, bracket, separator) => {
-			let mut parts = vec![Node::text(&bracket_glyphs(bracket)), Node::text(&separator_glyph(separator))];
-			parts.extend(items.iter().map(node_view));
-			tagged("list", parts)
-		}
-		Node::Type { name, body } => tagged("type", [view(name, false), view(body, false)]),
-		Node::Data(data) => tagged(
-			"data",
-			[Node::text(&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")))],
-		),
-		Node::Meta { node: inner, .. } => match node.get_lineinfo() {
-			Some(info) if positions && inner.get_lineinfo().is_none() => {
-				let at = [Node::int(info.line_nr as i64), Node::int(info.column as i64)];
-				tagged("at", at.into_iter().chain([meta_view(node, inner, positions)]))
-			}
-			_ => meta_view(node, inner, positions),
-		},
-	}
-}
-
-/// A source literal (`01234`, `1.10`) and an annotation (`@name(value)`) survive, comments go
-fn meta_view(node: &Node, inner: &Node, positions: bool) -> Node {
-	if let Some(template) = warp::text::interpolation::template_of(node) {
-		return tagged("template", [Node::text(template)]);
-	}
-	if let Some(literal) = node.source_literal() {
-		return tagged("literal", [Node::text(literal), view(inner, positions)]);
-	}
-	let attributes = node.attributes();
-	if attributes.len() > inner.attributes().len() {
-		let (name, value) = attributes[0];
-		return tagged("attribute", [Node::text(name), view(value, positions), view(inner, positions)]);
-	}
-	view(inner, positions)
-}
-
-fn tagged(kind: &str, parts: impl IntoIterator<Item = Node>) -> Node {
-	warp_list(std::iter::once(Node::text(kind)).chain(parts))
-}
-
-/// The opening glyph ("{", "[", "(", "<", "" for none), both glyphs for another pair
-fn bracket_glyphs(bracket: &Bracket) -> String {
-	match bracket {
-		Bracket::None => String::new(),
-		Bracket::Other(open, close) => format!("{open}{close}"),
-		_ => bracket.opening().to_string(),
-	}
-}
-
-fn separator_glyph(separator: &Separator) -> String {
-	separator.to_char().map(String::from).unwrap_or_default()
 }
 
 /// `word(read(path))` of lib/compiler/<part>.warp for every source, each written as the Rust twin's value of the same
@@ -477,33 +392,6 @@ fn twin_sources_of(paths: &[PathBuf], dropped: &[&str]) -> Vec<PathBuf> {
 	}
 }
 
-/// A node's view as a warp node gives it back: no literal and attribute layers, a character as a text (warp holds a
-/// one-character text as the character, card character-text), an empty group as ø (warp's empty `{}` / `()` is ø,
-/// decision empty-group-node)
-fn plain_view(node: &Node) -> Node {
-	plain(node_view(node))
-}
-
-/// The plain view with the positions: ["at", line, column, view] around each positioned node
-fn positioned_plain_view(node: &Node) -> Node {
-	plain(positioned_view(node))
-}
-
-fn plain(view: Node) -> Node {
-	match view {
-		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
-			Some("literal" | "attribute") => plain(items.pop().unwrap_or(Node::Empty)),
-			Some("list") if items.len() == 3 => Node::Empty,
-			Some("char") => {
-				items[0] = Node::text("text");
-				Node::List(items, bracket, separator)
-			}
-			_ => Node::List(items.into_iter().map(plain).collect(), bracket, separator),
-		},
-		other => other,
-	}
-}
-
 /// A value with each one-character text as its character: warp compares `"a" == 'a'`, holds a literal `"a"` as the
 /// character and a one-character text passed on or cut at run time as a text (card character-text)
 fn as_compared(value: Node) -> Node {
@@ -571,39 +459,6 @@ impl Drop for TwinProgram {
 	fn drop(&mut self) {
 		let _ = std::fs::remove_file(&self.input);
 	}
-}
-
-/// A node view as JSON (ø is null): the warp twin reads it with `json(…)`, data the host parses, where the same view
-/// as a warp literal is code to compile (a 100 KB chunk of sources took 2.4 GB in a debug build)
-pub fn view_json(view: &Node) -> String {
-	match view {
-		Node::Text(text) => json_text(text),
-		Node::Char(character) => json_text(&character.to_string()),
-		Node::List(items, ..) => format!("[{}]", items.iter().map(view_json).collect::<Vec<_>>().join(", ")),
-		Node::Empty => "null".into(),
-		Node::True => "true".into(),
-		Node::False => "false".into(),
-		number => number.serialize(),
-	}
-}
-
-fn json_text(text: &str) -> String {
-	quoted(text, |character| character.is_control().then(|| format!("\\u{:04x}", character as u32)))
-}
-
-/// The text in double quotes, its quotes, backslashes, newlines, tabs and returns escaped, other characters by `extra`
-fn quoted(text: &str, extra: impl Fn(char) -> Option<String>) -> String {
-	let escaped: String = text
-		.chars()
-		.map(|character| match character {
-			'"' | '\\' => format!("\\{character}"),
-			'\n' => "\\n".into(),
-			'\t' => "\\t".into(),
-			'\r' => "\\r".into(),
-			other => extra(other).unwrap_or_else(|| other.to_string()),
-		})
-		.collect();
-	format!("\"{escaped}\"")
 }
 
 /// The text around its first character that differs from the other text
