@@ -102,8 +102,9 @@ fn the_old_dollar_forms_work_with_a_hint() {
 	assert!(hints.contains(&("$who.value".into(), "$who".into())), "{hints:?}");
 	let hints = hints_of(&format!("{INPUT}$who.focus()"));
 	assert!(hints.contains(&("$who".into(), "who".into())), "{hints:?}");
-	let hints = hints_of("t = $document.title");
-	assert!(hints.contains(&("$document".into(), "document".into())), "{hints:?}");
+	// `$document.title` warns instead: `$` of a value is superfluous (card js-binding, test_browser_dollar_names)
+	let (_, warnings) = crate::common::warnings_of("t = $document.title");
+	assert!(warnings.iter().any(|warning| warning.contains("$document is superfluous")), "{warnings:?}");
 	let hints = hints_of("$xyz.innerHTML = \"x\"");
 	assert!(hints.contains(&("$xyz".into(), "element(\"xyz\")".into())), "{hints:?}");
 }
