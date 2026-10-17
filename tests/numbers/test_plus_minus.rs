@@ -1,6 +1,7 @@
 // `x ± r` at run time, an interval with its value that flows through arithmetic and functions (card plus-minus,
 // notes/plus_minus.md, decisions P217–P219): worst-case bounds, the ± part to 2 significant digits, the value to the same place
 use warp::wasm_emitter::eval;
+use warp::Node;
 
 fn shown(code: &str) -> String {
 	eval(code).serialize()
@@ -33,4 +34,10 @@ fn approximately_within_the_tolerance() {
 #[test]
 fn a_parameter_shadows_an_outer_interval_name() {
 	assert_eq!(eval("x = 5 ± 1; f(x: float) := if x < 0.0 then 1 else 2; f(3.0)"), 2);
+}
+
+#[test]
+fn uncertain_text_shows_the_parts_to_two_significant_digits() {
+	assert_eq!(eval("uncertain_text(1234.5678, 0.0012, 0)"), Node::text("1234.5678 ± 0.0012"));
+	assert_eq!(eval("uncertain_text(3.0, 0.5, 1)"), Node::text("3.00 ± 0.50σ"));
 }

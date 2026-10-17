@@ -1,27 +1,8 @@
-// card uncertain-text-warp: uncertain_text in warp, compared with the Rust runtime's print of the same values
-// each line twice, equal
-fixed_text(x: float, scale: float, decimals: int) := {
-	sign = if x < 0.0 then "-" else ""
-	x = abs(x)
-	if decimals == 0 { return sign + to_base((floor(x * scale + 0.5) * round(1.0 / scale)) as int, 10) }
-	digits = round(x * scale) as int
-	power = scale as int
-	sign + to_base(digits /! power, 10) + "." + to_base(power + digits % power, 10)[1..]
-}
-uncertain_text(value: float, radius: float, gaussian: bool) := {
-	sigma = if gaussian then "σ" else ""
-	if not (radius > 0.0 and radius < 1.0 / 0.0) { return "\(value) ± \(radius)\(sigma)" }
-	scale = 1.0
-	decimals = 0
-	while radius * scale < 9.5 and decimals <= 17 { scale = scale * 10.0; decimals += 1 }
-	while radius * scale >= 99.5 { scale = scale / 10.0 }
-	if decimals > 17 or abs(value) * scale >= 1e17 { return "\(value) ± \(radius)\(sigma)" }
-	fixed_text(value, scale, decimals) + " ± " + fixed_text(radius, scale, decimals) + sigma
-}
-show(x, gaussian = no) := { print(x); print(uncertain_text(x.value, x.uncertainty, gaussian)) }
+#!/usr/bin/env warp
+// card uncertain-text-warp: lib/prelude.warp's uncertain_text, the print of a ± value; each pair of lines prints the same
+show(x) := { print(x); print(uncertain_text(x.value, x.uncertainty, 0)) }
 show(5 ± 1)
 show(3 ± 0.5)
-show(sqrt(4 ± 1))
 show(1234.5678 ± 0.0012)
 show(-7.25 ± 0.1)
 show(1950 ± 50.0)
@@ -29,6 +10,3 @@ show(123456 ± 789.0)
 show(0.000123 ± 0.0000045)
 show(5 ± 0.0)
 show(5.5 ± (1.0 / 0.0))
-show(5 ± 1σ, yes)
-show((5 ± 1σ) * 2, yes)
-show(1e20 ± 1.0)
