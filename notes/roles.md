@@ -110,7 +110,9 @@ in ~/.cache/todo-board/urgent-cloud-session; SendMessage is held for approval th
 Supervisor, a direct push to main closes the card. Prompt and direct-to-main rules: notes/agents/urgent_cloud.md.
 Start (or replace) it: `tmux new-session -d -s cloud-warp-urgent -c /Users/me/dev/angles/warp "claude --model opus
 --name warp-urgent --settings '{\"fastMode\": true}' --cloud 'You are warp-urgent. Read notes/agents/urgent_cloud.md
-and AGENTS.md, then do the Priming and wait for urgent cards.'"`, then write its session id into that file.
+and AGENTS.md, then do the Priming and wait for urgent cards.'"`, then write its session id into that file and
+switch fast mode on: `claude -p "/fast on" --cloud <id> < /dev/null`. `--settings '{"fastMode": true}'` does not
+reach a cloud session (2026-10-17: the user had to switch it on by hand); check the session's footer once.
 
 ## Workers
 - One task, one branch, one worktree: `cowtree add -b <name> /Volumes/Worktrees/<name> origin/main`, on the Worktrees
