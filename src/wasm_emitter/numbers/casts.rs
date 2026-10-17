@@ -1,7 +1,6 @@
 //! Casts: as int/float/text/char/bool/number/exact, list and run-time text casts
 
 use super::super::*;
-use crate::wasm_emitter::layout::BYTE;
 
 /// Builtins that round a float to an exact Int
 pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] =
@@ -571,9 +570,9 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64];
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64, self.text_ref_nullable()];
 		self.runtime_function(TEXT_AS_NUMBER, vec![node_ref], vec![node_ref], locals, |s, f| {
-			let (start, end, slash, bits) = (1, 2, 3, 4);
+			let (start, end, slash, bits, bytes) = (1, 2, 3, 4, 5);
 			// a number (any node but a text or character) as it is
 			let is_kind = |s: &mut Self, f: &mut Function, kind: Kind| {
 				s.emit_field(f, 0, 0);
@@ -586,25 +585,21 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 0);
 			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
 			Self::emit_list(f, &[I::If(BlockType::Empty)]);
-			s.emit_text_bounds(f, start, end);
+			s.emit_text_bounds(f, (bytes, start, end));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(start), I::LocalSet(slash),
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 						I::LocalGet(slash), I::LocalGet(end), I::I32GeU, I::BrIf(1),
-						I::LocalGet(slash), I::I32Load8U(BYTE), I::I32Const(RATIO_SLASH), I::I32Eq,
+						I::LocalGet(bytes), I::LocalGet(slash), I::ArrayGetU(s.type_manager.text_type),
+						I::I32Const(RATIO_SLASH), I::I32Eq,
 						I::If(BlockType::Empty),
-							I::LocalGet(start), I::LocalGet(slash), I::LocalGet(start), I::I32Sub,
 			]);
-			s.call(f, "new_text");
+			s.emit_text_piece(f, (bytes, start, slash));
 			s.call(f, lists::list_ops::TEXT_AS_INT);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalGet(end), I::LocalGet(slash), I::I32Sub,
-				I::I32Const(1), I::I32Sub,
-			]);
-			s.call(f, "new_text");
+			Self::emit_list(f, &[I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalSet(start)]);
+			s.emit_text_piece(f, (bytes, start, end));
 			s.call(f, lists::list_ops::TEXT_AS_INT);
 			s.call(f, "exact_div");
 			s.call(f, "new_int");

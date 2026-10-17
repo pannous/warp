@@ -106,6 +106,8 @@ pub const TEXT_ADDRESS: &str = "text_address";
 pub const TEXT_BYTES_JOIN: &str = "text_bytes_join";
 /// text_flat(node) -> $Text: the bytes of a text node, a rope flattened
 pub const TEXT_FLAT: &str = "text_flat";
+/// text_piece(bytes, start, length) -> $Text: a copy of a stretch of bytes
+pub const TEXT_PIECE: &str = "text_piece";
 /// text_bytes_equal($Text, $Text) -> i32
 pub const TEXT_BYTES_EQUAL: &str = "text_bytes_equal";
 /// `as_bool(node) -> ref $Node`: an Int 1/0 as the bool it stands for, any other node as it is

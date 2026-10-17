@@ -15,8 +15,6 @@ use Instruction as I;
 use Instruction::I32Const;
 use ValType::Ref;
 
-const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-
 /// The longest mapping of one code point (`ΐ` upper is three)
 const MAPPED_SLOTS: u32 = 3;
 /// The fields of a range, each a little-endian u32: start, last, stride, delta, then the second and third mapped code points
@@ -106,31 +104,30 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(name) {
 			return;
 		}
-		self.emit_text_heap_global();
 		let case_table = cached_case_table(mapping);
 		let entries = (case_table.len() as u32 / ENTRY_BYTES) as i32;
 		let table = self.allocate_bytes(name, case_table) as i32;
-		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 16], |s, f| {
+		let (node_ref, text) = (Ref(self.node_ref(false)), self.text_ref_nullable());
+		let text_type = self.type_manager.text_type;
+		let mut locals = vec![ValType::I32; 16];
+		locals[3] = text;
+		locals.push(text);
+		self.runtime_function(name, vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (pointer, end, capacity, destination, index, out) = (1, 2, 3, 4, 5, 6);
 			let (width, code_point, lead, slot, mapped, entry) = (7, 8, 9, 10, 11, 12);
-			let (low, high, middle, next) = (13, 14, 15, 16);
-			s.emit_text_argument_bounds(f, pointer, end);
+			let (low, high, middle, next, bytes) = (13, 14, 15, 16, 17);
+			s.emit_text_argument_bounds(f, (bytes, pointer, end));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I32Const(OUTPUT_FACTOR), I::I32Mul,
-				I::LocalSet(capacity),
-			]);
-			s.emit_text_allocation(f, capacity, destination);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
+				I::LocalGet(end), I32Const(OUTPUT_FACTOR), I::I32Mul, I::LocalTee(capacity),
+				I::ArrayNewDefault(text_type), I::LocalSet(destination),
 				I::LocalGet(pointer), I::LocalSet(index),
-				I::LocalGet(destination), I::LocalSet(out),
+				I32Const(0), I::LocalSet(out),
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 						I::LocalGet(index), I::LocalGet(end), I::I32GeU, I::BrIf(1),
 			]);
-			s.emit_next_code_point(f, index, end, code_point);
+			s.emit_next_code_point(f, (bytes, index, end), code_point);
 			// binary search for the last range starting at or before the code point
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -197,7 +194,7 @@ impl WasmGcEmitter {
 			]);
 			Self::emit_utf8_width(f, mapped);
 			Self::emit_list(f, &[I::LocalTee(width), I::LocalGet(out), I::I32Add, I::LocalSet(next)]);
-			Self::emit_utf8_store(f, out, mapped, width, lead);
+			s.emit_utf8_store(f, (destination, out), mapped, width, lead);
 			Self::emit_list(f, &[I::LocalGet(next), I::LocalSet(out)]);
 			// only the first slot of an unchanged code point is read: its mapped value stays 0 and slot 1 ends the loop
 			#[rustfmt::skip]
@@ -210,17 +207,20 @@ impl WasmGcEmitter {
 				I::End,
 				I::End,
 			]);
-			s.emit_new_text_to(f, destination, out);
+			// the bytes written, from index 0 (capacity is free again)
+			Self::emit_list(f, &[I32Const(0), I::LocalSet(capacity)]);
+			s.emit_text_piece(f, (destination, capacity, out));
 		});
 	}
 
-	/// A character argument (local 0) becomes a text, anything else but a text fails; `pointer` and `end` span its bytes
-	fn emit_text_argument_bounds(&self, func: &mut Function, pointer: u32, end: u32) {
+	/// A character argument (local 0) becomes a text, anything else but a text fails; local `bytes` holds its bytes,
+	/// `pointer` and `end` span them
+	fn emit_text_argument_bounds(&self, func: &mut Function, bounds: (u32, u32, u32)) {
 		self.emit_codepoint_as_text(func, 0);
 		self.emit_is_text(func);
 		func.instruction(&I::I32Eqz);
 		self.emit_fail_if(func, "not_a_text");
-		self.emit_text_bounds(func, pointer, end);
+		self.emit_text_bounds(func, bounds);
 	}
 
 	/// text_reverse(text): a fresh text with the characters in the opposite order, each grapheme cluster kept whole
@@ -230,36 +230,35 @@ impl WasmGcEmitter {
 		if !["list_reverse", "text_reverse", "text_split"].iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
-		self.emit_text_heap_global();
-		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function("text_reverse", vec![node_ref], vec![node_ref], vec![ValType::I32; 5], |s, f| {
-			let (pointer, end, destination, at, past) = (1, 2, 3, 4, 5);
-			s.emit_text_argument_bounds(f, pointer, end);
-			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(at)]);
-			s.emit_text_allocation(f, at, destination);
+		let (node_ref, text) = (Ref(self.node_ref(false)), self.text_ref_nullable());
+		let text_type = self.type_manager.text_type;
+		let locals = vec![ValType::I32, ValType::I32, text, ValType::I32, ValType::I32, text];
+		self.runtime_function("text_reverse", vec![node_ref], vec![node_ref], locals, |s, f| {
+			let (pointer, end, destination, at, past, bytes) = (1, 2, 3, 4, 5, 6);
+			s.emit_text_argument_bounds(f, (bytes, pointer, end));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
+				I::LocalGet(end), I::ArrayNewDefault(text_type), I::LocalSet(destination),
 				I::LocalGet(pointer), I::LocalSet(at),
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 						I::LocalGet(at), I::LocalGet(end), I::I32GeU, I::BrIf(1),
-						I::LocalGet(at), I::LocalGet(end),
+						I::LocalGet(bytes), I::LocalGet(at), I::LocalGet(end),
 			]);
 			s.call(f, "grapheme_end");
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 						I::LocalSet(past),
-						I::LocalGet(destination), I::LocalGet(end), I::LocalGet(past), I::I32Sub, I::I32Add,
-						I::LocalGet(at),
-						I::LocalGet(past), I::LocalGet(at), I::I32Sub,
-						COPY_BYTES,
+						I::LocalGet(destination), I::LocalGet(end), I::LocalGet(past), I::I32Sub,
+						I::LocalGet(bytes), I::LocalGet(at), I::LocalGet(past), I::LocalGet(at), I::I32Sub,
+						I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
 						I::LocalGet(past), I::LocalSet(at),
 						I::Br(0),
 					I::End,
 				I::End,
-				I::LocalGet(destination), I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::I32Add, I::LocalSet(past),
+				I::LocalGet(destination), I::RefAsNonNull,
 			]);
-			s.emit_new_text_to(f, destination, past);
+			s.call(f, crate::wasm_emitter::NEW_TEXT_OF);
 		});
 	}
 
@@ -279,16 +278,17 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable];
 		locals.extend([ValType::I32; 3]);
+		locals.push(self.text_ref_nullable());
 		self.runtime_function(name, vec![node_ref], vec![node_ref], locals, |s, f| {
 			// code_point holds the grapheme's end when walking by grapheme
-			let (characters, pointer, end, code_point) = (1, 2, 3, 4);
+			let (characters, pointer, end, code_point, bytes) = (1, 2, 3, 4, 5);
 			s.emit_field(f, 0, 0);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq,
 				I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End,
 			]);
-			s.emit_text_argument_bounds(f, pointer, end);
+			s.emit_text_argument_bounds(f, (bytes, pointer, end));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::Block(BlockType::Empty),
@@ -297,10 +297,10 @@ impl WasmGcEmitter {
 			]);
 			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
 			if by_grapheme {
-				s.emit_grapheme_node(f, pointer, code_point, end);
+				s.emit_grapheme_node(f, (bytes, pointer, end), code_point);
 				Self::emit_list(f, &[I::LocalGet(code_point), I::LocalSet(pointer)]);
 			} else {
-				s.emit_next_code_point(f, pointer, end, code_point);
+				s.emit_next_code_point(f, (bytes, pointer, end), code_point);
 				f.instruction(&I::LocalGet(code_point));
 				s.call(f, "new_codepoint");
 			}

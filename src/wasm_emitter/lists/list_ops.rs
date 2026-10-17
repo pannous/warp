@@ -6,7 +6,7 @@ use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::wasm_emitter::lists::list_dispatch::Slot;
-use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_SEGMENT, VALUES_EQUAL};
+use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_PIECE, TEXT_SEGMENT, VALUES_EQUAL, NEW_TEXT_OF};
 use crate::words::MAP_WORD;
 use wasm_encoder::*;
 use Instruction as I;
@@ -105,13 +105,12 @@ const READ_CURSORS: u32 = 4;
 const TEXT_CURSORS: u32 = 2;
 /// How far (bytes) text_grapheme_back looks back from a cursor; further back, an index walks from the start of the text
 const BACK_REACH: i32 = 256;
-/// The globals of a text cursor: the text's address, a 1-based grapheme index in it and that grapheme's address
-const TEXT_CURSOR_PARTS: [(&str, ValType); 3] = [("text", ValType::I32), ("index", ValType::I64), ("at", ValType::I32)];
+/// The globals of a text cursor: the text's bytes, a 1-based grapheme index in them and that grapheme's byte index
+const TEXT_CURSOR_PARTS: [&str; 3] = ["text", "index", "at"];
 /// Texts whose grapheme counts are kept at once (text_grapheme_count), so a loop's `i < #text` counts once
 const TEXT_COUNTS: u32 = 2;
-/// The globals of a counted text: its start and end address and its count
-const TEXT_COUNTED_PARTS: [(&str, ValType); 3] =
-	[("start", ValType::I32), ("end", ValType::I32), ("count", ValType::I64)];
+/// The globals of a counted text: its bytes and its count
+const TEXT_COUNTED_PARTS: [&str; 2] = ["text", "count"];
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(in crate::wasm_emitter) struct CopyCells {
@@ -191,36 +190,36 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The text cursors of text_grapheme_offset, newest first. Runtime texts are bump-allocated, never freed and never
-	/// changed in place (an append writes after their end), so a cursor stays true for any text at the same address
-	/// that still holds it: the same text, the text grown, a prefix sharing its bytes
+	/// The text cursors of text_grapheme_offset, newest first, and the counted texts of text_grapheme_count, each keyed
+	/// by the text's bytes ($Text, never changed in place: an append builds a new text)
 	pub(in crate::wasm_emitter) fn emit_text_cursor_globals(&mut self) {
 		if !TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
+		let text_type = self.type_manager.text_type;
+		let global_of = |part: &str| match part {
+			"text" => (self.text_ref_nullable(), ConstExpr::ref_null(HeapType::Concrete(text_type))),
+			"at" => (ValType::I32, ConstExpr::i32_const(0)),
+			_ => (ValType::I64, ConstExpr::i64_const(0)),
+		};
+		let cursors = (0..TEXT_CURSORS).flat_map(|slot| TEXT_CURSOR_PARTS.map(|part| (format!("text_cursor_{slot}_{part}"), global_of(part))));
+		let counted = (0..TEXT_COUNTS).flat_map(|slot| TEXT_COUNTED_PARTS.map(|part| (format!("text_counted_{slot}_{part}"), global_of(part))));
+		let globals: Vec<_> = cursors.chain(counted).collect();
 		self.text_cursor_global = Some(self.next_global_idx);
-		let names = (0..TEXT_CURSORS).flat_map(|slot| {
-			TEXT_CURSOR_PARTS.map(|(part, val_type)| (format!("text_cursor_{slot}_{part}"), val_type))
-		});
-		let counted = (0..TEXT_COUNTS).flat_map(|slot| {
-			TEXT_COUNTED_PARTS.map(|(part, val_type)| (format!("text_counted_{slot}_{part}"), val_type))
-		});
-		for (name, val_type) in names.chain(counted) {
-			// no text starts at address -1
-			let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::i32_const(-1) };
+		for (name, (val_type, initial)) in globals {
 			self.declare_named_global(val_type, initial, name);
 		}
 	}
 
-	/// The globals (start, end, count) of each counted text
-	fn texts_counted(&self) -> Vec<(u32, u32, u32)> {
+	/// The globals (text, count) of each counted text
+	fn texts_counted(&self) -> Vec<(u32, u32)> {
 		let Some(cursors) = self.text_cursor_global else {
 			return vec![];
 		};
 		let first = cursors + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32;
 		(0..TEXT_COUNTS)
 			.map(|slot| first + slot * TEXT_COUNTED_PARTS.len() as u32)
-			.map(|start| (start, start + 1, start + 2))
+			.map(|text| (text, text + 1))
 			.collect()
 	}
 
@@ -443,12 +442,12 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = self.node_ref(false);
-		let (kind, pointer, end, byte, function_type) = (1, 2, 3, 4, 5);
+		let (kind, pointer, end, byte, function_type, bytes) = (1, 2, 3, 4, 5, 6);
 		self.runtime_function(
 			crate::type_tests::NODE_TYPE_NAME,
 			vec![Ref(node_ref)],
 			vec![Ref(node_ref)],
-			vec![ValType::I64, ValType::I32, ValType::I32, ValType::I32, Ref(self.node_ref(true))],
+			vec![ValType::I64, ValType::I32, ValType::I32, ValType::I32, Ref(self.node_ref(true)), self.text_ref_nullable()],
 			|s, f| {
 				// a function value: its kind and signature (function_type is ø for any other value)
 				if s.types_functions() {
@@ -547,8 +546,8 @@ impl WasmGcEmitter {
 					I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq,
 					I::If(BlockType::Empty),
 				]);
-				s.emit_text_bounds(f, pointer, end);
-				Self::emit_is_one_character(f, pointer, end, byte);
+				s.emit_text_bounds(f, (bytes, pointer, end));
+				s.emit_is_one_character(f, (bytes, pointer, end), byte);
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_type_value(f, &Kind::Codepoint.to_string());
 				Self::emit_list(f, &[I::Return, I::End, I::End]);
@@ -812,33 +811,38 @@ impl WasmGcEmitter {
 	fn emit_string_char_at(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
 		let params = vec![node_ref, ValType::I64];
-		self.runtime_function("string_char_at", params, vec![node_ref], vec![ValType::I32; 3], |s, f| {
-			let (start, end, stop) = (2, 3, 4);
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, self.text_ref_nullable()];
+		self.runtime_function("string_char_at", params, vec![node_ref], locals, |s, f| {
+			let (start, end, stop, bytes) = (2, 3, 4, 5);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "text_grapheme_offset");
 			f.instruction(&I::LocalSet(start));
-			s.emit_text_bounds(f, stop, end);
-			s.emit_grapheme_node(f, start, stop, end);
+			s.emit_text_bounds(f, (bytes, stop, end));
+			s.emit_grapheme_node(f, (bytes, start, end), stop);
 		});
 	}
 
-	/// The grapheme starting at the local `start` of a text ending at `end` as a node, its end left in `stop`: a Codepoint
-	/// when it is one code point, else the cluster as Text sharing the bytes (string_char_at, text_graphemes)
-	pub(in crate::wasm_emitter) fn emit_grapheme_node(&self, f: &mut Function, start: u32, stop: u32, end: u32) {
+	/// The grapheme at byte index local `start` of the $Text in local `bytes` (ending at `end`) as a node, its end left in
+	/// `stop`: a Codepoint when it is one code point, else the cluster as Text (string_char_at, text_graphemes)
+	pub(in crate::wasm_emitter) fn emit_grapheme_node(
+		&self,
+		f: &mut Function,
+		(bytes, start, end): (u32, u32, u32),
+		stop: u32,
+	) {
 		let node_ref = Ref(self.node_ref(false));
-		Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+		let at_start = [I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(end)];
+		Self::emit_list(f, &at_start);
 		self.call(f, "grapheme_end");
-		Self::emit_list(f, &[I::LocalSet(stop), I::LocalGet(start), I::LocalGet(end)]);
+		f.instruction(&I::LocalSet(stop));
+		Self::emit_list(f, &at_start);
 		self.call(f, "utf8_next");
-		#[rustfmt::skip]
-		Self::emit_list(f, &[
-			I::LocalGet(stop), I::I32Eq, I::If(BlockType::Result(node_ref)),
-				I::LocalGet(start), I::LocalGet(end),
-		]);
+		Self::emit_list(f, &[I::LocalGet(stop), I::I32Eq, I::If(BlockType::Result(node_ref))]);
+		Self::emit_list(f, &at_start);
 		self.call(f, "utf8_decode");
 		self.call(f, "new_codepoint");
-		Self::emit_list(f, &[I::Else, I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
-		self.call(f, "new_text");
+		f.instruction(&I::Else);
+		self.emit_text_piece(f, (bytes, start, stop));
 		f.instruction(&I::End);
 	}
 }
@@ -850,9 +854,10 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let (int, long) = (ValType::I32, ValType::I64);
 		let params = vec![node_ref, long, long];
-		self.runtime_function(TEXT_SLICE, params, vec![node_ref], vec![int, int, int, long], |s, f| {
-			let (from, to, start, end, stop, count) = (1, 2, 3, 4, 5, 6);
-			s.emit_text_bounds(f, start, end);
+		let locals = vec![int, int, int, long, self.text_ref_nullable()];
+		self.runtime_function(TEXT_SLICE, params, vec![node_ref], locals, |s, f| {
+			let (from, to, start, end, stop, count, bytes) = (1, 2, 3, 4, 5, 6, 7);
+			s.emit_text_bounds(f, (bytes, start, end));
 			f.instruction(&I::LocalGet(0));
 			s.call(f, "text_grapheme_count");
 			f.instruction(&I::LocalSet(count));
@@ -876,7 +881,7 @@ impl WasmGcEmitter {
 			]);
 			grapheme_address(f, to);
 			f.instruction(&I::LocalSet(stop));
-			s.emit_new_text_to(f, start, stop);
+			s.emit_text_piece(f, (bytes, start, stop));
 		});
 	}
 
