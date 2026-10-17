@@ -15,12 +15,10 @@ fn kinds_of(code: &str) -> Vec<String> {
 
 #[test]
 fn kinds_of_functions_variables_and_value() {
-	assert_eq!(kinds_of("f(a) := sqrt(a) * 2\nx = f(2)\nname = 'pi'\nx"), [
-		"f(int) -> float",
-		"name: text",
-		"x: float",
-		"= float"
-	]);
+	assert_eq!(
+		kinds_of("f(a) := sqrt(a) * 2\nx = f(2)\nname = 'pi'\nx"),
+		["f(int) -> float", "name: text", "x: float", "= float"]
+	);
 }
 
 #[test]
@@ -37,7 +35,12 @@ fn survey_rust_kinds() {
 	let mut out = String::new();
 	for path in sources() {
 		if let Some((program, kinds)) = analyzed(&std::fs::read_to_string(&path).unwrap()) {
-			out += &format!("{{\"path\": {:?}, \"kinds\": {:?}, \"program\": {}}}\n", path.display().to_string(), kinds, view_json(&program));
+			out += &format!(
+				"{{\"path\": {:?}, \"kinds\": {:?}, \"program\": {}}}\n",
+				path.display().to_string(),
+				kinds,
+				view_json(&program)
+			);
 		}
 	}
 	std::fs::create_dir_all("data/self_analyzer").unwrap();

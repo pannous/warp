@@ -628,11 +628,22 @@ analyze(program: any) := {
 	program
 }
 
-inferred_kinds(program: any) := {
+# the kinds as data: {functions: {f: {params: [kind…], result: kind}}, variables: {x: kind}, value: kind}
+kinds(program: any) := {
 	analyze(program)
-	lines = []
-	for name in definitions.keys() { lines += [name + "(" + parameter_kinds[name].join(", ") + ") -> " + results[name]] }
+	functions = {}
+	for name in definitions.keys() { functions[name] = {params: parameter_kinds[name], result: results[name]} }
 	main = collect(program, new_scope())
-	for name in main.kinds.keys() { lines += [name + ": " + main.kinds[name]] }
-	lines.sort() + ["= " + kind_of(program, main)]
+	{functions: functions, variables: main.kinds, value: kind_of(program, main)}
+}
+
+inferred_kinds(program: any) := {
+	found = kinds(program)
+	lines = []
+	for name in found.functions.keys() {
+		function = found.functions[name]
+		lines += [name + "(" + function.params.join(", ") + ") -> " + function.result]
+	}
+	for name in found.variables.keys() { lines += [name + ": " + found.variables[name]] }
+	lines.sort() + ["= " + found.value]
 }

@@ -326,7 +326,10 @@ pub fn analyzed(code: &str) -> Option<(Node, Vec<String>)> {
 /// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
 fn declared_types_shown(node: Node) -> Node {
 	match node {
-		Node::Key(target, Op::Assign, value) if let Node::Meta { node: name, data } = *target.clone() && matches!(*data, Node::Symbol(_)) => {
+		Node::Key(target, Op::Assign, value)
+			if let Node::Meta { node: name, data } = *target.clone()
+				&& matches!(*data, Node::Symbol(_)) =>
+		{
 			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
 		}
 		other => other.map_children(declared_types_shown),
