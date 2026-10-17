@@ -526,9 +526,11 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
-		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes or parses
-		// (cards data-meta, parse-word)
-		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
+		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes, parses or
+		// positions a node (cards data-meta, parse-word, carries-line)
+		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS)
+			|| node.mentions_any(&[crate::host::PARSE_CODE, reflection::node_api::POSITIONED])
+		{
 			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
 		}
 		if node.mentions_any(&[crate::words::AS_CODE]) {

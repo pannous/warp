@@ -420,6 +420,13 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 /// a pass's warp twin gets and must give (card twin-harness, tests/common/twins.rs pass_differential). None for a
 /// program refused before the passes, or a pass that is no source pass.
 pub fn around_source_pass(code: &str, pass: Pass) -> Option<(Node, Node)> {
+	around_source_pass_reporting(code, pass).map(|(before, after, _)| (before, after))
+}
+
+/// `around_source_pass` with the hints and warnings the pass itself says, every one, printing none (card carries-line:
+/// a twin reports them too)
+pub fn around_source_pass_reporting(code: &str, pass: Pass) -> Option<(Node, Node, Vec<crate::errors::diagnostic::Diagnostic>)> {
+	use crate::errors::diagnostic::{clear_shown_hints, every_hint_of, take_warnings};
 	crate::errors::diagnostic::begin_program();
 	let program = lawful_program(code).ok()?;
 	crate::errors::diagnostic::in_program_mode(program, |program| {
@@ -429,7 +436,11 @@ pub fn around_source_pass(code: &str, pass: Pass) -> Option<(Node, Node)> {
 			let passes: Vec<Pass> = SOURCE_PHASES.iter().flat_map(|phase| phase.iter().copied()).collect();
 			let index = passes.iter().position(|each| std::ptr::fn_addr_eq(*each, pass))?;
 			let before = run_passes(program, &passes[..index]);
-			Some((before.clone(), pass(before)))
+			clear_shown_hints();
+			take_warnings();
+			let (after, mut reports) = every_hint_of(|| pass(before.clone()));
+			reports.extend(take_warnings());
+			Some((before, after, reports))
 		})
 	})
 }

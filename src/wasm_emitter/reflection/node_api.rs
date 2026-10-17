@@ -44,9 +44,17 @@ const NEW_SEPARATED: &str = "new_separated";
 const KEY: &str = "key";
 const BRACKETED: &str = "bracketed";
 const SEPARATED: &str = "separated";
+/// `positioned(node, line, column)`: the node at that source position, as `n.line` and `n.column` read it (card
+/// carries-line: a pass written in warp reports where Rust's does)
+pub const POSITIONED: &str = "positioned";
 /// name, number of arguments, result kind
-pub const NODE_BUILTINS: [(&str, usize, Kind); 4] =
-	[(SYMBOL_WORD, 1, Kind::Symbol), (KEY, 3, Kind::Key), (BRACKETED, 2, Kind::List), (SEPARATED, 2, Kind::List)];
+pub const NODE_BUILTINS: [(&str, usize, Kind); 5] = [
+	(SYMBOL_WORD, 1, Kind::Symbol),
+	(KEY, 3, Kind::Key),
+	(BRACKETED, 2, Kind::List),
+	(SEPARATED, 2, Kind::List),
+	(POSITIONED, 3, Kind::Empty),
+];
 /// The opening brackets by their bracket info in a list's kind field (Curly 0, Square 1, Round 2, Less 3, None 5)
 const BRACKETS: [(&str, i64); 5] = [("{", 0), ("[", 1), ("(", 2), ("<", 3), ("", 5)];
 /// The bracket info of a round group `(…)`
@@ -77,8 +85,18 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 }
 
 impl WasmGcEmitter {
-	/// `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)`, `separated(items, separator)`
+	/// `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)`, `separated(items, separator)`,
+	/// `positioned(node, line, column)`
 	pub(in crate::wasm_emitter) fn emit_node_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
+		if let (POSITIONED, [node, line, column]) = (name, arguments) {
+			self.emit_node_instructions(func, node);
+			func.instruction(&I::RefAsNonNull);
+			self.emit_numeric_value(func, line);
+			self.emit_numeric_value(func, column);
+			self.emit_node_null(func);
+			self.emit_call(func, NODE_AT);
+			return;
+		}
 		for argument in arguments {
 			self.emit_node_instructions(func, argument);
 			func.instruction(&I::RefAsNonNull);
