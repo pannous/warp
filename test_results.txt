@@ -2459,7 +2459,6 @@ PASSED:
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_node_json::json_of_code_keeps_its_operations
   ✓ modules::test_node_json::json_writes_numbers_exactly_or_says_so
-  ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
   ✓ modules::test_package_forms::a_bare_name_is_a_folder_of_the_default_registry
   ✓ modules::test_package_forms::a_full_url_stays_as_written
   ✓ modules::test_package_forms::an_owner_and_repository_are_on_github
@@ -3766,6 +3765,7 @@ PASSED:
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
+  ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6348,7 +6348,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
+  ✗ modules::test_node_json::the_browser_spells_each_operator_code_alike
 
 SUMMARY:
 16 ignored, 6345 passed, 1 failed, 6346 total tested
