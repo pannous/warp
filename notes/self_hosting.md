@@ -110,6 +110,18 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
   `Data(…)`. Small floats keep their exponent on both sides (`2.5e-6`).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
 
+## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
+per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
+table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
+(test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipes, quasi_quote, tree_walks) → analyzer
+checks (match_exhaustive, switch unit names, index_positions, check_unit_names: analysis, warp-self-analyzer's side).
+- Passes the target eliminates are not ported: repair passes such as grouped_receivers (the parser's `f()` = `(f)`)
+  and of_lookups' repairs (`type of x` as a declaration head, `sum (of xs)` grouping). The twins already written stay
+  until the target passes replace them.
+- New ports go toward the target: the word-phrase pass and the scope pass (with warp-parsing: parser-scope-pass,
+  parser-keyword-table); broadcasting minimal; the structural keepers of the SUGAR_PASSES triage.
+
 ## Next phase: passes, analyzer, emitter
 Order: lowering passes first, then the analyzer, then the emitter; only the bootstrap waits for all three.
 - Next item: lib/math.warp and lib/units.warp become complete standalone warp files, and the parser fetches its
