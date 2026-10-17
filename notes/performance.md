@@ -71,6 +71,12 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
 - **Drawing on the GPU** (card gpu-draw, 2026-10-12; notes/drawing.md "On the GPU"): in a window, `use draw` sends
   shapes (24 bytes each) instead of the canvas's pixels. Finger paint, quick-release, 1024×768 window: show 29–45 →
   0.2 ms, clear 10–29 → 0–1 ms, canvas() 25–46 → 0 ms (no pixel list allocated).
+- **fast Ints** (card fast-int, 2026-10-16; probes/fast_int/fuel_cost.sh): a fast function wrapped every single
+  operation (operands to machine, result back to an Int, one branch each), so `fast` loops ran slower than exact
+  ones. Now a whole Int expression in a fast region is machine code (big_int.rs emit_machine_root): when its leaves
+  are proven fixnums or Int locals, one test of those locals and the result picks plain i64 code. 100M rounds of
+  `t = t + i % 7; i = i + 1`: fast 490 → 234 ms, exact 254 ms, the same loop in hand-written wasm 115 ms.
+  `byte_at` and `memory_byte` are proven 0…255. `x: i64` (`x: fast int`) wraps now; it was ignored.
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a
@@ -78,6 +84,10 @@ Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a
 closure typing has nothing to win here yet. Loops over typed lists, map, append: 2 million items in under 0.1 s.
 
 ## Still slow
+Fuel (card fuel-metering, probes/fast_int/fuel_cost.sh): every run meters fuel (warp-runtime engine::fueled_config),
+and that is most of what a call or a branch costs. 40M calls of a tiny function: 49 ms in the wasmtime CLI, 218 ms
+with `-W fuel`, 208 ms in warp. The 6 ns per closure call below is mostly fuel; so is the gap of the fast loop to
+hand-written wasm. Epoch interruption would be the cheap stop, but it is not deterministic as fuel is.
 Each use of a hash-table map as a whole value converts it (O(n)); a loop that prints or passes the map each round
 pays that every round.
 Finger paint after runtime-speed: `dot(col, row)` passes Ints to `cell(v)`, whose v is a float: int → f64 → floor →

@@ -40,7 +40,7 @@ wc(path:text) := {
 sort_lines(path:text) := sort(file_lines(path))
 unique_lines(path:text) := unique(file_lines(path))
 // `grep "fn " "main.rs"`: the lines of a file the regular expression matches
-grep(pattern:text, path:text) := [line for line in file_lines(path) if line matches pattern]
+grep(pattern:text, path:text) := [line for line in file_lines(path) if matches(line, pattern)]
 // `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches, hidden folders skipped (find itself
 // searches a list)
 find_files(folder:text, pattern:text) := std_io("file", "find", [folder, pattern])

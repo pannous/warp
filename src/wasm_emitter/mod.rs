@@ -33,6 +33,7 @@ pub(crate) mod maps;
 pub(crate) use control::loop_control::{is_step, mark_step, split_step};
 pub use maps::map_backend::MAP_COPY_SUFFIX;
 pub(crate) mod reflection;
+mod runtime_dependencies;
 mod string_table;
 pub(crate) mod text;
 mod type_manager;
@@ -119,6 +120,7 @@ enum ArithmeticWrap {
 ///   (field $value (ref null $Node)) ;; Child/value node (for Key, Pair, List, etc.)
 /// ))
 /// ```
+#[derive(Default)]
 pub struct WasmGcEmitter {
 	module: Module,
 	functions: FunctionSection,
@@ -178,8 +180,8 @@ pub struct WasmGcEmitter {
 	text_cursor_global: Option<u32>,
 	/// the indexes of maps held as cons lists: the first of their globals (map_index.rs emit_map_index_globals)
 	map_index_global: Option<u32>,
-	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
-	returns_float: bool, // the function being compiled returns an f64, so `return 7` returns 7.0
+	returns_number: bool, // the function being compiled returns an i64 or f64; main returns a Node, so `return x` gives x's Node
+	returns_float: bool,  // the function being compiled returns an f64, so `return 7` returns 7.0
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
@@ -188,8 +190,8 @@ pub struct WasmGcEmitter {
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
 	inherited_needs: std::collections::HashSet<Need>,
-	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
-	written_operator_bound: i64,
+	/// The highest operator code the needs ask list_text to write as written (see written_operator_bound)
+	highest_key_operator: i64,
 	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
 	writes_tags: bool,
 	/// The program parses code at run time (`parse(t)`): only then does a structure joining a text become its literal
@@ -233,91 +235,15 @@ pub struct WasmGcEmitter {
 	loop_variables: HashSet<String>,
 }
 
-impl Default for WasmGcEmitter {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
 impl WasmGcEmitter {
+	/// An emitter at the start of main, which returns a Node and whose list_text writes no operator but `:`
 	pub fn new() -> Self {
-		WasmGcEmitter {
-			module: Module::new(),
-			functions: FunctionSection::new(),
-			code: CodeSection::new(),
-			exports: ExportSection::new(),
-			names: NameSection::new(),
-			main_index: None,
-			start_index: None,
-			result_print: 0,
-			owns_memory: false,
-			globals: GlobalSection::new(),
-			tags: TagSection::new(),
-			guards_errors: false,
-			declares_list_types: false,
-			data_context: false,
-			error_catching: None,
-			memo_caches: HashMap::new(),
-			extra_global_names: Vec::new(),
-			number_constants: HashMap::new(),
-			config: EmitterConfig::default(),
-			type_manager: TypeManager::new(),
-			import_manager: ImportManager::new(),
-			string_table: StringTable::new(),
-			next_func_idx: 0,
-			next_global_idx: 0,
-			next_temp_local: 0,
-			ctx: Context::new(),
-			scope: Default::default(),
-			int_scratch: 0,
-			loop_values: LoopValues::default(),
-			wrapping_ints: false,
-			ratio_division: false,
-			int_division: false,
-			int_heap_global: 0,
-			int_count_global: 0,
-			list_cursor_global: None,
-			text_cursor_global: None,
-			map_index_global: None,
-			returns_node: true,
-			returns_float: false,
-			returned_tuple: vec![],
-			tuple_packers: HashMap::new(),
-			text_heap_global: None,
-			text_room_globals: None,
-			discovered_needs: Default::default(),
-			inherited_needs: Default::default(),
-			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
-			writes_tags: false,
-			parses_code: false,
-			type_errors: Vec::new(),
-			std_modules: Default::default(),
-			live_loops: Default::default(),
-			source_position: None,
-			statement_position: None,
-			loop_labels: Vec::new(),
-			typed_lists: HashMap::new(),
-			typed_globals: HashMap::new(),
-			typed_capture_globals: HashMap::new(),
-			main_typed_lists: None,
-			bounded_counters: std::collections::HashSet::new(),
-			typed_map_globals: HashMap::new(),
-			typed_maps: std::collections::HashSet::new(),
-			typed_structs: HashMap::new(),
-			instance_types: HashMap::new(),
-			struct_abi: HashMap::new(),
-			struct_results: HashMap::new(),
-			moved_lists: Vec::new(),
-			list_abi: HashMap::new(),
-			returns_list: false,
-			compare_witness: None,
-			text_witness: None,
-			shown: None,
-			late_calls: vec![],
-			closures: functions::closures::ClosureTypes::default(),
-			compiling: None,
-			loop_variables: HashSet::new(),
-		}
+		Self::default()
+	}
+
+	/// The highest operator code list_text writes as written: `:` at least, any code above the bound is written `:`
+	fn written_operator_bound(&self) -> i64 {
+		self.highest_key_operator.max(crate::operators::op_to_code(&crate::operators::Op::Colon))
 	}
 
 	/// Enable/disable emitting Kind globals for documentation
@@ -341,9 +267,13 @@ impl WasmGcEmitter {
 
 	/// Emit user-defined struct types from TypeRegistry
 	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
-		self.type_manager.emit_user_types(registry);
-		// Sync user type indices back to context
-		for type_def in registry.types() {
+		self.emit_struct_types(registry.types());
+	}
+
+	/// The struct types of the declared types, their indices noted in the context
+	fn emit_struct_types(&mut self, types: &[TypeDef]) {
+		for type_def in types {
+			self.type_manager.emit_single_user_type(type_def);
 			if let Some(idx) = self.type_manager.get_user_type_idx(&type_def.name) {
 				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
 			}
@@ -380,13 +310,10 @@ impl WasmGcEmitter {
 
 	/// Get function call index by name
 	fn func_index(&self, name: &str) -> u32 {
-		// First check user functions
-		if let Some(user_fn) = self.ctx.user_functions.get(name) {
-			if let Some(idx) = user_fn.func_index {
-				return idx;
-			}
+		if let Some(idx) = self.ctx.user_functions.get(name).and_then(|user_fn| user_fn.func_index) {
+			return idx;
 		}
-		// Then check registry (builtins/imports)
+		// then the builtins and imports
 		self.ctx
 			.func_registry
 			.get(name)
@@ -469,26 +396,20 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			// a local or parameter, then a global of that name: `g(x) := x as list` never takes a global x's kind
-			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
-					return local.kind;
-				}
-				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
-					return kind;
-				}
-				Kind::Symbol
-			}
+			Node::Symbol(name) => self
+				.scope
+				.lookup(name)
+				.map(|local| local.kind)
+				.or_else(|| self.ctx.user_globals.get(name).map(|&(_, kind)| kind))
+				.unwrap_or(Kind::Symbol),
 			// Call of a user function, also braceless: `f 3`
 			Node::List(items, _, _)
 				if items.len() >= 2
-					&& matches!(items[0].drop_meta(), Node::Symbol(name) if self.ctx.user_functions.contains_key(name)) =>
+					&& let Some(name) =
+						items[0].symbol_name().filter(|name| self.ctx.user_functions.contains_key(*name)) =>
 			{
-				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
 				if let Some(arity) = crate::closures::closure_call_arity(name) {
-					let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
-						Node::Symbol(variable) => Some(variable.as_str()),
-						_ => None,
-					});
+					let callee = items.get(1).and_then(Node::symbol_name);
 					let kinds = self.user_function_kinds();
 					return crate::closures::closure_call_site_kind(callee, arity, &self.ctx, &kinds);
 				}
@@ -533,33 +454,15 @@ impl WasmGcEmitter {
 		self.import_manager.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
 		self.next_func_idx = self.import_manager.import_count();
 		self.emit_gc_types();
-		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
-		self.emit_registered_user_types();
+		// the declared types' structs come after the GC types, before the functions
+		let declared_types = self.ctx.type_registry.types().to_vec();
+		self.emit_struct_types(&declared_types);
 		self.emit_instance_types();
 		if self.config.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 		self.emit_constructors();
-		// Emit constructors for registered user types
-		self.emit_registered_user_type_constructors();
-	}
-
-	/// Emit user types from internal type_registry
-	fn emit_registered_user_types(&mut self) {
-		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
-		for type_def in &types {
-			self.type_manager.emit_single_user_type(type_def);
-			// Update context with type indices
-			if let Some(idx) = self.type_manager.get_user_type_idx(&type_def.name) {
-				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
-			}
-		}
-	}
-
-	/// Emit constructors for registered user types
-	fn emit_registered_user_type_constructors(&mut self) {
-		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
-		for type_def in &types {
+		for type_def in &declared_types {
 			self.emit_user_type_constructor(type_def);
 		}
 	}
@@ -634,7 +537,7 @@ impl WasmGcEmitter {
 		if node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
 			self.parses_code = true;
-			self.written_operator_bound = (crate::operators::OP_CODES.len() - 1) as i64;
+			self.highest_key_operator = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
@@ -650,13 +553,12 @@ impl WasmGcEmitter {
 				None
 			}
 		});
-		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
+		self.highest_key_operator = key_operators.fold(self.highest_key_operator, i64::max);
 		self.writes_tags = reflection::library_ops::mentions_quoted_tag(node);
-		host::component_adapters::add_dependencies(&mut self.ctx.required_functions);
-		numbers::uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
-		self.require_function_text(); // before the similarity's: function_text needs values_equal
-		text::similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
-		text::text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		let dependencies: Vec<_> =
+			runtime_dependencies::every_dependency().into_iter().chain(self.function_text_dependency()).collect();
+		runtime_dependencies::require_dependencies(&mut self.ctx.required_functions, &dependencies);
+		text::text_builtins::require_float_text(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = control::try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
@@ -692,7 +594,7 @@ impl WasmGcEmitter {
 			Need::Function(name) => self.ctx.required_functions.contains(name),
 			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
 			Need::KeyOperator(code) => {
-				*code <= self.written_operator_bound
+				*code <= self.written_operator_bound()
 					|| !self.ctx.required_functions.contains(reflection::library_ops::LIST_TEXT)
 			}
 		}
@@ -828,12 +730,8 @@ impl WasmGcEmitter {
 		let func_type = self.type_manager.function_type(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
-		// Build locals list based on variable types
-		// Each variable gets its own entry, then temp locals (all i64)
-		let mut locals: Vec<(u32, ValType)> = Vec::new();
-		locals.extend(self.local_declarations(0));
-
-		// Add temp locals (i64 for now)
+		// each variable its own entry, then the temp locals, all i64
+		let mut locals = self.local_declarations(0);
 		if temp_locals > 0 {
 			locals.push((temp_locals, ValType::I64));
 		}
@@ -1050,11 +948,8 @@ impl WasmGcEmitter {
 			Node::Meta { .. } => {
 				self.emit_call(func, "new_empty");
 			}
-			Node::Error(inner) => {
-				// Emit the inner node, but mark as error in kind
-				// For now, just emit the inner
-				self.emit_node_instructions(func, inner);
-			}
+			// an Error node of the source emits its inner node (AGENTS.md "Serialization")
+			Node::Error(inner) => self.emit_node_instructions(func, inner),
 			Node::Type { name, body } => {
 				// Emit type as a tagged block with name and fields
 				self.emit_node_instructions(func, name);

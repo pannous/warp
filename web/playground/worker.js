@@ -110,12 +110,7 @@ async function loadCompiler() {
 	webWorkerBundle = awaitedEntry(compiler.web_worker_bundle);
 }
 
-function passText(text) {
-	const bytes = utf8.encode(text);
-	const pointer = compiler.web_alloc(bytes.length);
-	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
-	return [pointer, bytes.length];
-}
+const passText = text => passedBytes(compiler, utf8.encode(text)); // host-compiler.js
 
 // a program's main may wait for a promise (host.js JSPI): the compiler waits with it
 async function evaluate(code, acknowledged) {

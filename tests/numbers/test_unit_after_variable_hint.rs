@@ -1,0 +1,29 @@
+//! A unit after a variable is no quantity, units bind only after a number (notes/decisions.md): a constructor refusing
+//! `D(n inch)` names the way that works, `n * 1 inch` (cards diagonal-holds, decisions-md)
+use crate::common::{fails_with, warnings_of};
+use warp::wasm_emitter::eval;
+
+const DISPLAY: &str = "class D{diagonal: inch}\nn = 96";
+
+#[test]
+fn a_unit_after_a_variable_hints_the_multiplication() {
+	fails_with(&format!("{DISPLAY}\nD(n inch)"), "write n * 1 inch");
+	fails_with(&format!("{DISPLAY}\nD{{diagonal: n inch}}"), "write n * 1 inch");
+	assert_eq!(eval(&format!("{DISPLAY}\nD(n * 1 inch).diagonal")).serialize().trim(), "96inch");
+}
+
+#[test]
+fn a_unit_after_a_variable_holding_a_number_is_refused_everywhere() {
+	fails_with("n = 3\ny = n km\ny", "write n * 1 km");
+	fails_with("n = 96\nx: inch = n inch\nx", "write n * 1 inch");
+	fails_with("f(n) := n km\nf(2)", "write n * 1 km");
+	assert_eq!(eval("n = 3\nn * 1 km").serialize().trim(), "3km");
+	assert_eq!(eval("xs = [1, 2]\nxs cm").serialize().trim(), "[1cm 2cm]");
+}
+
+#[test]
+fn a_plain_variable_for_a_unit_field_suggests_the_multiplication() {
+	let (value, warnings) = warnings_of(&format!("{DISPLAY}\nD(n).diagonal"));
+	assert_eq!(value.serialize().trim(), "96inch");
+	assert!(warnings.iter().any(|warning| warning.contains("write the unit, `n * 1 inch`")), "{warnings:?}");
+}

@@ -7,7 +7,7 @@ libraries, maybe a shallow wrapper or a general mechanism… We want lots of fun
 access to anything." Card hijack-stdlib. Survey of what exists, options per ecosystem, recommendation, first step.
 
 ## What exists (main 1e0dea73f)
-- **C via FFI** (src/ffi.rs, ffi_parser.rs): `import f from "lib"` / `use lib` reads the library's headers
+- **C via FFI** (src/ffi/link.rs, ffi_parser.rs): `import f from "lib"` / `use lib` reads the library's headers
   (`<lib>.h`, `<lib>/<lib>.h` in the SDK and /opt/homebrew/include), parses the declarations, opens `lib<lib>.dylib/.so`
   (libloading) and links one generic wasmtime wrapper per signature shape (i32/i64/f32/f64/pointer params). Texts cross
   into C as NUL-terminated copies in linear memory. Works for libm, libc (string.h, stdlib.h, stdio.h) and SDL2.
@@ -21,7 +21,7 @@ access to anything." Card hijack-stdlib. Survey of what exists, options per ecos
 - **Host words** (src/host.rs): Rust functions the module imports, Node in / Node out. `run_block` reads Nodes with
   `wasm_reader::node_in` and builds its result with `tasks::Builders` (TaskValue: ø, Int, Float, Char, Text, Symbol,
   List, Key, Closure, Exact). That is a general bridge for any value: every connector below can use it.
-- **Capabilities** (src/analyzer/effects.rs): Host, Wasi, Ffi, Libm, Sql, Process. `eval` grants Host+Wasi+Ffi+Libm,
+- **Capabilities** (src/analyzer/effects/mod.rs): Host, Wasi, Ffi, Libm, Sql, Process. `eval` grants Host+Wasi+Ffi+Libm,
   `eval_untrusted` only Libm. Process (`exec sh "…"`) and Sql are granted by no host yet: there is no "allow anything"
   mode.
 - **Packages** (notes/packages.md): `use name` = local `.warp`, then builtin/FFI library, then the git registry
@@ -106,7 +106,7 @@ step 3.
   (`np.array([1, 2, 3]).sum()`). Reassigning the variable ends that.
 - Python numbers stay numbers: integral types (numpy ints) as Ints, inexact reals (numpy floats) as Floats; exact
   rationals (Fraction) and Decimals are handles. JS: Dates, Maps, class instances, functions are handles.
-- Shared rules with C's handles (warp-2d, card ffi-handles, table in src/ffi.rs): ids never addresses, one table per
+- Shared rules with C's handles (warp-2d, card ffi-handles, table in src/ffi/link.rs): ids never addresses, one table per
   runtime, freed at the end of the run, no user-visible free yet.
 - Operators (branch foreign-operators): an operator with a foreign operand forwards to its runtime's `operator` module:
   `a * 2` → operator.mul(a, 2), `-a` → neg, `a#2` → getitem(a, 1) (1-based to 0-based), `#a` / `count a` / `len(a)` →

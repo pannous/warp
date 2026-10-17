@@ -20,6 +20,15 @@ use std::collections::{HashMap, HashSet};
 const WRITTEN: &str = "it";
 const CANVAS: &str = "canvas";
 const SIDES: [&str; 2] = ["width", "height"];
+const DENSITY_NOTE: &str = "the pixels per length, in dpi";
+
+/// Other names of a property: object, alias, the property, the note naming it (decision display-names)
+const PROPERTY_ALIASES: [(&str, &str, &str, &str); 4] = [
+	("display", "dpi", "density", DENSITY_NOTE),
+	("display", "ppi", "density", DENSITY_NOTE),
+	("display", "dimensions", "size", "dimension is a physical quantity (length, mass); size is width × height in px"),
+	("display", "resolution", "size", "resolution: density (dpi) or size (px)? size is width × height"),
+];
 
 /// `object.property`: its getter body, its setter (parameter, body), the comment above its getter, the module it needs
 #[derive(Clone, Default)]
@@ -253,10 +262,20 @@ struct Rewrite {
 
 impl Rewrite {
 	/// The property `object.property` names (`member` the property's word), unless the program binds the object
+	/// (an other name of one, PROPERTY_ALIASES, names it with a hint)
 	fn property_of(&self, object: &Node, member: &Node) -> Option<(String, String)> {
 		let (object, property) = (object.drop_meta().symbol_name()?, member.drop_meta().symbol_name()?);
+		if self.bound.contains(object) {
+			return None;
+		}
 		let name = (object.to_string(), property.to_string());
-		(self.properties.contains_key(&name) && !self.bound.contains(object)).then_some(name)
+		if self.properties.contains_key(&name) {
+			return Some(name);
+		}
+		let (_, alias, canonical, note) =
+			PROPERTY_ALIASES.iter().find(|(of, alias, ..)| *of == object && *alias == property)?;
+		crate::normalize::hint(&format!("{object}.{alias}"), &format!("{object}.{canonical}"), note);
+		Some((object.to_string(), canonical.to_string()))
 	}
 
 	fn dotted_property(&self, node: &Node) -> Option<(String, String)> {

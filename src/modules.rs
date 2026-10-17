@@ -130,11 +130,6 @@ fn used_and_implicit_modules(program: &Node) -> Vec<String> {
 	names
 }
 
-/// The loader of the modules the program uses: the search folders, then the program file's own folder
-fn program_loader() -> Loader<'static> {
-	Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of))
-}
-
 /// The WebAssembly module a used name finds, when no warp source of that name exists
 fn wasm_module_path(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
 	loader
@@ -229,13 +224,5 @@ pub fn insert_module_classes(program: Node) -> Node {
 	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
-	match file_classes.is_empty() {
-		true => program,
-		false => match program {
-			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-				Node::List([file_classes, statements].concat(), Bracket::None, separator)
-			}
-			single => Node::List([file_classes, vec![single]].concat(), Bracket::None, Separator::Semicolon),
-		},
-	}
+	with_statements_in_front(program, file_classes)
 }

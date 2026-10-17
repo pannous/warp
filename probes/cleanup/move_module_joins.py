@@ -4,7 +4,7 @@ os.path.join(REPOSITORY, "src", "ffi_parser.rs") broke 9 browser tests after lay
 import importlib.util
 import os
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 spec = importlib.util.spec_from_file_location("move_module", os.path.join(REPO, "scripts", "move_module.py"))
 move_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(move_module)
