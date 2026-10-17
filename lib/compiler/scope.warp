@@ -35,55 +35,72 @@ parameters_of(head: any) := {
 # `def f(a) {…}` arrives as `((f (a)) {…})`: the head `(f (a))`
 definition_head(view: any) := if is_round(view) and #view > 3 and is_round(view#4) then definition_head(view#4) else view
 
-# the meanings a view gives, [name, meaning] each
-meanings_of(view: any) := {
-	kind = kind_of(view)
+as_parameters(names: any) := names.map(name => [name, "parameter"])
+
+# `f(a, b)` as a definition's head: the function and its parameters
+function_meanings(head: any) := {
+	if not is_round(head) { return [[head_name(head), "function"]] }
+	[[head_name(head), "function"]] + as_parameters(parameters_of(["list", "(", ""] + head[4 ..]))
+}
+
+# `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
+assignment_meanings(op: text, target: any, value: any) := match target {
+	["list", "(", _, _, ..._] => function_meanings(target)
+	_ => [[binding_name(target), if op == ":=" or is_lambda_view(value) then "function" else "variable"]]
+}
+
+# the meanings a word gives the item after it in a phrase: `for x`, `def f(a)`
+word_meanings(word: any, next: any) := match word {
+	["symbol", "for"] => [[binding_name(next), "loop"]]
+	["symbol", keyword] if function_keywords contains keyword => function_meanings(definition_head(next))
+	_ => []
+}
+
+# the meanings the words of a list view give
+phrase_meanings(view: any) := {
 	found = []
-	if kind == "key" and (view#2 == "=" or view#2 == ":=") {
-		target = view#3
-		if kind_of(target) == "list" and target#2 == "(" and #target > 3 {
-			found += [[binding_name(target#4), "function"]]
-			for name in parameters_of(["list", "(", ""] + target[4 ..]) { found += [[name, "parameter"]] }
-		} else {
-			meaning = if view#2 == ":=" or is_lambda_view(view#4) then "function" else "variable"
-			found += [[binding_name(target), meaning]]
-		}
-	}
-	if kind == "key" and (view#2 == "=>" or view#2 == "->") {
-		for name in parameters_of(view#3) { found += [[name, "parameter"]] }
-	}
-	if kind == "list" {
-		at = 4
-		while at < #view {
-			word = view#at
-			if kind_of(word) == "symbol" and word#2 == "for" { found += [[binding_name(view#(at + 1)), "loop"]] }
-			if kind_of(word) == "symbol" and function_keywords contains word#2 {
-				head = definition_head(view#(at + 1))
-				found += [[head_name(head), "function"]]
-				if is_round(head) { for name in parameters_of(["list", "(", ""] + head[4 ..]) { found += [[name, "parameter"]] } }
-			}
-			at += 1
-		}
-		if view#2 == "{" {
-			for item in view[3 ..] {
-				if kind_of(item) == "key" and item#2 == ":" { found += [[binding_name(item#3), "field"]] }
-			}
+	for at in 4 ..< #view { found += word_meanings(view#at, view#(at + 1)) }
+	found
+}
+
+# the meanings a view gives, [name, meaning] each
+meanings_of(view: any) := match view {
+	["key", op, target, value] if op == "=" or op == ":=" => assignment_meanings(op, target, value)
+	["key", op, parameters, _] if op == "=>" or op == "->" => as_parameters(parameters_of(parameters))
+	["list", _, _, ..._] => phrase_meanings(view)
+	_ => []
+}
+
+# `{k: v}`: the field k
+fields_of(view: any) := {
+	found = []
+	if kind_of(view) != "list" or view#2 != "{" { return found }
+	for item in view[3 ..] {
+		found += match item {
+			["key", ":", name, _] => [[binding_name(name), "field"]]
+			_ => []
 		}
 	}
 	found
+}
+
+# the scope with each [name, meaning] pair added
+remember(scope: any, pairs: any) := {
+	for pair in pairs {
+		name = pair#1
+		if name != ø and name != "" {
+			if not scope.has(name) { scope[name] = [] }
+			scope[name] = scope[name] + [pair#2]
+		}
+	}
+	scope
 }
 
 # name → its meanings, of the whole program
 scope_of(program: any) := {
 	scope = {}
 	for view in views_in(program) {
-		for pair in meanings_of(view) {
-			name = pair#1
-			if name != ø and name != "" {
-				if not scope.has(name) { scope[name] = [] }
-				scope[name] = scope[name] + [pair#2]
-			}
-		}
+		scope = remember(remember(scope, meanings_of(view)), fields_of(view))
 	}
 	scope
 }
