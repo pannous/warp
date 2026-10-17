@@ -338,7 +338,7 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	Some((Node::Symbol(IMPLICIT_PARAMETER.to_string()), walked))
 }
 
-/// The code points of a text, `codepoint·list(text)`
+/// The code points of a text, `code_point_list(text)`
 fn code_points_of(text: &Node) -> Node {
 	call(crate::library_words::CODE_POINT_LIST, vec![text.clone()])
 }

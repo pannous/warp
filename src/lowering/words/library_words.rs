@@ -27,7 +27,7 @@ use crate::words::LOG_WORD;
 use crate::words::NUMBER_WORD;
 use crate::words::ORD_WORD;
 use crate::words::SPLIT_WORD;
-use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
+use crate::words::{MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -74,55 +74,51 @@ const COUNT_PART: &str = "count_of";
 /// lib/prelude.warp's byte list of a text, `t.bytes`
 pub(crate) const BYTE_LIST: &str = "bytes";
 
-/// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 38] = [
-	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
+/// The library's words under their canonical names; their other spellings are lib/prelude.warp's alias lines
+const LIBRARY_WORDS: [&str; 38] = [
+	crate::wasm_emitter::text::text_builtins::WARNING,
 	// Python's tuple(xs) (card python-stdlib)
-	(LIST_WORD, &["tuple"]),
-	(MAP_KEYS, &["keys"]),
-	(MAP_VALUES, &["values"]),
-	(MAP_ENTRIES, &[]),
-	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
-	(MAP_GET_OR, &["get"]),
-	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
-	(COLLECTION_POSITION, &["index_of"]),
-	// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too
-	// decision text-unit-plurals: `t.graphemes`, `t.codepoints` are the lists
-	(CHARS_WORD, &["characters", "glyphs", "graphemes"]),
-	(CODE_POINT_LIST, &["codepoints"]),
-	("upper", &["uppercase"]),
-	("lower", &["lowercase"]),
-	// the text builtin trim (text_builtins.rs), Python's strip
-	("trim", &["strip"]),
-	("reverse", &["reversed"]),
-	("sort", &["sorted"]),
-	("split", &[]),
-	("join", &[]),
-	("first", &[]),
-	("last", &[]),
-	(SLICE, &[]),
-	(COPY_WORD, &["clone"]),
-	("replace", &[]),
-	(ORD_WORD, &["ordinal", CODEPOINT]),
-	(IS_DIGIT, &["isdigit"]),
-	("mean", &["average"]),
-	(IS_ALPHA, &["is_letter", "isalpha"]),
-	("is_alphanumeric", &["is_alnum", "isalnum"]),
-	("is_space", &["is_whitespace", "isspace"]),
-	("nearest", &[]),
+	LIST_WORD,
+	MAP_KEYS,
+	MAP_VALUES,
+	MAP_ENTRIES,
+	COLLECTION_CONTAINS,
+	MAP_GET_OR,
+	COLLECTION_POSITION,
+	CHARS_WORD,
+	CODE_POINT_LIST,
+	"upper",
+	"lower",
+	"trim",
+	"reverse",
+	"sort",
+	"split",
+	"join",
+	"first",
+	"last",
+	SLICE,
+	COPY_WORD,
+	"replace",
+	ORD_WORD,
+	IS_DIGIT,
+	"mean",
+	IS_ALPHA,
+	"is_alphanumeric",
+	"is_space",
+	"nearest",
 	// lib/prelude.warp's digits in a base up to 36 and back
-	("to_base", &[]),
-	("from_base", &[]),
+	"to_base",
+	"from_base",
 	// lib/prelude.warp's Euclidean length of a list, a number's absolute value (decision S3)
-	("norm", &[]),
-	("magnitude", &[]),
+	"norm",
+	"magnitude",
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
-	(DICT_WORD, &[]),
-	(FROMKEYS, &[]),
+	DICT_WORD,
+	FROMKEYS,
 	// lib/prelude.warp's count of a part of a text (`count "an" in t` calls it too)
-	(COUNT_PART, &[]),
-	(BYTE_LIST, &[]),
-	(crate::words::UNWRAP, &[]),
+	COUNT_PART,
+	BYTE_LIST,
+	crate::words::UNWRAP,
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/lists/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
@@ -130,7 +126,7 @@ pub const LIST_SUM: &str = "list_sum";
 /// `t.chars`: the list of a text's characters, a grapheme cluster each (`char` is short for character)
 pub const CHARS_WORD: &str = "chars";
 /// The list of a text's code points, which `for codepoints in t` and `for each codepoint in t` walk
-pub const CODE_POINT_LIST: &str = "codepoint·list";
+pub const CODE_POINT_LIST: &str = "code_point_list";
 /// The runtime functions behind them: text_graphemes(text), the list of its characters; text_chars(text), of its code points
 pub const TEXT_GRAPHEMES: &str = "text_graphemes";
 pub const TEXT_CODE_POINTS: &str = "text_chars";
@@ -367,11 +363,9 @@ pub fn canonical_spelling(name: &str) -> &str {
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
-	SYNONYMS
-		.iter()
-		.find(|(word, synonyms)| *word == name || synonyms.contains(&name))
-		.map(|(word, _)| *word)
-		.or((name == SUM_WORD).then_some(SUM_WORD))
+	let aliases = crate::modules::prelude_aliases();
+	let name = aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str());
+	LIBRARY_WORDS.into_iter().chain([SUM_WORD]).find(|word| *word == name)
 }
 
 pub(crate) fn arity(word: &str) -> usize {
