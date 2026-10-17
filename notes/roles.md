@@ -106,8 +106,9 @@ stating its net src/ delta. Feature cuts go to the Interviewer. Prompt: notes/ag
 A standing `claude --cloud` session in fast mode (user, 2026-10-17) that fixes the user's urgent cards; crash cards
 keep their local worker. ~/dev/bin/urgent-card-watch sends it each new urgent card (`claude -p … --cloud <id>`, the id
 in ~/.cache/todo-board/urgent-cloud-session; SendMessage is held for approval there) and collects its pushed
-`claude/urgent-<key>` branches: a report saying `done` goes into the merge queue as express, `needs-mac` to the
-Supervisor, a direct push to main closes the card. Prompt and direct-to-main rules: notes/agents/urgent_cloud.md.
+`claude/urgent-<key>` branches: a `done` report whose tip is on main closes the card, `needs-mac` goes to the
+Supervisor. warp-urgent pushes and merges every card to main itself, in any area, without the merge queue (user with
+warp-urgent, 2026-10-17); the Integrator's next full run checks it. Prompt: notes/agents/urgent_cloud.md.
 Start (or replace) it: `tmux new-session -d -s cloud-warp-urgent -c /Users/me/dev/angles/warp "claude --model opus
 --name warp-urgent --settings '{\"fastMode\": true}' --cloud 'You are warp-urgent. Read notes/agents/urgent_cloud.md
 and AGENTS.md, then do the Priming and wait for urgent cards.'"`, then write its session id into that file and
