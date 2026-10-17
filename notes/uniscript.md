@@ -1,7 +1,7 @@
-# Uniscript in warp: what it took (uniscript.wasp of the uniscript package)
+# Uniscript in warp (uniscript.wasp of the uniscript package)
 Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
-`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and, since 1.0.8 (card takes-three), calls its release asset uniscript_c.wasm (the C library of its Rust implementation as a core module) through lib/packages/uniscript.warp: 0.3 s per program instead of 1.5-3 s compiling uniscript.wasp, which `use uniscript version 1.0.0` and other older tags still load (notes/packages.md); index format: its src/index.rs.
+`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and calls its release asset uniscript_c.wasm since 1.0.8 (the C library of its Rust implementation as a core module) through lib/packages/uniscript.warp: 0.3 s per program instead of 1.5-3 s compiling uniscript.wasp, which `use uniscript version 1.0.0` and other older tags still load (notes/packages.md); index format: its src/index.rs.
 Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tests/text/test_text_bytes.rs, tests/text/test_text_functions.rs.
 
 ## Language features added for it (Rust)
@@ -11,24 +11,11 @@ Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tes
 - `read(path)` → the file's bytes as Text, or an Error with the reason (host import `host.read`, like `fetch`).
 - `byte_at(text, offset)`, `byte_slice(text, start, end)`: 0-based byte offsets, end exclusive; slices share memory.
 - `error message` makes an Error value.
-- The module exports its text heap global `text_heap`; the host allocates `read`/`fetch` results from it. Before, the host
-  wrote at 65536+ by its own counter, which could overlap texts the module allocated at runtime.
+- The module exports its text heap global `text_heap`; the host allocates `read`/`fetch` results from it.
 
-## Bugs fixed on the way (all were silent wrong results or validation failures)
-- while loops in functions took local 0 and 1 as temps: they overwrote the first parameter and variable.
-- `if a < n {…}` / `while i < n {…}` parsed the block as an argument of `n`. Still open: `i<n {` without spaces lexes `<n` as a tag.
-- `return x` inside a statement of a Node-returning function returned a number; `if c { return "t" }; …` did not make
-  the function text-valued; `if … {"a"} else {"b"}` in a function was numeric.
-- `{ if c {…}; x }` was read as a data list `{0 x}`: `if`, `while`, `i++`, `return` now mark a statement sequence.
-- A dropped statement that updates a text (`s += "a"`, `if c { s += "a" }`, a while body doing that) was emitted as a number.
-- `f("a")` for `f(t:text)`: a one-character literal is a codepoint and is now converted to text at the call.
-
-## Language pitfalls to know when writing warp (not fixed)
-- `"a"` with one character is a codepoint: a variable first assigned `"x"` is a codepoint variable, `s = s + "ab"` then fails loudly. Start texts with `""`.
-- `/` is exact division (rationals): use `>> 1` for halving indices.
-- `global g = read(…)` fails ("undefined variable: read"); `const g = read(…)` works and is imported by `use`.
-- Unannotated parameters are Int: annotate text parameters `f(t:text)`.
-- The ignored test `test_string_concat_wasm` (tests/wasm/test_wasm.rs) now passes; it is left ignored (existing tests are not edited).
+## Language pitfalls to know when writing warp
+- `/` is exact division (rationals: `1/3`): use `>> 1` for halving indices.
+- `i<n{` glued to its block fails ("cannot extract a numeric value from n{…}"): write `i < n {`.
 
 ## Design decisions
 - Controls follow their character (uniscript repository, fonts/README.md): `<:red A>` → A U+E0072. A block's own entry wins over the suffix,

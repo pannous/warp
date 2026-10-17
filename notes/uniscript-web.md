@@ -1,9 +1,9 @@
 # Uniscript web page
 
 https://pannous.com/uniscript/ — `web/uniscript/`: a textarea whose uniscript is converted live by `use uniscript`
-(uniscript.warp) compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicode_to_uniscript`). Since
-uniscript 1.0.8 (card takes-three) the program imports the package's C library uniscript_c.wasm by path and the page
-links it itself (card web-uniscript): 14 KB program + 10 MB library (brotli on the server) instead of 76 KB + the 3.4 MB index.
+(uniscript.warp) compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicode_to_uniscript`). The
+program imports the package's C library uniscript_c.wasm (uniscript ≥ 1.0.8) by path and the page links it itself: 14 KB
+program + 10 MB library (brotli on the server).
 
 ## Build and deploy
 
@@ -31,13 +31,13 @@ the uniscript repository's `fonts/dist` (`UNISCRIPT_FONTS`) or `~/Library/Fonts`
   freed, a `t` result is read into a new_text and freed with uniscript_free (a reduced web/playground/host-foreign.js
   callC; other letters are a loud error). Sites do the same with their imports renamed to `page:modules/<file>`
   (src/web/site_modules.rs); a hand-made page like this one keeps the absolute path and matches by file name.
-- `host.read` is a synchronous XHR (charset `x-user-defined` keeps the bytes); the program no longer reads any file.
+- `host.read` is a synchronous XHR (charset `x-user-defined` keeps the bytes); the program reads no file.
 - Imports come from imports.js `importDescriptors`: `host.read`, `host.fetch`, `host.fetch_within`, `host.warn` are real
   (`warning(message)` in warp lists under the output of the conversion that raised it, cleared on the next one),
   `host.run` and anything unknown warn in the page and return 0 / -1.
 - Bytes go into memory by the rule of `src/host.rs write_bytes_to_caller` (the exported `text_heap` bump pointer, fresh
   pages when it is 0 or full), then `new_text(ptr, len)`.
-- Results: JS cannot read WASM GC struct fields, so warp now exports `get_text_ptr` / `get_text_len` next to `get_kind`
+- Results: JS cannot read WASM GC struct fields, so warp exports `get_text_ptr` / `get_text_len` next to `get_kind`
   (the `$String` of a Text, Symbol or Error, 0 otherwise). `tests/text/test_text_getters.rs` does the same in wasmtime.
 - After each conversion `text_heap` is reset to its value after init: `out += …` allocates a fresh text per append, and
   the results are copied out immediately, so memory does not grow with typing.
@@ -70,5 +70,5 @@ with ~100 unicode-range slices per font (frequency-ordered zh/ja/ko first, then 
   - base + TAG (你 mirror/color): the base's plain slice file as an unranged face (cached); slices carry TAG undeclared.
 - Verified with the uniscript repository's probes/font_slices/shaping.html: sliced = whole font for all cases.
 - Cold load of pannous.com/uniscript/rust/: 12.8 MB → 2.3 MB. The main page with every example clicked: fonts 12.6 → 2.2 MB.
-- pannous.com gzips application/json since 2026-09-30 (fonts.json 55 → 13 KB).
+- pannous.com gzips application/json (fonts.json 55 → 13 KB).
 - Not handled: text in textareas (no spans), and a TAG effect on a composed IDS character.
