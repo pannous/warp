@@ -1,43 +1,25 @@
 # Churn volumes: build output and junk off the Data volume
 
-Problem: after a few days of 20 parallel agent sessions fseventsd goes wild. `.noindex` only stops Spotlight;
-fseventsd still logs every write on the Data volume (shared cargo target, scratch, temp files).
-
-Fix: two APFS volumes (created 2026-10-16, both share the container's free space), each with
-`.fseventsd/no_log` at its root (fseventsd keeps no log; needs sudo, then remount), Spotlight off, Time Machine excluded.
-They differ in when they may be wiped (`diskutil apfs deleteVolume <disk>`, then recreate and redo the setup):
+fseventsd logs every write on the Data volume (`.noindex` only stops Spotlight), and with many parallel agent sessions
+the shared cargo target, scratch and temp files made it go wild. So churn lives on APFS volumes of their own (they
+share the container's free space), each with `.fseventsd/no_log` at its root (needs sudo, then remount), Spotlight off,
+Time Machine excluded:
 
 | volume | disk | holds | wipe when |
 |---|---|---|---|
-| /Volumes/Junk | disk3s8 | scratch/, test and probe temp dirs, $TMPDIR warp*, cloud-test waiter files | any time; worst case a running test fails and is rerun |
-| /Volumes/Build | disk3s7 | shared cargo target, sccache cache | only with an empty test queue and no builds (Integrator idle); costs one full rebuild |
+| /Volumes/Junk | disk3s8 | scratch/ (the main checkout's scratch is a symlink to /Volumes/Junk/warp/scratch), test temp dirs (tests/queue.sh sets TMPDIR=/Volumes/Junk/tmp), cloud-test waiter files | any time; worst case a running test fails and is rerun |
+| /Volumes/Build | disk3s7 | the shared cargo target (`target-dir` in ~/.cargo/config.toml; ~/.cargo/shared-target.noindex is a symlink to it) | only with an empty test queue and no builds (Integrator idle); costs one full rebuild |
+| /Volumes/Worktrees | disk3s9 | new worktrees, `/Volumes/Worktrees/<name>` | never |
 
-Old worktrees (/Users/me/dev/angles/warp.worktrees.noindex) stay on the Data volume until retired; NEW worktrees go
-straight to /Volumes/Worktrees/<name> (disk3s9, user 2026-10-16, card new-worktrees): no_log, Spotlight off, Time Machine
-excluded for the whole volume (user: work is pushed per step), no .noindex subfolder. Never wiped. cowtree needs a
-registered donor worktree on that volume, one per project named after it: /Volumes/Worktrees/warp, detached at origin/main
-(the volume may hold other projects later), never removed (scripts/prune-worktrees.sh keeps it on origin/main).
-data/ (kept logs and results) stays in the repo.
+Wipe: `diskutil apfs deleteVolume <disk>`, then recreate and redo the setup (guide: ~/dev/bin/notes/apfs-churn-volumes.md).
 
-## Status
-- [x] volumes created, Spotlight off
-- [x] user (sudo), remounted 2026-10-16: no_log + Time Machine exclusion on both
-- [x] 2026-10-16 22:03: target-dir in ~/.cargo/config.toml → /Volumes/Build/target (no copy: the old
-  ~/.cargo/shared-target.noindex was 204 GB; sccache makes the cold rebuild cheap); prune-cargo-target.sh reads the
-  target dir from the config
-- [x] old ~/.cargo/shared-target.noindex deleted, the path is a symlink to /Volumes/Build/target
-- [x] 2026-10-17: the main checkout's scratch/ is a symlink to /Volumes/Junk/warp/scratch (ignored as /scratch);
-  test runs through tests/queue.sh get TMPDIR=/Volumes/Junk/tmp/. sccache stays on Data (1 GB, little churn).
-  Worktrees on /Volumes/Worktrees keep their own scratch/ there (no_log already).
-- [ ] the Integrator's integrate* worktrees and the infra trees main-binary, nightly, trial still live in
-  warp.worktrees.noindex on Data (scripts name those paths); move them to /Volumes/Worktrees with their scripts
+- cowtree needs a registered donor worktree on the Worktrees volume, one per project named after it:
+  /Volumes/Worktrees/warp, detached at origin/main, never removed (scripts/prune-worktrees.sh keeps it on origin/main).
+- Older worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay on Data until retired; the Integrator's integrate*
+  worktrees and the infra trees (main-binary, nightly, trial) still live there because scripts name those paths.
+- sccache's cache and data/ (kept logs and results) stay on Data.
+- APFS clones (clonefile, `cp -c`, cowtree) work only inside one volume. Cargo's hard links stay inside the target dir.
+  A copy from Build to Junk or Data (scripts/own-warp.sh → scratch/warp) is a real copy of ~225 MB.
 
-## Copy-on-write
-APFS clones (clonefile, `cp -c`, cowtree) work only inside one volume, not across volumes of the same container.
-So worktrees stay on Data next to the main checkout (cowtree clones it). Cargo's hard links (deps → uplifted binary,
-the tests' own_copy into target tmp/) stay inside the target dir, so they keep working on Build. A copy from Build to
-Data or Junk (scripts/own-warp.sh → scratch/warp) is a real copy of ~225 MB.
-- [ ] scripts/prune-cargo-target.sh: offer a full Build wipe when the target grows past its limit and the queue is empty
-- [ ] check that editors still get live file-change events there (no_log should only stop the on-disk log)
-
-General guide (setup commands, copy-on-write rules, reuse for other projects): ~/dev/bin/notes/apfs-churn-volumes.md
+Open: prune-cargo-target.sh could offer a full Build wipe when the target grows past its limit and the queue is
+empty; check that editors still get live file-change events on no_log volumes.
