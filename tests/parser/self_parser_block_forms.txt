@@ -12,3 +12,9 @@ repeat⏎⇥a b
 for x in xs:⏎  a⏎  b⏎c
 r = 2⏎  f x⏎y
 if c:⏎    a⏎    if d:⏎        b⏎    e
+x = (1 + 2]
+print 3 ¤ 4
+f(a, b]
+y = [1, 2)
+a ] b
+g = { for x in xs:⏎    a }⏎print 1

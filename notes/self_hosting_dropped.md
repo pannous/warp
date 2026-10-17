@@ -23,6 +23,22 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 | `$a` pattern names | `match n { data($a + 0) … }` | edge form of node patterns | a `$` name atom |
 | Error nodes for malformed input | `y = [1 2` → "`]` is missing" | come back with the diagnostics port | the parser's error nodes and their texts |
 
+## Deviations
+Rust tree shapes parser.warp does not copy (notes/self_hosting.md: matching Rust is a check, not the goal). The parser
+differential reads them as expected: tests/common/parser_deviations.rs rewrites the Rust tree to the clean shape, one
+function per entry. Each entry has a card for the Rust side; when Rust changes, its function goes.
+
+| Key | Form | Rust | parser.warp | Card |
+|-----|------|------|-------------|------|
+| square-cube | `x²` | `x ²` (a suffix operator, a second shape for powers) | `x ^ 2`, as `x⁴` is `x ^ 4` | rust-square-cube |
+| definition-head | `f(x, y) { x }` | `((f (x y)) {x})`: the parameters a nested group | `((f x y) {x})`: the head a call | rust-definition-head |
+| bare-return | `return` | the phrase `[return ø]` | the word `return` | rust-bare-return |
+| colon-body | `for 1..3: print it` | the body wrapped as `{;}` | the body bare, as in `for i in xs: x` (`3 times: x` keeps `{;}`: a block runs, `3 times "ab"` repeats) | rust-colon-body |
+
+Fixed in both parsers instead (2026-10-17): hex digit separators `0xFF_FF`; a wrong closer `(1 + 2]` and a stray
+top-level `]` are error nodes (before: skipped, the group "ran to the end of the input"); `3 times: print it` runs
+the whole rest of the line (before: only `print`).
+
 # Pass twins: fringe forms a warp twin leaves out
 The port keeps the clean core, not every Rust case (user 2026-10-17). A twin may skip a fringe form when it is
 recorded here with how to bring it back; the harness (tests/common/twins.rs pass_differential, `dropped`) skips the

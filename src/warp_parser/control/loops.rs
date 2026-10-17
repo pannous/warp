@@ -392,10 +392,8 @@ impl WarpParser {
 		self.skip_spaces();
 		let operand = match self.current_char() {
 			'{' | '[' => self.parse_atom(),
-			':' => {
-				self.advance();
-				as_block(self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
-			}
+			// `3 times: print it` runs the rest of the line, or the lines indented below
+			':' => as_block(self.with_equals_comparing(false, |parser| parser.colon_body(":"))),
 			quote_or_letter
 				if matches!(quote_or_letter, '"' | '\'')
 					|| self.is_identifier_start(0)

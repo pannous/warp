@@ -57,3 +57,10 @@ fn test_hex() {
 	is!("0xdce4c9b", 0xdce4c9b);
 	is!("0x113fddce4c9b", 0x113fddce4c9bi64);
 }
+
+#[test]
+fn test_digit_separators_in_hex_and_binary() {
+	is!("0xFF_FF", 0xFFFF);
+	is!("0xdead_beef", 0xdeadbeefi64);
+	is!("0b1010_1010", 0b1010_1010);
+}

@@ -2,12 +2,12 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool; branch: bool }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool; branch: bool; grouped: bool }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false, branch: false}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false, branch: false, grouped: false}
 	items(p, ' ', "")
 }
 
@@ -16,17 +16,30 @@ def tree(source) {
 // Rust twin: lists.rs parse_list_with_separators
 def items(p, closer, bracket) {
 	found = []
+	opener = p.at - 1
 	outer_branch = p.branch
+	outer_grouped = p.grouped
 	p.branch = false
+	p.grouped = p.grouped or closer != ' '
 	while true {
 		skip_blanks(p)
 		if p.at >= p.n { break }
-		if p.code[p.at] == closer {
+		c = p.code[p.at]
+		if c == closer {
 			p.at = p.at + 1
 			break
 		}
+		stray = c == ')' or c == ']' or c == '}'
+		if stray and closer != ' ' {
+			p.at = p.at + 1
+			p.branch = outer_branch
+			p.grouped = outer_grouped
+			return failed("`" + c + "` closes the group opened at " + line_and_column(p.code, opener) + ", which needs `" + closer + "`")
+		}
+		// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
+		if stray and p.grouped { break }
 		before = p.at
-		item = expression(p, 0)
+		item = if stray then stray_closer(p, c) else expression(p, 0)
 		newline = skip_blanks(p)
 		if bracket == "" and newline and line_indent(p) > p.indent {
 			body = lines_below(p)
@@ -37,11 +50,32 @@ def items(p, closer, bracket) {
 		after = if dedent then "" else separator(p, closer, newline)
 		found += [[statement, after] for statement in statements_of(item)]
 		if dedent { break }
-		// a closer of another bracket: skipped, so the reading goes on
 		if p.at == before { p.at = p.at + 1 }
 	}
 	p.branch = outer_branch
+	p.grouped = outer_grouped
 	grouped(found, bracket)
+}
+
+def stray_closer(p, c) {
+	p.at = p.at + 1
+	failed("`" + c + "` closes no group")
+}
+
+// An error node with its message, as the Rust parser writes one into the tree
+def failed(message) := ["error", ["text", message]]
+
+// `line:column` of the character at `at`, both from 1
+def line_and_column(code, at) {
+	line = 1
+	start = 0
+	for i in 0 ..< at {
+		if code[i] == '\n' {
+			line = line + 1
+			start = i + 1
+		}
+	}
+	"" + line + ":" + (at - start + 1)
 }
 
 // The indent of the parser's position on its line: its tabs, its spaces too inside a block indented by spaces
@@ -409,11 +443,8 @@ TIMES_POWER = 50
 // Rust twin: suffixes.rs parse_times_loop
 def repeated(p) {
 	if is_at(p.code, p.at, ':', p.n) {
-		p.at = p.at + 1
-		skip_spaces(p)
-		body = expression(p, 0)
-		if is_block(body) { return body }
-		return listed("{", ";", [body])
+		body = colon_body(p, 1)
+		return if is_block(body) then body else listed("{", ";", [body])
 	}
 	atom(p)
 }
@@ -772,7 +803,8 @@ def returned(p) {
 	c = peek(p.code, p.at, p.n)
 	value = ø
 	if not (c == '}' or c == ';' or c == '\n' or c == '\r') { value = continued(p, expression(p, 59), 0) }
-	listed("", " ", [["symbol", "return"], value])
+	// `return` alone is the word (Rust: [return ø], Deviations bare-return)
+	if value === ø then ["symbol", "return"] else listed("", " ", [["symbol", "return"], value])
 }
 
 // The operators after which `return` names a variable
@@ -906,7 +938,8 @@ def ranged_loop(p) {
 		body = indented_block(p)
 	}
 	if body == ø { return ø }
-	listed("", " ", [["symbol", "for"], iterable, if is_block(body) then body else listed("{", ";", [body])])
+	// a colon body stays bare, as in `for i in xs: x` (Rust wraps it: Deviations colon-body)
+	listed("", " ", [["symbol", "for"], iterable, body])
 }
 
 // A condition that took the block after it as an argument, `if x in xs {…}`: [the condition, the block], else []
@@ -1040,7 +1073,7 @@ def atom(p) {
 		return ø
 	}
 	p.at = p.at + 1
-	ø
+	failed("Unexpected character '" + c + "'")
 }
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
@@ -1055,7 +1088,8 @@ def with_glued_factor(p, amount) {
 	["key", "*", amount, if power == ø then factor else power]
 }
 
-// `x⁴` is x^4, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5; a lone ² or ³ keeps its square or cube operator:
+// `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5 (Rust keeps a lone ² or ³ as its own operator:
+// notes/self_hosting_dropped.md Deviations square-cube):
 // the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
 // Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
 def superscript_power(p, left, min_power) {
@@ -1076,9 +1110,9 @@ def superscript_power(p, left, min_power) {
 	total = 0
 	for term in terms { total = total + term#1 * term#2 }
 	power = ["key", "^", left, if total < 0 then 0 - total else total]
-	if width == 1 and total == 2 { power = ["key", "²", left, ø] }
-	if width == 1 and total == 3 { power = ["key", "³", left, ø] }
-	if (if power#2 == "^" then binding_powers("^")#1 else SUFFIX_POWER) < min_power { return ø }
+	// a lone ² or ³ binds as a suffix: `a.b²` squares a.b
+	suffix = width == 1 and (total == 2 or total == 3)
+	if (if suffix then SUFFIX_POWER else binding_powers("^")#1) < min_power { return ø }
 	p.at = p.at + width
 	reciprocal_if(total < 0, power)
 }
@@ -1141,7 +1175,8 @@ def named(p) {
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
-		return listed("(", "", [listed("(", "", [name, arguments]), body])
+		// the head is the call f(x, y) (Rust nests the parameters: Deviations definition-head)
+		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))
 }
@@ -1317,13 +1352,14 @@ def starts_code(first) {
 	is_call_head(first) and is_symbol(first#4)
 }
 
-// The digits of a number in `base` (`_` between binary digits), read
+// The digits of a number in `base` (`_` between digits), read
 // Rust twin: literals.rs read_number_value, its 0x and 0b branches
 def radix_value(p, base) {
 	value = 0
 	while p.at < p.n {
 		c = p.code[p.at]
-		if not (c == '_' and base == 2) {
+		separates = c == '_' and (base == 2 or digit_value(peek(p.code, p.at + 1, p.n)) < base)
+		if not separates {
 			digit = digit_value(c)
 			if digit >= base { return value }
 			value = value * base + digit
