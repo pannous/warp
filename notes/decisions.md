@@ -22,7 +22,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   exclusion list. Sizeable syntax drops go to the user as questions.
 - self-parser-drops: lib/compiler/parser.warp leaves out foreign syntax (Rust macros, Python
   generators/yield from, Ruby blocks), music `go {…}`, phrase definitions (`to get price of item := …`), CSS in style;
-  silently also WGSL shader holes, `$a` pattern names, error nodes. Code is data: music and CSS need no parser syntax and
+  silently also WGSL shader holes and error nodes (`$a` pattern names stay: pattern-roadmap). Code is data: music and CSS need no parser syntax and
   must still work as library data DSLs (`tune d:data := play d` → `tune { c4 e4 g4 }`, note names are sound-library
   constants; `style {…}` reads its block as data).
 - sugar-twins-drops: lib/compiler/passes.warp leaves out Rust Option forms (`if let Some`, `match o {Some/None}`,
@@ -99,7 +99,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - Error highlighting: CLI carets under the word; web red/amber wavy underlines with the message on hover.
 - #7/P92 unresolved calls are errors: `foo()` is "undefined function: foo"; a bare word statement naming nothing is "undefined variable: foo"; a bare `foo` in data stays a symbol.
 - constant-words (leave as is): null nul none nil nill nix nada nothing empty void true yes false no are constants in any case; `empty = 3` is `ø = 3`.
-- function-words-consume (user): every function word, not only print, takes everything right of it as arguments, nesting rightward: `show a, b` = show(a, b), `print ord c` = print(ord(c)); non-function words are unchanged.
+- function-words-consume (user): every function word, not only print, takes its arguments without parentheses, by its parameters (arity and types), no special rules: `show a, b` = show(a, b), `add 1 2` = add(1, 2), `print ord c` = print(ord(c)), `[twice 1, twice 2]` = [twice(1), twice(2)], `count xs > 3` = count(xs) > 3; a function word where the parameter takes a function is a value (`map square xs` = map(square, xs)); non-function words are unchanged. An argument reaches right as long as the expression fits the parameter type (`sqrt 4 + 5` = sqrt(9); `xs > 3` is a bool, so count stops). Varargs/defaults take what fits to the statement end, overloads the most arguments that type-check, a function value of unknown arity one atom per blank (Interviewer's decision).
 - P86 adding values of unknown kinds builds `a + b` lazily; evaluated operands need Addable, else a type error.
 
 ## Comments, separators and lexing
@@ -196,7 +196,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P179 sum types auto-unwrap like optionals; payload fields by position `rgb(1,2,3)#1`; a payload-free variant is its symbol and `red is Color`. P178 enum cases with values are sealed classes.
 - P45 a variable given kinds that don't mix (`x=[1]; x=5`) is a compile error; Int→Float widening stays; undeclared lists stay `list any`.
 - P28 `real x;` read before assignment is its type's zero value.
-- P23/P20/type-words-reserved: every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`.
+- P23/P20/type-words-reserved: every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as` (Interviewer's decision).
 - #9 `list of int`; plural type words (`numbers`) are lists; `list<int>` reads too; `x : 100 int` and `pixel:int[100]` declare typed arrays.
 - `type(ø)` prints "empty". static-int: a constant call misfitting its declared int result is refused at compile time.
 - D5 any noun can name a type/parameter (notes/matching.md).
@@ -297,6 +297,11 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ now floor division: julia-floor-divide).
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
+- pattern-roadmap (user 2026-10-17, notes/matching.md ★): pattern-clauses: functions whose parameters are patterns are
+  clauses tried in order (`simplify(data($a * 1)) := a; simplify(n) := n`); binding-alternatives: `|` branches bind when
+  every branch binds the same names; whole-binding: `as` inside a pattern names the (sub)pattern
+  (`data($f($inner) as call)`), outside it casts; text-patterns: `"0x" + rest`, at most one hole per side, plus
+  prefix/suffix and character classes.
 
 ## Classes, objects and enums
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).

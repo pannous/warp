@@ -1,0 +1,3 @@
+// Bug repro (card nested-use-class-field): prints 3 expected; "unknown type: Inner of field inner"
+use "outer.warp"
+print make().inner.x

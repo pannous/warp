@@ -13,6 +13,10 @@ mod loader;
 use loader::*;
 mod std_modules;
 pub use std_modules::*;
+mod std_words_cache;
+use std_words_cache::*;
+mod prelude_slices;
+use prelude_slices::*;
 pub mod binaryen;
 #[cfg(feature = "native")]
 pub mod cargo_crates;

@@ -133,6 +133,13 @@ impl WarpParser {
 
 			// Check for end condition (also check for end-of-input to avoid infinite loop)
 			let ch = self.current_char();
+			if let Some(closer) = close.filter(|&closer| ch != closer && matches!(ch, ')' | ']' | '}')) {
+				let (line, column) = self.group_start;
+				let message = format!("`{ch}` closes the group opened at {line}:{column}, which needs `{closer}`");
+				let at = self.get_position();
+				self.advance();
+				return wrong_closer(message, ch, closer, at);
+			}
 			let at_end = self.at_group_end(close);
 			if at_end {
 				if let Some(closer) = close.filter(|_| ch == '\0') {
@@ -145,6 +152,11 @@ impl WarpParser {
 				if close.is_some() {
 					self.advance(); // consume closing bracket
 				}
+				break;
+			}
+			let stray_closer = close.is_none() && matches!(ch, ')' | ']' | '}');
+			// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
+			if stray_closer && self.group_start != (0, 0) {
 				break;
 			}
 
@@ -166,7 +178,12 @@ impl WarpParser {
 			self.tag_block = ch == '{'
 				&& matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
 			let item_position = self.get_position();
-			let item = self.parse_value();
+			let item = if stray_closer {
+				self.advance();
+				error(&format!("`{ch}` closes no group"))
+			} else {
+				self.parse_value()
+			};
 			self.tag_block = false;
 			self.pipe_takes_call = outer_pipe;
 			self.in_command = outer_command;

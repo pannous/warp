@@ -93,6 +93,14 @@ better", which the worker makes its next commit. The Reviewer approves nothing a
 rare veto (unsound: the card goes back to Now with a note, the Integrator leaves it out of the push). Structural
 findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a default service.
 
+## Steward (warp-steward, the warp compiler's test owner)
+Owns "the warp-written compiler passes its own tests", orthogonal to the Integrator, who keeps merging everything.
+After each merge batch that touches lib/compiler or the pipeline (and nightly), it runs the warp-pipeline-suite on the
+cloud lane, records the pass count over time (data/self_hosting/suite_counts.txt), groups the failures by cause and
+turns the biggest groups into cards for the self-hosting workers, reporting the count and the top groups to the
+Supervisor. It merges nothing and writes no compiler code beyond the runner itself. Started once the
+warp-pipeline-suite runner is on main.
+
 ## Refactorer
 Regularly reorganizes the code base, keeping it structural, general and beautiful. A long-running session, not a
 default service: the Supervisor starts it with `notes/agents/start.sh refactorer` and wakes it after a batch of

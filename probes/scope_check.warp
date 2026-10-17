@@ -1,0 +1,4 @@
+# quick check of scope.warp: every binding form (card scope-bindings)
+use "../lib/compiler/parser.warp"
+use "../lib/compiler/scope.warp"
+print scope_of(node_of(plain(tree("x = 1; f(a, b: int) := a; g = y => y; for w in t { print w }; def h(c) { c }; p = {k: 1}; n: int = 2"))))

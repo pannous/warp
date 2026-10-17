@@ -3034,6 +3034,7 @@ PASSED:
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
   ✓ numbers::test_number_words::keys_and_texts_stay_words
   ✓ numbers::test_number_words::number_words_are_numbers
+  ✓ numbers::test_number::test_digit_separators_in_hex_and_binary
   ✓ numbers::test_number::test_hex
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
@@ -3110,6 +3111,7 @@ PASSED:
   ✓ numbers::test_recursive_law::recursive_laws_are_proved_by_induction
   ✓ numbers::test_recursive_units::a_recursive_function_keeps_its_dimensions
   ✓ numbers::test_recursive_units::a_recursive_function_takes_quantities
+  ✓ numbers::test_repeating_decimal::decimal_text_is_the_prelude_word_the_cast_calls
   ✓ numbers::test_repeating_decimal::parentheses_after_digits_still_multiply
   ✓ numbers::test_repeating_decimal::ratios_as_decimal_overline_their_period
   ✓ numbers::test_repeating_decimal::repeating_decimal_literals_are_exact
@@ -3306,6 +3308,9 @@ PASSED:
   ✓ operators::test_add_to::add_to_an_empty_list
   ✓ operators::test_add_to::add_to_appends_an_element
   ✓ operators::test_add_to::add_to_takes_an_expression
+  ✓ operators::test_alike_in_warp::a_program_word_named_alike_leaves_the_prelude_word_be
+  ✓ operators::test_alike_in_warp::numbers_compare_inline_without_alike
+  ✓ operators::test_alike_in_warp::pairs_and_nested_entries_are_alike_part_by_part
   ✓ operators::test_approximately::a_bool_is_approximately_any_value_of_its_truthiness
   ✓ operators::test_approximately::instances_are_approximately_equal_field_by_field
   ✓ operators::test_approximately::lists_and_objects_are_approximately_equal_element_by_element
@@ -3734,6 +3739,8 @@ PASSED:
   ✓ parser::test_rust_paths::to_string_is_string
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
+  ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
+  ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
@@ -3747,14 +3754,18 @@ PASSED:
   ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
   ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
   ✓ parser::test_self_passes::arrow_result_types_match_their_rust_twin
+  ✓ parser::test_self_passes::element_wise_operators_match_their_rust_twin
   ✓ parser::test_self_passes::every_source_is_a_node_and_back
+  ✓ parser::test_self_passes::grouped_receivers_match_their_rust_twin
   ✓ parser::test_self_passes::interpolation_matches_its_rust_twin
   ✓ parser::test_self_passes::match_arms_match_their_rust_twin
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
+  ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
-  ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
+  ✓ parser::test_self_words::copied_tables_are_their_rust_constants
+  ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -5937,6 +5948,7 @@ PASSED:
   ✓ welcoming::test_error_excerpt::the_cli_prints_the_line_of_an_error_and_a_warning
   ✓ welcoming::test_error_excerpt::the_page_learns_where_the_error_is
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
+  ✓ welcoming::test_error_positions::a_wrong_or_stray_closer_is_an_error
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
@@ -6334,6 +6346,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
 
 SUMMARY:
-14 ignored, 6331 passed, 0 failed, 6331 total tested
+16 ignored, 6343 passed, 1 failed, 6344 total tested

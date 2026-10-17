@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+# card function-values-in-rows: a function value inside a mixed list or a map is not callable
+mirrored(a: any, b: any) := [a, b, a]
+ROWS = [["x", mirrored]]
+rewrite = ROWS#1#2
+print rewrite(1, 2)  # expected [1 2 1]; today: undefined function: rewrite
+SUGAR = {"x": mirrored}  # today: mirrored needs 2 arguments (the map value is called)

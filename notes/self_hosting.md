@@ -14,13 +14,25 @@ forward-function, data-splice, data-pattern-sealed, parsed-kinds).
 Decision self-hosting:
 - Purpose: dogfooding (the compiler in warp shows what the language lacks), independence from Rust, a showcase.
 - Scope: the parser first (lexer, parser, serializer); then section Next phase.
-- Integration: twins, checked. Each warp part runs next to its Rust twin, and a differential test over every sample
-  compares them. The Rust part goes only when its twin matches everywhere.
+- Success-driven: the measure is the existing test suite and samples passing through the warp-written compiler
+  (program results, errors, output), not agreement with Rust's intermediate trees. Card warp-pipeline-suite runs the
+  is!/samples suite through the warp pipeline and reports the pass count; that count is the progress number. A warp
+  stage becomes the default when the suite passes with it. 80–90% passing is fine at the start: breadth over the
+  long tail, the failing rest is a ranked list, not a blocker.
+- The Rust compiler stays as fallback and reference implementation, and gets an intermediate cleanup phase now
+  (notes/rust_cleanup.md): every worker finishes its current card, applies the rewrite's structural decisions to the
+  Rust side of its stage, then self-hosting resumes and ports the cleaned design.
+- Twins (a warp part next to its Rust original, compared over every source) are scaffolding only: kept where a warp
+  stage hands its result to a Rust stage, because the Rust side needs a compatible shape, and dropped as soon as the
+  stages on both sides are warp. No new intermediate twin is written where the suite can already judge.
 - Language gaps are fixed in the language as cards of this topic, never worked around in the warp code.
+- No hand-lowering (notes/agents/common.md "Never degrade the input"): the compiler is written with warp's full
+  features, aiming to be more elegant than the Rust one. Runtime words are ordinary lib/*.warp code through the
+  normal pipeline, so a warp stage only ever sees lowered forms; a form it can't handle yet goes to its Rust twin.
 - Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
   result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
   warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
-  (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
+  (notes/self_hosting_dropped.md, the component's "deviations" section, with an example each), and the Rust side gets a bug card or,
   when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
   quirks before its Rust part is removed.
 - The same holds for structurally unsound decisions, not only bugs: special cases for single words, passes that undo
@@ -43,9 +55,13 @@ parser-keyword-table. Target shapes:
 - parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
   `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
   each; the twin compares after that pass.
+  Done (lib/compiler/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
+  `loop {…}`. Count words wait for parser-scope-pass (a program's own `twice`); `1e3`, `2x`, `x⁻¹`, `global int n`
+  already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
   knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+  Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
   restoring by hand.
 - parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
@@ -109,6 +125,18 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
   prints is serialize again, so the twin needs no Rust-only text. A Data node without a unit description is written
   `Data(…)`. Small floats keep their exponent on both sides (`2.5e-6`).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
+
+## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
+per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
+table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
+(test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipes, quasi_quote, tree_walks) → analyzer
+checks (match_exhaustive, switch unit names, index_positions, check_unit_names: analysis, warp-self-analyzer's side).
+- Passes the target eliminates are not ported: repair passes such as grouped_receivers (the parser's `f()` = `(f)`)
+  and of_lookups' repairs (`type of x` as a declaration head, `sum (of xs)` grouping). The twins already written stay
+  until the target passes replace them.
+- New ports go toward the target: the word-phrase pass and the scope pass (with warp-parsing: parser-scope-pass,
+  parser-keyword-table); broadcasting minimal; the structural keepers of the SUGAR_PASSES triage.
 
 ## Next phase: passes, analyzer, emitter
 Order: lowering passes first, then the analyzer, then the emitter; only the bootstrap waits for all three.
@@ -260,8 +288,12 @@ Load order (lib-from-runtime, landed with zero-fill-lib): code generation that c
 named, through `compiler_word(word)` (a call it writes, `n times [x]` → filled_list) or a late_call whose callee is
 missing, notes the word; pipeline::loading_compiler_words then compiles once more with resolve loading it (hints muted).
 The second compile is a safety net, not the plan: with it alone 13 of 216 samples compiled twice (~7% of compile time),
-so each move also adds an implied_words scan of the forms that need its word (filled_lists.rs: none twice). Loading
-the prelude costs a small program ~0.4 s (debug CLI), so a scan must not load words a program cannot need.
+so each move also adds an implied_words scan of the forms that need its word (filled_lists.rs: none twice).
+Measured cost (2026-10-17, quick-release, thread CPU of the lowering; cards cache-lowered, parse-once): a small program
+4 ms, with one function of its own 11 ms, with one prelude word 22 ms (the prelude parse 8 ms, the reach look-ahead
+4 ms, the word itself as an own function). So a scan must not load words a program cannot need, and a runtime function
+that nearly every program carries stays Rust until lowered prelude words are cached across runs: exact_text (any int
+arithmetic links ratio_new, so its printer) stays, `as decimal`'s decimal_text moved (card exact-text-warp).
 Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
 text search words above).
 

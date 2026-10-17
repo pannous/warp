@@ -1,0 +1,71 @@
+// The sugar pass (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): parser.warp writes what the
+// source says, `xs[i]`, `a /! b`, `a div b`, `x is in xs`, `loop {…}`; each arm of `sugared` rewrites one written form
+// into the tree the passes read, and a class body's fields get their types (card parser-typed-fields). Count words
+// (`twice {…}`) wait for the scope pass, which knows a program's own `twice`.
+use "lib/compiler/shapes.warp"
+
+// The tree with every written form rewritten, deepest first
+sugared(node: any) := {
+	if node === ø or not (node is list) { return node }
+	rewritten = node.map(sugared)
+	match rewritten {
+		["key", "[]", indexed, position] => subscript(indexed, position)
+		// `a /! b` and `a div b` are the call `floor_quotient(a, b)`, `a /!= b` the assignment `a = floor_quotient(a, b)`
+		["key", "/!" | "div", left, right] => quotient_call(left, right)
+		["key", "/!=", left, right] => ["key", "=", left, quotient_call(left, right)]
+		// Rust's `loop { … }` is `while true { … }`; Rust twin: atoms.rs keyword_form (LOOP_WORD)
+		["key", "loop", _, body] => ["key", "do", ["key", "while", ø, true], body]
+		["type", name, body] if body !== ø => ["type", name, typed_fields(body)]
+		["symbol", "is in"] => ["symbol", "in"]
+		_ => rewritten
+	}
+}
+
+quotient_call(left: any, right: any) := ["list", "(", "", ["symbol", "floor_quotient"], left, right]
+
+// `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
+// Rust twin: warp_parser subscript
+subscript(target: any, index: any) := {
+	bounds = slice_bounds(index)
+	if bounds != ø { return ["list", "(", "", ["symbol", "slice"], target] + bounds }
+	["key", "#", target, one_based(index)]
+}
+
+// The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
+// Rust twin: subscripts.rs slice_bounds
+slice_bounds(written: any) := match written {
+	["key", ":" | "..", start, end] => [start, end]
+	["key", "to", start, last] => [start, if last === ø then ø else ["key", "+", last, 1]]
+	_ => ø
+}
+
+// `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
+// Rust twin: warp_parser subscript
+one_based(index: any) := if index is number then index + 1 else ["key", "+", index, 1]
+
+// The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
+// Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
+CODE_MEMBER_WORDS = FUNCTION_KEYWORDS + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]
+
+// A class body's fields with their types, `x: int` holding the type int; a method keeps its code
+// Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type
+typed_fields(node: any) := match node {
+	["key", ":=", _, _] => node
+	["key", op, name, value] => ["key", op, name, if is_symbol(value) then ["type", value, ø] else value]
+	["list", bracket, sep, first, ...] if not starts_code(first) => typed_members(bracket, sep, node[3 ..].map(typed_fields))
+	_ => node
+}
+
+// A class body's members, typed; the line `left: Node` is the one field
+typed_members(bracket: text, sep: text, members: list) := match members {
+	[["key", ":", _, _]] if bracket == "" => members#1
+	_ => listed(bracket, sep, members)
+}
+
+// `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
+// Rust twin: lookahead.rs starts_code
+starts_code(first: any) := match first {
+	["symbol", word] => CODE_MEMBER_WORDS contains word
+	["list", "(", _, ["symbol", _], ...] => true
+	_ => false
+}

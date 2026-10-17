@@ -1,5 +1,7 @@
 #[cfg(feature = "native")]
-pub mod twins; // card self-differential
+pub mod parser_deviations;
+#[cfg(feature = "native")]
+pub mod twins; // card self-differential // notes/self_hosting_dropped.md Deviations
 use warp::wasm_emitter::eval;
 use warp::Node;
 
