@@ -1,0 +1,7 @@
+// gap (splice): `$a` inside data(…) should splice the value of a (SPECIFICATION.md "instant template evaluation")
+// y+1, y*2+10+2, for i in 0..3 {print 1}
+// today: $a+1, $a+10+2, and the pattern `$n times $b` is lowered as a times loop ("`times` needs a body")
+a = data(y)
+print(data($a + 1))
+print(data(y * 2 * 1 + 2) replace data($a * 1) with data($a + 10))
+print(data(3 times {print 1}) replace data($n times $b) with data(for i in 0..$n $b))

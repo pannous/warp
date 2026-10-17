@@ -160,6 +160,7 @@ mod test_pattern_unit_name; // card pattern-unit-name
 mod test_plural_field_of_elements; // card plural-of
 mod test_print_empty; // card print-error
 mod test_print_empty_map;
+mod test_quasi_quote; // cards data-pattern-sealed, unit-hole-name, data-splice
 mod test_quoted_data_untouched; // card data-quote-lowered
 mod test_raise;
 mod test_reactive_ports;

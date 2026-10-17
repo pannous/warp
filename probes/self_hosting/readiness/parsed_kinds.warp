@@ -1,0 +1,5 @@
+// gap (parsed-kinds): a pass dispatches on a node's kind; parsed {…} is neither list nor block, type() is always code
+// {a: b} block, {a; b} block, [a] list, x + 1 key, x symbol   (today {…} lines say "other", type(n) prints class code)
+// and `match n { symbol => …; key => … }` on a parsed node: "undefined variable: as_code"
+kind_of(n) := if n is block then "block" else if n is list then "list" else if n is key then "key" else if n is symbol then "symbol" else "other"
+for s in ["{a: b}", "{a; b}", "[a]", "x + 1", "x"] { print(s + " " + kind_of(parse(s))) }

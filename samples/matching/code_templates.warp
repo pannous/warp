@@ -1,0 +1,25 @@
+#!/usr/bin/env warp
+# Code templates: data(…) with holes matches code in a pattern and builds code in a template (notes/quasi_quote.md)
+
+# a pattern's holes bind the code at their place, a template's holes splice it back
+swap(c) := match c {
+	data($a - $b) => data($b - $a)
+	_ => c
+}
+print swap(data(x - 1)) == data(1 - x)                   # yes
+
+# $xs... takes the remaining items, $(expr) splices a computed value
+drop_first(c) := match c {
+	data($f($first, $rest...)) => data($f($rest...))
+	_ => c
+}
+print drop_first(data(g(1, 2, 3)))                       # (g 2 3)
+field = data(width)
+print data(m.pop($(text(field)))) == data(m.pop("width")) # yes
+
+# a pass as rewrite rules: each times phrase becomes its loop
+rounds(c) := match c {
+	data($n times $body) => data(for i in 0..$n $body)
+	_ => c
+}
+print rounds(data(3 times {print 1})) == data(for i in 0..3 {print 1})  # yes

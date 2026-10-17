@@ -1153,6 +1153,14 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 			}
 		}
 	};
+	// `data($m + 0)`: a hole names a variable, also in the arm it binds for (card unit-hole-name)
+	if let Some(code) = crate::lowering::blocks::quoted_data(node) {
+		code.visit(&mut |part| {
+			if let Some(name) = crate::lowering::switch::hole_name(part) {
+				add_unit(&Node::Symbol(name.to_string()))
+			}
+		});
+	}
 	let mut add_parameters = |head: &Node| match head.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| match item.drop_meta() {
 			Node::Key(name, Op::Colon, _) => add_unit(name),

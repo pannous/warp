@@ -45,3 +45,12 @@ fn a_defined_rounding_word_is_the_programs() {
 	is!("def floor(x) := x+10; floor(2)", 2);
 	is!("def floor(x) := x+10; floor(\"a\")", "a10");
 }
+
+// card export-name-clash: the runtime's internal function names (node_count, list_length …) and the entry main are
+// free for the program; its word is its own and `#xs` still counts with the runtime's
+#[test]
+fn a_runtime_function_name_is_free_for_the_program() {
+	is!("node_count(n) := n + 1; xs = [1, 2, 3]; #xs * 10 + node_count(2)", 33);
+	is!("node_count(n) := if n is key then 1 + node_count(n.key) + node_count(n.value) else 1; node_count(parse(\"a + b * c\"))", 5);
+	is!("main(n) := n + 1; main(2)", 3);
+}

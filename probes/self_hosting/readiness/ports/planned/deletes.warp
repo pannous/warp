@@ -1,0 +1,6 @@
+// planned (does not run yet): lower_deletes as rewrite rules: `replace … with` already walks children first and binds
+// the holes; splicing (card data-splice) lets the replacement be written as the code it becomes
+lower_deletes(program) := program
+	replace data(delete $map#($k + 1)) with data($map.pop($k))
+	replace data(delete $xs#$i) with data($xs.pop($i - 1))
+	replace data(delete $map.$k) with data($map.pop($(k.name)))

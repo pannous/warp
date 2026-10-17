@@ -1027,14 +1027,23 @@ function startBugButton() {
 	$("bug").ontoggle = () => {
 		if ($("bug").open) $("bug-comment").focus();
 	};
+	// a press outside an open menu (the bug report, ⋯) closes it, as Escape does; a comment begun stays (card clicking-outside)
+	const openMenus = () => [...document.querySelectorAll("details.tools[open]")];
+	addEventListener("pointerdown", press => openMenus().filter(menu => !menu.contains(press.target)).forEach(menu => menu.open = false));
+	addEventListener("keydown", key => {
+		if (key.key === "Escape") openMenus().forEach(menu => menu.open = false);
+	});
 	$("bug-form").onsubmit = submit => {
 		submit.preventDefault();
 		sendBugReport();
 	};
 }
 
+// unticked "include source" sends the comment alone: no program, no output (the version and page still go along)
 function bugReport() {
-	return { ...reportedRun(), comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
+	const run = reportedRun();
+	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
+	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
 		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 
@@ -1044,7 +1053,7 @@ async function sendBugReport() {
 	showBugStatus("sending…");
 	try {
 		const answer = await fetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
-		const { card, queued, error } = await answer.json();
+		const { card, board, queued, error } = await answer.json();
 		if (answer.status === FORBIDDEN) {
 			store(BUG_TOKEN_KEY, null);
 			$("bug-token").hidden = false;
@@ -1053,14 +1062,26 @@ async function sendBugReport() {
 		if (report.token !== BUG_TOKEN) store(BUG_TOKEN_KEY, report.token);
 		$("bug-comment").value = "";
 		$("bug-express").checked = false;
-		showBugStatus(card ? `card made: ${card}` : `sent (${queued}): a card within minutes`);
+		if (card) showBugStatus("card made: ", false, card, board);
+		else showBugStatus(`sent (${queued}): a card within minutes`);
 	} catch (failure) {
 		showBugStatus(`not sent: ${failure.message}`, true);
 	}
 }
 
-function showBugStatus(text, failed = false) {
-	Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
+// after the text, `issue #1762 · card`: the issue the report became (card card-made) and its card on the board (`board`
+// of scripts/bug_report.py, card card-made-issue), each a link named, no raw address
+function showBugStatus(text, failed = false, card = null, board = null) {
+	const status = Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
+	const link = (href, name) => Object.assign(document.createElement("a"), { href, target: "_blank", rel: "noopener", textContent: name });
+	if (card) status.append("issue ", link(card, cardName(card)));
+	if (board) status.append(" · ", link(board, "card"));
+}
+
+// https://github.com/pannous/warp/issues/1755 → #1755, any other address as it is
+function cardName(card) {
+	const number = card.match(/\/issues\/(\d+)$/)?.[1];
+	return number ? `#${number}` : card;
 }
 
 function showVersion() {

@@ -1,0 +1,18 @@
+// port of src/lowering/words/number_words.rs (71 Rust lines, 28 of them the table): number words are numbers
+// 1+2, x.one, {one:1}   (today {one:one}, card parsed-kinds; the hint per word and names_given left out: diagnostics and the names pass are other ports)
+number_words = {zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+	eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+	nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90}
+
+as_numbers(n) := {
+	if n is symbol and n.name in number_words { return number_words[n.name] }
+	if n is key and n.op == "." { return key(as_numbers(n.key), ".", n.value) }
+	if n is key and n.op == ":" { return key(n.key, ":", as_numbers(n.value)) }
+	// the generic rebuild every pass repeats (map_children): a walk word taking the pass needs card forward-function
+	if n is key { return key(as_numbers(n.key), n.op, as_numbers(n.value)) }
+	if n is list or n is block { return bracketed(n.map(as_numbers), n.bracket) }
+	n
+}
+print(as_numbers(parse("one + two")))
+print(as_numbers(parse("x.one")))
+print(as_numbers(parse("{one: one}")))
