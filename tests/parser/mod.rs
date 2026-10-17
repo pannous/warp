@@ -70,6 +70,8 @@ mod test_spaced_required_fields;
 mod test_statement_phrases;
 mod test_statement_terminators;
 mod test_statements_after_type;
+#[cfg(feature = "native")]
+mod test_sugar_survey; // card sugar-twins
 mod test_superscript_signs;
 mod test_surface_syntax;
 mod test_symbol_hyphen;
