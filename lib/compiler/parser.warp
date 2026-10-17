@@ -159,10 +159,11 @@ def continued(p, left, min_power) {
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
-			index = expression(p, 0)
+			index = slice_from_start(p)
+			if index == ø { index = expression(p, 0) }
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
-			left = ["key", "#", left, one_based(index)]
+			left = subscript(left, index)
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)
@@ -400,6 +401,43 @@ OPERAND_POWERS = [91, 141]
 
 // A braceless argument takes arithmetic and ranges, stops at comparisons: `f 3-1 > 5`, `y = sum 1..4`
 ARGUMENT_POWER = 130
+
+// `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
+// Rust twin: warp_parser subscript
+def subscript(target, index) {
+	bounds = slice_bounds(index)
+	if bounds != ø { return listed("(", "", [["symbol", "slice"], target] + bounds) }
+	["key", "#", target, one_based(index)]
+}
+
+// The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
+// Rust twin: subscripts.rs slice_bounds
+def slice_bounds(index) {
+	if not (index is list) or index.length != 4 or index#1 != "key" { return ø }
+	op = index#2
+	if op == ":" or op == ".." { return [index#3, index#4] }
+	if op != "to" { return ø }
+	if index#4 == ø { return [index#3, ø] }
+	[index#3, ["key", "+", index#4, 1]]
+}
+
+// The marks of a slice from the start, `xs[:3]`, `xs[...3]`, each with its operator
+// Rust twin: subscripts.rs SLICE_FROM_START
+SLICE_FROM_START = [[":", ":"], ["…", "to"], ["...", "to"], ["..", ".."]]
+
+// `[:end]`, `[...last]`, `[..end]`, `[:]`: a slice from the start, `ø:end`, else ø with nothing read
+// Rust twin: subscripts.rs parse_slice_from_start
+def slice_from_start(p) {
+	for mark in SLICE_FROM_START {
+		if starts_at(p.code, mark#1, p.at) {
+			p.at = p.at + mark#1.length
+			skip_blanks(p)
+			if is_at(p.code, p.at, ']', p.n) { return ["key", mark#2, ø, ø] }
+			return ["key", mark#2, ø, expression(p, 0)]
+		}
+	}
+	ø
+}
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
@@ -826,7 +864,7 @@ ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 // A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
 // Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call
 def named(p) {
-	end = name_end(p.code, p.at, p.n)
+	end = symbol_end(p.code, p.at, p.n)
 	word = p.code[p.at .. end]
 	p.at = end
 	if TRUE_WORDS.contains(word.lower()) { return true }
