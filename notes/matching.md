@@ -159,8 +159,8 @@ stored or combined, and cannot match code (macros aside).
 
 ## Roadmap: compiler-grade patterns (for the second, pattern-based pass over the self-hosted compiler)
 Goal: parser, passes, analyzer and emitter written in warp read as rule sets over node shapes, more elegant than the
-Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps in order; ★ = changes a decision
-above, so it goes to warp-interviewer first.
+Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps in order; ★ = a language decision
+(notes/decisions.md: clauses in order, binding alternatives, `as` inside patterns, `+` text patterns).
 
 | step | card | what | today |
 |---|---|---|---|
@@ -168,7 +168,7 @@ above, so it goes to warp-interviewer first.
 | 2 | typed-holes | conditions on holes: `$r: int`, `$n: > 0`, `$s: symbol`, `$b: block` | no match |
 | 3 | patterns-as-values | `n matches p` → bindings or nothing; `p: pattern` parameters; `find`/`replace` as lib warp (notes/pattern_values.md route B) | parse error |
 | 4 | rewrite-rules | a rule set as a value, `rules { data($a * 1) => a; data($a + 0) => a }`, applied bottom-up or to a fixpoint, keeping positions: the vocabulary of a lowering pass | single `replace … with` only |
-| 5 ★ | pattern-clauses | a function defined by pattern clauses `simplify(data($a * 1)) := a` … tried in order (today: the last definition wins) | last wins |
+| 5 ★ | pattern-clauses | a function defined by pattern clauses `simplify(data($a * 1)) := a` … tried in order (decided; today the last definition wins) | last wins |
 | 6 ★ | binding-alternatives | alternatives that bind the same names `data($k: int + $x) \| data($x + $k: int) => x` | error "alternatives bind no names" |
 | 7 ★ | whole-binding | `as` binds a (sub)pattern: `data($f($inner) as call)` | parse error |
 | 8 ★ | text-patterns | text patterns for the lexer: `"0x" + rest`, prefix/suffix, character classes | parse error |
