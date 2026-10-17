@@ -16,9 +16,9 @@ pub const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::Lis
 /// that reads the kind masked takes it as the Int it is, and printing, `type` and reading back see a bool
 pub const BOOL_INFO: i64 = 1;
 pub const BOOL_KIND: i64 = (BOOL_INFO << KIND_BITS) | Kind::Int as i64;
-/// An Int shown in hex, 0xFF (card hex-printing, wasm_emitter/hex.rs): marked only where it becomes a Node
+/// An Int shown in hex, 0xFF (card hex-printing, wasm_emitter/numbers/radix.rs): marked only where it becomes a Node
 pub const HEX_INFO: i64 = 2;
-/// An Int shown in binary, 0b101 (card binary-int, wasm_emitter/radix.rs)
+/// An Int shown in binary, 0b101 (card binary-int, wasm_emitter/numbers/radix.rs)
 pub const BINARY_INFO: i64 = 3;
 /// The bit of a bool in the kind masks of run-time type tests (node_kind_in): no Kind is that high
 pub const BOOL_MASK_BIT: i64 = 62;
@@ -87,11 +87,39 @@ pub enum Kind {
 	Int32 = 14,     // explicit i32 (for FFI)
 	Float32 = 15,   // explicit f32 (for FFI)
 	Function = 16,  // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
-	Uncertain = 17, // x ± σ: data = $f64 array [value, source id, contribution, …] (wasm_emitter/uncertain.rs)
-	Time = 18,      // an instant: data = $i64box(nanoseconds since 1970 UTC) (wasm_emitter/times.rs)
+	Uncertain = 17, // x ± σ: data = $f64 array [value, source id, contribution, …] (wasm_emitter/numbers/uncertain.rs)
+	Time = 18,      // an instant: data = $i64box(nanoseconds since 1970 UTC) (wasm_emitter/time/times.rs)
 }
+const _: () = assert!(Kind::ALL.len() == Kind::Time as usize + 1, "Kind::ALL lists every Kind in tag order");
 
 impl Kind {
+	const ALL: [Kind; 19] = [
+		Kind::Empty,
+		Kind::Int,
+		Kind::Float,
+		Kind::Text,
+		Kind::Codepoint,
+		Kind::Symbol,
+		Kind::Key,
+		Kind::Block,
+		Kind::List,
+		Kind::Data,
+		Kind::Meta,
+		Kind::Error,
+		Kind::TypeDef,
+		Kind::Pointer,
+		Kind::Int32,
+		Kind::Float32,
+		Kind::Function,
+		Kind::Uncertain,
+		Kind::Time,
+	];
+
+	/// The Kind in the low bits of a node's kind field
+	pub fn of_field(kind: i64) -> Option<Kind> {
+		Self::ALL.get((kind & KIND_MASK) as usize).copied()
+	}
+
 	/// Check if this is an integer type (WASM i64 local)
 	pub fn is_int(&self) -> bool {
 		matches!(self, Kind::Int | Kind::Int32)
@@ -396,23 +424,6 @@ impl TypeRegistry {
 	}
 }
 
-pub enum AstKind {
-	Declaration,
-	Expression,
-	Statement,
-	While,
-	For,
-	If,
-	Function,
-	Return,
-	Call,
-	Parameter,
-	Body,
-	Assignment,
-	Literal,
-	Identifier,
-}
-
 /// How a struct field of a declared type is stored, by the field's type name
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum FieldStorage {
@@ -436,11 +447,7 @@ pub fn named_field_type(type_name: &str) -> &str {
 pub fn field_storage(type_name: &str) -> FieldStorage {
 	let word = type_name.trim_end_matches(OPTIONAL_SUFFIX);
 	let optional = word.len() < type_name.len();
-	match word {
-		// `age: int?` may be ø: a number has no room for it, a Node does (card optional-int)
-		"Int" | "i64" | "long" | "Float" | "f64" | "double" | "i32" | "int" | "f32" | "float" if optional => {
-			FieldStorage::Node
-		}
+	let storage = match word {
 		"Int" | "i64" | "long" => FieldStorage::I64,
 		"Float" | "f64" | "double" => FieldStorage::F64,
 		"i32" | "int" => FieldStorage::I32,
@@ -456,6 +463,13 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 			FieldStorage::Node
 		}
 		_ => FieldStorage::Named,
+	};
+	let numeric = matches!(storage, FieldStorage::I64 | FieldStorage::F64 | FieldStorage::I32 | FieldStorage::F32);
+	// `age: int?` may be ø: a number has no room for it, a Node does (card optional-int)
+	if optional && numeric {
+		FieldStorage::Node
+	} else {
+		storage
 	}
 }
 
@@ -492,38 +506,13 @@ pub enum RawFieldValue {
 	String(String),
 }
 
-impl From<i64> for RawFieldValue {
-	fn from(v: i64) -> Self {
-		RawFieldValue::I64(v)
-	}
+macro_rules! raw_field_value_from {
+	($($source:ty => $variant:ident),*) => {$(
+		impl From<$source> for RawFieldValue {
+			fn from(value: $source) -> Self {
+				RawFieldValue::$variant(value.into())
+			}
+		}
+	)*};
 }
-
-impl From<i32> for RawFieldValue {
-	fn from(v: i32) -> Self {
-		RawFieldValue::I32(v)
-	}
-}
-
-impl From<f64> for RawFieldValue {
-	fn from(v: f64) -> Self {
-		RawFieldValue::F64(v)
-	}
-}
-
-impl From<f32> for RawFieldValue {
-	fn from(v: f32) -> Self {
-		RawFieldValue::F32(v)
-	}
-}
-
-impl From<&str> for RawFieldValue {
-	fn from(v: &str) -> Self {
-		RawFieldValue::String(v.to_string())
-	}
-}
-
-impl From<String> for RawFieldValue {
-	fn from(v: String) -> Self {
-		RawFieldValue::String(v)
-	}
-}
+raw_field_value_from!(i64 => I64, i32 => I32, f64 => F64, f32 => F32, &str => String, String => String);

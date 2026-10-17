@@ -20,6 +20,15 @@ use std::collections::{HashMap, HashSet};
 const WRITTEN: &str = "it";
 const CANVAS: &str = "canvas";
 const SIDES: [&str; 2] = ["width", "height"];
+const DENSITY_NOTE: &str = "the pixels per length, in dpi";
+
+/// Other names of a property: object, alias, the property, the note naming it (decision display-names)
+const PROPERTY_ALIASES: [(&str, &str, &str, &str); 4] = [
+	("display", "dpi", "density", DENSITY_NOTE),
+	("display", "ppi", "density", DENSITY_NOTE),
+	("display", "dimensions", "size", "dimension is a physical quantity (length, mass); size is width × height in px"),
+	("display", "resolution", "size", "resolution: density (dpi) or size (px)? size is width × height"),
+];
 
 /// `object.property`: its getter body, its setter (parameter, body), the comment above its getter, the module it needs
 #[derive(Clone, Default)]
@@ -111,11 +120,17 @@ fn read_only_reason(properties: &Properties, object: &str, property: &str) -> St
 pub fn lower(program: Node) -> Node {
 	let mut properties = standard_properties();
 	let mut own = Properties::new();
+	let program = match with_instance_getters(program) {
+		Ok(program) => program,
+		Err(refused) => return refused,
+	};
 	let original = program.clone();
 	collect(&crate::modules::statements(program.clone()), None, &mut own);
 	let program = if own.is_empty() { program } else { without_definitions(program) };
 	let bound = bound_names(&program);
-	if let Some(error) = refused_definition(&original, &bound) {
+	// a value, not a function: `canvas() := Picture()` beside `canvas.width := …` is fine
+	let values = original.assigned_names(|op| *op == Op::Assign);
+	if let Some(error) = refused_definition(&original, &values) {
 		return error;
 	}
 	properties.extend(own);
@@ -127,17 +142,68 @@ pub fn lower(program: Node) -> Node {
 	}
 }
 
+/// `Point.sum := it.x + it.y` of a class Point (card point-sum): a property of its instances, `it` the instance, which is
+/// the function `sum(it: Point) := it.x + it.y`, read `Point(1, 2).sum` as any function of one instance is. A property
+/// named as one of the class's fields would never be read: a loud error
+fn with_instance_getters(program: Node) -> Result<Node, Node> {
+	let classes = crate::modules::needed_definitions::class_names(&program);
+	if classes.is_empty() {
+		return Ok(program);
+	}
+	let fields = crate::lowering::class_methods::class_fields(&program);
+	let refused = std::cell::RefCell::new(None);
+	let program = map_statements(program, &|statement| match instance_getter(&statement, &classes) {
+		Some((class, property, _))
+			if fields.get(&class).is_some_and(|own| own.iter().any(|(field, _)| *field == property)) =>
+		{
+			let reason = format!("{class}.{property} is a field of {class}: a property cannot share its name");
+			refused.borrow_mut().get_or_insert_with(|| Diagnostic::at(&statement, reason).into_error());
+			statement
+		}
+		Some((class, property, body)) => {
+			let instance = Node::Key(Box::new(Node::Symbol(WRITTEN.into())), Op::Colon, Box::new(Node::Symbol(class)));
+			key(crate::node::call(&property, vec![instance]), Op::Define, body)
+		}
+		None => statement,
+	});
+	refused.into_inner().map_or(Ok(program), Err)
+}
+
+/// Class, property and body of `Point.sum := …`, a getter of a class's instances: any body, `it` being the instance
+fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(String, String, Node)> {
+	let Node::Key(head, Op::Define, body) = statement.drop_meta() else {
+		return None;
+	};
+	let Node::Key(object, Op::Dot, member) = head.drop_meta() else {
+		return None;
+	};
+	let class = object.drop_meta().symbol_name().filter(|class| classes.contains(*class))?;
+	let property = member.drop_meta().symbol_name()?;
+	Some((class.to_string(), property.to_string(), body.as_ref().clone()))
+}
+
+/// The program with each top-level statement (also inside a block) mapped
+fn map_statements(node: Node, map: &impl Fn(Node) -> Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) if bracket != Bracket::Curly => {
+			Node::List(items.into_iter().map(|item| map_statements(item, map)).collect(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(map_statements(*node, map)), data },
+		statement => map(statement),
+	}
+}
+
 /// A loud error for a property definition of a value the program binds, which no use would read: `p = {x: 1}; p.x := 5`
-/// (the field is written `p.x = 5`), or of a class, whose instances have none yet (card point-sum)
-fn refused_definition(program: &Node, bound: &HashSet<String>) -> Option<Node> {
+/// (the field is written `p.x = 5`), or a setter of a class's instances, which have none yet (card point-sum)
+fn refused_definition(program: &Node, values: &HashSet<String>) -> Option<Node> {
 	let classes = crate::modules::needed_definitions::class_names(program);
 	crate::modules::statements(program.clone()).iter().find_map(|statement| {
 		let (object, property, _, _) = definition(statement)?;
 		let reason = if classes.contains(&object) {
 			format!(
-				"{object}.{property} := … defines no property of {object}'s instances yet (card point-sum): write it as a method of class {object}"
+				"{object}.{property}(value) := … defines no setter of {object}'s instances yet (card point-label): write it as a method of class {object}"
 			)
-		} else if bound.contains(&object) {
+		} else if values.contains(&object) {
 			format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field")
 		} else {
 			return None;
@@ -196,10 +262,20 @@ struct Rewrite {
 
 impl Rewrite {
 	/// The property `object.property` names (`member` the property's word), unless the program binds the object
+	/// (an other name of one, PROPERTY_ALIASES, names it with a hint)
 	fn property_of(&self, object: &Node, member: &Node) -> Option<(String, String)> {
 		let (object, property) = (object.drop_meta().symbol_name()?, member.drop_meta().symbol_name()?);
+		if self.bound.contains(object) {
+			return None;
+		}
 		let name = (object.to_string(), property.to_string());
-		(self.properties.contains_key(&name) && !self.bound.contains(object)).then_some(name)
+		if self.properties.contains_key(&name) {
+			return Some(name);
+		}
+		let (_, alias, canonical, note) =
+			PROPERTY_ALIASES.iter().find(|(of, alias, ..)| *of == object && *alias == property)?;
+		crate::normalize::hint(&format!("{object}.{alias}"), &format!("{object}.{canonical}"), note);
+		Some((object.to_string(), canonical.to_string()))
 	}
 
 	fn dotted_property(&self, node: &Node) -> Option<(String, String)> {

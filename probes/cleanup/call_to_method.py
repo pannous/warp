@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Rewrite calls `path::name(arg)` / `name(&arg)` into `arg.method()` across files:
-probes/call_to_method.py <name> <method> <file>...   (merging a free helper into a Node method)"""
+probes/cleanup/call_to_method.py <name> <method> <file>...   (merging a free helper into a Node method)"""
 import re, sys
 from pathlib import Path
 

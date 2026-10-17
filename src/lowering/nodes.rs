@@ -434,11 +434,20 @@ fn viewed<'a>(
 	})
 }
 
-/// `(f x): int`, `(f x) as int`: the head and its result type
+/// `(f x): int`, `(f x) as int`, `(f x) -> int`: the head and its result type
 fn typed_head(target: &Node) -> (&Node, Option<&Node>) {
-	match target.drop_meta() {
-		Node::Key(head, Op::Colon | Op::As, result) if is_word_head(head) => (head, Some(result)),
+	match result_typed(target) {
+		Some((head, result)) if is_word_head(head) => (head, Some(result)),
 		_ => (target, None),
+	}
+}
+
+/// `head as T`, `head: T`, `head -> T`: the head and what its result operator holds, the one split of a typed head
+/// (declarations::result_typed_head adds the unions `as int or text`)
+pub(crate) fn result_typed(target: &Node) -> Option<(&Node, &Node)> {
+	match target.drop_meta() {
+		Node::Key(head, Op::As | Op::Colon | Op::Arrow, result) => Some((head, result)),
+		_ => None,
 	}
 }
 

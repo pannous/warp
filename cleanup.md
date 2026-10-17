@@ -136,3 +136,11 @@
 - Keep `_` as an argument-consuming wildcard without treating it as a named local.
 - Reuse the normal function-definition path so the rule also covers multiple ignored parameters and other bodies.
 - Run the focused definition-form test before and after, then formatting, clippy, and the wasm32 check.
+
+# Standard-library reflection hint cleanup
+
+- Reproduce the leaked style hint through both `function repeat` and `methods("hi")` with a focused regression test.
+- Find the reflection path that analyzes standard-library definitions outside the existing quiet module loader.
+- Apply the standard-library-wide rule there, without hiding hints from the user's program.
+- Run the focused test before and after, then formatting, clippy, and the wasm32 check.
+- Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.

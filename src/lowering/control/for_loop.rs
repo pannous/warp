@@ -20,9 +20,10 @@ const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 /// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
 const CODE_SUFFIX: &str = "·code";
-/// `for c in w.chars`, `w.chars.map(…)`: walked, the unit word `w.chars` (elsewhere the count) is the list `chars(w)`
-const CHARS_CALL: &str = "chars";
-const CODEPOINT_UNIT: &str = "codepoints";
+/// `for c in w.chars`, `w.chars.map(…)`: walked, the unit word `w.chars` (elsewhere the count) is the list `chars(w)`,
+/// `w.codepoints` the list `codepoint·list(w)`: the counting unit and the list of its items
+const WALKED_UNITS: [(&str, &str); 2] =
+	[("graphemes", crate::library_words::CHARS_WORD), ("codepoints", crate::library_words::CODE_POINT_LIST)];
 /// The method an iterator object gives its next item with, ø at the end
 const NEXT_METHOD: &str = "next";
 /// The object a loop walks with next(), `x·iterator`
@@ -254,18 +255,20 @@ fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body:
 }
 
 fn walked_units(iterable: Node) -> Node {
-	match iterable.drop_meta() {
-		Node::Key(text, Op::Dot, unit)
-			if crate::analyzer::text_unit(&unit.drop_meta().name()) == Some(CODEPOINT_UNIT) =>
-		{
-			call(CHARS_CALL, vec![(**text).clone()])
-		}
-		_ => iterable,
+	let Node::Key(text, Op::Dot, unit) = iterable.drop_meta() else { return iterable };
+	let counted = crate::analyzer::text_unit(&unit.drop_meta().name());
+	match WALKED_UNITS.iter().find(|(unit, _)| Some(*unit) == counted) {
+		Some((_, list)) => call(list, vec![(**text).clone()]),
+		None => iterable,
 	}
 }
 
 pub(crate) fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
-	let name = variable.name();
+	// a walked literal of constants is named apart, so lifted_walked_literals may build it once before the outer loops
+	let name = match is_constant_literal(&iterable) {
+		true => format!("{}·{}", variable.name(), super::nodes::fresh_number()),
+		false => variable.name(),
+	};
 	let (items, index) = (symbol(&format!("{name}{ITEMS_SUFFIX}")), symbol(&format!("{name}{INDEX_SUFFIX}")));
 	let element = key(items.clone(), Op::Hash, key(index.clone(), Op::Add, int(1)));
 	let mut statements = vec![key(variable.clone(), Op::Assign, element)];
@@ -353,4 +356,67 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 		Bracket::None,
 	)
 	.with_meta_of(&node)
+}
+
+/// `[16, 8, 0]`: a list of numbers, texts, codepoints and truth values, which no code changes
+fn is_constant_literal(iterable: &Node) -> bool {
+	let is_constant = |item: &Node| {
+		matches!(item.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False)
+	};
+	matches!(iterable.drop_meta(), Node::List(items, Bracket::Square, _) if items.iter().all(is_constant))
+}
+
+/// `for i in 0..n { for shift in [16, 8, 0] {…} }` builds its walked literal once, before the outer loop, not each
+/// round (card loop-literal-list): `shift·3·items = [16, 8, 0]` (walking_loop) lifts out of every loop around it.
+/// Through statement lists only, never out of a block, so never out of a function or lambda
+pub fn lifted_walked_literals(node: Node) -> Node {
+	match node.map_children(lifted_walked_literals) {
+		Node::List(statements, bracket, separator) if separator.separates_statements() => {
+			let lifted =
+				statements.into_iter().flat_map(|statement| match without_walked_literals(statement.clone()) {
+					(_, literals) if literals.is_empty() || !is_while(&statement) => vec![statement],
+					(rest, mut literals) => {
+						literals.push(rest);
+						literals
+					}
+				});
+			Node::List(lifted.collect(), bracket, separator)
+		}
+		other => other,
+	}
+}
+
+fn is_while(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::Key(head, Op::Do, _) if matches!(head.drop_meta(), Node::Key(_, Op::While, _)))
+}
+
+/// The while loop without the walked literals its body assigns (directly or in a statement list of it), and those
+fn without_walked_literals(statement: Node) -> (Node, Vec<Node>) {
+	let Node::Key(head, Op::Do, body) = statement.drop_meta().clone() else {
+		return (statement, vec![]);
+	};
+	let mut literals = vec![];
+	let body = taken_walked_literals(*body, &mut literals);
+	(Node::Key(head, Op::Do, Box::new(body)), literals)
+}
+
+fn taken_walked_literals(node: Node, literals: &mut Vec<Node>) -> Node {
+	let Node::List(statements, bracket, separator) = node else {
+		return node;
+	};
+	let mut kept = vec![];
+	for statement in statements {
+		match statement.drop_meta() {
+			Node::Key(items, Op::Assign, value)
+				if items.drop_meta().name().ends_with(ITEMS_SUFFIX) && is_constant_literal(value) =>
+			{
+				literals.push(statement)
+			}
+			Node::List(_, Bracket::None, inner) if inner.separates_statements() => {
+				kept.push(taken_walked_literals(statement.drop_meta().clone(), literals))
+			}
+			_ => kept.push(statement),
+		}
+	}
+	Node::List(kept, bracket, separator)
 }

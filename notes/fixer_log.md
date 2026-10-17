@@ -59,7 +59,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   tests/text/test_text_repeat.rs; approved edits of test_print_type_error, test_footguns, test_welcoming_sugar in their own commit.
 
 ## 2026-10-04 fix-ignored (the #[ignore = "next"/"soon"] sweep)
-- Python unpacking (tests/probe_destructuring.rs, all 15 "next" probes now pass): `a, b = xs` of a list, text or
+- Python unpacking (tests/lists/test_unpacking.rs, all 15 "next" probes now pass): `a, b = xs` of a list, text or
   `(1, 2)` unpacks by position (tuple_emitter.rs emit_unpacking; another count is the runtime error "wrong number of
   values"); `a, *rest = …` / `*init, last` / `a, *mid, z` (parser: `*name` → the starred symbol, tuples.rs STARRED;
   node_slice for the rest); `[a, b] = v`, `(a, b) = 1, 2`, nested `(a, b), c = …` (hidden `unpacked·i` names).
@@ -294,6 +294,10 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-15 name-after: / name after a word is a path wherever the program defines the word as a function (prescan: := , def, a variable holding a lambda), juxtaposed path literals print as separate values (declaration_scan scan_function_names, Node::as_path_literal; tests/parser/test_path_after_function.rs)
 - 2026-10-15 template-positions: errors inside a library template name the value the word was given (`sum 1` → not a list at 1:5, was 1:78): warp_parser::parse_template(template, at) re-stamps the template positions with at's (library_words expanded/instantiate_template/counts/safe lookup, lambdas iterate, music_words; tests/welcoming/test_template_positions.rs)
 - 2026-10-15 program-last: a program's last value of a class with text() shows bare (V(1) → v1, not "v1"): printable.rs rewrite_program wraps the text in symbol() (tests/types/test_instance_final_bare.rs)
+- 2026-10-16 diagonal-holds: a constructor refusing `D(n inch)` / `D{diagonal: n inch}` hints `write n * 1 inch` (unit_fields.rs unit_after_variable_hint; tests/numbers/test_unit_after_variable_hint.rs)
+- 2026-10-16 matches-call: a std module calling another module's word operator by its word (shell's `matches(line, pattern)`) works: loader.rs hidden_apart lowers call forms over the std definitions before renaming hidden words apart (word_operators.rs lower_call_forms_in)
+- 2026-10-16 decisions-md: a unit after a variable holding a plain number (`y = n km`, `x: inch = n inch`, `n * km`) is refused with "write n * 1 km" (static_units.rs is_plain_scalar_name at the `amount unit` and `amount * unit` sites); a list `xs cm` and `[n, 4] cm` (each element `n * 1 cm`) keep working
+- 2026-10-16 class-diagonal: superseded on main by unit-shallow (field_value names the written unit, holds m/s (mph)); its plain-number warning now offers `n * 1 inch` for a variable, never `n inch` (decisions.md)
 - 2026-10-16 list-printable-items: instances of a class with text() show as their text inside lists, interpolations and values of run-time type: a Printable witness table like Comparable's (witness.rs text·dispatch, text·shown; list_text hook in text_words.rs; tests/types/test_printable_items.rs)
 - 2026-10-16 if-list: a closure takes the float a parameter widened to after the first inference (widen loop reruns infer_closure_parameters), and an element of a list of unknown element kind is passed as a Node (user_functions.rs; tests/functions/test_closure_float_arguments.rs)
 - 2026-10-16 is-text-method, number-words, methods-text: already worked on main e04ca61ed; methods(text) pinned in tests/types/test_printable_items.rs
@@ -303,3 +307,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-16 def-form definitions: `def long(n) = Run(…)` is no destructuring (destructuring.rs positional_names skips a glued call head); static units see `def f(x) = …`, `def f(x): …` and `def f(x) { … }` (FunctionHead::is_untyped_call, returned_value unwraps the block)
 - 2026-10-16 traps-task: a task (go block, live_loop) runs in a fresh instance that never runs main, so the witness tables were null there (list-printable-items 8dee749dd); the installation of witnesses and late calls is now the module start function (mod.rs emit_installation_start)
 - 2026-10-16 constant-quantity: `2 g0` of a quantity is a spaced list by decision; it now says "write 2g0 or 2 * g0" instead of "undefined variable: m" (function_units.rs, a := constant arrives as a call (g0))
+- 2026-10-16 unit-amount (reviewer on decisions-md): a unit after any amount not written as a number (a field, a call, a sum) is refused like after a variable; one helper with_unit_written writes the advice (tests/numbers/test_unit_after_expression.rs)
