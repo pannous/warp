@@ -36,6 +36,7 @@ probes/*-work/
 
 # disposable copies, worktrees, cargo homes, private index files, temp builds
 scratch/
+/scratch
 # kept but not committed: logs, test results, patches, dumps, benchmark data
 data/
 !src/lowering/data/

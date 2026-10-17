@@ -13,12 +13,14 @@
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
 use super::listeners;
-use super::nodes::{any_part, block, call, children_rewritten, for_in_variable, if_then, key};
+use super::nodes::{any_part, assign, block, call, children_rewritten, for_in_variable, if_then, key};
 use crate::declarations::word;
 use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
+use crate::variable_signals::{
+	assign_variable, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord,
+};
 use crate::wasm_emitter::functions::cells::{
 	CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW,
 };
@@ -102,7 +104,7 @@ pub fn poll_shared(program: Node) -> Node {
 	let globals: HashSet<String> = polls.main_variables.difference(&polls.shared).cloned().collect();
 	let handler =
 		crate::event_signals::function_with_globals(crate::host::SHARED_HANDLER, false, &polls.checks, &globals);
-	let starts = polls.flags.iter().map(|flag| assign(flag, Node::False));
+	let starts = polls.flags.iter().map(|flag| assign_variable(flag, Node::False));
 	Node::List(starts.chain(std::iter::once(handler)).chain(polls.lowered).collect(), bracket, separator)
 }
 
@@ -153,7 +155,7 @@ impl SharedPolls {
 				.drop_meta()
 				.clone(),
 		);
-		self.lowered.push(assign(&polling, Node::True));
+		self.lowered.push(assign_variable(&polling, Node::True));
 		self.flags.extend([polling, running]);
 		self.main_variables.extend(self.flags.iter().cloned().chain([writes]));
 	}
@@ -176,13 +178,13 @@ impl SharedPolls {
 			.expect("a watched shared value");
 		let value = seen.first().map(|(name, _)| Node::Symbol(name.clone())).expect("a watched value");
 		let check = self.check(listener_word, subject, body, &value);
-		let remember = seen.iter().map(|(name, last)| assign(last, Node::Symbol(name.clone())));
+		let remember = seen.iter().map(|(name, last)| assign_variable(last, Node::Symbol(name.clone())));
 		self.checks.push(if_then(
 			key(Node::Symbol(polling.clone()), Op::And, changed),
 			block(remember.clone().chain([check]).collect()),
 		));
 		self.lowered.extend(remember);
-		self.lowered.push(assign(&polling, Node::True));
+		self.lowered.push(assign_variable(&polling, Node::True));
 		self.flags.push(polling);
 		self.main_variables.extend(self.flags.iter().cloned().chain(seen.into_iter().map(|(_, last)| last)));
 	}
@@ -203,7 +205,7 @@ impl SharedPolls {
 				let fired = format!("{POLLING_PREFIX}{}_fired", self.flags.len());
 				self.flags.push(fired.clone());
 				let condition = key(key(Node::Empty, Op::Not, Node::Symbol(fired.clone())), Op::And, subject);
-				if_then(condition, block(vec![assign(&fired, Node::True), body]))
+				if_then(condition, block(vec![assign_variable(&fired, Node::True), body]))
 			}
 		}
 	}
@@ -295,7 +297,7 @@ fn with_function_listeners(node: Node) -> Node {
 	if listener_parts(&listener).is_none() {
 		return node;
 	}
-	Node::Key(function.clone(), Op::Define, Box::new(Node::List(vec![listener], Bracket::Curly, Separator::Semicolon)))
+	Node::Key(function.clone(), Op::Define, Box::new(block(vec![listener])))
 }
 
 /// The variables a listener watches: `on set x` and `on change x` the one, `whenever` and `once` those of the condition
@@ -532,7 +534,7 @@ impl Subscriptions {
 				let holds = key(call(CELL_GET, vec![held_cell.clone()]), Op::Eq, Node::True);
 				let became_true = key(holds, Op::And, not_before);
 				let parts = vec![
-					assign(WAS_WORD, call(CELL_GET, vec![held_cell.clone()])),
+					assign_variable(WAS_WORD, call(CELL_GET, vec![held_cell.clone()])),
 					call(CELL_SET, vec![held_cell, subject]),
 					if_then(became_true, block(vec![body])),
 				];
@@ -551,7 +553,7 @@ impl Subscriptions {
 	fn flag_cell(&mut self, prefix: &str, statements: &mut Vec<Node>) -> String {
 		let flag = format!("{prefix}{}", self.fired);
 		self.fired += 1;
-		statements.push(assign(&flag, call(CELL_NEW, vec![Node::False])));
+		statements.push(assign_variable(&flag, call(CELL_NEW, vec![Node::False])));
 		flag
 	}
 }
@@ -579,7 +581,7 @@ fn listener_function(
 	statements.push(key(head, Op::Define, block(body)));
 	for variable in watched {
 		let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![signal_node(variable)])]);
-		statements.push(assign(&index_name(name, variable), place));
+		statements.push(assign_variable(&index_name(name, variable), place));
 	}
 	symbol(name)
 }
@@ -737,7 +739,7 @@ impl Signals {
 			_ => key(call(CELL_GET, vec![target.clone()]), op.base_op(), self.rewrite(value, signals, main)),
 		};
 		if main && self.escaping.contains(&name) && self.made.insert(name) {
-			return key(target, Op::Assign, call(SIGNAL_NEW, vec![value]));
+			return assign(target, call(SIGNAL_NEW, vec![value]));
 		}
 		call(SET_FUNCTION, vec![target, value])
 	}

@@ -12,7 +12,7 @@
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
-use super::nodes::{any_part, call, children_rewritten, is_block, key, word_headed};
+use super::nodes::{any_part, assign, call, children_rewritten, is_block, key, word_headed};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -888,7 +888,7 @@ impl Blocks {
 				body = crate::library_words::substitute(body, parameter, argument);
 			} else {
 				let bound = Node::Symbol(format!("{parameter}{EXPANSION_SEPARATOR}{number}"));
-				statements.push(key(bound.clone(), Op::Assign, self.rewrite(argument.clone())));
+				statements.push(assign(bound.clone(), self.rewrite(argument.clone())));
 				body = crate::library_words::substitute(body, parameter, &bound);
 			}
 		}

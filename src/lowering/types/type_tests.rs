@@ -367,13 +367,7 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 }
 
 fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
-	nodes
-		.iter()
-		.map(|node| match node.drop_meta() {
-			Node::Symbol(word) => Some(word.as_str()),
-			_ => None,
-		})
-		.collect()
+	nodes.iter().map(Node::symbol_name).collect()
 }
 
 /// The words of `x is int` and of `x is a number`, whose `a number` parses as a call (application binds tighter than `is`)

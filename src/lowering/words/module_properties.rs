@@ -128,8 +128,15 @@ pub fn lower(program: Node) -> Node {
 	collect(&crate::modules::statements(program.clone()), None, &mut own);
 	let program = if own.is_empty() { program } else { without_definitions(program) };
 	let bound = bound_names(&program);
-	// a value, not a function: `canvas() := Picture()` beside `canvas.width := …` is fine
-	let values = original.assigned_names(|op| *op == Op::Assign);
+	// a value (a variable, parameter or loop variable), not a function: `canvas() := Picture()` beside
+	// `canvas.width := …` is fine
+	// before tuples::lower the analyzer reads `[p, q] = …` as a definition of p: a destructured name is a value
+	let functions = crate::analyzer::function_definitions(&original).user_functions;
+	let destructured = destructured_variables(&original);
+	let values: HashSet<String> = bound_names(&original)
+		.into_iter()
+		.filter(|name| destructured.contains(name) || !functions.contains_key(name))
+		.collect();
 	if let Some(error) = refused_definition(&original, &values) {
 		return error;
 	}
@@ -143,8 +150,12 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// `Point.sum := it.x + it.y` of a class Point (card point-sum): a property of its instances, `it` the instance, which is
-/// the function `sum(it: Point) := it.x + it.y`, read `Point(1, 2).sum` as any function of one instance is. A property
-/// named as one of the class's fields would never be read: a loud error
+/// the function `sum(it: Point) := it.x + it.y`, read `Point(1, 2).sum` as any function of one instance is. Its setter
+/// `Point.label(v) := it.name = v` (card point-label) is `label(it: Point, v) := { it.name = v; it }`, which
+/// `p.label = "b"` calls as `p = label(p, "b")`, so it gives back the instance it changed. The instance may be written
+/// `self` or `this` too, also as the explicit parameter: `Point.norm(self) := self.x * 2`, `Point.norm() := self.x`
+/// (card point-norm, decision implicit-words-reserved). A property named as one of the class's fields would never be
+/// read: a loud error
 fn with_instance_getters(program: Node) -> Result<Node, Node> {
 	let classes = crate::modules::needed_definitions::class_names(&program);
 	if classes.is_empty() {
@@ -152,25 +163,50 @@ fn with_instance_getters(program: Node) -> Result<Node, Node> {
 	}
 	let fields = crate::lowering::class_methods::class_fields(&program);
 	let refused = std::cell::RefCell::new(None);
-	let program = map_statements(program, &|statement| match instance_getter(&statement, &classes) {
-		Some((class, property, _))
-			if fields.get(&class).is_some_and(|own| own.iter().any(|(field, _)| *field == property)) =>
+	let program = map_statements(program, &|statement| match instance_property(&statement, &classes) {
+		Some(found)
+			if fields.get(&found.class).is_some_and(|own| own.iter().any(|(field, _)| *field == found.property)) =>
 		{
+			let InstanceProperty { class, property, .. } = found;
 			let reason = format!("{class}.{property} is a field of {class}: a property cannot share its name");
 			refused.borrow_mut().get_or_insert_with(|| Diagnostic::at(&statement, reason).into_error());
 			statement
 		}
-		Some((class, property, body)) => {
-			let instance = Node::Key(Box::new(Node::Symbol(WRITTEN.into())), Op::Colon, Box::new(Node::Symbol(class)));
-			key(crate::node::call(&property, vec![instance]), Op::Define, body)
-		}
+		Some(found) => found.definition(),
 		None => statement,
 	});
 	refused.into_inner().map_or(Ok(program), Err)
 }
 
-/// Class, property and body of `Point.sum := …`, a getter of a class's instances: any body, `it` being the instance
-fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(String, String, Node)> {
+/// The words a property of a class's instances may name the instance by
+const RECEIVERS: [&str; 3] = [WRITTEN, crate::words::SELF_WORD, "this"];
+
+/// `Point.sum := …` (a getter of a class's instances) or `Point.label(v) := …` (a setter, `value` its parameter)
+struct InstanceProperty {
+	class: String,
+	property: String,
+	receiver: String,
+	value: Option<Node>,
+	body: Node,
+}
+
+impl InstanceProperty {
+	/// `sum(it: Point) := …`, `label(it: Point, v) := { …; it }`
+	fn definition(self) -> Node {
+		let receiver = || Node::Symbol(self.receiver.clone());
+		let instance = Node::Key(Box::new(receiver()), Op::Colon, Box::new(Node::Symbol(self.class.clone())));
+		let (parameters, body) = match self.value {
+			None => (vec![instance], self.body),
+			Some(value) => {
+				let changed = Node::List(vec![self.body, receiver()], Bracket::Curly, Separator::Semicolon);
+				(vec![instance, value], changed)
+			}
+		};
+		key(crate::node::call(&self.property, parameters), Op::Define, body)
+	}
+}
+
+fn instance_property(statement: &Node, classes: &HashSet<String>) -> Option<InstanceProperty> {
 	let Node::Key(head, Op::Define, body) = statement.drop_meta() else {
 		return None;
 	};
@@ -178,8 +214,28 @@ fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(Strin
 		return None;
 	};
 	let class = object.drop_meta().symbol_name().filter(|class| classes.contains(*class))?;
-	let property = member.drop_meta().symbol_name()?;
-	Some((class.to_string(), property.to_string(), body.as_ref().clone()))
+	let receiver_word =
+		|node: &Node| node.drop_meta().symbol_name().filter(|word| RECEIVERS.contains(word)).map(String::from);
+	let (property, explicit, value) = match member.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[property] => (property, None, None),
+			[property, receiver] if receiver_word(receiver).is_some() => (property, receiver_word(receiver), None),
+			[property, value] => (property, None, Some(value.clone())),
+			_ => return None,
+		},
+		_ => (member.as_ref(), None, None),
+	};
+	let mut read = None;
+	body.visit(&mut |node| {
+		read = read.take().or_else(|| receiver_word(node));
+	});
+	Some(InstanceProperty {
+		class: class.to_string(),
+		property: property.drop_meta().symbol_name()?.to_string(),
+		receiver: explicit.or(read).unwrap_or(WRITTEN.to_string()),
+		value,
+		body: body.as_ref().clone(),
+	})
 }
 
 /// The program with each top-level statement (also inside a block) mapped
@@ -194,20 +250,18 @@ fn map_statements(node: Node, map: &impl Fn(Node) -> Node) -> Node {
 }
 
 /// A loud error for a property definition of a value the program binds, which no use would read: `p = {x: 1}; p.x := 5`
-/// (the field is written `p.x = 5`), or a setter of a class's instances, which have none yet (card point-sum)
+/// (the field is written `p.x = 5`)
 fn refused_definition(program: &Node, values: &HashSet<String>) -> Option<Node> {
-	let classes = crate::modules::needed_definitions::class_names(program);
-	crate::modules::statements(program.clone()).iter().find_map(|statement| {
-		let (object, property, _, _) = definition(statement)?;
-		let reason = if classes.contains(&object) {
-			format!(
-				"{object}.{property}(value) := … defines no setter of {object}'s instances yet (card point-label): write it as a method of class {object}"
-			)
-		} else if values.contains(&object) {
-			format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field")
-		} else {
-			return None;
-		};
+	// also inside a body: `f(p) := { p.x := 5; p }`
+	let mut definitions = Vec::new();
+	program.visit(&mut |node| {
+		if definition(node).is_some() {
+			definitions.push(node.clone());
+		}
+	});
+	definitions.iter().find_map(|statement| {
+		let (object, property, _, _) = definition(statement).filter(|(object, ..)| values.contains(object))?;
+		let reason = format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field");
 		Some(Diagnostic::at(statement, reason).into_error())
 	})
 }
@@ -230,6 +284,7 @@ fn without_definitions(node: Node) -> Node {
 pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	let names = crate::soft_keywords::names_given_with_kinds(program).into_iter();
 	let mut bound: HashSet<String> = names.filter(|(_, kind)| *kind != "field").map(|(name, _)| name).collect();
+	bound.extend(destructured_variables(program));
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
 			let parameters = head.parameters();
@@ -245,6 +300,13 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 		}
 	});
 	bound
+}
+
+/// The variables the program's destructurings bind: `a, b = …`, `[a, b] = …`, `{x, y} = …`, `{x: a} = …`
+fn destructured_variables(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| names.extend(crate::tuples::destructured_names(node)));
+	names
 }
 
 /// `width` and `h` of a destructuring parameter `{width, height: h}`

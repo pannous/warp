@@ -6,7 +6,7 @@
 //! `x:int = agent_as("33/3", "int")` (card int-let, lib/agent.warp).
 
 use super::nodes::{
-	call, children_rewritten, in_block_as_written, is_assigned_data, is_call_head, is_words_call, key,
+	assign, call, children_rewritten, in_block_as_written, is_assigned_data, is_call_head, is_words_call, key,
 	with_parts_rewritten,
 };
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
@@ -237,7 +237,7 @@ impl Lowering {
 				self.rewrite(*value, Some(&result.drop_meta().name()))
 			}
 			Node::Key(target, Op::Assign, value) if is_assigned_data(&target, &value) => {
-				key(*target, Op::Assign, with_parts_rewritten(*value, &mut |part| self.rewrite(part, None)))
+				assign(*target, with_parts_rewritten(*value, &mut |part| self.rewrite(part, None)))
 			}
 			// `d:docx = render "x"`
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
@@ -443,8 +443,155 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 		return node;
 	}
 	let called_parameters = called_parameters(&node);
+	let class_fields = crate::lowering::class_methods::class_fields(&node);
+	let classes: Vec<String> = class_fields.keys().cloned().collect();
+	let node = MethodVariants {
+		arities: &arities,
+		class_fields: class_fields
+			.into_iter()
+			.map(|(class, fields)| (class, fields.into_iter().map(|(field, _)| field).collect()))
+			.collect(),
+		receiver_classes: receiver_classes(&node),
+		instances: crate::lowering::class_methods::instance_classes(&node, &classes),
+		maps: map_variables(&node),
+	}
+	.rewrite(node);
 	let node = ArityOverloads { arities: arities.clone() }.rewrite(node);
 	passed_variants(node, &arities, &called_parameters)
+}
+
+/// `p.label`, `p.label(x)` and `p.label = v` of label overloaded by arity: the variant taking the receiver too, label·1,
+/// label·2 (read `label·2(p, x)`, set `p = label·2(p, v)` by library_words). The receiver decides (decision
+/// default-methods): its own member, a map's key or a class's field, wins; a variant whose first parameter is a class
+/// (`label(it: Point, v)`) is only for instances of that class
+struct MethodVariants<'a> {
+	arities: &'a HashMap<String, Vec<Arity>>,
+	/// class → its fields
+	class_fields: HashMap<String, Vec<String>>,
+	/// (name, parameter count) → the class its first parameter is typed with: `label(it: Point, v)`
+	receiver_classes: HashMap<(String, usize), String>,
+	/// variable → the class of the instance it holds
+	instances: HashMap<String, String>,
+	/// variable → the keys of the map literal it holds: `m = {pick: 1}`
+	maps: HashMap<String, Vec<String>>,
+}
+
+impl MethodVariants<'_> {
+	/// The class of the instance `receiver` is: a variable holding one or a construction `Point(1, 2)`
+	fn receiver_class(&self, receiver: &Node) -> Option<String> {
+		match receiver.drop_meta() {
+			Node::Symbol(name) => self.instances.get(name).cloned(),
+			Node::List(items, Bracket::Round, _) => {
+				items.first().map(|head| head.drop_meta().name()).filter(|class| self.class_fields.contains_key(class))
+			}
+			_ => None,
+		}
+	}
+
+	/// `m.pick` of `m = {pick: 1}`, `p.name` of a Point with a field name: the receiver's own member
+	fn is_own_member(&self, receiver: &Node, name: &str) -> bool {
+		let map_keys = receiver.drop_meta().symbol_name().and_then(|variable| self.maps.get(variable));
+		let fields = self.receiver_class(receiver).and_then(|class| self.class_fields.get(&class));
+		map_keys.into_iter().chain(fields).any(|members| members.iter().any(|member| member == name))
+	}
+
+	/// Is the receiver's type known: a class instance, a map variable or a literal (`3.f`); an unknown one (a call's
+	/// result, a parameter) keeps the member lookup at run time
+	fn is_known_receiver(&self, receiver: &Node) -> bool {
+		let literal = matches!(
+			receiver.drop_meta(),
+			Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _)
+		);
+		let map = receiver.drop_meta().symbol_name().is_some_and(|variable| self.maps.contains_key(variable));
+		literal || map || self.receiver_class(receiver).is_some()
+	}
+
+	/// The variant of `member` called on `receiver` with `arguments` in all, the receiver counted
+	fn renamed(&self, receiver: &Node, member: &Node, arguments: usize) -> Option<Node> {
+		let name = member.drop_meta().symbol_name()?;
+		if !self.is_known_receiver(receiver) || self.is_own_member(receiver, name) {
+			return None;
+		}
+		let fitting: Vec<&Arity> = self.arities.get(name)?.iter().filter(|arity| arity.accepts(arguments)).collect();
+		let [arity] = fitting.as_slice() else { return None };
+		match self.receiver_classes.get(&(name.to_string(), arity.total)) {
+			Some(class) if self.receiver_class(receiver).as_ref() != Some(class) => None,
+			_ => Some(Node::Symbol(arity_variant(name, **arity))),
+		}
+	}
+
+	/// `p.label = v` calls the setter only for a variant typed for a class (`Point.label(v)`, `label(it: Point, v)`) on
+	/// an instance of it; an untyped variant never turns an assignment into a call
+	fn setter(&self, receiver: &Node, member: &Node) -> Option<Node> {
+		let name = member.drop_meta().symbol_name()?;
+		let class = self.receiver_classes.get(&(name.to_string(), 2))?;
+		(self.receiver_class(receiver).as_ref() == Some(class)).then(|| self.renamed(receiver, member, 2)).flatten()
+	}
+
+	fn rewrite(&self, node: Node) -> Node {
+		let recurse = |child: Node| self.rewrite(child);
+		match node {
+			Node::Key(target, Op::Assign, value) => match *target {
+				// `p.label = v`: the setter, or the member itself
+				Node::Key(receiver, Op::Dot, member) => {
+					let member = self.setter(&receiver, &member).unwrap_or(*member);
+					key(key(recurse(*receiver), Op::Dot, member), Op::Assign, recurse(*value))
+				}
+				target => key(recurse(target), Op::Assign, recurse(*value)),
+			},
+			Node::Key(receiver, Op::Dot, member) => {
+				let member = match member.drop_meta().clone() {
+					Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+						let arguments = items.len();
+						let mut items: Vec<Node> = items.into_iter().map(recurse).collect();
+						if let Some(head) = self.renamed(&receiver, &items[0], arguments) {
+							items[0] = head;
+						}
+						Node::List(items, Bracket::Round, separator)
+					}
+					symbol => self.renamed(&receiver, &symbol, 1).unwrap_or(*member),
+				};
+				key(recurse(*receiver), Op::Dot, member)
+			}
+			other => children_rewritten(other, recurse),
+		}
+	}
+}
+
+/// The keys of a map literal `{pick: 1}`
+fn map_literal_keys(value: &Node) -> Option<Vec<String>> {
+	let Node::List(items, Bracket::Curly, _) = value.drop_meta() else { return None };
+	let keys = items.iter().map(|item| match item.drop_meta() {
+		Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name().map(str::to_string),
+		_ => None,
+	});
+	keys.collect()
+}
+
+/// variable → the keys of the map literal assigned to it
+fn map_variables(node: &Node) -> HashMap<String, Vec<String>> {
+	let mut maps = HashMap::new();
+	node.visit(&mut |part| {
+		if let Node::Key(variable, Op::Assign, value) = part {
+			if let (Some(variable), Some(keys)) = (variable.drop_meta().symbol_name(), map_literal_keys(value)) {
+				maps.insert(variable.to_string(), keys);
+			}
+		}
+	});
+	maps
+}
+
+/// (name, parameter count) → the class the first parameter of that definition is typed with: `f(it: P, v) := …`
+fn receiver_classes(node: &Node) -> HashMap<(String, usize), String> {
+	let mut classes = HashMap::new();
+	each_definition(node, &mut |definition| {
+		if let [name, receiver, ..] = definition.head {
+			if let Node::Key(_, Op::Colon, class) = receiver.drop_meta() {
+				classes.insert((name.name(), definition.head.len() - 1), class.drop_meta().name());
+			}
+		}
+	});
+	classes
 }
 
 /// (function, parameter index) → how many arguments the function's body calls that parameter with: 0 of
@@ -556,7 +703,7 @@ trait VariantRenaming {
 		}
 		match node {
 			Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => {
-				key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| self.rewrite(part)))
+				assign(*left, with_parts_rewritten(*right, &mut |part| self.rewrite(part)))
 			}
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
@@ -807,7 +954,7 @@ impl ParameterOverloads {
 			.map(|(argument, kind)| match (kind, argument.drop_meta()) {
 				(None, Node::List(..) | Node::Key(..)) => {
 					let temporary = Node::Symbol(format!("overload·{}", super::nodes::fresh_number()));
-					bindings.push(key(temporary.clone(), Op::Assign, argument));
+					bindings.push(assign(temporary.clone(), argument));
 					temporary
 				}
 				_ => argument,

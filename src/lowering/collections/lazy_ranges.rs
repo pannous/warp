@@ -6,7 +6,7 @@
 //! f whose parameter is the range of its two new parameters. Any other use (printing, returning, changing it) keeps the
 //! variable a list, collected once (declaration_forms.rs).
 
-use super::nodes::{any_part, call, key, Counter};
+use super::nodes::{any_part, assign, call, key, Counter};
 use crate::analyzer::effects::call_arguments;
 use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
 use crate::library_words::substitute;
@@ -150,7 +150,7 @@ impl Lowering {
 			return body(&value);
 		}
 		let temporary = self.temporary(what);
-		let binding = key(temporary.clone(), Op::Assign, value);
+		let binding = assign(temporary.clone(), value);
 		Node::List(vec![binding, body(&temporary)], Bracket::Round, Separator::Semicolon)
 	}
 

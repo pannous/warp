@@ -1,6 +1,6 @@
 //! Class bodies as their members: fields as Java, C#, Go and Python write them, properties and accessors, constructors as `init`, methods with their result types
 use super::*;
-use crate::lowering::nodes::word_headed;
+use crate::lowering::nodes::{assign, block, word_headed};
 use crate::node::parens;
 use crate::words::SELF_WORD;
 
@@ -184,7 +184,7 @@ pub(super) fn setter_calls(node: Node, setters: &[String]) -> Node {
 				let call = parens(vec![setter, receiver.as_ref().clone(), recurse(*value)]);
 				Node::Key(receiver.clone(), Op::Assign, Box::new(call))
 			}
-			_ => key(recurse(*target), Op::Assign, recurse(*value)),
+			_ => assign(recurse(*target), recurse(*value)),
 		},
 		other => other.map_children(recurse),
 	}
@@ -448,9 +448,8 @@ pub(super) fn method_calls_named(node: &Node) -> std::collections::HashSet<Strin
 pub(super) fn with_members(node: Node) -> Node {
 	match node {
 		Node::Type { name, body } if name.attribute(crate::warp_parser::MIXIN_WORD).is_none() => {
-			let members = Node::List(class_items(&body), Bracket::Curly, Separator::Semicolon);
-			let changed = members.serialize()
-				!= Node::List(class_items_as_written(&body), Bracket::Curly, Separator::Semicolon).serialize();
+			let members = block(class_items(&body));
+			let changed = members.serialize() != block(class_items_as_written(&body)).serialize();
 			Node::Type { name, body: Box::new(if changed { members } else { *body }) }
 		}
 		other => other.map_children(with_members),
@@ -489,7 +488,7 @@ pub(super) fn declared_with_classes(node: Node, classes: &[String]) -> Node {
 		{
 			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else { unreachable!("guarded") };
 			let typed = Node::Key(variable, Op::Colon, Box::new(words[0].clone()));
-			key(typed, Op::Assign, declared_with_classes(*value, classes))
+			assign(typed, declared_with_classes(*value, classes))
 		}
 		other => other.map_children(|child| declared_with_classes(child, classes)),
 	}
@@ -549,7 +548,7 @@ pub(super) fn curly(body: Node) -> Node {
 		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List(items, Bracket::Curly, separator)
 		}
-		other => Node::List(vec![other], Bracket::Curly, Separator::Semicolon),
+		other => block(vec![other]),
 	}
 }
 
@@ -572,15 +571,7 @@ pub(super) fn constructor_parameters(word: &Node) -> Option<Vec<Node>> {
 		Node::List(call, Bracket::Round, _)
 			if call.first().and_then(Node::symbol_name).is_some_and(is_constructor_word) =>
 		{
-			Some(
-				call[1..]
-					.iter()
-					.flat_map(|parameter| match parameter.drop_meta() {
-						Node::List(group, Bracket::Round, _) => group.clone(),
-						_ => vec![parameter.clone()],
-					})
-					.collect(),
-			)
+			Some(call[1..].iter().flat_map(grouped_parameters).collect())
 		}
 		_ => None,
 	}

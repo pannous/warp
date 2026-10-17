@@ -12,7 +12,7 @@
 
 use crate::errors::diagnostic::Diagnostic;
 use crate::lowering::blocks::DATA_WORD;
-use crate::lowering::nodes::key;
+use crate::lowering::nodes::{arguments_rewritten, key, word_headed};
 use crate::modules::needed_definitions::with_statements_first;
 use crate::node::Node;
 use crate::operators::Op;
@@ -339,13 +339,8 @@ impl PageNames {
 		match member {
 			Node::Symbol(_) => member,
 			Node::Meta { .. } => member.under_meta(|inner| self.member_rewritten(inner, enclosing)),
-			Node::List(items, bracket, separator)
-				if items.first().is_some_and(|first| first.drop_meta().symbol_name().is_some()) =>
-			{
-				let mut items = items.into_iter();
-				let name = items.next().into_iter();
-				let arguments: Vec<Node> = items.map(|argument| self.rewritten(argument, enclosing)).collect();
-				Node::List(name.chain(arguments).collect(), bracket, separator)
+			Node::List(items, bracket, separator) if word_headed(&items).is_some() => {
+				arguments_rewritten(items, bracket, separator, |argument| self.rewritten(argument, enclosing))
 			}
 			other => self.rewritten(other, enclosing),
 		}

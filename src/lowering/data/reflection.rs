@@ -5,7 +5,7 @@
 //! `attributes`, `members`), `p.methods` and `dir(p)` of an instance or a class are the names of its class layout,
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
-use super::nodes::{call, key};
+use super::nodes::{call, key, word_applied};
 use crate::words::{DIR_WORD, MAP_WORD};
 use std::collections::{HashMap, HashSet};
 
@@ -272,11 +272,7 @@ fn function_named(subject: &Node) -> Option<&str> {
 		{
 			function_named(&items[0])
 		}
-		Node::List(items, Bracket::Round | Bracket::None, _) => match items.as_slice() {
-			[word, name] if word.symbol_name() == Some(FUNCTION_WORD) => name.symbol_name(),
-			_ => None,
-		},
-		_ => None,
+		_ => word_applied(subject, FUNCTION_WORD)?.symbol_name(),
 	}
 }
 
@@ -866,13 +862,9 @@ pub fn lower_unknown_dir(node: Node) -> Node {
 }
 
 fn answered_dir(node: Node) -> Node {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round | Bracket::None, _)
-			if items.len() == 2 && items[0].symbol_name() == Some(DIR_WORD) =>
-		{
-			dir_otherwise(&answered_dir(items[1].clone()))
-		}
-		_ => node.map_children(answered_dir),
+	match word_applied(&node, DIR_WORD) {
+		Some(subject) => dir_otherwise(&answered_dir(subject.clone())),
+		None => node.map_children(answered_dir),
 	}
 }
 
@@ -912,13 +904,11 @@ pub(crate) fn value_methods_modules(program: &Node) -> Vec<&'static str> {
 	let mut modules = vec![];
 	program.visit(&mut |part| {
 		let subject = match part.drop_meta() {
-			Node::List(items, Bracket::Round | Bracket::None, _)
-				if items.len() == 2 && items[0].symbol_name() == Some(METHODS_WORD) =>
-			{
-				&items[1]
-			}
-			Node::Key(subject, Op::Dot, word) if word.symbol_name() == Some(METHODS_WORD) => subject.as_ref(),
-			_ => return,
+			Node::Key(subject, Op::Dot, word) if word.is_symbol(METHODS_WORD) => subject.as_ref(),
+			_ => match word_applied(part, METHODS_WORD) {
+				Some(subject) => subject,
+				None => return,
+			},
 		};
 		modules.extend(literal_type(subject).or_else(|| variables.get(subject.symbol_name()?).copied()));
 	});
@@ -959,16 +949,8 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 	}
 	let reflected = match node.drop_meta() {
 		Node::Key(subject, Op::Dot, word) => word.symbol_name().and_then(|word| objects.dot_word(subject, word)),
-		Node::List(items, Bracket::Round | Bracket::None, _)
-			if items.len() == 2 && items[0].symbol_name() == Some(DIR_WORD) =>
-		{
-			objects.dir(&items[1])
-		}
-		Node::List(items, Bracket::Round | Bracket::None, _)
-			if items.len() == 2 && items[0].symbol_name() == Some(HELP_WORD) =>
-		{
-			objects.help(&items[1])
-		}
+		_ if let Some(subject) = word_applied(&node, DIR_WORD) => objects.dir(subject),
+		_ if let Some(subject) = word_applied(&node, HELP_WORD) => objects.help(subject),
 		// `methods(P)` is `P.methods`, `fields(p)` is `p.fields`
 		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && is_listing_word(&items[0]) => {
 			objects.dot_word(&items[1], &items[0].name())

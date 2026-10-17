@@ -2,7 +2,7 @@
 
 use crate::analyzer::*;
 use crate::declaration_forms::lower_declarations;
-use crate::lowering::nodes::{is_place, key};
+use crate::lowering::nodes::{assign, is_place};
 use crate::node::{parens, prelude_call, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{AT_WORD, DELETE_WORD, POP_WORD};
@@ -106,7 +106,7 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let without = prelude_call(rest_word, vec![map.clone(), map_key.clone()]);
 	let without = if rest_word == POPPED_REST_CALL { became(map, without) } else { without };
 	Some(Node::List(
-		vec![key(removed.clone(), Op::Assign, value), key(map.clone(), Op::Assign, without), removed],
+		vec![assign(removed.clone(), value), assign(map.clone(), without), removed],
 		Bracket::Round,
 		Separator::Semicolon,
 	))

@@ -6,7 +6,7 @@
 //! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
-use super::nodes::{arguments_rewritten, call, grouped_parameters, if_then, is_place, key, Counter};
+use super::nodes::{any_part, arguments_rewritten, assign, call, grouped_parameters, if_then, is_place, key, Counter};
 use crate::words::COPY_WORD;
 use crate::words::SELF_WORD;
 use crate::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
@@ -584,17 +584,13 @@ fn method_calls(node: Node, methods: &MethodCalls, calls: &Counter) -> Node {
 		Node::Symbol(_) if changing.giving_value.contains(&name) => {
 			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}·{}", calls.next_number()));
 			Node::List(
-				vec![
-					key(pair.clone(), Op::Assign, call),
-					key(receiver, Op::Assign, item(pair.clone(), 2)),
-					item(pair, 1),
-				],
+				vec![assign(pair.clone(), call), assign(receiver, item(pair.clone(), 2)), item(pair, 1)],
 				Bracket::Round,
 				Separator::Semicolon,
 			)
 		}
 		_ if changing.giving_value.contains(&name) => item(call, 1),
-		Node::Symbol(_) if changing.itself.contains(&name) => key(receiver, Op::Assign, call),
+		Node::Symbol(_) if changing.itself.contains(&name) => assign(receiver, call),
 		_ => call,
 	}
 }
@@ -801,7 +797,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 			let value = statements.pop().unwrap_or(Node::Empty);
 			let result = Node::Symbol(format!("{method}{VALUE_SUFFIX}"));
 			let pair = Node::List(vec![result.clone(), receiver], Bracket::Square, Separator::Space);
-			statements.extend([key(result, Op::Assign, value), pair]);
+			statements.extend([assign(result, value), pair]);
 			Node::List(statements, Bracket::None, Separator::Semicolon)
 		}
 	};
@@ -891,15 +887,11 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 /// Does the body assign a field of the variable (`self.n = …`, `self.n += 1`, `self.n++`) or change a list in one
 /// (`self.items.add(x)`)
 fn changes_fields_of(body: &Node, variable: &str) -> bool {
-	let mut changes = false;
-	body.visit(&mut |part| {
-		changes |= match part {
-			Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
-			Node::Key(target, op, _) => op.is_write() && is_field_of(target, variable),
-			_ => false,
-		};
-	});
-	changes
+	any_part(body, |part| match part {
+		Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
+		Node::Key(target, op, _) => op.is_write() && is_field_of(target, variable),
+		_ => false,
+	})
 }
 
 /// `self.items`, `self.stack.items`, an element `self.counts#i`
