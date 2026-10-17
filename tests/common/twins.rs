@@ -75,14 +75,15 @@ fn view(node: &Node, positions: bool) -> Node {
 		Node::Char(c) => tagged("char", [Node::Char(*c)]),
 		Node::Text(text) => tagged("text", [Node::text(text)]),
 		Node::Symbol(name) => tagged("symbol", [Node::text(name)]),
-		Node::Error(inner) => tagged("error", [node_view(inner)]),
+		// an error and a type stay opaque to a pass twin (walk.warp node_of): no positions inside
+		Node::Error(inner) => tagged("error", [view(inner, false)]),
 		Node::Key(left, op, right) => tagged("key", [Node::text(op.as_str()), node_view(left), node_view(right)]),
 		Node::List(items, bracket, separator) => {
 			let mut parts = vec![Node::text(&bracket_glyphs(bracket)), Node::text(&separator_glyph(separator))];
 			parts.extend(items.iter().map(node_view));
 			tagged("list", parts)
 		}
-		Node::Type { name, body } => tagged("type", [node_view(name), node_view(body)]),
+		Node::Type { name, body } => tagged("type", [view(name, false), view(body, false)]),
 		Node::Data(data) => tagged(
 			"data",
 			[Node::text(&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")))],
