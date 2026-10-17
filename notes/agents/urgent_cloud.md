@@ -38,4 +38,10 @@ message `[urgent card <key>] <title> | <description>`; between cards you wait.
     failing the same on origin/main here) are named in the report. A red full run caused by a direct push is fixed
     first, before the next card.
   - If main refuses the push, the branch goes through the queue as before and the report says so.
+  - Live page (user, 2026-10-17): a push to main does not deploy warp.pannous.com (pages.yml runs hourly at :17). After
+    a direct push that changes the compiler, the page or the samples, start the Playground workflow at once with the
+    GitHub tool actions_run_trigger (workflow pages.yml, ref main, input skip_checks: true: every card here is urgent,
+    live in a minute, the hourly run checks it later). Then watch https://warp.pannous.com/version.js in the background
+    (`until curl -s …/version.js | grep -q <commit>; do sleep 30; done`) and tell the user `live: <commit>`, or the
+    failed run's step when the workflow fails.
 - Back to waiting. When main has moved a lot since priming, `git pull` and rebuild before the next card.
