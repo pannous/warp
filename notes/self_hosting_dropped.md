@@ -138,9 +138,6 @@ Target order: parser (clean tree) → desugar table pass → scope pass (calls, 
 passes (test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipes, quasi_quote, tree_walks) →
 analyzer checks.
 
-## Deviations
-Where a warp twin keeps a cleaner result than its Rust twin, with an example; the differential reads these as expected.
-(none yet: of_lookups and grouped_receivers match Rust on every source but the dropped ones above)
 # Deviations: where a warp twin keeps the clean result instead of Rust's
 Rule: notes/self_hosting.md (matching Rust is a check, not the goal). Each entry: the difference, an example, the card
 or question for the Rust side.
@@ -163,3 +160,9 @@ real measure is the suite through the warp compiler (notes/self_hosting.md). Dev
   src/analyzer/inference.rs.
 - Element types don't flow through function results (`sieve(100)` → plain list): back by carrying the element slot
   of a result.
+## passes (lib/compiler/scope.warp)
+- Names come from lib/compiler/scope.warp (one walk for every binding form), not from three per-pass walks
+  (of_lookups defined_names, grouped_receivers bound_variables, number_words names_given). Cleaner on one corpus
+  source: `fn one() {…}` (probes/algo/queens/p8_plus_eq_call.warp) keeps the function's name, Rust's number_words
+  makes it `fn 1() {…}`, since its names_given misses `fn`/`def` definitions (card rust-renames). The pipeline
+  differential skips that source (tests/parser/test_self_passes.rs SCOPE_DEVIATIONS).
