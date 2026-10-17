@@ -68,7 +68,9 @@ impl WasmGcEmitter {
 		if self.ctx.user_functions.contains_key(&name) {
 			return Some(name);
 		}
-		self.missing_compiler_words.push(word.to_string());
+		if !self.missing_compiler_words.iter().any(|missing| missing == word) {
+			self.missing_compiler_words.push(word.to_string());
+		}
 		None
 	}
 

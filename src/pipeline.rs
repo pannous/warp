@@ -574,6 +574,8 @@ fn loading_compiler_words<T>(compile: impl Fn() -> Result<T, Node>) -> Result<T,
 	if compiled.is_ok() || missing.is_empty() {
 		return compiled;
 	}
+	// an implied_words scan that missed: the program compiles twice (RUST_LOG=debug names the words to scan for)
+	log::debug!("compiling again for the prelude words {missing:?}");
 	crate::normalize::without_hints(|| scoped(|context| &mut context.compiler_words, missing, compile))
 }
 

@@ -324,8 +324,9 @@ pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
 		crate::gpu_maps::implied_words(statements),
 		crate::lowering::library_words::implied_count_words(statements),
 		crate::wasm_emitter::numbers::radix::implied_words(statements),
-		crate::compiler::compile_context::read(|context| context.compiler_words.clone()),
+		crate::lowering::filled_lists::implied_words(statements),
 		crate::wasm_emitter::numbers::uncertain::implied_words(statements),
+		crate::compiler::compile_context::read(|context| context.compiler_words.clone()),
 	]
 	.concat();
 	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).chain(implied).collect())
