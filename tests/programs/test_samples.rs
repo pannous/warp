@@ -199,3 +199,9 @@ fn test_kitchensink() {
 fn test_y_combinator() {
 	is!("samples/functions/y_combinator.warp", 6765);
 }
+
+#[test] // one-noun phrase calls and `as`-picked definitions stay after park-phrases (card samples-phrases)
+fn test_phrases() {
+	let printed = crate::common::printed("samples/hello/phrases.warp");
+	assert_eq!(printed, "class full-name\nhello Ann Lee\n%PDF hello\n<w:t>hello MS</w:t>\n");
+}
