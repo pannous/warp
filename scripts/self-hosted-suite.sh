@@ -9,6 +9,7 @@
 #                                                      SCRATCH_PREFIX/<tip>-<group>, deleted after the run
 #   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
+#   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
 SKIPPED=parser::test_self_       # the twins compare warp with Rust themselves
@@ -24,6 +25,7 @@ TEST_GROUPS=(
 	"parser:: programs:: scope:: sweeps:: text:: wasm:: web:: welcoming::"
 )
 REPORTS=/Users/me/dev/angles/warp/data/self-hosted
+COUNTS=/Users/me/dev/angles/warp/data/self_hosting/suite_counts.txt   # the count over time, one line per cloud run
 CLOUD_RESULTS=/Users/me/dev/angles/warp/data/cloud
 SHOWN_CAUSES=40
 FAMILY_LEAST=10                  # a family of fewer failures is only listed by its causes
@@ -33,11 +35,12 @@ fail() { echo "self-hosted-suite: $*" >&2; exit 1; }
 
 # The passed/total count from the test lines and each failure's cause: the panic message, for an assertion its left
 # side (the value the self-hosted run gave), digits as #, so the same cause in different tests counts once per test
+# With LISTED set (a regex), only the failed tests whose cause matches, each with its cause
 rank() {
 	local log
 	for log in "$@"; do
 		if [[ "$log" == *.gz ]]; then gunzip -c "$log"; else cat "$log"; fi
-	done | LC_ALL=C awk -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH -v family_least=$FAMILY_LEAST '
+	done | LC_ALL=C awk -v listed="${LISTED:-}" -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH -v family_least=$FAMILY_LEAST '
 		/^test [^ ]+ \.\.\. ok$/ { passed++ }
 		/^test [^ ]+ \.\.\. FAILED$/ { failed++ }
 		/^cloud-test: KILLED/ { killed++ }
@@ -52,6 +55,7 @@ rank() {
 			sub(/^Error\("/, "", cause); sub(/"\)$/, "", cause)
 			gsub(/[0-9]+/, "#", cause)
 			cause = substr(cause, 1, width)
+			if (listed != "") { if (cause ~ listed) print current "\t" cause; return }
 			if (!(cause in causes)) example[cause] = current
 			causes[cause]++
 			family = cause
@@ -59,6 +63,7 @@ rank() {
 			families[family]++
 		}
 		END {
+			if (listed != "") exit
 			all = passed + failed
 			printf "self-hosted: %d passed / %d (%.1f%%)\n", passed, all, all ? 100 * passed / all : 0
 			if (killed) printf "%d killed runs: their unfinished tests are not counted, their failures have no cause\n", killed
@@ -113,12 +118,16 @@ cloud_run() {
 	done
 	mkdir -p "$REPORTS"
 	rank "${logs[@]}" | tee "$REPORTS/${tip:0:8}.txt"
+	mkdir -p "$(dirname "$COUNTS")"
+	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //')" \
+		"data/self-hosted/${tip:0:8}.txt" >> "$COUNTS"
 	echo "(report: $REPORTS/${tip:0:8}.txt, logs: ${logs[*]})"
 }
 
 case "${1:-}" in
 	--rank) shift; rank "$@" ;;
+	--tests) shift; LISTED=$1; shift; rank "$@" ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,11p' "$0"; exit 2 ;;
+	--*) sed -n '2,12p' "$0"; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac

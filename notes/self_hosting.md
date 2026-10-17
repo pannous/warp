@@ -341,7 +341,10 @@ no total saving, loses self-contained files, and a .cwasm only runs on the exact
 ## The suite through the warp pipeline (card warp-pipeline-suite)
 `scripts/self-hosted-suite.sh [<pushed tip>]` runs the whole suite on the cloud lane with WARP_SELF_HOSTED=1 and
 prints "self-hosted: N passed / M" plus the failures grouped by cause (an assertion's left side, digits as #), the most
-frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank <log>` ranks any test log.
+frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank <log>` ranks any test log,
+`--tests <cause regex> <log…>` lists the failed tests of a cause. A cloud run appends its count to
+data/self_hosting/suite_counts.txt (warp-steward reruns after each batch touching lib/compiler or the pipeline, and
+nightly). The failure groups are cards suite-* in topic self-hosted-2, each naming its stage owner.
 - src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
   [0, source]) and `run_program_passes` hands every source pass with a warp twin (TWINNED_PASSES, the order of
   passes.warp `passes`) to it ([i, view]); the passes without a twin, the analyzer and the emitter stay Rust.
