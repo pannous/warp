@@ -44,9 +44,29 @@ const NEW_SEPARATED: &str = "new_separated";
 const KEY: &str = "key";
 const BRACKETED: &str = "bracketed";
 const SEPARATED: &str = "separated";
-/// name, number of arguments, result kind
-pub const NODE_BUILTINS: [(&str, usize, Kind); 4] =
-	[(SYMBOL_WORD, 1, Kind::Symbol), (KEY, 3, Kind::Key), (BRACKETED, 2, Kind::List), (SEPARATED, 2, Kind::List)];
+/// `key_of(n)`, `value_of(n)`, …: the node part itself, which a field of that name never shadows (card
+/// node-part-clash: `.key` of the code `key = 3` is 3), ø for a part the node has not
+const PART_READERS: [(&str, i32); 6] = [
+	("key_of", KEY_PART),
+	("value_of", VALUE_PART),
+	("op_of", OP_PART),
+	("name_of", NAME_PART),
+	("bracket_of", BRACKET_PART),
+	("separator_of", SEPARATOR_PART),
+];
+/// name, number of arguments, result kind (a part read is a Node of any kind)
+pub const NODE_BUILTINS: [(&str, usize, Kind); 10] = [
+	(SYMBOL_WORD, 1, Kind::Symbol),
+	(KEY, 3, Kind::Key),
+	(BRACKETED, 2, Kind::List),
+	(SEPARATED, 2, Kind::List),
+	(PART_READERS[0].0, 1, Kind::Empty),
+	(PART_READERS[1].0, 1, Kind::Empty),
+	(PART_READERS[2].0, 1, Kind::Empty),
+	(PART_READERS[3].0, 1, Kind::Empty),
+	(PART_READERS[4].0, 1, Kind::Empty),
+	(PART_READERS[5].0, 1, Kind::Empty),
+];
 /// The opening brackets by their bracket info in a list's kind field (Curly 0, Square 1, Round 2, Less 3, None 5)
 const BRACKETS: [(&str, i64); 5] = [("{", 0), ("[", 1), ("(", 2), ("<", 3), ("", 5)];
 /// The bracket info of a round group `(…)`
@@ -106,7 +126,21 @@ impl WasmGcEmitter {
 				self.emit_call(func, NEW_KEY_OF)
 			}
 			SEPARATED => self.emit_call(func, NEW_SEPARATED),
-			_ => self.emit_call(func, NEW_BRACKETED),
+			BRACKETED => self.emit_call(func, NEW_BRACKETED),
+			reader => {
+				let Some((_, part)) = PART_READERS.iter().find(|(word, _)| *word == reader) else {
+					unreachable!("NODE_BUILTINS names {reader}");
+				};
+				let read = self.node_scratch();
+				func.instruction(&I::I32Const(*part));
+				self.emit_call(func, NODE_PART);
+				#[rustfmt::skip]
+				Self::emit_list(func, &[
+					I::LocalTee(read), I::RefIsNull, I::If(BlockType::Result(Ref(self.node_ref(false)))),
+				]);
+				self.emit_call(func, "new_empty");
+				Self::emit_list(func, &[I::Else, I::LocalGet(read), I::RefAsNonNull, I::End]);
+			}
 		}
 	}
 

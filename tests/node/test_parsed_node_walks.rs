@@ -64,3 +64,16 @@ fn parsed_type_declarations_are_nodes() {
 	is!("t = \"class P { x: int }\\nf(a) := a\"; #parse(t)", 2);
 	is!("n = parse(read(\"lib/compiler/parser.warp\")); #n > 50", true);
 }
+
+/// Card node-part-clash: `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` read
+/// the node part even where a field of that name wins (`.key` of the code `key = 3` is 3); ø for a part the node has not
+#[test]
+fn part_readers_never_clash_with_fields() {
+	is!("k = key(symbol(\"key\"), \"=\", 3); [k.key, key_of(k)]", warp::parse("[3 key]"));
+	is!("k = key(symbol(\"op\"), \":\", 3); op_of(k)", ":");
+	is!("value_of(parse(\"value = 4\"))", 4);
+	is!("name_of(parse(\"y\")) + bracket_of(parse(\"f(x)\"))", "y(");
+	is!("key_of(parse(\"y\"))", warp::Node::Empty);
+	is!("separator_of(parse(\"[a, b]\"))", ",");
+	is!("key_of(x) := x * 2; key_of(21)", 42);
+}
