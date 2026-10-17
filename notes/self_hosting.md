@@ -203,11 +203,16 @@ Readers of the layout (each place a module's result or a value crossing the boun
   before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
   a chunk at a time (iovec at 0, written count at 8, bytes from 16). That is the one edge helper; nothing else
   touches memory. Done (card emitter-prints); the emitter twin compares stdout too (host::with_captured_stdout).
-Runtime words are warp: `runtime = data { … }` in emitter.warp, written over a handful of intrinsics (new_text,
-copy_text, byte_count, byte_at, set_byte, int_quotient, int_remainder (truncating), code_of, output_byte, write_output; one or
-two instructions each, usable only inside the runtime) and compiled on their first call like the program's own
-functions: text_join (`+` on texts), text_count (`#` on a text: code points), print_line, int_text, char_text (print of
-an int, a character; a yes/no prints yes or no, a float is not printed yet).
+Runtime words are warp: lib/compiler/runtime.warp, written in idiomatic warp (for loops and all sugar) and lowered by
+the same pipeline as any program before emitter.warp sees them (`wasm_module(program, runtime)`; the twin harness
+lowers it with pipeline::lower). emitter.warp handles only lowered forms, never hand-lowered source. The words use a
+handful of intrinsics, one or two instructions each and callable only from runtime words: texts (new_text, copy_text,
+byte_count, byte_at, set_byte), lists (new_list, copy_items, adopt_items), numbers (int_quotient, int_remainder,
+truncating; code_of, char_of), boxed values (kind_code, marked_kind, unboxed_int/float/text/char, is_null), output
+(output_byte, write_output) and fail (a trap). Each word is compiled on its first call like the program's own
+functions: text_join and list_join (`+`), list_append (`+=` on a list, in place, so aliases see it), text_count (`#`
+on a text: code points), text_char (`t#i`), text_order (text comparisons), print_line, int_text, char_text, node_text
+(print and `+` of a value known only at run time; a float is not printed yet).
 
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word

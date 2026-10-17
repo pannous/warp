@@ -362,7 +362,13 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
 		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
 	});
-	let twin = TwinProgram::new("emitter", "wasm_module(node_of(json(argument)))");
+	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}.json", std::process::id()));
+	let runtime_source = std::fs::read_to_string(Path::new(COMPILER_FOLDER).join(RUNTIME_WORDS)).unwrap();
+	let lowered_runtime = warp::pipeline::lower(&runtime_source).expect("lib/compiler/runtime.warp lowers");
+	std::fs::create_dir_all(INPUT_FOLDER).unwrap();
+	std::fs::write(&runtime, view_json(&plain_view(&lowered_runtime))).unwrap();
+	let setup = format!("runtime_words = node_of(json(read(\"{}\")))", runtime.display());
+	let twin = TwinProgram::with_setup("emitter", &setup, "wasm_module(node_of(json(argument)), runtime_words)");
 	let (mut inside, mut differing, mut refusals) = (vec![], vec![], std::collections::BTreeMap::new());
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
 		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
@@ -386,6 +392,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 		eprintln!("{} inside; outside the core:", inside.len());
 		ranked.iter().for_each(|(refusal, count)| eprintln!("{count:5} {refusal}"));
 	}
+	let _ = std::fs::remove_file(&runtime);
 	report("wasm_module", &differing);
 	assert!(
 		inside.len() >= least,
@@ -395,6 +402,8 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	inside
 }
 
+/// The runtime words emitter.warp compiles into a module, lowered like a program, in COMPILER_FOLDER
+const RUNTIME_WORDS: &str = "runtime.warp";
 /// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
 const OUTSIDE_THE_CORE: &str = "outside the core";
 /// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
@@ -498,12 +507,17 @@ struct TwinProgram {
 
 impl TwinProgram {
 	fn new(part: &str, call: &str) -> Self {
+		Self::with_setup(part, "", call)
+	}
+
+	/// As new, with `setup` run once before the calls (a value every call shares)
+	fn with_setup(part: &str, setup: &str, call: &str) -> Self {
 		static DIFFERENTIALS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 		let number = DIFFERENTIALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 		std::fs::create_dir_all(INPUT_FOLDER).unwrap();
 		let input = Path::new(INPUT_FOLDER).join(format!("{part}-{}-{number}.txt", std::process::id()));
 		let program = format!(
-			"use \"{COMPILER_FOLDER}/{part}.warp\"\ntwin_case(argument: text) := {call}\ntwin_values = []\n\
+			"use \"{COMPILER_FOLDER}/{part}.warp\"\n{setup}\ntwin_case(argument: text) := {call}\ntwin_values = []\n\
 			 for argument in read(\"{}\").split(\"\\n\") {{ twin_values += [twin_case(argument)] }}\ntwin_values",
 			input.display()
 		);
