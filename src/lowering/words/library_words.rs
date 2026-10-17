@@ -74,52 +74,10 @@ const COUNT_PART: &str = "count_of";
 /// lib/prelude.warp's byte list of a text, `t.bytes`
 pub(crate) const BYTE_LIST: &str = "bytes";
 
-/// The library's words under their canonical names; their other spellings are lib/prelude.warp's alias lines
-const LIBRARY_WORDS: [&str; 38] = [
-	crate::wasm_emitter::text::text_builtins::WARNING,
-	// Python's tuple(xs) (card python-stdlib)
-	LIST_WORD,
-	MAP_KEYS,
-	MAP_VALUES,
-	MAP_ENTRIES,
-	COLLECTION_CONTAINS,
-	MAP_GET_OR,
-	COLLECTION_POSITION,
-	CHARS_WORD,
-	CODE_POINT_LIST,
-	"upper",
-	"lower",
-	"trim",
-	"reverse",
-	"sort",
-	"split",
-	"join",
-	"first",
-	"last",
-	SLICE,
-	COPY_WORD,
-	"replace",
-	ORD_WORD,
-	IS_DIGIT,
-	"mean",
-	IS_ALPHA,
-	"is_alphanumeric",
-	"is_space",
-	"nearest",
-	// lib/prelude.warp's digits in a base up to 36 and back
-	"to_base",
-	"from_base",
-	// lib/prelude.warp's Euclidean length of a list, a number's absolute value (decision S3)
-	"norm",
-	"magnitude",
-	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
-	DICT_WORD,
-	FROMKEYS,
-	// lib/prelude.warp's count of a part of a text (`count "an" in t` calls it too)
-	COUNT_PART,
-	BYTE_LIST,
-	crate::words::UNWRAP,
-];
+/// The library's words besides the runtime, expanded and prelude words: the text builtins warning and trim, the type
+/// word list and copy; their other spellings are lib/prelude.warp's alias lines
+const OTHER_LIBRARY_WORDS: [&str; 4] =
+	[crate::wasm_emitter::text::text_builtins::WARNING, LIST_WORD, "trim", COPY_WORD];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/lists/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
@@ -230,7 +188,6 @@ pub(crate) fn expanded_word_definition(word: &str) -> Option<String> {
 	let parameters: String = std::iter::once(TEMPORARY.to_string()).chain(after_receiver).collect();
 	Some(format!("{name}({parameters}) := {template}"))
 }
-const IS_DIGIT: &str = "is_digit";
 const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
@@ -254,7 +211,6 @@ const AS_LIST: &str = "as_list";
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
 const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
 	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
-const IS_ALPHA: &str = "is_alpha";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand";
@@ -365,7 +321,10 @@ pub fn canonical_spelling(name: &str) -> &str {
 fn canonical_word(name: &str) -> Option<&'static str> {
 	let aliases = crate::modules::prelude_aliases();
 	let name = aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str());
-	LIBRARY_WORDS.into_iter().chain([SUM_WORD]).find(|word| *word == name)
+	let runtime = RUNTIME_WORDS.into_iter().map(|(word, _)| word);
+	let expanded = EXPANDED_WORDS.into_iter().map(|(word, _, _)| word);
+	let built_in = runtime.chain(expanded).chain(OTHER_LIBRARY_WORDS).find(|word| *word == name);
+	built_in.or_else(|| crate::modules::prelude_word(name))
 }
 
 pub(crate) fn arity(word: &str) -> usize {
