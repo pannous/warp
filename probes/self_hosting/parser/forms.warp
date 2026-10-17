@@ -97,3 +97,10 @@ b = a[1..3]
 b = a[1...3]
 b = a[...3]
 b = a[i]
+class Run{distance: km}
+class V { x:int; plus(o) := V(x + o.x) }
+struct P { x: int, y: float }
+class Empty {}
+type Point { x: int }
+class Dog extends Animal { name: text }
+class Marker
