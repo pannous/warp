@@ -130,7 +130,12 @@ The bootstrap (warp compiling the warp-written compiler) is planned once 13–15
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
 node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
 the text "outside the core: <first form>". Module: type, function, export (main), code and a name section with
-function and local names. No GC types, no memory: the core needs neither.
+function and local names.
+- GC (card emitter-gc): the types $String, $Node, $i64box, $f64box come first (function types after them), named with
+  their fields in the name section; the memory (exported, for the reader) starts with the texts' bytes, each text once.
+  A text or list is a `(ref null $Node)`: a literal text a $Node of kind Text (one character: a Codepoint, an i31, as
+  warp holds a literal "a"), a list literal cons cells built from its last item, its items read in order and boxed
+  (numbers and yes/no in their boxes). main giving a yes/no gives it boxed, as a $Node of BOOL_KIND.
 - Kinds: int = i64, float = f64, a condition = i32. A parameter takes its annotation, else the kind of its first
   call's argument; a function's result is read twice, so a recursive call knows it (the pending kind takes the kind
   it meets). `%` is Euclidean as in Rust's emitter (r + |b| for a negative truncated remainder).
@@ -140,8 +145,8 @@ function and local names. No GC types, no memory: the core needs neither.
   the core; the checked share of every sample and probe must have at least a floor of programs inside.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
 - Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
-  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no result, a loop's value, texts, lists, every
-  runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
+  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no variable, a loop's value, operators on texts and
+  lists (`+`, `==`, `#`, indexing), every runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
 - Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
   (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
