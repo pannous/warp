@@ -13,5 +13,5 @@ fn a_fraction_of_a_second_sleeps_its_milliseconds() {
 #[test]
 fn a_fraction_of_a_millisecond_rounds_to_the_nearest() {
 	is!("start = clock(); sleep(16.7 ms); clock() - start >= 17", true);
-	is!("start = clock(); sleep((50/3) ms); clock() - start >= 17", true);
+	is!("start = clock(); sleep(50/3 * 1 ms); clock() - start >= 17", true);
 }
