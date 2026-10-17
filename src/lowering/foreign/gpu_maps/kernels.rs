@@ -800,24 +800,19 @@ fn last_values<'a>(node: &'a Node, values: &mut Vec<&'a Node>) {
 	}
 }
 
-/// The prelude words painted_functions may call where the program writes none: pixel_color, of `paint(f, …)`
-pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
-	fn paints_a_function(node: &Node) -> bool {
-		let paints = match node.drop_meta() {
-			Node::List(items, _, _) => match items.as_slice() {
-				[paint, arguments @ ..] if paint.is_symbol(PAINT_WORD) => {
-					spread_arguments(arguments, 3).is_some_and(|arguments| arguments[0].symbol_name().is_some())
-				}
-				_ => false,
-			},
+/// The prelude word painted_functions may call where the program writes none (modules IMPLIED_WORDS): pixel_color,
+/// of `paint(f, …)`
+pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
+	let paints = match node.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[paint, arguments @ ..] if paint.is_symbol(PAINT_WORD) => {
+				spread_arguments(arguments, 3).is_some_and(|arguments| arguments[0].symbol_name().is_some())
+			}
 			_ => false,
-		};
-		paints || node.drop_meta().parts().into_iter().any(paints_a_function)
-	}
-	match statements.iter().any(paints_a_function) {
-		true => vec![PIXEL_COLOR.to_string()],
-		false => vec![],
-	}
+		},
+		_ => false,
+	};
+	paints.then_some(PIXEL_COLOR)
 }
 
 /// Every `paint(f, width, height)` of a warp function f(x, y): a fragment shader of f where WGSL can compute it, the
