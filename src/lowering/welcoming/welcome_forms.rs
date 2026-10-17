@@ -151,7 +151,7 @@ fn named_reserved(target: &Node, destructures: bool) -> Option<(Node, String)> {
 }
 
 /// A bare `return` (the parser keeps the word alone: `if t == ø { return }`) is the phrase `return ø` every pass reads;
-/// `return` named on a key's left (`return = 2`) stays the word, for the soft keyword check
+/// `return` named on a key's left (`return = 2`, for the soft keyword check) or as a field (`op.return`) stays the word
 pub fn lower_bare_returns(node: Node) -> Node {
 	if !node.mentions_any(&[RETURN_WORD]) {
 		return node;
@@ -171,6 +171,9 @@ fn bare_returns(node: Node) -> Node {
 		}
 		Node::Key(left, op, right) if left.is_symbol(RETURN_WORD) => {
 			Node::Key(left, op, Box::new(bare_returns(*right)))
+		}
+		Node::Key(left, Op::Dot, right) if right.is_symbol(RETURN_WORD) => {
+			Node::Key(Box::new(bare_returns(*left)), Op::Dot, right)
 		}
 		other => other.map_children(bare_returns),
 	}
