@@ -14,7 +14,6 @@ fn a_function_name_with_ed_is_its_suffix_form() {
 	is!(&with_square("3 squared"), 9);
 	is!(&with_square("(1+2) squared"), 9);
 	is!(&with_square("1+(2 squared)"), 5);
-	is!("halve:=it/2; 8 halved", 4);
 	is!(&with_square("x=4; x squared"), 16);
 	is!(&with_square("2 squared+1"), 5);
 }

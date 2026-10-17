@@ -1,6 +1,10 @@
 //! Numbers: integers, floats, exponents, repeating decimals, vulgar fractions, ordinals, literal type suffixes
 use super::*;
 
+/// The litre's symbols, glued to a number only with `use units` (refused_glued_litre)
+const LITRE_SYMBOLS: [char; 2] = ['L', 'l'];
+const UNITS_MODULE: &str = "units";
+
 /// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an
 /// overline, or with a plain digit after an overlined one
 pub(crate) fn overlined_fraction(chars: &[char]) -> Option<(String, String, usize)> {
@@ -84,6 +88,9 @@ impl WarpParser {
 		let number = self.parse_number_value();
 		let literal: String = self.chars[start..self.pos].iter().collect();
 		let number = self.keep_source_literal(number, &literal);
+		if let Some(refusal) = self.refused_glued_litre(&literal) {
+			return refusal;
+		}
 		match self.literal_type_suffix().or_else(|| self.scientific_float(&number, &literal)) {
 			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
 			None => self.with_juxtaposed_factor(number),
@@ -102,7 +109,35 @@ impl WarpParser {
 		ORDINAL_SUFFIXES.contains(&word.as_str())
 	}
 
-	/// Tight conversion written on the literal: `0.1f` → float, `0.1l` → exact, `0.1:float` / `1.5:int` → that type.
+	/// `2L`, `2l` glued: the litre, which C's long-double suffix spells too, so a program says `use units` to mean it
+	/// (decision litre-suffix); `2 L` with a space is the litre anyway
+	fn refused_glued_litre(&self, literal: &str) -> Option<Node> {
+		let unit = self.current_char();
+		if is_identifier_char(self.peek_char(1)) || !self.glued_litre_refused(&unit.to_string()) {
+			return None;
+		}
+		Some(crate::node::error(&format!(
+			"{literal}{unit}: {unit} is the litre unit here; add `use units` (for an exact number write {literal} as exact)"
+		)))
+	}
+
+	/// Is `unit` the litre, which this program may not glue to a number (no `use units`)
+	pub(crate) fn glued_litre_refused(&self, unit: &str) -> bool {
+		let is_litre = LITRE_SYMBOLS.iter().any(|symbol| unit == symbol.to_string());
+		is_litre && !self.options.data_mode && !self.source_uses(UNITS_MODULE)
+	}
+
+	/// Does a line of the source say `use units` (or `import`, `require`)
+	fn source_uses(&self, module: &str) -> bool {
+		let source: String = self.chars.iter().collect();
+		source.lines().any(|line| {
+			let words: Vec<&str> = line.split_whitespace().take(2).collect();
+			matches!(words.as_slice(), [keyword, name] if crate::modules::USE_KEYWORDS.contains(keyword)
+				&& name.trim_end_matches(';') == module)
+		})
+	}
+
+	/// Tight conversion written on the literal: `0.1f` → float, `0.1:float` / `1.5:int` → that type.
 	/// Code only: in data `version: 1.10` and `n:int` stay key/value.
 	pub(crate) fn literal_type_suffix(&mut self) -> Option<String> {
 		if self.options.data_mode {

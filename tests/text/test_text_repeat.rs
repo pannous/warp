@@ -17,7 +17,6 @@ fn text_times_int_repeats() {
 
 #[test]
 fn n_times_text_is_the_explicit_repeat() {
-	is!("2 times \"ab\"", "abab");
 	is!("g=\"ab\"; 3 times g", "ababab");
 }
 

@@ -48,13 +48,14 @@ pub fn receive(port: &str, seconds: f64) -> Result<Option<Vec<u8>>, String> {
 		(name, messages)
 	};
 	let messages = messages.lock().map_err(|_| format!("the MIDI input {name} is poisoned"))?;
-	match seconds > 0.0 {
-		true => match messages.recv_timeout(std::time::Duration::from_secs_f64(seconds)) {
-			Ok(message) => Ok(Some(message)),
-			Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
-			Err(mpsc::RecvTimeoutError::Disconnected) => Err(format!("the MIDI input {name} closed")),
-		},
-		false => messages.recv().map(Some).map_err(|_| format!("the MIDI input {name} closed")),
+	let closed = || format!("the MIDI input {name} closed");
+	if seconds <= 0.0 {
+		return messages.recv().map(Some).map_err(|_| closed());
+	}
+	match messages.recv_timeout(std::time::Duration::from_secs_f64(seconds)) {
+		Ok(message) => Ok(Some(message)),
+		Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+		Err(mpsc::RecvTimeoutError::Disconnected) => Err(closed()),
 	}
 }
 

@@ -89,6 +89,8 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
+	// `if let Some(v) = o`, a match of `Some(v) =>` and `None =>` arms (rust_options.rs), before the arms below
+	crate::lowering::rust_options::lower,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
 	// `x(p:P) -> int := …` is `x(p:P): int := …` (welcome_forms.rs) before any pass reads a definition's head

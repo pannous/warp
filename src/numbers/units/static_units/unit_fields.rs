@@ -280,15 +280,16 @@ impl Inference {
 		if let Some(class) = self.named_construction_class(node) {
 			return Some(class);
 		}
+		if let Some(table) = crate::database_tables::element_table(node) {
+			return self.class_lists.get(&table).cloned();
+		}
 		match node.drop_meta() {
 			Node::Symbol(name) => self.instances.get(name).cloned(),
 			Node::List(items, Bracket::Round, _) => match items.first().map(Node::drop_meta) {
 				Some(Node::Symbol(class)) if self.classes.contains_key(class) => Some(class.clone()),
-				_ => match self.returned_by_call(items, calls_left) {
-					Some(last) => self.instance_class_within(last, calls_left - 1),
-					None => crate::database_tables::element_table(node)
-						.and_then(|table| self.class_lists.get(&table).cloned()),
-				},
+				_ => self
+					.returned_by_call(items, calls_left)
+					.and_then(|last| self.instance_class_within(last, calls_left - 1)),
 			},
 			Node::Key(list, Op::Hash, _) => self.class_lists.get(&list.drop_meta().name()).cloned(),
 			_ => None,

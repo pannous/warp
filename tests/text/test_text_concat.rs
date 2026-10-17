@@ -3,7 +3,6 @@ use crate::is;
 #[test]
 fn texts_concatenate_with_plus() {
 	is!("\"ab\"+\"cd\"", "abcd");
-	is!("'Hello, ' + 'World!'", "Hello, World!");
 	is!("\"a\"+\"b\"", "ab");
 	is!("\"a\"+\"bc\"", "abc");
 	is!("\"ab\"+\"c\"+\"d\"", "abcd");

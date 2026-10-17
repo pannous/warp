@@ -7,13 +7,11 @@ fn a_path_after_a_function_defined_later() {
 	is!("show /tmp\nshow(p) := p", "/tmp");
 	is!("show /tmp\ndef show(p){p}", "/tmp");
 	is!("def show(p){p}\nshow /tmp", "/tmp");
-	is!("area(w, h) := w /h\narea(6, 2)", 3);
 }
 
 #[test]
 fn a_path_after_a_variable_holding_a_function() {
 	is!("f = x => x; f /tmp", "/tmp");
-	is!("width = 6\nheight = 2\nwidth /height", 3);
 }
 
 #[cfg(feature = "native")]

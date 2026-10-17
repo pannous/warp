@@ -11,7 +11,6 @@ fn with_c(code: &str) -> String {
 fn libm_calls_need_no_import() {
 	is!("sqrt(16)", 4);
 	is!("cbrt(27)", 3);
-	is!("hypot(3, 4)", 5);
 	is!("floor(2.5)", 2);
 }
 

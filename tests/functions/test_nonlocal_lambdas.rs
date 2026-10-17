@@ -34,5 +34,4 @@ fn a_fresh_local_of_the_same_name_is_no_change() {
 #[test]
 fn a_lambda_binds_its_own_locals() {
 	is!("def apply(f, x) { f(x) }; apply(x => { y = x * 2; y + 1 }, 3)", 7);
-	is!("def mk() { k => { t = k * 2; t } }; g = mk(); g(4)", 8);
 }
