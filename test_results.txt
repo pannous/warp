@@ -3154,6 +3154,10 @@ PASSED:
   ✓ numbers::test_unit_after_variable_hint::a_plain_variable_for_a_unit_field_suggests_the_multiplication
   ✓ numbers::test_unit_after_variable_hint::a_unit_after_a_variable_hints_the_multiplication
   ✓ numbers::test_unit_after_variable_hint::a_unit_after_a_variable_holding_a_number_is_refused_everywhere
+  ✓ numbers::test_unit_beside_variable::a_function_named_like_a_unit_leaves_the_unit_after_a_number
+  ✓ numbers::test_unit_beside_variable::a_module_alias_named_like_a_unit_is_no_variable_after_a_number
+  ✓ numbers::test_unit_beside_variable::a_unit_named_like_a_variable_needs_use_units
+  ✓ numbers::test_unit_beside_variable::a_written_product_or_another_name_needs_nothing
   ✓ numbers::test_unit_columns::a_column_sums_and_peaks_in_its_unit
   ✓ numbers::test_unit_columns::a_conversion_takes_a_compound_unit_whole
   ✓ numbers::test_unit_columns::a_number_field_adds_into_an_exact_total
@@ -6242,4 +6246,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6237 passed, 0 failed, 6237 total tested
+13 ignored, 6241 passed, 0 failed, 6241 total tested

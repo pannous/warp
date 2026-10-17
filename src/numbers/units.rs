@@ -112,28 +112,50 @@ const AFTER_NUMBER: char = '\u{2060}';
 /// Each unit word after a number, or continuing a unit after one (`3 km/h`, `9.8 m/s²`), marked where the program
 /// also defines its name, so the shadowing of that name spares it
 fn with_units_after_numbers(program: Node) -> Node {
-	let shadowed = defined_unit_names(&program);
-	if shadowed.is_empty() {
+	let names = defined_unit_names(&program);
+	if names.is_empty() {
 		return program;
 	}
+	let units_used = crate::modules::says_use(&program, crate::modules::UNITS_MODULE);
+	let mut callables = std::collections::HashSet::new();
+	collect_callable_names(&program, &mut callables);
+	let variables: std::collections::HashSet<String> = names.difference(&callables).cloned().collect();
+	let shadowed = ShadowedUnits { names, variables, units_used };
 	let program = marked_after_numbers(program, &shadowed);
 	// `2000ms as s` where the program binds s only elsewhere (a function's parameter, a field): there it is the unit
-	crate::program_names::rewritten_by_scope(program, &|node, names| match node {
+	crate::program_names::rewritten_by_scope(program, &|node, scope| match node {
 		Node::Key(value, Op::As, unit) if is_unit_type(&unit) => {
-			let free = shadowed.iter().filter(|name| !names.takes(name)).cloned().collect();
+			let names = shadowed.names.iter().filter(|name| !scope.takes(name)).cloned().collect();
+			let free = ShadowedUnits { names, variables: shadowed.variables.clone(), units_used };
 			Node::Key(value, Op::As, Box::new(marked_unit(*unit, &free)))
 		}
 		other => other,
 	})
 }
 
-fn marked_after_numbers(node: Node, shadowed: &std::collections::HashSet<String>) -> Node {
+/// The unit names the program also defines, those of them that are variables or parameters, and whether it says
+/// `use units`, which makes such a variable's name after a number the unit (decision litre-suffix)
+struct ShadowedUnits {
+	names: std::collections::HashSet<String>,
+	variables: std::collections::HashSet<String>,
+	units_used: bool,
+}
+
+impl ShadowedUnits {
+	fn contains(&self, name: &str) -> bool {
+		self.names.contains(name)
+	}
+}
+
+fn marked_after_numbers(node: Node, shadowed: &ShadowedUnits) -> Node {
 	match node {
 		Node::Key(left, op @ (Op::Mul | Op::Div), right)
 			if (op == Op::Mul && is_amount(&left) && is_juxtaposed(&right)) || is_quantity(&left) =>
 		{
 			if op == Op::Mul {
-				hint_multiplying_variable(&left, &right, shadowed);
+				if let Some(refusal) = unit_beside_variable(&left, &right, shadowed) {
+					return refusal;
+				}
 			}
 			let left = marked_after_numbers(*left, shadowed);
 			Node::Key(Box::new(left), op, Box::new(marked_unit(*right, shadowed)))
@@ -161,20 +183,28 @@ fn is_unit_type(node: &Node) -> bool {
 	}
 }
 
-/// `m = 5; 3m` is 3 meters (user decision on variable-named-like): the hint says how to multiply by the variable
-fn hint_multiplying_variable(amount: &Node, unit: &Node, shadowed: &std::collections::HashSet<String>) {
+/// `m = 5; 3m`: a unit glued to a number, named like a variable of the program. With `use units` it is 3 meters (user
+/// decision unit-after-number) and the hint says how to multiply by the variable; without, an error with both fixes
+/// (decision litre-suffix)
+fn unit_beside_variable(amount: &Node, unit: &Node, shadowed: &ShadowedUnits) -> Option<Node> {
 	let Node::Symbol(name) = unit.drop_meta() else {
-		return;
+		return None;
 	};
-	if !shadowed.contains(name) {
-		return;
+	if !shadowed.variables.contains(name) {
+		return None;
 	}
 	let amount = amount.drop_meta().serialize();
 	let (written, multiplied) = (format!("{amount}{name}"), format!("{amount}*{name}"));
+	if !shadowed.units_used {
+		return Some(error(&format!(
+			"{written}: {name} is both a unit and a variable here; add `use units` for the unit, or write {multiplied} to multiply"
+		)));
+	}
 	crate::normalize::set_position_of(unit);
 	let reason =
 		format!("{written} is {amount} of the unit {name}; to multiply by the variable {name} write {multiplied}");
 	crate::normalize::advise(&written, &multiplied, &reason, None);
+	None
 }
 
 /// `3`, `2*1000`: an amount a unit word after it binds to
@@ -241,7 +271,7 @@ fn shadowed_unit(name: &str) -> bool {
 	units().iter().any(|unit| unit.name == name) || unit_aliases().iter().any(|(alias, _)| *alias == name)
 }
 
-fn marked_unit(node: Node, shadowed: &std::collections::HashSet<String>) -> Node {
+fn marked_unit(node: Node, shadowed: &ShadowedUnits) -> Node {
 	match node {
 		Node::Symbol(name) if shadowed.contains(&name) && units().iter().any(|unit| unit.name == name) => {
 			Node::Symbol(format!("{AFTER_NUMBER}{name}"))
@@ -1085,6 +1115,30 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	let mut names = std::collections::HashSet::new();
 	collect_defined_unit_names(node, &mut names);
 	names
+}
+
+/// The program's functions, methods, classes and module aliases (`use list as l`): after a number their name is the
+/// unit, never a value to multiply by (`h(d) := d + 2 h` adds two hours)
+fn collect_callable_names(node: &Node, names: &mut std::collections::HashSet<String>) {
+	if let Some(definition) = crate::lowering::function_head(node) {
+		names.insert(definition.name.to_string());
+	}
+	match node.drop_meta() {
+		Node::Type { name, .. } => {
+			if let Node::Symbol(name) = name.drop_meta() {
+				names.insert(name.clone());
+			}
+		}
+		Node::List(words, _, _) => {
+			if let [keyword, used] = words.as_slice() {
+				if let Some((_, alias)) = crate::lowering::welcome_forms::aliased_module(keyword, used) {
+					names.insert(alias);
+				}
+			}
+		}
+		_ => {}
+	}
+	node.drop_meta().parts().into_iter().for_each(|child| collect_callable_names(child, names));
 }
 
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
