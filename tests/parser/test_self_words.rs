@@ -51,3 +51,30 @@ fn copied_tables_are_their_rust_constants() {
 	let element_wise: Vec<&str> = warp::operators::ELEMENT_WISE_OPERATORS.iter().map(|op| op.as_str()).collect();
 	assert_eq!(warp_list("element_wise_operators"), element_wise);
 }
+
+/// The kind Rust's analyzer gives `word(0, …)` of each number of arguments up to six
+fn rust_call_kinds(word: &str) -> Vec<String> {
+	let scope = warp::analyzer::Scope::new();
+	(0..=6)
+		.map(|arity| {
+			let call = format!("{word}({})", vec!["0"; arity].join(", "));
+			warp::analyzer::infer_type(&parse(&call), &scope).to_string()
+		})
+		.collect()
+}
+
+#[test]
+fn call_kinds_are_rusts() {
+	let table = warp::pipeline::eval("use \"lib/compiler/words.warp\"; call_kinds");
+	let Node::List(entries, ..) = table.drop_meta() else { panic!("call_kinds is no map: {}", table.serialize()) };
+	let differing: Vec<String> = entries
+		.iter()
+		.filter_map(|entry| {
+			let Node::Key(word, _, kind) = entry.drop_meta() else { panic!("no `word: kind` {}", entry.serialize()) };
+			let (word, kind) = (word.text_value().expect("a word text").to_string(), kind.text_value().expect("a kind text").to_string());
+			let rust = rust_call_kinds(&word);
+			(!rust.contains(&kind)).then(|| format!("{word}: warp {kind}, rust {rust:?}"))
+		})
+		.collect();
+	assert!(differing.is_empty(), "call_kinds differ from Rust's analyzer:\n{}", differing.join("\n"));
+}
