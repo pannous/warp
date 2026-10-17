@@ -31,6 +31,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - sugar-triage: web + markup, media + host, help + reflection passes stay out of the warp compiler and return as library
   code. `of`/`in` are right-associative infix operators (`length of characters in text` = `length of (characters in
   text)`), so the of extras are no special passes; forms that aren't a right-hand infix application are dropped or carded.
+  `in`/`from` are a lookup only after a selector word (chars, words, lines, keys, …; one table), membership otherwise
+  (in-bool); `print words in t` walks and `byte count of t` are dropped (Interviewer's decision).
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
