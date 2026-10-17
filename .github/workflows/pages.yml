@@ -154,9 +154,10 @@ jobs:
         tool: wasm-tools
     - name: Install agent-browser (headless Chrome)
       run: npm install -g agent-browser && agent-browser install --with-deps
-    # the browser cannot run git: the pinned packages of packages.warp, cloned and linked as packages/<name>
-    - name: Fetch the pinned packages
-      run: web/playground/build.sh pinned
+    # the browser cannot run git: the packages, fetched by a native debug warp as `use` fetches them (card build-sh:
+    # warp reads packages.warp and the default registry itself, no regex reader)
+    - name: Fetch the packages
+      run: cargo fetch && web/playground/build.sh pinned
     - name: The test suite in headless Chrome
       run: cargo browser-test
 

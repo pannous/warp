@@ -12,6 +12,7 @@ pub const PACKAGE_MANIFEST: &str = "package.warp";
 /// the default registry's default branch, cloned into the package cache
 const REGISTRY_CLONE: &str = ".registry";
 /// how long the clone of the default registry stands for its latest state
+#[cfg(feature = "native")]
 const REGISTRY_REFRESH: std::time::Duration = std::time::Duration::from_secs(60 * 60);
 /// a folder package's version tags: `colors@1.2.3`
 const FOLDER_TAG_SEPARATOR: char = '@';
@@ -105,7 +106,9 @@ pub fn registry_entries(registry: &str) -> Vec<(String, Result<Registered, Strin
 
 fn registry_entry(name: &str, value: &Node) -> Result<Registered, String> {
 	match value.drop_meta() {
-		Node::List(_, Bracket::Curly, _) => package_of(name, &value["repository"], &value["version"], &value["library"]),
+		Node::List(_, Bracket::Curly, _) => {
+			package_of(name, &value["repository"], &value["version"], &value["library"])
+		}
 		_ if value.is_symbol(LATEST_VERSION) || version_of(value).is_some() => {
 			package_of(name, &Node::Empty, value, &Node::Empty)
 		}
@@ -186,11 +189,17 @@ fn registry_folder(name: &str) -> Option<PathBuf> {
 	if !is_package_name(name) {
 		return None;
 	}
+	Some(current_registry().join(name)).filter(|folder| folder.is_dir())
+}
+
+/// The clone of the default registry, refreshed when older than REGISTRY_REFRESH
+#[cfg(feature = "native")]
+fn current_registry() -> PathBuf {
 	let registry = registry_clone();
 	if is_stale(&registry) {
-		refresh_registry(name, &registry);
+		refresh_registry(&registry);
 	}
-	Some(registry.join(name)).filter(|folder| folder.is_dir())
+	registry
 }
 
 /// In the browser: the raw files of the default registry's default branch, a folder being there when its manifest is
@@ -211,13 +220,14 @@ fn registry_clone() -> PathBuf {
 
 #[cfg(feature = "native")]
 fn is_stale(registry: &Path) -> bool {
-	let fetched = ["FETCH_HEAD", "HEAD"].iter().find_map(|file| std::fs::metadata(registry.join(".git").join(file)).ok());
+	let fetched =
+		["FETCH_HEAD", "HEAD"].iter().find_map(|file| std::fs::metadata(registry.join(".git").join(file)).ok());
 	fetched.and_then(|metadata| metadata.modified().ok()?.elapsed().ok()).is_none_or(|age| age > REGISTRY_REFRESH)
 }
 
 /// The latest state of the default registry: cloned, or its default branch fetched; once per process, loudly failing
 #[cfg(feature = "native")]
-fn refresh_registry(name: &str, registry: &Path) {
+fn refresh_registry(registry: &Path) {
 	static REFRESHED: Mutex<bool> = Mutex::new(false);
 	let mut refreshed = REFRESHED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	if std::mem::replace(&mut *refreshed, true) {
@@ -228,7 +238,7 @@ fn refresh_registry(name: &str, registry: &Path) {
 			.and_then(|_| git_in(registry, &["checkout", "--quiet", "--force", "--detach", "FETCH_HEAD"]))
 			.map(|_| ())
 	} else {
-		clone(name, DEFAULT_REGISTRY, registry, None).map(|_| ())
+		clone("registry", DEFAULT_REGISTRY, registry, None).map(|_| ())
 	};
 	if let Err(failure) = refresh {
 		eprintln!("warning: the default registry {DEFAULT_REGISTRY} not refreshed: {failure}");
@@ -260,13 +270,31 @@ pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
 	fetch_package_into(Path::new(PACKAGES_DIRECTORY), name)
 }
 
+/// The named packages fetched into packages/; none named: every package of packages.warp and the default registry
+#[cfg(feature = "native")]
+pub fn fetch_packages(names: &[String]) -> Vec<(String, Result<PathBuf, String>)> {
+	let every_package = || {
+		let folders = std::fs::read_dir(current_registry()).into_iter().flatten().flatten().map(|entry| entry.path());
+		let folders =
+			folders.filter(|path| path.is_dir()).filter_map(|path| Some(path.file_name()?.to_str()?.to_string()));
+		let entries = registry_entries(PACKAGE_REGISTRY).into_iter().map(|(name, _)| name);
+		let mut names: Vec<String> = entries.chain(folders.filter(|name| is_package_name(name))).collect();
+		names.sort();
+		names.dedup();
+		names
+	};
+	let names = if names.is_empty() { every_package() } else { names.to_vec() };
+	names.into_iter().map(|name| (name.clone(), fetch_package(&name))).collect()
+}
+
 /// fetch_package with another packages directory than packages/
 pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String> {
 	let package = registered_package(name)?;
 	match (&package.pinned, &package.folder) {
 		(Some(version), _) => fetch_tagged(packages, name, &package, version, name),
 		(None, Some(folder)) => {
-			let latest = registry_folder(folder).ok_or(format!("package {name}: no folder {folder} in {DEFAULT_REGISTRY}"))?;
+			let latest =
+				registry_folder(folder).ok_or(format!("package {name}: no folder {folder} in {DEFAULT_REGISTRY}"))?;
 			link_package(packages, name, name, &latest)
 		}
 		(None, None) => clone(name, &package.url, &packages.join(name), None),

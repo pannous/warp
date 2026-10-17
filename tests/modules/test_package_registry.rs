@@ -5,6 +5,8 @@
 
 use crate::is;
 use std::path::Path;
+#[cfg(feature = "native")]
+use warp::modules::fetch_packages;
 use warp::modules::{
 	fetch_package_into, fetch_package_version, package_in, package_repository, pinned_version, DEFAULT_REGISTRY,
 };
@@ -60,6 +62,15 @@ fn a_folder_package_is_fetched_by_name() {
 	let directory = fetch_package_into(packages, "colors").unwrap();
 	assert!(directory.join("colors.warp").is_file());
 	is!("use colors; to_hex(from_hex(\"f80\"))", "#ff8800");
+}
+
+/// `warp fetch` (web/playground/build.sh pinned): every package of packages.warp and the default registry
+#[cfg(feature = "native")]
+#[test]
+fn fetch_without_names_fetches_every_package() {
+	let fetched: Vec<String> =
+		fetch_packages(&[]).into_iter().map(|(name, fetched)| fetched.map(|_| name).unwrap()).collect();
+	assert!(fetched.contains(&"uniscript".to_string()) && fetched.contains(&"colors".to_string()), "{fetched:?}");
 }
 
 /// A version of a folder package is its tag `<name>@<version>`, linked as packages/<name>@<version>; `use colors

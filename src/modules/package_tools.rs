@@ -7,9 +7,9 @@
 //!    Never into a shared cargo target directory: a fetched crate built there overwrote the binary of a checkout of
 //!    the same crate (uniscript 1.0.0, 2026-10-02).
 //!
-//! A package's library (packages.warp `library: "x"`) is a core module x.wasm with its header x.h, shipped in the package
-//! or release assets of the pinned tag, never built here (library_directory); `use <package>` calls it through warp's
-//! binding lib/packages/<package>.warp.
+//! A package's library (`library: "x"` of its manifest or packages.warp entry) is a core module x.wasm with its header
+//! x.h, shipped in the package or release assets of the pinned tag, never built here (library_directory); `use <package>`
+//! calls it through the binding <package>.warp of the folder declaring it (a proxy's folder in the default registry).
 //!
 //! The build directory is `~/.cache/warp/packages/<name>@<version>.build` for a pinned package (outside its clone)
 //! and `packages/.build/<name>` for any other (an unpinned clone, a local checkout linked as packages/<name>).
@@ -77,7 +77,7 @@ pub fn package_tool(name: &str) -> Result<PathBuf, String> {
 	})
 }
 
-/// The directory of a package's library (packages.warp `library`): its core module `<library>.wasm` with the header
+/// The directory of a package's library (`library` of its manifest): its core module `<library>.wasm` with the header
 /// `<library>.h` beside it, both shipped in the package or both release assets; never built on the user's machine
 pub fn library_directory(name: &str, library: &str) -> Result<PathBuf, String> {
 	let _providing = PROVIDING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());

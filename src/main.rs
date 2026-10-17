@@ -50,6 +50,9 @@ const TEST_WORD: &str = "test";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/modules/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
+/// `warp fetch [package…]`: the packages fetched into packages/ as `use` fetches them; every package of packages.warp
+/// and the default registry when none is named (web/playground/build.sh pinned, for the browser suite)
+const FETCH_COMMAND: &str = "fetch";
 /// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/web/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
 /// `warp app page.warp`: the program's page in a window (src/web/webview.rs, card read-chron)
@@ -60,10 +63,10 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 29] = [
+const COMMAND_WORDS: [&str; 30] = [
 	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
-	"dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version", "docs", "wiki",
-	"home", "lsp", "start",
+	"fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version", "docs",
+	"wiki", "home", "lsp", "start",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;
@@ -184,6 +187,18 @@ fn run_command(args: &[String]) {
 		std::process::exit((!all_proofs_check) as i32);
 	} else if let Some(target) = command_argument(&arg_string, "types") {
 		println!("{}", law::type_model::report(&source_of(target)));
+	} else if args[1] == FETCH_COMMAND {
+		let mut failed = false;
+		for (name, fetched) in warp::modules::fetch_packages(&args[2..]) {
+			match fetched {
+				Ok(directory) => println!("{name} → {}", directory.display()),
+				Err(failure) => {
+					eprintln!("{failure}");
+					failed = true;
+				}
+			}
+		}
+		std::process::exit(failed as i32);
 	} else if args[1] == TOOL_COMMAND && args.len() >= 3 {
 		let arguments: Vec<&str> = args[3..].iter().map(String::as_str).collect();
 		match package_tools::run_package_tool(&args[2], &arguments) {

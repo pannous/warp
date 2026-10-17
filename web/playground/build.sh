@@ -12,7 +12,7 @@
 #               components/names.txt: jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
-#   pinned    → packages/<name>: the pinned packages of packages.warp, cloned into ~/.cache/warp/packages (the browser
+#   pinned    → packages/<name>: every package of packages.warp and the default registry (`warp fetch`; the browser
 #               suite reads them from the repository root, pages.yml, scripts/browser-dry-run.sh)
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
@@ -105,21 +105,11 @@ write_repository_served_files() {
 	{ git ls-files --cached --others --exclude-standard; find web/playground/components -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
 }
 
-# the browser cannot run git: each pinned package of packages.warp is fetched as the native fetch_package does
-# (src/modules.rs): its version tag cloned once into the package cache, linked as packages/<name>
+# the browser cannot run git: every package of packages.warp and the default registry, fetched by the native warp as
+# `use` fetches it (`warp fetch`, src/modules/packages.rs): a pinned version cloned once into the package cache, linked
+# as packages/<name>
 fetch_pinned_packages() {
-	local pinned name url version tag cached
-	grep -oE '^[a-z_]+: \{repository: "[^"]+", version: [0-9.]+' packages.warp | while read -r pinned; do
-		name=${pinned%%:*}
-		url=$(grep -oE 'https://[^"]+' <<< "$pinned")
-		version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<< "$pinned")
-		cached=~/.cache/warp/packages/$name@$version
-		if [ ! -d "$cached" ]; then
-			tag=$(git ls-remote --tags --refs "$url" | grep -oE "refs/tags/v?$version\$" | sed 's|refs/tags/||' | head -1)
-			git clone -q --depth 1 --branch "$tag" "$url" "$cached"
-		fi
-		mkdir -p packages && ln -sfn "$cached" "packages/$name"
-	done
+	"$(scripts/own-warp.sh | tail -1)" fetch
 	ls -l packages
 }
 
