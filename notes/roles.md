@@ -71,9 +71,10 @@ The only session that runs the full suite and the only one that pushes code to m
   test-count check counts fixnow ignores as present.
 - Batches of at most ~8 Ready cards per run; wide refactors and carrier branches land alone and first. Runs a
   worker's targeted check on request.
-- Express: a card readied with `--express` (the user asked for that agent's result) is not batched: it goes next,
-  alone on main, its full suite ahead of the batch run (a running suite finishes first). It skips the waiting, never
-  the suite: one red branch on main stops every worker.
+- Express: a card readied with `--express` (the user asked for that agent's result) goes live untested, within a
+  minute (user 2026-10-17: skipping tests and checks is the default for express; a failure shows live and is fixed
+  forward): integrator_tools/express.sh merges it onto main, pushes, closes the card and deploys the Playground with
+  skip_checks. The next batch's gate tests it; a red one is fixed forward by its owner first.
 - Crash fixes first: a crash card or a branch fixing a panic or trap is always express.
 - User changes are signals: whenever a batch or a push meets changes by the user (commits on main, uncommitted edits
   carried along), look for the wish behind them and a general pattern: a commented-out line or TODO is a missing

@@ -36,6 +36,7 @@ mod test_one_line_statements;
 mod test_operator_aliases;
 mod test_operator_word_keys; // card abs-fails
 mod test_parameter_scope; // card path-parameter-scope
+mod test_parse_long_definitions;
 mod test_parse_long_sources;
 mod test_parser;
 mod test_parser_sugar;

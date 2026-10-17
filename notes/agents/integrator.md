@@ -17,10 +17,12 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   once merged, push_tested.sh's ancestry check catches a push during the run. A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
   branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
   and tell the Supervisor about lost-looking work.
-- Batches of at most ~8 Ready cards. Express cards (and crash fixes) go alone and next. Wide
+- Batches of at most ~8 Ready cards. Express cards (and crash fixes) skip the gate:
+  `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, push, close, Playground deploy with
+  skip_checks; ~15 s), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
 - Scripts (card integrator-scripts): `integrator_tools/batch_build.sh [--worktree "$P"] [--base <ref>] [--cloud]
-  [<card>…]` assembles a batch from the Ready cards (express alone, ≤8 tips, held tips in ../integrate_held.txt
+  [<card>…]` assembles a batch from the Ready cards (express cards left to express.sh, ≤8 tips, held tips in ../integrate_held.txt
   skipped), merges them with merge_batch.sh (`<branch>@<tip>`), runs keywords.py, native + wasm32 cargo check and fmt,
   writes ../<worktree>_batch.txt and prints the bounces as todo commands (~2 min). After push_tested.sh,
   `integrator_tools/batch_close.sh [--dry-run] [<batch file>]` closes each landed card with its merge commit, deletes

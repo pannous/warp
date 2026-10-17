@@ -2,6 +2,7 @@
 
 pub use control::traps::*;
 mod diagnostics;
+mod export_names;
 mod module_finish;
 #[cfg(feature = "native")]
 pub use maps::raw_structs::run_raw_struct;
@@ -125,7 +126,7 @@ pub struct WasmGcEmitter {
 	module: Module,
 	functions: FunctionSection,
 	code: CodeSection,
-	exports: ExportSection,
+	exports: export_names::Exports,
 	names: NameSection,
 	/// main's index, named in the name section (a trap's backtrace shows `main`, not `<wasm function N>`)
 	main_index: Option<u32>,
@@ -308,16 +309,16 @@ impl WasmGcEmitter {
 		idx
 	}
 
-	/// Get function call index by name
+	/// The index of the runtime function or import `name`, else of the program's function: a program word named like a
+	/// runtime function (`node_count`) is a function of its own (card export-name-clash)
 	fn func_index(&self, name: &str) -> u32 {
-		if let Some(idx) = self.ctx.user_functions.get(name).and_then(|user_fn| user_fn.func_index) {
-			return idx;
+		if let Some(function) = self.ctx.func_registry.get(name) {
+			return function.call_index as u32;
 		}
-		// then the builtins and imports
 		self.ctx
-			.func_registry
+			.user_functions
 			.get(name)
-			.map(|f| f.call_index as u32)
+			.and_then(|user_fn| user_fn.func_index)
 			.unwrap_or_else(|| panic!("Unknown function: {}", name))
 	}
 

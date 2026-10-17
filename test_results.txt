@@ -1318,6 +1318,7 @@ PASSED:
   ✓ functions::test_builtin_clash::a_cast_cannot_name_a_function
   ✓ functions::test_builtin_clash::a_defined_rounding_word_is_the_programs
   ✓ functions::test_builtin_clash::a_function_keyword_names_an_infix_word
+  ✓ functions::test_builtin_clash::a_runtime_function_name_is_free_for_the_program
   ✓ functions::test_builtin_clash::an_operator_word_cannot_name_a_function
   ✓ functions::test_builtin_clash::library_words_stay_redefinable
   ✓ functions::test_builtin_function_values::a_bare_builtin_assigned_needs_its_arguments
@@ -1525,6 +1526,7 @@ PASSED:
   ✓ functions::test_function_values::test_operators_as_values
   ✓ functions::test_function_values::test_ordinary_calls_are_untouched
   ✓ functions::test_function_values::test_partial_application_of_an_iteration_word
+  ✓ functions::test_functions_passed_by_name::a_function_parameter_passed_on_in_a_method_call
   ✓ functions::test_functions_passed_by_name::a_function_passed_by_name_is_called_by_name
   ✓ functions::test_functions_passed_by_name::recursive_passed_on_and_several_functions_by_name
   ✓ functions::test_functions::test_default_params
@@ -3630,6 +3632,8 @@ PASSED:
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
   ✓ parser::test_parameter_scope::a_parameter_divides_only_inside_its_definition
+  ✓ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
+  ✓ parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
@@ -5842,6 +5846,7 @@ PASSED:
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
+  ✓ welcoming::test_c_style::test_number_parameter_holds_floats
   ✓ welcoming::test_cli_error_exit::a_caught_error_and_a_value_keep_their_status
   ✓ welcoming::test_cli_error_exit::a_program_ending_in_a_float_exits_with_status_0
   ✓ welcoming::test_cli_error_exit::an_uncaught_error_exits_with_status_1
@@ -6279,4 +6284,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6274 passed, 0 failed, 6274 total tested
+13 ignored, 6279 passed, 0 failed, 6279 total tested
