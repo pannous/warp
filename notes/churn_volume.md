@@ -25,9 +25,12 @@ data/ (kept logs and results) stays in the repo.
 - [x] 2026-10-16 22:03: target-dir in ~/.cargo/config.toml → /Volumes/Build/target (no copy: the old
   ~/.cargo/shared-target.noindex was 204 GB; sccache makes the cold rebuild cheap); prune-cargo-target.sh reads the
   target dir from the config
-- [ ] delete the old ~/.cargo/shared-target.noindex once `lsof +D` shows nothing in it, then symlink the old path to
-  /Volumes/Build/target (probes and clean-git-lost-found.sh name it)
-- [ ] scratch/ → /Volumes/Junk (later; sccache stays on Data, 1 GB, little churn)
+- [x] old ~/.cargo/shared-target.noindex deleted, the path is a symlink to /Volumes/Build/target
+- [x] 2026-10-17: the main checkout's scratch/ is a symlink to /Volumes/Junk/warp/scratch (ignored as /scratch);
+  test runs through tests/queue.sh get TMPDIR=/Volumes/Junk/tmp/. sccache stays on Data (1 GB, little churn).
+  Worktrees on /Volumes/Worktrees keep their own scratch/ there (no_log already).
+- [ ] the Integrator's integrate* worktrees and the infra trees main-binary, nightly, trial still live in
+  warp.worktrees.noindex on Data (scripts name those paths); move them to /Volumes/Worktrees with their scripts
 
 ## Copy-on-write
 APFS clones (clonefile, `cp -c`, cowtree) work only inside one volume, not across volumes of the same container.
