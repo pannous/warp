@@ -1,4 +1,4 @@
-# WebAssembly component registries (research 2026-10-13, card use-component-registry)
+# WebAssembly component registries
 
 ## The ecosystem
 - Components and WIT packages are distributed as OCI artifacts in ordinary container registries, mostly ghcr.io.
