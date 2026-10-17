@@ -823,7 +823,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `v is int or text` means `v is (int or text)`.
 - P150 license (2026-10-17, user): warp stays unlicensed for now, so crates.io is skipped (it refuses unlicensed
   crates) and every other prepared channel ships. release-channels (2026-10-17, user): prepare next a PyPI wheel
-  (`pip install warp-lang` wrapping the binary), Linux .deb/.rpm, and AUR (warp-lang-bin).
+  wrapping the binary, Linux .deb/.rpm, and AUR (warp-lang-bin). The PyPI name is warp-language
+  (`pip install warp-language`), since NVIDIA's Warp owns warp-lang there; deb/rpm keep warp-lang.
 - fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
   limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
   that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
