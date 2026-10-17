@@ -111,3 +111,7 @@ global a, b
 export api: clock
 global direction = (1, 0)
 export = 3
+n = n >> 7
+f = [function twice]
+map function square on xs
+q = "say \"hi\"\tthere"

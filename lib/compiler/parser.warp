@@ -25,7 +25,8 @@ def items(p, closer, bracket) {
 		before = p.at
 		item = expression(p, 0)
 		newline = skip_blanks(p)
-		found += [[item, separator(p, closer, newline)]]
+		after = separator(p, closer, newline)
+		found += [[statement, after] for statement in statements_of(item)]
 		// a closer of another bracket: skipped, so the reading goes on
 		if p.at == before { p.at = p.at + 1 }
 	}
@@ -509,7 +510,7 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
+SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
 // The operators written as words, each with its canonical name
 WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"], ["upto", ".."]]
 
@@ -527,9 +528,17 @@ def operator_at(p) {
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
 	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
 	for op in SYMBOL_OPERATORS {
-		if op#1[0] == c and starts_at(p.code, op#1, p.at) { return op }
+		if op#1[0] == c and starts_at(p.code, op#1, p.at) and (op#1 != ">>" or operand_follows(p, 2)) { return op }
 	}
 	[]
+}
+
+// An operand follows `width` characters on, after any blanks: `n >> 7` shifts, `list<list<int>>` closes two generics
+// Rust twin: lookahead.rs operand_follows
+def operand_follows(p, width) {
+	at = p.at + width
+	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	at < p.n and not "\n\r>)]},;=".contains(p.code[at])
 }
 
 // `word` at the parser's position as a whole word
@@ -927,6 +936,10 @@ def named(p) {
 	end = symbol_end(p.code, p.at, p.n)
 	word = p.code[p.at .. end]
 	p.at = end
+	if FUNCTION_REFERENCE_WORDS.contains(word) {
+		referenced = function_reference(p)
+		if referenced != ø { return referenced }
+	}
 	if TRUE_WORDS.contains(word.lower()) { return true }
 	if FALSE_WORDS.contains(word.lower()) { return false }
 	if EMPTY_WORDS.contains(word.lower()) { return ø }
@@ -945,6 +958,21 @@ def named(p) {
 		return listed("(", "", [listed("(", "", [name, arguments]), body])
 	}
 	listed("(", "", [name] + spread(arguments))
+}
+
+// `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
+// follows: `map function square on xs`); `function add(x) {…}` defines it
+// Rust twin: definitions/functions.rs function_reference_after
+FUNCTION_REFERENCE_WORDS = ["function", "func"]
+def function_reference(p) {
+	at = blank_end(p, p.at)
+	if at == p.at or at >= p.n or not is_alpha(p.code[at]) { return ø }
+	end = name_end(p.code, at, p.n)
+	rest = blank_end(p, end)
+	next_word = p.code[rest .. name_end(p.code, rest, p.n)]
+	if not (rest >= p.n or ";,)]}\n".contains(p.code[rest]) or next_word == "on" or next_word == "is") { return ø }
+	p.at = end
+	["symbol", p.code[at .. end]]
 }
 
 // The words for yes, no and ø
@@ -997,6 +1025,17 @@ def global_declaration(p) {
 	declared = [["key", ":", ["symbol", "global"], name] for name in names]
 	if declared.length == 1 { return declared#1 }
 	listed("", ";", declared)
+}
+
+// The statements an item stands for in its block: `global a, b` is the declarations `global: a` and `global: b`
+// Rust twin: definitions/variables.rs declarations_of_several_globals
+def statements_of(item) {
+	if not (item is list and item.length > 3 and item#1 == "list" and item#2 == "" and item#3 == ";") { return [item] }
+	declarations = item[3 ..]
+	for declaration in declarations {
+		if not (declaration is list and declaration#1 == "key" and declaration#2 == ":" and declaration#3 == ["symbol", "global"]) { return [item] }
+	}
+	declarations
 }
 
 // The words that declare a type: `class V {…}`, `struct P {…}`, `type Point {…}`
@@ -1164,7 +1203,39 @@ def digits_read(p) {
 def quoted(p) {
 	quote = p.code[p.at]
 	end = text_end(p.code, p.at + 1, quote, p.n)
-	content = p.code[p.at + 1 .. end - 1]
+	content = unescaped(p.code[p.at + 1 .. end - 1], quote == '"')
 	p.at = end
 	[if content.length == 1 then "char" else "text", content]
+}
+
+// A text's escapes read: `\n` `\t` `\r` `\e` as their characters, `\"` `\\` and the like as the character itself;
+// holes `\(x)` and entities `\:alpha` stay as written in an interpolating text
+// Rust twin: literals/text.rs read_text
+def unescaped(content, interpolates) {
+	if not content.contains("\\") { return content }
+	read = ""
+	at = 0
+	while at < content.length {
+		c = content[at]
+		escaped = if at + 1 < content.length then content[at + 1] else ' '
+		if c != '\\' or at + 1 >= content.length {
+			read = read + c
+			at = at + 1
+		} else if interpolates and ("({".contains(escaped) or escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2])) {
+			read = read + c + escaped
+			at = at + 2
+		} else {
+			read = read + escape_character(escaped)
+			at = at + 2
+		}
+	}
+	read
+}
+
+def escape_character(c) {
+	if c == 'n' { return '\n' }
+	if c == 't' { return '\t' }
+	if c == 'r' { return '\r' }
+	if c == 'e' { return '\e' }
+	c
 }
