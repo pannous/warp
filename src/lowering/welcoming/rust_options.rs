@@ -120,7 +120,7 @@ fn option_match(node: &Node) -> Option<Node> {
 	}
 	let (mut some_arm, mut none_arm) = (None, None);
 	for arm in arms {
-		let Node::Key(pattern, Op::Arrow | Op::FatArrow, value) = arm.drop_meta() else {
+		let Node::Key(pattern, Op::Arrow, value) = arm.drop_meta() else {
 			return None;
 		};
 		match some_value(pattern) {
