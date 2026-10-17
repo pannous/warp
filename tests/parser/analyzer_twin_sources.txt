@@ -683,7 +683,6 @@ probes/perf/float_loop_repeated.warp
 probes/perf/ratio_compare.warp
 probes/perf/shown_color_pass.warp
 probes/perf/small_ratio_edges.warp
-probes/plus_minus_gaussian/parse.warp
 probes/print_closure.warp
 probes/print_empty.warp
 probes/print_list_shapes.warp
