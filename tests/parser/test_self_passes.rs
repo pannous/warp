@@ -4,6 +4,10 @@
 use crate::common::twins::{bridge_differential, pass_differential};
 use warp::pipeline::around_source_pass;
 
+/// The sources of sql and sh templates, which the interpolation twin leaves out (notes/self_hosting_dropped.md)
+pub(super) const SQL_AND_SH: [&str; 3] =
+	["probes/docs_sync/sandbox_exec.warp", "probes/sandbox/exec.warp", "samples/system/crontab.warp"];
+
 #[test]
 fn a_source_pass_is_seen_before_and_after() {
 	let (before, after) =
@@ -26,4 +30,24 @@ fn times_phrases_match_their_rust_twin() {
 #[test]
 fn number_words_match_their_rust_twin() {
 	pass_differential(warp::lowering::number_words::lower, "number_words", "number_words_pass", &[]);
+}
+
+#[test]
+fn interpolation_matches_its_rust_twin() {
+	pass_differential(warp::text::interpolation::lower_program, "interpolation", "interpolation", &SQL_AND_SH);
+}
+
+#[test]
+fn match_arms_match_their_rust_twin() {
+	pass_differential(warp::lowering::welcome_forms::lower_match_arms, "welcome_forms", "match_arms", &[]);
+}
+
+#[test]
+fn arrow_result_types_match_their_rust_twin() {
+	pass_differential(
+		warp::lowering::welcome_forms::lower_arrow_result_types,
+		"welcome_forms",
+		"arrow_result_types",
+		&[],
+	);
 }
