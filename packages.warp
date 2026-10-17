@@ -1,11 +1,11 @@
-// Package registry: `use <name>` of a name found in no local search directory fetches the git repository named here
-// into packages/<name> and loads packages/<name>/<name>.warp; a package without it only brings files.
-// `name: "git url"` follows the default branch (a shallow clone per checkout); short forms: a bare `name` is
-// github.com/pannous/<name>, `name: owner/repo` or `name: "github:owner/repo"` a GitHub repository;
-// `name: {repository: owner/repo, version: 1.2.3}` pins the git tag v1.2.3: cloned once per machine into
-// ~/.cache/warp/packages/<name>@1.2.3 (a tag never changes) and linked as packages/<name>. Raise the version to update.
-// A local checkout can stand in for a fetch: ln -s ~/dev/uniscript packages/uniscript
-
-// `use uniscript` calls the package's committed c/ffi/uniscript_c.wasm (the C library as a core module) through lib/packages/uniscript.warp;
-// data/entities.idx, the compiled entity index, is what `warp tool uniscript check` and the uniscript web page read
-uniscript: {repository: "https://github.com/pannous/uniscript.git", version: 1.0.9, library: "c/ffi/uniscript_c"}
+// Package registry: `use <name>` of a name found in no local search directory loads packages/<name>/<name>.warp, the
+// package fetched once; a package without that module only brings files. Most packages need no line here: the default
+// registry github.com/pannous/warp-packages holds one folder per package (`use colors` is its colors/, latest), and a
+// folder whose manifest package.warp names a `repository` is a proxy for that repository (`use uniscript`).
+// A line here pins or redirects a package:
+//   name: 1.2.3                 the default registry's package at its tag name@1.2.3 (latest: its default branch)
+//   name: "owner/repo@1.2.3"    a GitHub repository at its tag v1.2.3; unquoted owner/repo follows its default branch
+//   name: "git url"             any repository ("github:owner/repo" too), following its default branch
+//   name: {repository: owner/repo, version: 1.2.3, library: "c/ffi/x"}   the long form, which a manifest also uses
+// A pinned version is cloned once per machine into ~/.cache/warp/packages/<name>@1.2.3 (a tag never changes) and linked
+// as packages/<name>. Raise the version to update. A local checkout stands in for a fetch: ln -s ~/dev/uniscript packages/uniscript

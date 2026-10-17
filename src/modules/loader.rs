@@ -346,7 +346,9 @@ impl<'a> Loader<'a> {
 		};
 		use crate::errors::diagnostic::{report, Diagnostic};
 		let shadows = |shadowed: String| Diagnostic::at(statement, format!("{} shadows {shadowed}", path.display()));
-		if let Some(repository) = package_repository(name).filter(|_| import == Import::Use) {
+		// only what warp knows without fetching: a local module is no reason to ask the network
+		let is_known_package = import == Import::Use && known_package(name);
+		if let Some(repository) = is_known_package.then(|| package_repository(name)).flatten() {
 			report(&[shadows(format!("the package {name} ({repository}): rename the file to use the package"))])?;
 		}
 		if let Some(requirement) = &used.requirement {
@@ -374,8 +376,9 @@ impl<'a> Loader<'a> {
 				_ => Ok(vec![]),
 			};
 		}
+		let package = registered_package(name).map_err(|failure| error(&failure))?;
 		let mut directory = package_directory(name).map_err(|failure| error(&failure))?;
-		let mut library = package_library(name);
+		let mut library = package.library;
 		if let Some(requirement) = requirement {
 			let declared = package_module(&directory, name).and_then(|path| module_version(&path));
 			if !declared.is_some_and(|version| requirement.allows(&version)) {
@@ -386,7 +389,8 @@ impl<'a> Loader<'a> {
 		let version = package_module(&directory, name).and_then(|path| module_version(&path));
 		self.packages.insert(name.to_string(), version);
 		if let Some(library) = library {
-			return crate::normalize::without_hints(|| self.use_library(name, &library));
+			let binding = package.proxy.unwrap_or(directory);
+			return crate::normalize::without_hints(|| self.use_library(name, &library, &binding));
 		}
 		match package_module(&directory, name) {
 			Some(path) => crate::normalize::without_hints(|| self.load(Import::Use, name, path)),
@@ -394,11 +398,13 @@ impl<'a> Loader<'a> {
 		}
 	}
 
-	/// A package's prebuilt library through warp's binding, loaded as if it lay beside the library: its
-	/// `import <library>` finds `<library>.wasm` there (packages.warp `library`)
-	fn use_library(&mut self, name: &str, library: &str) -> Result<Vec<Node>, Node> {
-		let binding = library_binding(name).ok_or_else(|| {
-			error(&format!("package {name}: warp has no binding lib/packages/{name}.warp for {library}"))
+	/// A package's prebuilt library through the binding `<name>.warp` of the folder declaring it (a proxy's folder in
+	/// the default registry, else the package's own), loaded as if it lay beside the library: its `import <library>`
+	/// finds `<library>.wasm` there (`library` of the manifest or entry)
+	fn use_library(&mut self, name: &str, library: &str, folder: &Path) -> Result<Vec<Node>, Node> {
+		let binding_path = folder.join(format!("{name}.warp"));
+		let binding = crate::web::read_text(&binding_path.to_string_lossy()).ok_or_else(|| {
+			error(&format!("package {name}: no binding {} for its library {library}", binding_path.display()))
 		})?;
 		#[cfg(feature = "native")]
 		let directory = crate::modules::package_tools::library_directory(name, library);
@@ -413,7 +419,7 @@ impl<'a> Loader<'a> {
 		let file = Path::new(library).file_name().map_or(library.into(), |file| file.to_string_lossy());
 		let files = ["wasm", "h"].map(|extension| format!("{file}.{extension}"));
 		crate::web::list_directory(&directory.to_string_lossy(), &files);
-		self.load_source(Import::Use, directory.join(format!("{name}.warp")), binding)
+		self.load_source(Import::Use, directory.join(format!("{name}.warp")), &binding)
 	}
 
 	/// The standard modules a program uses without `use`: those IMPLICIT_MODULES picks for it, the prelude words it
