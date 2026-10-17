@@ -443,6 +443,9 @@ pub struct WarpParser {
 	path_end: Option<usize>,
 	/// The functions the source defines anywhere, found by a pre-scan: ` /name` after one is a path (card name-after)
 	program_functions: std::collections::HashSet<String>,
+	/// Where the source's last `end` that can close a block starts, found by a pre-scan; None when it has none or uses
+	/// `end` as a name. A search for a closing `end` stops there, so a source without one costs no scan per `do`/`def`
+	last_closing_end: Option<usize>,
 	/// The parameters of the definitions around: ` /name` after one divides, as after a variable; each definition's
 	/// until the statement holding it ends (card path-parameter-scope)
 	parameters_in_scope: Vec<String>,
@@ -543,7 +546,9 @@ impl WarpParser {
 		} else {
 			Default::default()
 		};
+		let last_closing_end = blocks::last_closing_end(&chars);
 		WarpParser {
+			last_closing_end,
 			user_operators,
 			source_aliases,
 			declared_types,
