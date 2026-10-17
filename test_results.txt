@@ -2139,6 +2139,7 @@ PASSED:
   ✓ lists::test_int_map::a_number_is_found_in_a_map
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
+  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -3756,6 +3757,7 @@ PASSED:
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
   ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
+  ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
@@ -6340,9 +6342,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
-  ✗ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
 
 SUMMARY:
-16 ignored, 6337 passed, 3 failed, 6340 total tested
+16 ignored, 6339 passed, 1 failed, 6340 total tested
