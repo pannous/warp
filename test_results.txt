@@ -991,6 +991,7 @@ PASSED:
   ✓ ffi::header::tests::test_parse_header_file_math
   ✓ ffi::test_browser_dollar_names::a_dollar_global_is_used_from_javascript
   ✓ ffi::test_browser_dollar_names::a_dollar_name_is_the_element_of_that_id
+  ✓ ffi::test_browser_dollar_names::a_superfluous_dollar_keeps_the_value_with_a_warning
   ✓ ffi::test_builtin_lines::a_builtin_line_declares_and_imports_nothing
   ✓ ffi::test_builtin_lines::a_builtin_words_signature_is_its_line
   ✓ ffi::test_builtin_lines::a_programs_builtin_line_must_be_warps
@@ -2582,6 +2583,7 @@ PASSED:
   ✓ modules::test_std_reflection_hints::reflecting_on_standard_module_functions_gives_no_hints_from_the_module
   ✓ modules::test_std_reflection_hints::reflection_still_gives_hints_for_the_programs_own_code
   ✓ modules::test_std_regex::a_match_prints_yes_or_no
+  ✓ modules::test_std_regex::a_slashed_regex_after_matches
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
   ✓ modules::test_std_shadowed_names::a_defaulted_parameter_shadows_each_arity_it_takes
@@ -6284,4 +6286,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6279 passed, 0 failed, 6279 total tested
+13 ignored, 6281 passed, 0 failed, 6281 total tested
