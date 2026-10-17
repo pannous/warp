@@ -2,16 +2,17 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source)}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false}
 	items(p, ' ', "")
 }
 
-// The items up to `closer` (' ' for the end of the source), grouped by their separators
+// The items up to `closer` (' ' for the end of the source), grouped by their separators; outside brackets the lines
+// indented below an item are its body (`repeat⏎⇥x` is `repeat: x`) and a line indented less ends the items
 // Rust twin: lists.rs parse_list_with_separators
 def items(p, closer, bracket) {
 	found = []
@@ -25,12 +26,87 @@ def items(p, closer, bracket) {
 		before = p.at
 		item = expression(p, 0)
 		newline = skip_blanks(p)
-		after = separator(p, closer, newline)
+		if bracket == "" and newline and line_indent(p) > p.indent {
+			body = lines_below(p)
+			item = ["key", ":", item, if is_list_of(body, "") and body#3 == "\n" then listed("{", "\n", body[3 ..]) else body]
+			newline = skip_blanks(p)
+		}
+		dedent = bracket == "" and newline and line_indent(p) < p.indent
+		after = if dedent then "" else separator(p, closer, newline)
 		found += [[statement, after] for statement in statements_of(item)]
+		if dedent { break }
 		// a closer of another bracket: skipped, so the reading goes on
 		if p.at == before { p.at = p.at + 1 }
 	}
 	grouped(found, bracket)
+}
+
+// The indent of the parser's position on its line: its tabs, its spaces too inside a block indented by spaces
+// Rust twin: scanning.rs skip_whitespace
+def line_indent(p) {
+	at = p.at
+	indent = 0
+	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') {
+		at = at - 1
+		if p.code[at] == '\t' or p.spaces { indent = indent + 1 }
+	}
+	indent
+}
+
+// The items of the lines indented below, the parser at the line they end before
+// Rust twin: lists.rs parse_list_with_separators (indented block), blocks.rs parse_indented_block
+def lines_below(p) {
+	outer = p.indent
+	p.indent = line_indent(p)
+	block = items(p, ' ', "")
+	p.indent = outer
+	// the line break after the block still separates the next statement
+	while p.at > 0 and is_blank(p.code[p.at - 1]) { p.at = p.at - 1 }
+	block
+}
+
+// The block indented below a head that ends its line, `for x in xs:` and its lines; ø with nothing read if none
+// Rust twin: blocks.rs parse_indented_block, curly_block
+def indented_block(p) {
+	before = p.at
+	outer_spaces = p.spaces
+	newline = skip_blanks(p)
+	p.spaces = outer_spaces or p.code[p.at - line_blanks(p) .. p.at].contains(" ")
+	if not newline or line_indent(p) <= p.indent {
+		p.spaces = outer_spaces
+		p.at = before
+		return ø
+	}
+	block = lines_below(p)
+	p.spaces = outer_spaces
+	if is_list_of(block, "") { return listed("{", block#3, block[3 ..]) }
+	listed("{", "", [block])
+}
+
+def line_blanks(p) {
+	at = p.at
+	while at > 0 and (p.code[at - 1] == ' ' or p.code[at - 1] == '\t') { at = at - 1 }
+	p.at - at
+}
+
+// Only blanks follow `at` on its line
+def ends_line(p, at) {
+	end = blank_end(p, at)
+	end >= p.n or p.code[end] == '\n' or p.code[end] == '\r'
+}
+
+def is_list_of(node, bracket) := node is list and node.length > 2 and node#1 == "list" and node#2 == bracket
+
+// The body after `:` or `do`: the block indented below when the line ends, else the rest of the line
+// Rust twin: blocks.rs colon_body
+def colon_body(p, width) {
+	p.at = p.at + width
+	if only_blanks_before_newline(p) {
+		block = indented_block(p)
+		if block != ø { return block }
+	}
+	skip_spaces(p)
+	statement_words(p)
 }
 
 // The separator after an item, consumed: "," ";" a newline, a blank, or "" before the closer
@@ -197,6 +273,12 @@ def continued(p, left, min_power) {
 			if op#1 == "=>" { powers = binding_powers("=>") }
 			if powers#1 < min_power { break }
 			p.at = p.at + op#1.length
+			// `f(n):` ending its line: the block indented below is its value
+			block = if op#1 == ":" and ends_line(p, p.at) then indented_block(p) else ø
+			if block != ø {
+				left = ["key", ":", left, block]
+				continue
+			}
 			skip_blanks(p)
 			left = bound_key(p, op#2, left, powers#2)
 		}
@@ -678,8 +760,8 @@ def returned(p) {
 // The operators after which `return` names a variable
 ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
 
-// Binds a condition until `then` or `do`
-CONDITION_POWER = 78
+// Binds a condition until `then`, `do` or the colon of `if c: x`
+CONDITION_POWER = 81
 
 // Rust's `loop { … }` is `while true { … }`; ø when no block follows the word
 // Rust twin: atoms.rs keyword_form (LOOP_WORD)
@@ -700,6 +782,8 @@ def conditioned(word, condition, p) {
 	if split.length > 0 {
 		condition = split#1
 		body = split#2
+	} else if is_at(p.code, p.at, ':', p.n) {
+		body = colon_body(p, 1)
 	} else {
 		if not is_at(p.code, p.at, '{', p.n) { return ["key", word, ø, condition] }
 		p.at = p.at + 1
@@ -734,8 +818,33 @@ def looped(p) {
 			return listed("", " ", [["symbol", "for"], variable, ["symbol", "in"], iterable, loop_body(p)])
 		}
 	}
+	p.at = before + 3
+	skip_spaces(p)
+	ranged = ranged_loop(p)
+	if ranged != ø { return ranged }
 	p.at = before
 	atom(p)
+}
+
+// `for 1…100: print it`, `for xs {…}` and `for 0 to 2` with the lines indented below: a loop over the iterable without
+// a name, its body a block; ø if no body follows
+// Rust twin: loops.rs try_parse_for_in (only the colon and do forms), as_block
+def ranged_loop(p) {
+	p.iterable = true
+	iterable = header_expression(p, 81)
+	p.iterable = false
+	skip_spaces(p)
+	width = body_word_width(p)
+	body = ø
+	if width > 0 {
+		body = colon_body(p, width)
+	} else if is_at(p.code, p.at, '{', p.n) {
+		body = atom(p)
+	} else {
+		body = indented_block(p)
+	}
+	if body == ø { return ø }
+	listed("", " ", [["symbol", "for"], iterable, if is_block(body) then body else listed("{", ";", [body])])
 }
 
 // A condition that took the block after it as an argument, `if x in xs {…}`: [the condition, the block], else []
@@ -764,13 +873,17 @@ SPLIT_OPERATORS = ["==", "!=", "===", "!==", "<", ">", "<=", ">=", "+", "-", "*"
 // A loop's body: `{…}`, `: words`, `do words`
 // Rust twin: statements.rs for_iterable_and_body_word, colon_body
 def loop_body(p) {
-	width = 0
-	if is_at(p.code, p.at, ':', p.n) { width = 1 }
-	if keyword_at(p, "do") { width = 2 }
-	if width == 0 { return atom(p) }
-	p.at = p.at + width
-	skip_spaces(p)
-	statement_words(p)
+	width = body_word_width(p)
+	if width > 0 { return colon_body(p, width) }
+	block = indented_block(p)
+	if block != ø { return block }
+	atom(p)
+}
+
+def body_word_width(p) {
+	if is_at(p.code, p.at, ':', p.n) { return 1 }
+	if keyword_at(p, "do") { return 2 }
+	0
 }
 
 // The words up to the end of the statement, one expression: `print ord c` of `for c in s: print ord c`
