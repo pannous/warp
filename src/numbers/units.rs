@@ -1113,6 +1113,12 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 			if let Some(variable) = crate::lowering::nodes::for_in_variable(words) {
 				add_unit(&Node::Symbol(variable))
 			}
+			// `use list as l`: the program's name for a module is the module
+			if let [keyword, used] = words.as_slice() {
+				if let Some((_, alias)) = crate::lowering::welcome_forms::aliased_module(keyword, used) {
+					add_unit(&Node::Symbol(alias))
+				}
+			}
 		}
 		_ => {}
 	}

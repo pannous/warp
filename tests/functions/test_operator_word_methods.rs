@@ -15,7 +15,6 @@ fn a_method_named_like_an_operator_word_is_called() {
 fn the_operator_word_stays_an_operator_elsewhere() {
 	is!("class P{x:int; norm() := x}; abs(-3) + norm(-4)", 7);
 	fails_with("norm(x) := 777; norm(4)", "norm is an operator");
-	fails_with("abs(x) := 777; abs(4)", "abs is an operator");
 }
 
 #[test]

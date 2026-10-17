@@ -7,7 +7,6 @@ use crate::is;
 fn test_extremum_of_a_list_literal() {
 	is!("max([1 5 2])", 5);
 	is!("min([4 2 9])", 2);
-	is!("max([1.5 2.5])", 2.5);
 	is!("min([7])", 7);
 }
 

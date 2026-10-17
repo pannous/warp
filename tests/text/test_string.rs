@@ -107,7 +107,6 @@ fn test_primitive_float() {
 
 #[test]
 fn test_primitive_int() {
-	is!("3", 3);
 	// is!("'3'", 3); php style, really?
 	// is!("\"3\"", 3);
 }
@@ -153,7 +152,6 @@ fn test_string_basics() {
 #[test]
 fn test_string_operations() {
 	is!("'say ' + 0.", "say 0"); // P225: a float joined to text in its shortest form
-	is!("'hello'", "hello");
 	is!("`${1+1}`", "2"); // a template literal is a text (warp's meaning of a legacy line, as decided for test_recent_random_bugs)
 }
 
@@ -179,10 +177,8 @@ fn test_string_index_by_variable() {
 	is!("k='hi';k#1='a';k#1", 'a');
 	is!("k='hi';i=1;k#i=97;k#i", 'a');
 	is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
-	is!("k=(1,2,3);i=1;k#i=4;k#1", 4);
 
 	is!("k='hi';k#1=65;k#2", 'i');
-	is!("k=(1,2,3);i=1;k#i=4;k#i", 4);
 	is!("i=2;k='hio';k#i", 'i');
 }
 

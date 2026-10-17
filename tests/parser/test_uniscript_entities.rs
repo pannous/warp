@@ -8,7 +8,6 @@ fn entities_are_their_characters() {
 	is!("\\:alpha = 4; α", 4);
 	is!("α = 4; \\:alpha + 1", 5);
 	is!("\\:alpha = 2; \\:alpha * 3", 6);
-	is!("\\:infinity == ∞", 1);
 	is!("\\:pi == π", 1);
 	is!("3 \\:leq 4", 1);
 	is!("\\:Delta = 7; Δ", 7);

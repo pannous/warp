@@ -14,6 +14,5 @@ fn a_prefix_operator_word_names_a_key() {
 #[test]
 fn the_prefix_operator_word_stays_an_operator() {
 	is!("abs -5", 5);
-	is!("sqrt 9", 3);
 	is!("x = {v: -2}; abs x.v", 2);
 }

@@ -1,6 +1,6 @@
 use std::fs::{create_dir_all, File};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 //noinspection ALL
 
 /// Without the native feature (the compiler in the browser) there is no network: the page's host does the fetching at run time
@@ -127,4 +127,22 @@ pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {
 	}
 
 	File::create(filename).and_then(|mut f| f.write_all(bytes)).is_ok()
+}
+
+/// The bytes written to `<stem>.<extension>` in the system's temporary `folder` for the first file of a kind,
+/// `<stem>-<number>.<extension>` for the later ones; `writer` names who failed (sound's WAVs, paint's PNGs)
+pub fn numbered_temporary_file(
+	folder: &str,
+	stem: &str,
+	number: usize,
+	extension: &str,
+	bytes: &[u8],
+	writer: &str,
+) -> Result<PathBuf, String> {
+	let folder = std::env::temp_dir().join(folder);
+	create_dir_all(&folder).map_err(|failure| format!("{writer}: cannot create {}: {failure}", folder.display()))?;
+	let name = if number == 1 { format!("{stem}.{extension}") } else { format!("{stem}-{number}.{extension}") };
+	let path = folder.join(name);
+	std::fs::write(&path, bytes).map_err(|failure| format!("{writer}: cannot write {}: {failure}", path.display()))?;
+	Ok(path)
 }
