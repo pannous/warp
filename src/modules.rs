@@ -212,7 +212,9 @@ pub fn insert_module_classes(program: Node) -> Node {
 			continue; // the loader reports it
 		}
 		let definitions = statements(module);
-		for used in modules_used_by(&definitions) {
+		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
+		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
+		for used in reexported {
 			if !modules.contains(&used) {
 				modules.push(used);
 			}
