@@ -3,9 +3,9 @@
 use super::*;
 
 mod gpu;
+use crate::sound::host_words::*;
 use gpu::*;
 pub(crate) use gpu::{linear_doubles, module_memory, number_of}; // the sound module's host words call them too
-use crate::sound::host_words::*;
 
 /// A program value as a host word gets and gives it: a reference to a Node of the instance
 pub(crate) type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;

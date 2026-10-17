@@ -29,5 +29,10 @@ fn a_tests_warp_writes_its_wavs_into_the_scratch_root() {
 	let path = errors.lines().find_map(|line| line.split_once(" s: ").map(|(_, path)| path.to_string()));
 	let root = crate::common::scratch_root().canonicalize().unwrap();
 	let written = std::path::Path::new(path.as_deref().unwrap_or_else(|| panic!("no sound line in {errors}")));
-	assert!(written.canonicalize().unwrap().starts_with(&root), "{} is not below {}", written.display(), root.display());
+	assert!(
+		written.canonicalize().unwrap().starts_with(&root),
+		"{} is not below {}",
+		written.display(),
+		root.display()
+	);
 }
