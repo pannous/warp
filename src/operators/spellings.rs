@@ -242,6 +242,7 @@ impl Op {
 			Op::Assign => "=",
 			Op::Arrow => "->",
 			Op::FatArrow => "=>",
+			Op::Subscript => "[]",
 			Op::ArrowUp => "↑",
 			Op::ArrowDown => "↓",
 
