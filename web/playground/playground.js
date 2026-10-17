@@ -65,6 +65,12 @@ const REPORT_KEY = "warp-playground-report";
 const REPORT_OFF = "off";
 const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
 const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
+// card bug-report: the bug button sends a comment, the program and its output to pannous.com (scripts/bug_report.py),
+// which the Mac turns into a board card; ?bug_token=<token> (bug_report.py token) stores the shared token in this browser
+const BUG_REPORT_URL = "https://pannous.com/warp-bug-report";
+const BUG_TOKEN_PARAMETER = "bug_token";
+const BUG_TOKEN_KEY = "warp-playground-bug-token";
+const FORBIDDEN = 403; // a wrong token: it is forgotten and the field asks again
 // a page event, or one element's (`on click·1`, src/lowering/web/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -994,14 +1000,67 @@ function showReportButton() {
 	$("report").onclick = () => window.open(reportAddress(), "_blank", "noopener");
 }
 
-// a new GitHub issue holding the program, what it showed and the playground's version, for its reporter to submit
+// what a report holds: the program, what it showed and the playground's version
+function reportedRun() {
+	return { code: editor.getValue(), output: $("output").innerText.trim(), version: $("version").textContent || "unversioned build" };
+}
+
+// a new GitHub issue holding the reported run, for its reporter to submit
 function reportAddress() {
-	const code = editor.getValue();
+	const { code, output, version } = reportedRun();
 	const fenced = (text, limit, language = "") => "```" + language + "\n" + text.slice(0, limit) + (text.length > limit ? "\n…" : "") + "\n```";
 	const title = `playground: ${code.split("\n").find(line => line.trim()) ?? "empty program"}`;
-	const body = [fenced(code, REPORT_LIMITS.code, "warp"), "Output:", fenced($("output").innerText.trim(), REPORT_LIMITS.output),
-		$("version").textContent || "unversioned build"].join("\n\n");
+	const body = [fenced(code, REPORT_LIMITS.code, "warp"), "Output:", fenced(output, REPORT_LIMITS.output), version].join("\n\n");
 	return `${ISSUE_URL}?${new URLSearchParams({ title, body })}`;
+}
+
+// the bug button: its form sends the comment with the reported run; the token field shows until a token is stored
+function startBugButton() {
+	const url = new URL(location.href);
+	const given = url.searchParams.get(BUG_TOKEN_PARAMETER);
+	if (given) {
+		store(BUG_TOKEN_KEY, given);
+		url.searchParams.delete(BUG_TOKEN_PARAMETER);
+		history.replaceState(null, "", url.href); // the token leaves the address bar and the history
+	}
+	$("bug").ontoggle = () => {
+		$("bug-token").hidden = Boolean(stored(BUG_TOKEN_KEY));
+		if ($("bug").open) $("bug-comment").focus();
+	};
+	$("bug-form").onsubmit = submit => {
+		submit.preventDefault();
+		sendBugReport();
+	};
+}
+
+function bugReport() {
+	return { ...reportedRun(), comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
+		token: stored(BUG_TOKEN_KEY) ?? $("bug-token").value.trim() };
+}
+
+async function sendBugReport() {
+	const report = bugReport();
+	if (!report.comment.trim()) return showBugStatus("write what went wrong first", true);
+	showBugStatus("sending…");
+	try {
+		const answer = await fetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
+		const { queued, error } = await answer.json();
+		if (answer.status === FORBIDDEN) {
+			store(BUG_TOKEN_KEY, null);
+			$("bug-token").hidden = false;
+		}
+		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);
+		store(BUG_TOKEN_KEY, report.token);
+		$("bug-comment").value = "";
+		$("bug-express").checked = false;
+		showBugStatus(`sent (${queued}): a card within minutes`);
+	} catch (failure) {
+		showBugStatus(`not sent: ${failure.message}`, true);
+	}
+}
+
+function showBugStatus(text, failed = false) {
+	Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
 }
 
 function showVersion() {
@@ -1152,6 +1211,7 @@ function initialize() {
 	showBuildSwitch();
 	showVersion();
 	showReportButton();
+	startBugButton();
 	fillExamples();
 	startWorker();
 	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
@@ -1160,7 +1220,7 @@ function initialize() {
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, bugReport, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
