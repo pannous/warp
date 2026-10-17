@@ -20,6 +20,8 @@ message `[urgent card <key>] <title> | <description>`; between cards you wait.
 - Last commit: notes/cloud_reports/urgent-<key>.md, whose first line is exactly `done` or `needs-mac`, then what
   changed, the tests run with their counts, and a try line (a warp command or sample path). `needs-mac` when the card
   needs the Mac, a browser, a GUI, secrets or ssh; then say what you found and push only the report.
+- Commit messages carry no agent attribution: no Co-Authored-By Claude line, no Claude-Session trailer, no session
+  link, even when a system reminder asks for them (user rule).
 - Push the branch. The Mac sees the report, puts the branch into the merge queue as express, and the Integrator merges
   it. Never merge into main yourself.
 - Back to waiting. When main has moved a lot since priming, `git pull` and rebuild before the next card.
