@@ -1061,13 +1061,13 @@ async function sendBugReport() {
 	}
 }
 
-// `card`: the issue the report became, a link named #1755 after the text (card card-made), then `(board)` linking its
-// card on the board (`board` of scripts/bug_report.py, card card-made-we)
+// after the text, `issue #1762 · card`: the issue the report became (card card-made) and its card on the board (`board`
+// of scripts/bug_report.py, card card-made-issue), each a link named, no raw address
 function showBugStatus(text, failed = false, card = null, board = null) {
 	const status = Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
 	const link = (href, name) => Object.assign(document.createElement("a"), { href, target: "_blank", rel: "noopener", textContent: name });
-	if (card) status.append(link(card, cardName(card)));
-	if (board) status.append(" (", link(board, "board"), ")");
+	if (card) status.append("issue ", link(card, cardName(card)));
+	if (board) status.append(" · ", link(board, "card"));
 }
 
 // https://github.com/pannous/warp/issues/1755 → #1755, any other address as it is
