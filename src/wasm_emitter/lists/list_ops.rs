@@ -402,7 +402,8 @@ impl WasmGcEmitter {
 	}
 
 	/// node_is_map(node) -> i32: 1 when its kind carries the curly bracket and it is empty or begins with a pair
-	/// (`{}`, `{a: 1}`); a quoted block `{print 1}` is a curly list too, but code
+	/// (`{}`, `{a: 1}`); a quoted block `{print 1}` is a curly list too, but code, and so is a parse() result marked as
+	/// code (`parse("{a: b}")`)
 	fn emit_node_is_map(&mut self) {
 		if !self.should_emit_function(crate::type_tests::NODE_IS_MAP) {
 			return;
@@ -417,8 +418,8 @@ impl WasmGcEmitter {
 				s.emit_field(f, 0, 0);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
-					I::I64Const(UNMARKED_KIND), I::I64And, I::I64Const(CURLY_LIST_KIND), I::I64Ne,
-					I::If(BlockType::Empty), I32Const(0), I::Return, I::End,
+					I::I64Const(UNMARKED_KIND | crate::type_kinds::CODE_MARK), I::I64And, I::I64Const(CURLY_LIST_KIND),
+					I::I64Ne, I::If(BlockType::Empty), I32Const(0), I::Return, I::End,
 				]);
 				s.emit_field(f, 0, 1);
 				#[rustfmt::skip]

@@ -752,8 +752,9 @@ impl WasmGcEmitter {
 					self.call(func, "is_ratio");
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::Else, I::I64Const(0), I::End]);
 				}
-				// a map is a curly list at run time, no list (card inside-function)
-				if crate::type_tests::canonical_spec_word(spec) == crate::words::LIST_WORD {
+				// a map is a curly list at run time, no list (card inside-function); code in braces is a list of its
+				// statements, as code in any other brackets
+				if crate::type_tests::canonical_spec_word(spec) == crate::words::LIST_WORD && !code {
 					self.emit_node_instructions(func, subject);
 					self.emit_is_map(func);
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64And]);
