@@ -6,7 +6,7 @@
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
-use crate::analyzer::{call_name, function_definitions};
+use crate::analyzer::call_name;
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
@@ -201,49 +201,43 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 /// returns the mapped list, `ps sort by .a` labels the function. A function of the program calls what follows,
 /// `f sorted xs`
 pub fn lower_infix_iterations(program: Node) -> Node {
-	let functions: HashSet<String> = function_definitions(&program).user_functions.into_keys().collect();
-	let (parameters, labels) = definition_parameters(&program);
-	let variables: HashSet<String> = crate::music_words::defined_names(&program)
-		.into_iter()
-		.filter(|name| !functions.contains(name))
-		.chain(parameters)
-		.chain([IMPLICIT_PARAMETER.to_string()])
-		.collect();
-	infix_iterations(program, &ProgramWords { variables, labels })
+	let labels = parameter_labels(&program);
+	let names = crate::program_names::ProgramNames::of(&program);
+	infix_iterations(program, &ProgramWords { names, labels: &labels })
 }
 
-/// `variables`: the words the program assigns or takes as parameters; any other word before an iteration word is
-/// a function or a module's word, `square all 1 to 5`, and the iteration stays prefix. `labels`: each function's
-/// parameter labels, `f(xs, each y)`, which stay labels in a call of that function, `f [1 2 3] each 2`
-struct ProgramWords {
-	variables: HashSet<String>,
-	labels: HashMap<String, HashSet<String>>,
+/// `names`: the names in scope, whose variables and parameters may hold the list before an iteration word; any other
+/// word there is a function or a module's word, `square all 1 to 5`, and the iteration stays prefix. `labels`: each
+/// function's parameter labels, `f(xs, each y)`, which stay labels in a call of that function, `f [1 2 3] each 2`
+struct ProgramWords<'a> {
+	names: crate::program_names::ProgramNames,
+	labels: &'a HashMap<String, HashSet<String>>,
 }
 
-/// `f(ys:list, n, each d) := …`: the parameter names ys, n and d, typed or not, and each function's labels (f: each)
-fn definition_parameters(program: &Node) -> (Vec<String>, HashMap<String, HashSet<String>>) {
-	let (mut names, mut labels) = (Vec::new(), HashMap::<String, HashSet<String>>::new());
+/// `f(ys:list, n, each d) := …`: each function's parameter labels (f: each)
+fn parameter_labels(program: &Node) -> HashMap<String, HashSet<String>> {
+	let mut labels = HashMap::<String, HashSet<String>>::new();
 	program.visit(&mut |node| {
 		let Node::Key(head, Op::Define | Op::Assign, _) = node else { return };
 		let Some(Node::List(items, _, _)) = definition_call(head) else { return };
 		let function = crate::node::leading_name(&items[0]);
 		for parameter in &items[1..] {
-			match parameter.drop_meta() {
-				Node::List(words, Bracket::None, _) if words.len() > 1 => {
+			if let Node::List(words, Bracket::None, _) = parameter.drop_meta() {
+				if words.len() > 1 {
 					labels.entry(function.clone()).or_default().insert(crate::node::leading_name(&words[0]));
-					names.push(crate::node::leading_name(&words[words.len() - 1]));
 				}
-				_ => names.push(crate::node::leading_name(parameter)),
 			}
 		}
 	});
-	(names, labels)
+	labels
 }
 
 fn infix_iterations(node: Node, words: &ProgramWords) -> Node {
-	let is_list_operand = |node: &Node| {
-		is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(|name| words.variables.contains(name))
-	};
+	let inner = words.names.inside(&node).map(|names| ProgramWords { names, labels: words.labels });
+	let words = inner.as_ref().unwrap_or(words);
+	let is_variable = |name: &str| words.names.binds(name) || name == IMPLICIT_PARAMETER;
+	let is_list_operand =
+		|node: &Node| is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(is_variable);
 	match node {
 		// `ys = sort xs by >`: the parser hung the phrase on the operator, `(sort xs by) > ø`
 		Node::Key(..) if dangling_sort_operator(&node).is_some_and(|(words, label)| sorts_before(&words[..label])) => {

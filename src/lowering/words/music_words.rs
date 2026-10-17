@@ -37,7 +37,6 @@ const UNIT_WORDS: [(&str, &str); 5] = [
 	("bars", "bar_seconds"),
 	("dB", "decibels"),
 ];
-const DEF_WORD: &str = "def";
 const AT_CALL: &str = "sound_at";
 const AT_END_CALL: &str = "sound_at_end";
 const LIVE_LOOP_WORD: &str = "live_loop";
@@ -636,37 +635,3 @@ fn midi_of(name: &str) -> Option<i64> {
 	Some(12 * (octave_digit.to_digit(10)? as i64 + 1) + semitone + shift)
 }
 
-/// The names the program assigns or defines anywhere: `A4 = 3`, `B3(x) := …` (B3 and its parameter x), `def f(k) {…}`,
-/// `for kind in …`
-pub(crate) fn defined_names(program: &Node) -> HashSet<String> {
-	let mut names: HashSet<String> = super::for_loop::loop_variables(program).into_iter().collect();
-	program.visit(&mut |node| match node {
-		Node::Key(target, Op::Assign | Op::Define, _) => names.extend(definition_names(target)),
-		Node::List(items, _, _) if items.first().is_some_and(|keyword| keyword.is_symbol(DEF_WORD)) => {
-			names.extend(items.get(1).map(definition_signature_names).unwrap_or_default())
-		}
-		_ => {}
-	});
-	names
-}
-
-/// `def h(v) { play C4 }` is `def ((h (v)) {body})`: the names of the signature, not of the body
-fn definition_signature_names(definition: &Node) -> Vec<String> {
-	match definition.drop_meta() {
-		Node::List(parts, _, _)
-			if parts.last().is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) =>
-		{
-			parts[..parts.len() - 1].iter().flat_map(definition_names).collect()
-		}
-		_ => definition_names(definition),
-	}
-}
-
-/// `B3` → B3; `(B3 x)`, `(f (k))` → the function and its parameters
-fn definition_names(target: &Node) -> Vec<String> {
-	match target.drop_meta() {
-		Node::Symbol(name) => vec![name.clone()],
-		Node::List(items, _, _) => items.iter().flat_map(definition_names).collect(),
-		_ => vec![],
-	}
-}
