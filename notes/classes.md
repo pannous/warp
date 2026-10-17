@@ -8,17 +8,17 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
   `person{name:"Ann"}`; `init{…}` / `init(name){…}` blocks are the constructor (P162). Field access `p.age`.
 - Methods are functions dispatching on their first argument's class: a method adds to the function of that name, the
   most specific wins, at run time when needed (notes/dispatch.md "Methods"). Written as free functions over the type
-  (`greet(p:person) := "hi " + p.name`, called `greet(p)` or `p.greet()`) or inside the class body (step 1).
+  (`greet(p:person) := "hi " + p.name`, called `greet(p)` or `p.greet()`) or inside the class body (below).
 - P115 receiver: in a class body bare field names read the receiver's fields; `self` (alias `this`) names it.
 - P117 `area := side*side` in a class body is a getter, computed at each `s.area`.
-- P116 a method assigning its own fields: `c.inc()` updates the variable c, like `xs.add(v)` (step 2; objects are
+- P116 a method assigning its own fields: `c.inc()` updates the variable c, like `xs.add(v)` (objects are
   values, wiki/class.md).
-- P117 inheritance: `class b extends a` copies a's fields and methods into b; b's own definitions override a's (step 3).
+- P117 inheritance: `class b extends a` copies a's fields and methods into b; b's own definitions override a's.
 - Traits (wiki/trait.md): Comparable, Equatable, declared traits; conformance is structural, by the class's methods
   (`class dot{x:int; compare(other) := x - other.x} is Comparable`), a claimed one checked (P177, below).
 - Fields are signal targets: `on change p.age {…}` hears `p.age = 3` (notes/signals.md).
 
-## Step 1 as built
+## Methods in the class body
 - lowering/types/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
   `name(self:class, params…) := body`, and the class keeps its fields. The parser keeps a `:=` body as code, not as a
   field type (lists.rs `transform_fields_to_types`).
@@ -28,7 +28,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
 - overloads.rs dispatches on the return type only among definitions with the same parameter types, so methods of
   two classes that return different classes are no return-type overloads.
 
-## Step 2 as built (P116)
+## Methods that change their object (P116)
 - A method whose body assigns a field of its receiver (`n += 1`, `self.n = …`, `x += dx` in a block) gives the changed
   object: its function body is `(body; self)`.
 - On a variable, `c.inc()` is the update `c = inc(c)`; on any other receiver (`counter(4).inc()`) the call gives the
@@ -41,7 +41,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
   (lowering field_elements, functions), so a method setting an element changes its object; also outside classes (`s.xs#2 = 6`).
 - init(x) := … is the constructor like init(x){…}; what a loop in init sets (`for x in xs { i = … }`) stays local.
 
-## Step 3 as built (P117 inheritance)
+## Inheritance (P117)
 - `class dog extends animal {…}`: the parser keeps the parent as the annotation `@extends(animal)` on the class name.
 - class_methods first gives each class its parents' items: animal's fields first (so `dog("Rex")` fills name), then
   dog's own; a field or method dog defines again replaces animal's. A parent that is no class, or a cycle, is an error.
@@ -88,7 +88,7 @@ Generic form: `P(1, 2)` is a `$Node` key `P` over a cons list of `x:1`, `y:2` en
 Instance mark), `p.x` is `struct_body` + `map_find`, a search comparing field-name symbols. The struct backend
 replaces that where the static type is known, modelled on map_backend.rs (typed maps) and list_abi.rs:
 - `P·instance`: one struct type per class (emit_instance_types), mutable fields, an int field i64, a float field f64,
-  any other a Node. Today's immutable `$P` (field_storage "int"→I32) stays for FFI/WIT.
+  any other a Node. The immutable `$P` (field_storage "int"→I32) stays for FFI/WIT.
 - Struct variables (find_typed_structs): a local whose every assignment is a construction of one class giving every
   field in declared order with values of the field's kind (int/float fields: static kind Int/Float), and field writes
   `p.x = v`, `p.x += v`, `p.x++` (struct.set) of values of the field's kind; a text or list written to a number field
