@@ -1,7 +1,6 @@
 # Browser playground (web/playground)
 
-Roadmap card: playground (board topic, notes/roadmaps.md). Investigation stories behind the rules below (Firefox
-start stalls, console errors, memory limits): notes/OLD/web_playground_history.md.
+Roadmap card: playground (board topic, notes/roadmaps.md).
 
 Run it: `web/playground/build.sh && python3 -m http.server 8000` in the repository root, then open
 http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or a samples/ file).

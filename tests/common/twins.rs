@@ -262,7 +262,10 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 		let expected = warp_list([after, reports].into_iter());
 		Some(Case::new(&path, view_json(&given), expected))
 	});
-	report(word, &differences_of(cases.into_iter(), part, &format!("reported(view_of({word}(node_of(json(argument)))))")));
+	report(
+		word,
+		&differences_of(cases.into_iter(), part, &format!("reported(view_of({word}(node_of(json(argument)))))")),
+	);
 }
 
 /// `case` of each path, in the paths' order, computed in RUST_SIDE_THREADS threads; each thread takes every

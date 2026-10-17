@@ -141,10 +141,10 @@ These are reexported in `lib.rs` for test access via `use warp::*`.
 
 ## Development Workflow
 
-0. **Run tests** - `cargo test` to verify we start from a clean state, check git logs
+0. **Run tests** - `tests/queue.sh -- <filter>` to verify we start from a clean state, check git logs
 1. **Modify parser or emitter** - Edit files in `src/`
 2. **Add tests** - Create or update tests in `tests/`
-3. **Run tests** - `cargo test` to verify
+3. **Run tests** - `tests/queue.sh -- <filter>` to verify
 4. **Build offline** - Use `--offline` for reproducible builds
 
 ## Serialization
@@ -221,7 +221,7 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
-Small or non-conflicting changes may go straight onto main without a worktree (user, 2026-10-12; notes/roles.md
+Small or non-conflicting changes may go straight onto main without a worktree (notes/roles.md
 "Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 (/Volumes/Worktrees/warp is cowtree's donor, never removed;
 /Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md), or work on the same branch for small changes.

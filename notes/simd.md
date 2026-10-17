@@ -25,8 +25,8 @@ GPU maps: notes/gpu.md. Linear arrays: notes/linear_arrays.md.
 - Most of the win is the representation (a typed loop over memory), f64x2 itself adds 5-15%.
 - A for loop's item counter `x·index` (only 0 and ++, below the count) needs no big-integer checks and reads with a
   direct `array.get` (big_int::bounded_counters, list_dispatch walking_counter).
-- NaN canonicalization after every float operation doubled a float loop; it now happens only where a float's bits are
-  observable (P119, floats::canonical_nan).
+- NaN canonicalization happens only where a float's bits are observable (P119, floats::canonical_nan): after every
+  float operation it doubled a float loop.
 - Tried and dropped: a map preallocating its result with the source's length: zero-filling and the copying GC's work
   on one large array cost more than the doublings.
 

@@ -6,9 +6,9 @@ Goal: replace React / Svelte / Next with warp itself: markup is warp data, react
 signals, the server is the same program. The steps are the web-* cards on the board; this note is their order, what
 each builds on, and how each works. Defaults marked so are undoable.
 
-## What exists already
+## Foundations
 - **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/web/html.warp, html_dsl.warp; repeated
-  keys like `li li li` since 49a48ece1, tests/web/test_markup_tags.rs). It is only a value today: nothing renders it.
+  keys like `li li li`, tests/web/test_markup_tags.rs) and renders as DOM in the page, as HTML natively (step 1 below).
 - **Signals** (notes/signals.md): every variable is a signal once something listens; `:=` derives one and knows what it
   reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7)
   and in `warp app` (`on key { exit }` closes it, samples/web/hello_div.warp, tests/web/test_app_keys.rs).
@@ -58,7 +58,7 @@ Each step is useful on its own and is what the next ones stand on.
 - `users := fetch "/api/users"` at the main level does not wait: `users` is ø with `users.loading` true and
   `users.error` ø; once the reply is in, `users.loading` is false, then `users.error` (the failure text, "fetch … failed:
   HTTP status 404") or `users` (the parsed JSON, any other body the text) is set, so `on change users {…}` and a page
-  whose last line is `users` show it. A fetch with `timeout` keeps the old meaning (fetched on each read).
+  whose last line is `users` show it. A fetch with `timeout` is fetched on each read.
 - A URL reading main-level variables (`"/api/users?page=" + page`) is fetched anew when one changes; a reply of an
   older fetch of the same name is dropped.
 - Lowering (src/lowering/signals/fetch_signals.rs): the variables users, users·loading, users·error, the call
@@ -290,8 +290,8 @@ Each step is useful on its own and is what the next ones stand on.
   /app.wasm, /site.js … beside it; a route wins over a file of the same path. The page hydrates and fetches the
   program's own routes (probes/site/served.warp). Page events draw no "never raises it" warning there. Only program
   files serve a page (the host builds it from modules::program_file).
-- Since done: a page asking the server is rendered per request with the replies carried along (P221 step 3,
-  2da366f5e), the page build's RPC stub (cards rpc-stub, rpc-everywhere; notes/server_routes.md). Left there: a page's
+- A page asking the server is rendered per request with the replies carried along (P221 step 3); the page build has
+  an RPC stub (cards rpc-stub, rpc-everywhere; notes/server_routes.md). Left there: a page's
   main-level statement reading server data (card web-page-server-data), access rules (card route-access).
 - Programs in a Worker (card site-worker, step 1): a module importing task words (task_/channel_/shared_, site.rs
   runs_in_a_worker) runs in site-worker.js, where a blocking await may wait (Atomics.wait) and its tasks run together on

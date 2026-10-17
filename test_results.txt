@@ -3731,6 +3731,13 @@ PASSED:
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
   ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
+  ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
+  ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
+  ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
+  ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
+  ✓ parser::test_self_passes::every_source_is_a_node_and_back
+  ✓ parser::test_self_passes::number_words_match_their_rust_twin
+  ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6309,4 +6316,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 6304 passed, 0 failed, 6304 total tested
+14 ignored, 6311 passed, 0 failed, 6311 total tested

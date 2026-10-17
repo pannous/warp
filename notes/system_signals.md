@@ -1,7 +1,6 @@
 # System signals: hooking into the world outside the module
 
-Companion of notes/signals.md (signals inside a program); this is the outside. The original sketch (catalog of
-sources per platform, bus design, delivery rules, the dirty parts): notes/OLD/system_signals_sketch.md.
+Companion of notes/signals.md (signals inside a program); this is the outside.
 
 ## The idea
 The program says what it listens to with the same words as for its own signals: `on interrupt {…}`,
