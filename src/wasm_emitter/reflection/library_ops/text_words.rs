@@ -496,7 +496,7 @@ impl WasmGcEmitter {
 				);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::LocalSet(element), I::End]);
-				if s.should_emit_function(super::super::super::numbers::uncertain::UNCERTAIN_TEXT) {
+				if s.prints_uncertain() {
 					is_kind(f, Kind::Uncertain);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
 					s.call(f, super::super::super::numbers::uncertain::UNCERTAIN_TEXT);

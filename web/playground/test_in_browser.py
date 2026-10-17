@@ -85,6 +85,10 @@ REPORT_PRINTED = "reported"
 BUG_BUTTON = "(the bug button sends a comment with the program; ?bug_token stores the token, a wrong one is refused)"  # card bug-report
 BUG_TOKEN = "wrong-probe-token"  # never the real one: the endpoint refuses it, so no card is made
 BUG_COMMENT = "probe comment"
+FIX_BUTTON = "(an \"I meant\" button rewrites the code and runs it again)"  # card clicking-meant: playground.js applyFix
+FIX_BUTTON_CODE = "a=5; b=1; a-b:2; a-b"  # the kebab key's fix renames it at the key and at its read (P81)
+FIX_BUTTON_LABEL = "I meant: a_b"
+FIX_BUTTON_FIXED = ("2", "a=5; b=1; a_b:2; a_b")
 FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
 FILE_KEPT_TEXT = "kept across a reload"
 WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
@@ -722,6 +726,30 @@ def gpu_jobs_wrong():
 	return [f"after 400 GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
 
 
+def fix_button_wrong():
+	"""the first "I meant" button, clicked as a person clicks it (pointer events, not element.click(): the user's click
+	had no effect while the probe's passed), leaves the fixed code and its value"""
+	run_code(FIX_BUTTON_CODE)
+	found = browser("eval", f"""(() => {{
+		const button = [...document.querySelectorAll(".apply-fix")].find(button => button.textContent === {json.dumps(FIX_BUTTON_LABEL)});
+		if (button) button.id = "fix-under-test";
+		return Boolean(button);
+	}})()""")
+	if found != "true":
+		return [f"no {FIX_BUTTON_LABEL!r} button: {found or browser_complaint}"]
+	if webdriver:
+		browser("eval", "document.getElementById('fix-under-test').click()")
+	else:
+		browser("click", "#fix-under-test")
+	shown = browser("eval", """(async () => {
+		await new Promise(done => setTimeout(done, 100));
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		return JSON.stringify([document.getElementById("value").textContent, playground.code()]);
+	})()""")
+	shown = tuple(json.loads(json.loads(shown))) if shown.startswith('"') else (f"(page gave no answer: {shown or browser_complaint})",)
+	return [] if shown == FIX_BUTTON_FIXED else [f"after clicking the fix: {shown!r}, expected {FIX_BUTTON_FIXED!r}"]
+
+
 def many_tasks_wrong():
 	"""400 tasks awaited one after the other give their sum"""
 	shown = run_code(MANY_TASKS_CODE)
@@ -951,7 +979,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

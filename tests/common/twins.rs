@@ -401,14 +401,21 @@ fn module_value(module: &Node) -> Node {
 	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
 	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes(&bytes)) {
 		Some(Ok(value)) => value,
-		Some(Err(failure)) => Node::text(&format!("module failed: {failure}")),
+		Some(Err(failure)) => Node::text(&format!("{MODULE_FAILED}{failure}")),
 		None => Node::text("a module byte beyond 0..255"),
 	}
 }
 
-/// Equal values; a float equals another number of exactly its value (the core's 3.5 * 2 is 7.0, Rust's 7)
+const MODULE_FAILED: &str = "module failed: ";
+const RUST_TRAP: &str = "wasm trap";
+
+/// Equal values; a float equals another number of exactly its value (the core's 3.5 * 2 is 7.0, Rust's 7); a trap on
+/// both sides is the same outcome (a million nested calls exhaust the test's stack, probes/functions/deep_recursion.warp)
 fn same_value(warp_value: &Node, rust_value: &Node) -> bool {
 	match (warp_value, rust_value) {
+		(Node::Text(failure), Node::Error(trap)) if failure.starts_with(MODULE_FAILED) => {
+			trap.serialize().contains(RUST_TRAP)
+		}
 		(Node::Number(a @ Number::Float(_)), Node::Number(b))
 		| (Node::Number(a), Node::Number(b @ Number::Float(_))) => f64::from(*a) == f64::from(*b),
 		_ => warp_value == rust_value,

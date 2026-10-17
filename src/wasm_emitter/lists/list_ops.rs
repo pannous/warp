@@ -133,7 +133,6 @@ impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
 		self.emit_is_meta_entry();
-		self.emit_zero_fill();
 		if TEXT_UNIT_USERS.iter().chain(&CODE_POINT_READERS).any(|name| self.should_emit_function(name)) {
 			self.emit_utf8_steps();
 		}
@@ -879,41 +878,6 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalSet(stop));
 			s.emit_new_text_to(f, start, stop);
 		});
-	}
-
-	/// zero_fill(count, zero): a square list of `count` times the node `zero`, ø when count is not positive
-	fn emit_zero_fill(&mut self) {
-		if !self.should_emit_function(crate::filled_lists::ZERO_FILL_CALL) {
-			return;
-		}
-		let node = self.type_manager.node_type;
-		let node_ref = Ref(self.node_ref(false));
-		let nullable_node_ref = Ref(self.node_ref(true));
-		self.runtime_function(
-			crate::filled_lists::ZERO_FILL_CALL,
-			vec![ValType::I64, node_ref],
-			vec![node_ref],
-			vec![nullable_node_ref],
-			|s, f| {
-				let rest = 2;
-				s.emit_require_whole(f, 0, COUNT_NOT_INTEGRAL);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
-					I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-							I::LocalGet(0), I::I64Const(0), I::I64LeS, I::BrIf(1),
-							I::I64Const(SQUARE_LIST_KIND), I::LocalGet(1), I::LocalGet(rest), I::StructNew(node),
-							I::LocalSet(rest),
-							I::LocalGet(0), I::I64Const(1), I::I64Sub, I::LocalSet(0),
-							I::Br(0),
-					I::End, I::End,
-					I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref)),
-				]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
-			},
-		);
 	}
 
 	fn emit_index_compare(func: &mut Function, compare: Instruction) {

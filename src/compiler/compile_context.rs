@@ -84,6 +84,11 @@ pub struct CompileContext {
 	pub fresh_number: usize,
 	/// how deep in compiles we are: only the outermost one starts its fresh numbers from 0
 	pub compile_depth: usize,
+	/// the prelude words a compile loads as if the program called them: those code generation found it calls though
+	/// the program never named them (pipeline::loading_compiler_words, card lib-from-runtime)
+	pub compiler_words: Vec<String>,
+	/// the prelude words the last emission called without their definition, which a second compile loads
+	pub missing_compiler_words: Vec<String>,
 }
 
 impl Default for CompileContext {
@@ -124,6 +129,8 @@ impl Default for CompileContext {
 			program_functions: HashMap::new(),
 			fresh_number: 0,
 			compile_depth: 0,
+			compiler_words: vec![],
+			missing_compiler_words: vec![],
 		}
 	}
 }
