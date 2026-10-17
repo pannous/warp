@@ -3841,6 +3841,7 @@ PASSED:
   ✓ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
   ✓ programs::test_midi::midi_notes_follow_one_another
   ✓ programs::test_midi::notes_survive_a_midi_file
+  ✓ programs::test_midi::warp_opens_a_virtual_source_other_programs_can_listen_to
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
   ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
   ✓ programs::test_music_values::the_tuning_tunes_every_note
@@ -4087,6 +4088,7 @@ PASSED:
   ✓ programs::test_sound_voices::a_voice_far_ahead_of_the_speaker_waits
   ✓ programs::test_sound_voices::a_voice_starts_where_its_starter_stands
   ✓ programs::test_sound_voices::voices_add_up
+  ✓ programs::test_sound_wavs::a_tests_warp_writes_its_wavs_into_the_scratch_root
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
@@ -6252,4 +6254,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6247 passed, 0 failed, 6247 total tested
+13 ignored, 6249 passed, 0 failed, 6249 total tested
