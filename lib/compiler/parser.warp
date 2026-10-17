@@ -1017,6 +1017,13 @@ def atom(p) {
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
 	if is_name_start(c) { return named(p) }
+	// `$a`, a pattern's name hole: `data($a + 0)`
+	if c == '$' and is_name_start(peek(p.code, p.at + 1, p.n)) {
+		end = symbol_end(p.code, p.at + 1, p.n)
+		hole = ["symbol", p.code[p.at .. end]]
+		p.at = end
+		return hole
+	}
 	if c == '(' or c == '[' or c == '{' {
 		p.at = p.at + 1
 		outer = p.header
@@ -1048,8 +1055,7 @@ def with_glued_factor(p, amount) {
 	["key", "*", amount, if power == ø then factor else power]
 }
 
-// `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5 (Rust keeps a lone ² or ³ as its own operator:
-// notes/self_hosting_dropped.md Deviations square-cube):
+// `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
 // the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
 // Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
 def superscript_power(p, left, min_power) {

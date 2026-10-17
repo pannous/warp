@@ -513,10 +513,6 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		{
 			zeros
 		}
-		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
-		Node::Key(base, op, _) if let Some(exponent) = op.suffix_exponent() => {
-			key(lower(*base), Op::Pow, Node::int(exponent))
-		}
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
 			let declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();

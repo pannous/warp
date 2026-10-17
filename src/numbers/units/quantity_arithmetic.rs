@@ -6,19 +6,18 @@ const DAY_MILLISECONDS: i128 = 86_400_000;
 const NANOS_PER_MILLISECOND: i128 = 1_000_000;
 
 /// `q as cm` under a power: the quantity and the powered target units
-pub(super) fn powered_conversion(conversion: &Node, op: Op) -> Option<(&Node, Vec<Factor>)> {
+pub(super) fn powered_conversion<'a>(conversion: &'a Node, exponent: &Node) -> Option<(&'a Node, Vec<Factor>)> {
 	let Node::Key(quantity, Op::As, unit) = conversion.drop_meta() else {
 		return None;
 	};
-	Some((quantity, powered(unit_expression(unit)?, exponent_of(op))))
+	Some((quantity, powered(unit_expression(unit)?, whole_exponent(exponent)?)))
 }
 
-/// The exponent of `²` and `³`
-pub(super) fn exponent_of(op: Op) -> i32 {
-	if op == Op::Square {
-		2
-	} else {
-		3
+/// The right side of `^ 2` (also written `²`): a whole number exponent
+pub(super) fn whole_exponent(exponent: &Node) -> Option<i32> {
+	match exponent.drop_meta() {
+		Node::Number(Number::Int(power)) => i32::try_from(*power).ok(),
+		_ => None,
 	}
 }
 
@@ -34,9 +33,7 @@ pub(super) fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
 /// Products, quotients and powers of what `leaf` reads: units (`km/h`) or dimensions (`length/duration`)
 pub(super) fn factor_expression(node: &Node, leaf: &dyn Fn(&Node) -> Option<Vec<Factor>>) -> Option<Vec<Factor>> {
 	match node.drop_meta() {
-		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if nothing.is_empty_node() => {
-			Some(powered(factor_expression(base, leaf)?, exponent_of(*op)))
-		}
+		Node::Key(base, Op::Pow, exponent) => Some(powered(factor_expression(base, leaf)?, whole_exponent(exponent)?)),
 		Node::Key(left, Op::Mul, right) => {
 			Some([factor_expression(left, leaf)?, factor_expression(right, leaf)?].concat())
 		}

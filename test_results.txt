@@ -2056,6 +2056,7 @@ PASSED:
   ✓ lists::test_deep_index_assignment::a_deep_index_assignment_keeps_the_stack
   ✓ lists::test_delete_list::delete_removes_the_first_matching_list_item
   ✓ lists::test_delete_list::delete_statement_removes_an_entry
+  ✓ lists::test_down_and_letter_ranges::a_for_loop_down_to_counts_without_a_list
   ✓ lists::test_down_and_letter_ranges::a_range_from_an_undefined_name_names_it
   ✓ lists::test_down_and_letter_ranges::down_to_counts_down
   ✓ lists::test_down_and_letter_ranges::letters_make_ranges
@@ -2458,7 +2459,6 @@ PASSED:
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_node_json::json_of_code_keeps_its_operations
   ✓ modules::test_node_json::json_writes_numbers_exactly_or_says_so
-  ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
   ✓ modules::test_package_forms::a_bare_name_is_a_folder_of_the_default_registry
   ✓ modules::test_package_forms::a_full_url_stays_as_written
   ✓ modules::test_package_forms::an_owner_and_repository_are_on_github
@@ -3745,7 +3745,9 @@ PASSED:
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
   ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
+  ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
   ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
@@ -6346,7 +6348,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_lexer::numbers_match_their_rust_twin
+  ✗ modules::test_node_json::the_browser_spells_each_operator_code_alike
 
 SUMMARY:
-16 ignored, 6343 passed, 1 failed, 6344 total tested
+16 ignored, 6345 passed, 1 failed, 6346 total tested

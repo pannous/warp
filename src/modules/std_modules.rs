@@ -39,45 +39,13 @@ pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
 pub(crate) const STD_FOLDER: &str = "lib";
 /// lib/prelude.warp: the warp-written words of every program, loaded when mentioned (Loader::use_prelude)
 pub(crate) const PRELUDE_MODULE: &str = "prelude";
+/// The start of a line `alias sorted = sort` (wiki/alias.md)
+const ALIAS_LINE_START: &str = "alias ";
 /// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
 pub(crate) const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 pub(crate) const PRELUDE_WORDS: [(&str, &[&str]); 2] =
 	[("file", &["write", "exists", "write_bytes", "read_bytes"]), ("os", &["exec"])];
-/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
-/// a note, when a used module defines that word
-pub(crate) const STD_ALIASES: [(&str, &str); 27] = [
-	("HashSet", "Set"),
-	("TreeSet", "Set"),
-	("LinkedHashSet", "Set"),
-	("frozenset", "Set"),
-	("ArrayDeque", "Deque"),
-	("VecDeque", "Deque"),
-	("deque", "Deque"),
-	("OrderedDict", "OrderedMap"),
-	("LinkedHashMap", "OrderedMap"),
-	// P169: the C library's historic names of `use math`'s words (atan2 takes y first, angle(x, y) does not: no alias)
-	// sqrt and cbrt are the operators √ and ∛ already
-	("pow", "power"),
-	("exp", "exponential"),
-	("log2", "binary_log"),
-	("log10", "decimal_log"),
-	("sin", "sine"),
-	("cos", "cosine"),
-	("tan", "tangent"),
-	("asin", "arc_sine"),
-	("acos", "arc_cosine"),
-	("atan", "arc_tangent"),
-	("sinh", "hyperbolic_sine"),
-	("cosh", "hyperbolic_cosine"),
-	("tanh", "hyperbolic_tangent"),
-	("hypot", "hypotenuse"),
-	("ceil", "ceiling"),
-	("trunc", "whole_part"),
-	("fmod", "remainder"),
-	("ln", "natural_log"),
-];
-
 /// warp's own lib/<module>.warp of a standard module: the source the binary embeds (natively the lib folder of the
 /// repository it was built from, or any file of the same text: lib/ of another warp checkout, card local-lib; in the
 /// browser lib/ of the served repository, the page's file root)
@@ -154,6 +122,19 @@ fn parsed_words(source: &str) -> Vec<String> {
 		.filter(|statement| used_module(statement).is_none())
 		.filter_map(name_declared_by)
 		.collect()
+}
+
+/// lib/prelude.warp's `alias sorted = sort` lines, (alias, word) each, read from its text: the parser asks for them
+/// while it may be parsing a module, as for std_function_names
+pub(crate) fn prelude_aliases() -> &'static [(String, String)] {
+	static ALIASES: std::sync::OnceLock<Vec<(String, String)>> = std::sync::OnceLock::new();
+	ALIASES.get_or_init(|| {
+		let alias = |line: &str| {
+			let (alias, word) = line.strip_prefix(ALIAS_LINE_START)?.split_once(" = ")?;
+			Some((alias.to_string(), word.to_string()))
+		};
+		std_module(PRELUDE_MODULE).unwrap_or_default().lines().filter_map(alias).collect()
+	})
 }
 
 /// The names the standard modules define with parameters (`ls(folder:any = ".") := …`), read from their text: the
@@ -257,7 +238,7 @@ pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 
 /// The parameters and the body of the prelude word's definition (`paint_each(f, width, height) := …`)
 pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
-	std_module_statements(PRELUDE_MODULE).into_iter().find_map(|statement| match statement.drop_meta() {
+	prelude_declarations_of(&[word]).into_iter().find_map(|statement| match statement.drop_meta() {
 		Node::Key(head, Op::Define, body) if leftmost_symbol(head).as_deref() == Some(word) => match head.drop_meta() {
 			Node::List(items, _, _) => Some((items[1..].to_vec(), body.as_ref().clone())),
 			_ => None,

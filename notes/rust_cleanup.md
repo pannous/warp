@@ -37,3 +37,9 @@ interpolation.warp, sugar.warp; library words already moved to lib/*.warp), the 
 keeping a Rust twin, and the Rust twin is deleted. Condition: compile time measured before and after (each pass
 runs as compiled warp at compile time); a pass that costs too much keeps its Rust form until the prelude parsing
 and caching work makes it cheap. This is the first real use of the warp compiler parts and shrinks src/ for good.
+
+Measured 2026-10-18 (warp-self-passes, times_phrases.warp with parser.warp, debug build): compiling the pass with
+its bridge takes 25 s CPU (41 s wall), the compiled module is 228 KB, and one run of it (wasm compile + a tiny
+program) 0.6 s. A pass at compile time would need the module built ahead and embedded (build.rs would need a warp
+compiler: the bootstrap problem) and still costs ~0.5 s per pass and program. So the Rust twins stay for now; this
+comes back with AOT-embedded compiler modules (cwasm) and the prelude caching work.

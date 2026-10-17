@@ -304,7 +304,10 @@ def symbol_end(source, from, n) {
 	at
 }
 
-def number_starts(source, at) := is_digit(source[at]) and (at == 0 or not is_name_char(source[at - 1]))
+def number_starts(source, at) := (is_digit(source[at]) or fraction_starts(source, at)) and (at == 0 or not is_name_char(source[at - 1]))
+
+// `.5`, `[.25]`: a fraction written without its 0, where no operand ends before the dot (`xs.1`, `f().5` stay members)
+def fraction_starts(source, at) := source[at] == '.' and at + 1 < source.length and is_digit(source[at + 1]) and (at == 0 or not ").]}".contains(source[at - 1]))
 
 def number_end(source, at, n) {
 	date = date_length(source, at, n)

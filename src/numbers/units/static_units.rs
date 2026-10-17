@@ -14,7 +14,7 @@
 //! text; `xs.add(q)` checks the element signature.
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
-use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
+use super::{finest_units, unit_named, units_text, whole_exponent, Dimension, Factor, Quantity, Unit};
 use crate::lowering::{function_head, DefinitionForm};
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
@@ -558,12 +558,12 @@ fn shown_zero(units: &[Factor]) -> Rational {
 	}
 }
 
-/// `²`, `³` and `^ 2`: the power a quantity is raised to, a whole number written
+/// `^ 2` (also written `²`): the power a quantity is raised to, a whole number written
 fn written_power(op: Op, exponent: &Node) -> Option<i32> {
-	match (op, exponent.drop_meta()) {
-		(Op::Square | Op::Cube, Node::Empty) => Some(exponent_of(op)),
-		(Op::Pow, Node::Number(Number::Int(power))) => i32::try_from(*power).ok(),
-		_ => None,
+	if op == Op::Pow {
+		whole_exponent(exponent)
+	} else {
+		None
 	}
 }
 

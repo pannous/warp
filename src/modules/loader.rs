@@ -567,11 +567,11 @@ impl<'a> Loader<'a> {
 			return Ok(());
 		}
 		// a program's own `first(xs) := …` takes its calls from the prelude's: a hint, as a used module's is a warning
-		let declarations: Vec<Node> =
-			std_module_statements(PRELUDE_MODULE).into_iter().filter(is_declaration).collect();
-		warn_replaced(&declarations, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
-		let reached =
-			reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat(), declarations);
+		let replaced: Vec<&str> =
+			prelude.iter().filter(|word| self.program_words.contains(word)).map(String::as_str).collect();
+		let replaced = prelude_declarations_of(&replaced);
+		warn_replaced(&replaced, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
+		let reached = reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat());
 		let module = Node::List(reached, Bracket::None, Separator::Semicolon);
 		let definitions =
 			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))?;
@@ -663,14 +663,10 @@ impl<'a> Loader<'a> {
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use
 			&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(&file));
-		let module = match classes_early {
-			true => Node::List(
-				statements(module).into_iter().filter(|statement| !is_class(statement)).collect(),
-				Bracket::None,
-				Separator::Semicolon,
-			),
-			false => module,
-		};
+		// alias lines are the loader's (modules::resolve), no code of the module
+		let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
+		let module =
+			Node::List(statements(module).into_iter().filter(kept).collect(), Bracket::None, Separator::Semicolon);
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
 		let module = crate::pipeline::lower_module_source(module);
 		// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
@@ -909,9 +905,11 @@ fn imported_statements(node: &Node) -> Option<Vec<Node>> {
 /// The prelude's definitions the program's statements reach, and those their bodies reach once lowered (a pass may
 /// write a call of another prelude word): lowering all of lib/prelude.warp for each program cost more than compiling
 /// a small one (card cache-lowered)
-fn reached_prelude_definitions(program: &[Node], declarations: Vec<Node>) -> Vec<Node> {
-	let mut reached =
-		needed_definitions(&Node::List(program.to_vec(), Bracket::None, Separator::Semicolon), &declarations);
+fn reached_prelude_definitions(program: &[Node]) -> Vec<Node> {
+	let reachable = |callers: &Node| {
+		needed_definitions(callers, &prelude_declarations_reached(&called_names(statements_of(callers))))
+	};
+	let mut reached = reachable(&Node::List(program.to_vec(), Bracket::None, Separator::Semicolon));
 	// a look ahead: the program's own fresh names and hints are not this lowering's
 	let lowered_aside = |definitions: Vec<Node>| {
 		let fresh_number = crate::compiler::compile_context::read(|context| context.fresh_number);
@@ -932,7 +930,7 @@ fn reached_prelude_definitions(program: &[Node], declarations: Vec<Node>) -> Vec
 	loop {
 		let lowered = lowered_aside(reached.clone());
 		let callers = Node::List([program, &lowered].concat(), Bracket::None, Separator::Semicolon);
-		let more = needed_definitions(&callers, &declarations);
+		let more = reachable(&callers);
 		if more.len() == reached.len() {
 			return reached;
 		}

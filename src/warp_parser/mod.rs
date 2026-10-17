@@ -62,6 +62,7 @@ mod annotations;
 mod math_notation;
 mod rust_macros;
 mod suffixes;
+mod sugar;
 mod types;
 pub(crate) use math_notation::*;
 pub(crate) use types::*;
@@ -174,7 +175,7 @@ const RECORD_WORD: &str = "record";
 const UPTO: &str = "upto";
 /// `10 down to 1` is `reverse(1 to 10)`
 const DOWN_WORD: &str = "down";
-const REVERSE_WORD: &str = "reverse";
+pub(crate) const REVERSE_WORD: &str = "reverse";
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `f x as T`, which casts the argument (card parameter-named-number)
 const ARGUMENT_CAST: &str = "argument-cast";
@@ -357,19 +358,6 @@ pub fn parse_file(path: &str) -> Node {
 	match read_to_string(path) {
 		Ok(content) => WarpParser::parse_with_options(&content, options),
 		_ => error(&format!("Failed to read {}", path)),
-	}
-}
-
-/// `=>` reads as in JS while parsing (Op::FatArrow: its binding, a lambda's body, a field holding a lambda); the program
-/// has one arrow, `->` (user 2026-10-14: "equal for us, but not for others")
-fn one_arrow(node: Node) -> Node {
-	let node = match node {
-		Node::Type { name, body } => Node::Type { name, body: Box::new(one_arrow(*body)) },
-		other => crate::node::children_rewritten(other, one_arrow),
-	};
-	match node {
-		Node::Key(parameters, Op::FatArrow, body) => Node::Key(parameters, Op::Arrow, body),
-		other => other,
 	}
 }
 
@@ -618,7 +606,7 @@ impl WarpParser {
 			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
-		let program = one_arrow(parser.parse_list_with_separators(None, Bracket::None));
+		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None));
 		if options == ParserOptions::default() {
 			crate::normalize::check_style(&program);
 		}

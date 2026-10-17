@@ -15,6 +15,8 @@ mod std_modules;
 pub use std_modules::*;
 mod std_words_cache;
 use std_words_cache::*;
+mod prelude_slices;
+use prelude_slices::*;
 pub mod binaryen;
 #[cfg(feature = "native")]
 pub mod cargo_crates;
@@ -181,6 +183,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
 		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
+	let mut aliases: Vec<(String, String)> = vec![]; // the used standard modules' `alias pow = power` lines
 
 	// what a used module itself uses reaches the program, its classes too (decision package-reexport)
 	let mut modules = used_and_implicit_modules(&program);
@@ -225,6 +228,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		defined.extend(definitions.iter().filter_map(name_declared_by));
 		match is_std {
 			true => {
+				aliases.extend(definitions.iter().filter_map(word_alias));
 				if definitions.iter().any(is_class) {
 					class_modules.push(name.clone());
 				}
@@ -237,10 +241,8 @@ pub fn insert_module_classes(program: Node) -> Node {
 	// joined, not replaced: a module's own lowering (markup's) runs this again before the program's sound loads
 	crate::compiler::compile_context::change(|context| context.early_class_modules.extend(early));
 	let is_foreign = |class: &Node| name_declared_by(class).is_none_or(|name| !own_names.contains(&name));
-	let aliases: Vec<(&str, &str)> = STD_ALIASES
-		.into_iter()
-		.filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias))
-		.collect();
+	aliases.retain(|(alias, _)| !own_names.contains(alias));
+	let aliases: Vec<(&str, &str)> = aliases.iter().map(|(alias, word)| (alias.as_str(), word.as_str())).collect();
 	// `collections.Counter(xs)`: the bare class before class_methods reads its construction; other qualified calls
 	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
 	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
