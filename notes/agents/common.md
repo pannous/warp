@@ -17,10 +17,10 @@ language is heading. If an existing test seems to force a special case, question
 instead of bending the code.
 
 - Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
-  Claude spawns never notify it (a Claude spawn notice landing in Codex is "not at all what we want").
+  Claude spawns never notify it.
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
-- One name per session ("I often have to guess who is actually responsible"): every session is named
+- One name per session: every session is named
   `warp-<role>`: its claude.ai title, its SendMessage/ListAgents address and its tmux session (claude-remote.sh starts
   `claude --name warp-<role> --remote-control warp-<role>`; a swap's replacement gets the same name). Address peers
   by role (`warp-integrator`, `warp-types`) and write role names, not session hashes like warp-3f, in messages,
@@ -32,13 +32,13 @@ instead of bending the code.
   user hears only about work.
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
-- Never ask the user yourself (questions go "either through the Supervisor or through the
-  Interviewer"): no AskUserQuestion, no question in your session's output. That includes confirmations a safety rule
+- Never ask the user yourself (questions go through the Supervisor or the Interviewer): no AskUserQuestion, no
+  question in your session's output. That includes confirmations a safety rule
   wants from the user directly (permission or hook changes, anything you won't do on a peer's word): send them to the
   Interviewer with the exact action, and wait on that item only while working on everything else. The Interviewer
   asks the user and relays the answer verbatim; that relayed answer is the user's confirmation.
-- Small or non-conflicting changes may go straight onto main in the main checkout, no worktree (
-  "new very important rule"; how: notes/roles.md "Small changes on main"). Everything else:
+- Small or non-conflicting changes may go straight onto main in the main checkout, no worktree (how: notes/roles.md
+  "Small changes on main"). Everything else:
 - Work in a git worktree outside the repo, on the Worktrees volume: `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
   (never touch /Volumes/Worktrees/warp, cowtree's donor, nor /Volumes/Worktrees/integrator),
   with the uncommitted build tweak: append `-<branch>` to the current `version = "…"` of both Cargo.toml and
@@ -49,17 +49,17 @@ instead of bending the code.
   the current worktree (`restore` puts the committed manifests back); the Integrator's version_tweak.sh does the same.
   In /Users/me/dev/angles/warp itself (the user's checkout) only small changes on main, and never the user's
   uncommitted files.
-- The user's uncommitted edits are the Integrator's to adopt ("I told the agents ten times"): whoever
-  notices uncommitted user changes in the main checkout or wiki/ (`git status`), above all in files of their own task,
-  never leaves them lying and never reports them as "untouched": SendMessage warp-integrator the paths and what they
-  ask for (commented TODOs are wishes). The Integrator reviews, fixes and commits them on the user's behalf in their
-  own commit, and turns a TODO it cannot do at once into a card.
+- The user's uncommitted edits are integrated at once by whoever meets them in the main checkout or wiki/
+  (`git status`), never left lying or reported as "untouched": read the diff, complete it, run it and commit it in the
+  main checkout itself as the user's change (notes/roles.md "Workers"). Commented TODOs are wishes: one that can't be
+  done at once becomes a card.
 - Word choices need no question (the alias mechanism): when alternatives are only different words
   for the same thing, make the recommended word canonical and the others aliases that work with a got-it note and an
   "I meant: <word>" fix (diagnostic::note_alias; which hint call to use: notes/fixits.md "Hints, notes and
   advice"). Ask the Interviewer only about differences in meaning.
-- Test upgrades need no question (AGENTS.md "Standing permission"): an error/"not yet"/ignored test that now works is
-  upgraded to the working value in its own commit; a change of meaning still goes to the Interviewer.
+- Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is
+  upgraded to the working value in its own commit, and `#[ignore]` is dropped from a test that passes unedited; a
+  change of meaning, or editing an un-ignored test's assertions, still goes to the Interviewer.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
@@ -83,15 +83,14 @@ instead of bending the code.
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in a `todo note` on the card.
 - Before `todo ready`: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
-  both (card cargo-fmt: the whole repo is formatted once, then enforced).
+  both.
   .warp files you wrote or changed (samples/, lib/, probes/): `scratch/warp format <files>` (your own build,
   scripts/own-warp.sh), the canonical layout that keeps the meaning (notes/warp_format.md); the gate reports the rest.
   A branch from before the whole-repo format (78607d62e) crosses it in three steps, which never drops main's changes:
   `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
   (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
   Never "take your side" on a conflict that also holds main's changes.
-- Done = the card is the handoff (the board's Ready column is the merge queue; a forgotten
-  "branch, tip" message left work silently unmerged):
+- Done = the card is the handoff (the board's Ready column is the merge queue):
   1. Run your own targeted tests (`tests/queue.sh -- <filters>`, or the cloud lane above once pushed), commit, fmt
      and clippy (above).
   2. Make sure the branch merges cleanly into origin/main: `git fetch origin && git merge origin/main` (the merge
@@ -100,8 +99,7 @@ instead of bending the code.
   3. Push the branch, then `todo ready <card>` (branch: the current one, or name it). It reads the tip itself and
      refuses a branch that is not pushed, differs from origin, or does not merge cleanly into origin/main (naming the
      conflicting files); `--force` only for a branch carrying other branches. Several cards on one branch: ready each.
-     What a merge request message used to say (new tests, filters, "docs: <page>", the sample) goes into a
-     `todo note <card>` first, as one line in this fixed form:
+     New tests, filters, "docs: <page>" and the sample go into a `todo note <card>` first, as one line in this fixed form:
      `card | branch | tip (full sha) | filters | passed/failed (queue or cloud) | clippy+wasm32 ok`, then prose if needed.
      Never message warp-integrator with FYIs or swap notices: the card is the merge request. Express (the user or the Supervisor asked for your result fast, a crash fix):
      `todo ready <card> --express` (or a note saying "express"): the Integrator pushes it to main untested at once, the gate follows (notes/roles.md).
@@ -113,7 +111,7 @@ instead of bending the code.
 - Post-hoc changes don't block: a tip once readied lands as gated. A small reviewer point or
   polish you fix afterwards is a follow-up commit readied with its own card, never "hold my branch". Only real breakage
   (a reviewer veto, a failing test) holds a branch.
-- Never retire with a card still yours ("cards disconnected from their agent"): before you stop, or
+- Never retire with a card still yours: before you stop, or
   hand over, every card you took is either `todo done <card> <commit>`, in Ready (`todo ready`: handed off, the
   Integrator closes it), or released with `todo release <card> "done: …; left: …; branch: …"`, which puts it back in
   Next with that note and no agent. Partial work that isn't merged gets pushed to its branch first. This applies to
@@ -125,8 +123,6 @@ instead of bending the code.
   changes, saved first under refs/removed-worktrees, a branch whose tip main or a remote branch holds. If it blocks,
   something would be lost: look before you delete. What is left over, scripts/prune-worktrees.sh removes daily
   (merged, idle 6 h, only the tweak changed) together with merged branches and loose files of the worktrees folder.
-- Un-ignoring tests: "it's allowed to un ignore test that are suddenly passing". Dropping
-  `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; when the board stays unreachable it says "CARD QUEUED" and keeps the card in ~/.cache/todo-board/pending.json5, which `todo flush` and the hourly cron add later; never into todo.md).
 - Fix tiny things on the spot instead of carding them (small cards cost more than the fix). Tiny
@@ -134,8 +130,8 @@ instead of bending the code.
   path, a stale comment, a leaked temp file), no change to what a user sees or what a test asserts, and outside
   files another session is working on. Make it its own commit on your current branch (`fix:`/`chore:`, so it can be
   reverted alone) and name it in your `todo ready` note. Anything else, or any doubt, still becomes a card.
-- Suspected non-issues go through the Interviewer (on `96px/inch` vs `96dpi`: "a nothing
-  burger"): when a small bug you found may not matter (the same value shown another way, a cosmetic difference),
+- Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
+  another way, a cosmetic difference such as `96px/inch` vs `96dpi`),
   SendMessage warp-interviewer the case before carding or fixing it. A confirmed non-issue gets no work: its card,
   if any, goes to Later with the verdict as a `todo note`.
 - GitHub's API quota (5000 requests/h) is shared by every session; `gh run watch` polling every 3 s runs
@@ -151,32 +147,31 @@ instead of bending the code.
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
 - Docs are part of done: a card that changes what users write or see (syntax, words, flags,
   messages, defaults) updates the wiki page of that concept in the same task: a minimal example and one sentence
-  (notes/agents/common.md "Wiki" for pushing). Say "docs: <page>" or "docs: none (internal)" in a `todo note` before `todo ready`.
+  ("Wiki" below for pushing). Say "docs: <page>" or "docs: none (internal)" in a `todo note` before `todo ready`.
   warp-docs sweeps for what slipped through.
-  A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste ("give me
-  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound/sound_features.warp"`: always that full path
+  A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to
+  paste, e.g. `--try "/Users/me/dev/bin/warp samples/sound/sound_features.warp"`: always that full path
   (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed
   batch by the Integrator's refresh_main_binary.sh; plain `warp` is the older brew release). Agents who want main's
   debug build (assertions, backtraces) run /Users/me/dev/bin/warp-debug, installed right at the push. Time
-  performance only with an optimized build: debug made finger paint's show() 250 ms instead of 20-40 ms. The
+  performance only with an optimized build (debug is several times slower). The
   Integrator closes your card after the merge; then add the try line: `todo done <card> <commit> --try "…"` (on a
   Done card it only sets Try); the Interviewer announces it (notes/roles.md "Ready to try").
-  Early try ("if it runs the test just for this one feature, we could already present it"): as soon
+  Early try: as soon
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
   warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
-  Every landing gets a try line (after "real-time-playback is on main" came without one): whenever
+  Every landing gets a try line: whenever
   any change of yours reaches main that the user can see, hear or run (a whole card, one step of it, a fix), you send
   warp-interviewer a fresh try line for exactly that change, the same moment you learn it merged; "X is on main"
   never goes out without its line. The Integrator's merge report names each user-visible branch, so its owner knows.
 - Picking a card: `todo take <card> <your session name>`: assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Order: first every unassigned card in Now; then the user's own
-  cards, the drafts marked "(user)" that `todo list Next` puts on top ("the ones manually created
-  by me"); then the cards of topics in Next; then loose Next cards; then Soon. Within that, prefer fresh, easy cards
+  cards, the drafts marked "(user)" that `todo list Next` puts on top; then the cards of topics in Next; then loose
+  Next cards; then Soon. Within that, prefer fresh, easy cards
   related to your current task, and pick a topic's cards together: `todo list Next --by-topic` groups them, `todo take --topic <topic> [-n 3]` takes its waiting cards
   at once (same rename rules as one card; the session is named for the topic).
-  A session is named for its task ("whenever an agent picks a new ticket, that this will also
-  trigger its rename"; "the agent can keep its name if the new ticket is related to the old task"): `todo take <card>`
+  A session is named for its task: `todo take <card>`
   run in your own tmux session (the agent defaults to it) renames you warp-<card key> when the card is unrelated: no
   word of your name in its key or title (warp-sound taking sound-latency is related) and no topic shared with a card
   you took. The tmux session is renamed at once, the Claude session (title, SendMessage address) once you are idle,
@@ -188,7 +183,7 @@ instead of bending the code.
   (urgent-card-watch) runs `todo keys` every 2 minutes, which gives each new card a key from its title. Whoever takes
   a card renames a poor key at once (`todo key <card> <short-meaningful-name>`) and uses the key in branch names and
   messages.
-  Topics ("connecting one big issue to many sub-issues"): a big topic card holds sub-cards, GitHub
+  Topics: a big topic card holds sub-cards, GitHub
   sub-issues. `todo add "…" --topic <card>` adds a sub-card, `todo sub <topic> <card>...` moves cards into a topic,
   `todo unsub <card>...` takes them out; `todo list` shows "(in <topic>)" after a sub-card and "(topic 2/5 done)"
   after a topic. Only issues have sub-issues, so these cards become issues of pannous/warp (others stay drafts).
@@ -197,7 +192,7 @@ instead of bending the code.
   topic level: a topic card sits in the column of its priority (new topics: Soon), a new sub-card lands in its
   topic's column unless you name one, and `todo move <topic> <column> --all` moves the topic's waiting cards along.
   Roadmaps holds the topics nobody prioritized yet. A misfiled card: `todo sub <right topic> <card>`.
-- Crash cards ("on a crash a new agent is spawned. I will paste him the trace log"): a panic of a
+- Crash cards: a panic of a
   warp built from a checkout files a card in Now (src/errors/crash_card.rs) naming its fingerprint and the branch it was
   built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a
   worktree build to the session on that branch (the Agent of the card keyed like the branch, else tmux warp-<branch>),

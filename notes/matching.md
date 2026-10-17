@@ -3,8 +3,7 @@
 Any noun can name a type or a parameter (D5; wiki/matching.md, wiki/type.md, wiki/signature.md), including unknown
 words (`photo`) and multi-word names. src/lowering/types/type_name_matching.rs (`parameter_slots`, used by the `to`
 phrase in warp_parser.rs and by spaced heads), tests/types/test_type_name_matching.rs.
-Spaced heads with a type word before the name (`fib int i = …`) no longer define typed functions (cleanup cuts):
-write `fib(i:int) := …`.
+Spaced heads with a type word before the name (`fib int i = …`) define no typed functions: write `fib(i:int) := …`.
 
 ## Forms covered
 

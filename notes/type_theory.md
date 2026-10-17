@@ -427,18 +427,18 @@ assignments and call arguments. A union field (`size: int | text`) and one of se
 arguments object `f·args`) are casts where an instance is made and where a field is written; W0 knows no object's class
 at `o.size = v`, so it casts only when every class with a field of that name declares it alike (card w0-unions). Warp
 checks a union field's literal when it is constructed and written (type_kinds keeps the union's name, its storage is a
-Node), and folding no longer inlines a variant with a declared parameter: `f(a: int, b: int) := a + b; f(1, 2.5)`
-folded to 3.5 unchecked. A union may name declared classes (card union-types): `s: Circle | Square` is the join of the
+Node), and folding never inlines a variant with a declared parameter (`f(a: int, b: int) := a + b; f(1, 2.5)` is
+checked). A union may name declared classes (card union-types): `s: Circle | Square` is the join of the
 classes (their common ancestor, `object` of unrelated ones), so W0 needs nothing new; warp lowers it like a union of
 builtin types (analyzer `union_of_types`, a class covers no builtin part: `Point | text` keeps both), holds it as a Node,
 and traits.rs `admit` refuses an instance like none of the classes. Class-typed places (card class-field): traits.rs
 `Dispatch` remembers `s: C = …` per definition scope (a function's `s = …` is its own local) and admits a later `s = v`,
 each constructor field (`instance_parts`) and a field write, which reaches dispatch as `b = field_with(b, "content", v)`;
 a class field may hold ø (tree leaves). The analyzer lowers unions inside class bodies too: `map_children` skips field
-declarations, so `content: Circle | Square` had registered as `any`. Every union part names a builtin type or a
-class (card undeclared-union): only a builtin part covers another, else `int | zork` collapsed to the unknown `zork`.
-`or` spells `|` everywhere (user 2026-10-12). A union result (card union-return, `def f(x) as int or text {…}`,
-`f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it, user 2026-10-12 return-as: `as` binds
+declarations, so `content: Circle | Square` is not `any`. Every union part names a builtin type or a
+class (card undeclared-union): only a builtin part covers another (`int | zork` is an unknown type error).
+`or` spells `|` everywhere. A union result (card union-return, `def f(x) as int or text {…}`,
+`f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it; `as` binds
 tighter than `or`, so declarations::as_union_result regroups `(f(x) as int) or text`) is checked, not converted: type_name_matching passes each returned value through the local
 `the result: int or text = v`, so a result gets the variable's checks. Not yet: a run-time check of a union
 variable (`x: int | text = f(2.5)` holds 2.5), `x is int` of a rational variable is yes (card int-accepts). Not yet: `x as T?` (a conversion in warp:
@@ -535,7 +535,7 @@ number, it becomes a float (`(1/3) as float`); a text is parsed ("4" is 4, "a" t
 convert to a number type (`[1] as int`, a compile error in warp too). The exporter takes scalar targets (int, number,
 text, bool and their spellings); `x as Point`, `x as texts` and `x as int?` are other operations in warp and stay out.
 
-A declared result converts the body's value only when nothing is lost (user 2026-10-12, card lossy-return): `-> text`,
+A declared result converts the body's value only when nothing is lost (card lossy-return): `-> text`,
 `-> float` convert as `body as T` and the exporter wraps the body in `.conv`; a whole-number type (`-> int`) and a
 union check it as a variable declared of the type is (type_name_matching `checked_result`, the local `the result`),
 `.cast` in W0: `def f() -> int { 2.5 }` is a compile error, `half(3)` of `-> int { x / 2 }` fails when it runs with
@@ -543,7 +543,7 @@ union check it as a variable declared of the type is (type_name_matching `checke
 `fun f(x: Int): Int`, `function f(x: number): number`, `def f(x) -> int: body`, `f(a, b): int := …`,
 `square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …` (`typed_definition` in
 src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all
-agreeing (2026-10-09). Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
+agreeing. Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
 conversion, KNOWN_HOLES) and card bool-conversion (`2 as bool` gives 1, not yes, KNOWN_VALUE_DIFFERENCES).
 
 ## Fixed widths and typed list elements

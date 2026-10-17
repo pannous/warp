@@ -16,7 +16,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 ```
 
 ## Pipeline (wasm_emitter::lower_for_emission)
-1. `lambdas::lower`: inlines lambdas where they stand (`f = x=>x*2` is a definition, `map xs {it*2}` a loop). Unchanged.
+1. `lambdas::lower`: inlines lambdas where they stand (`f = x=>x*2` is a definition, `map xs {it*2}` a loop).
 2. `function_values::lower`: a function taking a function calls it round (`f x` is `f(x)`); its calls pass a function
    value (a name, `&name`, an alias, a lambda, an operator, a block or a library word); a constant where a function is
    needed is a compile error. Every call passes a closure; one capturing nothing is made once (a global).

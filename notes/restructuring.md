@@ -5,8 +5,7 @@ expressions.rs, mod.rs) holds no syntax of a particular keyword or construct. Sp
 length: ~500 lines is fine (type_kinds.rs was split and reverted: its entries belong together). Moves are pure moves
 in their own commits (widening visibility to `pub(crate)` is the only edit); true duplicates merge, measured in
 net src/ lines. Inventory: data/restructuring/functions.tsv (name, file, line); earlier verdicts
-data/restructuring/duplicates_exact.md, similar_names.md. The full function → file tables of the 2026-10-14 moves:
-notes/OLD/restructuring_moves.md.
+data/restructuring/duplicates_exact.md, similar_names.md.
 
 ## Tools
 - `scripts/move_fn.py`: pure move of functions, consts, statics and type aliases between files (cuts docs and
@@ -83,5 +82,3 @@ Left to merge, each into one home with `--home`: UNION_JOINER, MODULE_FILE ×3, 
 MISSING_TARGET_SIGN, WARP_CALL, FIRED_PREFIX, STYLE ×6, EXTREMA/EXTREMUM_WORDS, CHANGE_WORDS ×2
 (`probes/cleanup/duplicate_constants.py` shows which are still there).
 
-## Rounds
-The Refactorer adds one line per round: date, what moved or merged, net src/ delta.

@@ -2,7 +2,7 @@
 
 `warp format [check] [hash-comments] <file|folder>…` writes the one canonical layout of warp code
 (src/formatting/, src/cli/formatting.rs; decision warp-format). `warp lint` is the same command.
-Options are words, never `--flags` (older flags: card cli-words); `help`, `--help`
+Options are words, never `--flags`; `help`, `--help`
 and `-h` anywhere print the usage. `warp beautify [check|yes] <file|folder>…` is the opinionated verb: the layout plus the best-practice rewrites (hash-comments, synonyms canonical), shown as a diff
 first (decision beautify-preview): in a terminal "apply? y/n", scripted nothing is applied, `yes` applies without
 asking, `check` only lists.
@@ -48,7 +48,7 @@ with the original (no differences), then checks a second pass changes nothing.
 - `//` comments: one hint per file with the count, naming the command that rewrites them: `warp beautify <file>`;
   a run that rewrites them (beautify, hash-comments) shows no such hint
 - a file whose layout was fixed while hints stay reads `<file>: layout of n lines fixed, m hints left`, never
-  "formatted" (that read as done while the `//` hint repeated)
+  "formatted"
 
 ## Unknown commands
 

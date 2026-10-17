@@ -25,7 +25,7 @@ out of wasm, past every try_table. So `try f(args) else Y` of a user function f 
 (the one tasks use) in the same instance; a stack overflow inside comes back as the Error "call stack exhausted"
 (built with the exported error_of), which try's is_error path catches. An Int, Float or Text result is converted back
 (`as int`, …). A wasm exception thrown inside (raise, a named runtime error) stays pending in the store and the host's
-Err rethrows it into the caller, so try catches it as before.
+Err rethrows it into the caller, so try catches it.
 - State after a caught overflow: nothing is rolled back. Globals and memory the aborted call wrote keep what it wrote
   (tests/control/test_try_stack_overflow.rs counts the calls in a global); the instance keeps working.
 - Only a direct call of a user function is guarded; in any other guarded expression a stack overflow ends the run. Running out of fuel is never caught: it is the runaway guard and leaves no fuel for a fallback.

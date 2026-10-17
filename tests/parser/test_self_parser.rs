@@ -7,7 +7,7 @@ use warp::Node;
 use warp::WarpParser;
 
 /// The sources parser.warp reads as the Rust parser does, one path per line relative to the crate
-const PARSED_SOURCES: &str = "tests/parser/self_parser_sources.txt";
+pub(super) const PARSED_SOURCES: &str = "tests/parser/self_parser_sources.txt";
 /// Every source parser.warp reads as the Rust parser does, written by parser_progress
 const MATCHING: &str = "data/self_parser/matching.txt";
 /// One form per line that parser.warp is learning, shown by rust_forms; ⏎ and ⇥ write a form's line breaks and tabs

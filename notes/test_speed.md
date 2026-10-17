@@ -1,7 +1,6 @@
 # Test speed
 
-Where the full suite's time goes and what keeps the gate fast. The two measured full runs (opt-level 0 vs 2, per-test
-distributions, logs in data/perf/): notes/OLD/test_speed_measurements.md.
+Where the full suite's time goes and what keeps the gate fast. Logs of measured runs: data/perf/.
 
 ## The run is throughput-bound
 - 16 test threads on 10 cores: the summed test time divided by 16 is the binary's wall clock. No single test is the
@@ -39,7 +38,7 @@ ffi::test_cargo_crates.
 
 ## The queue
 Targeted runs go 3 at once, a full run alone (notes/roles.md "Enforcement"). The queue builds before taking a slot,
-so slots run tests back to back. Never rename a ticket by hand: a renamed ticket (1- → 0-) was first in line while its
-process waited under the old name, and the queue deadlocked for 25 minutes.
+so slots run tests back to back. Never rename a ticket by hand: the process waits under its old name, so a renamed ticket
+deadlocks the queue.
 
 Not worth cutting: sleeps (all ≤200 ms polling for servers), the small tests (<0.3 s).

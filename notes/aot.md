@@ -1,8 +1,7 @@
 # Ahead-of-time compilation (native, wasmtime 49)
 
 Probes in probes/aot/ (`measure.sh`: wasmtime CLI JIT vs .cwasm; `standalone.sh`: a standalone executable;
-`run_speed.sh`; `shared_runtime.sh`: two-Module Linker / `warp_runtime`). Measurements and the survey behind this
-note: notes/OLD/aot_measurements.md.
+`run_speed.sh`; `shared_runtime.sh`: two-Module Linker / `warp_runtime`).
 
 ## Cranelift in dev builds
 `[profile.dev.package.wasmtime] opt-level = 3` optimizes only the wasmtime crate itself; cranelift-codegen, regalloc2
@@ -102,18 +101,20 @@ so plain executables stay small. macOS only for now (elsewhere build writes the 
 | Wasmer 7.5 | ✗ "No backends support the required features" | ✓ (Cranelift, LLVM) | ✓ (create-exe) | no |
 | WasmEdge 0.17 | ✓ interpreter | AOT try_table only from 0.18-alpha | ✓ | later |
 
-## Recommendation
-1. Done: Cranelift crates optimized in dev builds.
-2. Done: the on-disk module cache for every native run, and `warp compile --aot`.
-3. Done: one shared gc_engine per process and `warp build`.
-4. Done: dead-function elimination of every emitted module (src/compiler/dead_functions.rs): functions no export,
-   start, element segment or global reaches are dropped (`f(x):=x+1; f(41)`: 113 → 52 functions).
-5. Parked (card): one shared runtime module linked to every program (each .cwasm is ~10× its .wasm because every module
-   carries warp's runtime functions). It would save a few seconds of a cold suite and nothing once the module cache is
-   warm, but it changes the linking model everywhere (memory, text_heap, exception tags imported from the runtime,
-   identical GC rec groups, a runtime instance per store in run_main, tasks, guarded_call, run_block, host.js, a
-   standalone executable carrying two modules). `probes/aot/shared_runtime.sh` proves two-Module + Linker with the import
-   `"warp_runtime"` (no component model); the production INT_RUNTIME / emit split is still Later.
+## In place
+- Cranelift crates optimized in dev builds.
+- The on-disk module cache for every native run, and `warp compile --aot`.
+- One shared gc_engine per process and `warp build`.
+- Dead-function elimination of every emitted module (src/compiler/dead_functions.rs): functions no export,
+  start, element segment or global reaches are dropped (`f(x):=x+1; f(41)`: 113 → 52 functions).
+
+## Parked (card)
+One shared runtime module linked to every program (each .cwasm is ~10× its .wasm because every module
+carries warp's runtime functions). It would save a few seconds of a cold suite and nothing once the module cache is
+warm, but it changes the linking model everywhere (memory, text_heap, exception tags imported from the runtime,
+identical GC rec groups, a runtime instance per store in run_main, tasks, guarded_call, run_block, host.js, a
+standalone executable carrying two modules). `probes/aot/shared_runtime.sh` proves two-Module + Linker with the import
+`"warp_runtime"` (no component model); the production INT_RUNTIME / emit split is still Later.
 
 ## Run speed (`warp run` vs `warp <file>`, P105)
 `probes/aot/run_speed.sh <warp>`. With a debug build, a small program (fib(20)) takes ~70 ms fresh and ~30 ms unchanged
