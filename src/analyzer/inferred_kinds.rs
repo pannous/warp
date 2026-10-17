@@ -11,13 +11,19 @@ pub fn inferred_kinds(program: &Node) -> Vec<String> {
 		context.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	let mut main = Scope::with_function_kinds(function_kinds);
 	collect_variables(program, &mut main);
-	let functions = context.user_functions.values().map(|function| {
-		let params: Vec<String> = function.params.iter().map(|param| param_kind(param).to_string()).collect();
-		format!("{}({}) -> {}", function.name, params.join(", "), function.return_kind)
-	});
+	let functions =
+		context.user_functions.values().filter(|function| !is_synthesized(&function.name)).map(|function| {
+			let params: Vec<String> = function.params.iter().map(|param| param_kind(param).to_string()).collect();
+			format!("{}({}) -> {}", function.name, params.join(", "), function.return_kind)
+		});
 	let variables = main.locals.values().map(|local| format!("{}: {}", local.name, local.kind));
 	let mut definitions: Vec<String> = functions.chain(variables).collect();
 	definitions.sort();
 	definitions.push(format!("= {}", infer_type(program, &main)));
 	definitions
+}
+
+/// The helpers the analyzer adds for closures (`closure_call_2`, the capture readers), not functions the program defines
+fn is_synthesized(name: &str) -> bool {
+	crate::closures::closure_call_arity(name).is_some() || crate::closures::capture_reader(name).is_some()
 }

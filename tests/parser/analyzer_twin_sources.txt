@@ -531,6 +531,9 @@ probes/chars_map_try.warp
 probes/class_field_from_map.warp
 probes/class_field_function_def.warp
 probes/class_field_function_map.warp
+probes/cleanup/element_wise.warp
+probes/cleanup/lambdas/bench_higher_order.warp
+probes/cleanup/lambdas/bench_hoisted.warp
 probes/cleanup/lambdas/bench_map_filter_sum.warp
 probes/cleanup/program_wide_effects.warp
 probes/cli/assigned_command_word.warp
@@ -567,8 +570,14 @@ probes/format_semicolon.warp
 probes/function_objects/print_parse.warp
 probes/function_values_tour.warp
 probes/functions/deep_recursion.warp
+probes/generators/basic.warp
+probes/generators/block.warp
 probes/generators/collect.warp
 probes/generators/hand_inlined.warp
+probes/generators/lazy.warp
+probes/generators/objects.warp
+probes/generators/ruby.warp
+probes/generators/zip_take.warp
 probes/global_list/alias.warp
 probes/global_list/grow.warp
 probes/global_list/local_alias.warp
@@ -599,6 +608,7 @@ probes/indent/12_do_end_two_statements.warp
 probes/infix_map_try.warp
 probes/introspection/dir_time.warp
 probes/js_native.warp
+probes/lambda_held.warp
 probes/large_text_literal.warp
 probes/law_overflow.warp
 probes/laws/sum_to.warp
@@ -615,6 +625,7 @@ probes/matching/definition_cases.warp
 probes/matching/gap_feeding.warp
 probes/matching/variant_equality.warp
 probes/memory/one_float_list.warp
+probes/memory/two_float_lists.warp
 probes/merger/loop_word.warp
 probes/merger/match_arrow.warp
 probes/module_error_file/broken_word.warp
@@ -673,6 +684,10 @@ probes/readme/person.warp
 probes/readme/upto.warp
 probes/reflection_mode/function_meta.warp
 probes/ruby_yield/bare.warp
+probes/ruby_yield/do_block.warp
+probes/ruby_yield/each_twice.warp
+probes/ruby_yield/pair.warp
+probes/ruby_yield/twice.warp
 probes/runtime_positions.warp
 probes/rust_reading/fn_arrow.warp
 probes/rust_reading/inclusive_range.warp
@@ -710,6 +725,7 @@ probes/self_hosting/node_values.warp
 probes/self_hosting/parser/count_word_definition.warp
 probes/self_hosting/parser/data_core.warp
 probes/self_hosting/parser/glued_units.warp
+probes/self_hosting/readiness/closures_pass_list.warp
 probes/self_hosting/readiness/float_bits.warp
 probes/self_hosting/readiness/leb128.warp
 probes/self_hosting/readiness/modules/kinds.warp
@@ -802,6 +818,7 @@ samples/hello/comments.warp
 samples/hello/hello.warp
 samples/laws/laws.warp
 samples/laws/project_laws.warp
+samples/lists/dot.warp
 samples/lists/primes.warp
 samples/lists/sorting_idiomatic.warp
 samples/loops/life_idiomatic.warp
