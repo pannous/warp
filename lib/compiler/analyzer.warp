@@ -20,7 +20,9 @@ concrete_kinds = {"int": 1, "float": 1, "text": 1, "codepoint": 1, "list": 1, "s
 # words whose call gives a known kind, whatever the arguments
 word_kinds = {print: "empty", count: "int", size: "int", length: "int", type: "symbol", upper: "text",
 	lower: "text", trim: "text", join: "text", chars: "list", split: "list", sort: "list", map_keys: "list",
-	map_values: "list", map_entries: "list", zero_fill: "list", closure_new: "function", fetch: "text"}
+	map_values: "list", map_entries: "list", zero_fill: "list", closure_new: "function", fetch: "text",
+	# another runtime's value or a std adapter's: any value (Rust host::ANY_VALUE_WORDS)
+	fetch_reply: "empty", foreign_call: "empty", std_pure: "empty", std_io: "empty", parse_code: "empty"}
 # the built-in type words and the kind a value declared so is held as
 type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
@@ -192,9 +194,12 @@ loop_kind(body: any, scope: any) := {
 
 # `xs#i`: an element of a list of known elements, a character of a text
 subscript_kind(indexed: any, index: any, scope: any) := {
-	if kind_of(indexed, scope) == "" { return "" }
+	indexed_kind = kind_of(indexed, scope)
+	if indexed_kind == "" { return "" }
 	element = element_kind(indexed, scope)
 	if element != ø { return element }
+	# a list whose elements nothing tells may hold any value
+	if indexed_kind == "list" { return "empty" }
 	if index is text or kind_of(index, scope) == "text" or kind_of(index, scope) == "codepoint" { "empty" } else { "int" }
 }
 
@@ -325,8 +330,33 @@ element_list_type(map: any, scope: any) := {
 # a scope's slots: kinds of its variables (parameters among them), list types, the main scope a body sees
 new_scope() := {kinds: {}, types: {}, parameters: {}, globals: {}, pinned: {}, declared_globals: {}}
 
-# `(f a b) := body` and `(f a b) = body`
-is_definition(n: any) := (is_key(n, ":=") or is_key(n, "=")) and is_group(n.key) and n.key.bracket == "(" and head_name(n.key) != ""
+# `(f a b) := body`, `(f a b) = body`, and `f := body` of a body reading `it` or `$0` or of a block of statements
+is_definition(n: any) := defined_name(n) != ""
+
+defined_name(n: any) := {
+	if not (is_key(n, ":=") or is_key(n, "=")) { return "" }
+	if is_group(n.key) and n.key.bracket == "(" { return head_name(n.key) }
+	if n.op == ":=" and n.key is symbol and (takes_it(n.value) or is_sequence_block(n.value)) { return n.key.name }
+	""
+}
+
+# `(f a b)`: a, b; `f := body` reading `it` or `$0`: it
+# statements, not an if-expression of lists (card if-expression)
+defined_parameters(n: any) := {
+	if is_group(n.key) { return n.key[1..] }
+	if takes_it(n.value) { return [symbol("it")] }
+	[]
+}
+
+# whether a body reads the implicit parameter `it` or `$0`, `$1`…
+takes_it(n: any) := {
+	if n is symbol { return n.name == "it" or (n.name.starts_with("$") and is_digits(n.name[1..])) }
+	if type(n) is key { return takes_it(n.key) or takes_it(n.value) }
+	if is_group(n) { return any_of(n, item => takes_it(item)) }
+	no
+}
+is_digits(t: text) := #t > 0 and #t.chars().filter(c => c >= '0' and c <= '9') == #t
+is_sequence_block(n: any) := is_block(n) and (n.separator == ";" or n.separator == "\n")
 
 # the kind a slot holding both a and b has: equal kinds stay, an int widens to a float, a character to a text,
 # ø (nil) to a list, a number of run-time kind takes either number, any other pair is a node (empty)
@@ -360,7 +390,7 @@ declared_kind(type_node: any) := {
 
 # symbol first: `type(symbol("key")) is key` (card type-symbol)
 parameter_name(parameter: any) := if parameter is symbol then parameter.name else parameter_name(parameter.key)
-parameters_of(name: text) := definitions[name].key[1..]
+parameters_of(name: text) := defined_parameters(definitions[name])
 
 # the kind a parameter is pinned to: as declared, else its default's; "" when its calls decide
 pinned_kind(parameter: any) := {
@@ -482,8 +512,8 @@ result_kind(name: text) := {
 	joined_kind(kind, flowing_kind(last, scope))
 }
 
-# the kind a value flows into a slot: ø is nil (a list may hold it), else as held
-flowing_kind(value: any, scope: any) := if is_empty(value) then "nil" else held_kind(value, scope)
+# the kind a value flows into a slot: ø and the empty block are nil (a list or map may hold it), else as held
+flowing_kind(value: any, scope: any) := if is_empty(value) or (is_block(value) and #value == 0) then "nil" else held_kind(value, scope)
 
 # the statements of a program, those of a nested sequence (an included module) among them
 statements(program: any) := {
@@ -657,7 +687,7 @@ analyze(program: any) := {
 	scopes = {}
 	scopes[""] = new_scope()
 	for statement in statements(program) {
-		if is_definition(statement) { definitions[head_name(statement.key)] = statement }
+		if is_definition(statement) { definitions[defined_name(statement)] = statement }
 	}
 	for name in definitions.keys() {
 		scope = new_scope()

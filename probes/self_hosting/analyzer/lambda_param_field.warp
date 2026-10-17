@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+# a lambda passed as `any` and called with a symbol cannot read its field: errors "no field name" instead of yes
+m(n: any, passes: any) := passes(n)
+m(symbol("it"), s => s.name == "it")
