@@ -252,7 +252,8 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 /// A hint or warning as a twin reports it: [line, column, message, preferred form or ø]
 fn report_view(diagnostic: &warp::errors::diagnostic::Diagnostic) -> Node {
 	let preferred = diagnostic.preferred.as_deref().map_or(Node::Empty, Node::text);
-	let parts = [Node::int(diagnostic.line as i64), Node::int(diagnostic.column as i64), Node::text(&diagnostic.message)];
+	let parts =
+		[Node::int(diagnostic.line as i64), Node::int(diagnostic.column as i64), Node::text(&diagnostic.message)];
 	warp_list(parts.into_iter().chain([preferred]))
 }
 

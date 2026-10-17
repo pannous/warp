@@ -427,7 +427,10 @@ pub fn around_source_pass(code: &str, pass: Pass) -> Option<(Node, Node)> {
 
 /// `around_source_pass` with the hints and warnings the pass itself says, every one, printing none (card carries-line:
 /// a twin reports them too)
-pub fn around_source_pass_reporting(code: &str, pass: Pass) -> Option<(Node, Node, Vec<crate::errors::diagnostic::Diagnostic>)> {
+pub fn around_source_pass_reporting(
+	code: &str,
+	pass: Pass,
+) -> Option<(Node, Node, Vec<crate::errors::diagnostic::Diagnostic>)> {
 	use crate::errors::diagnostic::{clear_shown_hints, every_hint_of, take_warnings};
 	crate::errors::diagnostic::begin_program();
 	let program = lawful_program(code).ok()?;

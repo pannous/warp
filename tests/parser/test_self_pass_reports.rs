@@ -2,6 +2,7 @@
 //! where the Rust pass reports, and its hints are compared with the Rust pass's, position included
 //! (tests/common/twins.rs pass_differential, lib/compiler/walk.warp report; first twin: number_words, in test_self_passes)
 use crate::common::twins::positioned_bridge_differential;
+use crate::is;
 use warp::pipeline::around_source_pass_reporting;
 
 #[test]
@@ -16,4 +17,10 @@ fn a_source_pass_is_seen_with_its_hints() {
 #[test]
 fn every_positioned_source_is_a_node_and_back() {
 	positioned_bridge_differential();
+}
+
+#[test]
+fn a_built_node_carries_its_position() {
+	is!("n = positioned(symbol(\"x\"), 3, 7)\n[n.line, n.column]", warp::ints(vec![3, 7]));
+	is!("n = positioned(key(symbol(\"a\"), \":\", 1), 2, 1)\nkey_of(n) == symbol(\"a\")", true);
 }
