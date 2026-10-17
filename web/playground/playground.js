@@ -1028,6 +1028,12 @@ function startBugButton() {
 	$("bug").ontoggle = () => {
 		if ($("bug").open) $("bug-comment").focus();
 	};
+	// a press outside an open menu (the bug report, ⋯) closes it, as Escape does; a comment begun stays (card clicking-outside)
+	const openMenus = () => [...document.querySelectorAll("details.tools[open]")];
+	addEventListener("pointerdown", press => openMenus().filter(menu => !menu.contains(press.target)).forEach(menu => menu.open = false));
+	addEventListener("keydown", key => {
+		if (key.key === "Escape") openMenus().forEach(menu => menu.open = false);
+	});
 	$("bug-form").onsubmit = submit => {
 		submit.preventDefault();
 		sendBugReport();
