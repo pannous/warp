@@ -1,0 +1,14 @@
+self-hosted/aa7a536a-2
+dc520971cf76cbd58cd9fe0f8fbaa0fa4852fc7c
+--all-features
+--
+parser::
+programs::
+scope::
+sweeps::
+text::
+wasm::
+web::
+welcoming::
+--skip
+parser::test_self_
