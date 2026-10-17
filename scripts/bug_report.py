@@ -195,8 +195,11 @@ def shortened(text, length):
 def card_of(report):
     comment = report["comment"].strip()
     title = TITLE_MARK + shortened(comment.splitlines()[0], TITLE_LENGTH - len(TITLE_MARK))
-    body = "\n\n".join([f"(user, bug button {report['received']})", comment, fenced(report["code"], "warp"),
-                        "Output:", fenced(report["output"]), f"{report['version'] or 'unversioned build'} · {report['page']}"])
+    # the playground's "include source" unticked sends no program and no output: the card leaves them out
+    program = [fenced(report["code"], "warp")] if report["code"].strip() else []
+    output = ["Output:", fenced(report["output"])] if report["output"].strip() else []
+    body = "\n\n".join([f"(user, bug button {report['received']})", comment, *program, *output,
+                        f"{report['version'] or 'unversioned build'} · {report['page']}"])
     return title, body
 
 
