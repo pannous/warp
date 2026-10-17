@@ -40,6 +40,10 @@ pub const CLIPBOARD_COUNT: &str = "clipboard count";
 pub const MOUSE_X: &str = "mouse_x";
 pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
+/// The wheel turned over the paint window or the page's canvas since the start, in steps (notches): up (away from you)
+/// adds, down takes away; a trackpad's scroll counts PIXELS_PER_WHEEL_STEP pixels a step (card shader-wheel)
+pub const MOUSE_WHEEL: &str = "mouse_wheel";
+pub const PIXELS_PER_WHEEL_STEP: f64 = 100.0;
 /// Whether a key is held now, over the paint window or the page (card keyboard-state): `on key` hears each press
 pub const KEY_DOWN: &str = "key_down";
 /// The name of the key held now ("a", "ArrowUp", "" for none), as `on key` names presses (card held-key): the word
@@ -83,7 +87,7 @@ pub const CLICK_PRESSED: &str = "click_pressed";
 pub const CLICK_X: &str = "click_x";
 pub const CLICK_Y: &str = "click_y";
 /// The system values, and whether each is a yes/no value
-pub const SYSTEM_VALUES: [(&str, bool); 18] = [
+pub const SYSTEM_VALUES: [(&str, bool); 19] = [
 	(BATTERY, false),
 	(CHARGING, true),
 	(ONLINE, true),
@@ -92,6 +96,7 @@ pub const SYSTEM_VALUES: [(&str, bool); 18] = [
 	(MOUSE_X, false),
 	(MOUSE_Y, false),
 	(MOUSE_DOWN, true),
+	(MOUSE_WHEEL, false),
 	(KEY_DOWN, true),
 	(WINDOW_OPEN, true),
 	(VIEW_WIDTH, false),

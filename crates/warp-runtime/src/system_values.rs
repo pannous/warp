@@ -5,6 +5,7 @@
 //! macOS asks `pmset` and `defaults`, Linux /sys and `gsettings`; `online` is whether a route to the internet exists
 //! (a UDP connect sends nothing). A value the platform cannot give is a loud error, never a made-up reading.
 //! `mouse_x`, `mouse_y`, `mouse_down`: natively the pointer over the paint window (window_input), read each time;
+//! `mouse_wheel` the wheel steps turned over it (wheel);
 //! `key_down` whether a key is held over it, `key code held` which (lowering/signals/system_values.rs names it `held_key`);
 //! `window_open` whether that window shows; read before any paint, it opens the window (blank) where one can show.
 //! `window_width`, `window_height` (window.width, card make-width): the paint window's inner size in points as it reports
@@ -15,12 +16,13 @@
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
 	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_DPI, DISPLAY_HEIGHT,
-	DISPLAY_WIDTH, ESCAPE_KEPT, GPU_DRAWING, GPU_PAINTS, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X,
-	MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
+	DISPLAY_WIDTH, ESCAPE_KEPT, GPU_DRAWING, GPU_PAINTS, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_WHEEL,
+	MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN,
+	WINDOW_WIDTH,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -34,6 +36,17 @@ const INTERNET_ADDRESS: &str = "1.1.1.1:53";
 /// The last input over the paint window (src/graphics/paint_window.rs follow_input), each an f32's bits: pointer x, y in the
 /// painted frame's pixels, a button down (1), the key held; all 0 before a window
 static WINDOW_INPUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+
+/// The wheel steps turned over the paint window (MOUSE_WHEEL), as its viewer counts them (paint_window.rs follow_input)
+static WHEEL: AtomicI64 = AtomicI64::new(0);
+
+pub fn wheel() -> i64 {
+	WHEEL.load(Ordering::Relaxed)
+}
+
+pub fn tell_wheel(steps: i64) {
+	WHEEL.store(steps, Ordering::Relaxed);
+}
 
 /// Whether the paint window shows: set as it gets its first frame, cleared when it closes (src/graphics/paint_window.rs)
 static WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
@@ -251,6 +264,9 @@ pub fn read(name: &str) -> Result<i64, String> {
 	if name == WINDOW_WIDTH || name == WINDOW_HEIGHT {
 		let (width, height) = window_size();
 		return Ok(if name == WINDOW_WIDTH { width } else { height });
+	}
+	if name == MOUSE_WHEEL {
+		return Ok(wheel());
 	}
 	if name == GPU_DRAWING {
 		return Ok(DRAWING_ON_GPU.load(Ordering::Relaxed) as i64);
