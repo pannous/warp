@@ -41,6 +41,12 @@ message `[urgent card <key>] <title> | <description>`; between cards you wait.
     may differ), who tells the user (user, 2026-10-17). Unreachable: send it to warp-supervisor
     (session_019zLX6up9ferLyQ8brjWu1h, the session sending the cards), which relays. This session runs on Linux in the
     cloud, so it has no `say`.
+  - A deploy cancelled (user, 2026-10-17): runs of pages.yml share one concurrency group, so the hourly run at :17
+    cancels a skip_checks run still going. Check the run (actions_list list_workflow_runs pages.yml) while waiting; a
+    cancelled skip_checks run whose commit isn't live yet is dispatched again with skip_checks at once.
+  - Live, the card's issue too (user, 2026-10-17): with the live signal, comment on the card's GitHub issue (the
+    issue number from the card's text or its board card): `live: <commit> on https://warp.pannous.com/` plus the try
+    line, so the issue shows the fix is deployed.
   - A direct push still pushes the card's branch with its report: the cron watcher closes the card itself when the
     branch tip is already on main.
 - Back to waiting. When main has moved a lot since priming, `git pull` and rebuild before the next card.
