@@ -11,6 +11,14 @@ kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
 is_group(n: any) := bracket_of(n) != ø
 
+# the view without its literal and attribute layers (`01234`, `@name(v) x`): a node has none
+without_layers(view: any) := {
+	kind = kind_of(view)
+	if kind == "literal" or kind == "attribute" { return without_layers(view#(#view)) }
+	if view is list { return view.map(without_layers) }
+	view
+}
+
 # the node a view stands for
 node_of(view: any) := {
 	kind = kind_of(view)

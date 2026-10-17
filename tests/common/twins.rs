@@ -250,6 +250,20 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 	report(word, &differences_of(cases, part));
 }
 
+/// The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): `word(source text)` of
+/// lib/compiler/<part>.warp parses with parser.warp and runs the pass twins in pipeline order; compared with the Rust
+/// parse of the same text after the Rust twins of those passes in that order (only those: the others have no twin yet)
+pub fn chain_differential(paths: &[PathBuf], part: &str, word: &str, rust_passes: &[fn(Node) -> Node]) {
+	let cases = paths.iter().filter_map(|path| {
+		let text = std::fs::read_to_string(path).ok()?;
+		let lowered =
+			std::panic::catch_unwind(|| rust_passes.iter().fold(parse(&text), |node, pass| pass(node))).ok()?;
+		let call = format!("{word}(read(\"{}\"))", path.display());
+		Some(Case { path: path.display().to_string(), call, expected: plain_view(&lowered) })
+	});
+	report(word, &differences_of(cases, part));
+}
+
 /// A hint or warning as a twin reports it: [line, column, message, preferred form or ø]
 fn report_view(diagnostic: &warp::errors::diagnostic::Diagnostic) -> Node {
 	let preferred = diagnostic.preferred.as_deref().map_or(Node::Empty, Node::text);

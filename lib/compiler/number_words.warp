@@ -7,7 +7,7 @@ number_words = {zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, sev
 	eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
 	nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90}
 # the number words the program gives no other meaning
-numbers = {}
+unnamed_numbers = {}
 digits_reason = "a number is written in digits"
 # where a hint is: the last positioned node walked into (normalize set_position_of)
 hint_at = ø
@@ -75,8 +75,8 @@ as_numbers(n: any) := {
 	global hint_at
 	if is_quoted(n) { return n }
 	if is_positioned(n) { hint_at = n }
-	if n is symbol and numbers.has(name_of(n)) {
-		number = numbers[name_of(n)]
+	if n is symbol and unnamed_numbers.has(name_of(n)) {
+		number = unnamed_numbers[name_of(n)]
 		report(hint_at, digits_reason, text(number))
 		return number
 	}
@@ -86,11 +86,11 @@ as_numbers(n: any) := {
 }
 
 number_words_pass(program: any) := {
-	global numbers
+	global unnamed_numbers
 	global hint_at
 	hint_at = start_of(program)
 	names = names_given(program, {})
-	numbers = {}
-	for word in number_words.keys() { if not names.has(word) { numbers[word] = number_words[word] } }
+	unnamed_numbers = {}
+	for word in number_words.keys() { if not names.has(word) { unnamed_numbers[word] = number_words[word] } }
 	as_numbers(program)
 }
