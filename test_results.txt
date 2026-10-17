@@ -3666,6 +3666,9 @@ PASSED:
   ✓ parser::test_references::a_path_follows_a_reference
   ✓ parser::test_references::bracketed_attributes_before_a_body_are_meta_entries
   ✓ parser::test_references::references_survive_a_round_trip
+  ✓ parser::test_rust_items::a_block_value_still_continues
+  ✓ parser::test_rust_items::an_item_ends_at_its_closing_brace
+  ✓ parser::test_rust_items::impl_trait_for_a_struct_gives_it_the_methods
   ✓ parser::test_rust_macros::a_spaced_bang_stays_not
   ✓ parser::test_rust_macros::another_macro_is_a_call
   ✓ parser::test_rust_macros::assert_macros_assert
@@ -6246,4 +6249,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6241 passed, 0 failed, 6241 total tested
+13 ignored, 6244 passed, 0 failed, 6244 total tested
