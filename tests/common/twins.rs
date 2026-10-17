@@ -260,7 +260,7 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 		let given = if reports != Node::Empty || mentions_error(&after) { positioned_plain_view } else { plain_view };
 		let given = given(&before);
 		let expected = warp_list([after, reports].into_iter());
-		Some(Case::new(&path, view_json(&given), expected))
+		Some(Case::new(path, view_json(&given), expected))
 	});
 	report(
 		word,
