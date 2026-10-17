@@ -8,10 +8,16 @@ pub(crate) const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_WO
 /// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
 /// is_counting_word (a class's own size method is looked up in this order)
 pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
-/// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
-pub(crate) const BYTE_SIZE: &str = "byte_size";
+/// `byte_size(x)`, `x.byte_size`, `x.bytecount`: the bytes of x, `count x.bytes` (size is the element count, user
+/// decision P40; `x.bytes` is the byte list, decision text-unit-plurals)
+pub const BYTE_SIZE: &str = "byte_size";
+pub(crate) const BYTE_COUNT: &str = "bytecount";
 /// `x.number` counts too, but `number x` is the type conversion, not a count
 pub(crate) const NUMBER_PROPERTY: &str = "number";
+/// The counts of a text's code points and characters, which `count t.codepoints`, `#codepoints in t` and `t as
+/// graphemes` read (`t.codepoints`, `t.graphemes` are the lists: decision text-unit-plurals)
+pub(crate) const CODE_POINT_COUNT: &str = "codepoint·count";
+pub(crate) const GRAPHEME_COUNT: &str = "grapheme·count";
 
 /// `count x`, `length x`, `size x`: the runtime function counting the elements of x; a text counts its graphemes
 /// (user-perceived characters). Bytes are only counted by an explicit unit (`x.bytes`); a user function of that name wins.
@@ -30,26 +36,26 @@ pub(crate) fn is_counting_word(name: &str) -> bool {
 	COUNTING_WORDS.contains(&name)
 }
 
-/// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.codepoints`, `x.graphemes` (`x.chars` is the list of characters)
+/// `x.count`, `x.length`, `x.size`, the bytes `x.bytecount` (memory) and the unit counts a counting phrase builds
 pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 	match name {
 		_ if is_counting_property(name) => Some("node_count"),
-		"bytes" | BYTE_SIZE => Some("node_bytes"),
-		"codepoints" => Some("text_codepoint_count"),
-		"graphemes" => Some("text_grapheme_count"),
+		BYTE_COUNT | BYTE_SIZE => Some("node_bytes"),
+		CODE_POINT_COUNT => Some("text_codepoint_count"),
+		GRAPHEME_COUNT => Some("text_grapheme_count"),
 		_ => counting_function(name, ctx),
 	}
 }
 
-/// The counting method of a text unit, named in the singular or the plural: `byte`, `chars`, `codepoint`, `graphemes`.
+/// The count of a text unit, named in the singular or the plural: `byte`, `chars`, `codepoint`, `graphemes`.
 /// A char is a character (glyph), a grapheme cluster as `x.chars`; a code point is its own unit (`"שָלוֹם"` is 4
 /// characters, 6 code points: decision chars-codepoints amended).
 pub(crate) fn text_unit(word: &str) -> Option<&'static str> {
 	match word {
-		"byte" | "bytes" => Some("bytes"),
-		"codepoint" | "codepoints" => Some("codepoints"),
+		"byte" | "bytes" => Some(BYTE_COUNT),
+		"codepoint" | "codepoints" => Some(CODE_POINT_COUNT),
 		"char" | "chars" | "character" | "characters" | "glyph" | "glyphs" | "grapheme" | "graphemes" => {
-			Some("graphemes")
+			Some(GRAPHEME_COUNT)
 		}
 		_ => None,
 	}

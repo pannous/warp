@@ -324,7 +324,7 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 }
 
 /// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
-/// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
+/// bytes `(0..byte_size(text)).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
 fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
 	let word = variable.symbol_name()?;
 	if !UNIT_LOOP_WORDS.contains(&word) || body.mentions(word) {
@@ -343,10 +343,10 @@ fn code_points_of(text: &Node) -> Node {
 	call(crate::library_words::CODE_POINT_LIST, vec![text.clone()])
 }
 
-/// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
+/// The UTF-8 bytes of a text, `(0..byte_size(text)).map(i => byte_at(text, i))`
 fn bytes_of(text: &Node) -> Node {
 	let offset = Node::Symbol("byte·offset".to_string());
-	let count = key(text.clone(), Op::Dot, Node::Symbol(BYTES_WORD.to_string()));
+	let count = call(crate::analyzer::BYTE_SIZE, vec![text.clone()]);
 	let offsets = key(Node::int(0), Op::Range, count);
 	let byte = key(offset.clone(), Op::Arrow, call("byte_at", vec![text.clone(), offset]));
 	key(parens(vec![offsets]), Op::Dot, call("map", vec![byte]))

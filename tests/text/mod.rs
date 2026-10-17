@@ -75,6 +75,7 @@ mod test_text_runtime;
 mod test_text_search;
 mod test_text_slices; // cards text-slice, long-text
 mod test_text_type_words; // card cleanup-closed-lists
+mod test_text_unit_lists; // decision text-unit-plurals
 mod test_text_variable_assignment;
 mod test_trim;
 mod test_unicode_escape;

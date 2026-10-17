@@ -16,6 +16,8 @@ last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
+// the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
+bytes(t: text) := (0..byte_size(t)).map(offset => byte_at(t, offset))
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
