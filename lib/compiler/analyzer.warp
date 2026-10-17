@@ -5,11 +5,10 @@
 # variable holding a list also has a type word naming its elements (`list of int`, `map of text`, `list of node`).
 use "walk.warp"
 
-# name → the function's definition `(f a b) := body`, and its result kind, settled by rounds (recursion assumes int)
+# name → the function's definition `(f a b) := body`, its result kind, and the scope of its body ("" for main)
 definitions = {}
 results = {}
-# name → the kinds of its parameters
-parameter_kinds = {}
+scopes = {}
 
 arithmetic_ops = {"+": 1, "-": 1, "*": 1, "/": 1, "%": 1, "^": 1, "**": 1, "//": 1, "mod": 1}
 comparison_ops = {"==": 1, "!=": 1, "<": 1, ">": 1, "<=": 1, ">=": 1, "≤": 1, "≥": 1, "≠": 1, "is": 1, "in": 1, "not": 1}
@@ -51,6 +50,7 @@ all_of(xs: any, f: any) := #xs.filter(f) == #xs
 any_of(xs: any, f: any) := #xs.filter(f) > 0
 
 arithmetic_kind(left: text, op: text, right: text) := {
+	if left == "" or right == "" { return "" }
 	if (left == "data" or left == "empty") and (right == "data" or right == "empty" or right == "int" or right == "float") { return "data" }
 	if (right == "data" or right == "empty") and (left == "int" or left == "float") { return "data" }
 	if op == "+" and (left == "list" or left == "empty") and (right == "list" or right == "empty") { return "list" }
@@ -64,6 +64,7 @@ arithmetic_kind(left: text, op: text, right: text) := {
 
 # either branch's value: one kind stays, numbers widen, any other mix is a node
 branches_kind(a: text, b: text) := {
+	if a == "" or b == "" { return a + b }
 	if a == b and (is_ref(a) or a == "codepoint") { return a }
 	if a == "list" or b == "list" { return if (a == "list" or a == "empty") and (b == "list" or b == "empty") then "list" else "data" }
 	if a == "empty" or b == "empty" { return "empty" }
@@ -154,6 +155,7 @@ kind_of_key(n: any, scope: any) := {
 }
 
 compound_kind(left: text, op: text, right: text) := {
+	if left == "" or right == "" { return "" }
 	if op == "+" and (left == "list" or right == "list") and left != "text" and right != "text" { return "list" }
 	if op == "+" and (left == "text" or right == "text") { return "text" }
 	if left == "empty" { return "empty" }
@@ -162,6 +164,7 @@ compound_kind(left: text, op: text, right: text) := {
 }
 
 logical_kind(left: text, right: text) := {
+	if left == "" or right == "" { return "" }
 	if is_ref(left) or is_ref(right) or left == "codepoint" or right == "codepoint" or left == "empty" or right == "empty" {
 		return branches_kind(left, right)
 	}
@@ -184,11 +187,12 @@ loop_kind(body: any, scope: any) := {
 	last = last_statement(body)
 	if head_name(last) == "print" { return "empty" }
 	kind = kind_of(body, scope)
-	if kind == "text" or kind == "codepoint" or kind == "list" { kind } else { "data" }
+	if kind == "" or kind == "text" or kind == "codepoint" or kind == "list" { kind } else { "data" }
 }
 
 # `xs#i`: an element of a list of known elements, a character of a text
 subscript_kind(indexed: any, index: any, scope: any) := {
+	if kind_of(indexed, scope) == "" { return "" }
 	element = element_kind(indexed, scope)
 	if element != ø { return element }
 	if index is text or kind_of(index, scope) == "text" or kind_of(index, scope) == "codepoint" { "empty" } else { "int" }
@@ -216,7 +220,10 @@ kind_of(n: any, scope: any) := {
 	if n == yes or n == no { return "int" }
 	if n is number { return number_kind(n) }
 	if n is text { return if #n == 1 then "codepoint" else "text" }
-	if n is symbol { return if binding(scope, n.name) != ø then binding(scope, n.name) else "symbol" }
+	if n is symbol {
+		bound = binding(scope, n.name)
+		return if bound == ø then "symbol" else if bound == "nil" then "empty" else bound
+	}
 	if type(n) is key { return kind_of_key(n, scope) }
 	if is_group(n) and #n > 0 { return kind_of_list(n, scope) }
 	"int"
@@ -225,11 +232,16 @@ kind_of(n: any, scope: any) := {
 # --- list types (Rust list_type_name) ---
 
 type_word(n: any, scope: any) := {
+	word = element_type_word(n, scope)
+	if word == "list" { list_type(n, scope) } else { word }
+}
+
+# the type word of one element: ø, a literal number's (int, rational, float), else its kind
+element_type_word(n: any, scope: any) := {
 	if is_empty(n) { return "ø" }
 	if n is number { return if n is int then "int" else if number_kind(n) == "int" then (if n % 1 == 0 then "int" else "rational") else "float" }
 	if is_key(n, "/") and n.key is int and n.value is int and n.value != 0 { return if n.key % n.value == 0 then "int" else "rational" }
-	kind = kind_of(n, scope)
-	if kind == "list" { list_type(n, scope) } else { kind }
+	kind_of(n, scope)
 }
 
 # the one type word all elements fit, ø when they are no common kind
@@ -303,45 +315,38 @@ element_list_type(map: any, scope: any) := {
 	if inner.starts_with("list") { inner } else { "list" }
 }
 
-# --- variables (Rust collect_variables) ---
+# --- slots (Rust collect_variables, the parameter and result inference) ---
+#
+# Every variable, parameter, result and list element is a slot; each value that flows into a slot joins its kind
+# (`join`), repeated until nothing changes. A slot nothing flowed into yet is "" (unknown): an expression reading it is
+# unknown too and flows nothing, so the order of the program never matters and a read before a widening write sees
+# the widened kind.
 
-new_scope() := {kinds: {}, types: {}, parameters: {}, globals: {}}
+# a scope's slots: kinds of its variables (parameters among them), list types, the main scope a body sees
+new_scope() := {kinds: {}, types: {}, parameters: {}, globals: {}, pinned: {}, declared_globals: {}}
 
 # `(f a b) := body` and `(f a b) = body`
 is_definition(n: any) := (is_key(n, ":=") or is_key(n, "=")) and is_group(n.key) and n.key.bracket == "(" and head_name(n.key) != ""
 
-# the variables bound in n, into scope: a new name takes its value's kind, a known one widens
-collect(n: any, scope: any) := {
-	if is_definition(n) { return scope }
-	if type(n) is key and (n.op == "=" or n.op == ":=") {
-		collect(n.value, scope)
-		if n.op == ":=" { define(n.key, n.value, scope) } else { bind(n.key, n.value, scope) }
-		return scope
-	}
-	# `global x = 1`, `global x`: a global, no local
-	if is_key(n, ":") and n.key == symbol("global") {
-		declared = n.value
-		if is_key(declared, "=") { collect(declared.value, scope) }
-		name = if declared is symbol then declared.name else if is_key(declared, "=") and declared.key is symbol then declared.key.name else ""
-		if name != "" and not (name in scope.globals) { scope.globals[name] = if declared is symbol then "int" else held_kind(declared.value, scope) }
-		return scope
-	}
-	if type(n) is key and n.op in compound_ops {
-		collect(n.value, scope)
-		widen(n.key, key(n.key, compound_ops[n.op], n.value), scope)
-		return scope
-	}
-	if type(n) is key {
-		collect(n.key, scope)
-		return collect(n.value, scope)
-	}
-	if is_group(n) { for item in n { collect(item, scope) } }
-	scope
+# the kind a slot holding both a and b has: equal kinds stay, an int widens to a float, a character to a text,
+# ø (nil) to a list, a number of run-time kind takes either number, any other pair is a node (empty)
+joined_kind(a: text, b: text) := {
+	if a == "" or a == b { return b }
+	if b == "" { return a }
+	pair = [a, b].sort()
+	if pair == ["float", "int"] { return "float" }
+	if pair == ["codepoint", "text"] { return "text" }
+	if pair == ["list", "nil"] { return "list" }
+	if pair == ["data", "float"] or pair == ["data", "int"] { return "data" }
+	"empty"
 }
 
-define(target: any, value: any, scope: any) := {
-	if target is symbol and binding(scope, target.name) == ø { scope.kinds[target.name] = held_kind(value, scope) }
-	scope
+# the type word of a list's elements given both a and b (common_type), a node when they have none
+joined_word(a: text, b: text) := {
+	if a == "" or a == b { return b }
+	if b == "" { return a }
+	common = common_type([a, b])
+	if common == ø { "node" } else { common }
 }
 
 declared_kind(type_node: any) := {
@@ -351,55 +356,14 @@ declared_kind(type_node: any) := {
 	type_kinds.get(name)
 }
 
-bind(target: any, value: any, scope: any) := {
-	if is_key(target, ":") and target.key is symbol {
-		name = target.key.name
-		if binding(scope, name) == ø {
-			declared = declared_kind(target.value)
-			scope.kinds[name] = if declared != ø then declared else held_kind(value, scope)
-			scope.types[name] = target.value.name
-		}
-		return scope
-	}
-	if target is symbol and binding(scope, target.name) == ø {
-		scope.kinds[target.name] = held_kind(value, scope)
-		if scope.kinds[target.name] == "list" { scope.types[target.name] = list_type(value, scope) }
-		return scope
-	}
-	if target is symbol { widen(target, value, scope) }
-	scope
-}
-
-# a known variable given another value: an empty one becomes the list first appended, an int a float, two
-# kinds that do not mix a node
-widen(target: any, value: any, scope: any) := {
-	if not (target is symbol) or binding(scope, target.name) == ø { return scope }
-	name = target.name
-	known = binding(scope, name)
-	given = held_kind(value, scope)
-	if known == "empty" and scope.types.get(name) == ø and is_key(value, "+") and value.key == target and is_group(value.value) and value.value.bracket == "[" {
-		scope.kinds[name] = "list"
-		scope.types[name] = list_type(value.value, scope)
-		return scope
-	}
-	if known == "int" and kind_of(value, scope) == "float" and scope.types.get(name) == ø { scope.kinds[name] = "float" }
-	else if known in concrete_kinds and not (name in scope.parameters) and (given == "data" or given == "empty" and not is_empty(value) or given in concrete_kinds and not mixes(known, given)) {
-		scope.kinds[name] = "empty"
-		scope.types[name] = ø
-	}
-	scope
-}
-
-mixes(a: text, b: text) := a == b or (a == "int" or a == "float") and (b == "int" or b == "float") or (a == "text" or a == "codepoint") and (b == "text" or b == "codepoint")
-
 # --- functions ---
 
 # symbol first: `type(symbol("key")) is key` (card type-symbol)
 parameter_name(parameter: any) := if parameter is symbol then parameter.name else parameter_name(parameter.key)
 parameters_of(name: text) := definitions[name].key[1..]
 
-# a parameter's kind: as declared, else its default's, else what the body does with it (`usages`), else int
-parameter_kind(parameter: any, used: any) := {
+# the kind a parameter is pinned to: as declared, else its default's; "" when its calls decide
+pinned_kind(parameter: any) := {
 	if is_key(parameter, ":") {
 		declared = declared_kind(parameter.value)
 		return if declared != ø then declared else "empty"
@@ -409,17 +373,8 @@ parameter_kind(parameter: any, used: any) := {
 		if kind == "float" or kind == "text" or kind == "list" { return kind }
 		if kind == "codepoint" { return "text" }
 	}
-	kind = used_as(parameter_name(parameter), used)
-	if kind != ø { kind } else { "int" }
+	""
 }
-
-set_parameter_kind(name: text, index: int, kind: text) := {
-	kinds = parameter_kinds[name]
-	kinds[index] = kind
-}
-
-# an undeclared parameter, or one with an int default, takes the kind its calls pass
-takes_passed(parameter: any) := not is_key(parameter, ":") and (not is_key(parameter, "=") or literal_kind(parameter.value) == "int")
 
 # what a body does with a name: calls it (a function), uses it as a sequence (a list, a text when also joined to a text)
 used_as(name: text, used: any) := {
@@ -489,17 +444,6 @@ joined_name(n: any, joined: any) := {
 	""
 }
 
-# the kind an argument certainly has from the literal alone (Rust argument_literal_kind)
-literal_kind(argument: any) := {
-	if is_empty(argument) { return "list" }
-	if argument is number or argument is text or (is_group(argument) and argument.bracket == "[") { return kind_of(argument, new_scope()) }
-	if is_key(argument, "+") and is_text(argument) { return "text" }
-	if is_key(argument, "as") and argument.value is symbol and type_kinds.get(argument.value.name.lower()) == "float" { return "float" }
-	if head_name(argument) == "closure_new" { return "function" }
-	if is_block(argument) and all_of(argument, entry => is_key(entry, ":")) { return "list" }
-	ø
-}
-is_text(n: any) := n is text or (is_key(n, "+") and (is_text(n.key) or is_text(n.value)))
 
 # every call of a defined function in n, outside nested definitions: [name, arguments]
 calls(n: any, found: any) := {
@@ -512,103 +456,6 @@ calls(n: any, found: any) := {
 	found
 }
 
-# the variables only ever given literals of one kind (`s = "abcd"; f(s)` passes a text)
-literal_variables(n: any, kinds: any) := {
-	if type(n) is key and (n.op == "=" or n.op == ":=") and n.key is symbol {
-		kind = literal_kind(n.value)
-		if not (n.key.name in kinds) { kinds[n.key.name] = kind } else if kinds[n.key.name] != kind { kinds[n.key.name] = ø }
-	}
-	if type(n) is key {
-		literal_variables(n.key, kinds)
-		literal_variables(n.value, kinds)
-	} else if is_group(n) { for item in n { literal_variables(item, kinds) } }
-	kinds
-}
-
-# undeclared parameters take the kind of their literal arguments when every call agrees, any value when they disagree
-parameters_from_calls(program: any) := {
-	variables = literal_variables(program, {})
-	for name in definitions.keys() { for parameter in parameters_of(name) { variables[parameter_name(parameter)] = ø } }
-	passed = {}
-	for call in every_call(program) {
-		name = call#1
-		parameters = parameters_of(name)
-		arguments = call#2
-		for index in 0..<min(#arguments, #parameters) {
-			argument = arguments[index]
-			kind = literal_kind(argument)
-			if kind == ø and argument is symbol { kind = variables.get(argument.name) }
-			if kind == "codepoint" { kind = "text" }
-			slot = name + "#" + index
-			if kind != ø and not (slot in passed) { passed[slot] = [] }
-			if kind != ø and not passed[slot].contains(kind) { passed[slot] += [kind] }
-		}
-	}
-	for name in definitions.keys() {
-		parameters = parameters_of(name)
-		for index in 0..<#parameters {
-			kinds = passed.get(name + "#" + index)
-			if kinds != ø and takes_passed(parameters[index]) and not is_key(parameters[index], "=") {
-				if #kinds == 1 and kinds#1 != "int" { set_parameter_kind(name, index, kinds#1) }
-				if #kinds > 1 { set_parameter_kind(name, index, "empty") }
-			}
-		}
-	}
-}
-
-# the calls of the program and of every function body
-every_call(program: any) := {
-	found = calls(program, [])
-	for name in definitions.keys() { calls(definitions[name].value, found) }
-	found
-}
-
-# a parameter passed on to another function's parameter of a known kind takes that kind
-forwarded_parameters() := {
-	changed = yes
-	while changed {
-		changed = no
-		for name in definitions.keys() {
-			parameters = parameters_of(name).map(parameter_name)
-			for call in calls(definitions[name].value, []) {
-				called = parameter_kinds[call#1]
-				arguments = call#2
-				for index in 0..<min(#arguments, #called) {
-					argument = arguments[index]
-					# index_of counts from 1 and gives 0 for a missing value
-					own = (if argument is symbol then parameters.index_of(argument.name) else 0) - 1
-					if own >= 0 and called[index] != "int" and parameter_kinds[name][own] == "int" and parameters_of(name)[own] is symbol {
-						set_parameter_kind(name, own, called[index])
-						changed = yes
-					}
-				}
-			}
-		}
-	}
-}
-
-# the main-level variables a body sees, and the declared globals
-outer_scope(program: any) := {
-	main = collect(program, new_scope())
-	globals = {}
-	for name in main.kinds.keys() { globals[name] = main.kinds[name] }
-	for name in main.globals.keys() { globals[name] = main.globals[name] }
-	globals
-}
-
-body_scope(name: text, globals: any) := {
-	definition = definitions[name]
-	scope = new_scope()
-	scope.globals = globals
-	kinds = parameter_kinds[name]
-	parameters = parameters_of(name)
-	for index in 0..<#parameters {
-		parameter = parameter_name(parameters[index])
-		scope.kinds[parameter] = kinds[index]
-		scope.parameters[parameter] = yes
-	}
-	collect(definition.value, scope)
-}
 
 returns(n: any, found: any) := {
 	if head_name(n) == "return" and #n == 2 { found += [n#2] }
@@ -620,65 +467,215 @@ returns(n: any, found: any) := {
 	found
 }
 
-# the kind a function gives: its last value, joined with what it returns
-result_kind(name: text, globals: any) := {
-	scope = body_scope(name, globals)
+
+# the kind a function gives: its last value joined with what it returns; a branch raising an error gives nothing
+result_kind(name: text) := {
+	scope = scopes[name]
 	body = definitions[name].value
-	returned = returns(body, []).filter(value => not raises_error(value)).map(value => if is_empty(value) then "empty" else kind_of(value, scope))
-	last = last_statement(body)
-	if raises_error(last) and #returned > 0 {
-		if returned.contains("float") and not any_of(returned, k => is_ref(k)) { return "float" }
-		if all_of(returned, k => k == returned#1) { return returned#1 }
-		return "empty"
+	kind = ""
+	for value in returns(body, []) {
+		if not raises_error(value) { kind = joined_kind(kind, flowing_kind(value, scope)) }
 	}
-	if #returned == 0 and (is_empty(last) or (is_block(last) and #last == 0)) { return "empty" }
-	kind = kind_of(last, scope)
-	if kind == "data" and is_key(last, "do") and #returned > 0 { return if returned.contains("float") then "float" else "int" }
-	if kind == "int" and returned.contains("float") { return "float" }
-	nodes = returned.filter(k => is_ref(k)).unique()
-	if is_ref(kind) or #nodes == 0 { return kind }
-	if #nodes == 1 and (nodes#1 == "list" or nodes#1 == "empty") { nodes#1 } else { "empty" }
+	last = last_statement(body)
+	if raises_error(last) { return kind }
+	if is_block(last) and #last == 0 { return joined_kind(kind, "nil") }
+	joined_kind(kind, flowing_kind(last, scope))
 }
 
-# every function's result again, knowing the others', until they settle
-settle_results(program: any) := {
-	for name in definitions.keys() { results[name] = "int" }
-	rounds = 0
+# the kind a value flows into a slot: ø is nil (a list may hold it), else as held
+flowing_kind(value: any, scope: any) := if is_empty(value) then "nil" else held_kind(value, scope)
+
+# the statements of a program, those of a nested sequence (an included module) among them
+statements(program: any) := {
+	if not is_sequence(program) { return [program] }
+	found = []
+	for statement in program { found += statements(statement) }
+	found
+}
+is_sequence(n: any) := is_group(n) and n.bracket == "" and (n.separator == ";" or n.separator == "\n")
+
+# --- flows: ["variable" | "element" | "parameter", scope name, target, value]; a parameter's target is [function, index] ---
+
+gather(n: any, context: text, flows: any) := {
+	if is_definition(n) { return flows }
+	if type(n) is key and (n.op == "=" or n.op == ":=") {
+		gather(n.value, context, flows)
+		target = n.key
+		if target is symbol { flows += [["variable", context, target.name, n.value]] }
+		if is_key(target, "#") and target.key is symbol { flows += [["element", context, target.key.name, n.value]] }
+		if is_key(target, ":") and target.key is symbol { declare(target.key.name, target.value, context) }
+		return flows
+	}
+	# `global x = 1`, `global x`: a variable of the main scope
+	if is_key(n, ":") and n.key == symbol("global") {
+		declared = n.value
+		if is_key(declared, "=") and declared.key is symbol {
+			gather(declared.value, context, flows)
+			flows += [["variable", "", declared.key.name, declared.value]]
+		} else if declared is symbol { flows += [["variable", "", declared.name, 0]] }
+		# through a local: `scopes[""].declared_globals[name] = yes` errors "not an int" (card for `m[k][i] = v`)
+		main = scopes[""]
+		if declared is symbol or is_key(declared, "=") { main.declared_globals[parameter_name(declared)] = yes }
+		return flows
+	}
+	if type(n) is key and n.op in compound_ops and n.key is symbol {
+		gather(n.value, context, flows)
+		flows += [["variable", context, n.key.name, key(n.key, compound_ops[n.op], n.value)]]
+		return flows
+	}
+	if is_group(n) and head_name(n) in definitions {
+		arguments = n[1..]
+		for index in 0..<min(#arguments, #parameters_of(n#1.name)) { flows += [["parameter", context, [n#1.name, index], arguments[index]]] }
+	}
+	if type(n) is key {
+		gather(n.key, context, flows)
+		gather(n.value, context, flows)
+	} else if is_group(n) { for item in n { gather(item, context, flows) } }
+	flows
+}
+
+# `x: T = v`: the slot is pinned to T
+declare(name: text, type_node: any, context: text) := {
+	scope = scopes[context]
+	declared = declared_kind(type_node)
+	if declared != ø {
+		scope.kinds[name] = declared
+		scope.pinned[name] = yes
+	}
+	if type_node is symbol { scope.types[name] = type_node.name }
+}
+
+# the scope a variable of `context` lives in: its own, the main scope for a global or a main variable a body reads
+owner(context: text, name: text) := {
+	scope = scopes[context]
+	if name in scope.kinds or context == "" or not (name in scopes[""].kinds) { scope } else { scopes[""] }
+}
+
+# one flow joined into its slot; yes when the slot changed
+apply(flow: any) := {
+	context = flow#2
+	target = flow#3
+	value = flow#4
+	scope = scopes[context]
+	if flow#1 == "parameter" {
+		parameter = parameters_of(target#1)[target#2]
+		if pinned_kind(parameter) != "" { return no }
+		return set_slot(scopes[target#1], parameter_name(parameter), flowing_kind(value, scope))
+	}
+	if flow#1 == "element" {
+		name = target
+		holder = owner(context, name)
+		type = holder.types.get(name)
+		if type == ø or not type.starts_with("list of ") { return no }
+		element = joined_word(type[8..], element_type_word(value, scope))
+		holder.types[name] = "list of " + element
+		return element != type[8..]
+	}
+	holder = owner(context, target)
+	kind = flowing_kind(value, scope)
+	if kind == "" or target in holder.pinned { return no }
+	changed = set_slot(holder, target, kind)
+	if holder.kinds[target] == "list" and kind == "list" {
+		known = holder.types.get(target)
+		given = list_type(value, scope)
+		joined = if known == ø then given else if known.starts_with("list of ") and given.starts_with("list of ") then "list of " + joined_word(known[8..], given[8..]) else if known == given then known else "list"
+		if joined != known { changed = yes }
+		holder.types[target] = joined
+	}
+	changed
+}
+
+# join kind into the slot name of scope; yes when it changed
+set_slot(scope: any, name: text, kind: text) := {
+	if kind == "" { return no }
+	known = scope.kinds.get(name)
+	joined = joined_kind(if known == ø then "" else known, kind)
+	if joined == known { return no }
+	scope.kinds[name] = joined
+	if joined != "list" { scope.types[name] = ø }
+	yes
+}
+
+# every slot joined from its flows until none changes
+settle(flows: any) := {
 	changed = yes
-	while changed and rounds <= #definitions {
+	while changed {
 		changed = no
-		rounds += 1
-		globals = outer_scope(program)
+		for flow in flows { if apply(flow) { changed = yes } }
 		for name in definitions.keys() {
-			kind = result_kind(name, globals)
-			if kind != results[name] {
-				results[name] = kind
+			kind = result_kind(name)
+			joined = joined_kind(results[name], kind)
+			if joined != results[name] {
+				results[name] = joined
 				changed = yes
 			}
 		}
 	}
 }
 
-statements(program: any) := if is_group(program) and program.bracket == "" and (program.separator == ";" or program.separator == "\n") then program else [program]
+# the slots no value flowed into: a parameter takes what its body does with it, anything else an int
+defaults() := {
+	for name in definitions.keys() {
+		scope = scopes[name]
+		used = usages(definitions[name].value)
+		for parameter in parameters_of(name) {
+			own = parameter_name(parameter)
+			if scope.kinds[own] == "" {
+				kind = used_as(own, used)
+				scope.kinds[own] = if kind != ø then kind else "int"
+			}
+		}
+		if results[name] == "" { results[name] = "int" }
+		if results[name] == "nil" { results[name] = "empty" }
+	}
+	for context in scopes.keys() {
+		scope = scopes[context]
+		for name in scope.kinds.keys() {
+			if scope.kinds[name] == "" { scope.kinds[name] = "int" }
+			if scope.kinds[name] == "nil" { scope.kinds[name] = "empty" }
+		}
+	}
+}
+
+# every assigned name of a scope starts unknown, so a read before its first value is unknown too
+register(flows: any) := {
+	for flow in flows {
+		target = flow#3
+		if flow#1 == "variable" {
+			holder = owner(flow#2, target)
+			if not (target in holder.kinds) { holder.kinds[target] = "" }
+		}
+	}
+}
 
 analyze(program: any) := {
 	global definitions
 	global results
-	global parameter_kinds
+	global scopes
 	definitions = {}
 	results = {}
-	parameter_kinds = {}
+	scopes = {}
+	scopes[""] = new_scope()
 	for statement in statements(program) {
 		if is_definition(statement) { definitions[head_name(statement.key)] = statement }
 	}
 	for name in definitions.keys() {
-		definition = definitions[name]
-		used = usages(definition.value)
-		parameter_kinds[name] = parameters_of(name).map(parameter => parameter_kind(parameter, used))
+		scope = new_scope()
+		scope.globals = scopes[""].kinds
+		for parameter in parameters_of(name) {
+			own = parameter_name(parameter)
+			scope.kinds[own] = pinned_kind(parameter)
+			scope.parameters[own] = yes
+		}
+		scopes[name] = scope
+		results[name] = ""
 	}
-	parameters_from_calls(program)
-	forwarded_parameters()
-	settle_results(program)
+	flows = gather(program, "", [])
+	for name in definitions.keys() { gather(definitions[name].value, name, flows) }
+	register(flows)
+	settle(flows)
+	defaults()
+	settle(flows)
 	program
 }
 
@@ -686,9 +683,14 @@ analyze(program: any) := {
 kinds(program: any) := {
 	analyze(program)
 	functions = {}
-	for name in definitions.keys() { functions[name] = {params: parameter_kinds[name], result: results[name]} }
-	main = collect(program, new_scope())
-	{functions: functions, variables: main.kinds, value: kind_of(program, main)}
+	for name in definitions.keys() {
+		scope = scopes[name]
+		functions[name] = {params: parameters_of(name).map(parameter => scope.kinds[parameter_name(parameter)]), result: results[name]}
+	}
+	main = scopes[""]
+	variables = {}
+	for name in main.kinds.keys() { if not (name in main.declared_globals) { variables[name] = main.kinds[name] } }
+	{functions: functions, variables: variables, value: kind_of(program, main)}
 }
 
 inferred_kinds(program: any) := {

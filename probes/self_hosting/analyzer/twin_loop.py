@@ -14,6 +14,8 @@ WARP = "scratch/warp"
 SEPARATOR = " | "
 # the sources whose kinds match, written by each run
 MATCHING = "data/self_analyzer/matching.txt"
+# every difference in full, one JSON object per line: path, warp, rust (generality.py reads it)
+DIFFERING = "data/self_analyzer/differing.jsonl"
 
 
 def arguments():
@@ -58,6 +60,8 @@ def main():
     differing_paths = {path for path, _, _ in differing}
     with open(MATCHING, "w") as out:
         out.writelines(case["path"] + "\n" for case in cases if case["path"] not in differing_paths)
+    with open(DIFFERING, "w") as out:
+        out.writelines(json.dumps({"path": path, "warp": got, "rust": expected}) + "\n" for path, got, expected in differing)
     words = collections.Counter()
     for path, got, expected in differing:
         print(f"## {path}\n  warp: {got[:400]}\n  rust: {expected[:400]}")
