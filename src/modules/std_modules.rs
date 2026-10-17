@@ -132,19 +132,28 @@ pub(super) fn std_module_name(name: &str) -> &str {
 	STD_MODULE_ALIASES.iter().find(|(alias, _)| *alias == name).map_or(name, |(_, module)| *module)
 }
 
-/// The names the standard module at `index` of STD_MODULES defines, in their order; each module is parsed for them
-/// once, when first asked (a compile asks for a few of them)
+/// The names the standard module at `index` of STD_MODULES defines, in their order: kept from an earlier run
+/// (std_words_cache.rs), else every module parsed for them once, when first asked, and kept for the next runs
 pub(super) fn std_module_words(index: usize) -> &'static [String] {
-	pub(super) static DEFINED: [std::sync::OnceLock<Vec<String>>; STD_MODULES.len()] =
-		[const { std::sync::OnceLock::new() }; STD_MODULES.len()];
-	DEFINED[index].get_or_init(|| {
-		let source = STD_MODULES[index].1;
-		statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
-			.iter()
-			.filter(|statement| used_module(statement).is_none())
-			.filter_map(name_declared_by)
-			.collect()
-	})
+	static DEFINED: std::sync::OnceLock<Vec<Vec<String>>> = std::sync::OnceLock::new();
+	&DEFINED.get_or_init(|| match kept_words() {
+		Some(kept) => kept.words.clone(),
+		None => {
+			let words: Vec<Vec<String>> = STD_MODULES.iter().map(|(_, source)| parsed_words(source)).collect();
+			if let Some(heads) = prelude_heads() {
+				keep_words(&words, heads);
+			}
+			words
+		}
+	})[index]
+}
+
+fn parsed_words(source: &str) -> Vec<String> {
+	statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+		.iter()
+		.filter(|statement| used_module(statement).is_none())
+		.filter_map(name_declared_by)
+		.collect()
 }
 
 /// The names the standard modules define with parameters (`ls(folder:any = ".") := …`), read from their text: the
@@ -261,6 +270,9 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		return None;
 	}
 	let parameters = PARAMETERS.get_or_init(|| {
+		if let Some(kept) = kept_words() {
+			return kept.heads.clone();
+		}
 		READING_PRELUDE.set(true);
 		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
 		let has_default = |parameter: &Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));

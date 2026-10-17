@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+# an if-expression choosing between two node lists loses the element type: errors "not an int" instead of ['{']
+nodes = parse("{x:{s:1}}").map(entry => entry.value)
+(if no then nodes else nodes).map(v => v.bracket)

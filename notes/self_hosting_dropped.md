@@ -23,6 +23,22 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 | `$a` pattern names | `match n { data($a + 0) … }` | edge form of node patterns | a `$` name atom |
 | Error nodes for malformed input | `y = [1 2` → "`]` is missing" | come back with the diagnostics port | the parser's error nodes and their texts |
 
+## Deviations
+Rust tree shapes parser.warp does not copy (notes/self_hosting.md: matching Rust is a check, not the goal). The parser
+differential reads them as expected: tests/common/parser_deviations.rs rewrites the Rust tree to the clean shape, one
+function per entry. Each entry has a card for the Rust side; when Rust changes, its function goes.
+
+| Key | Form | Rust | parser.warp | Card |
+|-----|------|------|-------------|------|
+| square-cube | `x²` | `x ²` (a suffix operator, a second shape for powers) | `x ^ 2`, as `x⁴` is `x ^ 4` | rust-square-cube |
+| definition-head | `f(x, y) { x }` | `((f (x y)) {x})`: the parameters a nested group | `((f x y) {x})`: the head a call | rust-definition-head |
+| bare-return | `return` | the phrase `[return ø]` | the word `return` | rust-bare-return |
+| colon-body | `for 1..3: print it` | the body wrapped as `{;}` | the body bare, as in `for i in xs: x` (`3 times: x` keeps `{;}`: a block runs, `3 times "ab"` repeats) | rust-colon-body |
+
+Fixed in both parsers instead (2026-10-17): hex digit separators `0xFF_FF`; a wrong closer `(1 + 2]` and a stray
+top-level `]` are error nodes (before: skipped, the group "ran to the end of the input"); `3 times: print it` runs
+the whole rest of the line (before: only `print`).
+
 # Pass twins: fringe forms a warp twin leaves out
 The port keeps the clean core, not every Rust case (user 2026-10-17). A twin may skip a fringe form when it is
 recorded here with how to bring it back; the harness (tests/common/twins.rs pass_differential, `dropped`) skips the
@@ -122,8 +138,15 @@ Target order: parser (clean tree) → desugar table pass → scope pass (calls, 
 passes (test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipes, quasi_quote, tree_walks) →
 analyzer checks.
 
-## Deviations
-Where a warp twin keeps a cleaner result than its Rust twin, with an example; the differential reads these as expected.
+# Deviations: where a warp twin keeps the clean result instead of Rust's
+Rule: notes/self_hosting.md (matching Rust is a check, not the goal). Each entry: the difference, an example, the card
+or question for the Rust side.
+## emitter (lib/compiler/emitter.warp)
+- Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors
+  (notes/self_hosting.md "Value layout"). Rust boxes nearly every value as a $Node, keeps texts in linear memory as
+  (ptr, len) $String and lists as cons cells. Example: `xs#500` walks 500 cells in Rust's module, one array.get in
+  warp's. Same program results. Rust side: card rust-emitter.
+## passes (lib/compiler/scope.warp)
 - Names come from lib/compiler/scope.warp (one walk for every binding form), not from three per-pass walks
   (of_lookups defined_names, grouped_receivers bound_variables, number_words names_given). Cleaner on one corpus
   source: `fn one() {…}` (probes/algo/queens/p8_plus_eq_call.warp) keeps the function's name, Rust's number_words
