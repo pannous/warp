@@ -571,6 +571,16 @@ PASSED:
   ✓ control::test_print_empty_map::print_of_an_empty_map_prints_empty
   ✓ control::test_print_empty::print_empty_gives_nothing
   ✓ control::test_print_empty::print_empty_prints_it
+  ✓ control::test_quasi_quote::a_hole_is_an_operand_of_a_phrase
+  ✓ control::test_quasi_quote::a_hole_named_like_a_unit_is_the_bound_code
+  ✓ control::test_quasi_quote::a_replacement_template_splices_the_holes
+  ✓ control::test_quasi_quote::a_rest_hole_binds_and_splices_the_remaining_items
+  ✓ control::test_quasi_quote::a_template_in_a_lambda_splices_its_parameter
+  ✓ control::test_quasi_quote::a_template_splices_a_variable
+  ✓ control::test_quasi_quote::a_template_splices_an_expression
+  ✓ control::test_quasi_quote::a_times_phrase_becomes_its_loop
+  ✓ control::test_quasi_quote::an_arm_template_splices_the_holes
+  ✓ control::test_quasi_quote::quoted_phrases_stay_as_written
   ✓ control::test_quoted_data_untouched::a_member_read_stays_a_dot
   ✓ control::test_quoted_data_untouched::library_sugar_stays_as_written
   ✓ control::test_raise::raise_ends_the_run_with_its_message
@@ -6286,4 +6296,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6281 passed, 0 failed, 6281 total tested
+13 ignored, 6291 passed, 0 failed, 6291 total tested
