@@ -161,3 +161,11 @@ fn the_library_word_keeps_a_lists_call_with_a_hint() {
 fn a_field_named_like_a_library_word_is_written() {
 	is!("class N{title:text}; f(m) := { m.title = \"b\"; m }; f(N(\"a\")).title", "b");
 }
+
+// a soft keyword is the program's only where its name is in scope: a parameter or a field named undo leaves the top
+// level's `undo x` (slice 3, ProgramNames)
+#[test]
+fn a_local_name_leaves_the_keyword_to_the_top_level() {
+	is!("f(undo) := undo + 1; x = 1; x = 2; undo x; x + f(1)", 3);
+	is!("o = {undo: 5}; x = 1; x = 2; undo x; x + o.undo", 6);
+}

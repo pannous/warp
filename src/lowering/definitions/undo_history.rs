@@ -17,7 +17,8 @@ const NAME_PLACEHOLDER: &str = "X";
 pub fn lower(program: Node) -> Node {
 	let mut undone = vec![];
 	collect_undone(&program, &mut undone);
-	let taken = [UNDO_WORD, REDO_WORD].iter().any(|word| crate::soft_keywords::program_names(&program, word));
+	let names = crate::program_names::ProgramNames::of(&program);
+	let taken = [UNDO_WORD, REDO_WORD].iter().any(|word| names.takes(word));
 	if undone.is_empty() || taken {
 		return program;
 	}

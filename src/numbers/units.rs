@@ -265,7 +265,8 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
 	let program = with_units_after_numbers(lower_unit_aliases(with_run_time_unit_tables(program)));
-	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
+	let names = crate::program_names::ProgramNames::of(&program);
+	let program = match QUANTITY_CAST_WORDS.iter().any(|word| names.takes(word)) {
 		true => program,
 		false => with_quantity_casts(program),
 	};
