@@ -229,7 +229,8 @@ impl Bindings {
 					self.remember(name, if holds_function { Meaning::Function } else { Meaning::Variable });
 				}
 			}
-			Node::Key(parameters, Op::Arrow, _) => {
+			// `Some(v) => …`, a match arm's call pattern, binds no parameter named Some
+			Node::Key(parameters, Op::Arrow, _) if !is_call_pattern(parameters) => {
 				let names: Vec<String> = match parameters.drop_meta() {
 					Node::List(items, _, _) => items.iter().filter_map(parameter_name).collect(),
 					other => parameter_name(other).into_iter().collect(),
@@ -262,6 +263,11 @@ impl Bindings {
 /// `[a, b] = …` and `{a: 1} = …` are no function heads
 fn is_data_head(head: &Node) -> bool {
 	matches!(head.drop_meta(), Node::List(_, Bracket::Square | Bracket::Curly, _))
+}
+
+/// `Some(v)`: a name glued to its group
+fn is_call_pattern(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, crate::node::Separator::None) if items.len() > 1)
 }
 
 /// `x` of `x` and of `x: int`
