@@ -19,10 +19,19 @@ const IS_NONE: &str = "is_none";
 pub fn lower(program: Node) -> Node {
 	// a program's own Some keeps its meaning, its own expect or unwrap_or theirs
 	let defined = crate::library_words::defined_names(&program);
-	if !mentions_option(&program, &defined) || defined.contains(SOME_WORD) {
+	if !mentions_option(&program, &defined) || defined.contains(SOME_WORD) || declares_type(&program, SOME_WORD) {
 		return program;
 	}
 	rewritten(program, &defined)
+}
+
+/// `type Option[T] = Some(T) | None`: the program's own Some, a class of its sum type
+fn declares_type(program: &Node, name: &str) -> bool {
+	let mut declared = false;
+	program.visit(&mut |node| {
+		declared |= matches!(node, Node::Type { name: type_name, .. } if type_name.drop_meta().name() == name)
+	});
+	declared
 }
 
 fn mentions_option(node: &Node, defined: &HashSet<String>) -> bool {

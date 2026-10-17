@@ -57,4 +57,6 @@ fn loop_runs_until_break() {
 fn a_programs_own_option_method_keeps_its_meaning() {
 	is!("expect(x, y) := x + y; o = 3; o.expect(5)", 8);
 	is!("unwrap_or(x, y) := x * y; o = Some(3); o.unwrap_or(5)", 15);
+	// a sum type's own Some is a class with a payload field
+	is!("type Option[T] = Some(T) | None; s = Some(4); s#1 + s.value", 8);
 }
