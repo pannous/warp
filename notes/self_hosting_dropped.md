@@ -30,7 +30,6 @@ function per entry. Each entry has a card for the Rust side; when Rust changes, 
 
 | Key | Form | Rust | parser.warp | Card |
 |-----|------|------|-------------|------|
-| definition-head | `f(x, y) { x }` | `((f (x y)) {x})`: the parameters a nested group | `((f x y) {x})`: the head a call | rust-definition-head |
 | colon-body | `for 1..3: print it` | the body wrapped as `{;}` | the body bare, as in `for i in xs: x` (`3 times: x` keeps `{;}`: a block runs, `3 times "ab"` repeats) | rust-colon-body |
 
 Fixed in both parsers instead (2026-10-17): hex digit separators `0xFF_FF`; a wrong closer `(1 + 2]` and a stray

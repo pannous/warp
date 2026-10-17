@@ -544,10 +544,9 @@ impl WarpParser {
 
 				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
 				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header && !is_switch_subject {
-					// Function with body: name(params) { body }
+					// Function with body: name(params) { body }, its head the call
 					let body = self.parse_bracketed('{');
-					let signature = call(&symbol, vec![typed_parameters(args_node)]);
-					Node::List(vec![signature, body], Bracket::Round, Separator::None)
+					Node::List(vec![function_call(symbol, args_node), body], Bracket::Round, Separator::None)
 				} else if symbol == PRINT_WORD {
 					print_call(print_arguments(args_node))
 				} else {

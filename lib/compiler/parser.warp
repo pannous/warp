@@ -1163,7 +1163,7 @@ def named(p) {
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
-		// the head is the call f(x, y) (Rust nests the parameters: Deviations definition-head)
+		// the head is the call f(x, y)
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))

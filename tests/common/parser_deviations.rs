@@ -13,28 +13,7 @@ pub fn clean_rust_tree(node: &Node) -> Node {
 		Node::Error(inner) => Node::Error(Box::new(clean_rust_tree(inner))),
 		other => other.clone(),
 	};
-	definition_head_spread(&cleaned).or_else(|| colon_body_unwrapped(&cleaned)).unwrap_or(cleaned)
-}
-
-/// `f(x, y) { body }` has the head `f(x, y)` of a call, its parameters spread (deviation definition-head)
-fn definition_head_spread(node: &Node) -> Option<Node> {
-	let Node::List(parts, Bracket::Round, Separator::None) = node else { return None };
-	let [head, body] = parts.as_slice() else { return None };
-	if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
-		return None;
-	}
-	let Node::List(call, Bracket::Round, Separator::None) = head.drop_meta() else { return None };
-	let [name, parameters] = call.as_slice() else { return None };
-	if !matches!(name.drop_meta(), Node::Symbol(_)) {
-		return None;
-	}
-	let spread = match parameters.drop_meta() {
-		Node::Empty => vec![],
-		Node::List(items, Bracket::Round, _) => items.clone(),
-		_ => return None,
-	};
-	let head = Node::List(std::iter::once(name.clone()).chain(spread).collect(), Bracket::Round, Separator::None);
-	Some(Node::List(vec![head, body.clone()], Bracket::Round, Separator::None))
+	colon_body_unwrapped(&cleaned).unwrap_or(cleaned)
 }
 
 /// `for 1..3: print it` keeps its colon body bare, as `for i in xs: x` does (deviation colon-body); `3 times: x` keeps its
