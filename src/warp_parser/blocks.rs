@@ -45,13 +45,15 @@ impl WarpParser {
 	}
 
 	pub(super) fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
-		if self.names_end() {
+		let Some(last_end) = self.last_closing_end.filter(|last_end| *last_end >= start) else {
 			return false;
-		}
+		};
 		let mut open = 1;
-		for (word_start, word_end) in code_words(&self.chars, start) {
-			if word_start > 0 && self.chars[word_start - 1] == '.' {
-				continue; // `range.end` is a property
+		for (word_start, word_end) in
+			code_words(&self.chars, start).take_while(|(word_start, _)| *word_start <= last_end)
+		{
+			if is_property(&self.chars, word_start) {
+				continue;
 			}
 			let word: String = self.chars[word_start..word_end].iter().collect();
 			match word.as_str() {
@@ -64,26 +66,6 @@ impl WarpParser {
 			}
 		}
 		false
-	}
-
-	/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned variable
-	/// (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
-	pub(super) fn names_end(&self) -> bool {
-		let next_visible =
-			|from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
-		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
-		code_words(&self.chars, 0).any(|(word_start, word_end)| {
-			if self.chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
-				return false;
-			}
-			let before = previous_visible(word_start).map(|index| self.chars[index]);
-			let after = next_visible(word_end);
-			let assigned =
-				after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
-			// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
-			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')'))
-				|| assigned
-		})
 	}
 
 	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
@@ -222,6 +204,39 @@ pub(super) fn without_end_lines(body: Node) -> Node {
 		),
 		other => children_rewritten(other, without_end_lines),
 	}
+}
+
+/// `range.end` is a property, no keyword
+fn is_property(chars: &[char], word_start: usize) -> bool {
+	word_start > 0 && chars[word_start - 1] == '.'
+}
+
+/// Where the last `end` keyword of the code starts, None when there is none or the source uses `end` as a name: a
+/// parameter or argument between separators (`f(a, end)`) or an assigned variable (`end = 3`). Then no `end` closes a
+/// block: `if a == 0 then 1 else end` hands back the variable
+pub(super) fn last_closing_end(chars: &[char]) -> Option<usize> {
+	let next_visible =
+		|from: usize| chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
+	let previous_visible = |before: usize| chars[..before].iter().rposition(|ch| !ch.is_whitespace());
+	let mut last_end = None;
+	for (word_start, word_end) in code_words(chars, 0) {
+		if chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
+			continue;
+		}
+		let before = previous_visible(word_start).map(|index| chars[index]);
+		let after = next_visible(word_end);
+		let assigned = after.is_some_and(|index| chars[index] == '=' && chars.get(index + 1) != Some(&'='));
+		// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
+		let argument =
+			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(chars[index], ',' | ')'));
+		if argument || assigned {
+			return None;
+		}
+		if !is_property(chars, word_start) {
+			last_end = Some(word_start);
+		}
+	}
+	last_end
 }
 
 /// The spans of the words of the code from `start` on: an `end` in a text or a comment is no word of the code
