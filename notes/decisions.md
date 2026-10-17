@@ -98,6 +98,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P241 no vector type: `Vec<int>`, `vector<int>`, `Array<int>` read as `list of int` with the note "warp says list".
 - Error highlighting: CLI carets under the word; web red/amber wavy underlines with the message on hover.
 - #7/P92 unresolved calls are errors: `foo()` is "undefined function: foo"; a bare word statement naming nothing is "undefined variable: foo"; a bare `foo` in data stays a symbol.
+- constant-words (leave as is): null nul none nil nill nix nada nothing empty void true yes false no are constants in any case; `empty = 3` is `ø = 3`.
+- function-words-consume (user): every function word, not only print, takes its arguments without parentheses, by its parameters (arity and types), no special rules: `show a, b` = show(a, b), `add 1 2` = add(1, 2), `print ord c` = print(ord(c)), `[twice 1, twice 2]` = [twice(1), twice(2)], `count xs > 3` = count(xs) > 3; a function word where the parameter takes a function is a value (`map square xs` = map(square, xs)); non-function words are unchanged. An argument reaches right as long as the expression fits the parameter type (`sqrt 4 + 5` = sqrt(9); `xs > 3` is a bool, so count stops). Varargs/defaults take what fits to the statement end, overloads the most arguments that type-check, a function value of unknown arity one atom per blank (Interviewer's decision).
 - P86 adding values of unknown kinds builds `a + b` lazily; evaluated operands need Addable, else a type error.
 
 ## Comments, separators and lexing
@@ -194,7 +196,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P179 sum types auto-unwrap like optionals; payload fields by position `rgb(1,2,3)#1`; a payload-free variant is its symbol and `red is Color`. P178 enum cases with values are sealed classes.
 - P45 a variable given kinds that don't mix (`x=[1]; x=5`) is a compile error; Int→Float widening stays; undeclared lists stay `list any`.
 - P28 `real x;` read before assignment is its type's zero value.
-- P23/P20/type-words-reserved: every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`.
+- P23/P20/type-words-reserved: every type word is reserved as a function name (`double(x) := …` errs, "name it to_double"), except P31's `text(p)`. type-word-local-warns: binding a variable to a type word (`symbol = ":"`) warns, since it shadows the type in `is`/`as` (Interviewer's decision).
 - #9 `list of int`; plural type words (`numbers`) are lists; `list<int>` reads too; `x : 100 int` and `pixel:int[100]` declare typed arrays.
 - `type(ø)` prints "empty". static-int: a constant call misfitting its declared int result is refused at compile time.
 - D5 any noun can name a type/parameter (notes/matching.md).

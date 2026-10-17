@@ -2,12 +2,12 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool; branch: bool; grouped: bool }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false, branch: false, grouped: false}
 	items(p, ' ', "")
 }
 
@@ -16,15 +16,30 @@ def tree(source) {
 // Rust twin: lists.rs parse_list_with_separators
 def items(p, closer, bracket) {
 	found = []
+	opener = p.at - 1
+	outer_branch = p.branch
+	outer_grouped = p.grouped
+	p.branch = false
+	p.grouped = p.grouped or closer != ' '
 	while true {
 		skip_blanks(p)
 		if p.at >= p.n { break }
-		if p.code[p.at] == closer {
+		c = p.code[p.at]
+		if c == closer {
 			p.at = p.at + 1
 			break
 		}
+		stray = c == ')' or c == ']' or c == '}'
+		if stray and closer != ' ' {
+			p.at = p.at + 1
+			p.branch = outer_branch
+			p.grouped = outer_grouped
+			return failed("`" + c + "` closes the group opened at " + line_and_column(p.code, opener) + ", which needs `" + closer + "`")
+		}
+		// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
+		if stray and p.grouped { break }
 		before = p.at
-		item = expression(p, 0)
+		item = if stray then stray_closer(p, c) else expression(p, 0)
 		newline = skip_blanks(p)
 		if bracket == "" and newline and line_indent(p) > p.indent {
 			body = lines_below(p)
@@ -35,10 +50,32 @@ def items(p, closer, bracket) {
 		after = if dedent then "" else separator(p, closer, newline)
 		found += [[statement, after] for statement in statements_of(item)]
 		if dedent { break }
-		// a closer of another bracket: skipped, so the reading goes on
 		if p.at == before { p.at = p.at + 1 }
 	}
+	p.branch = outer_branch
+	p.grouped = outer_grouped
 	grouped(found, bracket)
+}
+
+def stray_closer(p, c) {
+	p.at = p.at + 1
+	failed("`" + c + "` closes no group")
+}
+
+// An error node with its message, as the Rust parser writes one into the tree
+def failed(message) := ["error", ["text", message]]
+
+// `line:column` of the character at `at`, both from 1
+def line_and_column(code, at) {
+	line = 1
+	start = 0
+	for i in 0 ..< at {
+		if code[i] == '\n' {
+			line = line + 1
+			start = i + 1
+		}
+	}
+	"" + line + ":" + (at - start + 1)
 }
 
 // The indent of the parser's position on its line: its tabs, its spaces too inside a block indented by spaces
@@ -170,15 +207,30 @@ def grouped(pairs, bracket) {
 	if group.length > 0 { groups += [group] }
 	nodes = [if group.length == 1 and group#1#2 == "" then group#1#1 else grouped(group, "") for group in groups]
 	if nodes.length == 1 and bracket == "" { return nodes#1 }
-	if split == " " then phrase(bracket, nodes) else listed(bracket, split, nodes)
+	if split == " " { return phrase(bracket, nodes) }
+	if split == "," { return comma_list(bracket, nodes) }
+	listed(bracket, split, nodes)
 }
 
 def listed(bracket, separator, nodes) := ["list", bracket, separator] + nodes
 
-// Words side by side; `print ord c` prints the rest of the line as one value. Rust twin: mod.rs grouped_list
+// Words side by side; `print ord c` and `{ print ord c }` print the rest of the line as one value
+// Rust twin: commands.rs grouped_list
 def phrase(bracket, nodes) {
-	if bracket != "" or nodes.length < 3 or nodes#1 != ["symbol", "print"] { return listed(bracket, " ", nodes) }
-	listed("", " ", [nodes#1, listed("", " ", nodes[1:])])
+	if not (bracket == "" or bracket == "{") or nodes.length < 3 or nodes#1 != PRINT { return listed(bracket, " ", nodes) }
+	listed(bracket, " ", [nodes#1, listed("", " ", nodes[1:])])
+}
+PRINT = ["symbol", "print"]
+
+// `print a, b` and `{ print i, i*2 }`: the comma binds looser than the space, so [[print a], b] is the call print(a, b)
+// Rust twin: commands.rs grouped_list, print_call
+def comma_list(bracket, nodes) {
+	head = nodes#1
+	if not (bracket == "" or bracket == "{") or not is_list_of(head, "") or head#3 != " " or head#4 != PRINT {
+		return listed(bracket, ",", nodes)
+	}
+	call = listed("(", "", [PRINT] + head[4 ..] + nodes[1 ..])
+	if bracket == "{" then listed("{", "", [call]) else call
 }
 
 // Spaces, tabs, newlines and comments skipped; whether a newline was among them
@@ -280,7 +332,7 @@ def continued(p, left, min_power) {
 				continue
 			}
 			skip_blanks(p)
-			left = bound_key(p, op#2, left, powers#2)
+			left = if op#2 == "then" or op#2 == "else" then ["key", op#2, left, branch(p, powers#2)] else bound_key(p, op#2, left, powers#2)
 		}
 	}
 	left
@@ -391,11 +443,8 @@ TIMES_POWER = 50
 // Rust twin: suffixes.rs parse_times_loop
 def repeated(p) {
 	if is_at(p.code, p.at, ':', p.n) {
-		p.at = p.at + 1
-		skip_spaces(p)
-		body = expression(p, 0)
-		if is_block(body) { return body }
-		return listed("{", ";", [body])
+		body = colon_body(p, 1)
+		return if is_block(body) then body else listed("{", ";", [body])
 	}
 	atom(p)
 }
@@ -509,7 +558,7 @@ def applies(p, left, min_power) {
 // The word here begins what follows the operand: a loop clause, a block's `end`, a key (`_: 0`) or an element (`p{m}`)
 // Rust twin: suffixes.rs word_begins_item
 def word_begins_item(p) {
-	if keyword_at(p, "for") or keyword_at(p, "end") { return true }
+	if keyword_at(p, "for") or keyword_at(p, "end") or else_if_at(p) { return true }
 	at = p.at
 	while at < p.n and is_name_char(p.code[at]) { at = at + 1 }
 	if at == p.at { return false }
@@ -602,7 +651,7 @@ def operator_at(p) {
 	c = peek(p.code, p.at, p.n)
 	if is_name_start(c) {
 		for op in WORD_OPERATORS {
-			if op#1[0] == c and keyword_at(p, op#1) { return op }
+			if op#1[0] == c and keyword_at(p, op#1) and not (p.branch and op#1 == "else") { return op }
 		}
 		return []
 	}
@@ -624,7 +673,7 @@ def operand_follows(p, width) {
 }
 
 // `word` at the parser's position as a whole word
-def keyword_at(p, word) := starts_at(p.code, word, p.at) and not (p.at + word.length < p.n and is_name_char(p.code[p.at + word.length]))
+def keyword_at(p, word) := keyword_at_position(p, word, p.at)
 
 // Left and right binding power of an operator
 // Rust twin: operators.rs Op::binding_power
@@ -754,7 +803,8 @@ def returned(p) {
 	c = peek(p.code, p.at, p.n)
 	value = ø
 	if not (c == '}' or c == ';' or c == '\n' or c == '\r') { value = continued(p, expression(p, 59), 0) }
-	listed("", " ", [["symbol", "return"], value])
+	// `return` alone is the word (Rust: [return ø], Deviations bare-return)
+	if value === ø then ["symbol", "return"] else listed("", " ", [["symbol", "return"], value])
 }
 
 // The operators after which `return` names a variable
@@ -783,7 +833,11 @@ def conditioned(word, condition, p) {
 		condition = split#1
 		body = split#2
 	} else if is_at(p.code, p.at, ':', p.n) {
+		// `if c: x = 1 else: x = 2`: the body ends before the else
+		outer = p.branch
+		p.branch = word == "if"
 		body = colon_body(p, 1)
+		p.branch = outer
 	} else {
 		if not is_at(p.code, p.at, '{', p.n) { return ["key", word, ø, condition] }
 		p.at = p.at + 1
@@ -792,12 +846,52 @@ def conditioned(word, condition, p) {
 	head = ["key", word, ø, condition]
 	if word == "while" { return ["key", "do", head, body] }
 	branches = ["key", "then", head, body]
+	otherwise = else_branch(p)
+	if otherwise.length == 0 { return branches }
+	["key", "else", branches, otherwise#1]
+}
+
+// `else body`, also on the line after the branch, `else: body`, and `elif`/`elsif`/`elseif` chaining a new if; [] if
+// no else follows
+// Rust twin: if_else.rs parse_optional_else, else_on_a_later_line, at_else_if_word
+def else_branch(p) {
 	skip_spaces(p)
-	if not keyword_at(p, "else") { return branches }
+	at = p.at
+	while at < p.n and is_blank(p.code[at]) { at = at + 1 }
+	if at > p.at and p.code[p.at .. at].contains("\n") and keyword_at_position(p, "else", at) { p.at = at }
+	for word in ELSE_IF_WORDS {
+		if keyword_at(p, word) {
+			p.at = p.at + word.length
+			skip_spaces(p)
+			return [conditioned("if", header_expression(p, CONDITION_POWER), p)]
+		}
+	}
+	if not keyword_at(p, "else") { return [] }
 	p.at = p.at + 4
 	skip_spaces(p)
-	["key", "else", branches, expression(p, 74)]
+	if not is_at(p.code, p.at, ':', p.n) { return [branch(p, 74)] }
+	p.at = p.at + 1
+	skip_spaces(p)
+	[branch(p, 0)]
 }
+
+// A branch of an if; `then print x, y` and `else print ord x` are the call print(…) of the expressions after it
+// Rust twin: if_else.rs parse_branch, commands.rs take_braceless_print, print_call_from
+def branch(p, min_power) {
+	at = blank_end(p, p.at + 5)
+	if not (keyword_at(p, "print") and at > p.at + 5 and starts_atom_at(p, at)) { return expression(p, min_power) }
+	p.at = at
+	arguments = [expression(p, min_power)]
+	while is_at(p.code, p.at, ',', p.n) {
+		p.at = p.at + 1
+		skip_spaces(p)
+		arguments += [expression(p, min_power)]
+	}
+	listed("(", "", [PRINT] + arguments)
+}
+ELSE_IF_WORDS = ["elif", "elsif", "elseif"]
+
+def keyword_at_position(p, word, at) := starts_at(p.code, word, at) and not (at + word.length < p.n and is_name_char(p.code[at + word.length]))
 
 // `for x in xs {…}`: the loop variable, the iterable and the body
 // Rust twin: statements.rs try_parse_for_in, for_iterable_and_body_word
@@ -844,7 +938,8 @@ def ranged_loop(p) {
 		body = indented_block(p)
 	}
 	if body == ø { return ø }
-	listed("", " ", [["symbol", "for"], iterable, if is_block(body) then body else listed("{", ";", [body])])
+	// a colon body stays bare, as in `for i in xs: x` (Rust wraps it: Deviations colon-body)
+	listed("", " ", [["symbol", "for"], iterable, body])
 }
 
 // A condition that took the block after it as an argument, `if x in xs {…}`: [the condition, the block], else []
@@ -893,14 +988,25 @@ def statement_words(p) {
 	while true {
 		words = words + [expression(p, 0)]
 		skip_spaces(p)
-		if keyword_at(p, "else") or not starts_atom(p) { break }
+		if ends_branch(p) or not starts_atom(p) { break }
 	}
 	if words.length == 1 { return words#1 }
 	phrase("", words)
 }
 
-def starts_atom(p) {
-	c = peek(p.code, p.at, p.n)
+def ends_branch(p) := keyword_at(p, "else") or else_if_at(p)
+
+def else_if_at(p) {
+	for word in ELSE_IF_WORDS {
+		if keyword_at(p, word) { return true }
+	}
+	false
+}
+
+def starts_atom(p) := starts_atom_at(p, p.at)
+
+def starts_atom_at(p, at) {
+	c = peek(p.code, at, p.n)
 	is_name_start(c) or is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{'
 }
 
@@ -967,7 +1073,7 @@ def atom(p) {
 		return ø
 	}
 	p.at = p.at + 1
-	ø
+	failed("Unexpected character '" + c + "'")
 }
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
@@ -982,7 +1088,8 @@ def with_glued_factor(p, amount) {
 	["key", "*", amount, if power == ø then factor else power]
 }
 
-// `x⁴` is x^4, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5; a lone ² or ³ keeps its square or cube operator:
+// `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5 (Rust keeps a lone ² or ³ as its own operator:
+// notes/self_hosting_dropped.md Deviations square-cube):
 // the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
 // Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
 def superscript_power(p, left, min_power) {
@@ -1003,9 +1110,9 @@ def superscript_power(p, left, min_power) {
 	total = 0
 	for term in terms { total = total + term#1 * term#2 }
 	power = ["key", "^", left, if total < 0 then 0 - total else total]
-	if width == 1 and total == 2 { power = ["key", "²", left, ø] }
-	if width == 1 and total == 3 { power = ["key", "³", left, ø] }
-	if (if power#2 == "^" then binding_powers("^")#1 else SUFFIX_POWER) < min_power { return ø }
+	// a lone ² or ³ binds as a suffix: `a.b²` squares a.b
+	suffix = width == 1 and (total == 2 or total == 3)
+	if (if suffix then SUFFIX_POWER else binding_powers("^")#1) < min_power { return ø }
 	p.at = p.at + width
 	reciprocal_if(total < 0, power)
 }
@@ -1068,7 +1175,8 @@ def named(p) {
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
-		return listed("(", "", [listed("(", "", [name, arguments]), body])
+		// the head is the call f(x, y) (Rust nests the parameters: Deviations definition-head)
+		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))
 }
@@ -1244,13 +1352,14 @@ def starts_code(first) {
 	is_call_head(first) and is_symbol(first#4)
 }
 
-// The digits of a number in `base` (`_` between binary digits), read
+// The digits of a number in `base` (`_` between digits), read
 // Rust twin: literals.rs read_number_value, its 0x and 0b branches
 def radix_value(p, base) {
 	value = 0
 	while p.at < p.n {
 		c = p.code[p.at]
-		if not (c == '_' and base == 2) {
+		separates = c == '_' and (base == 2 or digit_value(peek(p.code, p.at + 1, p.n)) < base)
+		if not separates {
 			digit = digit_value(c)
 			if digit >= base { return value }
 			value = value * base + digit
@@ -1361,7 +1470,7 @@ def template(written) {
 }
 
 // A text's escapes read: `\n` `\t` `\r` `\e` as their characters, `\"` `\\` and the like as the character itself;
-// holes `\(x)` and entities `\:alpha` stay as written in an interpolating text
+// entities `\:alpha` stay as written in an interpolating text (holes went to template)
 // Rust twin: literals/text.rs read_text
 def unescaped(content, interpolates) {
 	if not content.contains("\\") { return content }
@@ -1373,7 +1482,7 @@ def unescaped(content, interpolates) {
 		if c != '\\' or at + 1 >= content.length {
 			read = read + c
 			at = at + 1
-		} else if interpolates and ("({".contains(escaped) or escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2])) {
+		} else if interpolates and escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
 			read = read + c + escaped
 			at = at + 2
 		} else {

@@ -174,7 +174,31 @@ pub fn edit(source: &str, line: usize, column: usize, fix: &Fix) -> Option<Edit>
 		return offset_of(source, line, column)
 			.map(|offset| Edit { range: offset..offset, replacement: fix.replacement.clone() });
 	}
-	locate(source, line, column, &fix.written).map(|range| Edit { range, replacement: fix.replacement.clone() })
+	let edit = |written: &str, replacement: &str| {
+		locate(source, line, column, written).map(|range| Edit { range, replacement: replacement.to_string() })
+	};
+	edit(&fix.written, &fix.replacement).or_else(|| {
+		let (written, replacement) = changed_words(&fix.written, &fix.replacement)?;
+		edit(&written, &replacement)
+	})
+}
+
+/// The words a reading changes, the words both share around them left out: the compiler shows `written` serialized
+/// (`3 times 4` for the source's `three times four`, `(pow 2 10)` for `pow(2, 10)`), which the source need not hold
+/// whole (card clicking-meant); `None` when nothing is left to anchor the edit
+fn changed_words(written: &str, replacement: &str) -> Option<(String, String)> {
+	let (written, replacement): (Vec<&str>, Vec<&str>) =
+		(written.split_whitespace().collect(), replacement.split_whitespace().collect());
+	let shared_start = written.iter().zip(&replacement).take_while(|(a, b)| a == b).count();
+	let shared_end = written[shared_start..]
+		.iter()
+		.rev()
+		.zip(replacement[shared_start..].iter().rev())
+		.take_while(|(a, b)| a == b)
+		.count();
+	let changed = |words: &[&str]| words[shared_start..words.len() - shared_end].join(" ");
+	let (written, replacement) = (changed(&written), changed(&replacement));
+	(!written.is_empty() && !replacement.is_empty()).then_some((written, replacement))
 }
 
 /// Every edit of `fix` (its own and those it also needs), the last in the source first so each applies to the source

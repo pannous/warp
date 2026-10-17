@@ -265,12 +265,33 @@ fn first_unsaid_ordering(node: &Node, intervals: &HashSet<String>) -> Option<Dia
 		{
 			Some(unsaid_ordering(node, left, *op, right))
 		}
+		Node::Key(head, Op::Define | Op::Assign, body)
+			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
+		{
+			let outer = intervals.difference(&parameter_names(head)).cloned().collect();
+			first_unsaid_ordering(body, &outer)
+		}
 		Node::Key(left, _, right) => {
 			first_unsaid_ordering(left, intervals).or_else(|| first_unsaid_ordering(right, intervals))
 		}
 		Node::List(items, _, _) => items.iter().find_map(|item| first_unsaid_ordering(item, intervals)),
 		_ => None,
 	}
+}
+
+/// The parameters of a definition head `f(x, y: float)`: inside its body they shadow outer ± variables of that name
+fn parameter_names(head: &Node) -> HashSet<String> {
+	let Node::List(parameters, _, _) = head.drop_meta() else {
+		return HashSet::new();
+	};
+	parameters
+		.iter()
+		.filter_map(|parameter| match parameter.drop_meta() {
+			Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name(),
+			other => other.symbol_name(),
+		})
+		.map(str::to_string)
+		.collect()
 }
 
 fn makes_intervals(program: &Node) -> bool {

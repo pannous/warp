@@ -14,8 +14,14 @@ forward-function, data-splice, data-pattern-sealed, parsed-kinds).
 Decision self-hosting:
 - Purpose: dogfooding (the compiler in warp shows what the language lacks), independence from Rust, a showcase.
 - Scope: the parser first (lexer, parser, serializer); then section Next phase.
-- Integration: twins, checked. Each warp part runs next to its Rust twin, and a differential test over every sample
-  compares them. The Rust part goes only when its twin matches everywhere.
+- Success-driven: the measure is the existing test suite and samples passing through the warp-written compiler
+  (program results, errors, output), not agreement with Rust's intermediate trees. Card warp-pipeline-suite runs the
+  is!/samples suite through the warp pipeline and reports the pass count; that count is the progress number. A Rust
+  part goes when the suite passes without it. 80–90% passing is fine at the start: breadth over the long tail, the
+  failing rest is a ranked list, not a blocker.
+- Twins (a warp part next to its Rust original, compared over every source) are scaffolding only: kept where a warp
+  stage hands its result to a Rust stage, because the Rust side needs a compatible shape, and dropped as soon as the
+  stages on both sides are warp. No new intermediate twin is written where the suite can already judge.
 - Language gaps are fixed in the language as cards of this topic, never worked around in the warp code.
 - Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
   result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
@@ -32,6 +38,24 @@ Decision self-hosting:
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
 src ~59k.
+
+## Parser restructuring (review 2026-10-17, topic self-hosted)
+parser.warp leaves the Rust parser's structure where it is unsound. Order: parser-tokens and parser-desugar-pass first,
+then parser-scope-pass and parser-application with warp-self-passes, then parser-typed-fields, parser-context,
+parser-keyword-table. Target shapes:
+- parser-tokens: lexer.warp yields tokens, each with "blank before" and "newline before" bits; the parser reads tokens
+  and asks no character lookahead (operand_after, operand_follows, expression_ends, ends_line,
+  only_blanks_before_newline, line_blanks go).
+- parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
+  `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
+  each; the twin compares after that pass.
+- parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
+  knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
+- parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+- parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
+  restoring by hand.
+- parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
+  div as tag, unit words, membership, global/export, type words), in the format of library-word-tables.
 
 ## Language support the twins rely on
 - Mutable parser state in an object, char-by-char scanning, growing token lists, computed keys `{(n): 3}`,
@@ -92,6 +116,18 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
   `Data(…)`. Small floats keep their exponent on both sides (`2.5e-6`).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
 
+## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
+per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
+table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
+(test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipes, quasi_quote, tree_walks) → analyzer
+checks (match_exhaustive, switch unit names, index_positions, check_unit_names: analysis, warp-self-analyzer's side).
+- Passes the target eliminates are not ported: repair passes such as grouped_receivers (the parser's `f()` = `(f)`)
+  and of_lookups' repairs (`type of x` as a declaration head, `sum (of xs)` grouping). The twins already written stay
+  until the target passes replace them.
+- New ports go toward the target: the word-phrase pass and the scope pass (with warp-parsing: parser-scope-pass,
+  parser-keyword-table); broadcasting minimal; the structural keepers of the SUGAR_PASSES triage.
+
 ## Next phase: passes, analyzer, emitter
 Order: lowering passes first, then the analyzer, then the emitter; only the bootstrap waits for all three.
 - Next item: lib/math.warp and lib/units.warp become complete standalone warp files, and the parser fetches its
@@ -136,7 +172,8 @@ The bootstrap (warp compiling the warp-written compiler) is planned once 13–15
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
 node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
 the text "outside the core: <first form>". Module: type, function, export (main), code and a name section with
-function and local names. No GC types, no memory: the core needs neither.
+function and local names.
+- Values: see "Value layout" below.
 - Kinds: int = i64, float = f64, a condition = i32. A parameter takes its annotation, else the kind of its first
   call's argument; a function's result is read twice, so a recursive call knows it (the pending kind takes the kind
   it meets). `%` is Euclidean as in Rust's emitter (r + |b| for a negative truncated remainder).
@@ -146,11 +183,44 @@ function and local names. No GC types, no memory: the core needs neither.
   the core; the checked share of every sample and probe must have at least a floor of programs inside.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
 - Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
-  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no result, a loop's value, texts, lists, every
-  runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
+  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no variable, a loop's value, operators on texts and
+  lists beyond `+` on texts, `#` and `xs#i` (`==`, slices, a list's `+`), error values (a run-time error traps, without
+  Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
 - Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
   (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+
+## Value layout (card emitter-gc; the Rust emitter follows: card rust-emitter)
+Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
+
+| kind | wasm value | |
+|---|---|---|
+| int | i64 | |
+| float | f64 | |
+| yes/no | i32 | |
+| character | i32 code point | a one-character literal, as warp holds `"a"` |
+| text | `(ref null $text)`, `$text = (array (mut i8))` | UTF-8; literals from one passive data segment (array.new_data) |
+| list | `(ref null $list)`, `$list = (struct (mut i32 length) (mut (ref $items)))`, `$items = (array (mut anyref))` | a vector: `xs#i` O(1); items boxed |
+| any kind (a value of mixed branches, a list item, ø) | anyref holding a `$Node` | |
+
+Boxing (`boxed` in emitter.warp) makes a `$Node(kind i64, data anyref, value ref null $Node)` (CLAUDE.md
+"Serialization"): an int or yes/no in an `$i64box`, a float in an `$f64box`, a character as an i31, a text with data =
+its `$text`, a list with data = its `$list`. A value is boxed only where its kind is not known statically: a list item,
+a value of branches of different kinds, an `any` parameter, and main's result unless it is a number. No linear memory:
+texts are GC arrays, so no allocator and no (ptr, len) `$String`.
+Readers of the layout (each place a module's result or a value crossing the boundary is read):
+- src/run/wasm_reader.rs (native runs, the twins): reads a Text whose data is an `(array i8)`, a List whose data is a
+  `$list` (told from a cons cell by its first field: the i32 length, where a cons cell's first item is a $Node), and
+  needs no memory export. Done.
+- src/gc_traits (GcString::from_val): already reads an `(array i8)` text.
+- web/playground/reader.js reads through the reflection exports each Rust-emitted module carries
+  (src/wasm_emitter/reflection/exports.rs). emitter.warp modules do not run in the browser yet; when they do, they
+  carry the same exports, with tags for a byte-array text and a vector list.
+- Host imports, FFI and WIT (src/host, src/ffi): take $String (ptr, len) texts in linear memory. emitter.warp has no
+  imports yet; WASI output (fd_write) will copy a text's bytes into memory in one helper at that edge only.
+Runtime words are warp: `runtime = data { … }` in emitter.warp, written over a handful of intrinsics (new_text,
+copy_text, byte_count, byte_at; one or two instructions each, usable only inside the runtime) and compiled on their
+first call like the program's own functions: text_join (`+` on texts), text_count (`#` on a text: code points).
 
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word
@@ -194,6 +264,12 @@ Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words a
 Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
 lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
 arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
+Load order (lib-from-runtime, landed with zero-fill-lib): code generation that calls a prelude word the program never
+named, through `compiler_word(word)` (a call it writes, `n times [x]` → filled_list) or a late_call whose callee is
+missing, notes the word; pipeline::loading_compiler_words then compiles once more with resolve loading it (hints muted).
+The second compile is a safety net, not the plan: with it alone 13 of 216 samples compiled twice (~7% of compile time),
+so each move also adds an implied_words scan of the forms that need its word (filled_lists.rs: none twice). Loading
+the prelude costs a small program ~0.4 s (debug CLI), so a scan must not load words a program cannot need.
 Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
 text search words above).
 
@@ -207,7 +283,7 @@ objects cost more than Rust's stack values; typically 1.2-2x, less for allocatio
 |---|---|---|
 | Node fields are `anyref` | a checked cast on every read | typed structs for typed values |
 | Numbers boxed (`$i64box`) | an allocation per number | unboxed i64 fields, i31ref |
-| Lists are cons cells | `n#i` is O(i) | wasm GC arrays |
+| Lists are cons cells | `n#i` walks cells (cursors help in order) | wasm GC arrays: emitter.warp's vectors (Value layout) |
 | `text[i]` walks graphemes | ~300 fuel per ASCII step | byte indexing (`byte_at`) |
 | Unbounded ints | overflow checks/masks per operation | i64 path when the type is known (card int-i64) |
 | Fuel metering on | a counter per loop and call | off for trusted code (card fuel-metering) |
@@ -216,6 +292,11 @@ objects cost more than Rust's stack values; typically 1.2-2x, less for allocatio
 Host after self-hosting: the native `warp` stays a Rust shell (wasmtime, host words, FFI, graphics, sound) embedding
 `compiler.wasm` precompiled to .cwasm; the playground loads the same file. New interface: compiler imports for
 reading `use`d files, FFI signatures, the host-word list.
+
+Measured (2026-10-17, probes/self_hosting/emitter/bench/list_reads.warp: 20 million `xs#i` at scattered places of a
+1000-item mixed list; `warp compile --wasm` for Rust's module, emit_lowered.sh for emitter.warp's, hyperfine): Rust's
+cons cells 151 ms, emitter.warp's vector 80 ms (1.9x). Reads in order: 141 ms vs 66 ms (2.2x). Rust's list cursors
+keep its reads far from O(i) here; the gain is the plain array.get.
 
 ## Ahead-of-time executables and a host made of FFI (2026-10-17)
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub

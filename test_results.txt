@@ -2139,7 +2139,6 @@ PASSED:
   ✓ lists::test_int_map::a_number_is_found_in_a_map
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
-  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -3034,6 +3033,7 @@ PASSED:
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
   ✓ numbers::test_number_words::keys_and_texts_stay_words
   ✓ numbers::test_number_words::number_words_are_numbers
+  ✓ numbers::test_number::test_digit_separators_in_hex_and_binary
   ✓ numbers::test_number::test_hex
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
@@ -3065,9 +3065,11 @@ PASSED:
   ✓ numbers::test_plus_minus_units::a_plain_spread_counts_in_the_value_unit
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
+  ✓ numbers::test_plus_minus::a_parameter_shadows_an_outer_interval_name
   ✓ numbers::test_plus_minus::approximately_within_the_tolerance
   ✓ numbers::test_plus_minus::bounds_propagate_through_arithmetic
   ✓ numbers::test_plus_minus::intervals_are_not_correlated
+  ✓ numbers::test_plus_minus::uncertain_text_shows_the_parts_to_two_significant_digits
   ✓ numbers::test_plus_minus::untyped_functions_pass_an_interval_through
   ✓ numbers::test_printed_quantity::print_keeps_a_plain_fraction
   ✓ numbers::test_printed_quantity::print_rounds_a_quantity_to_two_decimals
@@ -3294,6 +3296,7 @@ PASSED:
   ✓ numbers::test_units_type_holes::a_text_repeats_a_plain_count_of_times
   ✓ numbers::test_units_type_holes::a_variable_keeps_its_dimension
   ✓ numbers::test_zero_fill::a_computed_size_is_a_runtime_count
+  ✓ numbers::test_zero_fill::a_filled_list_is_the_prelude_word_beside_a_program_fill
   ✓ numbers::test_zero_fill::a_large_zero_list_has_its_size
   ✓ numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros
   ✓ numbers::test_zero_fill::a_zero_list_of_nothing_is_empty
@@ -3731,6 +3734,7 @@ PASSED:
   ✓ parser::test_rust_paths::to_string_is_string
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
+  ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
@@ -3744,14 +3748,18 @@ PASSED:
   ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
   ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
   ✓ parser::test_self_passes::arrow_result_types_match_their_rust_twin
+  ✓ parser::test_self_passes::element_wise_operators_match_their_rust_twin
   ✓ parser::test_self_passes::every_source_is_a_node_and_back
+  ✓ parser::test_self_passes::grouped_receivers_match_their_rust_twin
   ✓ parser::test_self_passes::interpolation_matches_its_rust_twin
   ✓ parser::test_self_passes::match_arms_match_their_rust_twin
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
+  ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
-  ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
+  ✓ parser::test_self_words::copied_tables_are_their_rust_constants
+  ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -4797,6 +4805,8 @@ PASSED:
   ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
   ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
   ✓ types::test_extension_methods::an_extension_method_extends_a_class
+  ✓ types::test_field_default_variable::a_default_naming_a_variable_is_its_value
+  ✓ types::test_field_default_variable::a_field_named_result_is_a_field
   ✓ types::test_field_named_like_builtin::a_members_field_is_a_place
   ✓ types::test_field_named_like_builtin::a_size_field_of_an_element_of_a_declared_list
   ✓ types::test_field_named_like_library_word::a_known_instance_reads_its_field
@@ -5570,6 +5580,8 @@ PASSED:
   ✓ web::test_field_events::a_committed_value_reaches_on_change
   ✓ web::test_field_events::a_field_event_is_no_markup_mistake
   ✓ web::test_field_events::focus_and_blur_reach_their_handlers
+  ✓ web::test_fix_buttons_apply::a_fix_shown_serialized_edits_the_words_it_changes
+  ✓ web::test_fix_buttons_apply::the_samples_fix_buttons_find_their_text
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_field_is_validated_by_the_declared_type
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
@@ -5930,6 +5942,7 @@ PASSED:
   ✓ welcoming::test_error_excerpt::the_cli_prints_the_line_of_an_error_and_a_warning
   ✓ welcoming::test_error_excerpt::the_page_learns_where_the_error_is
   ✓ welcoming::test_error_positions::a_rebuilt_node_reports_the_position_of_its_parts
+  ✓ welcoming::test_error_positions::a_wrong_or_stray_closer_is_an_error
   ✓ welcoming::test_error_positions::an_error_found_while_emitting_names_its_statement
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
@@ -6327,6 +6340,9 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ lists::test_int_map::ten_thousand_rows_load_in_linear_time
+  ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
 
 SUMMARY:
-14 ignored, 6324 passed, 0 failed, 6324 total tested
+16 ignored, 6337 passed, 3 failed, 6340 total tested

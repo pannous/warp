@@ -1,0 +1,2 @@
+greeting(n: int) := if n > 1 then "hi all" else "hi"
+greeting(3)

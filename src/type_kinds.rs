@@ -406,6 +406,10 @@ impl TypeRegistry {
 			{
 				Self::extract_field(target)
 			}
+			// `tag = mark`: the untyped field with a default value, even one naming a variable
+			Node::Key(name_node, crate::operators::Op::Assign, _) => {
+				Some(FieldDef::untyped(&Self::written_name(name_node)?))
+			}
 			Node::Key(name_node, _, type_node) => {
 				let name = Self::written_name(name_node)?;
 				let type_name = match type_node.drop_meta() {
