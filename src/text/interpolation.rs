@@ -23,6 +23,15 @@ fn is_template_mark(data: &Node) -> bool {
 	matches!(data, Node::Key(name, _, _) if matches!(name.as_ref(), Node::Symbol(mark) | Node::Text(mark) if mark == TEMPLATE_MARK))
 }
 
+/// The template text of a template literal itself (holes `${expr}`, literal dollars `$$`), not of a node around one
+pub fn template_of(node: &Node) -> Option<&str> {
+	let Node::Meta { node, data } = node else { return None };
+	match node.drop_meta() {
+		Node::Text(template) if is_template_mark(data) => Some(template),
+		_ => None,
+	}
+}
+
 /// Does a hole of a template mention a name (`"caught: \(e)"` mentions e), as `mentions` tells of each hole
 pub fn template_mentions(node: &Node, mentions: impl Fn(&Node) -> bool) -> bool {
 	let Node::Meta { node, data } = node else { return false };

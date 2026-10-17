@@ -8,6 +8,10 @@ use std::path::PathBuf;
 #[test]
 fn the_warp_pipeline_lowers_as_rust() {
 	let paths: Vec<PathBuf> = std::fs::read_to_string(PARSED_SOURCES).unwrap().lines().map(PathBuf::from).collect();
-	let rust_passes = [warp::lowering::times_phrases::lower, warp::lowering::number_words::lower];
+	let rust_passes = [
+		warp::text::interpolation::lower_program,
+		warp::lowering::times_phrases::lower,
+		warp::lowering::number_words::lower,
+	];
 	chain_differential(&paths, "passes", "lowered", &rust_passes);
 }

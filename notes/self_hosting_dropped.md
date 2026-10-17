@@ -31,3 +31,16 @@ to the Supervisor instead of ported.
 
 Format: `## <part>` (lib/compiler/<part>.warp), then per form: the form, the sources showing it, why it is left out,
 how to bring it back.
+
+## passes (SUGAR_PASSES, card sugar-twins; decision sugar-twins-drops)
+- sql and sh templates: `sql "SELECT … $name"`, `exec sh "ls"` as parameterized calls (src/text/injection.rs
+  lower_templates, run first by interpolation.rs lower_program). Sources: probes/docs_sync/sandbox_exec.warp,
+  samples/system/crontab.warp. Left out for now: a library feature, not text building. Back: port lower_templates in
+  front of lib/compiler/interpolation.warp.
+- Rust Option forms: `if let Some(v) = o { A } else { B }`, `match o { Some(v) => A, None => B }`, `o.unwrap_or(d)`,
+  `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
+  (`if o != ø`, `o ?? d`, `o ?? raise(m)`). Back: port src/lowering/welcoming/rust_options.rs as a pass before the match
+  arms.
+- `set x to 5`, `set width of p to 12` (decision setter-calls: `p.width = 12` with a style hint). Sources:
+  probes/english_setter.warp. Left out as a compiler pass: comes back as a library code template, not a pass (card
+  set-set). Back meanwhile: port welcome_forms.rs lower_set_phrases after `a of b`.

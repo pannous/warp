@@ -106,6 +106,9 @@ fn view(node: &Node, positions: bool) -> Node {
 
 /// A source literal (`01234`, `1.10`) and an annotation (`@name(value)`) survive, comments go
 fn meta_view(node: &Node, inner: &Node, positions: bool) -> Node {
+	if let Some(template) = warp::text::interpolation::template_of(node) {
+		return tagged("template", [Node::text(template)]);
+	}
 	if let Some(literal) = node.source_literal() {
 		return tagged("literal", [Node::text(literal), view(inner, positions)]);
 	}

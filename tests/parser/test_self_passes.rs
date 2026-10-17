@@ -27,3 +27,9 @@ fn times_phrases_match_their_rust_twin() {
 fn number_words_match_their_rust_twin() {
 	pass_differential(warp::lowering::number_words::lower, "number_words", "number_words_pass", &[]);
 }
+
+#[test]
+fn interpolation_matches_its_rust_twin() {
+	let sql_and_sh = ["probes/docs_sync/sandbox_exec.warp", "samples/system/crontab.warp"];
+	pass_differential(warp::text::interpolation::lower_program, "interpolation", "interpolation", &sql_and_sh);
+}
