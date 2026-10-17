@@ -24,7 +24,13 @@ fn with_receiver_reads(node: Node, fields: &HashMap<String, Vec<String>>) -> Nod
 			let body = match receiver_fields {
 				Some((receiver, class_fields)) => {
 					let parameters = parameter_names(&head);
-					let unshadowed = class_fields.iter().filter(|field| !parameters.contains(field)).collect();
+					let unshadowed: Vec<&String> =
+						class_fields.iter().filter(|field| !parameters.contains(field)).collect();
+					for (write, field) in bare_field_writes(&body, &unshadowed) {
+						if let Err(error) = ask_field_or_local(&write, &field, &receiver, &leading_name(&head)) {
+							return error;
+						}
+					}
 					receiver_reads(body, &Readable { receiver: &receiver, fields: unshadowed, ..Readable::default() })
 				}
 				None => body,
@@ -33,6 +39,44 @@ fn with_receiver_reads(node: Node, fields: &HashMap<String, Vec<String>>) -> Nod
 		}
 		other => other.map_children(|child| with_receiver_reads(child, fields)),
 	}
+}
+
+const FIELD_OR_LOCAL: &str = "field-or-local";
+
+/// The first `n = …` (`n += …`) of each field n the body writes by its bare name, unless a `let n` makes n a local
+fn bare_field_writes(body: &Node, fields: &[&String]) -> Vec<(Node, String)> {
+	let mut writes: Vec<(Node, String)> = vec![];
+	let mut locals = vec![];
+	body.visit(&mut |part| {
+		if let Some(local) = let_binding(part) {
+			locals.push(local);
+		}
+		if let Node::Key(target, op, _) = part.drop_meta() {
+			let name = target.drop_meta().symbol_name().unwrap_or_default().to_string();
+			let is_field = fields.iter().any(|field| **field == name) && !locals.contains(&name);
+			if op.is_write() && is_field && !writes.iter().any(|(_, written)| *written == name) {
+				writes.push((part.clone(), name));
+			}
+		}
+	});
+	writes
+}
+
+/// `n = …` in an outside method `x(p:P)` whose class has a field n: the field p.n (the default, as in a class body) or a
+/// new local? The text of the method shows no field n, so the reading is said
+fn ask_field_or_local(write: &Node, field: &str, receiver: &str, function: &str) -> Result<usize, Node> {
+	use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
+	let question =
+		format!("does `{field} = …` inside {function} change the field {receiver}.{field}, or make a new local?");
+	let readings = vec![
+		reading(&format!("the field {receiver}.{field}"), &format!("{receiver}.{field} = …"))
+			.replacing(format!("{field} ="), format!("{receiver}.{field} =")),
+		reading(&format!("a new local of {function}"), &format!("let {field} = …"))
+			.replacing(format!("{field} ="), format!("let {field} =")),
+	];
+	ask(&Ask::new(FIELD_OR_LOCAL, question, readings, Fallback::Warning)
+		.written(&format!("{field} = …"))
+		.at_node(write))
 }
 
 /// `(p, P)` of the head `x(p:P, …)`, also with a result type `x(p:P): int`
