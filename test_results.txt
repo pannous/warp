@@ -4797,6 +4797,8 @@ PASSED:
   ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
   ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
   ✓ types::test_extension_methods::an_extension_method_extends_a_class
+  ✓ types::test_field_default_variable::a_default_naming_a_variable_is_its_value
+  ✓ types::test_field_default_variable::a_field_named_result_is_a_field
   ✓ types::test_field_named_like_builtin::a_members_field_is_a_place
   ✓ types::test_field_named_like_builtin::a_size_field_of_an_element_of_a_declared_list
   ✓ types::test_field_named_like_library_word::a_known_instance_reads_its_field
@@ -6329,4 +6331,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 6324 passed, 0 failed, 6324 total tested
+14 ignored, 6326 passed, 0 failed, 6326 total tested
