@@ -155,11 +155,7 @@ lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline:
 node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
 the text "outside the core: <first form>". Module: type, function, export (main), code and a name section with
 function and local names.
-- GC (card emitter-gc): the types $String, $Node, $i64box, $f64box come first (function types after them), named with
-  their fields in the name section; the memory (exported, for the reader) starts with the texts' bytes, each text once.
-  A text or list is a `(ref null $Node)`: a literal text a $Node of kind Text (one character: a Codepoint, an i31, as
-  warp holds a literal "a"), a list literal cons cells built from its last item, its items read in order and boxed
-  (numbers and yes/no in their boxes). main giving a yes/no gives it boxed, as a $Node of BOOL_KIND.
+- Values: see "Value layout" below.
 - Kinds: int = i64, float = f64, a condition = i32. A parameter takes its annotation, else the kind of its first
   call's argument; a function's result is read twice, so a recursive call knows it (the pending kind takes the kind
   it meets). `%` is Euclidean as in Rust's emitter (r + |b| for a negative truncated remainder).
@@ -170,10 +166,43 @@ function and local names.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
 - Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
   a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no variable, a loop's value, operators on texts and
-  lists (`+`, `==`, `#`, indexing), every runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
+  lists beyond `+` on texts, `#` and `xs#i` (`==`, slices, a list's `+`), error values (a run-time error traps, without
+  Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
 - Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
   (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+
+## Value layout (card emitter-gc; the Rust emitter follows: card rust-emitter)
+Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
+
+| kind | wasm value | |
+|---|---|---|
+| int | i64 | |
+| float | f64 | |
+| yes/no | i32 | |
+| character | i32 code point | a one-character literal, as warp holds `"a"` |
+| text | `(ref null $text)`, `$text = (array (mut i8))` | UTF-8; literals from one passive data segment (array.new_data) |
+| list | `(ref null $list)`, `$list = (struct (mut i32 length) (mut (ref $items)))`, `$items = (array (mut anyref))` | a vector: `xs#i` O(1); items boxed |
+| any kind (a value of mixed branches, a list item, ø) | anyref holding a `$Node` | |
+
+Boxing (`boxed` in emitter.warp) makes a `$Node(kind i64, data anyref, value ref null $Node)` (CLAUDE.md
+"Serialization"): an int or yes/no in an `$i64box`, a float in an `$f64box`, a character as an i31, a text with data =
+its `$text`, a list with data = its `$list`. A value is boxed only where its kind is not known statically: a list item,
+a value of branches of different kinds, an `any` parameter, and main's result unless it is a number. No linear memory:
+texts are GC arrays, so no allocator and no (ptr, len) `$String`.
+Readers of the layout (each place a module's result or a value crossing the boundary is read):
+- src/run/wasm_reader.rs (native runs, the twins): reads a Text whose data is an `(array i8)`, a List whose data is a
+  `$list` (told from a cons cell by its first field: the i32 length, where a cons cell's first item is a $Node), and
+  needs no memory export. Done.
+- src/gc_traits (GcString::from_val): already reads an `(array i8)` text.
+- web/playground/reader.js reads through the reflection exports each Rust-emitted module carries
+  (src/wasm_emitter/reflection/exports.rs). emitter.warp modules do not run in the browser yet; when they do, they
+  carry the same exports, with tags for a byte-array text and a vector list.
+- Host imports, FFI and WIT (src/host, src/ffi): take $String (ptr, len) texts in linear memory. emitter.warp has no
+  imports yet; WASI output (fd_write) will copy a text's bytes into memory in one helper at that edge only.
+Runtime words are warp: `runtime = data { … }` in emitter.warp, written over a handful of intrinsics (new_text,
+copy_text, byte_count, byte_at; one or two instructions each, usable only inside the runtime) and compiled on their
+first call like the program's own functions: text_join (`+` on texts), text_count (`#` on a text: code points).
 
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word
@@ -230,7 +259,7 @@ objects cost more than Rust's stack values; typically 1.2-2x, less for allocatio
 |---|---|---|
 | Node fields are `anyref` | a checked cast on every read | typed structs for typed values |
 | Numbers boxed (`$i64box`) | an allocation per number | unboxed i64 fields, i31ref |
-| Lists are cons cells | `n#i` is O(i) | wasm GC arrays |
+| Lists are cons cells | `n#i` walks cells (cursors help in order) | wasm GC arrays: emitter.warp's vectors (Value layout) |
 | `text[i]` walks graphemes | ~300 fuel per ASCII step | byte indexing (`byte_at`) |
 | Unbounded ints | overflow checks/masks per operation | i64 path when the type is known (card int-i64) |
 | Fuel metering on | a counter per loop and call | off for trusted code (card fuel-metering) |
@@ -239,6 +268,11 @@ objects cost more than Rust's stack values; typically 1.2-2x, less for allocatio
 Host after self-hosting: the native `warp` stays a Rust shell (wasmtime, host words, FFI, graphics, sound) embedding
 `compiler.wasm` precompiled to .cwasm; the playground loads the same file. New interface: compiler imports for
 reading `use`d files, FFI signatures, the host-word list.
+
+Measured (2026-10-17, probes/self_hosting/emitter/bench/list_reads.warp: 20 million `xs#i` at scattered places of a
+1000-item mixed list; `warp compile --wasm` for Rust's module, emit_lowered.sh for emitter.warp's, hyperfine): Rust's
+cons cells 151 ms, emitter.warp's vector 80 ms (1.9x). Reads in order: 141 ms vs 66 ms (2.2x). Rust's list cursors
+keep its reads far from O(i) here; the gain is the plain array.get.
 
 ## Ahead-of-time executables and a host made of FFI (2026-10-17)
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub

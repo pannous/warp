@@ -44,3 +44,13 @@ how to bring it back.
 - `set x to 5`, `set width of p to 12` (decision setter-calls: `p.width = 12` with a style hint). Sources:
   probes/english_setter.warp. Left out as a compiler pass: comes back as a library code template, not a pass (card
   set-set). Back meanwhile: port welcome_forms.rs lower_set_phrases after `a of b`.
+
+# Deviations: where a warp twin keeps the clean result instead of Rust's
+Rule: notes/self_hosting.md (matching Rust is a check, not the goal). Each entry: the difference, an example, the card
+or question for the Rust side.
+
+## emitter (lib/compiler/emitter.warp)
+- Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors
+  (notes/self_hosting.md "Value layout"). Rust boxes nearly every value as a $Node, keeps texts in linear memory as
+  (ptr, len) $String and lists as cons cells. Example: `xs#500` walks 500 cells in Rust's module, one array.get in
+  warp's. Same program results. Rust side: card rust-emitter.

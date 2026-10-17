@@ -362,11 +362,12 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
 	});
 	let twin = TwinProgram::new("emitter", "wasm_module(node_of(json(argument)))");
-	let (mut inside, mut differing) = (vec![], vec![]);
+	let (mut inside, mut differing, mut refusals) = (vec![], vec![], std::collections::BTreeMap::new());
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
 		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
 		for ((path, _, text), module) in cases.iter().zip(twin.values(&arguments)) {
-			if module.text_value().is_some_and(|text| text.starts_with(OUTSIDE_THE_CORE)) {
+			if let Some(refusal) = module.text_value().filter(|text| text.starts_with(OUTSIDE_THE_CORE)) {
+				*refusals.entry(refusal).or_insert(0) += 1;
 				continue;
 			}
 			inside.push(path.clone());
@@ -376,6 +377,12 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 				differing.push((path.clone(), warp_value.serialize(), rust_value.serialize()));
 			}
 		}
+	}
+	if std::env::var_os(REFUSALS_REPORT).is_some() {
+		let mut ranked: Vec<_> = refusals.into_iter().collect();
+		ranked.sort_by(|a, b| b.1.cmp(&a.1));
+		eprintln!("{} inside; outside the core:", inside.len());
+		ranked.iter().for_each(|(refusal, count)| eprintln!("{count:5} {refusal}"));
 	}
 	report("wasm_module", &differing);
 	assert!(
@@ -388,6 +395,8 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 
 /// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
 const OUTSIDE_THE_CORE: &str = "outside the core";
+/// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
+const REFUSALS_REPORT: &str = "EMITTER_REFUSALS";
 
 /// The value main of a module given as a list of bytes returns, or the failure as a text
 fn module_value(module: &Node) -> Node {
@@ -407,15 +416,13 @@ fn module_value(module: &Node) -> Node {
 }
 
 const MODULE_FAILED: &str = "module failed: ";
-const RUST_TRAP: &str = "wasm trap";
 
-/// Equal values; a float equals another number of exactly its value (the core's 3.5 * 2 is 7.0, Rust's 7); a trap on
-/// both sides is the same outcome (a million nested calls exhaust the test's stack, probes/functions/deep_recursion.warp)
+/// Equal values; a float equals another number of exactly its value (the core's 3.5 * 2 is 7.0, Rust's 7); a failure on
+/// both sides is the same outcome: emitter.warp's module traps where Rust's gives its error (an index out of range,
+/// probes/readme/oob.warp; a million nested calls, probes/functions/deep_recursion.warp)
 fn same_value(warp_value: &Node, rust_value: &Node) -> bool {
 	match (warp_value, rust_value) {
-		(Node::Text(failure), Node::Error(trap)) if failure.starts_with(MODULE_FAILED) => {
-			trap.serialize().contains(RUST_TRAP)
-		}
+		(Node::Text(failure), Node::Error(_)) => failure.starts_with(MODULE_FAILED),
 		(Node::Number(a @ Number::Float(_)), Node::Number(b))
 		| (Node::Number(a), Node::Number(b @ Number::Float(_))) => f64::from(*a) == f64::from(*b),
 		_ => warp_value == rust_value,
