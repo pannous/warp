@@ -119,8 +119,21 @@ fn with_units_after_numbers(program: Node) -> Node {
 	let units_used = crate::modules::says_use(&program, crate::modules::UNITS_MODULE);
 	let mut callables = std::collections::HashSet::new();
 	collect_callable_names(&program, &mut callables);
-	let variables = names.difference(&callables).cloned().collect();
-	marked_after_numbers(program, &ShadowedUnits { names, variables, units_used })
+	let variables: std::collections::HashSet<String> = names.difference(&callables).cloned().collect();
+	let shadowed = ShadowedUnits { names, variables, units_used };
+	let program = marked_after_numbers(program, &shadowed);
+	// `2000ms as s` where only a function binds s (its parameter): elsewhere it is the unit. A module alias
+	// `use math as mm` stays the alias
+	let local_names = crate::program_names::bound_in_functions(&program);
+	crate::program_names::rewritten_by_scope(program, &|node, scope| match node {
+		Node::Key(value, Op::As, unit) if is_unit_type(&unit) => {
+			let is_free_local = |name: &&String| local_names.contains(*name) && !scope.takes(name);
+			let names = shadowed.names.iter().filter(is_free_local).cloned().collect();
+			let free = ShadowedUnits { names, variables: shadowed.variables.clone(), units_used };
+			Node::Key(value, Op::As, Box::new(marked_unit(*unit, &free)))
+		}
+		other => other,
+	})
 }
 
 /// The unit names the program also defines, those of them that are variables or parameters, and whether it says
@@ -299,10 +312,10 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
 	let program = with_units_after_numbers(lower_unit_aliases(with_run_time_unit_tables(program)));
-	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
-		true => program,
-		false => with_quantity_casts(program),
-	};
+	// each cast word where the program leaves it free: a function's own `unit` is its variable
+	let program = QUANTITY_CAST_WORDS.into_iter().fold(program, |program, word| {
+		crate::program_names::rewritten_where_free(program, word, &|free| with_quantity_casts(free, word))
+	});
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
 }
 
@@ -427,12 +440,12 @@ fn quantity_line_word(statement: &Node) -> Option<&str> {
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
 const QUANTITY_CAST_WORDS: [&str; 2] = [RUN_TIME_QUANTITY_WORD, "unit"];
 
-fn with_quantity_casts(node: Node) -> Node {
-	let node = node.map_children(with_quantity_casts);
+fn with_quantity_casts(node: Node, cast_word: &str) -> Node {
+	let node = node.map_children(|child| with_quantity_casts(child, cast_word));
 	let Node::Key(value, Op::As, target) = node.drop_meta() else {
 		return node;
 	};
-	let Some(word) = target.drop_meta().symbol_name().filter(|word| QUANTITY_CAST_WORDS.contains(word)) else {
+	let Some(word) = target.drop_meta().symbol_name().filter(|word| *word == cast_word) else {
 		return node;
 	};
 	if word != RUN_TIME_QUANTITY_WORD {

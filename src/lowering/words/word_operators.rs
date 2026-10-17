@@ -20,12 +20,10 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&words) {
 		return node;
 	}
-	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = OPERATOR_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
-	if aliases.is_empty() {
-		return node;
-	}
-	operators(node, &aliases)
+	// each alias where the program leaves its word free (notes/dispatch.md: shadowing is scoped)
+	OPERATOR_ALIASES.into_iter().fold(node, |node, alias| {
+		crate::program_names::rewritten_where_free(node, alias.0, &|free| operators(free, &[alias]))
+	})
 }
 
 /// `divides(3, 12)` after `infix operator divides(d, n) := …` is `operator_divides(3, 12)`; a function the program

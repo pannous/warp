@@ -161,3 +161,31 @@ fn the_library_word_keeps_a_lists_call_with_a_hint() {
 fn a_field_named_like_a_library_word_is_written() {
 	is!("class N{title:text}; f(m) := { m.title = \"b\"; m }; f(N(\"a\")).title", "b");
 }
+
+// a soft keyword or phrase word is the program's only where its name is in scope: a parameter, field or local named undo
+// or set leaves the top level's `undo x`, `set x to 5` (slice 3, ProgramNames)
+#[test]
+fn a_local_name_leaves_the_keyword_to_the_top_level() {
+	is!("f(undo) := undo + 1; x = 1; x = 2; undo x; x + f(1)", 3);
+	is!("o = {undo: 5}; x = 1; x = 2; undo x; x + o.undo", 6);
+	is!("g() := { set = 2; set }; set x to 5; x + g()", 7);
+}
+
+// a unit word is the program's only where its name is in scope: a parameter s of f leaves `as s` elsewhere the unit
+// (slice 9)
+#[test]
+fn a_unit_named_by_a_local_is_the_unit_elsewhere() {
+	is!("f(s) := s + 1; str(2000ms as s) + str(f(1))", "2s2");
+	is!("f() := { m = 2; m }; str(300 cm as m)", "3m");
+	// a module alias named like a unit stays the alias (integrator bounce, test_use_modules)
+	is!("use math as mm\nmm.floor(4.5)", 4);
+}
+
+// a function's own variable named like a store word or cast word stays its variable, while the top level keeps the
+// word (playground gpu_visualizer_warp's `local`); `def square := it * it` is a function before `all` (functions sample)
+#[test]
+fn a_local_named_like_a_store_word_is_the_variable() {
+	is!("f() := { local = 3; local + 1 }; f()", 4);
+	is!("g() := { unit = 2; unit }; g()", 2);
+	is!("def square := it * it; numbers = [1, 2]; result = (square all numbers); string(result)", "[1 4]");
+}
