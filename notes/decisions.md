@@ -254,6 +254,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
 - `pixels size` works like `size of pixels`.
 - swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
+- curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø` (Interviewer's decision).
 
 ## Control flow, matching and errors
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
