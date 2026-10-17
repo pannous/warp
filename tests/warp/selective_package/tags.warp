@@ -1,0 +1,3 @@
+# fixture: XML-like helpers, tagged passed on only to shapes.warp
+tagged(t) := "<" + t + ">"
+secret_tag(t) := "!" + t
