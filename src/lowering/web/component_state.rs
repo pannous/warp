@@ -115,10 +115,10 @@ pub fn lower(program: Node) -> Node {
 	let shown = lowered.pop().expect("a program with a component has a last line");
 	let holes = hole_bindings(&shown, &markups);
 	if !holes.is_empty() {
-		declarations.push(filled(SHOWN_DECLARATION, &[("SHOWN", SHOWN)]));
+		declarations.push(filled_with_names(SHOWN_DECLARATION, &[("SHOWN", SHOWN)]));
 	}
-	let resets = components.iter().map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
-	let rendered = crate::variable_signals::assign(SHOWN, shown);
+	let resets = components.iter().map(|component| filled_with_names(RESET, &[("COUNTER", &component.counter)]));
+	let rendered = crate::variable_signals::assign_variable(SHOWN, shown);
 	let after = components.iter().flat_map(Component::after_render);
 	let render_body = resets.chain([rendered]).chain(after).chain([symbol(SHOWN)]).collect();
 	let render = key(symbol(RENDER), Op::Define, Node::List(render_body, Bracket::Curly, Separator::Semicolon));
@@ -381,7 +381,7 @@ fn handler_symbols(statements: &[Node]) -> Vec<String> {
 }
 
 /// A template with its placeholders filled by names
-fn filled(template: &str, names: &[(&str, &str)]) -> Node {
+fn filled_with_names(template: &str, names: &[(&str, &str)]) -> Node {
 	super::nodes::filled(template, names.iter().map(|(placeholder, name)| (*placeholder, symbol(name))))
 }
 
@@ -491,7 +491,7 @@ impl Component {
 		.into_iter()
 		.chain(numbered_names.iter().map(|(placeholder, name)| (placeholder.as_str(), name.as_str())))
 		.collect();
-		match filled(&template, &names) {
+		match filled_with_names(&template, &names) {
 			Node::List(statements, _, Separator::Semicolon) => statements,
 			statement => vec![statement],
 		}
@@ -507,10 +507,13 @@ impl Component {
 	fn declarations(&self) -> Vec<Node> {
 		let template = if crate::pipeline::compile_mode().for_dev { DEV_STATE_DECLARATION } else { STATE_DECLARATION };
 		let lists = self.lists().into_iter().map(|list| kept_in_dev(template, list));
-		[filled(COUNTER_DECLARATION, &[("COUNTER", &self.counter)]), filled(SEEN_DECLARATION, &[("SEEN", &self.seen)])]
-			.into_iter()
-			.chain(lists)
-			.collect()
+		[
+			filled_with_names(COUNTER_DECLARATION, &[("COUNTER", &self.counter)]),
+			filled_with_names(SEEN_DECLARATION, &[("SEEN", &self.seen)]),
+		]
+		.into_iter()
+		.chain(lists)
+		.collect()
 	}
 
 	/// `Counter·cleanup(Counter·instance) := { the cleanup bodies }`, reading that instance's state
@@ -533,24 +536,32 @@ impl Component {
 		];
 		let cleaning = match self.cleanups.is_empty() {
 			true => vec![],
-			false => vec![filled(CLEANED_FROM, &names), filled(CLEANUP_LOOP, &names)],
+			false => vec![filled_with_names(CLEANED_FROM, &names), filled_with_names(CLEANUP_LOOP, &names)],
 		};
-		let truncations =
-			self.lists().into_iter().map(|list| filled(TRUNCATED, &[("STATE", list), ("COUNTER", &self.counter)]));
-		let all_seen = self.keys.iter().map(|keys| filled(KEYED_SEEN, &[("SEEN", &self.seen), ("KEYS", keys)]));
+		let truncations = self
+			.lists()
+			.into_iter()
+			.map(|list| filled_with_names(TRUNCATED, &[("STATE", list), ("COUNTER", &self.counter)]));
+		let all_seen =
+			self.keys.iter().map(|keys| filled_with_names(KEYED_SEEN, &[("SEEN", &self.seen), ("KEYS", keys)]));
 		let dev_saves = self
 			.lists()
 			.into_iter()
 			.filter(|_| crate::pipeline::compile_mode().for_dev)
 			.map(|list| kept_in_dev(DEV_STATE_SAVE, list));
-		all_seen.chain(cleaning).chain(truncations).chain(dev_saves).chain([filled(SEEN_SET, &names)]).collect()
+		all_seen
+			.chain(cleaning)
+			.chain(truncations)
+			.chain(dev_saves)
+			.chain([filled_with_names(SEEN_SET, &names)])
+			.collect()
 	}
 
 	/// The body counting its instance, setting the state at the first render, reading the instance's entries
 	fn body(&self, statements: Vec<Node>) -> Node {
 		let mut lowered = vec![
-			filled(COUNTED, &[("COUNTER", &self.counter)]),
-			filled(KEYED, &[("KEY", &self.key), ("COUNTER", &self.counter)]),
+			filled_with_names(COUNTED, &[("COUNTER", &self.counter)]),
+			filled_with_names(KEYED, &[("KEY", &self.key), ("COUNTER", &self.counter)]),
 		];
 		lowered.extend(self.keys.iter().flat_map(|keys| self.placement(keys)));
 		let (mount_condition, state_start) = match self.keys {
@@ -560,8 +571,10 @@ impl Component {
 		for statement in statements {
 			if let Some((word, body)) = lifecycle(&statement) {
 				if word == MOUNT {
-					let condition =
-						filled(mount_condition, &[("SEEN", &self.seen), ("KEY", &self.key), ("FRESH", &self.fresh)]);
+					let condition = filled_with_names(
+						mount_condition,
+						&[("SEEN", &self.seen), ("KEY", &self.key), ("FRESH", &self.fresh)],
+					);
 					lowered.push(if_then(condition, self.read(body)));
 				}
 				continue;
@@ -585,24 +598,20 @@ impl Component {
 		Node::List(lowered, Bracket::Curly, Separator::Semicolon)
 	}
 
+	/// Each state variable as the `read` code reading it from its list (STATE) at the instance (KEY)
+	fn state_reads(&self, read: &str) -> HashMap<String, Node> {
+		let key = Node::Symbol(self.key.clone());
+		let read_from =
+			|list: &String| super::nodes::filled(read, [("STATE", Node::Symbol(list.clone())), ("KEY", key.clone())]);
+		self.state.iter().map(|(variable, _, list)| (variable.clone(), read_from(list))).collect()
+	}
+
 	/// The node reading the instance's entries: in a handler the event's instance, elsewhere the render's
 	fn read(&self, node: Node) -> Node {
 		if element_items(&node).is_some() {
 			return self.element(node);
 		}
-		let reads: HashMap<String, Node> = self
-			.state
-			.iter()
-			.map(|(variable, _, list)| {
-				(
-					variable.clone(),
-					super::nodes::filled(
-						READ,
-						vec![("STATE", Node::Symbol(list.clone())), ("KEY", Node::Symbol(self.key.clone()))],
-					),
-				)
-			})
-			.collect();
+		let reads = self.state_reads(READ);
 		match node {
 			Node::Symbol(ref name) => reads.get(name).cloned().unwrap_or(node),
 			other => other.map_children(|child| self.read(child)),
@@ -622,19 +631,7 @@ impl Component {
 			match handler_at(&items, index) {
 				Some((_, body, length)) => {
 					kept.extend(items[index..index + length - 1].iter().cloned());
-					let handled = substitute(
-						&body,
-						&self
-							.state
-							.iter()
-							.map(|(variable, _, list)| {
-								(
-									variable.clone(),
-									super::nodes::filled(HANDLER_READ, vec![("STATE", Node::Symbol(list.clone()))]),
-								)
-							})
-							.collect(),
-					);
+					let handled = substitute(&body, &self.state_reads(HANDLER_READ));
 					// `on click {…}` as a block reads it is `on`, `click: {…}`
 					match items[index + length - 1].drop_meta() {
 						Node::Key(event, Op::Colon, _) if length == 2 => {

@@ -4,7 +4,7 @@
 //! binding event_signals.rs made, else the program's last line when that is an expression: a page shows its last line
 //! anew, so it is read again after each handler.
 
-use super::nodes::call;
+use super::nodes::{call, head_symbol};
 use crate::event_signals::{function_with_globals, main_level_variables, PAGE_VALUE};
 use crate::node::{symbol, Node};
 use crate::operators::Op;
@@ -63,14 +63,7 @@ pub fn lower(program: Node) -> Node {
 
 /// `name() := …`, `(name) := …`
 fn defines(statement: &Node, name: &str) -> bool {
-	let Node::Key(head, Op::Define, _) = statement.drop_meta() else {
-		return false;
-	};
-	let head = match head.drop_meta() {
-		Node::List(items, _, _) => items.first().map(Node::drop_meta),
-		other => Some(other),
-	};
-	matches!(head, Some(Node::Symbol(defined)) if defined == name)
+	matches!(statement.drop_meta(), Node::Key(head, Op::Define, _) if head_symbol(head) == Some(name))
 }
 
 /// A last line that is a value: no assignment, definition or statement word

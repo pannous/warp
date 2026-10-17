@@ -1,5 +1,6 @@
 //! WGSL from warp: a numeric lambda as a compute kernel (with its reductions), a painted function as a fragment shader
 use super::*;
+use crate::lowering::nodes::{is_binding, is_return};
 use std::collections::{HashMap, HashSet};
 use warp_runtime::host_words::GPU_PAINTS;
 
@@ -599,7 +600,7 @@ impl Translation {
 				*out += "}\n";
 				Some(())
 			}
-			Node::Key(target, op, _) if is_assigning_op(*op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
+			Node::Key(target, op, _) if is_binding(op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
 				self.statement(node, out)?;
 				*out += &self.returning(target)?;
 				Some(())
@@ -637,7 +638,7 @@ impl Translation {
 			return Some(());
 		}
 		match node.drop_meta() {
-			Node::Key(target, op, value) if is_assigning_op(*op) => {
+			Node::Key(target, op, value) if is_binding(op) => {
 				let name = target.symbol_name()?;
 				let (value, width) = match op {
 					Op::Assign | Op::Define => self.typed(value)?,
@@ -956,10 +957,6 @@ fn comparison(op: Op) -> Option<&'static str> {
 	})
 }
 
-fn is_assigning_op(op: Op) -> bool {
-	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
-}
-
 /// The statements of a block: `{ … }`, or lines and `;` without brackets
 fn block_statements(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {
@@ -976,7 +973,7 @@ fn block_statements(node: &Node) -> Option<&[Node]> {
 /// `return v`: v
 fn returned_value(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) => Some(&items[1]),
+		Node::List(items, _, _) if is_return(items) => Some(&items[1]),
 		_ => None,
 	}
 }
@@ -1012,7 +1009,7 @@ fn assigned_names(node: &Node, names: &mut Vec<String>) {
 		}
 	};
 	node.visit(&mut |part| match part.drop_meta() {
-		Node::Key(target, op, _) if is_assigning_op(*op) => {
+		Node::Key(target, op, _) if is_binding(op) => {
 			if let Node::Symbol(name) = target.drop_meta() {
 				add(name.clone());
 			}

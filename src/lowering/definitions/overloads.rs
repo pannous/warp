@@ -6,7 +6,7 @@
 //! `x:int = agent_as("33/3", "int")` (card int-let, lib/agent.warp).
 
 use super::nodes::{
-	call, children_rewritten, in_block_as_written, is_assigned_data, is_call_head, is_words_call, key,
+	assign, call, children_rewritten, in_block_as_written, is_assigned_data, is_call_head, is_words_call, key,
 	with_parts_rewritten,
 };
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
@@ -237,7 +237,7 @@ impl Lowering {
 				self.rewrite(*value, Some(&result.drop_meta().name()))
 			}
 			Node::Key(target, Op::Assign, value) if is_assigned_data(&target, &value) => {
-				key(*target, Op::Assign, with_parts_rewritten(*value, &mut |part| self.rewrite(part, None)))
+				assign(*target, with_parts_rewritten(*value, &mut |part| self.rewrite(part, None)))
 			}
 			// `d:docx = render "x"`
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
@@ -556,7 +556,7 @@ trait VariantRenaming {
 		}
 		match node {
 			Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => {
-				key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| self.rewrite(part)))
+				assign(*left, with_parts_rewritten(*right, &mut |part| self.rewrite(part)))
 			}
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
@@ -807,7 +807,7 @@ impl ParameterOverloads {
 			.map(|(argument, kind)| match (kind, argument.drop_meta()) {
 				(None, Node::List(..) | Node::Key(..)) => {
 					let temporary = Node::Symbol(format!("overload·{}", super::nodes::fresh_number()));
-					bindings.push(key(temporary.clone(), Op::Assign, argument));
+					bindings.push(assign(temporary.clone(), argument));
 					temporary
 				}
 				_ => argument,

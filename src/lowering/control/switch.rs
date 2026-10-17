@@ -9,7 +9,7 @@ use super::blocks::{as_data, quoted_data, DATA_WORD};
 use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{
-	block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
+	assign, block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
 };
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
@@ -143,7 +143,7 @@ impl Lowering<'_> {
 			let then = if_then(matches, body);
 			key(then, Op::Else, otherwise)
 		});
-		let bind = key(subject_value, Op::Assign, subject.clone());
+		let bind = assign(subject_value, subject.clone());
 		Some(Node::List(vec![bind, chain], Bracket::Round, Separator::Semicolon))
 	}
 }
@@ -245,11 +245,11 @@ fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>, names: &N
 	let temporary = |name: &str| Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}{number}"));
 	let (item, held) = (temporary(ITEM_WORD), temporary(HELD_WORD));
 	let Matched { tests: item_tests, bindings: item_bindings, .. } = Matched::of(each, item.clone(), names);
-	let mut statements = vec![key(held.clone(), Op::Assign, Node::True)];
+	let mut statements = vec![assign(held.clone(), Node::True)];
 	let mut appends = vec![];
 	for (name, value) in item_bindings.iter().filter_map(bound) {
 		let list = temporary(&name.name());
-		statements.push(key(list.clone(), Op::Assign, Node::Empty));
+		statements.push(assign(list.clone(), Node::Empty));
 		appends.push(key(
 			list.clone(),
 			Op::AddAssign,
@@ -257,7 +257,7 @@ fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>, names: &N
 		));
 		bindings.push(bind(name.clone(), list));
 	}
-	let missed = key(held.clone(), Op::Assign, Node::False);
+	let missed = assign(held.clone(), Node::False);
 	let verdict = match appends.is_empty() {
 		true => if_then(key(Node::Empty, Op::Not, joined(item_tests, Op::And)), missed),
 		false => key(if_then(joined(item_tests, Op::And), block(appends)), Op::Else, missed),
@@ -671,7 +671,7 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 /// A name a pattern binds is declared `let`: the arm's own local, never a change of a main-level variable of that name
 /// (card pattern-names)
 pub(crate) fn bind(name: Node, value: Node) -> Node {
-	Node::List(vec![Node::Symbol(LET_WORD.to_string()), key(name, Op::Assign, value)], Bracket::None, Separator::Space)
+	Node::List(vec![Node::Symbol(LET_WORD.to_string()), assign(name, value)], Bracket::None, Separator::Space)
 }
 
 /// A list pattern tests its shape, a type word (`int`, `Circle`) the subject's type, `i: int` also binds it; any other

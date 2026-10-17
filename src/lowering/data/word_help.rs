@@ -8,7 +8,7 @@
 use crate::words::PRINT_WORD;
 use std::collections::{BTreeMap, HashSet};
 
-use super::nodes::{filled, key};
+use super::nodes::{filled, key, word_applied};
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -173,13 +173,7 @@ impl Words {
 		if let Some(name) = crate::closures::referenced_function(subject) {
 			return Some(self.name_of(&Node::Symbol(name)));
 		}
-		let Node::List(items, Bracket::Round | Bracket::None, _) = subject.drop_meta() else {
-			return None;
-		};
-		match items.as_slice() {
-			[word, argument] if word.symbol_name() == Some(FUNCTION_WORD) => Some(self.name_of(argument)),
-			_ => None,
-		}
+		Some(self.name_of(word_applied(subject, FUNCTION_WORD)?))
 	}
 
 	/// A word's own name as a text; anything else is an expression that gives the name at run time
@@ -211,13 +205,7 @@ impl Words {
 
 /// `help(x)`, `help x`: x
 fn help_subject(node: &Node) -> Option<&Node> {
-	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
-		return None;
-	};
-	match items.as_slice() {
-		[word, subject] if word.symbol_name() == Some(HELP_WORD) => Some(ungrouped(subject)),
-		_ => None,
-	}
+	word_applied(node, HELP_WORD).map(ungrouped)
 }
 
 /// `(x)` → x

@@ -2,7 +2,7 @@
 //! `k·counts·elements = k.counts; k·counts·elements#i += 1; k.counts = k·counts·elements`, the changed list written back
 //! to its field. In a method the field is read from self (class_methods), so `counts#i += 1` changes the object too.
 
-use super::nodes::key;
+use super::nodes::{assign, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -36,10 +36,6 @@ fn field_element(target: &Node) -> Option<(Node, Node, String)> {
 fn written_back(field: Node, index: Node, op: Op, value: Node, name: String) -> Node {
 	let elements = Node::Symbol(name);
 	let element = key(elements.clone(), Op::Hash, index);
-	let statements = vec![
-		key(elements.clone(), Op::Assign, field.clone()),
-		key(element, op, value),
-		key(field, Op::Assign, elements),
-	];
+	let statements = vec![assign(elements.clone(), field.clone()), key(element, op, value), assign(field, elements)];
 	Node::List(statements, Bracket::None, Separator::Semicolon)
 }

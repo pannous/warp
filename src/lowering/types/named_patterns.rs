@@ -5,7 +5,7 @@
 //! always a value; one whose right side can only be a pattern (`Pair = [_, _]`) is the error whose fix is the keyword.
 
 use super::nodes::is_kinded_type_word;
-use super::nodes::{children_rewritten, key};
+use super::nodes::{assign, children_rewritten, key};
 use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, map_field, rest_pattern, split_switch, WILDCARD};
 use super::tree_walks::{FIND_WORD, REPLACE_WORD};
 use crate::errors::diagnostic::Diagnostic;
@@ -205,7 +205,7 @@ fn cast_to_schema(subject: Node, schema: &str, fields: &[SchemaField]) -> Node {
 			}
 		})
 		.collect();
-	let copied = key(Node::Symbol(copy.clone()), Op::Assign, crate::lowering::nodes::call("copy", vec![subject]));
+	let copied = assign(Node::Symbol(copy.clone()), crate::lowering::nodes::call("copy", vec![subject]));
 	let mut statements = vec![copied];
 	statements.extend(crate::warp_parser::parse_generated(&format!("{converted}{copy}")).as_items());
 	Node::List(statements, Bracket::Round, crate::node::Separator::Semicolon)

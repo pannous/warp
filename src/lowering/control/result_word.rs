@@ -3,7 +3,7 @@
 //! that assigns `result` itself keeps its own variable. A print gives ø, so a statement ending in a print remembers
 //! the printed value: `if c: print "hi" else: print "ho"; result` is "hi" (card result-keyword).
 
-use super::nodes::{any_part, children_rewritten, key};
+use super::nodes::{any_part, assign, block, children_rewritten, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{print_arguments_of, print_call, starts_print};
@@ -29,7 +29,7 @@ fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {
 }
 
 fn result_of(value: Node) -> Node {
-	key(symbol(RESULT_WORD), Op::Assign, value)
+	assign(symbol(RESULT_WORD), value)
 }
 
 fn with_results(node: Node) -> Node {
@@ -89,11 +89,7 @@ fn prints_last(node: &Node) -> bool {
 /// The statement assigning the value it ends with to `result`, a print the value it shows: `{result = x; print result}`
 fn remembering(node: Node) -> Node {
 	if let Some(value) = printed(&node) {
-		return Node::List(
-			vec![result_of(value), print_call([symbol(RESULT_WORD)])],
-			Bracket::Curly,
-			Separator::Semicolon,
-		);
+		return block(vec![result_of(value), print_call([symbol(RESULT_WORD)])]);
 	}
 	match node.drop_meta().clone() {
 		Node::List(mut items, Bracket::Curly, separator) if !items.is_empty() => {

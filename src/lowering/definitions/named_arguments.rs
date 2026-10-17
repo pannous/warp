@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::{any_part, children_rewritten, key, parameter_word, word_headed, Counter};
+use super::nodes::{any_part, assign, children_rewritten, key, parameter_word, word_headed, Counter};
 use crate::errors::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -85,7 +85,7 @@ fn default_forms(node: Node) -> Node {
 }
 
 fn optional(name: Node) -> Node {
-	key(name, Op::Assign, Node::Empty)
+	assign(name, Node::Empty)
 }
 
 fn is_maybe(node: &Node) -> bool {
@@ -515,7 +515,7 @@ impl Rewrite {
 		if !written.is_sorted() {
 			for value in values.iter_mut().filter(|value| !is_effect_free(value)) {
 				let temporary = Node::Symbol(self.temporary());
-				bindings.push(key(temporary.clone(), Op::Assign, std::mem::replace(value, temporary)));
+				bindings.push(assign(temporary.clone(), std::mem::replace(value, temporary)));
 			}
 		}
 		let callee = if function.parameters.is_empty() && !function.extras.is_empty() {

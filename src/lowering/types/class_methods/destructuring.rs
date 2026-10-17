@@ -1,5 +1,6 @@
 //! Destructuring and patterns of instances: `{x, y} = p`, `(a, b) = p`, `c#1` and `c.0`, `Point{x, y: b}` patterns
 use super::*;
+use crate::lowering::nodes::assign;
 
 /// Destructuring (JS, Python, Rust, Kotlin): `{x, y} = p` and `{x: a} = p` by field name (maps too); `(a, b) = p` and
 /// `a, b = p` of an instance in field order; match arms `Point{x, y} => …` and `Point(x, y) => …` a type test binding
@@ -236,12 +237,12 @@ pub(super) fn bound_parts(value: Node, bindings: &[(Node, String)], body: Option
 	let subject = symbol(PARTS_WORD);
 	let mut statements = match value.drop_meta() {
 		Node::Symbol(name) if name == PARTS_WORD => vec![],
-		_ => vec![key(subject, Op::Assign, value)],
+		_ => vec![assign(subject, value)],
 	};
 	// an arm's names are its own locals, as a match arm's (card param-pattern-local-warning); `{x, y} = p` assigns
 	let assigned = |(path, name): &(Node, String)| match body {
 		Some(_) => crate::lowering::switch::bind(Node::Symbol(name.clone()), path.clone()),
-		None => key(Node::Symbol(name.clone()), Op::Assign, path.clone()),
+		None => assign(Node::Symbol(name.clone()), path.clone()),
 	};
 	statements.extend(bindings.iter().map(assigned));
 	statements.extend(body);

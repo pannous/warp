@@ -5,7 +5,7 @@
 //!   multi-value results, and a plain call `f()` gets them packed into the list `[a b]`
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
-use super::nodes::children_rewritten;
+use super::nodes::{block, children_rewritten};
 use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::STARRED;
@@ -46,8 +46,7 @@ pub fn lower(node: Node) -> Node {
 					.or_else(|| regroup_destructuring(&items))
 					.or_else(|| regroup_declared_destructuring(&items)),
 				// `{ return a, b }` keeps its one statement; `{a, b=2}` stays data
-				(Bracket::Curly, Separator::Comma) => regroup_return(&items)
-					.map(|statement| Node::List(vec![statement], Bracket::Curly, Separator::Semicolon)),
+				(Bracket::Curly, Separator::Comma) => regroup_return(&items).map(|statement| block(vec![statement])),
 				_ => None,
 			};
 			regrouped.unwrap_or(Node::List(items, bracket, separator))
