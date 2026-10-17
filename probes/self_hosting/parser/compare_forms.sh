@@ -8,7 +8,7 @@ warp=scratch/warp  # scripts/own-warp.sh builds it; else the warp on the PATH
 tests/queue.sh -- rust_forms --ignored --nocapture 2>&1 | sed -n '/running 1 test/,/^test /p' | grep '^  [^ ]' | sed 's/^  //' > scratch/forms_rust.txt
 cat probes/self_hosting/parser/forms.warp tests/parser/self_parser_block_forms.txt > scratch/forms_all.txt
 printf 'use "lib/compiler/parser.warp"\n' > scratch/forms_run.warp
-while IFS= read -r line; do esc=$(printf '%s' "$line" | sed 's/\\/\\\\/g; s/"/\\"/g; s/⏎/\\n/g; s/⇥/\\t/g'); printf 'print ("" + tree("%s")).replace("\\n", "⏎")\n' "$esc" >> scratch/forms_run.warp; done < scratch/forms_all.txt
+while IFS= read -r line; do esc=$(printf '%s' "$line" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\$/\\$/g; s/⏎/\\n/g; s/⇥/\\t/g'); printf 'print ("" + tree("%s")).replace("\\n", "⏎")\n' "$esc" >> scratch/forms_run.warp; done < scratch/forms_all.txt
 WARP_NO_WINDOW=1 WARP_HINTS=0 "$warp" scratch/forms_run.warp > scratch/forms_out.txt 2>&1
 python3 - <<'PY'
 import re

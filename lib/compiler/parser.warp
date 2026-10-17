@@ -1394,28 +1394,42 @@ def quoted(p) {
 	[if content.length == 1 then "char" else "text", content]
 }
 
-// A text's escapes read: `\n` `\t` `\r` `\e` as their characters, `\"` `\\` and the like as the character itself;
-// holes `\(x)` and entities `\:alpha` stay as written in an interpolating text
+// A text's escapes read: `\n` `\t` `\r` `\e` as their characters, `\"` `\\` and the like as the character itself; an
+// interpolating text with holes `\(x)` `\{x}` `$(x)` `${x}` is its template, each hole written `${x}` and a dollar `$$`
+// (a bare `$name` stays); entities `\:alpha` stay as written
 // Rust twin: literals/text.rs read_text
 def unescaped(content, interpolates) {
-	if not content.contains("\\") { return content }
+	if not (content.contains("\\") or interpolates and content.contains("$")) { return content }
 	read = ""
+	template = ""
+	holes = false
 	at = 0
 	while at < content.length {
 		c = content[at]
-		escaped = if at + 1 < content.length then content[at + 1] else ' '
+		next = if at + 1 < content.length then content[at + 1] else ' '
+		if interpolates and (c == '\\' or c == '$') and (next == '(' or next == '{') {
+			end = hole_end(content, at + 2, next, closing_of(next), content.length)
+			template = template + '$' + '{' + content[at + 2 .. end - 1] + '}'
+			holes = true
+			at = end
+			continue
+		}
+		literal = c
 		if c != '\\' or at + 1 >= content.length {
-			read = read + c
 			at = at + 1
-		} else if interpolates and ("({".contains(escaped) or escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2])) {
-			read = read + c + escaped
+		} else if interpolates and next == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
+			literal = "\\:"
 			at = at + 2
 		} else {
-			read = read + escape_character(escaped)
+			literal = escape_character(next)
+			holes = holes or (interpolates and next == '$')
 			at = at + 2
 		}
+		read = read + literal
+		bare_dollar_name = c == '$' and (is_alpha(next) or next == '_')
+		template = template + (if literal == '$' and not bare_dollar_name then "$$" else literal)
 	}
-	read
+	if holes then template else read
 }
 
 def escape_character(c) {

@@ -133,3 +133,9 @@ if c then x else y
 if c { x } else print a, b
 for i in xs { print i, i*2 }
 { print upper n }
+print "price: \(price(100))"
+x = "a ${b} c"
+y = "cost $5 and \(n) items"
+z = "plain $name here"
+w = "say \"hi\""
+v = "\$(x)"
