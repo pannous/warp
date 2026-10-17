@@ -125,6 +125,7 @@ PASSED:
   ✓ control::test_database_members_add::adding_a_row_to_a_list_field_moves_it
   ✓ control::test_database_members_query::a_list_field_reads_only_the_rows_pointing_back
   ✓ control::test_database_nested_add::add_on_a_list_field_of_a_field
+  ✓ control::test_database_optional_units::an_optional_unit_field_holds_a_distance_or_nothing
   ✓ control::test_database_optional::a_field_made_optional_keeps_its_values
   ✓ control::test_database_optional::an_optional_field_added_later_starts_empty
   ✓ control::test_database_optional::an_optional_field_is_a_nullable_column
@@ -147,6 +148,7 @@ PASSED:
   ✓ control::test_database_tables::a_row_knows_its_id
   ✓ control::test_database_tables::a_table_loads_its_rows_only_when_read
   ✓ control::test_database_tables::a_table_takes_rows_filters_and_writes_field_changes_through
+  ✓ control::test_database_tables::a_unit_field_is_stored_and_migrates_within_its_quantity
   ✓ control::test_database_tables::an_add_in_a_block_of_one_statement_inserts
   ✓ control::test_database_tables::an_element_of_a_table_loads_one_row
   ✓ control::test_database_tables::an_instance_added_before_loading_is_the_loaded_row
@@ -156,6 +158,8 @@ PASSED:
   ✓ control::test_database_tables::save_writes_the_row_and_is_the_instance
   ✓ control::test_database_tables::stored_registers_a_table_of_the_same_name
   ✓ control::test_database_tables::the_orm_sample_runs_twice_on_the_same_rows
+  ✓ control::test_database_units_everywhere::a_unit_column_migrates_within_its_quantity
+  ✓ control::test_database_units_everywhere::plain_numbers_given_a_unit_are_read_as_it
   ✓ control::test_do_block::a_user_function_named_do_wins
   ✓ control::test_do_block::do_runs_a_block_literal
   ✓ control::test_do_block::do_runs_a_named_block
@@ -642,6 +646,13 @@ PASSED:
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_for_header
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_match_arm
   ✓ control::test_rust_inclusive_range::an_inclusive_range_is_the_range_to_its_end
+  ✓ control::test_rust_option::a_function_returns_an_option
+  ✓ control::test_rust_option::a_match_of_some_and_none
+  ✓ control::test_rust_option::a_programs_own_option_method_keeps_its_meaning
+  ✓ control::test_rust_option::if_let_some_binds_the_value
+  ✓ control::test_rust_option::loop_runs_until_break
+  ✓ control::test_rust_option::option_type_is_optional
+  ✓ control::test_rust_option::some_is_the_value_none_is_nothing
   ✓ control::test_schema_cast::a_field_that_does_not_convert_is_named
   ✓ control::test_schema_cast::a_fitting_value_is_itself
   ✓ control::test_schema_cast::a_missing_optional_field_stays_missing
@@ -1038,7 +1049,6 @@ PASSED:
   ✓ ffi::test_ffi_text_out_pointers::a_text_out_pointer_keeps_the_c_result
   ✓ ffi::test_ffi_text_results::a_c_string_result_is_a_text
   ✓ ffi::test_ffi_text_results::a_libc_function_without_use_c_says_how_to_import_it
-  ✓ ffi::test_ffi_text_results::other_pointer_results_are_refused
   ✓ ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once
   ✓ ffi::test_ffi::test_a_lone_import_with_a_comment_is_empty
   ✓ ffi::test_ffi::test_a_program_of_imports_only_is_empty
@@ -1075,7 +1085,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_sdl_window
   ✓ ffi::test_ffi::test_ffi_sin
   ✓ ffi::test_ffi::test_ffi_sin_pi_half
-  ✓ ffi::test_ffi::test_ffi_sin_works
   ✓ ffi::test_ffi::test_ffi_sqlite_discovery
   ✓ ffi::test_ffi::test_ffi_sqrt_works
   ✓ ffi::test_ffi::test_ffi_strcmp
@@ -1136,7 +1145,6 @@ PASSED:
   ✓ ffi::test_libc_results::strcmp_orders_texts
   ✓ ffi::test_libc_results::strlen_inside_a_program
   ✓ ffi::test_libc_results::strlen_returns_a_size
-  ✓ ffi::test_libc_results::strncmp_compares_a_prefix
   ✓ ffi::test_libm_header_functions::a_c_function_with_float_and_int_parameters
   ✓ ffi::test_libm_header_functions::a_libm_function_of_the_headers_links_by_itself
   ✓ ffi::test_libm_header_functions::a_libm_function_with_an_int_parameter_says_so
@@ -1426,6 +1434,7 @@ PASSED:
   ✓ functions::test_each_spellings::for_each_spellings_are_each
   ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
   ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
+  ✓ functions::test_effects_value::effects_of_a_parameter_reads_its_field
   ✓ functions::test_effects_value::effects_of_as_a_value
   ✓ functions::test_effects_value::effects_of_last_keeps_the_prints
   ✓ functions::test_effects::test_allocation_and_async_are_inferred
@@ -2067,7 +2076,6 @@ PASSED:
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
   ✓ lists::test_first_items::first_and_last_take_a_number_of_items
   ✓ lists::test_first_items::first_of_a_list_is_its_first_item
-  ✓ lists::test_first_items::first_of_a_phrase_stays_one_item
   ✓ lists::test_float_array_writes::numbers_written_into_a_float_array_are_floats
   ✓ lists::test_float_array_writes::walking_a_typed_array_reads_every_item
   ✓ lists::test_for_where::a_loop_over_the_elements_a_condition_keeps
@@ -2283,7 +2291,6 @@ PASSED:
   ✓ lists::test_size_count::test_bytes_need_explicit_unit
   ✓ lists::test_size_count::test_size_is_element_count
   ✓ lists::test_size_count::test_size_of_text_is_character_count
-  ✓ lists::test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ lists::test_size_property_word::test_property_word_agrees_with_size_of
   ✓ lists::test_sort_long::a_long_list_sorts_in_n_log_n
   ✓ lists::test_sort_long::equal_keys_keep_their_order
@@ -2403,6 +2410,7 @@ PASSED:
   ✓ modules::test_module_cache::test_different_modules_not_cached
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
+  ✓ modules::test_module_classes::a_used_modules_instance_reads_a_field_named_like_a_word
   ✓ modules::test_module_classes::the_programs_own_class_wins
   ✓ modules::test_module_error_file::a_modules_unknown_word_names_its_file
   ✓ modules::test_module_function_dir::a_used_module_function_reflects_like_the_program_own
@@ -2902,6 +2910,9 @@ PASSED:
   ✓ numbers::test_libm_functions::test_cube_root_of_a_runtime_value
   ✓ numbers::test_libm_functions::trigonometry_and_logarithms_from_libm
   ✓ numbers::test_literal_type_words::every_number_type_word_types_a_literal
+  ✓ numbers::test_litre_hectare::a_glued_litre_needs_use_units
+  ✓ numbers::test_litre_hectare::a_module_alias_wins_over_a_unit_name
+  ✓ numbers::test_litre_hectare::litre_and_hectare_are_units
   ✓ numbers::test_log_base::log_takes_a_base
   ✓ numbers::test_log_exact::a_list_variable_with_a_base_is_the_log_of_each_item
   ✓ numbers::test_log_exact::a_list_with_a_base_is_the_log_of_each_item
@@ -2954,7 +2965,6 @@ PASSED:
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
   ✓ numbers::test_nearest_default::a_float_gives_pythons_fraction
   ✓ numbers::test_nearest_default::a_precision_reaches_beyond_the_default_limit
-  ✓ numbers::test_nearest_default::an_exact_value_compares_exactly
   ✓ numbers::test_nearest_default::limit_zero_is_the_exact_fraction
   ✓ numbers::test_nearest_quiet::nearest_warns_nothing_of_the_prelude
   ✓ numbers::test_nearest_quiet::the_programs_own_float_equality_still_warns
@@ -3340,7 +3350,6 @@ PASSED:
   ✓ operators::test_negated_call_operand::a_negated_variable_takes_no_argument
   ✓ operators::test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
   ✓ operators::test_negated_call::test_function_applied_to_a_negative_number
-  ✓ operators::test_negated_call::test_variable_minus_number_stays_subtraction
   ✓ operators::test_operator_declarations::test_built_in_operators_are_untouched
   ✓ operators::test_operator_declarations::test_infix_operator
   ✓ operators::test_operator_declarations::test_infix_operator_declared_by_its_pattern
@@ -3685,7 +3694,6 @@ PASSED:
   ✓ parser::test_statement_phrases::and_before_an_infix_word_continues_the_condition
   ✓ parser::test_statement_phrases::and_between_statements_sequences_them
   ✓ parser::test_statement_phrases::and_not_continues_the_condition_after_let
-  ✓ parser::test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
   ✓ parser::test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
   ✓ parser::test_statement_terminators::semicolon_inside_a_line_still_groups
   ✓ parser::test_statements_after_type::a_type_declaration_alone_is_empty
@@ -3766,7 +3774,6 @@ PASSED:
   ✓ programs::test_algo_sieve::test_sieve
   ✓ programs::test_algo_sieve::test_sieve_idiomatic
   ✓ programs::test_algo_sorting::test_sorting
-  ✓ programs::test_algo_sorting::test_sorting_idiomatic
   ✓ programs::test_all_samples::test_parse_all_samples
   ✓ programs::test_brush_ripples::a_click_starts_the_brushs_ripple_where_it_was
   ✓ programs::test_calculator_fixes::test_else_on_the_next_line
@@ -3907,6 +3914,7 @@ PASSED:
   ✓ programs::test_samples::test_kitchensink
   ✓ programs::test_samples::test_mandelbrot
   ✓ programs::test_samples::test_parse_all_samples
+  ✓ programs::test_samples::test_phrases
   ✓ programs::test_samples::test_power
   ✓ programs::test_samples::test_primes
   ✓ programs::test_samples::test_quadratic
@@ -4185,13 +4193,8 @@ PASSED:
   ✓ sweeps::test_sweep_fixes::a_lone_false_is_zero
   ✓ sweeps::test_sweep_fixes::do_runs_an_add_to_phrase
   ✓ sweeps::test_todo::test_array_length
-  ✓ sweeps::test_todo::test_array_type_generics
   ✓ sweeps::test_todo::test_if_then_else
   ✓ sweeps::test_todo::test_index_assign_in_loop
-  ✓ sweeps::test_todo::test_lambda_comparison
-  ✓ sweeps::test_todo::test_lambda_simple
-  ✓ sweeps::test_todo::test_lambda_with_multiply
-  ✓ sweeps::test_todo::test_list_index_after_puts
   ✓ sweeps::test_todo::test_param_reference
   ✓ sweeps::test_todo::test_polymorphic_dispatch
   ✓ sweeps::test_todo::test_print_function
@@ -6232,4 +6235,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6227 passed, 0 failed, 6227 total tested
+13 ignored, 6230 passed, 0 failed, 6230 total tested
