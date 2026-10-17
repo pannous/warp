@@ -66,7 +66,6 @@ const OPTIONAL_TYPE_PREFIX: &str = ".opt ";
 const EMPTY_LIST: &str = ".nil";
 const EMPTY_VALUE: &str = ".unit";
 const EMIT_KEYWORD: &str = "emit";
-/// `global n = 0` at main level, `global n` in a function: a main-level name functions may assign
 /// What a global declared without a value holds until it is assigned: `global x; x + 1` is 1
 const UNSET_GLOBAL: i64 = 0;
 /// `break` is not in W0: block handlers, whose block it ended, were dropped (card cleanup-drop-scoped-handlers)
@@ -499,7 +498,7 @@ impl Exporter {
 					other => outside_w0(other),
 				}
 			}
-			Node::List(items, Bracket::None, Separator::Colon) if destructuring_assignment(items).is_some() => {
+			Node::List(items, Bracket::None, Separator::Comma) if destructuring_assignment(items).is_some() => {
 				let (names, values) = destructuring_assignment(items).expect("a destructuring");
 				match values[..] {
 					[list] => self.destructure(&names, list),

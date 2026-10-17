@@ -25,7 +25,6 @@ const PLAIN_VALUE_KINDS: [Kind; 9] = [
 	Kind::Time,
 ];
 
-/// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
 /// Runtime functions called from lowered code with their node arguments, and how many those are
 const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 	(crate::list_mutations::LIST_DROP_LAST, 1),
@@ -34,10 +33,12 @@ const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),
 ];
 
-const BUILTIN_CALLS: [&str; 28] = [
-	"return",
+/// Names the emitter resolves itself, besides user functions, imports, type words, counting functions and the
+/// NODE_ARGUMENT_CALLS
+const BUILTIN_CALLS: [&str; 24] = [
+	crate::words::RETURN_WORD,
 	crate::words::AS_CODE,
-	"fetch",
+	crate::host::FETCH_WORD,
 	"puts",
 	"puti",
 	"putl",
@@ -54,21 +55,16 @@ const BUILTIN_CALLS: [&str; 28] = [
 	crate::library_words::LIST_SUM,
 	crate::words::INSTANCE_OF,
 	crate::list_mutations::REMOVED_VALUE_CALL,
-	crate::list_mutations::LIST_DROP_LAST,
-	crate::list_mutations::LIST_BECOME,
 	crate::library_words::VALUES_SIMILAR,
-	super::super::lists::list_ops::LIST_EXTEND,
 	crate::library_words::VALUES_ROUGH,
 	crate::time::INSTANT_AT,
 	crate::time::TIME_OF,
 	crate::time::TIME_IN_ZONE,
-	super::super::reflection::library_ops::LIST_SORTED_BY,
 ];
 
 /// `print a, b` writes "a b", like Python
 const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 
-/// The value `print` writes: its one argument, or several joined by a space
 /// The word a list calls: `f a b`, `f(a, b)`, `(f)`; none for a `;`/newline sequence, whose first statement may be a
 /// word of its own (`{beep⏎ play 440}` runs beep, then play; card error-beep)
 pub(in crate::wasm_emitter) fn called_word<'a>(
@@ -81,6 +77,7 @@ pub(in crate::wasm_emitter) fn called_word<'a>(
 	items.first().filter(|_| calls)?.symbol_name()
 }
 
+/// The value `print` writes: its one argument, or several joined by a space
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::warp_parser::print_arguments_of(call, bracket).as_slice() {
 		[single] => juxtaposed_text(single).or_else(|| spaced_values_text(single)).unwrap_or_else(|| single.clone()),
@@ -116,12 +113,10 @@ fn juxtaposed_text(argument: &Node) -> Option<Node> {
 }
 /// The Ask topic of `xs.insert(i, x)` with two Ints: answers are remembered per topic
 const INSERT_ORDER_TOPIC: &str = "insert-order";
-/// The got-it topic of an unknown word applied to a value (`cube 3`)
 /// `data cube 3`: the rest is data (P62, P63: `data` is the word for what never runs)
 pub(in crate::wasm_emitter) const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
-const CODEPOINT_TYPE: &str = "codepoint";
 const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
@@ -146,6 +141,7 @@ impl WasmGcEmitter {
 			|| name == PRINT_WORD
 			|| name == crate::warp_parser::TEXT_TIMES
 			|| BUILTIN_CALLS.contains(&name)
+			|| NODE_ARGUMENT_CALLS.iter().any(|(call, _)| *call == name)
 			|| super::super::functions::cells::CELL_WORDS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
 			|| name == crate::words::IS_TYPE
@@ -246,7 +242,7 @@ impl WasmGcEmitter {
 	/// `return value`: leaves the open tries and the function
 	fn emit_return_statement(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, value] = items else { return false };
-		if !matches!(word.drop_meta(), Node::Symbol(s) if s == "return") {
+		if !word.is_symbol(crate::words::RETURN_WORD) {
 			return false;
 		}
 		self.emit_returned_value(func, value);
@@ -405,7 +401,7 @@ impl WasmGcEmitter {
 
 		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
 		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (reject_variable_applied)
-		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
+		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Comma) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if self.reject_variable_applied(func, items, bracket, separator)
 					|| (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1]))
@@ -558,7 +554,7 @@ impl WasmGcEmitter {
 		} else {
 			// Check for pure numeric expressions; a square list and a comma tuple `(h + 1, 2)` keep all their items,
 			// whatever they compute
-			let is_tuple = *separator == Separator::Colon && items.len() > 1;
+			let is_tuple = *separator == Separator::Comma && items.len() > 1;
 			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
 			let has_field =
 				items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
@@ -703,14 +699,15 @@ impl WasmGcEmitter {
 		let filter_loop = filter_loop_of(node);
 		// `for char in s` of a text s: every item is a code point
 		if filter_loop.as_ref().is_some_and(|filter| {
-			self.get_type(&filter.iterable) == Kind::Text && crate::type_tests::type_matches(CODEPOINT_TYPE, spec)
+			self.get_type(&filter.iterable) == Kind::Text
+				&& crate::type_tests::type_matches(crate::words::CODEPOINT, spec)
 		}) {
 			func.instruction(&I::I64Const(1));
 			return true;
 		}
 		// `s#1 is char`: an item of a text is typed text but is a code point at run time
 		let item_of_text = self.static_type_name(subject) == TEXT_WORD
-			&& crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
+			&& crate::type_tests::canonical_spec_word(spec) == crate::words::CODEPOINT;
 		// only the run time tells an operation from a pair
 		let operation_of_key = self.get_type(subject) == Kind::Key
 			&& crate::type_tests::canonical_spec_word(spec) == crate::words::OPERATION_WORD;
@@ -1284,7 +1281,7 @@ impl WasmGcEmitter {
 				return;
 			}
 			// `S1 = -0.16, S2 = 0.0083`: assignments separated by commas are statements too, each of its own kind
-			Node::List(items, bracket, Separator::Colon)
+			Node::List(items, bracket, Separator::Comma)
 				if *bracket != Bracket::Square
 					&& items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) =>
 			{

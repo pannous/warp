@@ -75,7 +75,7 @@ impl WarpParser {
 		}
 		let declared = match names.len() {
 			1 => names.remove(0),
-			_ => Node::List(names, Bracket::None, Separator::Colon),
+			_ => Node::List(names, Bracket::None, Separator::Comma),
 		};
 		Node::Key(Box::new(Symbol(NONLOCAL_WORD.to_string())), Op::Colon, Box::new(declared))
 	}

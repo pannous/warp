@@ -12,6 +12,7 @@ mod test_cli_help;
 mod test_code_golf; // card code-golf
 mod test_compute_toys; // card compute-toys
 mod test_data_structure_fixes;
+mod test_display_names;
 mod test_draw;
 mod test_draw_label; // card paint-text
 mod test_file_spectrum; // card gpu-visualizer-mp3
@@ -75,4 +76,4 @@ mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
 mod test_warp_command; // card midi-out // card values-number
 mod test_window_closed_by_user; // card escape-window
-mod test_window_size; // card make-width
+mod test_window_size; // card make-width // card display-names

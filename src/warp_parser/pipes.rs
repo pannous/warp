@@ -78,7 +78,7 @@ impl WarpParser {
 		self.advance_by(body_start);
 		Some(match <[Node; 1]>::try_from(names) {
 			Ok([name]) => name,
-			Err(names) => Node::List(names, Bracket::Round, Separator::Colon),
+			Err(names) => Node::List(names, Bracket::Round, Separator::Comma),
 		})
 	}
 

@@ -49,7 +49,7 @@ pub(super) fn moved_through(owner: &str, statements: &[Node], last: &Node) -> Op
 pub(super) fn is_tuple_or_object(value: &Node) -> bool {
 	use crate::node::Separator;
 	match value.drop_meta() {
-		Node::List(_, Bracket::Curly, _) | Node::List(_, Bracket::Round, Separator::Colon) => true,
+		Node::List(_, Bracket::Curly, _) | Node::List(_, Bracket::Round, Separator::Comma) => true,
 		Node::List(items, Bracket::Round, Separator::Space | Separator::None) => {
 			!matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
 		}
@@ -204,7 +204,6 @@ impl WasmGcEmitter {
 		Some([part(left)?, part(right)?].concat())
 	}
 
-	/// The source of `target = value`
 	/// Whether an append to `name` (`xs = xs + [v]`) can run while another variable holds its list: after an assignment
 	/// between it and another (`ys = xs`, `xs = ys`) or in a loop around one. A list aliased only once its appends are
 	/// done (`d = (out = ø; for … { out = out + [x] }; out)`, every lowered map and filter) grows in place (card map-typed),

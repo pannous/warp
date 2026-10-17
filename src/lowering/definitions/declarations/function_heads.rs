@@ -1,19 +1,13 @@
 //! Function heads: result types (`-> int`, `as int or text`, curried, function and tuple results), parameter labels and types, Ruby's `end` and bodiless definitions
 use super::*;
+use crate::lowering::nodes::{is_call_head, result_typed};
 use crate::node::parens;
 use crate::words::ANY_TYPE;
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
 pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
-	let rotated = as_union_result(definition).map(|(head, union)| key(head, Op::As, union));
-	let Node::Key(head, Op::Arrow | Op::Colon | Op::As, typed_body) = rotated.as_ref().unwrap_or(definition) else {
-		return None;
-	};
-	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
-	{
-		return None;
-	}
+	let (head, typed_body) = result_typed_head(definition).filter(|(head, _)| is_call_head(head))?;
 	let (result_type, body) = match typed_body.drop_meta() {
 		Node::List(parts, _, Separator::Space)
 			if parts.len() == 2
@@ -32,7 +26,13 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		}
 		_ => return None,
 	};
-	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+	Some((key(head, Op::Define, body), result_type))
+}
+
+/// `f(x) as int`, `f(x): int`, `f(x) -> int` and `f(x) as int or text`: the head and what its result operator holds,
+/// the one reader of a typed definition head (nodes::result_typed borrows the forms without a union)
+pub(crate) fn result_typed_head(target: &Node) -> Option<(Node, Node)> {
+	as_union_result(target).or_else(|| result_typed(target).map(|(head, result)| (head.clone(), result.clone())))
 }
 
 /// A built-in type, or `any`: a Node of whatever kind the paths return (`def f(w) as any`, card def)
@@ -42,7 +42,7 @@ fn is_result_type(result_type: &Node) -> bool {
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
 /// spells canonically (user 2026-10-12, return-as)
-pub(crate) fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
+fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
 	let Node::Key(left, Op::Or, rest) = definition.drop_meta() else {
 		return None;
 	};
@@ -182,15 +182,15 @@ pub(super) fn typed_returns(body: Node, result_types: &Node) -> Node {
 	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(RETURN_WORD));
 	match body {
 		// `return a, b` parses as `(return a), b`
-		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
+		Node::List(items, bracket, Separator::Comma) if items.first().is_some_and(is_return) => {
 			let Node::List(words, _, _) = items[0].drop_meta() else { unreachable!("guarded") };
 			let values: Vec<Node> = std::iter::once(words[1].clone()).chain(items[1..].iter().cloned()).collect();
 			match converted(&values) {
 				Some(mut values) => {
 					let first = Node::List(vec![words[0].clone(), values.remove(0)], Bracket::None, Separator::Space);
-					Node::List([vec![first], values].concat(), bracket, Separator::Colon)
+					Node::List([vec![first], values].concat(), bracket, Separator::Comma)
 				}
-				None => Node::List(items, bracket, Separator::Colon),
+				None => Node::List(items, bracket, Separator::Comma),
 			}
 		}
 		other => other.map_children(|child| typed_returns(child, result_types)),
@@ -355,7 +355,7 @@ pub(super) fn function_head(head: &Node) -> Node {
 	match head.drop_meta() {
 		Node::Symbol(_) => parens(vec![head.clone()]),
 		Node::List(items, Bracket::Round, separator) if items.len() > 2 => {
-			let parameters = Node::List(items[1..].to_vec(), Bracket::Round, Separator::Colon);
+			let parameters = Node::List(items[1..].to_vec(), Bracket::Round, Separator::Comma);
 			Node::List(vec![items[0].clone(), parameters], Bracket::Round, separator.clone())
 		}
 		_ => head.clone(),

@@ -5,6 +5,9 @@ use warp::Node;
 
 /// Set to "true" in Claude Code cloud sessions
 const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
+/// Set by tests/nightly.sh: the nightly run checks what the gate only samples (twins.rs)
+#[cfg(feature = "native")]
+const NIGHTLY_VARIABLE: &str = "WARP_NIGHTLY";
 /// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
 /// samples is SAMPLE_SLICES tests, each over one slice
 const SAMPLE_SLICES: usize = 4;
@@ -15,9 +18,49 @@ const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection"
 const ANSWERED: &str = "http status";
 #[cfg(feature = "native")]
 const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+/// Set by test.sh once it built the runtime stubs (built_stub)
+#[cfg(feature = "native")]
+const STUBS_BUILT_VARIABLE: &str = "WARP_TEST_STUBS_BUILT";
 /// The echo server of echo_url: what a POST sent, as httpbin.org/post answers it
 #[cfg(feature = "native")]
 const ECHO_SERVER: &str = "post \"/post\" { {data: request.body, headers: request.headers} }";
+
+/// The sample programs, one folder per chapter of the playground's guide (notes/samples.md)
+pub const SAMPLES: &str = "samples";
+/// Folders of samples/ that hold no menu samples: golf counts bytes, wit holds interfaces, tests links the C++ ones
+const NOT_CHAPTERS: [&str; 3] = ["golf", "wit", "tests"];
+
+/// samples/<chapter>/<name>.warp, every one, sorted, in the folder the samples run from (samples_run_folder)
+pub fn sample_files() -> Vec<std::path::PathBuf> {
+	let entries =
+		|folder: &std::path::Path| std::fs::read_dir(folder).into_iter().flatten().flatten().map(|entry| entry.path());
+	let chapters = entries(samples_run_folder()).filter(|path| {
+		path.is_dir() && !path.file_name().is_some_and(|name| NOT_CHAPTERS.iter().any(|other| name == *other))
+	});
+	let mut files: Vec<_> = chapters
+		.flat_map(|chapter| entries(&chapter))
+		.filter(|path| path.extension().is_some_and(|extension| extension == "warp"))
+		.collect();
+	files.sort();
+	files
+}
+
+/// The name of a sample (the playground menu's): its file name without .warp
+pub fn sample_name(path: &std::path::Path) -> String {
+	path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// The file of the sample of that name, in whichever chapter folder (samples/<chapter>/<name>.warp when there is none)
+pub fn sample_path(name: &str) -> String {
+	let found = sample_files().into_iter().find(|path| sample_name(path) == name);
+	found.map(|path| path.to_string_lossy().into_owned()).unwrap_or_else(|| format!("{SAMPLES}/<chapter>/{name}.warp"))
+}
+
+/// Whether this is the nightly run (tests/nightly.sh), which checks in full what the gate samples
+#[cfg(feature = "native")]
+pub fn nightly() -> bool {
+	std::env::var_os(NIGHTLY_VARIABLE).is_some()
+}
 
 /// Every SAMPLE_SLICES-th item from `slice` on
 pub fn sample_slice<T>(items: &[T], slice: usize) -> impl Iterator<Item = &T> {
@@ -284,6 +327,49 @@ pub fn scratch_directory(name: &str) -> std::path::PathBuf {
 	.join(name);
 }
 
+/// The folder the samples run from. Natively a scratch copy of the committed samples (git ls-files): what a run keeps
+/// beside its program (stored values, database tables) stays out of the checkout, and every test run starts from the
+/// samples as committed (card samples-store). The checkout's other top-level entries are linked beside the copy, so
+/// paths like ../tests/fixtures still reach them. The browser suite's file system is in memory: samples/ itself
+pub fn samples_run_folder() -> &'static std::path::Path {
+	#[cfg(feature = "native")]
+	{
+		static FOLDER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+		FOLDER.get_or_init(copy_of_the_samples)
+	}
+	#[cfg(not(feature = "native"))]
+	std::path::Path::new(SAMPLES)
+}
+
+#[cfg(feature = "native")]
+fn copy_of_the_samples() -> std::path::PathBuf {
+	use std::fs;
+	let root = scratch_directory("samples_run");
+	let _ = fs::remove_dir_all(&root);
+	let listing =
+		std::process::Command::new("git").args(["ls-files", "-z", SAMPLES]).output().expect("git lists the samples");
+	for file in listing.stdout.split(|byte| *byte == 0).filter(|file| !file.is_empty()) {
+		let file = std::path::Path::new(std::str::from_utf8(file).expect("a sample path in UTF-8"));
+		let copy = root.join(file);
+		fs::create_dir_all(copy.parent().expect("a sample lies in a folder")).expect("the copy's folder");
+		// a link stays a link (samples/shapes.wasm → ../tests/fixtures/…), resolved against the linked siblings
+		let copied = match fs::read_link(file) {
+			Ok(target) => std::os::unix::fs::symlink(target, &copy),
+			Err(_) => fs::copy(file, &copy).map(drop),
+		};
+		copied.unwrap_or_else(|error| panic!("copying {}: {error}", file.display()));
+	}
+	let checkout = std::env::current_dir().expect("the checkout");
+	for entry in fs::read_dir(&checkout).expect("the checkout").flatten() {
+		if entry.file_name() != SAMPLES {
+			// the entry's own path, not its resolved one: a dangling link of the checkout stays a dangling link
+			std::os::unix::fs::symlink(entry.path(), root.join(entry.file_name()))
+				.expect("a link beside the samples' copy");
+		}
+	}
+	root.join(SAMPLES)
+}
+
 /// What the warp binary writes to stdout running `code` (no questions asked)
 #[cfg(feature = "native")]
 pub fn printed(code: &str) -> String {
@@ -310,13 +396,17 @@ pub fn page_runtime_stub() -> &'static std::path::Path {
 
 #[cfg(feature = "native")]
 fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
-	let built = std::process::Command::new(env!("CARGO"))
-		.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
-		.args(features)
-		.current_dir(env!("CARGO_MANIFEST_DIR"))
-		.status()
-		.expect("cargo runs");
-	assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	// test.sh builds both stubs before the run: cargo here would wait for the shared target dir's lock while other
+	// worktrees build (notes/test_speed.md)
+	if std::env::var_os(STUBS_BUILT_VARIABLE).is_none() {
+		let built = std::process::Command::new(env!("CARGO"))
+			.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
+			.args(features)
+			.current_dir(env!("CARGO_MANIFEST_DIR"))
+			.status()
+			.expect("cargo runs");
+		assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	}
 	let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name(name);
 	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
 	let build = checkout_build(

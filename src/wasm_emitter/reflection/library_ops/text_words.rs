@@ -219,7 +219,7 @@ impl WasmGcEmitter {
 	/// the bound the program's Keys need, then `:` for any code above, in one run of bytes, and for each its offset in
 	/// the run and length as two bytes; returns (run, table). A hello world carries `:` alone (web::test_bundle_budget)
 	pub(super) fn allocate_operator_texts(&mut self) -> (u32, u32) {
-		let bound = self.written_operator_bound as usize;
+		let bound = self.written_operator_bound() as usize;
 		let texts: Vec<String> = (0..=bound)
 			.map(crate::operators::written_operator)
 			.chain([crate::operators::Op::Colon.as_str().to_string()])
@@ -275,13 +275,13 @@ impl WasmGcEmitter {
 		});
 		let no_bracket = self.allocate_string("");
 		let separator_texts =
-			[Separator::Colon, Separator::Semicolon, Separator::Newline, Separator::Tab].map(|separator| {
+			[Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab].map(|separator| {
 				(crate::wasm_emitter::separator_code(&separator), self.allocate_string(&separator.joint()))
 			});
 		let space = self.allocate_string(" ");
 		// only a program whose Keys hold operators beyond `:` carries their texts (web::test_bundle_budget)
 		let operator_texts =
-			(self.written_operator_bound > op_to_code(&Op::Colon)).then(|| self.allocate_operator_texts());
+			(self.written_operator_bound() > op_to_code(&Op::Colon)).then(|| self.allocate_operator_texts());
 		let instance_texts = [self.allocate_string(""), self.allocate_string(Op::Colon.as_str())];
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let empty = self.allocate_string("");
@@ -408,7 +408,7 @@ impl WasmGcEmitter {
 					s.emit_field(f, element, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And]);
 					if let Some((run, table)) = operator_texts {
-						let last_code = I32Const(s.written_operator_bound as i32 + 1);
+						let last_code = I32Const(s.written_operator_bound() as i32 + 1);
 						Self::emit_list(
 							f,
 							&[

@@ -195,7 +195,6 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 	})
 }
 
-/// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
 /// The `ack:` lines of the answers file earlier versions wrote, appended to the acknowledgements file when it lacks
 /// them, so acknowledged notes stay quiet after the rename
 pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>) {
@@ -222,6 +221,7 @@ pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>)
 	}
 }
 
+/// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
 pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 	ACKNOWLEDGEMENTS_FILE.with(|file| *file.borrow_mut() = Some(path.into()));
 	load_acknowledgements();
@@ -251,18 +251,17 @@ pub fn begin_program() {
 /// Run `body` hearing every hint it gives, also those "got it" was said to, printing and asking nothing: `warp
 /// beautify` applies their fixes (src/formatting/synonyms.rs)
 pub fn every_hint_of<T>(body: impl FnOnce() -> T) -> (T, Vec<Diagnostic>) {
-	let shown_from = SHOWN_FROM.swap(u8::MAX, std::sync::atomic::Ordering::Relaxed);
-	let heard = crate::util::scoped(&ACKNOWLEDGER, None, || {
-		crate::util::scoped(&ACKNOWLEDGEMENTS_FILE, None, || {
-			compile_context::scoped(
-				|context| &mut context.hint_mode,
-				crate::normalize::HintMode::Always,
-				|| capture_hints(body),
-			)
+	crate::util::scoped(&PRINTING_SILENCED, true, || {
+		crate::util::scoped(&ACKNOWLEDGER, None, || {
+			crate::util::scoped(&ACKNOWLEDGEMENTS_FILE, None, || {
+				compile_context::scoped(
+					|context| &mut context.hint_mode,
+					crate::normalize::HintMode::Always,
+					|| capture_hints(body),
+				)
+			})
 		})
-	});
-	SHOWN_FROM.store(shown_from, std::sync::atomic::Ordering::Relaxed);
-	heard
+	})
 }
 
 /// Acknowledged for the whole topic, or for this written expression

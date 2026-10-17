@@ -41,9 +41,22 @@ pub use program_file::*;
 mod use_statements;
 pub(crate) use use_statements::*;
 
-/// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
-/// that are not standard, like netbase, P194)
-pub const SEARCH_DIRECTORIES: [&str; 7] = [".", "include", "lib", "lib/extra", "src", "source", "samples"];
+/// Where modules are looked for, in this order: the current directory, the library (lib/extra: modules
+/// that are not standard, like netbase, P194), the modules among the samples (samples/modules: lib, square;
+/// samples/wasm: shapes.wasm)
+pub const SEARCH_DIRECTORIES: [&str; 9] =
+	[".", "include", "lib", "lib/extra", "src", "source", SAMPLE_MODULES[0], SAMPLE_MODULES[1], SAMPLE_MODULES[2]];
+/// The samples' modules never stand in for a standard module: samples/modules/agent.warp is a sample, `use agent` from
+/// the repository root means lib/agent.warp (card samples-name)
+/// samples/numbers: sin.warp, which `use sin` imports (test_sinus_warp_import) and the Numbers chapter links
+pub const SAMPLE_MODULES: [&str; 3] = ["samples/modules", "samples/wasm", "samples/numbers"];
+
+/// A sample's file named like a standard module (samples/modules/agent.warp for `use agent`): never that module
+pub fn shadows_with_a_sample(path: &std::path::Path) -> bool {
+	let standard =
+		path.file_stem().and_then(|stem| stem.to_str()).is_some_and(|name| std_module_source(name).is_some());
+	standard && path.parent().is_some_and(|folder| SAMPLE_MODULES.iter().any(|samples| folder.ends_with(samples)))
+}
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
@@ -115,11 +128,6 @@ fn used_and_implicit_modules(program: &Node) -> Vec<String> {
 		}
 	}
 	names
-}
-
-/// The loader of the modules the program uses: the search folders, then the program file's own folder
-fn program_loader() -> Loader<'static> {
-	Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of))
 }
 
 /// The WebAssembly module a used name finds, when no warp source of that name exists
@@ -216,13 +224,5 @@ pub fn insert_module_classes(program: Node) -> Node {
 	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
-	match file_classes.is_empty() {
-		true => program,
-		false => match program {
-			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-				Node::List([file_classes, statements].concat(), Bracket::None, separator)
-			}
-			single => Node::List([file_classes, vec![single]].concat(), Bracket::None, Separator::Semicolon),
-		},
-	}
+	with_statements_in_front(program, file_classes)
 }

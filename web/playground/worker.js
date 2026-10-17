@@ -110,12 +110,7 @@ async function loadCompiler() {
 	webWorkerBundle = awaitedEntry(compiler.web_worker_bundle);
 }
 
-function passText(text) {
-	const bytes = utf8.encode(text);
-	const pointer = compiler.web_alloc(bytes.length);
-	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
-	return [pointer, bytes.length];
-}
+const passText = text => passedBytes(compiler, utf8.encode(text)); // host-compiler.js
 
 // a program's main may wait for a promise (host.js JSPI): the compiler waits with it
 async function evaluate(code, acknowledged) {
@@ -319,6 +314,7 @@ async function handleMessage(data) {
 	self.newSoundHandles(); // host-tasks.js
 	self.liveHandover = data.liveHandover ?? {}; // the page's live loops of the run before (host-tasks.js liveCycleStarted)
 	self.programFile = data.file; // host-files.js besideProgram
+	self.programArguments = data.arguments ?? []; // host-files.js os.args
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

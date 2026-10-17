@@ -71,6 +71,12 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
 - **Drawing on the GPU** (card gpu-draw, 2026-10-12; notes/drawing.md "On the GPU"): in a window, `use draw` sends
   shapes (24 bytes each) instead of the canvas's pixels. Finger paint, quick-release, 1024×768 window: show 29–45 →
   0.2 ms, clear 10–29 → 0–1 ms, canvas() 25–46 → 0 ms (no pixel list allocated).
+- **fast Ints** (card fast-int, 2026-10-16; probes/fast_int/fuel_cost.sh): a fast function wrapped every single
+  operation (operands to machine, result back to an Int, one branch each), so `fast` loops ran slower than exact
+  ones. Now a whole Int expression in a fast region is machine code (big_int.rs emit_machine_root): when its leaves
+  are proven fixnums or Int locals, one test of those locals and the result picks plain i64 code. 100M rounds of
+  `t = t + i % 7; i = i + 1`: fast 490 → 234 ms, exact 254 ms, the same loop in hand-written wasm 115 ms.
+  `byte_at` and `memory_byte` are proven 0…255. `x: i64` (`x: fast int`) wraps now; it was ignored.
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a
@@ -78,6 +84,10 @@ Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a
 closure typing has nothing to win here yet. Loops over typed lists, map, append: 2 million items in under 0.1 s.
 
 ## Still slow
+Fuel (card fuel-metering, probes/fast_int/fuel_cost.sh): every run meters fuel (warp-runtime engine::fueled_config),
+and that is most of what a call or a branch costs. 40M calls of a tiny function: 49 ms in the wasmtime CLI, 218 ms
+with `-W fuel`, 208 ms in warp. The 6 ns per closure call below is mostly fuel; so is the gap of the fast loop to
+hand-written wasm. Epoch interruption would be the cheap stop, but it is not deterministic as fuel is.
 Each use of a hash-table map as a whole value converts it (O(n)); a loop that prints or passes the map each round
 pays that every round.
 Finger paint after runtime-speed: `dot(col, row)` passes Ints to `cell(v)`, whose v is a float: int → f64 → floor →
@@ -94,7 +104,7 @@ hoisting the conversion into the float path, would drop it).
 Everyday operations (card runtime-speed, 2026-10-12, quick-release; probes/perf/runtime_mix.warp, n=200k, ms):
 push 1, index read/write 1, typed write 2, map 2, filter 3, concat 30 → 0 (int_list_concat: array.copy into an array
 variable), slice 5, map insert 12 (20k), map lookup 7, sort 11. Left: slice, map insert/lookup; sort is now n log n (above), except with a two-item comparator.
-Compile time (samples/visualizer.warp, CPU s): 0.84 → 0.50. The passes that need only names/params/bodies take
+Compile time (samples/sound/visualizer.warp, CPU s): 0.84 → 0.50. The passes that need only names/params/bodies take
 analyzer::function_definitions; a full analyse_user_functions runs per changed program state (the memo misses on
 each), so a pass asking for one paid ~5–60 ms. Profile with probes/perf/xctrace_summary.py (unstripped build:
 CARGO_PROFILE_QUICK_RELEASE_STRIP=false; --callers <name> shows who pays). Left: module loading of std (~190 ms of
@@ -110,10 +120,10 @@ instead of copying all of them. std_module_definitions parsed all 24 std modules
 module is now parsed when first asked: a tiny program compiles in 0.02 s instead of 0.04.
 Tried, no gain: a per-thread cache of parsed std modules (insert_module_classes and the loader parse the same
 source): cloning the tree costs about what parsing it does (visualizer 0.30 → 0.29 s), not kept.
-Start of samples/gpu_visualizer_warp.warp (2026-10-15, card shader-start): the time to the first frame is the
+Start of samples/sound/gpu_visualizer_warp.warp (2026-10-15, card shader-start): the time to the first frame is the
 compile, not the GPU. The first paint makes the shader in ~0.2–0.5 s and later paints take ~0.1 s, both for the WGSL
 sample too (probes/perf/shader_start/*_first_frame.warp print the ms to the first paint, the first and the second
-paint). Compiling takes 1.23 s of CPU in release against 0.63 s for samples/gpu_visualizer.warp; in the debug build
+paint). Compiling takes 1.23 s of CPU in release against 0.63 s for samples/gpu/gpu_visualizer.warp; in the debug build
 5.4 s against 3.8 s (the ~5 s the user saw through a debug try line). 43 % of the samples are in
 analyse_user_functions (function_body_scope → collect_variables, refine_return_kinds → settled_return_kind): 13
 vector functions calling each other.

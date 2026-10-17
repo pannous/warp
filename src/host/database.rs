@@ -32,7 +32,7 @@ const UNIT_COLUMN: &str = "NUMERIC";
 const BUSY_MILLISECONDS: c_int = 5000;
 /// A folder set by cargo's test runs (.cargo/config.toml): each test thread keeps a sample's tables in its own copy there
 const TEST_TABLES: &str = "WARP_TEST_TABLES";
-/// The folder of the samples, which several tests run at once
+/// The folder of the samples (samples/<chapter>/), which several tests run at once
 const SAMPLES_FOLDER: &str = "samples";
 
 /// The program's function by name, called with the list of its arguments (src/host.rs calls back into the instance)
@@ -41,25 +41,43 @@ type SqlFunction = unsafe extern "C" fn(Handle, c_int, *mut Handle);
 
 type Handle = *mut c_void;
 
-/// The functions of the SQLite C API the tables use
-struct Sqlite {
-	open: unsafe extern "C" fn(*const c_char, *mut Handle) -> c_int,
-	busy_timeout: unsafe extern "C" fn(Handle, c_int) -> c_int,
-	errmsg: unsafe extern "C" fn(Handle) -> *const c_char,
-	prepare: unsafe extern "C" fn(Handle, *const c_char, c_int, *mut Handle, *mut *const c_char) -> c_int,
-	bind_int64: unsafe extern "C" fn(Handle, c_int, i64) -> c_int,
-	bind_double: unsafe extern "C" fn(Handle, c_int, f64) -> c_int,
-	bind_text: unsafe extern "C" fn(Handle, c_int, *const c_char, c_int, isize) -> c_int,
-	bind_null: unsafe extern "C" fn(Handle, c_int) -> c_int,
-	step: unsafe extern "C" fn(Handle) -> c_int,
-	column_count: unsafe extern "C" fn(Handle) -> c_int,
-	column_type: unsafe extern "C" fn(Handle, c_int) -> c_int,
-	column_int64: unsafe extern "C" fn(Handle, c_int) -> i64,
-	column_double: unsafe extern "C" fn(Handle, c_int) -> f64,
-	column_text: unsafe extern "C" fn(Handle, c_int) -> *const c_char,
-	finalize: unsafe extern "C" fn(Handle) -> c_int,
-	last_insert_rowid: unsafe extern "C" fn(Handle) -> i64,
-	create_function: unsafe extern "C" fn(
+/// The functions of the SQLite C API the tables use, each loaded by its C name
+macro_rules! sqlite_api {
+	($($field:ident = $symbol:literal: $signature:ty,)*) => {
+		struct Sqlite {
+			$($field: $signature,)*
+		}
+
+		fn load_sqlite() -> Result<Sqlite, String> {
+			let library = crate::ffi::get_or_load_library(SQLITE_LIBRARY)
+				.ok_or_else(|| format!("no lib{SQLITE_LIBRARY} found: database tables need SQLite"))?;
+			// the library stays loaded for the process (ffi/link.rs keeps it), so its function pointers stay valid
+			Ok(Sqlite {
+				$($field: *unsafe { library.get(concat!($symbol, "\0").as_bytes()) }
+					.map_err(|problem| format!("{}: {problem}", $symbol))?,)*
+			})
+		}
+	};
+}
+
+sqlite_api! {
+	open = "sqlite3_open": unsafe extern "C" fn(*const c_char, *mut Handle) -> c_int,
+	busy_timeout = "sqlite3_busy_timeout": unsafe extern "C" fn(Handle, c_int) -> c_int,
+	errmsg = "sqlite3_errmsg": unsafe extern "C" fn(Handle) -> *const c_char,
+	prepare = "sqlite3_prepare_v2": unsafe extern "C" fn(Handle, *const c_char, c_int, *mut Handle, *mut *const c_char) -> c_int,
+	bind_int64 = "sqlite3_bind_int64": unsafe extern "C" fn(Handle, c_int, i64) -> c_int,
+	bind_double = "sqlite3_bind_double": unsafe extern "C" fn(Handle, c_int, f64) -> c_int,
+	bind_text = "sqlite3_bind_text": unsafe extern "C" fn(Handle, c_int, *const c_char, c_int, isize) -> c_int,
+	bind_null = "sqlite3_bind_null": unsafe extern "C" fn(Handle, c_int) -> c_int,
+	step = "sqlite3_step": unsafe extern "C" fn(Handle) -> c_int,
+	column_count = "sqlite3_column_count": unsafe extern "C" fn(Handle) -> c_int,
+	column_type = "sqlite3_column_type": unsafe extern "C" fn(Handle, c_int) -> c_int,
+	column_int64 = "sqlite3_column_int64": unsafe extern "C" fn(Handle, c_int) -> i64,
+	column_double = "sqlite3_column_double": unsafe extern "C" fn(Handle, c_int) -> f64,
+	column_text = "sqlite3_column_text": unsafe extern "C" fn(Handle, c_int) -> *const c_char,
+	finalize = "sqlite3_finalize": unsafe extern "C" fn(Handle) -> c_int,
+	last_insert_rowid = "sqlite3_last_insert_rowid": unsafe extern "C" fn(Handle) -> i64,
+	create_function = "sqlite3_create_function_v2": unsafe extern "C" fn(
 		Handle,
 		*const c_char,
 		c_int,
@@ -70,63 +88,22 @@ struct Sqlite {
 		Option<unsafe extern "C" fn(Handle)>,
 		Option<unsafe extern "C" fn(*mut c_void)>,
 	) -> c_int,
-	user_data: unsafe extern "C" fn(Handle) -> *mut c_void,
-	value_type: unsafe extern "C" fn(Handle) -> c_int,
-	value_int64: unsafe extern "C" fn(Handle) -> i64,
-	value_double: unsafe extern "C" fn(Handle) -> f64,
-	value_text: unsafe extern "C" fn(Handle) -> *const c_char,
-	result_int64: unsafe extern "C" fn(Handle, i64),
-	result_double: unsafe extern "C" fn(Handle, f64),
-	result_text: unsafe extern "C" fn(Handle, *const c_char, c_int, isize),
-	result_null: unsafe extern "C" fn(Handle),
-	result_error: unsafe extern "C" fn(Handle, *const c_char, c_int),
+	user_data = "sqlite3_user_data": unsafe extern "C" fn(Handle) -> *mut c_void,
+	value_type = "sqlite3_value_type": unsafe extern "C" fn(Handle) -> c_int,
+	value_int64 = "sqlite3_value_int64": unsafe extern "C" fn(Handle) -> i64,
+	value_double = "sqlite3_value_double": unsafe extern "C" fn(Handle) -> f64,
+	value_text = "sqlite3_value_text": unsafe extern "C" fn(Handle) -> *const c_char,
+	result_int64 = "sqlite3_result_int64": unsafe extern "C" fn(Handle, i64),
+	result_double = "sqlite3_result_double": unsafe extern "C" fn(Handle, f64),
+	result_text = "sqlite3_result_text": unsafe extern "C" fn(Handle, *const c_char, c_int, isize),
+	result_null = "sqlite3_result_null": unsafe extern "C" fn(Handle),
+	result_error = "sqlite3_result_error": unsafe extern "C" fn(Handle, *const c_char, c_int),
 }
 
 static SQLITE: std::sync::OnceLock<Result<Sqlite, String>> = std::sync::OnceLock::new();
 
 fn sqlite() -> Result<&'static Sqlite, String> {
 	SQLITE.get_or_init(load_sqlite).as_ref().map_err(Clone::clone)
-}
-
-fn load_sqlite() -> Result<Sqlite, String> {
-	let library = crate::ffi::get_or_load_library(SQLITE_LIBRARY)
-		.ok_or_else(|| format!("no lib{SQLITE_LIBRARY} found: database tables need SQLite"))?;
-	macro_rules! function {
-		($name:literal) => {
-			// the library stays loaded for the process (ffi/link.rs keeps it), so its function pointers stay valid
-			*unsafe { library.get(concat!($name, "\0").as_bytes()) }
-				.map_err(|problem| format!("{}: {problem}", $name))?
-		};
-	}
-	Ok(Sqlite {
-		open: function!("sqlite3_open"),
-		busy_timeout: function!("sqlite3_busy_timeout"),
-		errmsg: function!("sqlite3_errmsg"),
-		prepare: function!("sqlite3_prepare_v2"),
-		bind_int64: function!("sqlite3_bind_int64"),
-		bind_double: function!("sqlite3_bind_double"),
-		bind_text: function!("sqlite3_bind_text"),
-		bind_null: function!("sqlite3_bind_null"),
-		step: function!("sqlite3_step"),
-		column_count: function!("sqlite3_column_count"),
-		column_type: function!("sqlite3_column_type"),
-		column_int64: function!("sqlite3_column_int64"),
-		column_double: function!("sqlite3_column_double"),
-		column_text: function!("sqlite3_column_text"),
-		finalize: function!("sqlite3_finalize"),
-		last_insert_rowid: function!("sqlite3_last_insert_rowid"),
-		create_function: function!("sqlite3_create_function_v2"),
-		user_data: function!("sqlite3_user_data"),
-		value_type: function!("sqlite3_value_type"),
-		value_int64: function!("sqlite3_value_int64"),
-		value_double: function!("sqlite3_value_double"),
-		value_text: function!("sqlite3_value_text"),
-		result_int64: function!("sqlite3_result_int64"),
-		result_double: function!("sqlite3_result_double"),
-		result_text: function!("sqlite3_result_text"),
-		result_null: function!("sqlite3_result_null"),
-		result_error: function!("sqlite3_result_error"),
-	})
 }
 
 thread_local! {
@@ -141,19 +118,18 @@ pub fn rows_read() -> usize {
 	ROWS_READ.get()
 }
 
-/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page (from a
-/// position), count, insert
-/// (give the id), delete (by id), update
+/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page
+/// (from a position), count, insert (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
-	let text = |node: &Node| node.text_value().ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()));
+	let text = |node: &Node| node.text_value().ok_or_else(|| format!("needs a text, got {}", spelled(node)));
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
 		("rows", [table, schema, file]) => {
-			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
+			let columns = columns_of(&schema.children())?;
 			selected(connection(&text(file)?)?, &text(table)?, &columns, "", "", &[])
 		}
 		("page", [table, schema, file, start, size]) => {
-			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
+			let columns = columns_of(&schema.children())?;
 			selected(
 				connection(&text(file)?)?,
 				&text(table)?,
@@ -185,15 +161,15 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		}
 		("delete", [table, id, file]) => {
 			let sql = format!("DELETE FROM {} WHERE {ID_COLUMN} = ?", quote(&text(table)?));
-			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
+			executed(connection(&text(file)?)?, &sql, std::slice::from_ref(id))
 		}
 		("update", [table, id, column, value, file]) => {
 			let sql =
 				format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
-			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
+			executed(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()])
 		}
 		(member, [file]) if transaction_statement(member).is_some() => {
-			rows(connection(&text(file)?)?, transaction_statement(member).expect("guarded"), &[]).map(|_| Node::Empty)
+			executed(connection(&text(file)?)?, transaction_statement(member).expect("guarded"), &[])
 		}
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
@@ -211,7 +187,7 @@ pub fn select(arguments: &[Node], callback: &mut Callback) -> Result<Node, Strin
 		return Err(format!("select needs 5 arguments, got {}", arguments.len()));
 	};
 	let database = connection(&file.drop_meta().name())?;
-	let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
+	let columns = columns_of(&schema.children())?;
 	let mut call = WarpCall { callback, failure: None };
 	register_warp_call(database, Some((&mut call as *mut WarpCall).cast()))?;
 	let found = selected(
@@ -279,12 +255,27 @@ unsafe extern "C" fn warp_call(context: Handle, count: c_int, values: *mut Handl
 
 unsafe fn value_of(sqlite: &Sqlite, value: Handle) -> Node {
 	unsafe {
-		match (sqlite.value_type)(value) {
-			SQLITE_INTEGER => Node::int((sqlite.value_int64)(value)),
-			SQLITE_FLOAT => Node::float((sqlite.value_double)(value)),
-			SQLITE_TEXT => Node::Text(CStr::from_ptr((sqlite.value_text)(value)).to_string_lossy().into_owned()),
-			_ => Node::Empty,
-		}
+		node_of(
+			(sqlite.value_type)(value),
+			|| (sqlite.value_int64)(value),
+			|| (sqlite.value_double)(value),
+			|| (sqlite.value_text)(value),
+		)
+	}
+}
+
+/// An SQLite value of the type `kind` as a Node, read by the reader of its type: NULL (and blobs) are ø
+unsafe fn node_of(
+	kind: c_int,
+	integer: impl FnOnce() -> i64,
+	float: impl FnOnce() -> f64,
+	text: impl FnOnce() -> *const c_char,
+) -> Node {
+	match kind {
+		SQLITE_INTEGER => Node::int(integer()),
+		SQLITE_FLOAT => Node::float(float()),
+		SQLITE_TEXT => Node::Text(unsafe { CStr::from_ptr(text()) }.to_string_lossy().into_owned()),
+		_ => Node::Empty,
 	}
 }
 
@@ -301,12 +292,7 @@ unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), Str
 				let text = c_text(value)?;
 				(sqlite.result_text)(context, text.as_ptr(), -1, SQLITE_TRANSIENT)
 			}
-			other => {
-				return Err(format!(
-					"a filter's function gave {}, which a query cannot compare",
-					other.serialize().trim()
-				))
-			}
+			other => return Err(format!("a filter's function gave {}, which a query cannot compare", spelled(other))),
 		}
 	}
 	Ok(())
@@ -320,7 +306,6 @@ fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	selected(database, table, &columns, "", "", &[])
 }
 
-/// The table's rows `[id, columns…]` in id order, or only a page of them: its start position (counted from 1) and size
 /// The rows `[id, columns…]` of a table in order, those of `filter` (` WHERE …`) within `limit` (` LIMIT …`), whose
 /// parameters come in that order
 fn selected(
@@ -344,7 +329,7 @@ fn selected(
 
 /// The table created or migrated to the class's fields; their columns
 fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(String, String, String)>, String> {
-	let columns = schema.iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
+	let columns = columns_of(schema)?;
 	let definitions: Vec<String> =
 		columns.iter().map(|(name, column_type, _)| format!("{} {column_type}", quote(name))).collect();
 	let quoted_table = quote(table);
@@ -481,11 +466,15 @@ fn split_unit(column_type: &str) -> (&str, Option<&str>) {
 	}
 }
 
+fn columns_of(fields: &[Node]) -> Result<Vec<(String, String, String)>, String> {
+	fields.iter().map(column_of).collect()
+}
+
 /// A field `[name, type, default]` as its column: name, SQL type, the SQL literal new rows of an added column take
 fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let parts = field.children();
 	let [name, field_type, default, ..] = parts.as_slice() else {
-		return Err(format!("no field [name type default]: {}", field.serialize().trim()));
+		return Err(format!("no field [name type default]: {}", spelled(field)));
 	};
 	let field_type = field_type.drop_meta().name();
 	// `email: text?`: a nullable column, its rows default to NULL (ø)
@@ -519,8 +508,13 @@ fn literal(value: &Node) -> Result<String, String> {
 		Node::False => Ok("0".to_string()),
 		Node::Text(text) => Ok(format!("'{}'", text.replace('\'', "''"))),
 		Node::Char(character) => literal(&Node::Text(character.to_string())),
-		other => Err(format!("{} is no column value", other.serialize().trim())),
+		other => Err(format!("{} is no column value", spelled(other))),
 	}
+}
+
+/// A value as warp writes it, for messages
+fn spelled(value: &Node) -> String {
+	value.serialize().trim().to_string()
 }
 
 /// "name" as an SQL identifier
@@ -559,7 +553,7 @@ fn connection(file: &str) -> Result<Handle, String> {
 /// sample's file, so tests running one sample at once neither lock nor change each other's rows
 fn test_thread_copy(file: &str) -> Option<String> {
 	let file = std::path::Path::new(file);
-	let in_samples = file.parent().and_then(|folder| folder.file_name()).is_some_and(|folder| folder == SAMPLES_FOLDER);
+	let in_samples = file.ancestors().any(|folder| folder.file_name().is_some_and(|name| name == SAMPLES_FOLDER));
 	let folder = std::env::var(TEST_TABLES).ok().filter(|_| in_samples)?;
 	let thread = std::thread::current().name().filter(|name| *name != "main")?.replace("::", ".");
 	let folder = std::path::Path::new(&folder).join(thread);
@@ -597,6 +591,11 @@ fn rows(database: Handle, sql: &str, parameters: &[Node]) -> Result<Vec<Vec<Node
 	result
 }
 
+/// A statement run for what it does: ø
+fn executed(database: Handle, sql: &str, parameters: &[Node]) -> Result<Node, String> {
+	rows(database, sql, parameters).map(|_| Node::Empty)
+}
+
 /// A text or character value as SQLite's text
 fn c_text(value: &Node) -> Result<CString, String> {
 	CString::new(value.text_or_name()).map_err(|problem| problem.to_string())
@@ -616,26 +615,24 @@ fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Resul
 				let text = c_text(value)?;
 				(sqlite.bind_text)(statement, index, text.as_ptr(), -1, SQLITE_TRANSIENT)
 			}
-			other => return Err(format!("{} is no column value", other.serialize().trim())),
+			other => return Err(format!("{} is no column value", spelled(other))),
 		}
 	};
 	match code {
 		SQLITE_OK => Ok(()),
-		code => Err(format!("binding {} failed ({code})", value.serialize().trim())),
+		code => Err(format!("binding {} failed ({code})", spelled(value))),
 	}
 }
 
 fn row(sqlite: &Sqlite, statement: Handle) -> Vec<Node> {
 	(0..unsafe { (sqlite.column_count)(statement) })
 		.map(|column| unsafe {
-			match (sqlite.column_type)(statement, column) {
-				SQLITE_INTEGER => Node::int((sqlite.column_int64)(statement, column)),
-				SQLITE_FLOAT => Node::float((sqlite.column_double)(statement, column)),
-				SQLITE_TEXT => {
-					Node::Text(CStr::from_ptr((sqlite.column_text)(statement, column)).to_string_lossy().into_owned())
-				}
-				_ => Node::Empty,
-			}
+			node_of(
+				(sqlite.column_type)(statement, column),
+				|| (sqlite.column_int64)(statement, column),
+				|| (sqlite.column_double)(statement, column),
+				|| (sqlite.column_text)(statement, column),
+			)
 		})
 		.collect()
 }

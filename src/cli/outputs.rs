@@ -8,7 +8,6 @@ pub(crate) const COMPONENT_EXTENSION: &str = "component.wasm";
 pub(crate) const WAGI_EXTENSION: &str = "wagi.wasm";
 pub(crate) const SPIN_MANIFEST_EXTENSION: &str = "spin.toml";
 
-/// `dir/program.warp` compiles to `dir/program.wasm`; inline code compiles to `out.wasm`
 /// `warp build`: the WebAssembly module next to the program file (out.wasm for inline code), with `--aot` its machine
 /// code too
 pub(crate) fn write_module(code: &str, target: &str, ahead_of_time: bool) {
@@ -109,6 +108,20 @@ pub(crate) fn write_wagi(code: &str, target: &str) {
 			eprintln!("warp build --wagi: {failure}");
 			std::process::exit(1);
 		}
+	}
+}
+
+/// `warp compile --page`: the module next to the program file with the modules it imports by path in modules/
+pub(crate) fn write_page_module(code: &str, target: &str) {
+	let output_path = compiled_output_path(target);
+	let written = warp::pipeline::for_any_host(|| wasm_emitter::compile(code))
+		.map_err(|final_value| format!("nothing to compile: {}", final_value.serialize()))
+		.and_then(|module| {
+			warp::web::site_modules::write_page_module(&module.bytes, std::path::Path::new(&output_path))
+		});
+	match written {
+		Ok(files) => println!("compiled {output_path} for a page, beside it: {}", files.join(", ")),
+		Err(failure) => fail(format!("warp compile --page: {failure}")),
 	}
 }
 

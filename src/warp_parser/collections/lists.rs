@@ -231,10 +231,9 @@ impl WarpParser {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
 				break;
-			} else if bracket == Bracket::Curly {
-				field_holding_lambda(item)
 			} else {
-				item
+				// a `key: value` item is an entry in any bracket: `[d: x => x + 1]` holds the lambda too (reviewer)
+				field_holding_lambda(item)
 			};
 
 			// Determine separator after this item
@@ -275,7 +274,7 @@ impl WarpParser {
 			_ if self.at_group_end(close) => Separator::None,
 			',' => {
 				self.advance();
-				Separator::Colon
+				Separator::Comma
 			}
 			';' => {
 				self.advance();

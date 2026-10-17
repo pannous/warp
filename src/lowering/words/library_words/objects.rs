@@ -1,6 +1,44 @@
 //! Objects and their fields: `object.name`, `name of object`, `object["name"]`, field assignments and `?.`, the variables only ever holding object literals
 use super::*;
 
+/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
+/// otherwise` (word(x)), so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a
+/// list (`[{first: 2}]`) is held as a key, which has that key too
+pub(crate) fn map_field_or(receiver: &Node, name: &str, word_node: &Node, otherwise: Node) -> Node {
+	if !is_pure_read(receiver) {
+		return otherwise;
+	}
+	let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
+	let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
+	let contains = symbol(COLLECTION_CONTAINS).with_meta_of(word_node);
+	let has_key = parens(vec![contains, receiver.clone(), text(name)]);
+	if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), otherwise)
+}
+
+/// The keys of the map literals in the program: `size` of `{size: 9}`
+pub(super) fn entry_names(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	node.visit(&mut |node| {
+		if let Node::List(items, Bracket::Curly, _) = node.drop_meta() {
+			let keys = items.iter().filter_map(|item| match item.drop_meta() {
+				Node::Key(key, Op::Colon, _) => field_name(key),
+				_ => None,
+			});
+			names.extend(keys);
+		}
+	});
+	names
+}
+
+/// An uncalled word without arguments on a value that may be a map reads the map's entry of that name first: a
+/// counting word (`info.size`), or any other word but a map's own (`m.keys`) or one whose list or text result the code
+/// after it types (`it.chars.map(…)`), where a field read would hide that type (cards map-field, map-read)
+pub(crate) fn reads_entry_first(name: &str, word: &str) -> bool {
+	let keeps_word =
+		crate::members::MAP_MEMBERS.contains(&name) || result_kind(word).or_else(|| result_kind(name)).is_some();
+	crate::analyzer::is_counting_property(name) || !keeps_word
+}
+
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 pub(super) fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {

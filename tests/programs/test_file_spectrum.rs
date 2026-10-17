@@ -1,5 +1,5 @@
 // card gpu-visualizer-mp3: spectrum("song.mp3", seconds, bands) measures an audio file at a moment (decoded once by the
-// host, src/sound/spectrum.rs), sound_seconds(file) is how long it sounds; samples/gpu_visualizer_warp.warp lights its
+// host, src/sound/spectrum.rs), sound_seconds(file) is how long it sounds; samples/sound/gpu_visualizer_warp.warp lights its
 // bars with it while the file plays. shader_of(f) is the WGSL paint(f, …) compiles f to
 #![cfg(feature = "native")]
 use crate::is;
@@ -45,7 +45,8 @@ fn shader_of_is_the_wgsl_a_function_paints_with() {
 
 #[test]
 fn the_compiled_shader_demo_compiles_to_one_fragment_shader() {
-	let demo = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/warp_compiled_wgsl_shader.warp"));
+	let demo =
+		std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu/warp_compiled_wgsl_shader.warp"));
 	let lowered = warp::pipeline::lower(&demo.unwrap()).expect("a program").serialize();
 	assert!(lowered.contains("@fragment") && lowered.contains("fn warp_swirl_color("), "{lowered}");
 }

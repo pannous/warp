@@ -138,7 +138,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - libc in the browser (P147, 2026-10-06): host.js `c` calls web/playground/lib/libc.wasm, wasi-libc built by
   lib/build_libc.sh (21 KB, deployed with the page: pages.yml SITE_FILES `lib`), one instance per worker. Its exports
   have the native FFI's types (lib/libc.c wraps strlen, strncmp, strspn, strcspn, atol, labs to 64 bits), so numbers
-  pass through; texts cross by the program's custom section warp.c_calls (src/modules/wasm_modules.rs c_calls: `t` a
+  pass through; texts cross by the program's custom section warp.c_calls (src/modules/wasm_modules/mod.rs c_calls: `t` a
   NUL-terminated text, `l` the length after strcmp's text, `n` a number; result `t` a text): copied into libc.wasm's
   malloc and freed after the call, a char * result read back (NULL is ø). Functions: lib/libc.h; anything else of libc
   throws "c.X is not available in the browser". The hand-written shims of 2026-10-04 are gone.
@@ -155,14 +155,14 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - With every Worker of the pool busy, a task used to run inline in the program's isolate, where a channel's sender can
   never meet its receiver: `ch.send waits forever` (card primer-channel-flake: the primer's channel snippet once in
   ~100 CI runs, when the pool was short; tests/control/test_channels.rs a_sender_queued_behind_busy_tasks_is_received
-  makes it certain with 6 sleeping tasks). Now it is queued, as natively behind the fixed thread pool (src/host/tasks.rs):
+  makes it certain with 6 sleeping tasks). Now it is queued, as natively behind the fixed thread pool (src/host/tasks/mod.rs):
   startQueuedTasks moves queued tasks onto Workers whose tasks are done (released before their record is read) at
   every wait for a task or channel, check point and loop start. Inline remains in a task (its Worker has no pool), in
   a run without Workers, and when the run holds no Worker that could free.
 - card coi-headless (2026-10-08): the reload does happen, on warp.pannous.com and a plain local server, in a fresh
   profile of headless Chrome (agent-browser) and of WebKit 26 (Playwright, probes/webkit_samples.mjs, 3 of 3). Without
   isolation (service worker blocked: ISOLATED=no in that probe, a private window) tasks take turns: `tasks` prints out
-  of order, samples/threads.warp and async.warp hang. No fallback can make them parallel without shared memory (the
+  of order, samples/tasks/threads.warp and async.warp hang. No fallback can make them parallel without shared memory (the
   program blocks on a task's result with Atomics.wait; only JSPI could suspend instead, not in Safari), so the run says
   why: host-tasks.js TASKS_INLINE as a warning, and the page's 10 s timeout names it (worker message "tasks inline").
 
@@ -312,15 +312,15 @@ the_strict_flag_turns_warnings_into_errors before).
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
 worker's hooks.paint, the page draws one canvas per call under the output (playground.js showPaintings: nonzero/true
-is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/graphics/paint.rs, flate2 + crc32fast), prints its path. Run by `warp` itself it shows the frames in a window instead, also from an editor's build or a pipe (card g_gGsg, src/graphics/paint_window.rs; PNGs only with WARP_NO_WINDOW or CI set, as tests/common warp_command and tests/queue.sh do, or for warp used as a library): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed: a program that ended well waits for that, any other end (exit(), a failure, ctrl-c, a kill) ends the viewer's stdin and so its window, which opens only with the first frame (card exit-key, tests/programs/test_paint_window_ends.rs); the user ending the window (closing it, Cmd-Q) ends the run and stops its sounds, the viewer writing `closed`, and so does Escape unless the program names that key (`key == ESC`: then it is the program's, as on a page), `exit` stopping the sounds too (card escape-window) (the playground likewise: a painting the size of the last replaces it at once, sleep or not, card g_oldM). Pixels cross between host and module in one call each way (card g_odW4, src/wasm_emitter/lists/int_lists.rs: ints_to_list for gpu_render, list_to_ints for paint, through scratch memory above the text heap): a 256×256 frame of samples/webgpu went from 43 to 5 ms for gpu_render natively (paint 44 → 1 ms) and from 31 to 7 ms in Chrome (probes/gpu/render_speed.warp, probes/gpu/web_speed.py),, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/circle.warp is the issue's demo as
-written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.warp the filled
+is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/graphics/paint.rs, flate2 + crc32fast), prints its path. Run by `warp` itself it shows the frames in a window instead, also from an editor's build or a pipe (card g_gGsg, src/graphics/paint_window.rs; PNGs only with WARP_NO_WINDOW or CI set, as tests/common warp_command and tests/queue.sh do, or for warp used as a library): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed: a program that ended well waits for that, any other end (exit(), a failure, ctrl-c, a kill) ends the viewer's stdin and so its window, which opens only with the first frame (card exit-key, tests/programs/test_paint_window_ends.rs); the user ending the window (closing it, Cmd-Q) ends the run and stops its sounds, the viewer writing `closed`, and so does Escape unless the program names that key (`key == ESC`: then it is the program's, as on a page), `exit` stopping the sounds too (card escape-window) (the playground likewise: a painting the size of the last replaces it at once, sleep or not, card g_oldM). Pixels cross between host and module in one call each way (card g_odW4, src/wasm_emitter/lists/int_lists.rs: ints_to_list for gpu_render, list_to_ints for paint, through scratch memory above the text heap): a 256×256 frame of samples/graphics/webgpu went from 43 to 5 ms for gpu_render natively (paint 44 → 1 ms) and from 31 to 7 ms in Chrome (probes/gpu/render_speed.warp, probes/gpu/web_speed.py),, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/advanced/circle.warp is the issue's demo as
+written (one loop moving x and y together, so it paints only a short diagonal), samples/advanced/filled_circle.warp the filled
 circle with two loops.
 Prints show as they arrive, like paintings (card print-watch, 2026-10-09): `print "Watch it turn blue."` before a
 slow paint is read while it renders. Only an animation (after its first sleep) holds a text frame back until the next
 one begins (playground.js printedChunk). probes/print_watch.sh.
 
 ### Frames: only what changed (card abysmally-slow, 2026-10-15)
-samples/finger_paint (1280×800, show() every loop pass) crawled in Safari on an iPad. probes/paint_speed.mjs runs the
+samples/graphics/finger_paint (1280×800, show() every loop pass) crawled in Safari on an iPad. probes/paint_speed.mjs runs the
 playground's worker scripts in node over probes/paint_speed.warp and times each step. Before: every show() turned the
 1M BigInt64 pixels into a Float64Array (147 ms in node's V8), cloned 8 MB to the page, which shaded each pixel from a
 double (87 ms), then putImageData'd the whole canvas; frames came every few ms, so the page fell further behind with
@@ -372,7 +372,7 @@ fails. Next time a warning shows, its stage says where to look.
 - Fingers (card register-fingers, 2026-10-15): a touch is the pointer. Every painting canvas has `touch-action: none`
   (canvas.js paintingElement), else iPad Safari takes a finger for scrolling and sends pointercancel right after
   pointerdown; pointercancel releases mouse_down like pointerup; of several fingers only the first one down steers
-  mouse_x/mouse_y. Check: the Chrome tour drags a real touch over samples/finger_paint (touch_drag.mjs over the
+  mouse_x/mouse_y. Check: the Chrome tour drags a real touch over samples/graphics/finger_paint (touch_drag.mjs over the
   DevTools protocol, test_in_browser.py fingers_wrong); with the browser's own touch handling the same drag paints
   nothing, so the check can fail. A diagonal swipe there went back in the page's history (another example).
 
@@ -395,7 +395,7 @@ WebDriver, no console) on a macos-26 runner, job tour-safari of pages.yml (besid
 has navigator.gpu but no adapter (a VM), so GPU samples end in their no-adapter error there.
 - A growable SharedArrayBuffer reserves its maxByteLength (TASK_RESULT_LIMIT, 256 MB). Posted to a task Worker that
   stays idle it is never collected: after ~226 of them `new SharedArrayBuffer` throws "RangeError: Out of memory"
-  (measured on the runner). gpuJob made one per GPU job, a frame each, so samples/webgpu ended in
+  (measured on the runner). gpuJob made one per GPU job, a frame each, so samples/graphics/webgpu ended in
   `wasm trap: Out of memory`. Every answer buffer (task, fetch, askPage, GPU job) now comes from a free list
   (host-tasks.js takeAnswerBuffer) and goes back once its answer is read (cards webgpu-safari, safari-shared-buffers).
   Tour checks GPU_JOBS (400 GPU jobs in one run) and MANY_TASKS (400 tasks) guard the paths; the runner's Safari

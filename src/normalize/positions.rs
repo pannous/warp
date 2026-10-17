@@ -65,7 +65,14 @@ pub fn capture_hints<T>(action: impl FnOnce() -> T) -> (T, Vec<CapturedHint>) {
 
 /// Set the current position for hint messages
 pub fn set_hint_position(line: usize, column: usize) {
+	let file =
+		compile_context::read(|context| context.parsed_file.clone().or_else(|| context.hint_position.file.clone()));
+	set_hint_position_in(file, line, column);
+}
+
+pub(crate) fn set_hint_position_in(file: Option<String>, line: usize, column: usize) {
 	compile_context::change(|context| {
+		context.hint_position.file = file;
 		context.hint_position.line = line;
 		context.hint_position.column = column;
 	});

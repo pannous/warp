@@ -15,7 +15,7 @@ Draft by functions (warp-64), adapters section by async (warp-f0). Defaults belo
 - **P165 soft keywords.** Module names and module words are soft: a program may name a local variable `text` or a
   parameter `count`; a top-level redefinition of a *prelude* word stays allowed as today (user function wins, e.g.
   `def sum(xs)`), unless the word is in `soft_keywords::SOFT_KEYWORDS`.
-- **Capabilities.** Modules that touch the outside declare it (src/analyzer/effects.rs): file → Wasi/Host, net → Host, os/process
+- **Capabilities.** Modules that touch the outside declare it (src/analyzer/effects/mod.rs): file → Wasi/Host, net → Host, os/process
   → Process. `eval_untrusted` gets math, text, list, map, json, random-with-seed only.
 
 ## 2. Module layout
@@ -88,7 +88,8 @@ Done (branch functions, 2026-10-07):
 4. Qualified `list.zip(…)`, `math.gcd(…)`, JS's `Math.sqrt(16)`: the bare word with a note (welcome_forms
    module_calls); a program's own variable `text`/`list` keeps its methods (tests/modules/test_std_qualified.rs).
 5. `use random`: choice shuffle sample; `use map`: merge map_values (tests/modules/test_std_random.rs, test_std_map.rs).
-   A std module's source shows no style hints (parsed under normalize::without_hints).
+   A std module's source shows no style hints. Its initial parse is muted, and `normalize::show_hint` also rejects
+   source positions under embedded `lib/<module>.warp`, covering definitions brought in later for reflection.
 Bugs met (cards over-keys, inside-loop, index-hint): `for k in keys(m)` / `m[k]` in a loop over a one-entry map
 parameter; lib/map.warp uses `ks = keys(m)` and `m.get(k)` until they are fixed.
 6. `use time`: date_of(ms) {year month day}, weekday(ms) (ISO, Monday 1), day_number(ms), today()
