@@ -66,10 +66,12 @@ const REPORT_OFF = "off";
 const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
 const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
 // card bug-report: the bug button sends a comment, the program and its output to pannous.com (scripts/bug_report.py),
-// which the Mac turns into a board card; ?bug_token=<token> (bug_report.py token) stores the shared token in this browser
+// which the Mac turns into a board card. The page carries the shared token (user: the abuse risk is accepted); another
+// one given as ?bug_token=<token> (bug_report.py token) is stored in this browser and used instead
 const BUG_REPORT_URL = "https://pannous.com/warp-bug-report";
 const BUG_TOKEN_PARAMETER = "bug_token";
 const BUG_TOKEN_KEY = "warp-playground-bug-token";
+const BUG_TOKEN = "ON4YlqHqAtviYPgPzSeqx3QS_gSPFlY5";
 const FORBIDDEN = 403; // a wrong token: it is forgotten and the field asks again
 // a page event, or one element's (`on click·1`, src/lowering/web/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
@@ -1014,7 +1016,7 @@ function reportAddress() {
 	return `${ISSUE_URL}?${new URLSearchParams({ title, body })}`;
 }
 
-// the bug button: its form sends the comment with the reported run; the token field shows until a token is stored
+// the bug button: its form sends the comment with the reported run; the token field shows once a token is refused
 function startBugButton() {
 	const url = new URL(location.href);
 	const given = url.searchParams.get(BUG_TOKEN_PARAMETER);
@@ -1024,7 +1026,6 @@ function startBugButton() {
 		history.replaceState(null, "", url.href); // the token leaves the address bar and the history
 	}
 	$("bug").ontoggle = () => {
-		$("bug-token").hidden = Boolean(stored(BUG_TOKEN_KEY));
 		if ($("bug").open) $("bug-comment").focus();
 	};
 	$("bug-form").onsubmit = submit => {
@@ -1035,7 +1036,7 @@ function startBugButton() {
 
 function bugReport() {
 	return { ...reportedRun(), comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
-		token: stored(BUG_TOKEN_KEY) ?? $("bug-token").value.trim() };
+		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 
 async function sendBugReport() {
@@ -1050,7 +1051,7 @@ async function sendBugReport() {
 			$("bug-token").hidden = false;
 		}
 		if (!answer.ok) return showBugStatus(`not sent: ${error ?? answer.status}`, true);
-		store(BUG_TOKEN_KEY, report.token);
+		if (report.token !== BUG_TOKEN) store(BUG_TOKEN_KEY, report.token);
 		$("bug-comment").value = "";
 		$("bug-express").checked = false;
 		showBugStatus(card ? `card made: ${card}` : `sent (${queued}): a card within minutes`);
