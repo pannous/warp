@@ -199,17 +199,20 @@ fn declared_parameter_kinds(item: &Node) -> HashMap<String, Kind> {
 
 /// Parameter name → declared type name, for parameters written `name:type`.
 pub(crate) fn declared_parameter_types(item: &Node) -> HashMap<String, String> {
-	let mut types = HashMap::new();
-	if let Node::Key(signature, Op::Assign | Op::Define, _) = item.drop_meta() {
-		if let Node::List(params, _, _) = signature.drop_meta() {
-			for param in params.iter().skip(1) {
-				if let Node::Key(name, Op::Colon, type_name) = param.drop_meta() {
-					types.insert(name.name(), type_name.name());
-				}
-			}
-		}
-	}
-	types
+	let Node::Key(signature, Op::Assign | Op::Define, _) = item.drop_meta() else {
+		return HashMap::new();
+	};
+	let Node::List(params, _, _) = signature.drop_meta() else {
+		return HashMap::new();
+	};
+	params
+		.iter()
+		.skip(1)
+		.filter_map(|param| match param.drop_meta() {
+			Node::Key(name, Op::Colon, type_name) => Some((name.name(), type_name.name())),
+			_ => None,
+		})
+		.collect()
 }
 
 fn kind_of_type_name(name: &str) -> Kind {
@@ -219,6 +222,7 @@ fn kind_of_type_name(name: &str) -> Kind {
 fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> Law {
 	let LawDeclaration { name, statement, mut variables } = declaration;
 	let known = |name: &str| functions.iter().find(|f| f.name == name);
+	let is_function = |name: &str| known(name).is_some();
 	let mut function = String::new();
 	statement.visit(&mut |node| {
 		if let Some((name, args)) = node.call_parts() {
@@ -227,25 +231,29 @@ fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> La
 					function = name.to_string();
 				}
 				for (arg, (_, kind)) in args.iter().zip(&definition.parameters) {
-					arg.visit(&mut |inner| {
-						if let Node::Symbol(var) = inner {
-							if known(var).is_none() && !variables.iter().any(|(v, _)| v == var) {
-								variables.push((var.clone(), *kind));
-							}
-						}
-					});
+					add_free_variables(arg, *kind, &is_function, &mut variables);
 				}
 			}
 		}
 	});
-	statement.visit(&mut |node| {
-		if let Node::Symbol(var) = node {
-			if known(var).is_none() && !variables.iter().any(|(v, _)| v == var) {
-				variables.push((var.clone(), Kind::Int));
+	add_free_variables(&statement, Kind::Int, &is_function, &mut variables);
+	Law { name, function, statement, variables }
+}
+
+/// The symbols in `node` that name no function and no variable yet, as variables of `kind`
+fn add_free_variables(
+	node: &Node,
+	kind: Kind,
+	is_function: &dyn Fn(&str) -> bool,
+	variables: &mut Vec<(String, Kind)>,
+) {
+	node.visit(&mut |inner| {
+		if let Node::Symbol(var) = inner {
+			if !is_function(var) && !variables.iter().any(|(v, _)| v == var) {
+				variables.push((var.clone(), kind));
 			}
 		}
 	});
-	Law { name, function, statement, variables }
 }
 
 pub fn substitute(node: &Node, bindings: &HashMap<String, Node>) -> Node {

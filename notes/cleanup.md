@@ -557,3 +557,18 @@ Behaviour-preserving, +352 −587 lines. Byte check: every probe and sample comp
 Left for later (cards): emit_kind_globals' hand-written name table (derive from Kind::ALL); module_cache and
 program_cache each hash to hex (one shared hex_digest, also modules/cargo_crates); host/native.rs and
 host/tasks/values.rs could match Kind::of_field (host area); list_emitter KNOWN_WORDS as a mechanism.
+
+## Final pass (final-host, 2026-10-16)
+Area: src/host/, src/ffi/, src/gc_traits/, src/modules/, top-level src/*.rs (not extensions.rs). Net −410 lines.
+- ffi: one `NativeCall` wrapper for every C function; aliases interned once (resolve_library_alias leaked a string
+  per call); header signatures in one collect; header.rs comments match the code
+- host: `exported_memory` (one lookup of a caller's memory for host words, gpu, tasks, foreign calls, module linking),
+  `answer_for_text`, one `HostNode` type; database.rs's SQLite API as one `sqlite_api!` table
+- gc_traits/wasm_name_resolver.rs matches on wasmparser's own types (the Parsed* mirrors gone, −245)
+- modules: one program_loader, `qualified_call`, `instance_memory`; rustdoc's `Conversion::list_of/option_of/borrowed`
+  and its `kebab` = components' `kebab_case` + validity check
+- pipeline `without_located_errors`, law `add_free_variables`
+Left on purpose:
+- needed_definitions `with_statements_first` / `with_statements_in_front` differ in Meta handling and separator
+- main.rs's long if/else command dispatch: not touched
+- gc_traits ObjFieldValue / obj! and the GcObject reading API: the documented rasm pattern

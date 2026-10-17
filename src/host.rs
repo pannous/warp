@@ -255,6 +255,14 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(CHANNEL_WORDS[3], &[I64], &[I64]),
 	(CHANNEL_WORDS[4], &[I64], &[]),
 ];
+/// A text as it is, any other value as warp writes it
+pub(crate) fn text_or_written(node: Node) -> String {
+	match node {
+		Node::Text(text) => text,
+		other => other.serialize(),
+	}
+}
+
 /// The host words taking nothing and giving a value (`random`): a bare one is its call, as a program's function without
 /// parameters is (bare_calls.rs)
 pub fn parameterless_host_words() -> impl Iterator<Item = &'static str> {

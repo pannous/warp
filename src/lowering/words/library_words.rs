@@ -409,6 +409,7 @@ pub fn lower(node: Node) -> Node {
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
 	let times = crate::time::time_variables(&node);
+	let entry_names = entry_names(&node);
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
@@ -420,6 +421,7 @@ pub fn lower(node: Node) -> Node {
 		defining: RefCell::new(vec![]),
 		call_results,
 		times,
+		entry_names,
 		temporaries: Counter::default(),
 	}
 	.expand(node)
@@ -580,6 +582,8 @@ struct Lowering {
 	call_results: HashSet<String>,
 	/// Variables holding a time (time::time_variables): `(x + 1 hour).hour` reads the field
 	times: HashSet<String>,
+	/// The keys the program's map literals give entries: only a counting word named so may read an entry (`{size: 9}`)
+	entry_names: HashSet<String>,
 	temporaries: Counter,
 }
 
@@ -987,6 +991,20 @@ impl Lowering {
 		let meaning = self.word_meaning(receiver, name, word_node, &arguments, is_bare);
 		let field = || Some(field_lookup(receiver, name, word_node));
 		let own_member = self.own_member(receiver, name, &arguments);
+		// `m.size` of a map read at run time with an entry size reads the entry, else counts (card map-read); only where
+		// the program writes such an entry, as the check makes the count no longer known to be an Int (`xs.length - 1`).
+		// `number of bytes in t` reads `bytes.number`: the unit, no variable
+		let is_unit =
+			receiver.symbol_name().filter(|unit| !self.shadows(unit)).and_then(crate::analyzer::text_unit).is_some();
+		if is_bare
+			&& !is_unit
+			&& matches!(own_member, OwnMember::Maybe)
+			&& self.entry_names.contains(name)
+			&& crate::analyzer::is_counting_property(name)
+		{
+			// `x.number` stays for the emitter's counter (counting_getter): `number(x)` would cast x
+			return Some(self.member_or(receiver, name, word_node, key(receiver.clone(), Op::Dot, method.clone())));
+		}
 		// `p.center`, `s.words` of another module's word on what may be an object: its field, as before the word was
 		// loaded; a parameter or a user function's result may be of the word's type module, chosen at run time
 		let is_module_word = is_bare && is_loaded_module_word(name) && self.library_word_for(name, 1).is_none();
@@ -1071,10 +1089,7 @@ impl Lowering {
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| !is_bare || counting_method(name, &self.context).is_none())
 		{
-			// a map's own word (`m.keys`), or a word whose list or text result the code after it types
-			// (`it.chars.map(…)`): no run-time choice, which would hide that type
-			let typed = crate::members::MAP_MEMBERS.contains(&name)
-				|| result_kind(word).or_else(|| result_kind(name)).is_some();
+			let typed = !reads_entry_first(name, word);
 			let call = self.call(word, word_node, [vec![receiver.clone()], arguments.to_vec()].concat(), false);
 			return WordMeaning::Call { call, typed };
 		}
