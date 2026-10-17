@@ -22,10 +22,12 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 | Shader holes in WGSL text | `shader "…{x}…"` with `shader_holes` | experimental GPU text | port the hole scan for shader texts |
 | `$a` pattern names | `match n { data($a + 0) … }` | edge form of node patterns | a `$` name atom |
 | Error nodes for malformed input | `y = [1 2` → "`]` is missing" | come back with the diagnostics port | the parser's error nodes and their texts |
-# Dropped in the port: fringe forms a warp twin leaves out
+
+# Pass twins: fringe forms a warp twin leaves out
 The port keeps the clean core, not every Rust case (user 2026-10-17). A twin may skip a fringe form when it is
 recorded here with how to bring it back; the harness (tests/common/twins.rs pass_differential, `dropped`) skips the
 named sources and refuses a dropped source this file does not name. Passes that look like bloat as a whole are listed
 to the Supervisor instead of ported.
+
 Format: `## <part>` (lib/compiler/<part>.warp), then per form: the form, the sources showing it, why it is left out,
 how to bring it back.
