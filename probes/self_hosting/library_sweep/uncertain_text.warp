@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// card uncertain-text-warp: lib/prelude.warp's uncertain_text, the print of a ± value; each pair of lines prints the same
+show(x) := { print(x); print(uncertain_text(x.value, x.uncertainty, 0)) }
+show(5 ± 1)
+show(3 ± 0.5)
+show(1234.5678 ± 0.0012)
+show(-7.25 ± 0.1)
+show(1950 ± 50.0)
+show(123456 ± 789.0)
+show(0.000123 ± 0.0000045)
+show(5 ± 0.0)
+show(5.5 ± (1.0 / 0.0))

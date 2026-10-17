@@ -1,18 +1,20 @@
 #!/bin/sh
-# Compares parser.warp with the Rust parser on each line of probes/self_hosting/parser/forms.warp
+# Compares parser.warp with the Rust parser on each line of probes/self_hosting/parser/forms.warp and
+# tests/parser/self_parser_block_forms.txt (⏎ ⇥: line breaks, tabs)
 cd "$(dirname "$0")/../../.."  # the repo root
 mkdir -p scratch
 warp=scratch/warp  # scripts/own-warp.sh builds it; else the warp on the PATH
 [ -x "$warp" ] || warp=warp
 tests/queue.sh -- rust_forms --ignored --nocapture 2>&1 | sed -n '/running 1 test/,/^test /p' | grep '^  [^ ]' | sed 's/^  //' > scratch/forms_rust.txt
+cat probes/self_hosting/parser/forms.warp tests/parser/self_parser_block_forms.txt > scratch/forms_all.txt
 printf 'use "lib/compiler/parser.warp"\n' > scratch/forms_run.warp
-while IFS= read -r line; do esc=$(printf '%s' "$line" | sed 's/\\/\\\\/g; s/"/\\"/g'); printf 'print tree("%s")\n' "$esc" >> scratch/forms_run.warp; done < probes/self_hosting/parser/forms.warp
+while IFS= read -r line; do esc=$(printf '%s' "$line" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\$/\\$/g; s/⏎/\\n/g; s/⇥/\\t/g'); printf 'print (tree("%s") as text).replace("\\n", "⏎")\n' "$esc" >> scratch/forms_run.warp; done < scratch/forms_all.txt
 WARP_NO_WINDOW=1 WARP_HINTS=0 "$warp" scratch/forms_run.warp > scratch/forms_out.txt 2>&1
 python3 - <<'PY'
 import re
 r=open('scratch/forms_rust.txt').read().split('\n')
 w=open('scratch/forms_out.txt').read().split('\n')
-f=open('probes/self_hosting/parser/forms.warp').read().split('\n')
+f=open('scratch/forms_all.txt').read().split('\n')
 norm=lambda t: re.sub(r"'([^'\\]|\\.)'", lambda m: '"'+m.group(1)+'"', t)
 bad=0
 for i,line in enumerate(f):

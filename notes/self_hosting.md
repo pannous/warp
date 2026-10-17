@@ -17,9 +17,39 @@ Decision self-hosting:
 - Integration: twins, checked. Each warp part runs next to its Rust twin, and a differential test over every sample
   compares them. The Rust part goes only when its twin matches everywhere.
 - Language gaps are fixed in the language as cards of this topic, never worked around in the warp code.
+- Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
+  result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
+  warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
+  (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
+  when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
+  quirks before its Rust part is removed.
+- The same holds for structurally unsound decisions, not only bugs: special cases for single words, passes that undo
+  another pass's work, two mechanisms for one concept, tables duplicated across stages, pass order that exists only to
+  work around an earlier pass. The warp compiler may restructure (merge or split passes, change an internal tree
+  shape, replace special cases by one general rule). Where it does, the twin compares at the next level where both
+  agree (the tree after a later pass, or the program's result) instead of forcing the Rust structure. Each
+  restructuring is a short entry in Deviations; ones that change the language go to warp-interviewer.
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
 src ~59k.
+
+## Parser restructuring (review 2026-10-17, topic self-hosted)
+parser.warp leaves the Rust parser's structure where it is unsound. Order: parser-tokens and parser-desugar-pass first,
+then parser-scope-pass and parser-application with warp-self-passes, then parser-typed-fields, parser-context,
+parser-keyword-table. Target shapes:
+- parser-tokens: lexer.warp yields tokens, each with "blank before" and "newline before" bits; the parser reads tokens
+  and asks no character lookahead (operand_after, operand_follows, expression_ends, ends_line,
+  only_blanks_before_newline, line_blanks go).
+- parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
+  `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
+  each; the twin compares after that pass.
+- parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
+  knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
+- parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+- parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
+  restoring by hand.
+- parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
+  div as tag, unit words, membership, global/export, type words), in the format of library-word-tables.
 
 ## Language support the twins rely on
 - Mutable parser state in an object, char-by-char scanning, growing token lists, computed keys `{(n): 3}`,
@@ -80,6 +110,18 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
   `Data(…)`. Small floats keep their exponent on both sides (`2.5e-6`).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
 
+## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
+per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
+table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
+(test_blocks, enums, comprehensions, go_blocks, references, lambdas, pipes, quasi_quote, tree_walks) → analyzer
+checks (match_exhaustive, switch unit names, index_positions, check_unit_names: analysis, warp-self-analyzer's side).
+- Passes the target eliminates are not ported: repair passes such as grouped_receivers (the parser's `f()` = `(f)`)
+  and of_lookups' repairs (`type of x` as a declaration head, `sum (of xs)` grouping). The twins already written stay
+  until the target passes replace them.
+- New ports go toward the target: the word-phrase pass and the scope pass (with warp-parsing: parser-scope-pass,
+  parser-keyword-table); broadcasting minimal; the structural keepers of the SUGAR_PASSES triage.
+
 ## Next phase: passes, analyzer, emitter
 Order: lowering passes first, then the analyzer, then the emitter; only the bootstrap waits for all three.
 - Next item: lib/math.warp and lib/units.warp become complete standalone warp files, and the parser fetches its
@@ -119,6 +161,26 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 | 17 | f64-const | float_bits / bits_float: a float's IEEE bits as an int | gap (float_bits) | |
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
+
+## Emitter core (card emits-wasm, step 15)
+lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
+node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
+the text "outside the core: <first form>". Module: type, function, export (main), code and a name section with
+function and local names. No GC types, no memory: the core needs neither.
+- Kinds: int = i64, float = f64, a condition = i32. A parameter takes its annotation, else the kind of its first
+  call's argument; a function's result is read twice, so a recursive call knows it (the pending kind takes the kind
+  it meets). `%` is Euclidean as in Rust's emitter (r + |b| for a negative truncated remainder).
+- Twin (tests/parser/test_self_emitter.rs, tests/common/twins.rs emitter_differential): the module runs
+  (wasm_reader::read_bytes) and its value is compared with eval(source); a float equals another number of exactly
+  its value (3.5 * 2 is 7.0 here, 7 in Rust). probes/self_hosting/emitter/core/ holds one program per form, all inside
+  the core; the checked share of every sample and probe must have at least a floor of programs inside.
+- Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
+- Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
+  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no result, a loop's value, texts, lists, every
+  runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
+  library words a user function's name meets (`add` becomes add·any).
+- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
+  (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
 
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word
@@ -162,6 +224,12 @@ Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words a
 Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
 lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
 arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
+Load order (lib-from-runtime, landed with zero-fill-lib): code generation that calls a prelude word the program never
+named, through `compiler_word(word)` (a call it writes, `n times [x]` → filled_list) or a late_call whose callee is
+missing, notes the word; pipeline::loading_compiler_words then compiles once more with resolve loading it (hints muted).
+The second compile is a safety net, not the plan: with it alone 13 of 216 samples compiled twice (~7% of compile time),
+so each move also adds an implied_words scan of the forms that need its word (filled_lists.rs: none twice). Loading
+the prelude costs a small program ~0.4 s (debug CLI), so a scan must not load words a program cannot need.
 Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
 text search words above).
 

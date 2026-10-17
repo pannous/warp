@@ -484,6 +484,9 @@ PASSED:
   ✓ control::test_member_completion::an_unknown_receiver_offers_nothing
   ✓ control::test_member_completion::every_offered_builtin_is_a_method_of_its_type
   ✓ control::test_member_completion::literals_offer_their_type_s_methods
+  ✓ control::test_method_let_shadows_field::a_bare_field_write_changes_the_field
+  ✓ control::test_method_let_shadows_field::a_let_local_hides_the_field
+  ✓ control::test_method_let_shadows_field::a_let_local_starts_after_its_value
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
@@ -1454,6 +1457,8 @@ PASSED:
   ✓ functions::test_dot_lambda::a_leading_dot_number_stays_a_number
   ✓ functions::test_dot_lambda::a_parameter_s_number_word_method_is_the_word
   ✓ functions::test_each_spellings::for_each_spellings_are_each
+  ✓ functions::test_early_return_kind::a_word_ending_with_a_throwing_call_gives_its_other_values
+  ✓ functions::test_early_return_kind::an_early_return_of_another_kind_is_tested_at_run_time
   ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
   ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
   ✓ functions::test_effects_value::effects_of_a_parameter_reads_its_field
@@ -3060,9 +3065,11 @@ PASSED:
   ✓ numbers::test_plus_minus_units::a_plain_spread_counts_in_the_value_unit
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
+  ✓ numbers::test_plus_minus::a_parameter_shadows_an_outer_interval_name
   ✓ numbers::test_plus_minus::approximately_within_the_tolerance
   ✓ numbers::test_plus_minus::bounds_propagate_through_arithmetic
   ✓ numbers::test_plus_minus::intervals_are_not_correlated
+  ✓ numbers::test_plus_minus::uncertain_text_shows_the_parts_to_two_significant_digits
   ✓ numbers::test_plus_minus::untyped_functions_pass_an_interval_through
   ✓ numbers::test_printed_quantity::print_keeps_a_plain_fraction
   ✓ numbers::test_printed_quantity::print_rounds_a_quantity_to_two_decimals
@@ -3289,6 +3296,7 @@ PASSED:
   ✓ numbers::test_units_type_holes::a_text_repeats_a_plain_count_of_times
   ✓ numbers::test_units_type_holes::a_variable_keeps_its_dimension
   ✓ numbers::test_zero_fill::a_computed_size_is_a_runtime_count
+  ✓ numbers::test_zero_fill::a_filled_list_is_the_prelude_word_beside_a_program_fill
   ✓ numbers::test_zero_fill::a_large_zero_list_has_its_size
   ✓ numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros
   ✓ numbers::test_zero_fill::a_zero_list_of_nothing_is_empty
@@ -3728,6 +3736,8 @@ PASSED:
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
+  ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
@@ -3736,7 +3746,10 @@ PASSED:
   ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
   ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
   ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
+  ✓ parser::test_self_passes::arrow_result_types_match_their_rust_twin
   ✓ parser::test_self_passes::every_source_is_a_node_and_back
+  ✓ parser::test_self_passes::interpolation_matches_its_rust_twin
+  ✓ parser::test_self_passes::match_arms_match_their_rust_twin
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
@@ -4248,6 +4261,7 @@ PASSED:
   ✓ scope::test_variable_kind_clash::a_function_body_is_checked_too
   ✓ scope::test_variable_kind_clash::a_variable_given_another_kind_is_a_compile_error
   ✓ scope::test_variable_kind_clash::kinds_that_mix_stay_allowed
+  ✓ scope::test_variable_named_like_method::a_variable_named_like_a_word_leaves_the_word_after_a_dot
   ✓ sweeps::test_crash_card_location::crash_card_names_the_crashing_frame
   ✓ sweeps::test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value
   ✓ sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator
@@ -4786,6 +4800,8 @@ PASSED:
   ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
   ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
   ✓ types::test_extension_methods::an_extension_method_extends_a_class
+  ✓ types::test_field_default_variable::a_default_naming_a_variable_is_its_value
+  ✓ types::test_field_default_variable::a_field_named_result_is_a_field
   ✓ types::test_field_named_like_builtin::a_members_field_is_a_place
   ✓ types::test_field_named_like_builtin::a_size_field_of_an_element_of_a_declared_list
   ✓ types::test_field_named_like_library_word::a_known_instance_reads_its_field
@@ -5559,6 +5575,8 @@ PASSED:
   ✓ web::test_field_events::a_committed_value_reaches_on_change
   ✓ web::test_field_events::a_field_event_is_no_markup_mistake
   ✓ web::test_field_events::focus_and_blur_reach_their_handlers
+  ✓ web::test_fix_buttons_apply::a_fix_shown_serialized_edits_the_words_it_changes
+  ✓ web::test_fix_buttons_apply::the_samples_fix_buttons_find_their_text
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_field_is_validated_by_the_declared_type
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
@@ -6318,4 +6336,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 6313 passed, 0 failed, 6313 total tested
+14 ignored, 6331 passed, 0 failed, 6331 total tested

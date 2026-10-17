@@ -472,9 +472,14 @@ impl WasmGcEmitter {
 		}
 		if let [Node::Symbol(call), count, zero] = items {
 			if call == crate::filled_lists::ZERO_FILL_CALL {
-				self.emit_numeric_value(func, count);
-				self.emit_node_instructions(func, zero);
-				self.emit_call(func, crate::filled_lists::ZERO_FILL_CALL);
+				match self.compiler_word(crate::filled_lists::FILLED_LIST_WORD) {
+					Some(filled_list) => {
+						self.emit_user_function_call(func, &filled_list, &[count.clone(), zero.clone()])
+					}
+					None => {
+						func.instruction(&I::Unreachable);
+					}
+				}
 				return;
 			}
 		}

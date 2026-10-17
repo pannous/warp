@@ -22,19 +22,6 @@ pub fn is_similarity_call(name: &str) -> bool {
 	SIMILARITY_LEVELS.iter().any(|(_, function, ..)| *function == name)
 }
 
-/// The prelude word `a ≈ b` and `a ~ b` call, for modules::resolve, which runs before they are lowered
-pub(crate) fn implied_similarity_words(statements: &[Node]) -> Vec<String> {
-	let mut words = Vec::new();
-	for statement in statements {
-		statement.visit(&mut |node| {
-			if matches!(node, Node::Key(_, Op::Similar | Op::Rough, _)) && words.is_empty() {
-				words.push(ALIKE_WORD.to_string());
-			}
-		});
-	}
-	words
-}
-
 impl Lowering {
 	/// `a ≈ b`, `a ~ b`, `a circa b`: the prelude's alike(a, b, tolerance, rough), whose tolerance is the program's
 	/// variable when it sets one; the emitter compares two plain numbers inline instead

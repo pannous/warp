@@ -229,6 +229,8 @@ pub struct WasmGcEmitter {
 	text_witness: Option<reflection::witness::WitnessTable>,    // runtime dispatch of Printable to user types (witness.rs)
 	shown: Option<u32>, // the function giving main's value with printable instances as their texts (witness.rs)
 	late_calls: Vec<functions::late_calls::LateCall>, // runtime calls of warp-written functions (late_calls.rs)
+	/// prelude words the emitted code calls that the program did not load (late_calls.rs compiler_word)
+	missing_compiler_words: Vec<String>,
 	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
@@ -503,15 +505,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub fn emit_for_node(&mut self, program: &Node) {
-		let needed;
-		let node = match self.without_unneeded_words(program) {
-			Some(without) => {
-				needed = without;
-				&needed
-			}
-			None => program,
-		};
+	pub fn emit_for_node(&mut self, node: &Node) {
 		let lowered;
 		let node = if crate::numbers::real::mentions_real(node) {
 			lowered = crate::numbers::real::lower(node.clone());
@@ -599,7 +593,7 @@ impl WasmGcEmitter {
 			rerun.ratio_division = self.ratio_division;
 			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
 			rerun.inherited_needs = rerun.discovered_needs.clone();
-			crate::normalize::without_hints(|| rerun.emit_for_node(program)); // the first pass already hinted the same program
+			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
 			*self = rerun;
 		}
 	}
@@ -1017,6 +1011,12 @@ fn emit_module_with(node: &Node, ratio_division: bool) -> Result<(CompiledModule
 	let mut emitter = WasmGcEmitter::new();
 	emitter.ratio_division = ratio_division;
 	emitter.emit_for_node(node);
+	if !emitter.missing_compiler_words.is_empty() {
+		let missing = std::mem::take(&mut emitter.missing_compiler_words);
+		let message = format!("internal error: {} called but not loaded", missing.join(", "));
+		crate::compiler::compile_context::change(|context| context.missing_compiler_words = missing);
+		return Err(crate::node::error(&message));
+	}
 	if let Some(type_error) = emitter.type_error() {
 		return Err(type_error);
 	}

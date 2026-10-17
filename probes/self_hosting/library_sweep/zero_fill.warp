@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+// card zero-fill-lib: lib/prelude.warp's filled_list, the list `n times [x]` builds; each pair of lines prints the same
+n = 3
+print(filled_list(n, 0))
+print(n times [0])
+print(filled_list(0, 0))
+print(0 times [0])
+print(filled_list(n, [1 2]))
+print(n times [[1 2]])
+print(try filled_list(2.5, 0) else "error")
+y = 2.5
+print(try y times [0] else "error")
+print(filled_list(2.0, 1))

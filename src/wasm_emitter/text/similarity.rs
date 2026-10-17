@@ -10,7 +10,9 @@ use super::super::runtime_dependencies::{any, Dependency};
 use super::super::text::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
 use super::super::text::text_unicode::CaseMapping;
 use super::super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
-use crate::library_words::{is_similarity_call, ALIKE_FUNCTION, SIMILARITY_LEVELS, VALUES_ROUGH, VALUES_SIMILAR};
+use crate::library_words::{
+	is_similarity_call, ALIKE_FUNCTION, ALIKE_WORD, SIMILARITY_LEVELS, VALUES_ROUGH, VALUES_SIMILAR,
+};
 use crate::node::Node;
 use crate::type_kinds::{Kind, BOOL_KIND};
 use wasm_encoder::*;
@@ -36,7 +38,8 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 impl WasmGcEmitter {
 	/// Push i64 1/0 for a similarity call and say so: lib/prelude.warp's `alike(a, b, tolerance, rough)` of two plain
 	/// numbers inline (numbers_similar), `values_similar(a, b, tolerance)` and `values_rough(…)` by their runtime
-	/// function. False for any other call, and for alike of other values once loaded: an ordinary call of the warp word
+	/// function. False for any other call, and for alike of other values: an ordinary call of the warp word, loaded
+	/// by a second compile when the program did not name it (compiler_word)
 	pub(in crate::wasm_emitter) fn emit_similarity(
 		&mut self,
 		func: &mut Function,
@@ -57,10 +60,10 @@ impl WasmGcEmitter {
 			self.emit_float_value(func, tolerance);
 			self.emit_call(func, NUMBERS_SIMILAR);
 		} else if is_alike {
-			if self.ctx.user_functions.contains_key(ALIKE_FUNCTION) {
+			if self.compiler_word(ALIKE_WORD).is_some() {
 				return false;
 			}
-			self.emit_call(func, ALIKE_FUNCTION); // left out till now (without_unneeded_words): a need, the rerun has it
+			func.instruction(&I::Unreachable); // alike was not loaded: the second compile loads it
 		} else {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);

@@ -1,0 +1,4 @@
+# emitter core: a function, its parameter kind from the call
+# 49
+square(x) := x * x
+square(7)

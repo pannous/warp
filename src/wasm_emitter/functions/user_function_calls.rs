@@ -6,10 +6,6 @@ use super::super::*;
 const SCALAR_KINDS: [Kind; 5] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List];
 /// The kinds that are never a map
 const PLAIN_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
-/// The warp words the emitter calls itself (lib/prelude.warp alike for `a ≈ b`): loaded with every program that may
-/// call them, compiled once a call needs them (a rerun, mod.rs discovered_needs): `x ≈ 3` of two numbers keeps alike
-/// and its runtime functions and tables out of the module
-const COMPILED_ON_NEED: [&str; 1] = [crate::library_words::ALIKE_FUNCTION];
 
 impl WasmGcEmitter {
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -22,23 +18,6 @@ impl WasmGcEmitter {
 		let bodies: Vec<Box<Node>> = self.ctx.user_functions.values().map(|f| f.body.clone()).collect();
 		for body in bodies {
 			self.collect_and_allocate_strings(&body);
-		}
-	}
-
-	/// The program without the definitions of the COMPILED_ON_NEED words no call has needed yet; None when it has none
-	pub(in crate::wasm_emitter) fn without_unneeded_words(&self, program: &Node) -> Option<Node> {
-		let unneeded = |statement: &&Node| {
-			let name = statement.defined_name();
-			COMPILED_ON_NEED
-				.iter()
-				.any(|word| name.as_deref() == Some(*word) && !self.inherited_needs.contains(&Need::Function(word)))
-		};
-		match program.drop_meta() {
-			Node::List(statements, bracket, separator) if statements.iter().any(|statement| unneeded(&statement)) => {
-				let needed = statements.iter().filter(|statement| !unneeded(statement)).cloned().collect();
-				Some(Node::List(needed, bracket.clone(), separator.clone()))
-			}
-			_ => None,
 		}
 	}
 

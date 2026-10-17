@@ -16,9 +16,9 @@
   `any` value) part by part, each with alike again; any other two values go to the runtime function
   `values_similar(anyref, anyref, f64)` (bool, uncertain, numbers, texts, else values_equal).
 - wasm_emitter/similarity.rs: a call of alike with two plain numbers (static types Int/Float, not bool) compiles inline
-  to `numbers_similar(f64, f64, f64)`. alike is loaded with every `≈` (implied_similarity_words) but left out of the
-  emitted program until a call needs it (user_function_calls.rs COMPILED_ON_NEED, a rerun via discovered_needs), so a
-  numeric program stays ~3 KB instead of carrying alike, the map runtime and text_fold's table (~25 KB of data).
+  to `numbers_similar(f64, f64, f64)`. Any other call loads alike as a compiler word (late_calls.rs compiler_word: a
+  second compile when the program did not name it), so a numeric program stays ~3 KB instead of carrying alike, the
+  map runtime and text_fold's table (~25 KB of data).
   folding.rs never specialises alike's calls (a variant would hide the call from the emitter).
 - text_fold is text_lower's emitter with CaseMapping::Fold: a letter whose canonical decomposition adds only combining
   marks maps to its base letter's lower case. Hangul syllables stay themselves. No full case folding: `ß` stays `ß`.
