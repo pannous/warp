@@ -1,0 +1,23 @@
+# .deb and .rpm of the release binaries (nfpm, https://nfpm.goreleaser.com/), built by .github/workflows/release.yml:
+#   cd <unpacked tarball> && VERSION=1.3.0 ARCH=amd64 nfpm package -f <repo>/packaging/linux/nfpm.yaml -p deb -t <dir>
+# Run in the unpacked tarball: the binaries are read from the current directory. ARCH is Go's name (amd64, arm64);
+# nfpm writes x86_64/aarch64 into the rpm. notes/packaging.md
+name: warp-lang
+version: ${VERSION}
+arch: ${ARCH}
+platform: linux
+section: devel
+priority: optional
+maintainer: pannous <info@pannous.com>
+description: |-
+  Warp: a data notation that is also a programming language, compiled to WebAssembly GC.
+  Ships warp and warp-runtime, the stub of the standalone executables `warp build` makes.
+vendor: pannous
+homepage: https://warp.pannous.com/
+license: LicenseRef-Proprietary # unlicensed, all rights reserved (open_decisions P150)
+contents:
+  # warp, warp-runtime and (since the page stub) warp-page-runtime: all next to each other
+  - src: ./warp*
+    dst: /usr/bin/
+    file_info:
+      mode: 0755
