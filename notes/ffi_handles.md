@@ -1,4 +1,4 @@
-# C pointers as handles (card ffi-handles)
+# C pointers as handles
 
 A C pointer never reaches warp as an address. It crosses as a **handle id** into the run's table (`ffi::CHandles` in
 `HostState`): id n is the n-th pointer the run got, the same pointer keeps its id, **0 is NULL**. The table belongs to
@@ -30,7 +30,7 @@ All functions crossing pointers share one wrapper (`create_pointer_wrapper`): ha
 or handle result. Passing 0 (NULL) where C does not accept it crashes as it would in C (`fclose(0)`).
 
 FILE and DIR are structs everywhere (ffi STANDARD_STRUCT_TYPES): Linux declares FILE in bits/types/FILE.h, which is
-not read, and `fclose(f)` passed the handle id as a memory offset there (SIGSEGV in CI). A `char **` out-pointer
-(strtod's endptr, card ffi-header) is no handle out-pointer: left out of the warp call as any out-pointer, but the C
+not read. A `char **` out-pointer
+(strtod's endptr) is no handle out-pointer: left out of the warp call as any out-pointer, but the C
 function's own result stays the result (`strtod('2.5')` is 2.5, `strtol('ff', 16)` 255). Open: asprintf's text,
 written to its `char **`, is not read back.
