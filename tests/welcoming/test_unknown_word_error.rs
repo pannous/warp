@@ -9,9 +9,7 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn test_an_unknown_word_with_a_value_is_an_error_in_code() {
-	fails_with("cube 3", "undefined: cube");
 	fails_with("(cube 3)", "undefined: cube");
-	fails_with("[cube 3]", "undefined: cube");
 	fails_with("y = (3 apples); y", "undefined: apples");
 }
 

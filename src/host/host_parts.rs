@@ -5,10 +5,10 @@
 
 use crate::host::page_parts::{page_layout, PageLayout};
 use crate::host::{
-	ANY_STD_MODULE, CLIPBOARD_TEXT, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE,
-	GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, PARSE_CODE,
-	RUN_BLOCK, SAVE_PICTURE, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR, STD_PURE,
-	TEXT_COVERAGE,
+	ANY_STD_MODULE, CLIPBOARD_TEXT, DRAW_SHADER, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL,
+	GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT,
+	PARSE_CODE, RUN_BLOCK, SAVE_PICTURE, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR,
+	STD_PURE, TEXT_COVERAGE,
 };
 use crate::node::Node;
 use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_LISTEN};
@@ -101,7 +101,8 @@ pub const HOST_PARTS: [HostPart; 11] = [
 	HostPart {
 		script: ("host-gpu.js", script_text!("host-gpu.js")),
 		gives: |module, name| {
-			module == HOST_LIBRARY && (GPU_WORDS.contains(&name) || [PAINT, DRAW_SHAPE, DRAW_SHOW].contains(&name))
+			module == HOST_LIBRARY
+				&& (GPU_WORDS.contains(&name) || [PAINT, DRAW_SHAPE, DRAW_SHOW, DRAW_SHADER].contains(&name))
 		},
 		needs: &["host-tasks.js", "host-media.js"],
 	},
@@ -245,14 +246,13 @@ pub fn deployable(code: &str) -> Result<Deployable, String> {
 /// Worker answering requests does not have
 fn uses_the_browser(module: &[u8]) -> Result<bool, String> {
 	let browser_word = |name: &str| {
-		[PAINT, SAVE_PICTURE, DRAW_SHAPE, DRAW_SHOW, SOUND, TEXT_COVERAGE, CLIPBOARD_TEXT, SIGNAL_LISTEN]
+		[PAINT, SAVE_PICTURE, DRAW_SHAPE, DRAW_SHOW, DRAW_SHADER, SOUND, TEXT_COVERAGE, CLIPBOARD_TEXT, SIGNAL_LISTEN]
 			.contains(&name)
 			|| GPU_WORDS.contains(&name)
 	};
 	Ok(imports_of(module)?.iter().any(|(library, name)| library == HOST_LIBRARY && browser_word(name)))
 }
 
-/// The text of an error, else the value written out
 /// Why `code` gave no module: its error with the excerpt, as the CLI says it; a program whose value is all it has
 /// (no error) has nothing to compile
 pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
@@ -263,12 +263,10 @@ pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
 	}
 }
 
+/// The text of an error, else the value written out
 pub(crate) fn message_of(failure: &Node) -> String {
 	match failure.drop_meta() {
-		Node::Error(message) => match message.drop_meta() {
-			Node::Text(text) => text.clone(),
-			other => other.serialize(),
-		},
+		Node::Error(message) => super::text_or_written(message.drop_meta().clone()),
 		other => other.serialize(),
 	}
 }

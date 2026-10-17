@@ -1,9 +1,0 @@
-// card operator-spelling: word and glyph spellings of operators (wiki/operator.md)
-print 3 is not 4
-print yes xor no
-print yes nand yes
-x = yes
-x and= no
-print x
-print 7 modulo 3
-print 3 is at least 3

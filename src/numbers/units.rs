@@ -199,6 +199,21 @@ fn is_juxtaposed(node: &Node) -> bool {
 	false
 }
 
+/// `90 min`, `2 h`: a whole amount of a time unit the parser joined to it, as the time module's exact duration
+/// (decision duration-units); none for any other quantity
+pub fn duration_quantity(node: &Node) -> Option<crate::time::Duration> {
+	let Node::Key(amount, Op::Mul, unit) = node.drop_meta() else {
+		return None;
+	};
+	let Node::Number(Number::Int(count)) = amount.drop_meta() else {
+		return None;
+	};
+	let name = unit.drop_meta().symbol_name()?;
+	let unit_word = unit_named(name.strip_prefix(AFTER_NUMBER).unwrap_or(name))?;
+	let duration = quantity_arithmetic::unit_duration(unit_word)?;
+	is_juxtaposed(unit).then(|| duration.times(*count))
+}
+
 /// `km`, `m²`, `s^2`
 fn is_unit_term(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -958,8 +973,9 @@ fn fold_comparisons(node: Node, constants: &Constants, clock: bool, time_is_the_
 			Err(message) => error(&message),
 		};
 	}
-	let reads_quantities =
-		needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name));
+	// `1 h == 60 minutes`: a time unit beside a date or a duration of the time module is a duration, time::lower compares
+	let reads_quantities = !crate::time::mentions_time(&node)
+		&& (needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name)));
 	match static_units::constant(&with_constants(&node, constants)) {
 		Ok(Some((truth @ (Node::True | Node::False), _))) if reads_quantities => truth,
 		Err(message) if reads_quantities => error(&message),
