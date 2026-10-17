@@ -1033,6 +1033,13 @@ function startBugButton() {
 	addEventListener("keydown", key => {
 		if (key.key === "Escape") openMenus().forEach(menu => menu.open = false);
 	});
+	// ⌘ Enter (Ctrl Enter elsewhere) in the comment sends the report, as the send button does (card command-enter)
+	$("bug-comment").addEventListener("keydown", key => {
+		if (key.key === "Enter" && (key.metaKey || key.ctrlKey)) {
+			key.preventDefault();
+			$("bug-form").requestSubmit();
+		}
+	});
 	$("bug-form").onsubmit = submit => {
 		submit.preventDefault();
 		sendBugReport();

@@ -55,6 +55,12 @@ const UNKNOWN_OPERATOR: &str = "unknown operator: ";
 const UNKNOWN_BRACKET: &str = "unknown bracket: ";
 const UNKNOWN_SEPARATOR: &str = "unknown separator: ";
 
+/// The code of the op a built key is given (OP_CODES' index), the highest when it is no constant
+fn built_operator_code(op: &Node) -> i64 {
+	let written = |text: String| OP_CODES.iter().position(|code| code.as_str() == text);
+	op.text_value().and_then(written).unwrap_or(OP_CODES.len() - 1) as i64
+}
+
 /// The part a field name reads when the node has no field of that name
 pub fn node_part(field: &str) -> Option<i32> {
 	NODE_PARTS.iter().position(|part| *part == field).map(|part| part as i32)
@@ -68,7 +74,7 @@ pub fn is_pair_part(part: i32) -> bool {
 /// Runtime functions the node words call
 pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 	vec![
-		any(&[NODE_PART], &["new_text"]),
+		any(&[NODE_PART], &["new_text", "new_empty"]),
 		any(
 			&[NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED],
 			&[OPERATOR_CODE, BRACKET_CODE, SEPARATOR_CODE, TEXT_OF, TEXT_CONCAT, ERROR_OF, "new_key", "new_text"],
@@ -93,7 +99,12 @@ impl WasmGcEmitter {
 				self.emit_call(func, "get_text_len");
 				self.emit_call(func, "new_symbol");
 			}
-			KEY => self.emit_call(func, NEW_KEY_OF),
+			KEY => {
+				// list_text writes the op as written: the op given, any when only the run time knows it
+				let code = arguments.get(1).map_or(0, built_operator_code);
+				self.discovered_needs.insert(crate::wasm_emitter::Need::KeyOperator(code));
+				self.emit_call(func, NEW_KEY_OF)
+			}
 			SEPARATED => self.emit_call(func, NEW_SEPARATED),
 			_ => self.emit_call(func, NEW_BRACKETED),
 		}
@@ -189,6 +200,14 @@ impl WasmGcEmitter {
 					let separators: Vec<(i64, &str)> =
 						separators.iter().map(|(code, text)| (*code, text.as_str())).collect();
 					s.emit_part_text(f, &part_is(SEPARATOR_PART), &is_kind(kind, Kind::List), code, &separators);
+					// a node that is no group has no bracket and no separator: ø, so a walk tests groups without `try`
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(part), I::I32Const(BRACKET_PART), I::I32Eq, I::LocalGet(part),
+						I::I32Const(SEPARATOR_PART), I::I32Eq, I::I32Or, I::If(BlockType::Empty),
+					]);
+					s.call(f, "new_empty");
+					Self::emit_list(f, &[I::Return, I::End]);
 					// a word's name, or the name of a key's key (`x` of `x: 3`, of `x.y: 3` too)
 					Self::emit_list(f, &part_is(NAME_PART));
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::Loop(BlockType::Empty)]);
@@ -329,10 +348,14 @@ impl WasmGcEmitter {
 			vec![ValType::I64, nullable_node_ref],
 			|s, f| {
 				let (code, rest) = (2, 3);
+				s.emit_code_or_error(f, text, code, coder, prefix);
+				// no items is the empty list ø, whatever its brackets, as `()` parses
+				Self::emit_list(f, &kind_of(items));
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(items), I::Return, I::End]);
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_kind_test(f, Kind::List as i64, I::I64Ne);
 				s.emit_fail_if(f, "not_a_list");
-				s.emit_code_or_error(f, text, code, coder, prefix);
 				Self::emit_list(f, &kind_of(items));
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
