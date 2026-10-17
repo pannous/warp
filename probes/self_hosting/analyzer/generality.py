@@ -5,31 +5,15 @@ Rust has a number, a run-time number where Rust has an int or float) keeps every
 narrower may be unsound (a bug on either side); int → float can change printed values; a name only one side has is
 listed apart.
 Usage: probes/self_hosting/analyzer/generality.py [data/self_analyzer/differing.jsonl] [--examples N]"""
-import json, re, sys, collections
+import json, os, sys, collections
+
+sys.path.insert(0, os.path.dirname(__file__))
+from twin_loop import slots  # noqa: E402
 
 DIFFERING = "data/self_analyzer/differing.jsonl"
-SEPARATOR = " | "
 # a node holds any value; data any number
 NODE, NUMBER = "empty", "data"
 NUMBERS = {"int", "float"}
-
-
-def slots(text):
-    """{slot name: kind} of one side's kinds text"""
-    found = {}
-    for line in text.split(SEPARATOR):
-        function = re.match(r"^(.*)\((.*)\) -> (.*)$", line)
-        if function:
-            name, params, result = function.groups()
-            for index, kind in enumerate(filter(None, params.split(", "))):
-                found[f"{name}({index})"] = kind
-            found[f"{name}()"] = result
-        elif line.startswith("= "):
-            found["="] = line[2:]
-        elif ": " in line:
-            name, kind = line.rsplit(": ", 1)
-            found[name] = kind
-    return found
 
 
 def verdict(rust, warp):

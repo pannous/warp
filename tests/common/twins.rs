@@ -334,14 +334,61 @@ fn mentions_error(view: &Node) -> bool {
 }
 
 /// The analyzer's twin (card inferred-kinds, notes/self_hosting.md step 14): each source the pipeline lowers goes to
-/// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its text compared with src/analyzer/inferred_kinds.rs
-/// on the same program
+/// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its kinds compared with src/analyzer/inferred_kinds.rs
+/// on the same program slot by slot: warp's kind is Rust's or a more general one (`covers`), never a narrower one
 pub fn analyzer_differential(paths: &[PathBuf]) {
-	let cases = paths.iter().filter_map(|path| {
-		let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
-		Some(Case::new(path, view_json(&program), warp_list(kinds.iter().map(|kind| Node::text(kind)))))
-	});
-	report("inferred_kinds", &differences_of(cases, "analyzer", "inferred_kinds(node_of(json(argument)))"));
+	let cases: Vec<(String, String, Vec<String>)> = paths
+		.iter()
+		.filter_map(|path| {
+			let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
+			Some((path.display().to_string(), view_json(&program), kinds))
+		})
+		.collect();
+	let twin = TwinProgram::new("analyzer", "inferred_kinds(node_of(json(argument)))");
+	let mut differing = vec![];
+	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, argument, _)| argument.as_str()).collect();
+		for ((path, _, rust), value) in cases.iter().zip(twin.values(&arguments)) {
+			let warp: Vec<String> = match value.drop_meta() {
+				Node::List(items, ..) => items.iter().filter_map(Node::text_value).collect(),
+				other => vec![other.serialize()],
+			};
+			if !covers(&kind_slots(&warp), &kind_slots(rust)) {
+				differing.push((path.clone(), warp.join(" | "), rust.join(" | ")));
+			}
+		}
+	}
+	report("inferred_kinds", &differing);
+}
+
+/// Each slot's kind in an inferred kinds text: `f(0)` for f's first parameter, `f()` its result, a variable by name,
+/// `=` the program's value
+fn kind_slots(lines: &[String]) -> std::collections::BTreeMap<String, String> {
+	let mut slots = std::collections::BTreeMap::new();
+	for line in lines {
+		if let Some(value) = line.strip_prefix("= ") {
+			slots.insert("=".to_string(), value.to_string());
+		} else if let Some((signature, result)) = line.split_once(") -> ") {
+			let (name, params) = signature.split_once('(').unwrap_or((signature, ""));
+			for (index, kind) in params.split(", ").filter(|kind| !kind.is_empty()).enumerate() {
+				slots.insert(format!("{name}({index})"), kind.to_string());
+			}
+			slots.insert(format!("{name}()"), result.to_string());
+		} else if let Some((name, kind)) = line.rsplit_once(": ") {
+			slots.insert(name.to_string(), kind.to_string());
+		}
+	}
+	slots
+}
+
+/// The same slots, each of warp's kinds Rust's or a more general one: a node (empty) holds any value, a number of
+/// run-time kind (data) any number; a narrower kind would hold a value Rust's may not fit
+fn covers(warp: &std::collections::BTreeMap<String, String>, rust: &std::collections::BTreeMap<String, String>) -> bool {
+	let general = |warp: &str, rust: &str| {
+		warp == rust || warp == "empty" || (warp == "data" && (rust == "int" || rust == "float"))
+	};
+	warp.len() == rust.len()
+		&& rust.iter().all(|(slot, kind)| warp.get(slot).is_some_and(|warp_kind| general(warp_kind, kind)))
 }
 
 /// The view of the program after every lowering pass and the kinds the Rust analyzer infers in it; None for a program
