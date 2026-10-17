@@ -181,10 +181,10 @@ fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Nod
 
 /// `form post "/todos" { body }` → `form{ method:"post" action:"/todos" body }`, unless the program defines form
 pub fn lower_form_routes(node: Node) -> Node {
-	if !node.mentions_any(&[FORM_TAG]) || crate::library_words::defined_names(&node).contains(FORM_TAG) {
+	if !node.mentions_any(&[FORM_TAG]) {
 		return node;
 	}
-	with_form_routes(node)
+	crate::program_names::rewritten_where_free(node, FORM_TAG, &with_form_routes)
 }
 
 fn with_form_routes(node: Node) -> Node {

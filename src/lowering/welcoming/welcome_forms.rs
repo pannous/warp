@@ -155,10 +155,10 @@ fn named_reserved(target: &Node, destructures: bool) -> Option<(Node, String)> {
 /// `set x to 5` is `x = 5` for any assignment target, with a style hint (decision setter-calls); after of_lookups
 /// `set width of canvas to 12` is `set canvas.width to 12`, so `canvas.width = 12`. A program's own `set` wins
 pub fn lower_set_phrases(node: Node) -> Node {
-	if !node.mentions_any(&[SET_WORD]) || crate::library_words::defined_names(&node).contains(SET_WORD) {
+	if !node.mentions_any(&[SET_WORD]) {
 		return node;
 	}
-	set_phrases(node)
+	crate::program_names::rewritten_where_free(node, SET_WORD, &set_phrases)
 }
 
 fn set_phrases(node: Node) -> Node {
