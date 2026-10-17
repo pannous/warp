@@ -106,10 +106,8 @@ pub enum Op {
 	Abs,  // ‖...‖
 
 	// Suffix operators
-	Inc,    // ++
-	Dec,    // --
-	Square, // ²
-	Cube,   // ³
+	Inc, // ++
+	Dec, // --
 
 	// Ternary
 	Question, // ? (ternary condition)
@@ -151,16 +149,7 @@ impl Op {
 
 	/// Check if this is a suffix-only operator
 	pub fn is_suffix(&self) -> bool {
-		matches!(self, Op::Inc | Op::Dec | Op::Square | Op::Cube)
-	}
-
-	/// The exponent a suffix power operator stands for: x² is x^2, x³ is x^3
-	pub fn suffix_exponent(&self) -> Option<i64> {
-		match self {
-			Op::Square => Some(2),
-			Op::Cube => Some(3),
-			_ => None,
-		}
+		matches!(self, Op::Inc | Op::Dec)
 	}
 
 	/// Whether this comparison holds for two values ordered so (`<=` holds for Less and Equal)
