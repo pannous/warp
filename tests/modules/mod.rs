@@ -9,7 +9,6 @@ mod test_dir_builtin_members; // card dir-lists
 mod test_dir_value_methods; // card list-methods: dir([1 2]) lists its methods
 mod test_folder_scope;
 mod test_from_import; // card std-import
-mod test_selective_package; // card import-hides
 mod test_header_search;
 mod test_import_compiled; // card import-compiled
 mod test_import_words; // card cleanup-closed-lists
@@ -39,6 +38,7 @@ mod test_packages;
 mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
 mod test_replaced_module_function; // card use-sound-def
+mod test_selective_package; // card import-hides
 mod test_std_aliases;
 mod test_std_args; // card std-args
 mod test_std_collections;
