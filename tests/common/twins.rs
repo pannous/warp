@@ -232,7 +232,8 @@ pub fn bridge_differential() {
 }
 
 /// A node's view as a warp node gives it back: no literal and attribute layers, a character as a text (warp holds a
-/// one-character text as the character, card character-text)
+/// one-character text as the character, card character-text), an empty group as ø (assumption (B) of card
+/// empty-group-node, open with warp-interviewer: warp's empty `{}` / `()` is ø)
 fn plain_view(node: &Node) -> Node {
 	plain(node_view(node))
 }
@@ -241,6 +242,7 @@ fn plain(view: Node) -> Node {
 	match view {
 		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
 			Some("literal" | "attribute") => plain(items.pop().unwrap_or(Node::Empty)),
+			Some("list") if items.len() == 3 => Node::Empty,
 			Some("char") => {
 				items[0] = Node::text("text");
 				Node::List(items, bracket, separator)

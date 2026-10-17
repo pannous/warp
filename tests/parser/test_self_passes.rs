@@ -22,3 +22,8 @@ fn every_source_is_a_node_and_back() {
 fn times_phrases_match_their_rust_twin() {
 	pass_differential(warp::lowering::times_phrases::lower, "times_phrases", "times_phrases");
 }
+
+#[test]
+fn number_words_match_their_rust_twin() {
+	pass_differential(warp::lowering::number_words::lower, "number_words", "number_words_pass");
+}

@@ -1,0 +1,68 @@
+# English number words are numbers (`one plus two` is 3) unless the program names a variable, parameter or function
+# so (card times-phrases; Rust twin: src/lowering/words/number_words.rs). Keys (`{one: 1}`), members (`x.one`) and
+# quoted data (`data [one]`) stay words.
+use "walk.warp"
+
+number_words = {zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+	eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+	nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90}
+# the number words the program gives no other meaning
+numbers = {}
+
+# `x` of `x`, `x: int`, `x: int = 1`: the innermost left side
+parameter_head(n: any) := if type(n) is key then parameter_head(n.key) else n
+parameter_name(n: any) := {
+	head = parameter_head(n)
+	if head is symbol { return head.name }
+	ø
+}
+
+# every name the program gives: variables, functions, parameters, fields (soft_keywords.rs names_given)
+names_given(n: any, names: any) := {
+	if type(n) is key and (n.op == ":=" or n.op == "=") {
+		target = n.key
+		if target is symbol { names[target.name] = yes }
+		if target.bracket == "(" and #target > 0 {
+			if target#1 is symbol { names[target#1.name] = yes }
+			for parameter in target[1..] { given(parameter_name(parameter), names) }
+		}
+		return names_given(n.value, names)
+	}
+	if type(n) is key and n.op == "=>" {
+		parameters = n.key
+		if is_group(parameters) { for parameter in parameters { given(parameter_name(parameter), names) } }
+		else { given(parameter_name(parameters), names) }
+		return names_given(n.value, names)
+	}
+	if type(n) is key {
+		names_given(n.key, names)
+		return names_given(n.value, names)
+	}
+	if is_group(n) {
+		for item in n {
+			if n.bracket == "{" and type(item) is key and item.op == ":" and item.key is symbol { names[item.key.name] = yes }
+			names_given(item, names)
+		}
+	}
+	names
+}
+given(name: any, names: any) := if name != ø then names[name] = yes
+
+# `data e`: e as written
+is_quoted(n: any) := n.bracket == "" and n.separator == " " and #n == 2 and n#1 == symbol("data")
+
+as_numbers(n: any) := {
+	if is_quoted(n) { return n }
+	if n is symbol and numbers.has(n.name) { return numbers[n.name] }
+	if type(n) is key and n.op == ":" { return key(n.key, ":", as_numbers(n.value)) }
+	if type(n) is key and n.op == "." { return key(as_numbers(n.key), ".", n.value) }
+	children(n, as_numbers)
+}
+
+number_words_pass(program: any) := {
+	global numbers
+	names = names_given(program, {})
+	numbers = {}
+	for word in number_words.keys() { if not names.has(word) { numbers[word] = number_words[word] } }
+	as_numbers(program)
+}
