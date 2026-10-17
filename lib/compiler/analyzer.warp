@@ -287,7 +287,10 @@ nested_type(item: any, scope: any) := if kind_of(item, scope) == "list" then lis
 map_type(n: any, scope: any) := {
 	values = n.map(entry => entry.value)
 	typed = values.filter(v => not (is_empty(v) or (is_group(v) and v.bracket == "[" and #v == 0)))
-	words = (if #typed == 0 then values else typed).map(v => nested_type(v, scope))
+	# not `(if … then values else typed).map(…)`: that loses the element type (card if-expression)
+	chosen = typed
+	if #typed == 0 { chosen = values }
+	words = chosen.map(v => nested_type(v, scope))
 	common = common_type(words)
 	lists = #typed < #values and all_of(words, w => w.starts_with("list"))
 	if common != ø and (lists or #typed == #values) { "map of " + common } else { "map" }
@@ -391,7 +394,8 @@ mixes(a: text, b: text) := a == b or (a == "int" or a == "float") and (b == "int
 
 # --- functions ---
 
-parameter_name(parameter: any) := if type(parameter) is key then parameter_name(parameter.key) else parameter.name
+# symbol first: `type(symbol("key")) is key` (card type-symbol)
+parameter_name(parameter: any) := if parameter is symbol then parameter.name else parameter_name(parameter.key)
 parameters_of(name: text) := definitions[name].key[1..]
 
 # a parameter's kind: as declared, else its default's, else what the body does with it, else int
@@ -518,7 +522,8 @@ forwarded_parameters() := {
 				arguments = call#2
 				for index in 0..<min(#arguments, #called) {
 					argument = arguments[index]
-					own = if argument is symbol then parameters.index_of(argument.name) else -1
+					# index_of counts from 1 and gives 0 for a missing value
+					own = (if argument is symbol then parameters.index_of(argument.name) else 0) - 1
 					if own >= 0 and called[index] != "int" and parameter_kinds[name][own] == "int" and parameters_of(name)[own] is symbol {
 						set_parameter_kind(name, own, called[index])
 						changed = yes
