@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+# card match-rest-in-block: a rest binding is unknown inside a block arm (undefined variable: rest); an expression arm sees it
+f(node: any) := match node {
+	[first, ...rest] => {
+		all = [first] + rest
+		all.length
+	}
+	_ => 0
+}
+print f([1, 2, 3])  # expected 3

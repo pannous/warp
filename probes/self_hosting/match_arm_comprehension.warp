@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+# card match-arm-comprehension: a recursive call in a comprehension inside a match arm fails on nested lists
+f(node: any) := match node {
+	["l", first, ...rest] => [f(m) for m in [first] + rest]
+	_ => node
+}
+print f(["l", ["s", "x"]])  # expected [["s" "x"]]; today: not an int (rest.map(f) works)
