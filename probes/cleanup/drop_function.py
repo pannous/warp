@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Delete a function (with its doc comments and attributes) from a Rust file: probes/drop_function.py <file> <name>...
+"""Delete a function (with its doc comments and attributes) from a Rust file: probes/cleanup/drop_function.py <file> <name>...
 Used for merging similar-name duplicates (data/restructuring/similar_names.md); bodies found like similar_names.py."""
 import re, sys
 from pathlib import Path

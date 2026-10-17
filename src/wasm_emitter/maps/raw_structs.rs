@@ -228,17 +228,9 @@ pub(in crate::wasm_emitter) fn find_instantiation_recursive(
 					}
 				}
 			}
-			// Recurse into right
 			find_instantiation_recursive(registry, right)
 		}
-		Node::List(items, _, _) => {
-			for item in items {
-				if let Some(result) = find_instantiation_recursive(registry, item) {
-					return Some(result);
-				}
-			}
-			None
-		}
+		Node::List(items, _, _) => items.iter().find_map(|item| find_instantiation_recursive(registry, item)),
 		_ => None,
 	}
 }

@@ -6,6 +6,7 @@
 
 use super::super::numbers::uncertain::UNCERTAIN_SIMILAR;
 use super::super::reflection::equality::IS_META_ENTRY;
+use super::super::runtime_dependencies::{any, Dependency};
 use super::super::text::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
 use super::super::text::text_unicode::CaseMapping;
 use super::super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
@@ -28,13 +29,8 @@ const TEXT_KINDS: [Kind; 2] = [Kind::Text, Kind::Codepoint];
 
 /// `a ≈ b` needs numbers_similar; values_similar, with its text_fold table, only when the emitter finds an operand that is
 /// not a plain number (a rerun, mod.rs discovered_needs); the same for `a ~ b` and values_rough
-pub fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
-	if required.contains(VALUES_SIMILAR) || required.contains(VALUES_ROUGH) {
-		required.extend(VALUES_SIMILAR_NEEDS);
-	}
-	if required.contains(VALUES_ROUGH) {
-		required.extend([TEXT_ROUGH_TRIM, TEXT_OF]);
-	}
+pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
+	vec![any(&[VALUES_SIMILAR, VALUES_ROUGH], &VALUES_SIMILAR_NEEDS), any(&[VALUES_ROUGH], &[TEXT_ROUGH_TRIM, TEXT_OF])]
 }
 
 impl WasmGcEmitter {

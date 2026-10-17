@@ -29,6 +29,7 @@ mod test_json;
 mod test_juxtaposition;
 mod test_meta;
 mod test_meta_attributes;
+mod test_named_argument_lambda; // card holder-says
 mod test_newline_precedence;
 mod test_number_glyphs;
 mod test_one_line_statements;
@@ -41,6 +42,8 @@ mod test_parser_sugar;
 mod test_path_after_function; // card name-after
 mod test_path_literal; // card play-mozart
 mod test_references;
+mod test_rust_macros;
+mod test_rust_paths;
 mod test_scheme_relative_url;
 #[cfg(feature = "native")]
 mod test_self_differential; // card self-differential

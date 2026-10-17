@@ -311,7 +311,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// `return value`: the value as the Node a Node-returning function gives back; the 0 after it types the block
-		if items.len() == 2 && items[0].is_symbol("return") {
+		if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) {
 			self.emit_returned_value(func, &items[1]);
 			Self::emit_list(func, &[I::Return, I::I64Const(0)]);
 			return;
@@ -678,7 +678,6 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::F64Mul, I::F64Sub]);
 	}
 
-	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	/// Call a libm function (`m.pow`), imported once the emitter has found it is needed: false while it is not yet
 	pub(in crate::wasm_emitter) fn emit_libm_call(&mut self, func: &mut Function, key: &'static str) -> bool {
 		let Some(index) = self.ffi_func_index(key) else {
@@ -722,6 +721,7 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	pub(in crate::wasm_emitter) fn emit_float_power(&mut self, func: &mut Function) {
 		if !self.emit_libm_call(func, LIBM_POW) {
 			return;
