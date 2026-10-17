@@ -25,7 +25,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cargo-fmt: the gate enforces `cargo fmt --check` (`use_small_heuristics = "Max"`). emit-rows: emitter instruction lists one logical step per row like WAT, kept by `#[rustfmt::skip]`. rust-style-lint: of the Rust lint rules only doc-moved is enforced.
 - git-hook restore: agents may restore only Cargo.toml/Cargo.lock (the build tweak); the hook backs up the diff first.
 - #1 avoid panics, errors as values. #14 not-implemented errors unless easy.
-- P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license (2026-10-17): the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
+- P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license (2026-10-17, confirmed by the user, replacing the night's "unlicensed"): the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
+- package-reexport (2026-10-17, user; card module-own): a package's own `use` lines reach the programs that use it.
+  `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
 - laws-file (2026-10-17, user): the human-owned laws move from root LAWS.warp to samples/laws/project_laws.warp
   (samples/laws/laws.warp already exists), keeping the "AI agents must not edit this file" header; test_bend_laws runs
   `warp verify samples/laws/project_laws.warp`.
