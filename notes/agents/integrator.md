@@ -5,19 +5,19 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 
 - Integration worktree W=/Volumes/Worktrees/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
-- Prep worktree P=/Volumes/Worktrees/integrate2 (user, 2026-10-16): while the gate or a
+- Prep worktree P=/Volumes/Worktrees/integrate2: while the gate or a
   test run holds W, assemble the next batch in P: merge the Ready tips, resolve conflicts, `python3
   web/playground/keywords.py`, cargo check (native and `--target wasm32-unknown-unknown --no-default-features`), fmt.
   P gets its own version tweak (`-integrate2`), so its builds don't overwrite W's artifacts in the shared target dir.
   Only one gate runs at a time (the machine's single test queue): when W is free, bring the prepared batch over
   (`git -C "$W" checkout --detach <P's HEAD>`) and gate it there. Never wait idle on a test run.
-- The queue is the board (user, 2026-10-16): `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
+- The queue is the board: `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
   cards are merged, each at origin/<branch> when that descends from the tip its card names (owners push newer tips
   without updating the card; a stale tip re-resolved a hand-resolved conflict), else at the card tip; the tip is fixed
   once merged, push_tested.sh's ancestry check catches a push during the run. A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
   branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
   and tell the Supervisor about lost-looking work.
-- Batches of at most ~8 Ready cards (user, 2026-10-16). Express cards (and crash fixes) go alone and next. Wide
+- Batches of at most ~8 Ready cards. Express cards (and crash fixes) go alone and next. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
 - Scripts (card integrator-scripts): `integrator_tools/batch_build.sh [--worktree "$P"] [--base <ref>] [--cloud]
   [<card>…]` assembles a batch from the Ready cards (express alone, ≤8 tips, held tips in ../integrate_held.txt
@@ -34,7 +34,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   blindly.
 - After the push: `todo done <card> <commit>` for each merged card (Ready → Done; the owner adds `--try` later).
   A failing test or a reviewer veto: leave the card out, `todo move <card> Now` + `todo note` with the failure.
-- The user's own edits go into every batch (user, 2026-10-08): check `git -C /Users/me/dev/angles/warp status --short`
+- The user's own edits go into every batch: check `git -C /Users/me/dev/angles/warp status --short`
   and commit its uncommitted changes on the integration tip as the user's change (never touch their working tree). A
   file that looks stale (re-adds moved code, reverts decisions): include the rest and ask the user about that file.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
@@ -57,7 +57,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   Verify every merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`. Commit test_results.txt as a
   "test: baseline" commit when the count changes. Delete the merged remote branch (by literal name; the hook allows
   merged ones).
-- Two stages (user, 2026-10-15): the gate (fmt, clippy, native suite, wasm check, samples) decides the push; the push
+- Two stages: the gate (fmt, clippy, native suite, wasm check, samples) decides the push; the push
   never waits for a deploy. The Playground workflow is stage 2: hourly at :17 on the latest main (skipped when nothing
   the site is made of changed since its last green run), building, touring, deploying. Check each hourly run; a red one
   is carded and fixed forward with priority, the last good site stays up meanwhile. An urgent fix (the user waiting to
@@ -82,7 +82,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   rebuilt in integrate2 must be checked out in integrate (`git checkout --detach <tip>`) before the gate, else the
   gate re-tests the old batch. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
-- Small fixes first (user, 2026-10-16): when a failure comes from a worker's change and the fix looks like a couple of
+- Small fixes first: when a failure comes from a worker's change and the fix looks like a couple of
   lines (a stale path, `//` → `/!`, a missing cfg, a test's spelling after a decided syntax change, a renamed name),
   fix it yourself in the batch, in its own commit, at once: no card, no `fixnow` ignore. Tell the worker in one line.
   If the fix does not work on the first try, stop and delegate back (fixnow ignore + card, or bounce as below).

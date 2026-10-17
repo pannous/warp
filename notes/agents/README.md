@@ -1,7 +1,7 @@
 # Starting the warp agent team
 
 The rules live in notes/roles.md; this folder holds the startup prompts, one per role, so a fresh day starts the same
-way. Proven on 2026-10-03 (about 30 branches merged, suite 1345 → 1525 passed, 0 failed).
+way.
 
 ## Start
 1. Supervisor: `notes/agents/start.sh supervisor` (tmux warp-supervisor). It must run in that tmux session:
@@ -13,7 +13,7 @@ way. Proven on 2026-10-03 (about 30 branches merged, suite 1345 → 1525 passed,
    - warp-integrator (merge, full suite, push to main)
    - warp-interviewer (the only one who asks you decision questions; talk to it when you have a minute)
    - warp-fixer (small to-dos from the board `todo list`, ignored "next"/"soon" tests)
-3. At most TWO feature workers at a time (user, 2026-10-06; the 2026-10-06 fleet of eight stalled on the usage limit). Workers are spawned per task by the supervisor with `notes/agents/start.sh worker <name> "<task>"`.
+3. At most TWO feature workers at a time (a fleet of eight stalls on the usage limit). Workers are spawned per task by the supervisor with `notes/agents/start.sh worker <name> "<task>"`.
 
 Spawned sessions get generated names (warp-6c …). Find them with ListAgents: the tmux column shows the role
 (tmux `warp-<role>`). Two sessions can share a generated name; then address one by its `[ref]`.
@@ -24,7 +24,7 @@ Spawned sessions get generated names (warp-6c …). Find them with ListAgents: t
   refactorer is not a default service: `notes/agents/start.sh refactorer` when the Supervisor decides.
 - start.sh: spawns roles via ~/dev/bin/claude-remote.sh (refuses at high load; FORCE_SPAWN=1 overrides).
 - api_worker.sh: a worker headless on the Anthropic API key (ANTHROPIC_KEY_WARP) instead of the subscription:
-  `notes/agents/api_worker.sh <name> "<task>"`. User 2026-10-10: when the plan's weekly limit runs low, only the
+  `notes/agents/api_worker.sh <name> "<task>"`. When the plan's weekly limit runs low, only the
   Supervisor, the Integrator and the Interviewer stay on Claude Code; every worker runs on the key, one task per run.
   Sonnet 5.5 by default, ≤ $15 per run, refuses past $150 total; costs in data/llm/api_workers/ledger.tsv.
 
