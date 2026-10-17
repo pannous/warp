@@ -1,0 +1,6 @@
+// Bug repro (card replaced-text-index): with lexer.warp loaded, a text made by .replace and passed to starts_at first
+// finds nothing; called with a literal first, both work (the first call site seems to fix how the text is read)
+use "lib/compiler/lexer.warp"
+code = "a  b // c⏎  d".replace("⏎", "\n")
+print starts_at(code, "c", 8)      # yes expected, prints no
+print code == "a  b // c\n  d"     # yes
