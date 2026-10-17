@@ -33,7 +33,7 @@ distributions, logs in data/perf/): notes/OLD/test_speed_measurements.md.
 
 ## The nightly tier
 tests/nightly.sh, crontab 03:10, runs the tests the gate samples (`parser::test_self_`, WARP_NIGHTLY=1: every source)
-on origin/main in the detached worktree warp.worktrees.noindex/nightly, log data/nightly/<date>.log; a failure files a
+on origin/main in the detached worktree /Volumes/Worktrees/nightly, log data/nightly/<date>.log; a failure files a
 card. Not GitHub's "Rust CI" nightly (card github-rust). Candidates if the gate must shrink further: the Lean proofs,
 ffi::test_cargo_crates.
 

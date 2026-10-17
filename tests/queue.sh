@@ -85,7 +85,7 @@ case "${run[0]}" in
 	*) priority=1; niceness=$TARGETED_NICENESS; exclusive=""; export RUST_TEST_THREADS="${RUST_TEST_THREADS:-$TARGETED_TEST_THREADS}" ;;
 esac
 # The Integrator's targeted re-runs of a batch's failures hold up main: they go ahead of the workers' runs too
-[[ "$PWD" == */warp.worktrees.noindex/integrate* ]] && priority=0
+[[ "$PWD" == /Volumes/Worktrees/integrate* ]] && priority=0
 
 # A `cargo test` builds before it queues: the build waits only for cargo's own lock on the shared target dir, which
 # serializes builds anyway, and the test lock is held for running tests, not compiling (a third of its time was builds,

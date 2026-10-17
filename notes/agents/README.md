@@ -35,7 +35,7 @@ Open questions are queued in notes/open_decisions.md ("Pending questions"), the 
 
 ## End of day
 Workers remove their worktrees after the merge; the Integrator deletes merged remote branches. Leftovers:
-`git worktree list`, `ls /Volumes/Worktrees /Users/me/dev/angles/warp.worktrees.noindex`, `git branch -r` (delete what is merged).
+`git worktree list`, `ls /Volumes/Worktrees`, `git branch -r` (delete what is merged).
 
 ## Context swap
 A global Stop hook swaps any tmux-hosted session at 300k context tokens (handover + replacement + notice to peers): notes/agent_swap.md.

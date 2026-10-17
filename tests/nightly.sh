@@ -5,7 +5,7 @@
 #   10 3 * * * /Users/me/dev/angles/warp/tests/nightly.sh >> /Users/me/.companion/logs/warp-nightly.log 2>&1
 # the main checkout, also when this script runs from a worktree
 WARP=$(git -C ${0:A:h} worktree list --porcelain | head -1 | cut -d' ' -f2-)
-WORKTREE=$WARP:h/warp.worktrees.noindex/nightly
+WORKTREE=/Volumes/Worktrees/nightly
 LOGS=$WARP/data/nightly
 # the tests that check more with WARP_NIGHTLY set: the self-hosting twins (tests/common/twins.rs, every 4th source in
 # the gate)

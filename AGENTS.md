@@ -223,13 +223,13 @@ Don't cargo clean unless absolutely necessary!
 The /probes/ folder is NOT a place to doublicate worktrees!
 Small or non-conflicting changes may go straight onto main without a worktree (user, 2026-10-12; notes/roles.md
 "Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
-(older ones stay in /Users/me/dev/angles/warp.worktrees.noindex until retired; /Volumes/Worktrees/warp is cowtree's
-donor, never removed; notes/roles.md), or work on the same branch for small changes.
+(/Volumes/Worktrees/warp is cowtree's donor, never removed;
+/Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md), or work on the same branch for small changes.
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
 
 ## Folders
 - `probes/` = hand-written probe sources only (.warp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
-- `scratch/` = disposable, ignored temporary area, only for: the checkout's own warp binary (`scripts/own-warp.sh` → `scratch/warp`), temporary work folders of tests and probes, and cloned outside repos for research. Not for worktrees (`warp.worktrees.noindex/`), repo copies or extra binary copies; logs and results go to `data/`. Deletable any time; anything older than two days gets cleared.
+- `scratch/` = disposable, ignored temporary area, only for: the checkout's own warp binary (`scripts/own-warp.sh` → `scratch/warp`), temporary work folders of tests and probes, and cloned outside repos for research. Not for worktrees, repo copies or extra binary copies; logs and results go to `data/`. Deletable any time; anything older than two days gets cleared.
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 - Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
 - `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.

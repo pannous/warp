@@ -15,10 +15,9 @@ Wipe: `diskutil apfs deleteVolume <disk>`, then recreate and redo the setup (gui
 
 - cowtree needs a registered donor worktree on the Worktrees volume, one per project named after it:
   /Volumes/Worktrees/warp, detached at origin/main, never removed (scripts/prune-worktrees.sh keeps it on origin/main).
-- Older worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay on Data until retired; the infra
-  trees (main-binary, nightly, trial) still live there because scripts name those paths. The integrate and
-  integrate2 worktrees moved to /Volumes/Worktrees on 2026-10-17 (logs, batch and held files stay in
-  warp.worktrees.noindex beside integrator_tools).
+- All worktrees live on the Worktrees volume since 2026-10-17, the infra trees too (integrate, integrate2,
+  main-binary, nightly, trial); /Volumes/Worktrees/integrator is a plain folder with integrator_tools and the
+  Integrator's logs, batch and held files.
 - sccache's cache and data/ (kept logs and results) stay on Data.
 - APFS clones (clonefile, `cp -c`, cowtree) work only inside one volume. Cargo's hard links stay inside the target dir.
   A copy from Build to Junk or Data (scripts/own-warp.sh → scratch/warp) is a real copy of ~225 MB.

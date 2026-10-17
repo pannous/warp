@@ -26,7 +26,7 @@ never waits for the answer.
 After each batch of questions, and whenever idle, `todo try --new` lists finished features not announced yet.
 - Binaries: /Users/me/dev/bin/warp is main built with the optimized quick-release profile, rebuilt in the background
   by refresh_main_binary.sh a few minutes after every pushed batch (`--version`: "…-main"; log:
-  warp.worktrees.noindex/main_binary.log); main's debug build is /Users/me/dev/bin/warp-debug. Plain `warp` and a
+  /Volumes/Worktrees/integrator/main_binary.log); main's debug build is /Users/me/dev/bin/warp-debug. Plain `warp` and a
   sample's `#!/usr/bin/env warp` run brew's copy for agents (/opt/homebrew/bin comes first on their PATH), so a sample
   is tried as `/Users/me/dev/bin/warp samples/x.warp`; the user's interactive shell finds /Users/me/dev/bin/warp first.
   Never the shared-target debug/warp: it holds whichever worktree built last. Homebrew releases are occasional, so
@@ -104,8 +104,7 @@ stating its net src/ delta. Feature cuts go to the Interviewer. Prompt: notes/ag
 ## Workers
 - One task, one branch, one worktree: `cowtree add -b <name> /Volumes/Worktrees/<name> origin/main`, on the Worktrees
   volume (notes/churn_volume.md: Spotlight off, no fseventsd log, cowtree clones the donor /Volumes/Worktrees/warp,
-  which nobody removes). Outside the repo, so grep/IDE/cargo of the main checkout never see it. Older worktrees in
-  /Users/me/dev/angles/warp.worktrees.noindex stay there until they retire. Uncommitted build tweak in it:
+  which nobody removes). Outside the repo, so grep/IDE/cargo of the main checkout never see it. Uncommitted build tweak in it:
   `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Small changes on main: only changes that cannot break the build or a test, i.e. nothing compiled: notes, docs,
   wiki, probes, scripts, samples, playground text, go straight onto main in the main checkout
