@@ -117,13 +117,17 @@ fn with_units_after_numbers(program: Node) -> Node {
 		return program;
 	}
 	let units_used = crate::modules::says_use(&program, crate::modules::UNITS_MODULE);
-	marked_after_numbers(program, &ShadowedUnits { names, units_used })
+	let mut callables = std::collections::HashSet::new();
+	collect_callable_names(&program, &mut callables);
+	let variables = names.difference(&callables).cloned().collect();
+	marked_after_numbers(program, &ShadowedUnits { names, variables, units_used })
 }
 
-/// The unit names the program also defines, and whether it says `use units`, which makes such a name after a number
-/// the unit (decision litre-suffix)
+/// The unit names the program also defines, those of them that are variables or parameters, and whether it says
+/// `use units`, which makes such a variable's name after a number the unit (decision litre-suffix)
 struct ShadowedUnits {
 	names: std::collections::HashSet<String>,
+	variables: std::collections::HashSet<String>,
 	units_used: bool,
 }
 
@@ -176,7 +180,7 @@ fn unit_beside_variable(amount: &Node, unit: &Node, shadowed: &ShadowedUnits) ->
 	let Node::Symbol(name) = unit.drop_meta() else {
 		return None;
 	};
-	if !shadowed.contains(name) {
+	if !shadowed.variables.contains(name) {
 		return None;
 	}
 	let amount = amount.drop_meta().serialize();
@@ -1095,6 +1099,20 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	let mut names = std::collections::HashSet::new();
 	collect_defined_unit_names(node, &mut names);
 	names
+}
+
+/// The program's functions, methods and classes: after a number their name is the unit, never a value to multiply by
+/// (`h(d) := d + 2 h` adds two hours)
+fn collect_callable_names(node: &Node, names: &mut std::collections::HashSet<String>) {
+	if let Some(definition) = crate::lowering::function_head(node) {
+		names.insert(definition.name.to_string());
+	}
+	if let Node::Type { name, .. } = node.drop_meta() {
+		if let Node::Symbol(name) = name.drop_meta() {
+			names.insert(name.clone());
+		}
+	}
+	node.drop_meta().parts().into_iter().for_each(|child| collect_callable_names(child, names));
 }
 
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {

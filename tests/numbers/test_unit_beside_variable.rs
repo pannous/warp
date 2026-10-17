@@ -18,3 +18,9 @@ fn a_written_product_or_another_name_needs_nothing() {
 	is!("x = 5; 3x", 15);
 	is!("str(3m + 2m)", "5m");
 }
+
+#[test]
+fn a_function_named_like_a_unit_leaves_the_unit_after_a_number() {
+	is!("m() := 1\nstr(3m)", "3m");
+	is!("h(d) := d + 2 h\nstr(h(3 h))", "5h");
+}
