@@ -10,6 +10,7 @@ use wasm_encoder::*;
 type FfiImport = (String, String, &'static str, Vec<ValType>, Vec<ValType>);
 
 /// Manages WASM imports: host functions, WASI functions, FFI functions
+#[derive(Default)]
 pub struct ImportManager {
 	/// Import section for WASM module
 	imports: ImportSection,
@@ -18,18 +19,7 @@ pub struct ImportManager {
 	next_func_idx: u32,
 }
 
-impl Default for ImportManager {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
 impl ImportManager {
-	/// Create a new import manager
-	pub fn new() -> Self {
-		Self { imports: ImportSection::new(), next_func_idx: 0 }
-	}
-
 	/// Emit all imports based on configuration
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	pub fn emit_imports(&mut self, config: &EmitterConfig, type_manager: &mut TypeManager, ctx: &mut Context) {

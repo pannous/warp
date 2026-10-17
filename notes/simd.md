@@ -81,7 +81,7 @@ and fuel plus NaN canonicalization (the Interviewer question above) apply to eve
 zeroed pages (blocks are never freed). The automatic array chooses linear memory for float maps by itself (card auto-linear-floats, notes/linear_arrays.md).
 `go xs.map(x => …)` with a float kernel splits on the host (card go-split-kernel, 2026-10-12): parallel.rs kernel_map
 keeps the map (SPLIT_ATTRIBUTE) instead of 8 Node-copying tasks; shared_arrays.rs split_mapped calls
-`task_split_mapf(kernel, xs)` from 2^18 cells up (SPLIT_FEWEST), and src/host/tasks.rs split_map maps one slice per core,
+`task_split_mapf(kernel, xs)` from 2^18 cells up (SPLIT_FEWEST), and src/host/tasks/mod.rs split_map maps one slice per core,
 each in an instance of its own (exported `ffi_linear_mapf·…` and `ffi_linear_new`), copying cells in and out. 0 (in a
 task, in the browser, below the size) means the program calls the kernel itself. 10 rounds of
 `go xs.map(x => sqrt(x) * 0.5 + 1)` over 4M floats: 0.74 s against 2.12 s without go (debug build); the old task path

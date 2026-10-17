@@ -19,3 +19,44 @@ fn assigning_it_warns_that_it_is_reserved() {
 	let strict = warp::wasm_emitter::eval("use strict; it = 5; it").serialize();
 	assert!(strict.contains("`it` is reserved"), "{strict}");
 }
+
+/// reviewer: every form that binds a name binds `it` too; a parameter written `it` is the parameter itself
+#[test]
+fn every_binding_of_it_warns() {
+	for code in [
+		"x = 1; it += 1; x",
+		"for it in [1 2] { x = it }; 1",
+		"let it = 3; it",
+		"[it, b] = [1, 2]; b",
+		"it: int = 5; it",
+	] {
+		let (_, warnings) = warnings_of(code);
+		assert!(warnings.iter().any(|warning| warning.contains("`it` is reserved")), "{code}: {warnings:?}");
+	}
+	for code in ["f(it) := it * 2; f(3)", "g = it => it + 1; g(1)"] {
+		let (_, warnings) = warnings_of(code);
+		assert!(!warnings.iter().any(|warning| warning.contains("reserved")), "{code}: {warnings:?}");
+	}
+}
+
+/// user decision implicit-words-reserved: self and this name a method's receiver, reserved as it is
+#[test]
+fn self_and_this_are_reserved_too() {
+	for (code, name) in [
+		("self = 3; self", "self"),
+		("this = 1; this += 1; this", "this"),
+		("for self in [1 2] { x = self }; 1", "self"),
+	] {
+		let (_, warnings) = warnings_of(code);
+		let expected = format!("`{name}` is reserved: it names the receiver of a method");
+		assert!(warnings.iter().any(|warning| warning.contains(&expected)), "{code}: {warnings:?}");
+	}
+	for code in [
+		"class Point { x: int; norm(self) := self.x * 2 }\nPoint(x: 3).norm()",
+		"class Point { x: int; norm() := this.x * 2 }\nPoint(x: 3).norm()",
+	] {
+		let (value, warnings) = warnings_of(code);
+		assert_eq!(value, warp::Node::int(6), "{code}");
+		assert!(!warnings.iter().any(|warning| warning.contains("reserved")), "{code}: {warnings:?}");
+	}
+}

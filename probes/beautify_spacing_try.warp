@@ -1,0 +1,5 @@
+// try for card format-beautify: warp beautify yes on a copy spaces o-b to o - b
+o = 5
+b = 2
+c = o-b
+print c

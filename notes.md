@@ -75,3 +75,5 @@
   helper osxkeychain (errSecWrPerm: the keychain refuses writes from headless sessions) running after gh's helper.
   ~/.config/git/config now resets the list (`helper =`) before `helper = !gh auth git-credential` for github.com and
   gist.github.com, the form `gh auth setup-git` writes; git credential then asks gh only.
+
+- 2026-10-17 (warp-parser): object_entries must not take a square list of key: value items as one object: a one-entry map in a list is held as a bare key ([{first: 2}] is [first: 2]), so [a: 1, b: 2] is also a list of one-entry maps; generalising it broke 10 tests (list fields, possessives). Local readings (a held lambda's holder) are fine.

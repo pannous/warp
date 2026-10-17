@@ -1,16 +1,7 @@
-// FFI (Foreign Function Interface) support for calling native C libraries
-// Provides imports for libc and libm functions via wasmtime linker
-//
-// Files: header.rs reads C headers into signatures, link.rs links them into wasmtime (native only), this file
-// looks signatures up and says how C pointers cross (notes/ffi_handles.md).
-//
-// Architecture:
-// - ffi_parser.rs: Built-in/embedded C header definitions (portable, no dependencies)
-// - This file (ffi.rs): Runtime parsing of system headers for additional functions
-//
-// Signature lookup order (see get_ffi_signature):
-// 1. Built-in signatures from ffi_parser (libc, libm basics)
-// 2. System header parsing for extended functions (SDL2, raylib, etc.)
+//! Foreign functions: calls into native C libraries (libc, libm, SDL2, …).
+//! header.rs reads C headers into signatures, link.rs links them into wasmtime (native only), this file looks
+//! signatures up (hand-linked ones first, then the library's system headers) and says how C pointers cross
+//! (notes/ffi_handles.md).
 
 #[cfg(feature = "native")]
 use anyhow::Result;
@@ -112,9 +103,14 @@ impl FfiSignature {
 pub use crate::host::HostState as FfiState;
 
 mod header;
+#[cfg(feature = "native")]
 mod link;
 pub use header::*;
+#[cfg(feature = "native")]
 pub use link::*;
+
+/// The import module of libm
+pub const LIBM: &str = "m";
 
 const SDL_PREFIX: &str = "SDL_";
 /// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
@@ -309,18 +305,10 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 }
 
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
-	let mut sigs = HashMap::new();
-	let paths = get_library_header_paths(library);
-
 	// all headers first: their struct types decide how pointers cross (is_struct_type)
-	let header_sigs: Vec<FfiHeaderSignature> = paths.iter().flat_map(|path| parse_header_file(path, library)).collect();
-	for hsig in header_sigs {
-		if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
-			sigs.insert(hsig.name.clone(), ffi_sig);
-		}
-	}
-
-	sigs
+	let header_sigs: Vec<FfiHeaderSignature> =
+		get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library)).collect();
+	header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
 }
 
 /// The signatures warp links by hand, once per process: the libc functions it adapts (strcmp of two texts), libm's f64
@@ -404,14 +392,20 @@ pub fn resolve_library_alias(alias: &str) -> &'static str {
 		"c" | "libc" => "c",
 		"SDL2" | "sdl2" | "sdl" => "SDL2",
 		"z" | "zlib" => "z",
-		_ => {
-			// Strip "lib" prefix for any library (e.g., "libfoo" → "foo")
-			if let Some(stripped) = alias.strip_prefix("lib") {
-				// Leak the string to get static lifetime (safe for small number of libs)
-				Box::leak(stripped.to_string().into_boxed_str())
-			} else {
-				Box::leak(alias.to_string().into_boxed_str())
-			}
+		_ => interned(alias.strip_prefix("lib").unwrap_or(alias)),
+	}
+}
+
+/// `name` with a static lifetime, leaked once per distinct name (the analyzer asks for every `use`d word)
+fn interned(name: &str) -> &'static str {
+	static NAMES: OnceLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> = OnceLock::new();
+	let mut names = NAMES.get_or_init(Default::default).lock().unwrap();
+	match names.get(name) {
+		Some(known) => known,
+		None => {
+			let leaked: &'static str = Box::leak(name.into());
+			names.insert(leaked);
+			leaked
 		}
 	}
 }
