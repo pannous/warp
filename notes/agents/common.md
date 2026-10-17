@@ -61,6 +61,11 @@ instead of bending the code.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
+- Cloud test lane instead of the queue, for committed and pushed work (notes/roles.md "Workers"): `scripts/cloud-test.sh
+  --card <card> <branch> <tip from git rev-parse HEAD> <filters>` in the background, ~6 min on a cloud VM of its own,
+  green = exit 0. Use it whenever 2 or more runs wait in the queue (`ls ~/.cargo/warp-tests.lock.queue | wc -l`) or
+  your filters take more than a few minutes; tests/queue.sh only for uncommitted edits, quick single-test re-runs and
+  tests needing the Mac (sound, GPU, windows, Lean, SDL). Both may run at once.
 - No Chrome or Chromium on the Mac: browser runs happen only in CI. The browser test suite, the
   playground tour (test_in_browser.py), web::test_dom_pages and the agent-browser probes refuse to start a browser
   unless CI is set and print "browser tests run in CI only"; never call agent-browser yourself. To check the
@@ -85,7 +90,8 @@ instead of bending the code.
   Never "take your side" on a conflict that also holds main's changes.
 - Done = the card is the handoff (the board's Ready column is the merge queue; a forgotten
   "branch, tip" message left work silently unmerged):
-  1. Run your own targeted tests (`tests/queue.sh -- <filters>`), commit, fmt and clippy (above).
+  1. Run your own targeted tests (`tests/queue.sh -- <filters>`, or the cloud lane above once pushed), commit, fmt
+     and clippy (above).
   2. Make sure the branch merges cleanly into origin/main: `git fetch origin && git merge origin/main` (the merge
      rules above). Conflicts are resolved by you, who knows the code, never by the Integrator in the gate. No need to
      re-run the tests after a clean update.
