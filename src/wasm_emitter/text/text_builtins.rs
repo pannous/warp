@@ -166,7 +166,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		// `catch e`: the caught error becomes an Error through error_of
 		any(&[CAUGHT_ERROR], &[ERROR_OF]),
 		any(&[LIST_TEXT], &["list_join"]), // emitted together, with the same helpers
-		any(&[NODE_SLICE], &[TEXT_GRAPHEMES, "list_join", "list_reverse"]),
+		any(&[NODE_SLICE], &[TEXT_GRAPHEMES, "list_join", "list_reverse", TEXT_SLICE]),
 		// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
 		any(&MAP_WORD_FUNCTIONS, &["map_find", TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]),
 		any(&[ELEMENT_BODY], &[ELEMENT_CHILDREN]),
