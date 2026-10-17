@@ -657,7 +657,12 @@ impl<'a> Loader<'a> {
 			false => module,
 		};
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = with_module_directory(crate::pipeline::lower_module_source(module), &directory);
+		let module = crate::pipeline::lower_module_source(module);
+		// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
+		if let Node::Error(_) = module.drop_meta() {
+			return Err(crate::errors::diagnostic::located_in_file(&module, &shown));
+		}
+		let module = with_module_directory(module, &directory);
 		let outer_directory = self.including_directory.replace(directory);
 		let (module, fast) = without_fast_pragma(module);
 		let outer_fast = std::mem::replace(&mut self.fast_module, fast);
