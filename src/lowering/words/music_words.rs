@@ -639,7 +639,8 @@ fn midi_of(name: &str) -> Option<i64> {
 /// The names the program assigns or defines anywhere: `A4 = 3`, `B3(x) := …` (B3 and its parameter x), `def f(k) {…}`,
 /// `for kind in …`
 pub(crate) fn defined_names(program: &Node) -> HashSet<String> {
-	let mut names: HashSet<String> = super::for_loop::loop_variables(program).into_iter().collect();
+	let mut names = crate::library_words::defined_names(program);
+	names.extend(super::for_loop::loop_variables(program));
 	program.visit(&mut |node| match node {
 		Node::Key(target, Op::Assign | Op::Define, _) => names.extend(definition_names(target)),
 		Node::List(items, _, _) if items.first().is_some_and(|keyword| keyword.is_symbol(DEF_WORD)) => {
