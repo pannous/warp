@@ -8,7 +8,7 @@ kaleidoscope = shader {
 	const TAU = 6.2831853;
 
 	fn hash(cell: vec2f) -> f32 {
-		var h = bitcast<u32>(vec2i(cell).x) * 1103515245u ^ bitcast<u32>(vec2i(cell).y) * 2654435761u;
+		var h = (bitcast<u32>(vec2i(cell).x) * 1103515245u) ^ (bitcast<u32>(vec2i(cell).y) * 2654435761u);
 		h = (h ^ (h >> 16u)) * 2246822519u;
 		return f32(h ^ (h >> 13u)) / 4294967295.0;
 	}
