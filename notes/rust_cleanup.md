@@ -20,3 +20,16 @@ the full Rust suite staying green while src/ shrinks; each step states its net s
 
 Order inside the phase: the parser first (later stages read its trees), the others in parallel where they don't
 depend on it. Branches already Ready are merged before the phase starts.
+
+## The board's own cleanup cards
+Each worker also sweeps the open cards of its stage's topics (Next, Soon, Later) and takes those the cleanup touches
+anyway: parser → parsing, parser-features, lookup; lowering → units, modules, effects; analyzer → types,
+type-theory, errors; emitter → printing, codegen, format, runtime-speed; library → the self-hosted library moves.
+New feature gaps (spec-gaps) stay where they are.
+
+## Warp files in the Rust chain
+Where a warp part is finished and clean (lib/compiler passes such as number_words.warp, times_phrases.warp,
+interpolation.warp, sugar.warp; library words already moved to lib/*.warp), the Rust pipeline runs it instead of
+keeping a Rust twin, and the Rust twin is deleted. Condition: compile time measured before and after (each pass
+runs as compiled warp at compile time); a pass that costs too much keeps its Rust form until the prelude parsing
+and caching work makes it cheap. This is the first real use of the warp compiler parts and shrinks src/ for good.
