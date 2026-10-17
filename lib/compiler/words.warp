@@ -23,3 +23,6 @@ function_keywords = ["fun", "fn", "def", "define", "function", "func"]
 # of_lookups.rs SELECTOR_WORDS)
 selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "bytes", "letters", "words", "lines",
 	"keys", "values"]
+# the operators a dotted spelling applies to each element, `xs .* 2` (Rust twin: operators/spellings.rs
+# ELEMENT_WISE_OPERATORS)
+element_wise_operators = ["+", "-", "*", "/", "^"]

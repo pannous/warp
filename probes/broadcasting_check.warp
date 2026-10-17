@@ -1,0 +1,7 @@
+# quick check of the element-wise operator twin (card broadcasting), on the phrase the Rust parser writes
+use "../lib/compiler/parser.warp"
+use "../lib/compiler/broadcasting.warp"
+check(view: any) := view_of(element_wise_operators_pass(node_of(view)))
+print check(["list", "", " ", ["symbol", "xs"], ["symbol", ".*"], 2])
+print check(["list", "", " ", ["symbol", "xs"], ["symbol", "plus"], 2])
+print tree("[1 2 3] .* 2")

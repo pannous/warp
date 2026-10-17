@@ -16,6 +16,7 @@ fn the_warp_pipeline_lowers_as_rust() {
 		warp::lowering::of_lookups::lower,
 		warp::lowering::grouped_receivers::lower,
 		warp::lowering::times_phrases::lower,
+		warp::lowering::broadcasting::lower_element_wise_operators,
 		warp::lowering::number_words::lower,
 	];
 	chain_differential(
