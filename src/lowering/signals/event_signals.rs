@@ -521,7 +521,7 @@ impl Listeners {
 		Listeners {
 			counts: handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect(),
 			// a handler nothing emits is gone: its name binds nothing
-			bound: statements.iter().flat_map(assigned_and_loop_names).collect(),
+			bound: statements.iter().flat_map(|statement| crate::program_names::Bindings::of(statement).bound()).collect(),
 			named,
 		}
 	}
@@ -731,25 +731,6 @@ fn first_error(node: &Node) -> Option<Node> {
 		}
 	});
 	found
-}
-
-/// The names a program binds: assigned ones and loop variables (`for l in …`)
-fn assigned_and_loop_names(program: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	program.visit(&mut |part| match part {
-		Node::Key(target, Op::Assign | Op::Define, _) => {
-			names.insert(word(target));
-		}
-		Node::List(items, _, _) => {
-			if let [first, variable, ..] = items.as_slice() {
-				if word(first) == "for" {
-					names.insert(word(variable));
-				}
-			}
-		}
-		_ => {}
-	});
-	names
 }
 
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`, `once alarm {body}`: the event's name, the body

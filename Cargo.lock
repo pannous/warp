@@ -3719,7 +3719,7 @@ dependencies = [
 
 [[package]]
 name = "warp-lang"
-version = "1.3.0"
+version = "1.3.0-rust-scope"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -3758,7 +3758,7 @@ dependencies = [
 
 [[package]]
 name = "warp-runtime"
-version = "1.3.0"
+version = "1.3.0-rust-scope"
 dependencies = [
  "libc",
  "miniz_oxide",
