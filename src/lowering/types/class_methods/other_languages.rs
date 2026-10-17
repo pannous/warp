@@ -61,7 +61,9 @@ pub(super) fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
 	};
 	let (class, block) = match words.as_slice() {
 		// `impl Area for S {…}` parses as `impl Area (for S {…})`
-		[word, _, clause] if word.drop_meta().name() == IMPL_WORD && for_clause(clause).is_some() => for_clause(clause)?,
+		[word, _, clause] if word.drop_meta().name() == IMPL_WORD && for_clause(clause).is_some() => {
+			for_clause(clause)?
+		}
 		[word, class, block] if word.drop_meta().name() == IMPL_WORD => (class, block),
 		// `impl Point {…}` of a declared Point reads like the spaced construction `Point {…}`
 		[word, construction] if word.drop_meta().name() == IMPL_WORD => match construction.drop_meta() {

@@ -275,7 +275,13 @@ impl WarpParser {
 	}
 
 	/// The separator after a list item, consumed: `,` `;` a newline, a blank, or an `and` starting the next command
-	fn parse_separator(&mut self, close: Option<char>, had_newline: bool, in_command: bool, in_item: bool) -> Separator {
+	fn parse_separator(
+		&mut self,
+		close: Option<char>,
+		had_newline: bool,
+		in_command: bool,
+		in_item: bool,
+	) -> Separator {
 		match self.current_char() {
 			_ if self.at_group_end(close) => Separator::None,
 			',' => {
