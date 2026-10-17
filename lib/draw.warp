@@ -41,7 +41,7 @@ def hsv(h, s, v) {
 with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
 alpha_of(color) := color /! 16777216
 
-// what draw_shape's kind says to shape_shader
+// what draw_shape's kind says to shape_shader (clear_shape: gpu_canvas.rs CLEAR; test_paint_shades)
 clear_shape = 0
 rect_shape = 1
 circle_shape = 2

@@ -828,13 +828,16 @@ impl Lowering {
 	}
 
 	/// The library word a call of `name` with that many arguments (receiver included) means; shadowing is per arity:
-	/// `first(x) := …` leaves `first(xs, 2)` to the library (notes/dispatch.md)
+	/// `first(x) := …` leaves `first(xs, 2)` to the library (notes/dispatch.md); a prelude word answers to its own
+	/// name too (`round_to(x, 2)` as `round(x, 2)` does, card lib-math)
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
 		let variant = arity_variant(name, argument_count);
+		let prelude_word = || crate::modules::prelude_word(name);
 		if self.program.function_takes(name, argument_count) == Some(false) && !self.program.binds(name) {
-			return variant.or_else(|| canonical_word(name));
+			return variant.or_else(|| canonical_word(name)).or_else(prelude_word);
 		}
-		variant.filter(|_| !self.shadows(name)).or_else(|| self.library_word(name))
+		let unshadowed = || prelude_word().filter(|_| !self.shadows(name));
+		variant.filter(|_| !self.shadows(name)).or_else(|| self.library_word(name)).or_else(unshadowed)
 	}
 
 	/// `word(x, args)` and `word x args`

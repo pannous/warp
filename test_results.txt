@@ -1562,6 +1562,8 @@ PASSED:
   ✓ functions::test_lambda_held_by_field::a_field_holding_a_lambda_is_passed_as_a_function
   ✓ functions::test_lambda_held_by_field::a_field_named_like_a_library_method_keeps_the_method
   ✓ functions::test_lambda_held_by_field::a_held_lambda_is_called_whatever_holds_it
+  ✓ functions::test_lambda_held_by_field::a_lambda_given_by_name_is_called
+  ✓ functions::test_lambda_held_by_field::a_lambda_in_a_listed_entry_is_called
   ✓ functions::test_lambda_held_by_field::a_lambda_in_a_map_entry_is_called
   ✓ functions::test_lambda_held_by_field::a_lambda_in_an_untyped_class_field_is_called
   ✓ functions::test_lambda_spaced_body::a_lambda_body_may_be_a_spaced_call
@@ -2436,6 +2438,8 @@ PASSED:
   ✓ modules::test_packages::module_directory_is_where_the_module_lives
   ✓ modules::test_packages::the_registry_names_repositories
   ✓ modules::test_packages::use_loads_the_module_of_a_package
+  ✓ modules::test_prelude_own_names::a_program_word_named_like_a_prelude_word_stays_the_programs
+  ✓ modules::test_prelude_own_names::prelude_words_answer_to_their_own_names
   ✓ modules::test_prelude_shadowing::library_spellings_keep_the_prelude_word
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
@@ -3118,6 +3122,13 @@ PASSED:
   ✓ numbers::test_unbounded_int::test_overflow_promotes_pow
   ✓ numbers::test_unbounded_int::test_ratio_reduced_by_a_big_gcd
   ✓ numbers::test_unbounded_int::test_small_arithmetic_unchanged
+  ✓ numbers::test_unit_after_expression::a_unit_after_an_expression_is_refused_like_after_a_variable
+  ✓ numbers::test_unit_after_expression::a_written_tolerance_takes_the_unit
+  ✓ numbers::test_unit_after_expression::the_advice_parenthesizes_any_operator
+  ✓ numbers::test_unit_after_expression::the_advised_forms_work
+  ✓ numbers::test_unit_after_variable_hint::a_plain_variable_for_a_unit_field_suggests_the_multiplication
+  ✓ numbers::test_unit_after_variable_hint::a_unit_after_a_variable_hints_the_multiplication
+  ✓ numbers::test_unit_after_variable_hint::a_unit_after_a_variable_holding_a_number_is_refused_everywhere
   ✓ numbers::test_unit_columns::a_column_sums_and_peaks_in_its_unit
   ✓ numbers::test_unit_columns::a_conversion_takes_a_compound_unit_whole
   ✓ numbers::test_unit_columns::a_number_field_adds_into_an_exact_total
@@ -3304,6 +3315,7 @@ PASSED:
   ✓ operators::test_minus_after_callable::a_type_takes_a_negative_argument
   ✓ operators::test_minus_after_callable::a_user_function_takes_a_negative_argument
   ✓ operators::test_minus_after_callable::a_variable_minus_a_number_subtracts
+  ✓ operators::test_module_operator_call_form::a_standard_module_calls_a_used_modules_operator_by_its_word
   ✓ operators::test_mutating_bang::a_function_with_bang_on_its_argument_assigns_back
   ✓ operators::test_mutating_bang::a_method_with_bang_assigns_back
   ✓ operators::test_mutating_bang::bang_after_a_block_or_lone_name_evaluates
@@ -3757,6 +3769,8 @@ PASSED:
   ✓ programs::test_data_structure_fixes::test_data_key_read_as_a_variable
   ✓ programs::test_data_structure_fixes::test_list_comprehension
   ✓ programs::test_data_structure_fixes::test_named_tuple_fields
+  ✓ programs::test_display_names::other_names_of_a_display_property_name_it
+  ✓ programs::test_display_names::the_display_has_a_density_a_size_and_a_diagonal
   ✓ programs::test_draw_label::a_label_covers_pixels_in_its_color
   ✓ programs::test_draw_label::text_coverage_grows_with_the_size_and_the_words
   ✓ programs::test_draw::a_color_with_alpha_mixes_with_what_is_below
@@ -3837,6 +3851,7 @@ PASSED:
   ✓ programs::test_paint_shader::paint_renders_a_shader_text
   ✓ programs::test_paint_shader::use_graphics_is_use_draw
   ✓ programs::test_paint_shades::the_hosts_shade_pixels_as_pixels_rs_says
+  ✓ programs::test_paint_shades::the_view_and_the_clear_shape_agree_everywhere
   ✓ programs::test_paint_window_ends::a_painting_without_a_window_never_waits
   ✓ programs::test_paint_window_ends::the_paint_window_ends_when_its_program_does
   ✓ programs::test_paint::paint_frames_for_the_window_read_back_as_sent
@@ -5260,7 +5275,6 @@ PASSED:
   ✓ wasm::test_wasm::test_auto_smarty
   ✓ wasm::test_wasm::test_comparison_math
   ✓ wasm::test_wasm::test_comparison_primitives
-  ✓ wasm::test_wasm::test_const_return
   ✓ wasm::test_wasm::test_custom_operators
   ✓ wasm::test_wasm::test_dom
   ✓ wasm::test_wasm::test_emit_basics
@@ -5301,7 +5315,6 @@ PASSED:
   ✓ wasm::test_wasm::test_smart_return_harder
   ✓ wasm::test_wasm::test_square
   ✓ wasm::test_wasm::test_square_precedence
-  ✓ wasm::test_wasm::test_string_concat_wasm
   ✓ wasm::test_wasm::test_todo_browser
   ✓ wasm::test_wasm::test_wasm_function_definiton
   ✓ wasm::test_wasm::test_wasm_if
@@ -6171,4 +6184,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6166 passed, 0 failed, 6166 total tested
+13 ignored, 6179 passed, 0 failed, 6179 total tested

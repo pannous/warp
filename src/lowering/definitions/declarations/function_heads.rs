@@ -1,19 +1,13 @@
 //! Function heads: result types (`-> int`, `as int or text`, curried, function and tuple results), parameter labels and types, Ruby's `end` and bodiless definitions
 use super::*;
-use crate::lowering::nodes::{round_call, word_headed};
+use crate::lowering::nodes::{is_call_head, result_typed, round_call, word_headed};
 use crate::node::parens;
 use crate::words::ANY_TYPE;
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
 pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
-	let rotated = as_union_result(definition).map(|(head, union)| key(head, Op::As, union));
-	let Node::Key(head, Op::Arrow | Op::Colon | Op::As, typed_body) = rotated.as_ref().unwrap_or(definition) else {
-		return None;
-	};
-	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if word_headed(items).is_some()) {
-		return None;
-	}
+	let (head, typed_body) = result_typed_head(definition).filter(|(head, _)| is_call_head(head))?;
 	let (result_type, body) = match typed_body.drop_meta() {
 		Node::List(parts, _, Separator::Space)
 			if parts.len() == 2
@@ -32,7 +26,13 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		}
 		_ => return None,
 	};
-	Some((Node::Key(head.clone(), Op::Define, Box::new(body)), result_type))
+	Some((key(head, Op::Define, body), result_type))
+}
+
+/// `f(x) as int`, `f(x): int`, `f(x) -> int` and `f(x) as int or text`: the head and what its result operator holds,
+/// the one reader of a typed definition head (nodes::result_typed borrows the forms without a union)
+pub(crate) fn result_typed_head(target: &Node) -> Option<(Node, Node)> {
+	as_union_result(target).or_else(|| result_typed(target).map(|(head, result)| (head.clone(), result.clone())))
 }
 
 /// A built-in type, or `any`: a Node of whatever kind the paths return (`def f(w) as any`, card def)
@@ -42,7 +42,7 @@ fn is_result_type(result_type: &Node) -> bool {
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
 /// spells canonically (user 2026-10-12, return-as)
-pub(crate) fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
+fn as_union_result(definition: &Node) -> Option<(Node, Node)> {
 	let Node::Key(left, Op::Or, rest) = definition.drop_meta() else {
 		return None;
 	};
