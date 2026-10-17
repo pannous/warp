@@ -4861,12 +4861,15 @@ PASSED:
   ✓ types::test_one_dispatch::a_field_named_like_a_library_word_is_written
   ✓ types::test_one_dispatch::a_host_word_bound_inside_a_function_stays_the_hosts_outside
   ✓ types::test_one_dispatch::a_library_word_keeps_its_types
+  ✓ types::test_one_dispatch::a_local_name_leaves_the_keyword_to_the_top_level
+  ✓ types::test_one_dispatch::a_local_named_like_a_store_word_is_the_variable
   ✓ types::test_one_dispatch::a_member_is_read_with_or_without_parentheses
   ✓ types::test_one_dispatch::a_method_form_call_takes_the_receiver_first
   ✓ types::test_one_dispatch::a_program_word_shadows_only_its_own_arities
   ✓ types::test_one_dispatch::a_property_is_called_in_function_form
   ✓ types::test_one_dispatch::a_setter_writing_its_own_field_stores_it
   ✓ types::test_one_dispatch::a_typed_redefinition_of_a_library_word_is_refused
+  ✓ types::test_one_dispatch::a_unit_named_by_a_local_is_the_unit_elsewhere
   ✓ types::test_one_dispatch::a_used_module_word_gives_way_per_scope_and_arity
   ✓ types::test_one_dispatch::an_instance_of_unknown_class_reads_its_own_member_at_run_time
   ✓ types::test_one_dispatch::every_library_parameter_type_chooses
@@ -6249,4 +6252,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6244 passed, 0 failed, 6244 total tested
+13 ignored, 6247 passed, 0 failed, 6247 total tested
