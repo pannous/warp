@@ -50,7 +50,7 @@ impl WasmGcEmitter {
 
 	/// The module bytes, or the validation failure as an error message
 	pub fn try_finish(mut self) -> Result<Vec<u8>, String> {
-		// WASM section order: types, imports, functions, memory, globals, exports, code, data, names
+		// WASM section order: types, imports, functions, memory, globals, exports, start, elements, code, data, names
 		self.module.section(self.type_manager.types());
 		if self.ctx.func_registry.import_count() > 0 || !self.ctx.imported_entities.is_empty() {
 			self.module.section(self.import_manager.imports());
@@ -64,6 +64,9 @@ impl WasmGcEmitter {
 			self.module.section(&self.globals);
 		}
 		self.module.section(&self.exports);
+		if let Some(function_index) = self.start_index {
+			self.module.section(&StartSection { function_index });
+		}
 		// functions taken by ref.func: one declarative element segment for all (a module has one element section)
 		let declared_functions: Vec<u32> = self
 			.closures
@@ -149,6 +152,7 @@ impl WasmGcEmitter {
 			.chain(self.closures.entry_names())
 			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
 			.chain(self.main_index.map(|index| (index, "main".to_string())))
+			.chain(self.start_index.map(|index| (index, super::START_FUNCTION.to_string())))
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 

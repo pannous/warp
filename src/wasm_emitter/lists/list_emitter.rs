@@ -560,11 +560,9 @@ impl WasmGcEmitter {
 				items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
 			// spaced values (`y 1+1` of a variable y) keep every value, as `1+1 2+2` and `y 2` do (card print-prints)
 			let spaced = *separator == Separator::Space && items.len() > 1;
-			let has_arithmetic = *bracket != Bracket::Square
-				&& !is_tuple && !has_field
-				&& !spaced && items
-				.iter()
-				.any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
+			let any_arithmetic =
+				items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
+			let has_arithmetic = *bracket != Bracket::Square && !is_tuple && !has_field && !spaced && any_arithmetic;
 			if has_arithmetic {
 				let node = Node::List(items.to_vec(), bracket.clone(), Separator::None);
 				if self.get_type(&node).is_float() {

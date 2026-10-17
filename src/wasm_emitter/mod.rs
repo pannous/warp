@@ -61,6 +61,8 @@ const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "no
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// Node locals every function has after its Int scratch: node_scratch and container_scratch (globals.rs)
 const NODE_SCRATCH_LOCALS: u32 = 2;
+/// The name section's name of the start function, which installs witness tables and late calls in each instance
+const START_FUNCTION: &str = "install";
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
 pub const MEMORY_ENTITY: &str = "memory";
 pub const TABLE_ENTITY: &str = "table";
@@ -127,6 +129,8 @@ pub struct WasmGcEmitter {
 	names: NameSection,
 	/// main's index, named in the name section (a trap's backtrace shows `main`, not `<wasm function N>`)
 	main_index: Option<u32>,
+	/// The start function installing the witness tables and late calls (emit_installation_start)
+	start_index: Option<u32>,
 	/// the address of the items of `print(value)` that ends main when the pipeline added it (CompileMode::prints_result)
 	result_print: usize,
 	/// the module declares its own memory (not imported), sized by its texts when the module is finished
@@ -738,8 +742,6 @@ impl WasmGcEmitter {
 
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);
-		self.emit_witness_installation(&mut func);
-		self.emit_late_call_installation(&mut func);
 		// a program with `on interrupt {…}` watches for ctrl-c from its start and takes one that came at its end
 		let signal_poll = self.ffi_func_index(crate::host::SIGNAL_POLL);
 		signal_poll.iter().for_each(|poll| {
@@ -756,9 +758,27 @@ impl WasmGcEmitter {
 		self.exports.export("main", ExportKind::Func, self.next_func_idx);
 		self.main_index = Some(self.next_func_idx);
 		self.next_func_idx += 1;
+		self.emit_installation_start();
 		if config::compile_mode().for_wagi {
 			self.emit_wagi_start();
 		}
+	}
+
+	/// The module's start function: the witness tables and the late-called functions installed in each instance,
+	/// before main and in the fresh instance a task (`go { … }`, live_loop) runs in, which never runs main
+	fn emit_installation_start(&mut self) {
+		if self.witness_dispatchers().is_empty() && self.late_calls.is_empty() {
+			return;
+		}
+		let start_type = self.type_manager.function_type(vec![], vec![]);
+		self.functions.function(start_type);
+		let mut func = Function::new(vec![]);
+		self.emit_witness_installation(&mut func);
+		self.emit_late_call_installation(&mut func);
+		func.instruction(&I::End);
+		self.code.function(&func);
+		self.start_index = Some(self.next_func_idx);
+		self.next_func_idx += 1;
 	}
 
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
