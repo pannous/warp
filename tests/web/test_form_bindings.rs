@@ -1,7 +1,7 @@
 //! Two-way bindings for forms (card web-bind, notes/web_framework.md step 6): `input{ bind: name }` shows name as its
 //! value and sets name from what is typed (its handler of the page event input); a checkbox binds `checked`
-use warp::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 fn html_of(code: &str) -> String {
 	to_html(&eval(code))
@@ -29,10 +29,7 @@ fn a_bound_checkbox_is_checked_by_its_variable() {
 
 #[test]
 fn boolean_attributes_are_present_or_absent() {
-	assert_eq!(
-		html_of("button{ disabled: true \"Go\" }"),
-		"<button disabled>Go</button>"
-	);
+	assert_eq!(html_of("button{ disabled: true \"Go\" }"), "<button disabled>Go</button>");
 	assert_eq!(html_of("button{ disabled: false \"Go\" }"), "<button>Go</button>");
 }
 
@@ -41,14 +38,9 @@ fn boolean_attributes_are_present_or_absent() {
 #[test]
 fn a_submitted_form_hands_its_fields_to_its_handler() {
 	let program = "saved = \"\"\ndiv{ form{ on submit { saved = event.fields.name + \" is \" + event.fields.age } input{ name: \"name\" aria-label: \"name\" } input{ name: \"age\" type: \"number\" aria-label: \"age\" } button{ \"Save\" } } p{ saved } }";
-	assert!(
-		html_of(program).contains("<form data-warp-submit=\"1\">"),
-		"{}",
-		html_of(program)
-	);
+	assert!(html_of(program).contains("<form data-warp-submit=\"1\">"), "{}", html_of(program));
 	let mut page = warp::web::headless::Page::render(program).expect("renders");
-	page.submit("Save", serde_json::json!({ "name": "Ann", "age": 7 }))
-		.expect("a form handles submit");
+	page.submit("Save", serde_json::json!({ "name": "Ann", "age": 7 })).expect("a form handles submit");
 	assert!(page.text().ends_with("Ann is 7"), "{}", page.html());
 }
 
@@ -119,11 +111,7 @@ fn a_bound_field_is_validated_by_the_declared_type() {
 #[cfg(feature = "native")]
 fn a_c_style_declared_variable_is_bound() {
 	let code = "int age = 30\nint clicks = 0\ndiv{ input{ bind: age aria-label: \"age\" } button{ on click { clicks += 1 } \"More\" } p{ \"\" + age + \"/\" + clicks } }";
-	assert!(
-		html_of(code).contains("<input type=\"number\" step=\"1\" value=\"30\""),
-		"{}",
-		html_of(code)
-	);
+	assert!(html_of(code).contains("<input type=\"number\" step=\"1\" value=\"30\""), "{}", html_of(code));
 	let mut page = warp::web::headless::Page::render(code).expect("the page");
 	page.type_into("age", "31").expect("typed");
 	page.click("More").expect("clicked");

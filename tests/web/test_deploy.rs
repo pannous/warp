@@ -3,7 +3,7 @@
 use crate::common::scratch_directory;
 use std::time::{Duration, Instant};
 
-const PROGRAM: &str = include_str!("../../samples/worker.warp");
+const PROGRAM: &str = include_str!("../../samples/servers/worker.warp");
 const START_LIMIT: Duration = Duration::from_secs(90);
 
 struct WranglerDev(std::process::Child);
@@ -18,23 +18,11 @@ impl Drop for WranglerDev {
 
 /// status, content type and body of GET path
 fn answer(base: &str, path: &str) -> (u16, String, String) {
-	let mut reply = ureq::get(&format!("{base}{path}"))
-		.config()
-		.http_status_as_error(false)
-		.build()
-		.call()
-		.expect("an answer");
-	let content_type = reply
-		.headers()
-		.get("content-type")
-		.and_then(|value| value.to_str().ok())
-		.unwrap_or_default()
-		.to_string();
-	(
-		reply.status().as_u16(),
-		content_type,
-		reply.body_mut().read_to_string().expect("a text"),
-	)
+	let mut reply =
+		ureq::get(&format!("{base}{path}")).config().http_status_as_error(false).build().call().expect("an answer");
+	let content_type =
+		reply.headers().get("content-type").and_then(|value| value.to_str().ok()).unwrap_or_default().to_string();
+	(reply.status().as_u16(), content_type, reply.body_mut().read_to_string().expect("a text"))
 }
 
 #[test]
@@ -69,14 +57,7 @@ fn a_deployed_program_answers_its_routes() {
 	// the program's variables live across requests: the readiness check above asked "/" only
 	assert_eq!(answer(&base, "/visits").2, "1");
 	assert_eq!(answer(&base, "/visits").2, "2");
-	assert_eq!(
-		answer(&base, "/nope"),
-		(
-			404,
-			"text/plain; charset=utf-8".into(),
-			"no route answers GET /nope".into()
-		)
-	);
+	assert_eq!(answer(&base, "/nope"), (404, "text/plain; charset=utf-8".into(), "no route answers GET /nope".into()));
 	std::fs::remove_dir_all(directory).ok();
 }
 
@@ -91,27 +72,14 @@ fn a_program_without_routes_is_no_worker() {
 /// anything is sent
 #[test]
 fn the_playground_bundles_a_program_for_warp_hosting() {
-	let (report, module) = warp::web::worker_bundle(include_str!("../../samples/hosting.warp"));
+	let (report, module) = warp::web::worker_bundle(include_str!("../../samples/servers/hosting.warp"));
 	assert_eq!(&module[..4], b"\0asm");
 	assert_eq!(report["module_length"], module.len());
-	let scripts: Vec<&str> = report["scripts"]
-		.as_array()
-		.expect("script names")
-		.iter()
-		.filter_map(|name| name.as_str())
-		.collect();
-	assert_eq!(
-		scripts,
-		["reader.js", "host.js"],
-		"a program of routes only imports no part of host.js"
-	);
+	let scripts: Vec<&str> =
+		report["scripts"].as_array().expect("script names").iter().filter_map(|name| name.as_str()).collect();
+	assert_eq!(scripts, ["reader.js", "host.js"], "a program of routes only imports no part of host.js");
 	let (refused, nothing) = warp::web::worker_bundle("x = 1");
-	assert!(
-		refused["error"]
-			.as_str()
-			.is_some_and(|message| message.contains("answers no request")),
-		"{refused}"
-	);
+	assert!(refused["error"].as_str().is_some_and(|message| message.contains("answers no request")), "{refused}");
 	assert!(nothing.is_empty());
 }
 
@@ -130,15 +98,7 @@ fn running_worker(program: &str, name: &str) -> (WranglerDev, String, std::path:
 	let port = free_port();
 	// its own inspector port too: two wrangler dev at once (the test above) clash on the default 9229
 	let wrangler = std::process::Command::new("wrangler")
-		.args([
-			"dev",
-			"--ip",
-			"127.0.0.1",
-			"--port",
-			&port,
-			"--inspector-port",
-			&free_port(),
-		])
+		.args(["dev", "--ip", "127.0.0.1", "--port", &port, "--inspector-port", &free_port()])
 		.current_dir(&directory)
 		.stdout(std::process::Stdio::null())
 		.stderr(std::process::Stdio::null())
@@ -157,14 +117,9 @@ fn running_worker(program: &str, name: &str) -> (WranglerDev, String, std::path:
 /// calling it with the path's parts; a program of functions only lists their routes at /
 #[test]
 fn a_program_without_routes_answers_its_value_and_functions() {
-	let (_running, base, directory) = running_worker(
-		"square(n) := n*n\nadd(a, b) := a + b\ntwice := it * 2\n\"squares and sums\"",
-		"lambda",
-	);
-	assert_eq!(
-		answer(&base, "/"),
-		(200, "text/plain; charset=utf-8".into(), "squares and sums".into())
-	);
+	let (_running, base, directory) =
+		running_worker("square(n) := n*n\nadd(a, b) := a + b\ntwice := it * 2\n\"squares and sums\"", "lambda");
+	assert_eq!(answer(&base, "/"), (200, "text/plain; charset=utf-8".into(), "squares and sums".into()));
 	assert_eq!(answer(&base, "/square/3").2, "9");
 	assert_eq!(answer(&base, "/add/2/40").2, "42");
 	assert_eq!(answer(&base, "/twice/21").2, "42");
@@ -173,5 +128,95 @@ fn a_program_without_routes_answers_its_value_and_functions() {
 	let (_running, base, directory) = running_worker("square(n) := n*n", "functions-only");
 	assert_eq!(answer(&base, "/").2, r#"["/square/:n"]"#);
 	assert_eq!(answer(&base, "/square/12").2, "144");
+	std::fs::remove_dir_all(directory).ok();
+}
+
+/// A program of a single route, and routes inside `serve PORT {…}`, deploy too: the Worker answers them, the port is
+/// the local server's only (both were refused with "the program answers no request")
+#[test]
+fn a_single_route_and_a_served_route_deploy() {
+	for program in [r#"get "/" { "hi" }"#, r#"serve 8080 { get "/" { "hi" } }"#] {
+		let (report, module) = warp::web::worker_bundle(program);
+		assert!(report["error"].is_null(), "{program}: {report}");
+		assert_eq!(&module[..4], b"\0asm");
+	}
+}
+
+/// cards program-answers, host-available: a program of page routes deploys, each route the page at its path as HTML
+/// rendered by the Worker (before: "the program answers no request", then "host.page_path is not available")
+#[test]
+fn page_routes_deploy_as_rendered_pages() {
+	let program = "route \"/\" { a{href:'/square/3' 'try it'} }\nroute \"/square/:n:int\" { n*n }";
+	let (_running, base, directory) = running_worker(program, "page-routes");
+	let (status, content_type, body) = answer(&base, "/");
+	assert_eq!((status, body.as_str()), (200, "<a href=\"/square/3\">try it</a>"));
+	assert!(content_type.starts_with("text/html"), "{content_type}");
+	assert_eq!(answer(&base, "/square/3").2, "9");
+	assert_eq!(answer(&base, "/nope").0, 404);
+	std::fs::remove_dir_all(directory).ok();
+}
+
+/// samples/servers/route_headers.warp deployed: a route's `status 418` is its answer's status in the Worker too
+#[test]
+fn a_deployed_route_answers_its_status() {
+	let (_running, base, directory) =
+		running_worker(include_str!("../../samples/servers/route_headers.warp"), "route-headers");
+	assert_eq!(answer(&base, "/teapot"), (418, "text/plain; charset=utf-8".into(), "short and stout".into()));
+	std::fs::remove_dir_all(directory).ok();
+}
+
+/// A program painting, drawing or listening for frames runs in a browser page, not in a Worker (card
+/// deploy-browser-site): the playground's Deploy bundles it as a site, which warp-hosting serves
+#[test]
+fn deploy_names_a_browser_only_feature() {
+	let report = |code: &str| warp::web::worker_bundle(code).0;
+	let painting = report(include_str!("../../samples/advanced/filled_circle.warp"));
+	assert_eq!(painting["site"], true, "{painting}");
+	let query = painting["query"].as_str().unwrap_or_default();
+	assert!(
+		query.starts_with("site=") && query.contains("canvas.js") && query.contains("&worker=reader.js"),
+		"{query}"
+	);
+	let framing = report(include_str!("../../samples/graphics/shader_trails.warp"));
+	assert_eq!(framing["site"], true, "{framing}");
+	let routes = report(include_str!("../../samples/servers/hosting.warp"));
+	assert_eq!((&routes["site"], &routes["query"]), (&false.into(), &"scripts=reader.js,host.js".into()), "{routes}");
+}
+
+/// A program using the browser with server routes or server functions deploys as neither silently (card
+/// program-server): its site would drop them, so Deploy refuses and names them; page routes stay the page's
+#[test]
+fn deploy_refuses_server_parts_of_a_browser_program() {
+	let error = |code: &str| warp::web::worker_bundle(code).0["error"].as_str().unwrap_or_default().to_string();
+	let painting = "surface = 4 int\npaint(surface, 2, 2)\n";
+	for server_part in ["get \"/api\" { \"from the server\" }", "server def greeting(name) { \"hello \" + name }"] {
+		let refused = error(&format!("{server_part}\n{painting}"));
+		assert!(refused.contains("server") && refused.contains("browser"), "{server_part}: {refused}");
+	}
+	let routed = warp::web::worker_bundle(&format!("route \"/\" {{ \"home\" }}\n{painting}")).0;
+	assert_eq!(routed["site"], true, "{routed}");
+}
+
+/// A program using the browser deploys as its site (card deploy-browser-site): the Worker serves the page, its scripts
+/// and app.wasm, cross-origin isolated, and the visitor's browser runs the program (painting checked in CI)
+#[test]
+fn a_painting_program_deploys_as_its_site() {
+	let (_running, base, directory) =
+		running_worker(include_str!("../../samples/advanced/filled_circle.warp"), "painting");
+	let (status, content_type, page) = answer(&base, "/");
+	assert_eq!((status, content_type.as_str()), (200, "text/html; charset=utf-8"), "{page}");
+	assert!(
+		page.contains("<script src=\"canvas.js\">") && page.contains("data-warp-worker=\"reader.js,host.js"),
+		"{page}"
+	);
+	let (status, content_type, _) = answer(&base, "/canvas.js");
+	assert_eq!((status, content_type.as_str()), (200, "text/javascript; charset=utf-8"));
+	let module = ureq::get(&format!("{base}/app.wasm")).call().expect("the module");
+	assert_eq!(
+		module.headers().get("cross-origin-embedder-policy").map(|value| value.to_str().unwrap()),
+		Some("require-corp")
+	);
+	assert_eq!(&module.into_body().read_to_vec().expect("bytes")[..4], b"\0asm");
+	assert_eq!(answer(&base, "/nope.js").0, 404);
 	std::fs::remove_dir_all(directory).ok();
 }

@@ -11,7 +11,7 @@
 // A fresh profile per run, so the user's own Firefox is never touched.
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -28,7 +28,7 @@ const QUIT_SECONDS = 30;
 const REPORTED_LEVELS = new Set(["error", "warn", "warning", "assert"]);
 const FAILED_STATUS = 400;
 // api.github.com answers 60 unauthenticated requests an hour per address, which a shared CI runner's address has often
-// used up (samples/live_region, card samples-fetches): with GITHUB_TOKEN set, its requests carry the token, added here
+// used up (samples/web/live_region, card samples-fetches): with GITHUB_TOKEN set, its requests carry the token, added here
 // so the page never sees it
 const GITHUB_API = "api.github.com";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -55,16 +55,36 @@ async function startFirefox(profile) {
 	throw new Error(`Firefox (${FIREFOX}) did not listen for WebDriver BiDi in ${START_SECONDS} s`);
 }
 
+// FIREFOX_PREFS: a JSON5 map of preferences for the fresh profile (its user.js), e.g. WebGPU on a runner without it
+const preferences = Object.entries(process.env.FIREFOX_PREFS ? new Function(`"use strict"; return (${process.env.FIREFOX_PREFS});`)() : {});
 const profile = mkdtempSync(join(tmpdir(), "warp-firefox-"));
+writeFileSync(join(profile, "user.js"), preferences.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(""));
 const { socket, exited } = await startFirefox(profile);
 let nextId = 1;
 const pending = new Map();
 const messages = [];
+const realms = new Map();
+// what happened last (Workers started and ended, requests), told with an error that has no stack, which says no more
+const RECENT_EVENTS = 15;
+const recent = [];
+const remember = what => recent.splice(0, recent.push(`${(performance.now() / 1000).toFixed(2)} s ${what}`) - RECENT_EVENTS);
+const withRecent = entry => entry.stackTrace?.callFrames?.length ? "" : ` [before it: ${recent.join("; ")}]`;
 const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages.push({ level: level === "warn" ? "warning" : level, text, url });
 const events = {
-	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? entry.stackTrace?.callFrames?.[0]?.url : ""),
+	// an error without a stack (Firefox's bare "uncaught exception: undefined") still says the realm it came from: the
+	// page ("window") or which kind of Worker
+	"log.entryAdded": entry => {
+		const text = entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" ");
+		report(entry.level, entry.level === "error" ? text + withRecent(entry) : text, entry.stackTrace?.callFrames?.[0]?.url ?? realms.get(entry.source?.realm) ?? "");
+		remember(`${entry.level}: ${text?.slice(0, 80)}`);
+	},
+	"script.realmCreated": ({ realm, type, origin }) => {
+		realms.set(realm, `${type} realm of ${origin}`);
+		remember(`+ ${type}`);
+	},
+	"script.realmDestroyed": ({ realm }) => remember(`- ${realms.get(realm)?.split(" ")[0] ?? "realm"}`),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
-	"network.beforeRequestSent": ({ isBlocked, request }) => isBlocked && send("network.continueRequest", {
+	"network.beforeRequestSent": ({ isBlocked, request }) => (remember(`request ${request.url.replace(/^https?:\/\/[^/]+/, "")}`), isBlocked) && send("network.continueRequest", {
 		request: request.request,
 		headers: [...request.headers.filter(({ name }) => name.toLowerCase() !== "authorization"), { name: "Authorization", value: { type: "string", value: `Bearer ${GITHUB_TOKEN}` } }],
 	}),

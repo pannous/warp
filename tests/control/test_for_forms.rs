@@ -62,26 +62,23 @@ fn each_starts_a_loop() {
 #[test] // wiki/iteration.md: loops binding `it` to numbers, then characters, then symbols; it is held as a Node (card loop-symbols)
 fn loops_bind_it_to_values_of_other_kinds() {
 	is!("n=0; for 1..3 {n+=it}; s=\"\"; for \"ab\" {s+=it}; s", "ab");
-	is!(
-		"for 1..3 {it}; s=\"\"; for friend in [foe1, friend1] {s+=\"$(it)\"}; s",
-		"foe1friend1"
-	);
-	is!(
-		"x=1; while x<3 {x++}; xs=[a,b]; x = xs#2; x",
-		warp::Node::Symbol("b".into())
-	);
+	is!("for 1..3 {it}; s=\"\"; for friend in [foe1, friend1] {s+=\"$(it)\"}; s", "foe1friend1");
+	is!("x=1; while x<3 {x++}; xs=[a,b]; x = xs#2; x", warp::Node::Symbol("b".into()));
 }
 
 #[test] // wiki/plural.md: over a text, `word` walks the words, `line` the lines, any other name the characters (card loop-walks)
 fn the_loop_variable_name_picks_the_text_unit() {
-	is!(
-		"text=\"hi  you\"; s=\"\"; for word in text { s += word + \",\" }; s",
-		"hi,you,"
-	);
+	is!("text=\"hi  you\"; s=\"\"; for word in text { s += word + \",\" }; s", "hi,you,");
 	is!("s=\"\"; for line in \"a\nb c\" { s += line + \",\" }; s", "a,b c,");
 	is!("text=\"hi\"; s=\"\"; for char in text { s += char + \",\" }; s", "h,i,");
-	is!(
-		"s=\"\"; for word in [\"a b\", \"c\"] { s += word + \",\" }; s",
-		"a b,c,"
-	);
+	is!("s=\"\"; for word in [\"a b\", \"c\"] { s += word + \",\" }; s", "a b,c,");
+}
+
+#[test] // a braceless call is a loop header's last bound, before any body form (card count-xs-int)
+fn a_braceless_call_ends_the_loop_range() {
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs { s+=i }; s", 6);
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs do s+=i; s", 6);
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs:\n  s+=i\ns", 6);
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs\n  s+=i\ns", 6);
+	is!("xs=[5,6,7]; s=0; for x in reverse xs { s=s*10+x }; s", 765);
 }

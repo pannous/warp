@@ -18,7 +18,7 @@ t0 = clock(); a = gpu_compute(idle, xs, $workgroups); t1 = clock(); b = gpu_comp
 {n: $n, transfer: t1 - t0, transfer_and_double: t2 - t1, cpu_double_and_sum: t3 - t2}"
 done
 
-# `ys = xs.map(f) @gpu` over a linear float array (src/lowering/gpu_maps.rs) against the CPU's map of the same lambda:
+# `ys = xs.map(f) @gpu` over a linear float array (src/lowering/foreign/gpu_maps.rs) against the CPU's map of the same lambda:
 # a light one (the CPU's f64x2 kernel) and a heavy one (sin, cos: the CPU's generic map)
 for n in $COUNTS; do
 	"$WARP" eval "linear xs = float[$n]

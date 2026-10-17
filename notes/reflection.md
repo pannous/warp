@@ -15,22 +15,23 @@ custom section, `warp.meta`, kept unstripped.
 | `x.type`, `type(x)` | any value | its type name (`int`, `P`) | works; `p.type` of a known instance since step 2 |
 | `x.class` | instance | its class, `P` | step 2: known instances (`type(p)`) |
 | `x.fields` (`attributes`, `members`) | instance, class, map | field names, in declared order | step 2: inherited fields first; a map's keys at run time |
-| `x.methods` | instance, class | method names | step 2: without constructors and derived methods |
+| `x.methods`, `methods(x)`, `methods of x` | module, instance, class, value | the functions themselves (`function sq` each; decision reflection) | step 2: without constructors and derived methods; card module-methods (2026-10-14): function objects, a std module's words (introspection.rs), a value's type module (one when the literal type is known, else a type dispatch); an imported .wasm module's class still gives names |
 | `x.keys` | map, object | keys | works (library word) |
 | `x.meta`, `x.@key` | any binding | meta entries (meta_entries.rs) | works, `x.meta` under `use comments` |
 | `f.params` (`parameters`), `f.signature` | function | parameter names / `(a:int, b:int) -> int` | step 3: user functions |
+| `f.name`, `f.return_type`, `type(f)` | function, function value | `gcd` / `int` / `function: (a, b) -> int` | card module-methods: compile time in reflection.rs; on a function value at run time `.name .doc .signature .return_type .dump` are field fallbacks over the closure targets (wasm_emitter closures.rs FUNCTION_WORDS); `print f` alone shows the doc as `#` lines and the definition (function_dump), in a list its name |
 | `f.dump` | function | the whole definition, to copy and paste: `area(width:int, height:int) := width*height` (Node::serialize spacing) | card reflection-area |
 | `f.effects` (= `effects of f`) | function | effect set as texts (`"IO"`, `["IO" "ask"]`) | a value anywhere (card effects-value); a program whose top level does nothing answers at compile time |
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
 | `module.exports` | `use wasm`, foreign module | export names | step 4: imported core modules; components natively |
 | `x.unit` | quantity | its unit | static units (static_units.rs), no `.unit` word yet |
-| `help(x)` | class, instance, user function | text: `class P extends Q` / `fields: …` / `methods: …` lines; a function's name and signature | card help-help (2026-10-09): compile time; no doc comment yet (P114 keeps comments off by default) |
-| `x.doc` | binding, function | its comment (P114, `use comments`) | step 4: `x.doc` = `x.@comment`, of functions too |
+| `help(x)` | class, instance, user function | text: `class P extends Q` / `fields: …` / `methods: …` lines; a function's name and signature | card help-help (2026-10-09): compile time; a function's doc on the lines below its signature (card doc-strings) |
+| `x.doc` | binding, function | its comment (P114, `use comments`); a function's doc string | step 4: `x.doc` = `x.@comment`; card doc-strings (2026-10-14): a function's leading text statement and the comment above its definition, without `use comments`, are its doc (doc_strings.rs: the body's `doc` meta entry, UserFunctionDef::doc), `""` without |
 
 ## Rule
 `x.word` is, in order: x's real field `word` (a class or map field always wins), its meta entry `@word`
 (meta_entries.rs), then the reflection word. A program's own definition of the word (`fields(x) := …`) wins as usual
-(library_words defined_names). One lowering pass, `src/lowering/reflection.rs` (absorbing introspection.rs), rewrites
+(library_words defined_names). One lowering pass, `src/lowering/data/reflection.rs` (absorbing introspection.rs), rewrites
 `x.word` to the function form (`type(x)`, `effects of f`, `listeners of e`), so each word has one implementation.
 
 ## Sources
@@ -62,7 +63,7 @@ Warp notation text (parsed by the reader we already have), one map:
 3. Functions: `f.params`, `f.signature`. Done in reflection::lower: constants from the user function's definition;
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
    is `(x) -> int`). Library words (`sqrt.signature`, `first.params`, `dir(sqrt)`, `help(upper)`) answer from
-   lowering/library_signatures.rs: a hand table names and types the operator, rounding and text/list words (result
+   lowering/foreign/library_signatures.rs: a hand table names and types the operator, rounding and text/list words (result
    `number` where it depends on the argument), a prelude word shows its lib/prelude.warp head, libm, text builtins and
    runtime words get positional names (`(a:float, b:float) -> float`) from their tables. A program's own definition wins.
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
@@ -75,7 +76,7 @@ Warp notation text (parsed by the reader we already have), one map:
    snake_case), reflection::lower_component_words right before foreign_modules. In the page too (card
    reflect-page-meta): wasm_modules::component_export_names reads them with wasmparser's validator (no wasmtime), the
    compiler fetching the binary like an imported core module's (web::read_bytes); the validator was linked into the
-   browser build already, the optimized warp.wasm kept its size. Sample samples/component_reflection.warp.
+   browser build already, the optimized warp.wasm kept its size. Sample samples/wasm/component_reflection.warp.
 5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`
@@ -101,3 +102,14 @@ Warp notation text (parsed by the reader we already have), one map:
 
 Text holes: interpolation is the first source pass (card interpolation-source), so `"\(f.params)"` and every other
 reflection word work inside `\(…)` like plain statements.
+
+Module words (cards help-undefined, joinable-error; src/lowering/data/word_help.rs): `help(sound)` is the module's
+index (std_docs::module_help, as `warp help sound`), `help(midi)` the word's head and comment, answered before
+reflection.rs (which would read help(sound) as the word sound). After modules::resolve, `help(x)` and
+`function(x).dump` / `(function x).dump` of a name known only at run time look x up in a map literal of the used
+modules' words plus the program's functions (`if T has x then T[x] else error(…)`). `function trick` is still the
+function reference P82; where trick is no function but a variable, its value is the name. std_docs now indexes
+`global x = …` and `def f(x) {…}` definitions too; a prelude word's help stays its head (test_library_signatures).
+A help statement prints (user decision help-statement, via the Interviewer): `help(x)` on its own line, other than the
+value of a block or program, is `print help(x)` (word_help::printing_help_statements); in a loop's body the last
+statement too. `t = help(x)` stays silent, `print help(x)` prints once.

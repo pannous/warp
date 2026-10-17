@@ -35,8 +35,5 @@ fn a_tuple_result_type() {
 		eval("func swapped(_ a: Int, _ b: Int) -> (Int, Int) { return (b, a) }; swapped(1, 2)").serialize(),
 		"(2 1)"
 	);
-	assert_eq!(
-		eval("def f(a) -> (int, int) { return (a, a) }; f(1)").serialize(),
-		"(1 1)"
-	);
+	assert_eq!(eval("def f(a) -> (int, int) { return (a, a) }; f(1)").serialize(), "(1 1)");
 }

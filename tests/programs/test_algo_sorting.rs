@@ -2,7 +2,7 @@ use crate::is;
 
 #[test]
 fn test_sorting() {
-	is!("samples/sorting.warp", "-3,0,1,2,5,5,6,7,8,9");
+	is!("samples/lists/sorting.warp", "-3,0,1,2,5,5,6,7,8,9");
 }
 
 #[test]
@@ -22,9 +22,4 @@ fn probe_sorting_snippets() {
 			Err(_) => println!("PROBE {path}: PANIC"),
 		}
 	}
-}
-
-#[test]
-fn test_sorting_idiomatic() {
-	is!("samples/sorting_idiomatic.warp", "-3,0,1,2,5,5,6,7,8,9");
 }

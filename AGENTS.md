@@ -32,7 +32,7 @@ Person {
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
 
 
-### Node AST (`src/node/`, the enum in `mod.rs`)
+### Node AST (the enum in `src/node/mod.rs`)
 
 The central data structure is `Node`, an enum representing all AST node types:
 
@@ -57,14 +57,14 @@ parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such 
 
 ### Emitters
 
-0. **Text**: `Node::serialize` (`src/node/serialization.rs`), warp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
+0. **Text**: `Node::serialize` (`src/node/serialization.rs`), warp notation similar to json5; `src/formats/wisp_parser.rs` reads and writes Wisp
 1. **WASM GC Emitter** (`src/wasm_emitter/`)
     - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
       functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
     - `function_builder.rs`: `runtime_function` / `exported_function` emit a whole function in one call
     - Uses the `Kind` enum (`src/type_kinds.rs`) for runtime type discrimination
 
-### WASM Runtime (`src/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi/`)
+### WASM Runtime (`src/run/wasm_reader.rs`, `src/run/wasmtime_runner.rs`, `src/host.rs`, `src/ffi/`)
 
 - `wasm_reader::run_main` instantiates a module with the host, WASI or FFI imports and calls `main`
 - `wasm_reader` and `gc_traits/` read the resulting GC objects back into Nodes
@@ -120,11 +120,6 @@ Use WASM names excessively! Wasm provides custom sections for names, use ALL of 
 
 The project is configured for **offline-first** development to avoid compilation delays: dependencies come from the
 local registry cache. Use `--offline` flag when building.
-
-Vendoring is deactivated for now (user, 2026-10-04: "currently we don't need it but maybe we want to run an off-line
-agent later again"): main has no `vendor/` and no source replacement. The machinery is kept as it is: the `vendor`
-branch (vendored crates for main c5a44e05, 2026-10-03) and .github/workflows/offline-build-refresh.yml, which still
-refreshes it when Cargo.lock changes on main; how to use it again: notes/cloud_offline_build.md.
 
 ### Test File Locations
 
@@ -227,13 +222,14 @@ Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
 Small or non-conflicting changes may go straight onto main without a worktree (user, 2026-10-12; notes/roles.md
-"Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Users/me/dev/angles/warp.worktrees.noindex/<name>
-(notes/roles.md), or work on the same branch for small changes.
+"Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
+(older ones stay in /Users/me/dev/angles/warp.worktrees.noindex until retired; /Volumes/Worktrees/warp is cowtree's
+donor, never removed; notes/roles.md), or work on the same branch for small changes.
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
 
 ## Folders
 - `probes/` = hand-written probe sources only (.warp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
-- `scratch/` = disposable, ignored: repo exports/copies, worktrees, cargo homes, private index files (`scratch/<topic>.index`), temp builds. Deletable any time.
+- `scratch/` = disposable, ignored temporary area, only for: the checkout's own warp binary (`scripts/own-warp.sh` → `scratch/warp`), temporary work folders of tests and probes, and cloned outside repos for research. Not for worktrees (`warp.worktrees.noindex/`), repo copies or extra binary copies; logs and results go to `data/`. Deletable any time; anything older than two days gets cleared.
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 - Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
 - `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
@@ -265,4 +261,4 @@ Picking a card is `todo take <card> <session name>`
 
 Builds go to the shared target-dir from ~/.cargo/config.toml (sccache is on). 
 Never create a local target/ or *_target dir. 
-Remove worktrees when done.
+Remove worktrees and branches when done!

@@ -5,10 +5,7 @@ use crate::is;
 
 #[test]
 fn a_missing_kebab_field_is_an_error_offering_the_subtraction() {
-	fails_with(
-		"p = {phone: 7}; number = 2; p.phone-number",
-		"p has no field phone-number",
-	);
+	fails_with("p = {phone: 7}; number = 2; p.phone-number", "p has no field phone-number");
 	is!("p = {phone: 7}; number = 2; p.phone - number", 5);
 }
 

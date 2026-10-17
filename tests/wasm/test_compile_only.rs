@@ -1,6 +1,6 @@
 use std::path::PathBuf;
+use warp::run::wasm_reader::read_bytes;
 use warp::wasm_emitter::run_raw_struct;
-use warp::wasm_reader::read_bytes;
 
 const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
 const STRUCT_SOURCE: &str = "class Person{name:String age:i64}; Person{name:'Alice' age:30}";
@@ -11,17 +11,10 @@ fn compile_source(file_name: &str, source: &str) -> Vec<u8> {
 	std::fs::write(&source_path, source).unwrap();
 	let _ = std::fs::remove_file(&binary_path);
 
-	let output = crate::common::warp_command()
-		.args(["compile", "--wasm"])
-		.arg(&source_path)
-		.output()
-		.unwrap();
+	let output = crate::common::warp_command().args(["compile", "--wasm"]).arg(&source_path).output().unwrap();
 
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-	assert!(
-		!String::from_utf8_lossy(&output.stdout).contains("» "),
-		"compile must not print a result"
-	);
+	assert!(!String::from_utf8_lossy(&output.stdout).contains("» "), "compile must not print a result");
 	std::fs::read(&binary_path).expect("compile wrote no .wasm file")
 }
 

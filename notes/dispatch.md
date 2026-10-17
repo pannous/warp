@@ -1,11 +1,55 @@
-# Dispatch on return type (D10)
+# One lookup for every word
 
-User decision (P17, notes/open_decisions.md): "Dispatch on return type" (un-parked). `render "hello" as pdf` and
-`docx example = render "x"` pick the overload of `render` by the expected result type; when the expected type picks no
-single overload, the first-declared one is taken with a got-it warning naming the explicit form.
+`x.word` ≡ `x.word()` ≡ `word(x)` ≡ `word x` ≡ `word of x`, all resolved by one lookup: multi-dispatch on the
+receiver's type, the most specific meaning wins (decisions default-methods, library-words-typed,
+dispatch-untyped-library-words, class-members-free, field-forms, type-words-reserved).
 
-The traits work (notes/traits.md) picks an operation by the type of its first argument; this picks a function by the type
-its caller expects back. Both rename the variants to `name·T` (traits::witness_name) and resolve calls at compile time.
+## The rule
+A word names a generic function. Its meanings, most specific first:
+
+| level | meaning | examples |
+|---|---|---|
+| 0 | a variable or parameter in scope (bare words only; `x.word` never reads a variable `word`) | `random = 4; random` |
+| 1 | the receiver's own member: field of its class, entry of its literal or map, class method or method typed with its class (own class before a parent) | `{first: 1}.first`, `Deck(3).sort()` |
+| 2 | the program's own untyped definition, at the arities it takes | `count(x) := 7; count(5)` |
+| 3 | a used module's word (`use json`: bare `parse` is json.parse) | `use json; parse t` |
+| 4 | the library word of the receiver's built-in type | `xs.first`, `x.round`, `t.int`, `p.zy` |
+| 5 | nothing: `undefined function: word` | `5.shout` |
+
+Exception: typed library words are immutable for their own types, so for a value of those types level 4 comes before
+level 2 (`count(x) := 7; count([1,2])` → 2, with a hint).
+
+- Static when the receiver's type is known at compile time; otherwise one run-time choice (`is_type` test of the
+  receiver, never of a function argument: testing calls it).
+- Forms: a getter is the 0-argument meaning, a setter the 1-argument one; `x.word = v` ≡ `x.word(v)` ≡ `word(x, v)` ≡
+  `word of x = v` call the setter when one exists, else store the field. Plain fields answer only `.` and `of`.
+- A function word used as a value is its 0-argument call (bare `canvas` is `canvas()`).
+- After a number, a unit symbol is the unit, even beside a variable of that name.
+- Shadowing is per name and arity, scoped per function: a program `first(x)` leaves `first(xs, 3)` to the library.
+- Uniform call: `x.f(args)` calls `f` when f takes `args + 1` arguments (`ProgramNames::takes_method_call`).
+- Redefining a built-in type's library word for that type (`first(xs: list) := …`) is a loud error; every type and
+  conversion word is refused as a function name ("hex is a type; name your function to_hex").
+
+## Where it lives
+- src/lowering/words/library_words.rs `method_call`: OwnMember × WordMeaning.
+- src/lowering/words/program_names.rs `ProgramNames` (scoped, per arity): `of`, `takes`, `binds`, `takes_call`,
+  `function_takes`, `inside`, `rewritten_where_free`, `rewritten_by_scope`. Ask it instead of building another
+  "the program defines X" set. Program-wide on purpose: std_aliases and rust_paths, of_lookups, markup tags, operator
+  call forms, type_tests' Names, needed_definitions.
+- src/lowering/words/typed_library_words.rs (start of MODULE_PASSES): an untyped redefinition `count(x) := 7` becomes
+  `count·any` with a hint, and each call of an arity the program's takes is chosen by the argument types
+  (library_parameter_types, MEMBER_SIGNATURES).
+- A field write `m.title = v` takes no word unless the program defines the setter; parameters and loop variables are
+  of unknown kind; another module's bare word on what may be an object reads its field (`p.center`).
+- probes/dispatch/compare_binaries.py: every `is!` snippet of the given test files run with two binaries, results
+  compared; a quick behaviour check while the test queue is long.
+
+Open: card parameter-unit (`f(x) := x as ms` loses the conversion at run time).
+
+# Dispatch on return type (D10, P17)
+
+`(render "hello") as pdf` and `docx example = render "x"` pick the overload of `render` by the expected result type;
+when it picks no single overload, the first-declared one is taken with a got-it warning naming the explicit form.
 
 ## Overloads
 Two or more definitions of one name whose result types differ are overloads, in declaration order:
@@ -15,44 +59,34 @@ class docx{body}
 render(t):pdf  := pdf("%PDF " + t)      // the result type written after the head (also `render(t) as pdf := …`)
 render(t):docx := docx("<w:t>" + t)
 ```
-The result type is the written one, else the type of the instance the body constructs (`render(t) := pdf(…)`).
-The English phrase names it after a final `as` (card render-as): `to render text as pdf: …` is `render(text) as pdf := …`
-(warp_parser atoms.rs phrase_result_type); an `as` followed by more words stays a parameter word.
+The result type is the written one, else the type of the instance the body constructs. The English phrase names it
+after a final `as`: `to render text as pdf: …` is `render(text) as pdf := …` (atoms.rs phrase_result_type).
 Definitions of one name whose result types are not all known stay what they were (the last one wins).
 
 ## The expected type of a call
 | context                         | expected type |
 |---------------------------------|---------------|
-| `render "x" as pdf`, `(render "x") as pdf` | pdf  |
+| `(render "x") as pdf`           | pdf  |
 | `docx d = render "x"`, `d:docx = render "x"` | docx |
 | `save(render "x")` with `save(d:docx)` | docx (the parameter's declared type) |
 | anything else                   | none          |
 
-A function defined once with a known result type takes `render "x" as pdf` and `(render "x") as pdf` as naming that
-result, not as converting (only the spaced call: `square(2.7 as int)` still converts its argument).
-A call with an expected type that one overload returns calls it (`render·pdf("x")`; the `as pdf` is then redundant and
-dropped). Otherwise the first-declared overload is taken with the got-it warning (diagnostic::ask, Fallback::Warning,
-topic `return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: render "x" as pdf`.
+A function defined once with a known result type takes `(render "x") as pdf` as naming that result, not as converting.
+The ungrouped `render "x" as pdf` casts the argument (call-as-grouping). A call whose expected type one overload
+returns calls it (`render·pdf("x")`); otherwise the first-declared overload with the got-it warning (topic
+`return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: (render "x") as pdf`.
 
-### Companions (card int-let)
+## Companions
 A function f without overloads but with a companion `f_as(…, type:text)` gets its expected type at run time:
-`x:int = agent "33/3"` calls `agent_as("33/3", "int") as int` (lib/agent.warp asks Claude for a JSON value of that type
-and parses it). The `as T` stays for a built-in type word, since the companion's answer has no static type (`yes` shows as yes,
-not 1). Companions are found by operation (`agent·1` of lower_arity_overloads is `agent`), and modules.rs links `f_as`
-whenever it links f, because the call to it only appears here. `agent "is 7 prime" as bool` works too. Live check:
-probes/agent_types.sh.
+`x:int = agent "33/3"` calls `agent_as("33/3", "int") as int` (lib/agent.warp asks Claude for a JSON value of that
+type). modules.rs links `f_as` whenever it links f. Live check: probes/agent_types.sh.
 
 ## Lowering
-src/lowering/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
-library_words, so `x = render "x" as pdf; x.body` reads a field: traits::InstanceTypes knows the result shape of a user
-function from its body.
+src/lowering/definitions/overloads.rs, right after type_constructor and before the trait passes and library_words.
 
-# Methods: dispatch on the first argument's class (card dispatch, user 2026-10-12)
+# Methods: dispatch by argument classes
 
-User: "a more Julia-like approach where we just have functions and if the function takes the class as argument, then
-it's kind of a class method. sort(list) <=> list.sort(). Make this a very general concept."
-
-A function name is a generic function, a set of methods told apart by the class of their first argument.
+A function name is a generic function, a set of methods told apart by the classes of their positional arguments.
 `sort(d:Deck) := …` adds a method to sort; sort of lists and texts stays the library's. `x.f(args)` is `f(x, args)`.
 ```warp
 class Deck{n:int}; sort(d:Deck) := d.n
@@ -62,43 +96,27 @@ class Animal{name:text}; class Dog extends Animal{}
 speak(a:Animal) := "..."; speak(d:Dog) := "woof"
 speak(Dog("rex"))  // woof: the most specific method wins (a class over its parent, nearest first)
 ```
-- Which names: a name with a method for a declared class and either a fallback (a library word, class_methods
-  `is_library_method`, or an untyped definition `sort(x)` of the program) or methods for several classes. A name with
-  one method and nothing else stays a plain function (function values, reflection see it unchanged). Declared trait
-  operations keep their own path (witness_of); both name a method `f·T` (traits::witness_name).
-- Calls (traits.rs `generic_calls`, in lower_conformances: before library_words, which would expand `sort` itself):
-  an argument of a known class calls its method statically (direct `call $sort·Deck`); a literal or a variable only
-  holding literals (analyzer::literal_variable_kinds) calls the fallback; a value of unknown class goes through the
-  generated `f·dispatch`, which tests `instance_of` per class (each class mapped to its most specific method) and
-  otherwise calls the fallback.
-- Errors: a class without method and no fallback: `area has no method for circle; methods: area(square), area(rect);
-  fix: define area(s:circle) := …`. A class like two classes at the same distance that both have a method:
-  `f of an image is ambiguous: image is like both photo and sketch, …; fix: define f(x:image) := … to pick one`.
-- An untyped definition `sort(x) := …` replaces the library function on purpose (the fallback) and stays a plain
-  definition.
+- A method's signature is the class of each positional parameter, any where untyped (traits.rs Signature):
+  `collide(a:Ship, b:Rock)` is `collide·Ship·Rock`, a first-only method `sort·Deck`. Generic::method_for: per position
+  the likeness steps from the argument's class (own 0, parent 1, any value ANY_DISTANCE); the method no other beats at
+  every position wins; two left are ambiguous, with the fix "define the exact one".
+- Which names: a name with a method for a declared class and either a fallback (a library word, an untyped definition)
+  or methods for several classes. A name with one method and nothing else stays a plain function. The fallback counts
+  only when it takes the call's arguments (`b.take()` never falls back to `take(xs, n)`).
+- Calls (traits.rs `generic_calls`, before library_words): a known class calls its method statically; a literal calls
+  the fallback; an unknown class goes through the generated `f·dispatch`, testing `instance_of` per typed position.
+- Errors: no method and no fallback: `area has no method for circle; methods: …; fix: define area(s:circle) := …`.
+- A field and a method of one name: `b.size` reads the field, `b.size()` and `size(b)` call the method, and the
+  definition warns (field_method_warnings).
+- A class's own method named like a library word (`pop`) takes calls on its instances only; `items.pop()` on an
+  untyped field stays the library word.
+- Across modules: a std module's method like shell's `sort(file:Path)` joins the list word's generic function.
 
-Open (later steps): dispatch on every positional argument (Julia), not only the first; class-body methods named like
-library words still take class_methods' `method·sort` + `dispatched_by_class` route and should become methods of the
-generic function too; the list/map/text library as methods where that simplifies the code.
-
-## Methods: what came after (2026-10-12)
-- The fallback counts only when it takes the call's arguments: `b.take()` of a class Box never falls back to list's
-  `take(xs, n)` (traits.rs Generic::falls_back), so a single method is called directly.
-- list/text/map words are standard functions (decision type-library-words): modules.rs with_type_module_uses adds the
-  module for `f(x)`, `f x` and `x.f()`; a class's method of that name (body or `take(b:Box)`) is not the program's own
-  word (own_functions), so the module still comes and the method joins its generic function. `from list import zip`
-  keeps list's other words out. Sound's words other than play, beep, stop_sound and wait_sound still need `use sound`.
-- A field and a method of one name (card warn-field): `class Box{size:int}; size(b:Box) := …` keeps both, `b.size`
-  reads the field (traits.rs operation_calls; it used to call size(b), recursing forever inside the method),
-  `b.size()` and `size(b)` call the method, and the definition warns (field_method_warnings).
-- Follow-up cards: dispatch-positional (done), warn-field (done), library-words (step d, done: every standard function is a
-  fallback, one builtin method rule in lower_function_methods).
-
-## Every positional argument (card dispatch-positional, 2026-10-12)
-A method's signature is the class of each positional parameter, None where it takes any value (traits.rs Signature);
-`collide(a:Ship, b:Rock)` is the method `collide·Ship·Rock`, `describe(k, s:Ship)` is `describe·any·Ship`, a first-only
-method keeps its old name `sort·Deck`. Generic::method_for: per position the likeness steps from the argument's class
-(0 its own, a parent 1, any value ANY_DISTANCE); the method no other one beats at every position wins; two left are
-ambiguous ("meet(Dog, Dog) is ambiguous: meet(Dog, Animal) and meet(Animal, Dog) fit equally well", fix: define the
-exact one). At run time the dispatcher tests `instance_of` at every typed position, per combination of the classes
-that fit there (or no instance), the combinations testing more classes first.
+## One method form (one-method-form)
+`class P{def x(k):=…}` and `def x(p:P, k):=…` are one method: `p.x(k)`, `x(p, k)`, `x p`, `&x`, methods(P), dir(p)
+behave alike. A class-body method lowers to `x(self:P, k)`; an outside one keeps its place and gets the class-body
+rules: bare fields read the receiver unless a parameter has the name (class_methods/outside_methods.rs); a type word
+as the name is renamed `method·double`; methods(P) lists every function whose first parameter is declared P or an
+ancestor. Moving outside definitions into the class body was tried and changed dispatch errors, traits and compiled
+modules' exports, so the outside form stays where it is.
+Open: a trait's functions (`f(s:Shape)` is untyped before reflection reads it), `.declared_in` metadata.

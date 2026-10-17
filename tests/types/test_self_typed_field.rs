@@ -5,10 +5,7 @@ use crate::is;
 
 #[test]
 fn a_required_field_of_the_own_class_is_an_error() {
-	fails_with(
-		"class Tree{left: Tree; v:int}; Tree(ø, 3).v",
-		"left can never be filled",
-	);
+	fails_with("class Tree{left: Tree; v:int}; Tree(ø, 3).v", "left can never be filled");
 	fails_with("class Tree{left: Tree; v:int}; 1", "fix: left: Tree?");
 }
 

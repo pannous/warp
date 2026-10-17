@@ -1,4 +1,4 @@
-// lib/sound.warp (card basic-sound): `play 440Hz for 0.5s`, `play C4`, `play [C4 E4 G4]`, `melody`, `tone`, `beep`.
+// lib/sound.warp (card basic-sound): `play(440Hz, 0.5s)`, `play C4`, `play [C4 E4 G4]`, `melody`, `tone`, `beep`.
 // The samples go to the host word sound_samples: natively a WAV file in the temporary folder (warp-sound/sound.wav),
 // played only when the warp binary may reach the user, so these tests stay silent; in the browser WebAudio
 #![cfg(feature = "native")]
@@ -11,11 +11,8 @@ const WAV_HEADER_BYTES: usize = 44;
 fn sounded(folder: &str, program: &str) -> Vec<i16> {
 	let folder = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(folder);
 	std::fs::create_dir_all(&folder).unwrap();
-	let run = crate::common::warp_command()
-		.env("TMPDIR", &folder)
-		.args(["--no-ask", "eval", program])
-		.output()
-		.unwrap();
+	let run =
+		crate::common::warp_command().env("TMPDIR", &folder).args(["--no-ask", "eval", program]).output().unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr);
 	assert!(String::from_utf8_lossy(&run.stdout).contains('7'), "{errors}");
 	let path = errors
@@ -25,50 +22,37 @@ fn sounded(folder: &str, program: &str) -> Vec<i16> {
 	let wav = std::fs::read(path).expect("sound.wav written");
 	assert_eq!((&wav[0..4], &wav[8..16]), (b"RIFF".as_slice(), b"WAVEfmt ".as_slice()));
 	assert_eq!(u32::from_le_bytes(wav[24..28].try_into().unwrap()), SAMPLE_RATE);
-	wav[WAV_HEADER_BYTES..]
-		.chunks(2)
-		.map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
-		.collect()
+	wav[WAV_HEADER_BYTES..].chunks(2).map(|pair| i16::from_le_bytes([pair[0], pair[1]])).collect()
 }
 
 #[test]
 fn play_writes_the_tone_as_a_wav() {
-	let samples = sounded("sound-play", "play 440Hz for 10ms; 7");
+	let samples = sounded("sound-play", "play(440Hz, 10ms); 7");
 	assert_eq!(samples.len(), 220);
-	assert_eq!(
-		(samples[0], samples[219]),
-		(0, 0),
-		"faded in and out, so the speaker does not click"
-	);
+	assert_eq!((samples[0], samples[219]), (0, 0), "faded in and out, so the speaker does not click");
 	assert!(samples.iter().any(|&sample| sample > 5000) && samples.iter().any(|&sample| sample < -5000));
 }
 
 #[test]
 fn a_melody_is_its_notes_one_after_another() {
-	assert_eq!(
-		sounded("sound-melody", "use sound\nmelody([C4 E4 [C4 G4]], 20ms); 7").len(),
-		3 * 441
-	);
-	assert_eq!(
-		sounded("sound-melody-each", "use sound\nmelody [C4 E4] each 20ms; 7").len(),
-		2 * 441
-	);
+	assert_eq!(sounded("sound-melody", "use sound\nmelody([C4 E4 [C4 G4]], 20ms); 7").len(), 3 * 441);
+	assert_eq!(sounded("sound-melody-each", "use sound\nmelody([C4 E4], 20ms); 7").len(), 2 * 441);
 	is!("use sound\ncount(melody_samples([C4 [E4 G4]], 0.01))", 2 * 220);
 }
 
 #[test]
 fn notes_are_frequencies() {
-	is!("use sound\nround(note(\"A4\"))", 440);
-	is!("use sound\nround(note(\"C#4\") * 100)", 27718);
-	is!("use sound\nround(note(\"Eb5\"))", 622);
+	is!("use sound\nround(note(\"A4\").hertz())", 440);
+	is!("use sound\nround(note(\"C#4\").hertz() * 100)", 27718);
+	is!("use sound\nround(note(\"Eb5\").hertz())", 622);
 	is!("use sound\nC4", 261.63);
 }
 
 /// card module-text: note() reads the module's plain text constant scale_letters, also in a program with units
 #[test]
 fn notes_are_named_in_a_program_with_units() {
-	is!("use sound\nx = 300ms\nround(note(\"D4\"))", 294);
-	is!("play [C4 E4 G4] for 3ms\nplay note(\"C#4\") for 0.003\n7", 7);
+	is!("use sound\nx = 300ms\nround(note(\"D4\").hertz())", 294);
+	is!("play([C4 E4 G4], 3ms)\nplay(note(\"C#4\"), 0.003)\n7", 7);
 }
 
 /// Every note name lib/sound.warp defines (C2 … B6) is its frequency as note(name) computes it, to a hundredth of a Hz
@@ -83,10 +67,8 @@ fn the_note_table_matches_note() {
 		"C6 D6 E6 F6 G6 A6 B6",
 	];
 	for octave in OCTAVES {
-		let differences: Vec<String> = octave
-			.split(' ')
-			.map(|name| format!("abs({name} - note(\"{name}\"))"))
-			.collect();
+		let differences: Vec<String> =
+			octave.split(' ').map(|name| format!("abs({name} - note(\"{name}\").hertz())")).collect();
 		is!(&format!("use sound\nmax([{}]) < 0.01", differences.join(", ")), true);
 	}
 }
@@ -94,12 +76,12 @@ fn the_note_table_matches_note() {
 #[test]
 fn sound_words_run_without_use() {
 	// card bizarre-global (user, 2026-10-11): play, beep, stop_sound and wait_sound are global, the other words need the use
-	is!("play C4 for 10ms\nbeep\nplay [C4 E4 G4] for 10ms\n7", 7);
-	is!("use sound\ntone(220Hz, 10ms, \"square\")\ntone 330Hz for 5ms\n7", 7);
+	is!("play(C4, 10ms)\nbeep\nplay([C4 E4 G4], 10ms)\n7", 7);
+	is!("use sound\ntone(220Hz, 10ms, \"square\")\ntone(330Hz, 5ms)\n7", 7);
 }
 
 #[test]
 fn play_inside_a_def_body_before_the_value() {
-	is!("def h(value) { play 440Hz for 0.05s; value + 1 }; h(2)", 3);
-	is!("def h(value) {\n  play 440Hz for 0.05s\n  value + 1\n}\nh(2)", 3); // the `for` of play owns no indented lines below
+	is!("def h(value) { play(440Hz, 0.05s); value + 1 }; h(2)", 3);
+	is!("def h(value) {\n  play(440Hz, 0.05s)\n  value + 1\n}\nh(2)", 3); // the `for` of play owns no indented lines below
 }

@@ -1,4 +1,4 @@
-//! Welcoming C habits (samples/sin.warp, samples/sine.warp): `real f(real x) { … }` definitions and
+//! Welcoming C habits (samples/numbers/sin.warp, samples/numbers/sine.warp): `real f(real x) { … }` definitions and
 //! `if (condition) statement` without braces
 use crate::is;
 
@@ -19,8 +19,5 @@ fn test_if_parenthesized_condition_then_statement() {
 #[test] // an `if` assigning a float variable was emitted as an Int statement: "assigns a float where an exact Int is expected"
 fn test_if_assigning_a_float() {
 	is!("g(x:float) := { if (x > 1) x = x - 1.5\nreturn x }\ng(4)", 2.5);
-	is!(
-		"g(x:float) := { if x > 1 { x = x - 1.5 } else { x = 0.5 }\nreturn x }\ng(0) + g(4)",
-		3.0
-	);
+	is!("g(x:float) := { if x > 1 { x = x - 1.5 } else { x = 0.5 }\nreturn x }\ng(0) + g(4)", 3.0);
 }

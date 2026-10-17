@@ -4,4 +4,4 @@ xs = float[n]
 t0 = clock()
 for i in 1 to n { xs#i = i / n }
 t1 = clock()
-print "filled \(n) floats in \(t1 - t0) ms, last \(xs#n), middle \(xs#(n//2))"
+print "filled \(n) floats in \(t1 - t0) ms, last \(xs#n), middle \(xs#(n /! 2))"

@@ -1,87 +1,26 @@
 //! `warp build --site app.warp` (card web-ssr, notes/web_framework.md "Built sites"): a directory a static web server
 //! serves as it is. index.html holds the HTML of what the program shows, rendered at build time by the program itself
-//! (its export page·html, lowering/page_html.rs, run natively after main), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
+//! (its export page·html, lowering/web/page_html.rs, run natively after main), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
 //! runs in the page to hydrate it: the DOM stays, the handlers of its elements run, and what they change is shown anew.
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
-pub(crate) use crate::host_parts::{
-	compile_failure, exports, host_scripts_of, imports_of, message_of, with_excerpt, GPU_WORDS, TASK_WORD_PREFIXES,
-};
-pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
+pub(crate) use crate::host::host_parts::{compile_failure, exports, imports_of, message_of, with_excerpt};
+pub use crate::host::host_parts::{HostPart, Script, HOST_PARTS};
+pub use crate::host::page_parts::scripts_of;
+use crate::host::page_parts::{page, page_layout, PageLayout, BESIDE, DEV_SCRIPT, SITE_ROOT};
+use crate::host::{FOREIGN_CALL, HOST_LIBRARY};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 pub use warp_runtime::site_files::{content_type, file_at, SiteFile};
 use warp_runtime::site_files::{PAGE_FILE, ROUTED_PAGE_FILE};
 
 const MODULE_FILE: &str = "app.wasm";
-/// The scripts every page loads after the host's (host_parts.rs HOST_SCRIPTS)
-const PAGE_SCRIPTS: [Script; 2] = [
-	("markup.js", include_str!("../../web/playground/markup.js")),
-	("site.js", include_str!("../../web/playground/site.js")),
-];
-/// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
-const TRANSITIONS_SCRIPT: Script = (
-	"markup-transitions.js",
-	include_str!("../../web/playground/markup-transitions.js"),
-);
-/// A transition, or a leave animation (`leave: pop 400ms`, data-warp-leave), needs the transitions part
-const TRANSITION_WORDS: [&[u8]; 2] = [b"transition", b"data-warp-leave"];
-/// The part of markup.js for forms with `on submit` (card web-submit): only a module with such a handler has them
-const FORMS_SCRIPT: Script = ("markup-forms.js", include_str!("../../web/playground/markup-forms.js"));
-const SUBMIT_HANDLER_WORD: &[u8] = "on·submit".as_bytes();
-/// The canvas a module that paints shows its paintings and animation frames in, and the pointer over it (mouse_x, …)
-const PAINT_SCRIPT: Script = ("canvas.js", include_str!("../../web/playground/canvas.js"));
-/// A page whose program runs in a Worker (card site-worker) loads this before them, and site.js hands over to it
-const THREAD_SCRIPT: Script = ("site-thread.js", include_str!("../../web/playground/site-thread.js"));
-/// The page makes the task Workers of the program's Worker, which asks for them (Firefox, card tour-firefox-stall), when
-/// the Worker has the task pool (TASK_PART: not a site that only paints)
-const TASK_WORKERS_SCRIPT: Script = ("task-workers.js", include_str!("../../web/playground/task-workers.js"));
-const TASK_PART: &str = "host-tasks.js";
-/// What such a site ships besides: the program's Worker, the task Workers it starts, and the service worker that gives a
-/// static host's page the cross-origin isolation shared memory needs
-const WORKER_FILES: [Script; 3] = [
-	("site-worker.js", include_str!("../../web/playground/site-worker.js")),
-	("task-worker.js", include_str!("../../web/playground/task-worker.js")),
-	(
-		"coi-serviceworker.js",
-		include_str!("../../web/playground/coi-serviceworker.js"),
-	),
-];
-/// The root's attribute listing the scripts of the program's Worker (site-thread.js WORKER_ATTRIBUTE)
-const WORKER_ATTRIBUTE: &str = "data-warp-worker";
-const LIST_SEPARATOR: &str = ",";
-
-/// The parts the page keeps when the program runs in a Worker: host-routes.js follows links and the back button and
-/// moves the focus, which only the page can (site-thread.js)
-const PAGE_SIDE_PARTS: [&str; 1] = ["host-routes.js"];
 const LINE_COMMENT: &str = "//";
 /// `const KEY = "data-warp-key"; // a list item's element`: the statement ends before the comment
 const TRAILING_COMMENT: &str = "; //";
-/// The element holding the program's markup (site.js SITE_ROOT)
-const ROOT_ID: &str = "warp-root";
 /// The element holding the replies of a rendered page's server calls (host-tasks.js SERVER_REPLIES_ID)
 const REPLIES_ID: &str = "warp-replies";
-const PAGE_TEMPLATE: &str = r#"<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{title}}</title>
-{{base}}</head>
-<body>
-<div id="{{root}}"{{worker}}>{{body}}</div>
-{{replies}}{{scripts}}</body>
-</html>
-"#;
-
-/// `warp dev` adds the script asking the dev server for new builds (src/web/dev_server.rs)
-const DEV_SCRIPT: (&str, &str) = ("dev.js", include_str!("../../web/playground/dev.js"));
-
-/// Where the page finds the site's files: index.html beside them, 404.html at any depth from the site's root
-const BESIDE: &str = "";
-const SITE_ROOT: &str = "/";
 
 /// What `warp build --site` wrote
 pub struct BuiltSite {
@@ -98,22 +37,21 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 pub fn write_files(files: &[SiteFile], directory: &Path) -> Result<BuiltSite, String> {
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
 	for (name, bytes) in files {
-		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
+		let path = directory.join(name);
+		// modules/<file> (site_modules.rs)
+		path.parent()
+			.map_or(Ok(()), std::fs::create_dir_all)
+			.and_then(|()| std::fs::write(&path, bytes))
+			.map_err(|failure| format!("cannot write {name}: {failure}"))?;
 	}
-	Ok(BuiltSite {
-		directory: directory.to_path_buf(),
-		files: files.iter().map(|(name, _)| name.clone()).collect(),
-	})
+	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.iter().map(|(name, _)| name.clone()).collect() })
 }
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
 pub fn files(code: &str, title: &str, dev: bool) -> Result<Vec<SiteFile>, String> {
-	site_files(code, title, dev)?.map(|site| site.files).ok_or_else(|| {
-		format!(
-			"the program shows no page: it exports no {}",
-			crate::page_html::PAGE_HTML
-		)
-	})
+	site_files(code, title, dev)?
+		.map(|site| site.files)
+		.ok_or_else(|| format!("the program shows no page: it exports no {}", crate::page_html::PAGE_HTML))
 }
 
 /// The site a program serving its page serves (src/web/web_server.rs), none when its last line shows nothing
@@ -135,10 +73,9 @@ pub struct ServedSite {
 /// (host-tasks.js SERVER_REPLIES), so it starts showing what the server rendered
 struct Renderer {
 	bytes: Vec<u8>,
-	imports: crate::wasm_reader::Imports,
+	imports: crate::run::wasm_reader::Imports,
 	title: String,
-	scripts: Vec<Script>,
-	worker_scripts: Vec<Script>,
+	layout: PageLayout,
 }
 
 impl ServedSite {
@@ -146,10 +83,7 @@ impl ServedSite {
 	/// every path, user 2026-10-07)
 	pub fn matches_no_route_at(&self, path: &str) -> bool {
 		file_at(&self.files, path).is_some_and(|(name, _)| name == ROUTED_PAGE_FILE)
-			&& !self
-				.page_routes
-				.iter()
-				.any(|pattern| crate::routes::path_matches(pattern, path))
+			&& !self.page_routes.iter().any(|pattern| crate::routes::path_matches(pattern, path))
 	}
 
 	/// The file a request path names (file_at); a page of a program asking the server is rendered for the path
@@ -158,11 +92,7 @@ impl ServedSite {
 		match &self.renderer {
 			Some(renderer) if name == PAGE_FILE || name == ROUTED_PAGE_FILE => {
 				let root = if name == PAGE_FILE { BESIDE } else { SITE_ROOT };
-				Some(
-					renderer
-						.page_at(path, root)
-						.map(|page| (name.clone(), page.into_bytes())),
-				)
+				Some(renderer.page_at(path, root).map(|page| (name.clone(), page.into_bytes())))
 			}
 			_ => Some(Ok((name.clone(), bytes.clone()))),
 		}
@@ -171,29 +101,15 @@ impl ServedSite {
 
 impl Renderer {
 	fn page_at(&self, path: &str, root: &str) -> Result<String, String> {
-		let names = [
-			crate::page_html::PAGE_HTML,
-			crate::serve::RPC_REQUESTS,
-			crate::serve::RPC_VALUES,
-		];
+		let names = [crate::page_html::PAGE_HTML, crate::serve::RPC_REQUESTS, crate::serve::RPC_VALUES];
 		let read = crate::host::with_page_path(path, || {
-			crate::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names)
+			crate::run::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names)
 		});
-		let failed = |failure| {
-			format!(
-				"the page of {path} failed: {}",
-				message_of(&crate::wasm_emitter::failed_run(failure))
-			)
-		};
+		let failed =
+			|failure| format!("the page of {path} failed: {}", message_of(&crate::wasm_emitter::failed_run(failure)));
 		let [html, requests, values]: [Node; 3] = read.map_err(failed)?.try_into().expect("three exports");
-		Ok(page(
-			&self.title,
-			page_html_text(&html)?,
-			&replies_script(&items_of(&requests), &items_of(&values)),
-			&self.scripts,
-			&self.worker_scripts,
-			root,
-		))
+		let replies = replies_script(&requests.as_items(), &values.as_items());
+		Ok(self.layout.page(&self.title, page_html_text(&html)?, &replies, root))
 	}
 }
 
@@ -203,19 +119,7 @@ fn page_html_text(rendered: &Node) -> Result<&str, String> {
 	match rendered.drop_meta() {
 		Node::Text(html) => Ok(html),
 		Node::Empty => Ok(""),
-		_ => Err(format!(
-			"{} gave no text: {}",
-			crate::page_html::PAGE_HTML,
-			rendered.serialize()
-		)),
-	}
-}
-
-/// A list's items, a single value as one
-fn items_of(list: &Node) -> Vec<Node> {
-	match list.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		single => vec![single.clone()],
+		_ => Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize())),
 	}
 }
 
@@ -226,11 +130,11 @@ fn replies_script(requests: &[Node], values: &[Node]) -> String {
 		.iter()
 		.zip(values)
 		.filter_map(|(request, value)| {
-			let [url, arguments] = items_of(request).try_into().ok()?;
+			let [url, arguments] = request.as_items().try_into().ok()?;
 			let answer = crate::web::web_server::Answer::of(value);
 			Some(serde_json::json!({
 				"url": url.name(),
-				"arguments": crate::foreign::json_of(&arguments),
+				"arguments": crate::modules::foreign::json_of(&arguments),
 				"body": String::from_utf8_lossy(&answer.body),
 				"text": answer.content_type.starts_with(crate::web::web_server::TEXT_REPLY_TYPE),
 			}))
@@ -250,21 +154,16 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	if !exports(&rendering.bytes, crate::page_html::PAGE_HTML) {
 		return Ok(None);
 	}
-	let imports = crate::wasm_reader::Imports {
+	let imports = crate::run::wasm_reader::Imports {
 		host: rendering.needs_host,
 		wasi: rendering.needs_wasi,
 		ffi: rendering.needs_ffi,
 	};
 	let read_after_main = |name: &str| {
 		warp_runtime::system_signals::until_first_frame(|| {
-			crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name)
+			crate::run::wasm_reader::read_export_after_main(&rendering.bytes, imports, name)
 		})
-		.map_err(|failure| {
-			format!(
-				"the program failed at build time: {}",
-				with_excerpt(code, failure.to_string())
-			)
-		})
+		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
 	};
 	// card page-dom: a main calling into the page (`use js document`) fails here, natively, where there is no page; the
 	// page then starts empty and shows what main renders in the browser
@@ -277,189 +176,50 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		other => other?,
 	};
 	let page_routes: Vec<String> = match exports(&rendering.bytes, crate::routes::PAGE_ROUTES) {
-		true => items_of(&read_after_main(crate::routes::PAGE_ROUTES)?)
-			.iter()
-			.map(crate::routes::pattern_text)
-			.collect(),
+		true => read_after_main(crate::routes::PAGE_ROUTES)?.as_items().iter().map(Node::text_or_name).collect(),
 		false => vec![],
 	};
-	// a page calling server functions ships without them, starting from the values they gave here (lowering/serve.rs)
+	// a page calling server functions ships without them, starting from the values they gave here (lowering/web/serve.rs)
 	let asks_the_server = exports(&rendering.bytes, crate::serve::RPC_VALUES);
 	let rendering_bytes = rendering.bytes.clone();
 	let module = if asks_the_server {
-		let values = items_of(&read_after_main(crate::serve::RPC_VALUES)?);
+		let values = read_after_main(crate::serve::RPC_VALUES)?.as_items();
 		compile(&|| crate::pipeline::with_server_values(values.clone(), || crate::pipeline::compile(code)))?
 	} else {
 		rendering
 	};
 	let html = page_html_text(&rendered)?;
-	let host_scripts = host_scripts_of(&module.bytes)?;
-	let page_scripts = page_scripts_of(&module.bytes)?
-		.into_iter()
-		.chain(dev.then_some(DEV_SCRIPT));
-	let (scripts, worker_scripts): (Vec<Script>, Vec<Script>) = if runs_in_a_worker(&imports_of(&module.bytes)?) {
-		let page_parts = host_scripts
-			.iter()
-			.filter(|(name, _)| PAGE_SIDE_PARTS.contains(name))
-			.copied();
-		let task_workers = host_scripts
-			.iter()
-			.any(|(name, _)| *name == TASK_PART)
-			.then_some(TASK_WORKERS_SCRIPT);
-		(
-			task_workers
-				.into_iter()
-				.chain([THREAD_SCRIPT])
-				.chain(page_parts)
-				.chain(page_scripts)
-				.collect(),
-			host_scripts,
-		)
-	} else {
-		(host_scripts.into_iter().chain(page_scripts).collect(), vec![])
-	};
-	let page_file = |root: &str| page(title, html, "", &scripts, &worker_scripts, root).into_bytes();
+	let (renamed, shipped_modules) = crate::web::site_modules::with_shipped_modules(&module.bytes)?;
+	let module = crate::pipeline::CompiledModule { bytes: renamed, ..module };
+	let layout = page_layout(&module.bytes, dev)?;
+	let page_file = |root: &str| layout.page(title, html, "", root).into_bytes();
 	let routed = exports(&module.bytes, crate::routes::PAGE_ROUTES);
 	// each route's own functions in a module the page loads when it shows the route; a dev page reloads whole anyway
-	let split = if dev {
-		None
-	} else {
-		crate::web::route_split::split_by_route(&module.bytes)?
-	};
+	let split = if dev { None } else { crate::web::route_split::split_by_route(&module.bytes)? };
 	let (primary, route_modules) = match split {
 		Some(split) => (split.primary, split.routes),
 		None => (module.bytes, vec![]),
 	};
-	let mut files = vec![
-		(PAGE_FILE.to_string(), page_file(BESIDE)),
-		(MODULE_FILE.to_string(), primary),
-	];
+	let mut files = vec![(PAGE_FILE.to_string(), page_file(BESIDE)), (MODULE_FILE.to_string(), primary)];
 	if routed {
 		files.push((ROUTED_PAGE_FILE.to_string(), page_file(SITE_ROOT)));
 	}
 	files.extend(route_modules);
-	let worker_files = if worker_scripts.is_empty() {
-		&[][..]
-	} else {
-		&WORKER_FILES[..]
-	};
-	let shipped = scripts
-		.iter()
-		.chain(worker_scripts.iter().filter(|script| !scripts.contains(script)))
-		.chain(worker_files);
-	files.extend(shipped.map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
-	let renderer = asks_the_server.then(|| Renderer {
-		bytes: rendering_bytes,
-		imports,
-		title: title.to_string(),
-		scripts,
-		worker_scripts,
-	});
-	Ok(Some(ServedSite {
-		files,
-		renderer,
-		page_routes,
-	}))
+	files.extend(shipped_modules);
+	files.extend(layout.shipped().into_iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
+	let renderer =
+		asks_the_server.then(|| Renderer { bytes: rendering_bytes, imports, title: title.to_string(), layout });
+	Ok(Some(ServedSite { files, renderer, page_routes }))
 }
 
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure
 pub fn dev_shell(title: &str) -> Vec<SiteFile> {
 	let page = page(title, "", "", &[DEV_SCRIPT], &[], BESIDE);
-	vec![
-		(PAGE_FILE.to_string(), page.into_bytes()),
-		(DEV_SCRIPT.0.to_string(), DEV_SCRIPT.1.as_bytes().to_vec()),
-	]
-}
-
-/// The scripts of the page of a module, in load order: the parts of the host it imports words of, with the parts they
-/// need, and markup-transitions.js when it names a transition; `dev` adds dev.js
-pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
-	Ok(host_scripts_of(module)?
-		.into_iter()
-		.chain(page_scripts_of(module)?)
-		.chain(dev.then_some(DEV_SCRIPT))
-		.collect())
-}
-
-/// canvas.js when the module paints, markup.js, its transitions part when the module names a transition, its forms part
-/// when it has an `on submit` handler, and site.js
-fn page_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
-	let [markup, site] = PAGE_SCRIPTS;
-	let canvas = paints(&imports_of(module)?).then_some(PAINT_SCRIPT);
-	let transitions = TRANSITION_WORDS
-		.iter()
-		.any(|word| names(module, word))
-		.then_some(TRANSITIONS_SCRIPT);
-	let forms = names(module, SUBMIT_HANDLER_WORD).then_some(FORMS_SCRIPT);
-	Ok(canvas
-		.into_iter()
-		.chain([markup])
-		.chain(transitions)
-		.chain(forms)
-		.chain([site])
-		.collect())
-}
-
-fn names(module: &[u8], word: &[u8]) -> bool {
-	module.windows(word.len()).any(|window| window == word)
-}
-
-fn paints(imports: &[(String, String)]) -> bool {
-	imports_any(imports, &[PAINT])
-}
-
-fn imports_any(imports: &[(String, String)], words: &[&str]) -> bool {
-	imports
-		.iter()
-		.any(|(module, name)| module == HOST_LIBRARY && words.contains(&name.as_str()))
-}
-
-/// A module that starts tasks, uses channels or shared memory runs in a Worker, where a blocking `await` may wait and
-/// its tasks run together (card site-worker); a plain page stays on the page's thread. Routes go along: the page sends
-/// the Worker the path of each link followed (site-thread.js). A module that paints runs there too (card site-frames):
-/// an animation sleeps between its frames, which the page shows meanwhile, and reads the pointer at once; so does one
-/// using the GPU, whose jobs run on the task Workers (card site-gpu)
-fn runs_in_a_worker(imports: &[(String, String)]) -> bool {
-	paints(imports)
-		|| imports_any(imports, &GPU_WORDS)
-		|| imports.iter().any(|(module, name)| {
-			module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
-		})
+	vec![(PAGE_FILE.to_string(), page.into_bytes()), (DEV_SCRIPT.0.to_string(), DEV_SCRIPT.1.as_bytes().to_vec())]
 }
 
 fn calls_foreign_code(module: &[u8]) -> Result<bool, String> {
-	Ok(imports_of(module)?
-		.iter()
-		.any(|(module, name)| module == HOST_LIBRARY && name == FOREIGN_CALL))
-}
-
-/// A page served at a deeper path than the site's files finds them, and the module and route modules they load,
-/// through its <base> (`root`)
-fn page(title: &str, body: &str, replies: &str, scripts: &[Script], worker_scripts: &[Script], root: &str) -> String {
-	let scripts: String = scripts
-		.iter()
-		.map(|(name, _)| format!("<script src=\"{name}\"></script>\n"))
-		.collect();
-	let worker_list: Vec<&str> = worker_scripts.iter().map(|(name, _)| *name).collect();
-	let worker = if worker_list.is_empty() {
-		String::new()
-	} else {
-		format!(" {WORKER_ATTRIBUTE}=\"{}\"", worker_list.join(LIST_SEPARATOR))
-	};
-	let base = if root == BESIDE {
-		String::new()
-	} else {
-		format!("<base href=\"{root}\">\n")
-	};
-	// the program's texts last, so nothing in them is read as a placeholder
-	PAGE_TEMPLATE
-		.replace("{{root}}", ROOT_ID)
-		.replace("{{scripts}}", &scripts)
-		.replace("{{worker}}", &worker)
-		.replace("{{base}}", &base)
-		.replace("{{title}}", &crate::markup::escaped(title))
-		.replace("{{replies}}", replies)
-		.replace("{{body}}", body)
+	Ok(imports_of(module)?.iter().any(|(module, name)| module == HOST_LIBRARY && name == FOREIGN_CALL))
 }
 
 /// A script without its comment lines, trailing comments after a statement, blank lines and indentation (card
@@ -489,8 +249,5 @@ pub(crate) fn read_program(program: &Path) -> Result<String, String> {
 
 /// app.warp → app, the name of its page and Worker
 pub(crate) fn program_stem(program: &Path) -> String {
-	program
-		.file_stem()
-		.map(|stem| stem.to_string_lossy().into_owned())
-		.unwrap_or_default()
+	program.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
 }

@@ -17,10 +17,7 @@ fn sound_file(folder: &str, name: &str, bytes: &[u8]) -> PathBuf {
 
 /// What `program` prints on stderr, its stdout holding 7
 fn errors_of(program: &str) -> String {
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", program])
-		.output()
-		.unwrap();
+	let run = crate::common::warp_command().args(["--no-ask", "eval", program]).output().unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr).into_owned();
 	assert!(String::from_utf8_lossy(&run.stdout).contains('7'), "{errors}");
 	errors
@@ -28,16 +25,24 @@ fn errors_of(program: &str) -> String {
 
 #[test]
 fn a_music_file_plays_in_the_background() {
-	let wav = sound_file(
-		"sound-files",
-		"beep.wav",
-		&warp::sound::wav(&[32768, 40000, 32768], 22050),
-	);
+	let wav = sound_file("sound-files", "beep.wav", &warp::sound::wav(&[32768, 40000, 32768], 22050));
 	assert!(errors_of(&format!("use sound\nplay \"{}\"\n7", wav.display()))
 		.contains(&format!("sound file wav: {}", wav.display())));
 	assert!(
 		errors_of(&format!("use sound\nplay_file(\"{}\")\nstop_sound\n7", wav.display())).contains("sound file wav: ")
 	);
+}
+
+/// card play-beside-program: a program file plays a file named relative to it, wherever warp runs from (samples/sound/play_mp3
+/// plays samples/sound/mozart.mp3 run from the repository root)
+#[test]
+fn a_program_plays_the_file_beside_it() {
+	let wav = sound_file("sound-beside", "beep.wav", &warp::sound::wav(&[32768, 40000, 32768], 22050));
+	let program = wav.with_file_name("beside.warp");
+	std::fs::write(&program, "play \"beep.wav\"\n7").unwrap();
+	let run = crate::common::warp_command().args(["--no-ask", "run"]).arg(&program).output().unwrap();
+	let errors = String::from_utf8_lossy(&run.stderr);
+	assert!(errors.contains(&format!("sound file wav: {}", wav.display())), "{errors}");
 }
 
 /// card sound-file-failure: a file only its first bytes call music is decoded first (ffprobe, afinfo), so a broken one
@@ -63,5 +68,5 @@ fn only_a_music_file_plays() {
 	let text = sound_file("sound-files-not", "notes.txt", b"C4 E4 G4");
 	fails_with(&format!("play \"{}\"", text.display()), "not a sound file");
 	fails_with("play \"no/such/song.mp3\"", "no/such/song.mp3");
-	is!("play [C4 E4] for 3ms\nstop_sound\n7", 7);
+	is!("play([C4 E4], 3ms)\nstop_sound\n7", 7);
 }

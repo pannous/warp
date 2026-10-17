@@ -22,7 +22,7 @@ twice(ft) + half(5.0)                   // 86.5
   the export, 21 as float for the cast" (an export a cast or type word would take).
 - P139: `import`, `use`, `require` of a module only declare (their value is ø); `include m` also runs m's `main` (or
   `_start`) and is its value: `include fourty_two` is 42.
-- Linking (src/wasm_modules.rs `link`, native): every import from a module path is a host function that instantiates
+- Linking (src/modules/wasm_modules/mod.rs `link`, native): every import from a module path is a host function that instantiates
   the module in the run's store at its first call (HostState::wasm_modules), so its state (globals, memory) lasts for
   the run: `tick(); tick()` counts on.
 - A module's own imports are linked like a .wasm file's (`Imports::EVERY`): WASI (`fd_write`), warp's host words

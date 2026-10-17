@@ -9,8 +9,5 @@ fn a_float_node_writes_its_shortest_text() {
 	assert_eq!(tiny.serialize(), "2.5e-6");
 	let cast = Node::Key(Box::new(tiny), Op::As, Box::new(Node::Symbol("float".into())));
 	assert_eq!(cast.serialize(), "2.5e-6 as float");
-	assert_eq!(
-		Node::Number(Number::Float(0.1 + 0.2)).to_string(),
-		"0.30000000000000004"
-	);
+	assert_eq!(Node::Number(Number::Float(0.1 + 0.2)).to_string(), "0.30000000000000004");
 }

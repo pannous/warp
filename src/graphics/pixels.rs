@@ -1,5 +1,5 @@
 //! What a painted pixel value shows, natively and in the browser: shared by paint and the shaders of painted functions
-//! (lowering/gpu_maps.rs)
+//! (lowering/foreign/gpu_maps.rs)
 
 /// The gray levels of a nonzero pixel and of a zero one, as the playground draws them
 pub const INK: u8 = 29;

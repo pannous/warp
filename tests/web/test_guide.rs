@@ -34,11 +34,7 @@ fn snippets() -> Vec<Snippet> {
 				.strip_prefix('\n')
 				.and_then(|next| next.strip_prefix(PRINTED_FENCE))
 				.map(|block| block.split(FENCE_END).next().unwrap());
-			Snippet {
-				code: in_scratch_directory(code),
-				value: info.strip_prefix(VALUE_MARK),
-				printed,
-			}
+			Snippet { code: in_scratch_directory(code), value: info.strip_prefix(VALUE_MARK), printed }
 		})
 		.collect()
 }
@@ -48,24 +44,14 @@ fn snippets() -> Vec<Snippet> {
 fn in_scratch_directory(code: &str) -> String {
 	let directory = crate::common::scratch_directory("guide");
 	std::fs::create_dir_all(&directory).unwrap();
-	code.split(WRITE_CALL)
-		.skip(1)
-		.filter_map(|call| call.split('"').next())
-		.fold(code.to_string(), |code, name| {
-			code.replace(
-				&format!("\"{name}\""),
-				&format!("\"{}\"", directory.join(name).display()),
-			)
-		})
+	code.split(WRITE_CALL).skip(1).filter_map(|call| call.split('"').next()).fold(code.to_string(), |code, name| {
+		code.replace(&format!("\"{name}\""), &format!("\"{}\"", directory.join(name).display()))
+	})
 }
 
 // `Examples: welcome, "element events"; samples: hello` → tour names and sample names
 fn linked_examples() -> (Vec<String>, Vec<String>) {
-	let names = |list: &str| {
-		list.split(", ")
-			.map(|name| name.trim().trim_matches('"').to_string())
-			.collect::<Vec<_>>()
-	};
+	let names = |list: &str| list.split(", ").map(|name| name.trim().trim_matches('"').to_string()).collect::<Vec<_>>();
 	let (mut tour, mut samples) = (vec![], vec![]);
 	for line in GUIDE.lines().filter_map(|line| line.strip_prefix(EXAMPLES_LINE)) {
 		let (tour_part, samples_part) = line.split_once("; samples: ").unwrap_or((line, ""));
@@ -81,10 +67,7 @@ fn every_guide_snippet_shows_its_value() {
 		.into_iter()
 		.filter_map(|Snippet { code, value, .. }| {
 			let expected = value?;
-			let shown = evaluate(&code, HashSet::new())["value"]
-				.as_str()
-				.unwrap_or_default()
-				.to_string();
+			let shown = evaluate(&code, HashSet::new())["value"].as_str().unwrap_or_default().to_string();
 			(shown != expected).then(|| format!("{code}  shows {shown}, the guide says {expected}"))
 		})
 		.collect();
@@ -116,26 +99,45 @@ fn every_guide_snippet_prints_what_the_guide_shows() {
 fn every_example_a_chapter_links_exists() {
 	let (tour, samples) = linked_examples();
 	for name in &tour {
-		let key = if name.contains(' ') {
-			format!("\t\"{name}\": {{")
-		} else {
-			format!("\t{name}: {{")
-		};
-		assert!(
-			TOUR.contains(&key),
-			"the guide links the tour example {name}, examples.js has none"
-		);
+		let key = if name.contains(' ') { format!("\t\"{name}\": {{") } else { format!("\t{name}: {{") };
+		assert!(TOUR.contains(&key), "the guide links the tour example {name}, examples.js has none");
 	}
 	for name in &samples {
+		assert!(std::path::Path::new(&crate::common::sample_path(name)).exists(), "the guide links the sample {name}");
 		assert!(
-			std::path::Path::new(&format!("samples/{name}.warp")).exists(),
-			"the guide links samples/{name}.warp"
-		);
-		assert!(
-			!EXCLUDED_SAMPLES
-				.lines()
-				.any(|line| line.starts_with(&format!("{name}\t"))),
+			// a fixnow exclusion is temporary (notes/roles.md "Fix forward"): the link stays
+			!EXCLUDED_SAMPLES.lines().any(|line| line.starts_with(&format!("{name}\t")) && !line.contains("\tfixnow:")),
 			"{name} is not in the playground menu"
 		);
+	}
+}
+
+// samples/ has a folder per chapter, as the example menu has a group per chapter (guide.js groupExamplesByChapter): the
+// samples a chapter links first lie in one folder, which no other chapter's samples share (notes/samples.md)
+#[test]
+fn every_chapter_has_its_own_sample_folder() {
+	let mut chapter = "";
+	let mut folders_of_chapter = std::collections::BTreeMap::<&str, std::collections::BTreeSet<String>>::new();
+	let mut seen = HashSet::new();
+	for line in GUIDE.lines() {
+		if let Some(title) = line.strip_prefix("## ") {
+			chapter = title;
+		}
+		let Some((_, samples)) = line.strip_prefix(EXAMPLES_LINE).and_then(|line| line.split_once("; samples: "))
+		else {
+			continue;
+		};
+		for name in samples.split(", ").map(str::trim).filter(|name| seen.insert(name.to_string())) {
+			let path = crate::common::sample_path(name);
+			let folder = std::path::Path::new(&path).parent().and_then(|folder| folder.file_name()).unwrap_or_default();
+			folders_of_chapter.entry(chapter).or_default().insert(folder.to_string_lossy().into_owned());
+		}
+	}
+	let mut owners = std::collections::HashMap::new();
+	for (chapter, folders) in &folders_of_chapter {
+		assert_eq!(folders.len(), 1, "the samples chapter {chapter} links first lie in several folders: {folders:?}");
+		let folder = folders.first().unwrap();
+		let owner = owners.insert(folder.clone(), *chapter);
+		assert!(owner.is_none(), "samples/{folder} holds samples of the chapters {} and {chapter}", owner.unwrap());
 	}
 }

@@ -3,7 +3,7 @@
 
 use warp::extensions::numbers::Number;
 use warp::node::Node;
-use warp::wasm_reader::read_bytes;
+use warp::run::wasm_reader::read_bytes;
 
 const I64_RESULT: &str = r#"(module (func (export "main") (result i64) i64.const 42))"#;
 const I32_RESULT: &str = r#"(module (func (export "main") (result i32) i32.const -7))"#;
@@ -56,9 +56,6 @@ fn an_unreadable_result_is_an_error_not_a_panic() {
 	for wat_source in [I31_RESULT, FUNCREF_RESULT, TWO_RESULTS, NO_ENTRY_POINT] {
 		let outcome = std::panic::catch_unwind(|| read(wat_source));
 		let outcome = outcome.unwrap_or_else(|_| panic!("read_bytes panicked on {wat_source}"));
-		assert!(
-			matches!(outcome, Err(_) | Ok(Node::Error(_))),
-			"{wat_source} gave {outcome:?}"
-		);
+		assert!(matches!(outcome, Err(_) | Ok(Node::Error(_))), "{wat_source} gave {outcome:?}");
 	}
 }

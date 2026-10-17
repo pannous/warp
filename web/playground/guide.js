@@ -19,15 +19,21 @@ const examplesOfChapter = new Map(); // in the guide's order: the example menu's
 const MORE_SAMPLES = "more samples";
 
 const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
-// a chapter's anchor is #guide-lists: a bare #lists names an example (playground.js, card sample-hash)
+// a heading's anchor is #guide-lists: a bare #lists names an example (playground.js, card sample-hash)
 const CHAPTER_PREFIX = "guide-";
-const chapterId = title => CHAPTER_PREFIX + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// GitHub's slug of a heading ("Hello, world" → hello-world), so [Pictures](#pictures) works in the .md on GitHub too
+const slug = title => title.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-");
+const headingId = title => CHAPTER_PREFIX + slug(title);
 
-// `code`, **bold** and [text](url) in one line of escaped text
+// `code`, **bold**, *italic*, [text](url) and heading links in one line of escaped text: [[#Pictures]] is
+// [Pictures](#pictures), which goes to that chapter or ### section (card heading-links)
 function inline(text) {
 	return escapeHtml(text)
 		.replace(/`([^`]+)`/g, "<code>$1</code>")
 		.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+		.replace(/\*([^*\s][^*]*)\*/g, "<em>$1</em>")
+		.replace(/\[\[#([^\]]+)\]\]/g, (_, title) => `[${title}](#${slug(title)})`)
+		.replace(/\[([^\]]+)\]\(#([^)\s]+)\)/g, `<a href="#${CHAPTER_PREFIX}$2">$1</a>`)
 		.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>');
 }
 
@@ -91,7 +97,8 @@ function renderBody(lines, chapter) {
 			blocks.push(exampleLinks(line, chapter));
 		} else if (line.startsWith(SECTION_PREFIX)) {
 			flush();
-			blocks.push(element("h3", { className: "guide-section" }, line.slice(SECTION_PREFIX.length)));
+			const title = line.slice(SECTION_PREFIX.length);
+			blocks.push(element("h3", { id: headingId(title), className: "guide-section" }, title));
 		} else if (line.trim()) text.push(line);
 		else flush();
 	}
@@ -105,7 +112,7 @@ function renderGuide(markdown) {
 	const introLines = head.split("\n").filter(line => !line.startsWith("# "));
 	const chapters = sections.map(section => {
 		const [title, ...lines] = section.split("\n");
-		const id = chapterId(title);
+		const id = headingId(title);
 		const summary = element("summary", {}, element("a", { href: `#${id}` }, title));
 		return element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title));
 	});
@@ -133,25 +140,28 @@ function openedChapter(event) {
 	const chapter = event.target;
 	if (!chapter.open) return;
 	for (const other of document.querySelectorAll(".guide-chapter[open]")) if (other !== chapter) other.open = false;
-	if (location.hash !== `#${chapter.id}`) history.replaceState(null, "", `#${chapter.id}`);
+	// the address names the chapter, or a section of it (openChapterOfAddress)
+	const named = location.hash && document.getElementById(location.hash.slice(1));
+	if (!named || !chapter.contains(named)) history.replaceState(null, "", `#${chapter.id}`);
 	showChapterLink(chapter.querySelector("summary").textContent);
 }
 
-// the chapter the address names, else the first one
+// the chapter or section the address names (its chapter opened), else the first chapter
 function openChapterOfAddress() {
 	redirectOldChapterLink();
-	const chapter = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
-	if (!chapter?.classList.contains("guide-chapter")) return;
+	const heading = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
+	const chapter = heading?.closest(".guide-chapter");
+	if (!chapter) return;
 	if (location.hash) $("guide").open = true;
 	chapter.open = true;
-	if (location.hash) chapter.scrollIntoView({ block: "nearest" });
+	if (location.hash) heading.scrollIntoView({ block: heading === chapter ? "nearest" : "start" });
 }
 
-// an old chapter link #hello-world goes to #guide-hello-world, unless the name is an example's (#lists)
+// an old heading link #hello-world goes to #guide-hello-world, unless the name is an example's (#lists)
 function redirectOldChapterLink() {
 	const name = location.hash.slice(1);
-	const chapter = name ? document.getElementById(CHAPTER_PREFIX + name) : null;
-	if (chapter?.classList.contains("guide-chapter") && exampleSource(name) === undefined) history.replaceState(null, "", `#${chapter.id}`);
+	const heading = name ? document.getElementById(CHAPTER_PREFIX + name) : null;
+	if (heading?.closest(".guide-chapter") && exampleSource(name) === undefined) history.replaceState(null, "", `#${heading.id}`);
 }
 
 // the example menu in the guide's order: a group per chapter with its examples and samples, then the other samples
@@ -170,7 +180,7 @@ function groupExamplesByChapter() {
 function showChapterLink(chapter) {
 	$("guide-link").hidden = !chapter;
 	if (!chapter) return;
-	$("guide-link").href = `#${chapterId(chapter)}`;
+	$("guide-link").href = `#${headingId(chapter)}`;
 	$("guide-link").textContent = `guide: ${chapter}`;
 }
 

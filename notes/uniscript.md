@@ -1,7 +1,7 @@
 # Uniscript in warp: what it took (uniscript.wasp of the uniscript package)
 Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
-`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and loads its uniscript.wasp (notes/packages.md); index format: its src/index.rs.
+`use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and, since 1.0.8 (card takes-three), calls its release asset uniscript_c.wasm (the C library of its Rust implementation as a core module) through lib/packages/uniscript.warp: 0.3 s per program instead of 1.5-3 s compiling uniscript.wasp, which `use uniscript version 1.0.0` and other older tags still load (notes/packages.md); index format: its src/index.rs.
 Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tests/text/test_text_bytes.rs, tests/text/test_text_functions.rs.
 
 ## Language features added for it (Rust)
@@ -43,7 +43,7 @@ Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tes
   name: alpha), the block form (`<:fracture A>`), else the Unicode name.
 
 ## Porting note: meta information (TAG sequences), done in Rust and Swift, open in the package's uniscript.wasp
-Reference: github.com/pannous/uniscript `src/meta.rs`, `src/lib.rs` (`meta_tag`, `to_uniscript`, `html`), tests
+Reference: github.com/pannous/uniscript `src/compiler/meta.rs`, `src/lib.rs` (`meta_tag`, `to_uniscript`, `html`), tests
 `tests/meta_test.rs`, Swift `Sources/Uniscript/Meta.swift`; spec wiki/uniscript.md "Meta information".
 - Data: the package's index already has the 5 tables, appended, so `names_table`/`chars_table`/`suffixes_table` stay
   valid: `fonts_table = 3` (`han-japanese ` → "", `han-japanese lang` → ja, `… families`, `… features`), `meta_table = 4`

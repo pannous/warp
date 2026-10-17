@@ -1,8 +1,7 @@
-# Dates at run time (cards runtime-dates, run-time-dates)
+# Dates at run time
 
-`now` reads the host clock when the program runs, not when it compiles (decision 7e9b01db4: dates run at run time).
-Date, local time, instant and zoned time literals and durations are run-time values too: a program that prints, loops
-or keeps them in variables runs (stages B1a, B1b of run-time-dates).
+`now` reads the host clock when the program runs, not when it compiles (decision runtime-dates). Date, local time,
+instant and zoned time literals and durations are run-time values too.
 
 ## Representation
 A time is a `$Node` of `Kind::Time` (18): `data` = `$i64box` of its position, `value` = null. Its `TimeForm`
@@ -14,13 +13,19 @@ A time is a `$Node` of `Kind::Time` (18): `data` = `$i64box` of its position, `v
 - Zoned = 4: nanoseconds since 1970 UTC; the index in `calendar::ZONES` (8 bits) above the form, the offset in minutes
   above it (`OFFSET_SHIFT`). Read back with the current rules; a prediction (after the builtin rules' publication)
   prints `[_tzdata=warp-2026a]`
+- Clock = 5: a time of day (`calendar::Time::Clock`, type `time of day`), nanoseconds since midnight. Made by the
+  parts `t.time` (whole seconds, prints `22:27:46`) and `t.date` (a Date) of any time with a clock or date
+  (`Time::part`; at run time `time_field` indices 10 and 11 wrapped into a time node). `time.now` lowers to `now.time`
+  (time/partial_comparisons.rs, user decision time-word). `+`/`-` an exact duration goes round the clock
+  (23:00 + 2 hours = 01:00); months or days are refused. Not yet: a time of day compared with a duration (`now.time <
+  17h`) and a clock literal (`22:27`).
 
 `time::time_info` gives the info bits and position of a constant. The analyzer types a time `Kind::Data`. Readers
 (`wasm_reader::struct_node`, `web.rs cell_node`) pass all info bits (`kind >> 8`) to `time::time_node(info, position)`.
 
 ## Lowering (`time::lower`, called by pipeline.rs)
 - A free `now` (also `now.hour`) becomes `instant_at(clock())` (`time::now_call`, system_values).
-- No program is answered whole at compile time (stage B4): `fold_constants` folds the largest constant time
+- No program is answered whole at compile time: `fold_constants` folds the largest constant time
   expressions (time literals, unit and time words, field names after a dot) into `time_of(info, position)`, and the
   rest runs. A real error of a constant expression is the program's error.
 - A duration in a unit of the units module (`1 day in h`) folds to its quantity, written as `24h` for the units'
@@ -29,8 +34,7 @@ A time is a `$Node` of `Kind::Time` (18): `data` = `$i64box` of its position, `v
 - Known edge: a variable named like a unit word (`days`) counts as a time word.
 
 ## The local wall clock of an instant
-An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of the environment's time zone (user,
-2026-10-10: "provide the default local from the environment through the runtime"); `epoch_seconds` needs none.
+An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of the environment's time zone, provided through the runtime; `epoch_seconds` needs none.
 - Host word `local_offset(ms) -> seconds east of UTC` at that instant, DST included: natively libc `localtime_r`'s
   `tm_gmtoff` (TZ, else the system zone; UTC without one, `system_signals::local_offset_at`), in the browser
   `-Date.getTimezoneOffset() * 60` (host.js).
@@ -40,7 +44,7 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
   `Time::field` uses `time::local_offset` for the same result natively.
 - Placing in a zone stays explicit for any other zone: `t in "Europe/Berlin"`.
 
-## Emitter (src/wasm_emitter/times.rs)
+## Emitter (src/wasm_emitter/time/times.rs)
 - `instant_at(i64 ms) -> node`; `time_of` constants are emitted inline (`emit_time_constant`).
 - `civil_from_days`, `days_from_civil`: Hinnant's civil calendar. `time_parts(form, position) -> (days, nanos)`.
 - `time_field(node, index of TIME_FIELDS) -> i64`, a zoned time's on its own wall clock, `offset` its seconds east of
@@ -53,15 +57,15 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
 - node_order compares two times of one form by position; two forms trap with "no implicit conversion between kinds
   of time", durations with "cannot order durations".
 
-## Arithmetic (stage B2, wasm_emitter/time_arithmetic.rs)
+## Arithmetic (wasm_emitter/time_arithmetic.rs)
 node_add, node_sub and node_mul hand over to `time_arithmetic(a, b, operator)` when an operand is a time, as calendar.rs
 does for constants: time ± duration (months first, then days, then nanoseconds; a day that does not exist in the target
 month is a run-time error naming `add(…, overflow: clamp)`), duration ± duration, duration * whole number (either way
 round), `a - b` of two times of one form (days between dates, else a duration). A date takes no time of day, an instant
-no months or days. Zoned arithmetic is B3 (below). `1 month 2 days` is lexed as one duration
+no months or days. `1 month 2 days` is lexed as one duration
 (literals.rs `with_time_unit`).
 
-## Zones (stage B3, wasm_emitter/time_zones.rs)
+## Zones (wasm_emitter/time_zones.rs)
 - `zone_rule(zone)` (winter offset, Dst) is a table of calendar::ZONES; `zone_offset_at(zone, seconds)` applies the Europe
   and US rules as `Zone::offset_at`; `zone_resolve(zone, wall nanos, choice) -> (instant, status)` as `Zone::resolve`
   (status 1 skipped, 2 repeated, both failing with the choice named unless `disambiguation: earlier|later`);
@@ -75,5 +79,3 @@ no months or days. Zoned arithmetic is B3 (below). `1 month 2 days` is lexed as 
   (reject: a day landing on a skipped or repeated wall time fails). `a - b` of two zoned times is their elapsed time.
 - Not yet: `add(t, d, disambiguation: …)` and a zone name held in a variable at run time.
 
-## Stages
-B1a, B1b, B2, B3 above; B4 (the whole-program folder removed) done.

@@ -1,16 +1,7 @@
-// FFI (Foreign Function Interface) support for calling native C libraries
-// Provides imports for libc and libm functions via wasmtime linker
-//
-// Files: header.rs reads C headers into signatures, link.rs links them into wasmtime (native only), this file
-// looks signatures up and says how C pointers cross (notes/ffi_handles.md).
-//
-// Architecture:
-// - ffi_parser.rs: Built-in/embedded C header definitions (portable, no dependencies)
-// - This file (ffi.rs): Runtime parsing of system headers for additional functions
-//
-// Signature lookup order (see get_ffi_signature):
-// 1. Built-in signatures from ffi_parser (libc, libm basics)
-// 2. System header parsing for extended functions (SDL2, raylib, etc.)
+//! Foreign functions: calls into native C libraries (libc, libm, SDL2, …).
+//! header.rs reads C headers into signatures, link.rs links them into wasmtime (native only), this file looks
+//! signatures up (hand-linked ones first, then the library's system headers) and says how C pointers cross
+//! (notes/ffi_handles.md).
 
 #[cfg(feature = "native")]
 use anyhow::Result;
@@ -40,38 +31,51 @@ const LIBC_SIGNATURES: [(&str, &[wasm_encoder::ValType], wasm_encoder::ValType);
 	]
 };
 
-/// libm f64 functions linked by link_ffi_functions, with their arity.
-/// Fallback when system headers declare them via macros (glibc __MATHCALL).
-/// A libm name missing here compiled to its last argument (`hypot(3, 4)` was 4): the browser host takes them from Math.
-pub const LIBM_F64_FUNCTIONS: [(&str, usize); 27] = [
-	("fmin", 2),
-	("fmax", 2),
-	("fabs", 1),
-	("floor", 1),
-	("ceil", 1),
-	("round", 1),
-	("sqrt", 1),
-	("sin", 1),
-	("cos", 1),
-	("tan", 1),
-	("fmod", 2),
-	("pow", 2),
-	("exp", 1),
-	("log", 1),
-	("log10", 1),
-	("asin", 1),
-	("acos", 1),
-	("atan", 1),
-	("atan2", 2),
-	("sinh", 1),
-	("cosh", 1),
-	("tanh", 1),
-	("hypot", 2),
-	("log2", 1),
-	("trunc", 1),
-	("log1p", 1),
-	("expm1", 1),
-];
+/// libm f64 functions linked by link_ffi_functions, with their arity: lib/math.warp's foreign lines
+/// `atan2(y: float, x: float): float from 'm'` (decision foreign-signature), so headers that declare them by macros
+/// (glibc __MATHCALL) don't hide them. A libm name missing there compiled to its last argument (`hypot(3, 4)` was 4):
+/// the browser host takes them from Math.
+pub fn libm_f64_functions() -> &'static [(&'static str, usize)] {
+	static FUNCTIONS: OnceLock<Vec<(&'static str, usize)>> = OnceLock::new();
+	FUNCTIONS.get_or_init(|| math_foreign_lines(LIBM).map(|line| (line.name, line.arity())).collect())
+}
+
+const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
+/// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
+pub const BUILTIN_LIBRARY: &str = "warp";
+
+/// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
+pub struct ForeignLine<'a> {
+	pub name: &'a str,
+	pub parameters: &'a str,
+	pub result: &'a str,
+}
+
+impl ForeignLine<'_> {
+	pub fn arity(&self) -> usize {
+		if self.parameters.trim().is_empty() {
+			0
+		} else {
+			self.parameters.split(',').count()
+		}
+	}
+}
+
+/// lib/math.warp's foreign lines of one library: `'m'` (libm) or warp itself (BUILTIN_LIBRARY)
+pub fn math_foreign_lines(library: &str) -> impl Iterator<Item = ForeignLine<'static>> + '_ {
+	MATH_SOURCE.lines().filter_map(move |line| foreign_line(line, library))
+}
+
+/// `atan2(y: float, x: float): float from 'm'`, `floor(x: number): int from warp`: a foreign line of `library`
+pub fn foreign_line<'a>(line: &'a str, library: &str) -> Option<ForeignLine<'a>> {
+	let line = line.trim();
+	let signature =
+		line.strip_suffix(&format!(" from '{library}'")).or_else(|| line.strip_suffix(&format!(" from {library}")))?;
+	let (name, rest) = signature.split_once('(')?;
+	let (parameters, result) = rest.rsplit_once(')')?;
+	let result = result.trim().strip_prefix(':').unwrap_or_default().trim();
+	crate::warp_parser::is_plain_name(name).then_some(ForeignLine { name, parameters, result })
+}
 
 /// FFI function signature descriptor
 /// Uses wasm_encoder::ValType for consistency with emitter
@@ -90,12 +94,7 @@ impl FfiSignature {
 		params: Vec<wasm_encoder::ValType>,
 		results: Vec<wasm_encoder::ValType>,
 	) -> Self {
-		FfiSignature {
-			name,
-			library,
-			params,
-			results,
-		}
+		FfiSignature { name, library, params, results }
 	}
 }
 
@@ -104,9 +103,14 @@ impl FfiSignature {
 pub use crate::host::HostState as FfiState;
 
 mod header;
+#[cfg(feature = "native")]
 mod link;
 pub use header::*;
+#[cfg(feature = "native")]
 pub use link::*;
+
+/// The import module of libm
+pub const LIBM: &str = "m";
 
 const SDL_PREFIX: &str = "SDL_";
 /// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
@@ -127,12 +131,12 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
 }
 
 /// The error of a call nothing resolves at `call`; a word of a standard module offers to add its `use` line
-pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> crate::diagnostic::Diagnostic {
-	let diagnostic = crate::diagnostic::Diagnostic::at(call, undefined_function_message(name));
+pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> crate::errors::diagnostic::Diagnostic {
+	let diagnostic = crate::errors::diagnostic::Diagnostic::at(call, undefined_function_message(name));
 	match crate::modules::std_module_defining(name)
 		.filter(|module| crate::modules::module_file_shadowing(module).is_none())
 	{
-		Some(module) => diagnostic.offering(crate::fixits::added_first_line(
+		Some(module) => diagnostic.offering(crate::errors::fixits::added_first_line(
 			format!("{name} from the standard module {module}"),
 			format!("use {module}"),
 		)),
@@ -142,21 +146,24 @@ pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> cr
 
 /// The error of a call of `import name from 'library'` whose headers are missing or do not declare it
 pub fn unresolved_import_message(name: &str, library: &str) -> String {
-	let headers = crate::ffi_parser::find_library_headers(library);
+	let headers = crate::formats::ffi_parser::find_library_headers(library);
 	match headers.is_empty() {
 		true => {
 			format!("{name} is imported from {library}, but no header of {library} is found in the include directories")
 		}
-		false => format!(
-			"{name} is imported from {library}, but its headers do not declare it: {}",
-			headers.join(", ")
-		),
+		false => {
+			format!("{name} is imported from {library}, but its headers do not declare it: {}", headers.join(", "))
+		}
 	}
 }
 
 /// The error of a call nothing resolves, always "undefined function: name", then where the name is found: a standard
-/// module or a libc function says how to bring it in
+/// module or a libc function says how to bring it in; a free symbol used as an operator (`1 ⇔ 1`, decision
+/// unicode-symbols) says how to define it
 pub fn undefined_function_message(name: &str) -> String {
+	if let Some(glyph) = name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX) {
+		return format!("operator {glyph} is not defined (define it with infix operator {glyph}(a, b) := …)");
+	}
 	match where_undefined_function_is(name) {
 		Some(hint) => format!("undefined function: {name} ({hint})"),
 		None => format!("undefined function: {name}"),
@@ -168,9 +175,7 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 		if let Some(file) = crate::modules::module_file_shadowing(module) {
 			return Some(format!("{name} is in the standard module {module}, but `use {module}` finds the file {} first, which has no {name}: rename that file", file.display()));
 		}
-		return Some(format!(
-			"{name} is in the standard module {module}: write `use {module}`"
-		));
+		return Some(format!("{name} is in the standard module {module}: write `use {module}`"));
 	}
 	if let Some(c_type) = unlinkable_header_function(name) {
 		return Some(format!(
@@ -178,9 +183,7 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 		));
 	}
 	if get_ffi_signature_from_lib(name, "c").is_some() {
-		return Some(format!(
-			"{name} is a C function: write `use c` or `import {name} from \"c\"`"
-		));
+		return Some(format!("{name} is a C function: write `use c` or `import {name} from \"c\"`"));
 	}
 	// only f64 functions link by themselves (analyzer imports.rs is_f64_header_function): an int parameter may be a
 	// pointer (frexp's int *), which the import's author knows
@@ -194,11 +197,7 @@ fn where_undefined_function_is(name: &str) -> Option<String> {
 fn unlinkable_header_function(name: &str) -> Option<&'static str> {
 	implicit_header_libraries(name)
 		.iter()
-		.flat_map(|library| {
-			get_library_header_paths(library)
-				.into_iter()
-				.map(move |path| (path, library))
-		})
+		.flat_map(|library| get_library_header_paths(library).into_iter().map(move |path| (path, library)))
 		.flat_map(|(path, library)| parse_header_file(&path, library))
 		.find(|declared| declared.name == name)
 		.and_then(|declared| unlinkable_type(&declared))
@@ -224,11 +223,7 @@ const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union",
 /// `FILE` of `FILE *`), "" for none (`unsigned *`)
 fn pointee(c_type: &str) -> String {
 	let before_star = &c_type[..c_type.find('*').unwrap_or(c_type.len())];
-	before_star
-		.split_whitespace()
-		.rfind(|word| !C_QUALIFIERS.contains(word))
-		.unwrap_or_default()
-		.to_string()
+	before_star.split_whitespace().rfind(|word| !C_QUALIFIERS.contains(word)).unwrap_or_default().to_string()
 }
 
 /// How the C type `c_type` crosses, None for no pointer. A handle points to a struct (`struct stat *`, or one a header
@@ -310,18 +305,10 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 }
 
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
-	let mut sigs = HashMap::new();
-	let paths = get_library_header_paths(library);
-
 	// all headers first: their struct types decide how pointers cross (is_struct_type)
-	let header_sigs: Vec<FfiHeaderSignature> = paths.iter().flat_map(|path| parse_header_file(path, library)).collect();
-	for hsig in header_sigs {
-		if let Some(ffi_sig) = header_sig_to_ffi_sig(&hsig) {
-			sigs.insert(hsig.name.clone(), ffi_sig);
-		}
-	}
-
-	sigs
+	let header_sigs: Vec<FfiHeaderSignature> =
+		get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library)).collect();
+	header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
 }
 
 /// The signatures warp links by hand, once per process: the libc functions it adapts (strcmp of two texts), libm's f64
@@ -334,30 +321,17 @@ pub fn get_ffi_signatures() -> &'static HashMap<String, FfiSignature> {
 fn hand_linked_signatures() -> HashMap<String, FfiSignature> {
 	let mut sigs = HashMap::new();
 	for (name, params, result) in LIBC_SIGNATURES {
-		sigs.insert(
-			name.to_string(),
-			FfiSignature::new(name, "c", params.to_vec(), vec![result]),
-		);
+		sigs.insert(name.to_string(), FfiSignature::new(name, "c", params.to_vec(), vec![result]));
 	}
-	for (name, arity) in LIBM_F64_FUNCTIONS {
+	for &(name, arity) in libm_f64_functions() {
 		sigs.entry(name.to_string()).or_insert_with(|| {
-			FfiSignature::new(
-				name,
-				"m",
-				vec![wasm_encoder::ValType::F64; arity],
-				vec![wasm_encoder::ValType::F64],
-			)
+			FfiSignature::new(name, "m", vec![wasm_encoder::ValType::F64; arity], vec![wasm_encoder::ValType::F64])
 		});
 	}
 	// `ln(x)` is the natural logarithm: libm's log under the name the program calls
 	sigs.insert(
 		"ln".to_string(),
-		FfiSignature::new(
-			"log",
-			"m",
-			vec![wasm_encoder::ValType::F64],
-			vec![wasm_encoder::ValType::F64],
-		),
+		FfiSignature::new("log", "m", vec![wasm_encoder::ValType::F64], vec![wasm_encoder::ValType::F64]),
 	);
 	for (name, params, results) in crate::host::HOST_WORD_SIGNATURES {
 		sigs.insert(
@@ -365,12 +339,9 @@ fn hand_linked_signatures() -> HashMap<String, FfiSignature> {
 			FfiSignature::new(name, crate::host::HOST_LIBRARY, params.to_vec(), results.to_vec()),
 		);
 	}
-	use crate::wasm_emitter::linear_arrays::{linear_word_signatures, LINEAR_LIBRARY};
+	use crate::wasm_emitter::lists::linear_arrays::{linear_word_signatures, LINEAR_LIBRARY};
 	for (name, params, results) in linear_word_signatures() {
-		sigs.insert(
-			name.to_string(),
-			FfiSignature::new(name, LINEAR_LIBRARY, params, results),
-		);
+		sigs.insert(name.to_string(), FfiSignature::new(name, LINEAR_LIBRARY, params, results));
 	}
 
 	sigs
@@ -405,10 +376,7 @@ pub fn implicit_header_libraries(name: &str) -> &'static [&'static str] {
 /// Get FFI signature from a specific library's headers
 pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignature> {
 	let library = resolve_library_alias(library);
-	let built_in = get_ffi_signatures()
-		.get(name)
-		.filter(|sig| sig.library == library)
-		.cloned();
+	let built_in = get_ffi_signatures().get(name).filter(|sig| sig.library == library).cloned();
 	// the hand-linked libc functions and libm keep their wasm-adapted signatures (strcmp of two texts)
 	if (library == "m" || (library == "c" && HAND_LINKED_LIBC.contains(&name))) && built_in.is_some() {
 		return built_in;
@@ -424,14 +392,20 @@ pub fn resolve_library_alias(alias: &str) -> &'static str {
 		"c" | "libc" => "c",
 		"SDL2" | "sdl2" | "sdl" => "SDL2",
 		"z" | "zlib" => "z",
-		_ => {
-			// Strip "lib" prefix for any library (e.g., "libfoo" → "foo")
-			if let Some(stripped) = alias.strip_prefix("lib") {
-				// Leak the string to get static lifetime (safe for small number of libs)
-				Box::leak(stripped.to_string().into_boxed_str())
-			} else {
-				Box::leak(alias.to_string().into_boxed_str())
-			}
+		_ => interned(alias.strip_prefix("lib").unwrap_or(alias)),
+	}
+}
+
+/// `name` with a static lifetime, leaked once per distinct name (the analyzer asks for every `use`d word)
+fn interned(name: &str) -> &'static str {
+	static NAMES: OnceLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> = OnceLock::new();
+	let mut names = NAMES.get_or_init(Default::default).lock().unwrap();
+	match names.get(name) {
+		Some(known) => known,
+		None => {
+			let leaked: &'static str = Box::leak(name.into());
+			names.insert(leaked);
+			leaked
 		}
 	}
 }

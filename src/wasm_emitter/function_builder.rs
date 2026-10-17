@@ -16,8 +16,8 @@ const PAGE_HOST_CALLS: [&str; 13] = [
 	"new_list",
 	"get_kind",
 	"error_of",
-	super::int_lists::INTS_TO_LIST,
-	super::int_lists::LIST_TO_INTS,
+	super::lists::int_lists::INTS_TO_LIST,
+	super::lists::int_lists::LIST_TO_INTS,
 	super::NODE_AT,
 ];
 
@@ -97,21 +97,18 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Compares the kind of the kind field on the stack, its low byte, with `kind` by `compare` (I64Eq or I64Ne)
+	pub(super) fn emit_kind_test(func: &mut Function, kind: i64, compare: Instruction) {
+		Self::emit_list(func, &[I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(kind), compare]);
+	}
+
 	pub(super) fn emit_new_text(&self, func: &mut Function, address: u32, length: u32) {
 		Self::emit_list(func, &[I::LocalGet(address), I::LocalGet(length)]);
 		self.call(func, "new_text");
 	}
 
 	pub(super) fn emit_new_text_to(&self, func: &mut Function, address: u32, position: u32) {
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(address),
-				I::LocalGet(position),
-				I::LocalGet(address),
-				I::I32Sub,
-			],
-		);
+		Self::emit_list(func, &[I::LocalGet(address), I::LocalGet(position), I::LocalGet(address), I::I32Sub]);
 		self.call(func, "new_text");
 	}
 

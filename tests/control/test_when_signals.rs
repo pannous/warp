@@ -9,10 +9,7 @@ fn when_an_event_listens_like_on() {
 
 #[test]
 fn when_a_condition_listens_like_whenever() {
-	is!(
-		"x = 0; hits = 0; when x > 1 { hits += 1 }; x = 1; x = 2; x = 3; x = 0; x = 5; hits",
-		2
-	);
+	is!("x = 0; hits = 0; when x > 1 { hits += 1 }; x = 1; x = 2; x = 3; x = 0; x = 5; hits", 2);
 }
 
 #[test]
@@ -25,19 +22,23 @@ fn when_arms_stay_a_switch() {
 fn hints_of(code: &str) -> Vec<String> {
 	warp::normalize::clear_shown_hints();
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
-	hints
-		.iter()
-		.map(|hint| format!("{} → {}", hint.original, hint.canonical))
-		.collect()
+	hints.iter().map(|hint| format!("{} → {}", hint.original, hint.canonical)).collect()
 }
 
 #[test]
 fn a_condition_when_notes_that_it_reacts_to_later_writes() {
 	assert!(hints_of("x = 0; when x > 3 { print 1 }; x = 5").contains(&"when → whenever".to_string()));
-	assert!(!hints_of("n = 0; when ping { n += 1 }; emit ping")
-		.iter()
-		.any(|hint| hint.contains("whenever")));
-	assert!(!hints_of("when 3 { 1 -> 2; 3 -> 4 }")
-		.iter()
-		.any(|hint| hint.contains("whenever")));
+	assert!(!hints_of("n = 0; when ping { n += 1 }; emit ping").iter().any(|hint| hint.contains("whenever")));
+	assert!(!hints_of("when 3 { 1 -> 2; 3 -> 4 }").iter().any(|hint| hint.contains("whenever")));
+}
+
+// user 2026-10-13: `when` is ambiguous in all four shapes, so each gives the same one warning, its fix the word meant;
+// a match takes Kotlin's arms `1 -> a; else -> b` too
+#[test]
+fn every_when_warns_naming_the_word_meant() {
+	assert!(hints_of("n = 0; when ping { n += 1 }; emit ping").contains(&"when → on".to_string()));
+	assert!(hints_of("x = 0; when x > 3 { print 1 }; x = 5").contains(&"when → whenever".to_string()));
+	assert!(hints_of("x = 2; when x { 1 -> 10; else -> 20 }").contains(&"when → match".to_string()));
+	assert!(hints_of("x = 2; when { x > 1 -> 10; else -> 20 }").contains(&"when → if".to_string()));
+	is!("x = 3; match x { 1 -> \"a\"; else -> \"b\" }", 'b');
 }

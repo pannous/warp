@@ -1,8 +1,0 @@
-#!/usr/bin/env warp
-// A select bound to a variable (card web-bind-select): it shows the chosen option from the start, and choosing
-// another sets the variable. Run it in the playground, or `warp samples/select_binding.warp` for its HTML.
-fruit = "pear"
-div{
-	label{ "Fruit " select{ bind: fruit option{ "apple" } option{ "pear" } option{ "plum" } } }
-	p{ "You chose " + fruit }
-}

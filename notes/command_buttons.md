@@ -1,8 +1,7 @@
 # Command buttons: the "run this command" box in Claude's apps
 
-Research by warp-command-buttons, 2026-10-10. Sources: the claude.ai web bundles cached by the Claude desktop app
-(`~/Library/Application Support/Claude/Cache/Cache_Data`, zstd-compressed JS from assets-proxy.anthropic.com),
-the Claude Code 2.1.296 binary and changelog, and session transcripts under `~/.claude/projects/`.
+Source: the claude.ai web bundles cached by the Claude desktop app (`~/Library/Application
+Support/Claude/Cache/Cache_Data`, zstd-compressed JS), checked against session transcripts.
 
 ## Summary
 
@@ -16,12 +15,9 @@ reply, and adds the run button **only when the session it shows has a shell it c
 | **Remote Control**: terminal `claude --remote-control`, `claude-remote.sh` (`bridge`) | **never** |
 | Local session over WSL, or SSH without the SSH-terminal feature      | no         |
 
-So **in Remote Control it doesn't work**, whatever the message says. Our worker sessions are spawned with
-`~/dev/bin/claude-remote.sh` (`claude --remote-control` in tmux), so they are Remote Control sessions, and that is why
-warp-interviewer could not produce a box. The boxes the user saw came from desktop-app sessions. All 5 transcripts
-with a clicked run (`<bash-input>` entries) carry `entrypoint: claude-desktop`, and each one comes right after an
-assistant message with a ```` ```bash ```` block holding exactly that command
-(`-Users-me-dev-angles-warp/f8959e98…`, `-Users-me/d2c34965…`, `-Users-me-dev-script-python/91958fe5…`, …).
+So **in Remote Control it doesn't work**, whatever the message says. Our sessions are spawned with
+`~/dev/bin/claude-remote.sh` (`claude --remote-control` in tmux), so they are Remote Control sessions. Clicked runs
+show up in transcripts as `<bash-input>` entries with `entrypoint: claude-desktop`.
 
 ## Message format (code block component in the web bundle)
 
@@ -73,15 +69,12 @@ session's own terminal (tmux), or have the user run it themselves.
 - **iOS / Android apps:** native, not inspected. They run no shell of their own, so at most a cloud session behind the
   same flag could offer it. Not verified.
 
-## Changelog
-
-The Claude Code changelog doesn't mention the button: it lives in the claude.ai and desktop web client, not the CLI.
-The CLI only has the `claude-cli://` deep link with its "This command came from a link… Run this command?" prompt,
-and the `! <command>` bash mode in the terminal prompt.
+The button lives in the claude.ai and desktop web client, not the CLI (which has only the `claude-cli://` deep link
+and the `! <command>` bash mode).
 
 ## How to re-check (the web client changes often)
 
 Extract the cached bundles (Chromium simple cache: 24-byte header, key, then a zstd body) and grep for the shell-language
 set `"bash","sh","shell","shellscript","zsh"` next to the command-word list (the code block component imports it), and for
 the shell transport function that branches on `type==="landing"|"local"|"remote"` (`bridge` falls through to none).
-The extraction script used is in `scratch/` (ignored); about 1 GB of JS, of which a few files matter.
+About 1 GB of JS, of which a few files matter.

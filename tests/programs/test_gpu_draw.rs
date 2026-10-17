@@ -3,7 +3,7 @@
 #![cfg(feature = "native")]
 use super::test_paint_lists::painted_rows_by;
 use warp::graphics::paint::DRAW_VARIABLE;
-use warp::graphics::paint_window::{read_message, shapes_message, Message};
+use warp::graphics::paint_window::{read_message, shape_shader_message, shapes_message, Message};
 
 const SCENE: &str = "use draw
 canvas(64, 48)
@@ -36,6 +36,18 @@ fn shapes_cross_to_the_paint_window_whole() {
 	}
 }
 
+// card draw-shader-warp: lib/draw.warp's shape shader crosses to the paint window once, ahead of the first shapes
+#[test]
+fn the_shape_shader_crosses_before_the_shapes() {
+	let shapes: Vec<u8> = (0..warp::graphics::gpu_canvas::SHAPE_BYTES as u8).collect();
+	let mut message = shape_shader_message("@fragment fn fragment() {}");
+	message.extend(shapes_message(8, 4, &shapes));
+	match read_message(&mut message.as_slice()) {
+		Some(Message::Shapes(read)) => assert_eq!((read.width, read.height, read.shapes), (8, 4, shapes)),
+		_ => panic!("no shapes read after the shader"),
+	}
+}
+
 #[test]
 fn gpu_draws_what_cpu_draws() {
 	if !has_gpu() {
@@ -48,8 +60,5 @@ fn gpu_draws_what_cpu_draws() {
 #[test]
 fn an_unknown_draw_choice_warns() {
 	let run = drawn_by("quantum").args(["--no-ask", "eval", "1"]).output().unwrap();
-	assert!(
-		String::from_utf8_lossy(&run.stderr).contains("WARP_DRAW=quantum is neither"),
-		"{run:?}"
-	);
+	assert!(String::from_utf8_lossy(&run.stderr).contains("WARP_DRAW=quantum is neither"), "{run:?}");
 }

@@ -5,8 +5,8 @@ use crate::is;
 
 #[test]
 fn a_map_parameter_is_a_map() {
-	is!("f(x) := type(x)\nstr(f({a: 1, b: 2}))", "map");
-	is!("f(x) := type(x)\nstr(f([1 2]))", "list");
+	is!("f(x) := type(x)\nstr(f({a: 1, b: 2}))", "class map");
+	is!("f(x) := type(x)\nstr(f([1 2]))", "class list");
 	is!("f(x) := x is map\nf({a: 1, b: 2})", true);
 	is!("f(x) := x is map\nf([1 2])", false);
 }

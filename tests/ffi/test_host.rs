@@ -1,6 +1,6 @@
 //! Tests for host functions: fetch and run
 
-use warp::wasm_reader::read_bytes_with_host;
+use warp::run::wasm_reader::read_bytes_with_host;
 use warp::WasmGcEmitter;
 
 // todo this is a horrible test suite, just do is!("fetch(...)", result)

@@ -19,19 +19,10 @@ fn test_taking_the_error_branch_is_the_error() {
 
 #[test]
 fn test_else_if_chains_and_switch_defaults() {
-	is!(
-		"x=2; (if x == 0 then error(\"zero\") else if x == 1 then 10 else 20) + 1",
-		21
-	);
-	fails_with(
-		"x=0; (if x == 1 then 10 else if x == 2 then 20 else error(\"no case\")) + 1",
-		"no case",
-	);
+	is!("x=2; (if x == 0 then error(\"zero\") else if x == 1 then 10 else 20) + 1", 21);
+	fails_with("x=0; (if x == 1 then 10 else if x == 2 then 20 else error(\"no case\")) + 1", "no case");
 	is!("c=2; y = switch c {1: 10 2: 20 default: error(\"no case\")}; y + 1", 21);
-	fails_with(
-		"c=3; y = switch c {1: 10 2: 20 default: error(\"no case\")}; y + 1",
-		"no case",
-	);
+	fails_with("c=3; y = switch c {1: 10 2: 20 default: error(\"no case\")}; y + 1", "no case");
 }
 
 #[test]
@@ -50,14 +41,8 @@ fn test_an_error_value_stays_a_value() {
 #[test]
 fn test_a_declared_result_passes_an_error_on() {
 	fails_with("def f(x) -> text { error(\"e\") }; f(1)", "e");
-	fails_with(
-		"def f(x) -> text { if x > 0 then \"pos\" else error(\"neg\") }; f(-1)",
-		"neg",
-	);
-	is!(
-		"def f(x) -> text { if x > 0 then \"pos\" else error(\"neg\") }; f(1)",
-		"pos"
-	);
+	fails_with("def f(x) -> text { if x > 0 then \"pos\" else error(\"neg\") }; f(-1)", "neg");
+	is!("def f(x) -> text { if x > 0 then \"pos\" else error(\"neg\") }; f(1)", "pos");
 	fails_with("int g(x) = x > 0 ? x : error(\"neg\"); g(-1)", "neg");
 	is!("int g(x) = x > 0 ? x : error(\"neg\"); g(3) + 1", 4);
 	is!("def g(x) := x > 0 ? x : error(\"neg\"); g(3) + 1", 4); // was wasm trap: cast failure

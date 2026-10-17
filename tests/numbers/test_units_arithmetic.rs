@@ -35,5 +35,7 @@ fn test_spaced_unknown_unit_stays_a_list() {
 
 #[test]
 fn test_variable_shadows_the_unit() {
-	is!("m=5;3m", 15);
+	// user decision (variable-named-like): a unit after a number wins over a variable of its name
+	is!("use units;m=5;str(3m)", "3m"); // without `use units` an error (decision litre-suffix)
+	is!("m=5;m*3", 15);
 }

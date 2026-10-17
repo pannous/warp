@@ -22,14 +22,8 @@ fn test_arithmetic_on_an_any_typed_field_has_a_text() {
 #[test]
 fn a_field_of_an_any_value_ignores_a_class_field_of_that_name() {
 	let class = "class T{t: text; p: int}; ";
-	crate::is!(
-		&format!("{class}f(r: any) := T(r.t, int(r.p)); f({{t: \"a\", p: \"2\"}}).p"),
-		2
-	);
-	crate::is!(
-		&format!("{class}f(r: any) := T(r.t, int(r.p)); f({{t: \"a\", p: \"23\"}}).p"),
-		23
-	);
+	crate::is!(&format!("{class}f(r: any) := T(r.t, int(r.p)); f({{t: \"a\", p: \"2\"}}).p"), 2);
+	crate::is!(&format!("{class}f(r: any) := T(r.t, int(r.p)); f({{t: \"a\", p: \"23\"}}).p"), 23);
 	crate::is!("f(r: any) := number(r.p); f({p: \"2\"})", 2);
 	crate::is!("f(r: any) := number(r.p); f({p: \"23\"})", 23);
 }

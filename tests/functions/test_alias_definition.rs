@@ -12,10 +12,7 @@ fn a_defined_name_of_a_function_calls_it() {
 	is!("arc_sine(x) := asin(x); arcsin := arc_sine; arcsin(1) == asin(1)", true);
 	is!("arc_cosine(x) := acos(x); arccos := arc_cosine; arccos(1)", 0.0);
 	is!("doubled(x) := x*2; twice := doubled; twice(3) + twice 4", 14);
-	is!(
-		"doubled(x) := x*2; twice := doubled; [1 2].map(twice)",
-		warp::parse("[2 4]")
-	);
+	is!("doubled(x) := x*2; twice := doubled; [1 2].map(twice)", warp::parse("[2 4]"));
 }
 
 #[test]
@@ -37,4 +34,10 @@ fn a_partial_definition_names_its_hole() {
 fn an_alias_of_an_alias_calls_the_function() {
 	is!("doubled(x) := x*2; g := &doubled; h := g; h 4", 8);
 	is!("doubled(x) := x*2; g := doubled; h := g; h(4) + g 1", 10);
+}
+
+// card partial-hole-fix: an unused definition leaving an argument out gets the hole fix too
+#[test]
+fn an_unused_partial_definition_names_its_hole() {
+	fails_with("add(a, b) := a + b; inc := add 1", "fix: inc := add(1, _)");
 }

@@ -48,6 +48,8 @@ mod test_glued_attribute_content; // card words-glue
 mod test_gpu_auto; // card gpu-auto
 mod test_gpu_functions; // card gpu-functions
 mod test_guide; // the language guide on the playground page
+#[cfg(feature = "native")] // runs node
+mod test_guide_heading_links; // card heading-links
 mod test_guide_sections; // card guide-lists
 mod test_headless_pages;
 #[cfg(feature = "native")] // src/web/site.rs is native
@@ -62,6 +64,9 @@ mod test_i18n;
 mod test_keyed_lists;
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
+mod test_labelled_argument_markup; // card labelled-a-argument
+#[cfg(feature = "native")] // runs node
+mod test_live_handover; // card playground-live
 mod test_markup_holes;
 mod test_markup_lines; // card todo-app
 mod test_markup_mistakes; // card our-html
@@ -78,12 +83,16 @@ mod test_page_rendered_sound; // card playground-refuses
 #[cfg(feature = "native")] // builds a site natively
 mod test_page_server_data; // a main-level statement changing server data stays on the server
 mod test_page_tests;
+#[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
+mod test_playground_get_routes; // cards square-int, recognized-browser
 #[cfg(feature = "native")] // runs node
 mod test_playground_paint; // card canvas-zero
 mod test_primer; // card language-primer: the assistant's system prompt, /llms.txt
 mod test_rendered_at; // card sample-accurate
+mod test_rendered_buses; // card shared-buses
 mod test_rendered_fades; // card sound-gain-ramps
 mod test_rendered_pan; // card stereo-pan
+mod test_rendered_samples; // card sound-samples
 mod test_rendered_task_sounds; // card playground-drops
 mod test_rendering_itself; // card playground-render
 #[cfg(feature = "native")] // a server on a port, HTTP requests
@@ -106,6 +115,9 @@ mod test_safari_imports;
 #[cfg(feature = "native")] // runs the warp binary
 mod test_sandbox_refusals; // card sandbox-exec
 mod test_sandboxed_programs; // card ferron-hosting
+#[cfg(feature = "native")] // reads web/playground's files
+mod test_script_scopes; // card test-page
+mod test_script_words; // card browser-twin
 mod test_select_options; // card select-shorthand
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_serve_error_body; // card serve-error-body
@@ -133,6 +145,8 @@ mod test_site_failure; // the dev overlay's message
 #[cfg(all(feature = "native", target_os = "macos"))] // the system web view
 mod test_site_holes;
 #[cfg(feature = "native")] // builds a site natively
+mod test_site_modules; // card takes-three
+#[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
 mod test_sleep_run_limit; // card sleep-run-limit
@@ -142,6 +156,8 @@ mod test_style_rules;
 mod test_styles;
 mod test_tag_lists;
 mod test_task_files; // card task-sound-play
+#[cfg(feature = "native")] // runs node
+mod test_task_midi; // card inside-go
 mod test_task_voices; // card playground-go
 mod test_text_holes; // card web-fine-text-nodes
 mod test_transitions;

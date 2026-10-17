@@ -4,10 +4,7 @@
 
 #[test]
 fn a_hint_on_piped_stderr_has_no_escape_codes() {
-	let output = crate::common::warp_command()
-		.args(["--no-ask", "eval", "2 ** 3"])
-		.output()
-		.expect("warp runs");
+	let output = crate::common::warp_command().args(["--no-ask", "eval", "2 ** 3"]).output().expect("warp runs");
 	let errors = String::from_utf8_lossy(&output.stderr);
 	assert!(errors.contains("hint 1:3: prefer ^ over **"), "{errors}");
 	assert!(!errors.contains('\x1b'), "{errors:?}");

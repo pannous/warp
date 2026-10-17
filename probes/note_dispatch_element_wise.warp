@@ -1,0 +1,15 @@
+// card note-dispatch-element-wise: with the Note class loaded (melody_samples), whose plus and minus make `+ -` dispatch,
+// element-wise operators still pair items: want [4 6], [2 2], [2 2], [1.5 2.5], then two transposed notes twice
+use sound
+song = melody_samples([C4], 0.25)
+c() := [1, 2]
+added(p) := p .+ [1, 2]
+taken(p) := p .- [1, 2]
+taken_call(p) := p .- c()
+print(added([3, 4]))
+print(taken([3, 4]))
+print(taken_call([3, 4]))
+print(0.5 .+ [1, 2])
+print([note(C4), note(E4)] .+ 2)
+up(notes) := notes .+ 2
+print(up([note(C4), note(E4)]))

@@ -20,20 +20,11 @@ pub struct StringTable {
 
 impl Default for StringTable {
 	fn default() -> Self {
-		Self::new()
+		Self { table: HashMap::new(), next_offset: WASI_SCRATCH_BYTES, data_section: DataSection::new() }
 	}
 }
 
 impl StringTable {
-	/// Create a new empty string table
-	pub fn new() -> Self {
-		Self {
-			table: HashMap::new(),
-			next_offset: WASI_SCRATCH_BYTES,
-			data_section: DataSection::new(),
-		}
-	}
-
 	/// Allocate a string in linear memory, returning (ptr, len)
 	/// Deduplicates strings - if the string is already allocated, returns existing offset
 	pub fn allocate(&mut self, s: &str) -> (u32, u32) {
@@ -42,8 +33,7 @@ impl StringTable {
 		}
 		let offset = self.next_offset;
 		let bytes = s.as_bytes();
-		self.data_section
-			.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
+		self.data_section.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
 		self.table.insert(s.to_string(), offset);
 		self.next_offset += bytes.len() as u32;
 		(offset, bytes.len() as u32)
@@ -56,8 +46,7 @@ impl StringTable {
 			return offset;
 		}
 		let offset = self.next_offset;
-		self.data_section
-			.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
+		self.data_section.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
 		self.table.insert(key, offset);
 		self.next_offset += bytes.len() as u32;
 		offset

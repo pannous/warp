@@ -1,6 +1,6 @@
 # Effects guide
 
-Code: `src/effects.rs` · Tests: `tests/functions/test_effects.rs` · Design: DESIGN.md "Effects", "Effects as enforced capabilities"
+Code: `src/analyzer/effects/mod.rs` · Tests: `tests/functions/test_effects.rs` · Design: DESIGN.md "Effects", "Effects as enforced capabilities"
 
 ## Model
 - Closed set `Effect { State, Allocation, IO, FFI, Async, Unsafe }`, `EffectSet` is a u8 bitset, `Pure` = empty set.
@@ -12,11 +12,10 @@ Code: `src/effects.rs` · Tests: `tests/functions/test_effects.rs` · Design: DE
 - Effects = union over callees, iterated to a fixpoint (recursion safe).
 - Inferred beyond calls: `State` (the `global` keyword), `Div`, `Allocation` (a written list `[a b]`, record
   `{name: a}` or text join `"hi " + n`; not the arguments a lowering pass builds for a host word), `Async` (the task,
-  signal and channel host words `host::TASK_WORDS` that `go`/`await`/`stop`/channels lower to; before, they counted
-  as FFI).
+  signal and channel host words `host::TASK_WORDS` that `go`/`await`/`stop`/channels lower to).
 - Allocation is reported (`effects of f` says `Allocation`) but pure (wiki/pure.md: construction is pure):
   `EffectSet::is_pure`/`is_subset_of` and the `! Pure` check look at `observable()`, so folding, memoization and
-  `! Pure` behave as before. Async is observable: `f() := await go g() ! Pure` is a violation.
+  `! Pure` ignore it. Async is observable: `f() := await go g() ! Pure` is a violation.
 
 ## API
 - `EffectReport::of(&node)` → `effects_of(name)`, `entry_effects()`, `needs(Capability)`, `call_chain(f, effect)`, `violations`.
@@ -32,12 +31,10 @@ Violation → `Error("effect violation at L:C: f is declared ! Pure but performs
 ## Imports follow effects
 `WasmGcEmitter::emit_for_node` calls `derive_imports_from_effects`: WASI/host imports only if such a call
 resolves, FFI imports pruned to called functions (`use m; 3` imports nothing). Explicit `set_*_imports(true)`
-still wins. `eval_parsed` picks the linker from `emitter.imports(Capability)`. The old `code.contains("puts ")`
-heuristics are gone.
+still wins. `eval_parsed` picks the linker from `emitter.imports(Capability)`.
 
-Consequence: WASI no longer changes `main`'s type. `main` always returns a Node, WASI call results are boxed
+WASI does not change `main`'s type: `main` always returns a Node, WASI call results are boxed
 with `new_int`, `read_bytes_with_wasi` returns a Node (shared `val_to_node` in wasm_reader.rs).
-Before, `puts('ok')` (no space) silently skipped printing; now it really prints.
 
 ## Known gaps / next
 - `puts x` / `puti x` where `x` is a *function parameter* panics "Undefined variable" (WASI emitter looks up

@@ -13,14 +13,8 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn upper_and_lower_map_as_rust_does() {
-	assert_eq!(
-		shown(&format!("\"{SAMPLE}\".upper")),
-		format!("\"{}\"", SAMPLE.to_uppercase())
-	);
-	assert_eq!(
-		shown(&format!("\"{SAMPLE}\".lower")),
-		format!("\"{}\"", SAMPLE.to_lowercase())
-	);
+	assert_eq!(shown(&format!("\"{SAMPLE}\".upper")), format!("\"{}\"", SAMPLE.to_uppercase()));
+	assert_eq!(shown(&format!("\"{SAMPLE}\".lower")), format!("\"{}\"", SAMPLE.to_lowercase()));
 }
 
 // every code point whose case changes, in one text (the escapes the parser reads are left out); the parser keeps a
@@ -32,15 +26,7 @@ fn every_cased_code_point_maps_as_rust_does() {
 		.filter(|letter| letter.to_uppercase().ne([*letter]) || letter.to_lowercase().ne([*letter]))
 		.filter(|letter| !matches!(letter, '"' | '\\'))
 		.collect();
-	let warp::Node::Text(held) = eval(&format!("\"{cased}\"")) else {
-		panic!("a text")
-	};
-	assert_eq!(
-		shown(&format!("\"{cased}\".upper")),
-		format!("\"{}\"", held.to_uppercase())
-	);
-	assert_eq!(
-		shown(&format!("\"{cased}\".lower")),
-		format!("\"{}\"", held.to_lowercase())
-	);
+	let warp::Node::Text(held) = eval(&format!("\"{cased}\"")) else { panic!("a text") };
+	assert_eq!(shown(&format!("\"{cased}\".upper")), format!("\"{}\"", held.to_uppercase()));
+	assert_eq!(shown(&format!("\"{cased}\".lower")), format!("\"{}\"", held.to_lowercase()));
 }

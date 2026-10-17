@@ -1,5 +1,5 @@
 // a site or Worker that does not compile says why, as the CLI does: the error and its excerpt, without the "nothing to
-// compile:" of a program whose value is all it has (src/host_parts.rs compile_failure; the dev overlay shows it)
+// compile:" of a program whose value is all it has (src/host/host_parts.rs compile_failure; the dev overlay shows it)
 const TYPO: &str = "count = 3\ndiv{ p{ \"count \" + cuont } }";
 
 #[test]

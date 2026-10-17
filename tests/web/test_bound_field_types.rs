@@ -1,4 +1,4 @@
-// card guest-type (samples/typed_form.warp): a field bound to a declared variable sets it only to a value of its type;
+// card guest-type (samples/web/typed_form.warp): a field bound to a declared variable sets it only to a value of its type;
 // 5.1 typed into the guests field of `guests: int = 2` leaves guests 2 while the page marks the field invalid
 #![cfg(feature = "native")]
 
@@ -14,16 +14,8 @@ fn page_after(entries: &[(&str, &str)]) -> String {
 
 #[test]
 fn a_bound_int_takes_whole_numbers_only() {
-	assert!(
-		page_after(&[("guests", "3")]).ends_with("3 guests, 12.5 each"),
-		"{}",
-		page_after(&[("guests", "3")])
-	);
-	assert!(
-		page_after(&[("guests", "5.1")]).ends_with("2 guests, 12.5 each"),
-		"{}",
-		page_after(&[("guests", "5.1")])
-	);
+	assert!(page_after(&[("guests", "3")]).ends_with("3 guests, 12.5 each"), "{}", page_after(&[("guests", "3")]));
+	assert!(page_after(&[("guests", "5.1")]).ends_with("2 guests, 12.5 each"), "{}", page_after(&[("guests", "5.1")]));
 	assert!(page_after(&[("guests", "4"), ("guests", "4.5")]).ends_with("4 guests, 12.5 each"));
 }
 
@@ -34,9 +26,5 @@ fn a_bound_float_takes_any_number() {
 		"{}",
 		page_after(&[("budget", "7.25")])
 	);
-	assert!(
-		page_after(&[("budget", "8")]).ends_with("2 guests, 8 each"),
-		"{}",
-		page_after(&[("budget", "8")])
-	);
+	assert!(page_after(&[("budget", "8")]).ends_with("2 guests, 8 each"), "{}", page_after(&[("budget", "8")]));
 }

@@ -3,13 +3,7 @@
 #![cfg(feature = "native")]
 
 fn exit_status(arguments: &[&str]) -> Option<i32> {
-	crate::common::warp_command()
-		.arg("--no-ask")
-		.args(arguments)
-		.output()
-		.unwrap()
-		.status
-		.code()
+	crate::common::warp_command().arg("--no-ask").args(arguments).output().unwrap().status.code()
 }
 
 fn inline_status(code: &str) -> Option<i32> {
@@ -39,15 +33,10 @@ fn a_caught_error_and_a_value_keep_their_status() {
 	assert_eq!(file_status("three", "3"), Some(3));
 }
 
-// a float result is a measurement, not a status: samples/visualizer.warp ends in its loop's elapsed seconds
+// a float result is a measurement, not a status: samples/sound/visualizer.warp ends in its loop's elapsed seconds
 #[test]
 fn a_program_ending_in_a_float_exits_with_status_0() {
 	assert_eq!(file_status("float", "4.5"), Some(0));
-	assert_eq!(
-		file_status(
-			"float_loop",
-			"elapsed = 0.0\nwhile elapsed < 4 { elapsed = elapsed + 1.25f }"
-		),
-		Some(0)
-	); // a float (decision exact-decimals: 1.25 alone sums to the Int 5)
+	assert_eq!(file_status("float_loop", "elapsed = 0.0\nwhile elapsed < 4 { elapsed = elapsed + 1.25f }"), Some(0));
+	// a float (decision exact-decimals: 1.25 alone sums to the Int 5)
 }

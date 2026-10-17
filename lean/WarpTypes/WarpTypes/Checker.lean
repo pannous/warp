@@ -52,7 +52,7 @@ def evidentMisconversion (e : Expr) : Ty → Bool
   | _ => false
 
 /-- a quantity meets only its own dimensions (or a dynamic value, or an error): `1 m + 1 s`, `1 m == 1`, `1 m < "a"`
-and `if c { 1 m } else { 2 }` are DimensionErrors when warp compiles them (src/units/static_units.rs) -/
+and `if c { 1 m } else { 2 }` are DimensionErrors when warp compiles them (src/numbers/units/static_units.rs) -/
 def dimensionsAgree (a b : Ty) : Bool :=
   !(a.isQuantity || b.isQuantity) || a == b || a == .any || b == .any || a == .never || b == .never
 
@@ -71,6 +71,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .flt _ => some .float
   | .fail _ => some .any
   | .failed e => (typeOf P Γ e).map fun _ => .bool
+  | .written e _ => typeOf P Γ e
   | .qty _ d => some (.quantity d)
   | .text s => some (textTy s)
   | .unit => some .unit
@@ -382,6 +383,9 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     intro Γ t h; simp only [typeOf, Option.map_eq_some_iff] at h
     obtain ⟨_, he, rfl⟩ := h
     exact .failed (ih he)
+  | written e m ih =>
+    intro Γ t h; simp only [typeOf] at h
+    exact .written (ih h)
   | handle ev h b ih1 ih2 =>
     intro Γ t hs
     cases hR : P.effects ev <;> cases hh : typeOf P (Γ.set eventLocal .any) h <;> cases hb : typeOf P Γ b <;>
@@ -582,7 +586,8 @@ def valuesOf (x : String) : Expr → List Expr
   | .ite c a b | .loop c a b | .forIn _ c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
-  | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
+  | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .written e _ | .emit _ e
+  | .scope _ e | .abort _ _ e => valuesOf x e
   | .handle _ h b => valuesOf x h ++ valuesOf x b
   | .lam _ b => valuesOf x b
   | _ => []
@@ -623,6 +628,7 @@ def Expr.rewrite (P : Program) (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr →
   | .set e g v => f Γ (.set (e.rewrite P f Γ) g (v.rewrite P f Γ))
   | .isA e c => f Γ (.isA (e.rewrite P f Γ) c)
   | .failed e => f Γ (.failed (e.rewrite P f Γ))
+  | .written e m => f Γ (.written (e.rewrite P f Γ) m)
   | .handle ev h b => f Γ (.handle ev (h.rewrite P f (Γ.set eventLocal .any)) (b.rewrite P f Γ))
   | .emit ev e => f Γ (.emit ev (e.rewrite P f Γ))
   | .scope k e => f Γ (.scope k (e.rewrite P f Γ))
@@ -737,7 +743,8 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b
   | .tryCatch a b | .orElse a b | .app a b => observe P Γ a ++ observe P Γ b
   | .ite c a b | .loop c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
-  | .assign _ e | .init _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .emit _ e | .scope _ e => observe P Γ e
+  | .assign _ e | .init _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .written e _
+  | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
   | .forIn y l b d => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map elementTy).getD .any)) b ++ observe P Γ d
@@ -839,7 +846,7 @@ def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .orElse a b | .set a _ b | .app a b => a.breaksIn ev && b.breaksIn ev
   | .ite c a b => c.breaksIn ev && a.breaksIn ev && b.breaksIn ev
   | .assign _ e | .init _ e | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .emit _ e
-  | .scope _ e => e.breaksIn ev
+  | .written e _ | .scope _ e => e.breaksIn ev
   | _ => true
 
 def Spec.breaksPlaced (s : Spec) : Bool :=

@@ -1,0 +1,17 @@
+#!/usr/bin/env warp
+# Modules in warp: `use` brings in the definitions of a module, each module once
+# (a fuller module system is sketched in notes/module_manager.md, card module-manager)
+
+# a standard module written in warp
+use math
+print sqrt(16)
+
+# a standard module with classes
+use collections
+stack = Stack()
+stack.push(3)
+print stack.pop()
+
+# a file beside the program: lib.warp defines ok()
+use lib
+print ok()

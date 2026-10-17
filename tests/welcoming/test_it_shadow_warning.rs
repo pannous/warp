@@ -1,7 +1,7 @@
 // #23 (user 2026-10-03, "Warn on `it` shadowing"): a loop's `it` inside a function with an implicit `it` hides it, warned.
 use crate::common::fails_with;
 use crate::is;
-use warp::diagnostic::{with_warning_mode, WarningMode};
+use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 
 #[test]
 fn a_loop_it_still_shadows_the_function_it() {
@@ -10,9 +10,7 @@ fn a_loop_it_still_shadows_the_function_it() {
 
 #[test]
 fn a_loop_it_hiding_the_function_it_warns() {
-	with_warning_mode(WarningMode::Error, || {
-		fails_with("f:={s=it; for 1..3 {s+=it}; s}; f(10)", "hides")
-	});
+	with_warning_mode(WarningMode::Error, || fails_with("f:={s=it; for 1..3 {s+=it}; s}; f(10)", "hides"));
 }
 
 #[test]

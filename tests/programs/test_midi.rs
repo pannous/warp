@@ -12,21 +12,21 @@ fn midi_path(name: &str) -> PathBuf {
 
 /// What `program`, using sound, prints on stdout (its failure is printed there) and stderr (headless sound and MIDI lines)
 fn failures_of(program: &str) -> String {
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", &format!("use sound\n{program}")])
-		.output()
-		.unwrap();
-	format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	)
+	let run =
+		crate::common::warp_command().args(["--no-ask", "eval", &format!("use sound\n{program}")]).output().unwrap();
+	format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr))
 }
 
 #[test]
 fn notes_survive_a_midi_file() {
 	let path = midi_path("tune.mid");
-	is!(&format!("use sound\nwrite_midi(\"{0}\", [[0, C4, 0.5, 100], [0.5, E4, 0.25, 90]])\nread_midi(\"{0}\") == [[0, 261.63, 0.5, 100], [0.5, 329.63, 0.25, 90]]", path.display()), true);
+	is!(
+		&format!(
+			"use sound\nwrite_midi(\"{0}\", [[0, C4, 0.5, 100], [0.5, E4, 0.25, 90]])\nread_midi(\"{0}\") == [[0, 261.63, 0.5, 100], [0.5, 329.63, 0.25, 90]]",
+			path.display()
+		),
+		true
+	);
 	let bytes = std::fs::read(&path).unwrap();
 	assert_eq!(&bytes[..4], b"MThd");
 	assert_eq!(&bytes[14..18], b"MTrk");
@@ -43,13 +43,7 @@ fn a_file_of_another_program_reads_with_running_status_and_tempo() {
 	file.extend(track);
 	let path = midi_path("other.mid");
 	std::fs::write(&path, file).unwrap();
-	is!(
-		&format!(
-			"use sound\nread_midi(\"{}\") == [[0, 261.63, 2, 100], [1, 329.63, 2, 100]]",
-			path.display()
-		),
-		true
-	);
+	is!(&format!("use sound\nread_midi(\"{}\") == [[0, 261.63, 2, 100], [1, 329.63, 2, 100]]", path.display()), true);
 }
 
 #[test]
@@ -69,17 +63,93 @@ fn headless_messages_are_named() {
 }
 
 #[test]
-fn native_input_is_a_loud_error() {
-	let errors = failures_of("midi_receive()");
-	assert!(errors.contains("MIDI input is not available natively yet"), "{errors}");
+fn a_missing_input_is_a_loud_error() {
+	let errors = failures_of("midi_receive(\"no such device\", 0.1)");
+	assert!(errors.contains("no MIDI input"), "{errors}");
 }
 
 #[test]
 fn listing_outputs_needs_a_backend_or_names_the_missing_one() {
 	let output = failures_of("midi_outputs()");
-	assert!(
-		output.starts_with('»') || output.contains("sendmidi") || output.contains("Error"),
-		"{output}"
+	// midir is the backend everywhere natively: the names, nothing printed when there is no device
+	assert!(!output.contains("Error"), "{output}");
+	assert!(output.contains('[') || output.trim().is_empty(), "{output}");
+}
+
+// card midi-clock: a message goes out at its voice's place, after the sounds queued before it or at an `at`'s time;
+// headless names that place
+#[test]
+fn a_message_waits_for_the_sounds_before_it() {
+	let printed = failures_of("play(C4, 0.5s)\nmidi_on E4\n7");
+	assert!(printed.contains("midi out : 90 40 64 at 0.500 s"), "{printed}");
+}
+
+#[test]
+fn at_places_a_message() {
+	let printed = failures_of("at 1s midi_on C4\nmidi_on E4\n7");
+	assert!(printed.contains("midi out : 90 3c 64 at 1.000 s"), "{printed}");
+	assert!(printed.contains("midi out : 90 40 64\n"), "the voice goes on where it stood: {printed}");
+}
+
+#[test]
+fn midi_notes_follow_one_another() {
+	let printed = failures_of("midi_note(C4, 0.5s)\nmidi_note(E4, 250ms, 90)\nsound_queued() > 0");
+	let lines: Vec<&str> = printed.lines().filter(|line| line.starts_with("midi out")).collect();
+	assert_eq!(
+		lines,
+		[
+			"midi out : 90 3c 64",
+			"midi out : 80 3c 00 at 0.500 s",
+			"midi out : 90 40 5a at 0.500 s",
+			"midi out : 80 40 00 at 0.750 s"
+		],
+		"{printed}"
 	);
-	assert!(output.contains('[') || output.contains("sendmidi"), "{output}");
+}
+
+// card midi-receive: a device's message reaches the program; here a CoreMIDI virtual source the test plays into
+#[cfg(target_os = "macos")]
+#[test]
+fn a_program_receives_a_device_message() {
+	use midir::os::unix::VirtualOutput;
+	let device = format!("warp test {}", std::process::id());
+	let mut source = midir::MidiOutput::new("warp test").unwrap().create_virtual(&device).unwrap();
+	let program = format!("use sound\nprint contains(midi_inputs(), \"{device}\")\nmidi_receive(\"{device}\", 10)");
+	let mut run = crate::common::warp_command()
+		.args(["--no-ask", "eval", &program])
+		.stdout(std::process::Stdio::piped())
+		.spawn()
+		.unwrap();
+	// the program opens the input once it runs: play until it has the message
+	while run.try_wait().unwrap().is_none() {
+		source.send(&[0x90, 60, 100]).unwrap();
+		std::thread::sleep(std::time::Duration::from_millis(50));
+	}
+	let output = std::io::read_to_string(run.stdout.take().unwrap()).unwrap();
+	assert!(output.contains("yes"), "the input is listed: {output}");
+	assert!(output.contains("[144 60 100]"), "{output}");
+}
+
+// card port-name: a name part shared by several devices is a loud error naming them; an exact name or a part only one
+// device has picks that device
+#[test]
+fn a_port_name_shared_by_several_devices_is_ambiguous() {
+	use warp::sound::midi::chosen_port;
+	let names = ["IAC Driver Bus 1", "IAC Driver Bus 2", "Keystation"].map(String::from);
+	let error = chosen_port("IAC", &names, "output").unwrap_err();
+	assert!(error.contains("IAC Driver Bus 1") && error.contains("IAC Driver Bus 2"), "{error}");
+	assert_eq!(chosen_port("Bus 2", &names, "output").unwrap(), "IAC Driver Bus 2");
+	assert_eq!(chosen_port("IAC Driver Bus 1", &names, "output").unwrap(), "IAC Driver Bus 1");
+	assert_eq!(chosen_port("", &names, "output").unwrap(), "IAC Driver Bus 1");
+}
+
+// card midi-send: with no output device, messages go out on warp's own virtual source, which other programs list as
+// a MIDI input, instead of failing with "no MIDI output devices found"
+#[cfg(target_os = "macos")]
+#[test]
+fn warp_opens_a_virtual_source_other_programs_can_listen_to() {
+	let _source = warp::sound::midi::virtual_output().unwrap();
+	let listener = midir::MidiInput::new("warp test listener").unwrap();
+	let names: Vec<String> = listener.ports().iter().filter_map(|port| listener.port_name(port).ok()).collect();
+	assert!(names.iter().any(|name| name == warp::sound::midi::CLIENT), "{names:?}");
 }

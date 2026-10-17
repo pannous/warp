@@ -10,7 +10,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   A bare flag name sets it: `f(3, loud)` of a parameter `loud = no` (default yes or no) is `f(3, loud: yes)` when no
   variable loud is in scope, as `x.copy(shallow)` is `x.copy(shallow: yes)` (card copy-shallow, named_arguments.rs
   flag_arguments).
-- Overloading by arity: `def f(a)` + `def f(a,b)` become `f·1`, `f·2` (src/lowering/overloads.rs
+- Overloading by arity: `def f(a)` + `def f(a,b)` become `f·1`, `f·2` (src/lowering/definitions/overloads.rs
   `lower_arity_overloads`, a MEANING pass before broadcasting reads arities). A call names the variant its argument
   count fits; none or two fitting (`f(a)` + `f(a, b=2)` called `f(5)`) is an error. Methods: class_methods prepends
   `self`, so a method's variant number is one more than written.
@@ -18,10 +18,23 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   into the starred `*xs` of tuples.rs). Only the last parameter. `total(1,2,3)` → `total([1 2 3])`.
 - Spreading: `f(...xs)`, `f(xs...)`, `f(*xs)`: into a rest parameter the list is passed as is (`[2] + xs` after other
   leftovers), into fixed parameters as `xs#1, xs#2, …`. Static: no run-time arity check, a plain call
-  (src/lowering/variadic.rs, a SOURCE pass before named_arguments).
+  (src/lowering/definitions/variadic.rs, a SOURCE pass before named_arguments).
 - Prefix nesting: `square square 2` / `square(square 2)` → `square(square(2))` when the call has more juxtaposed
   arguments than its function takes (broadcasting.rs `lower_prefix_calls`, before the function value passes).
 - Ruby keyword parameters `def f(a, b: 2)`: a literal after the colon is the default (named_arguments.rs).
+- Prepositions as argument labels (card prepositions-call, user 2026-10-14; Swift's labels): a parameter written
+  after a preposition, `play(tone, for duration)`, `move(x, from a, to b)`, is passed by that word, which in a call
+  always takes a colon (decision labels-calls, 2026-10-15): `play 440Hz for: 0.5s`, `play(440Hz, for: 0.5s)`,
+  `play tone:440Hz for:0.5s`, `move 1 from: 10 to: 3` (any order), `r = move 1 to: 3 from: 10`, `s + f 9 to: 4`
+  (the parser reads `word: ` after a call's argument as its label, suffixes.rs labelled_argument). A call without
+  brackets also names arguments: `f b=1 a=5` (before, the `=` assigned). Words: to of from with in into at by for
+  on each (type_name_matching.rs PREPOSITIONS; preposition_calls.rs is a FUNCTION pass before named_arguments, which
+  picks the overload the names fit). Without the colon a word keeps its meaning, `for` loops, `1 to 5` a range, `x in
+  xs` a membership; in a call of a function taking it, the bare word (`move x to 5`) is an error naming the colon
+  form, or a warning where it cannot mean anything else (`play C4 for 1s`, `melody xs each 1 beat`: for and each,
+  preposition_calls.rs UNAMBIGUOUS_LABELS). A variable named `by` stays a variable; a label the function does not take is an error naming those it takes.
+  `as` labels a parameter too (card save-sound): `save(made, as file)` is called `save sound as: "x.wav"`
+  (type_name_matching.rs AS_LABEL).
 - Result types before a block body: `-> int { … }`, `: number { … }`, `-> int: body` (declarations.rs `typed_result`).
 - A function body block of one braceless call `def f(x){square x}` is that call (library_words.rs `body_statement`).
 - Partial application stays `add(1, _)`; `add(1)` is a missing-argument error.
@@ -100,7 +113,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   through call_ref, the entry unboxes each capture per call). Now even with a plain call:
   - a closure variable whose targets (closure_variable_targets) are one function, and no parameter of that name
     anywhere, calls that target's entry directly (wasm_emitter/closures.rs `emit_direct_closure_call`);
-  - assigned once with captured values, lowering/closures.rs `hoist_captures` reads them once after the assignment,
+  - assigned once with captured values, lowering/definitions/closures.rs `hoist_captures` reads them once after the assignment,
     `h·capture·0 = closure_lambda_1·captured·0(h)` (a capture reader, its kind the target's parameter kind via
     closure_call_kind), and the call passes the locals to the target itself (`emit_hoisted_closure_call`). Nested
     functions with capture globals keep the entry, which restores them.
@@ -184,7 +197,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Ruby `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`, also `def h` without parentheses:
   declarations::end_definitions (start of lower_c_functions) gives them a `{…}` body. Nested `if … then … end` keeps
   its own `end` (the parser takes it).
-- Ruby blocks and `yield` (card functions-ruby-yield, src/lowering/ruby_blocks.rs, after lower_spaced_definitions): a
+- Ruby blocks and `yield` (card functions-ruby-yield, src/lowering/control/blocks.rs lower_trailing_blocks, after lower_spaced_definitions): a
   function whose body yields and that some call passes a block (`f {…}`, `f(a) {…}`, `f(a) do |x| … end`) gets the
   block as its last parameter `yield·block`; `yield a, b` → `yield·block(a, b)`, a block without `|params|` is
   `() => block`. Functions no call passes a block keep `yield` (free for generators).

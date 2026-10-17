@@ -64,3 +64,18 @@
 - 2026-10-12 cleanup-json-nodes: headless page events had a private JSON converter that silently turned arrays into ø; `foreign::node_of` already preserves arrays and special big-integer/codepoint objects, so it is now the one converter.
 
 2026-10-13 list-text-quotes: the reported computed quote in a printed list was already fixed by `text_quoted` on main; the older regression covered literals, so the exact runtime-concatenated serializer shape now has string() and print coverage.
+- 2026-10-14 cleanup-park-phrases: the newly generalized `of_lookups` pass still asked `phrase_calls` which function
+  names owned an `of`; parking phrase calls removes that exception and leaves one unconditional `a of b` to `b.a`
+  rule. A push also printed `fatal: failed to store: -61` after successfully creating its remote branch; board card
+  `git-credential-store` tracks the credential-helper problem.
+- 2026-10-15 if-yes: library-word lowering had a shared predicate for a braceless call used as the only statement of a
+  curly block, but its main prefix-call path duplicated a narrower bracket check and never used it. Reusing
+  `is_spaced_call` and `in_block_as_written` makes `if yes {sum ...}` follow the same general call rule.
+- 2026-10-16 git-push: 'fatal: failed to store: -61' after a successful push came from Homebrew's system gitconfig
+  helper osxkeychain (errSecWrPerm: the keychain refuses writes from headless sessions) running after gh's helper.
+  ~/.config/git/config now resets the list (`helper =`) before `helper = !gh auth git-credential` for github.com and
+  gist.github.com, the form `gh auth setup-git` writes; git credential then asks gh only.
+
+- 2026-10-17 (warp-parser): object_entries must not take a square list of key: value items as one object: a one-entry map in a list is held as a bare key ([{first: 2}] is [first: 2]), so [a: 1, b: 2] is also a list of one-entry maps; generalising it broke 10 tests (list fields, possessives). Local readings (a held lambda's holder) are fine.
+
+2026-10-17 interviewer: src/extensions.rs texts! Separator::Colon edit (unknown origin, user "fix it") reverted to Comma; backup data/patches/texts-macro-colon-2026-10-17.patch

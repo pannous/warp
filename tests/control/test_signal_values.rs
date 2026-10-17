@@ -6,37 +6,27 @@ use crate::is;
 #[cfg(feature = "native")]
 fn printed(code: &str) -> String {
 	let output = crate::common::printed(code);
-	output
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(|line| format!("{line}\n"))
-		.collect()
+	output.lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
 }
 
 #[test]
 #[cfg(feature = "native")]
 fn a_function_subscribes_to_the_signal_it_is_given() {
-	assert_eq!(
-		printed("watch(s) := on change s {print \"now \" + value}\nx = 1\nwatch(x)\nx = 2"),
-		"now 2\n"
-	);
+	assert_eq!(printed("watch(s) := on change s {print \"now \" + value}\nx = 1\nwatch(x)\nx = 2"), "now 2\n");
 	assert_eq!(printed("def alarm(reading) { whenever reading > 30 { print \"hot \" + reading } }\nt = 20\nalarm(t)\nt = 25\nt = 35"), "hot 35\n");
 }
 
 #[test]
 #[cfg(feature = "native")]
 fn on_change_skips_writes_of_the_same_value() {
-	assert_eq!(
-		printed("watch(s) := on change s {print value}\nx = 1\nwatch(x)\nx = 1\nx = 2\nx = 2\nx = 3"),
-		"2\n3\n"
-	);
+	assert_eq!(printed("watch(s) := on change s {print value}\nx = 1\nwatch(x)\nx = 1\nx = 2\nx = 2\nx = 3"), "2\n3\n");
 }
 
 #[test]
 #[cfg(feature = "native")]
 fn on_set_runs_after_each_write() {
 	assert_eq!(
-		printed("def log(s) { on set s { print \"set \" + value } }\nx = 1\nlog(x)\nx = 1\nx = 4"),
+		printed("def watch(s) { on set s { print \"set \" + value } }\nx = 1\nwatch(x)\nx = 1\nx = 4"),
 		"set 1\nset 4\n"
 	);
 }
@@ -44,10 +34,7 @@ fn on_set_runs_after_each_write() {
 #[test]
 #[cfg(feature = "native")]
 fn writes_before_the_subscription_are_not_seen() {
-	assert_eq!(
-		printed("watch(s) := on set s {print value}\nx = 1\nx = 2\nwatch(x)\nx = 3"),
-		"3\n"
-	);
+	assert_eq!(printed("watch(s) := on set s {print value}\nx = 1\nx = 2\nwatch(x)\nx = 3"), "3\n");
 }
 
 #[test]
@@ -69,10 +56,7 @@ fn a_function_subscribes_to_a_main_level_variable() {
 
 #[test]
 fn the_escaping_variable_keeps_its_value() {
-	is!(
-		"watch(s) := on set s {print value}\nx = 1\nwatch(x)\nx = x + 5\nx * 2",
-		12
-	);
+	is!("watch(s) := on set s {print value}\nx = 1\nwatch(x)\nx = x + 5\nx * 2", 12);
 	is!("watch(s) := on set s {print value}\nx = 1\nwatch(x)\nx += 5\nx", 6);
 }
 
@@ -116,10 +100,7 @@ fn a_signal_of_text() {
 #[test]
 #[cfg(feature = "native")]
 fn writes_in_loops_and_functions_notify() {
-	assert_eq!(
-		printed("watch(s) := on set s {print value}\nx = 0\nwatch(x)\nfor i in 1 to 3 { x = i }"),
-		"1\n2\n3\n"
-	);
+	assert_eq!(printed("watch(s) := on set s {print value}\nx = 0\nwatch(x)\nfor i in 1 to 3 { x = i }"), "1\n2\n3\n");
 	assert_eq!(
 		printed(
 			"watch(s) := on set s {print value}\nx = 1\nwatch(x)\ndef bump() { global x; x = x + 1 }\nbump()\nbump()"

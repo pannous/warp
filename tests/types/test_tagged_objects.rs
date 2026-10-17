@@ -15,8 +15,5 @@ fn a_field_of_a_tagged_object_is_read_from_its_fields() {
 
 #[test]
 fn a_static_counts_constructions_in_the_value_block() {
-	is!(
-		"class Ticket{static sold = 0; id = 0; value{ sold += 1; id = sold }}; a = Ticket(); b = Ticket(); b.id",
-		2
-	);
+	is!("class Ticket{static sold = 0; id = 0; value{ sold += 1; id = sold }}; a = Ticket(); b = Ticket(); b.id", 2);
 }

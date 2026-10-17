@@ -72,6 +72,7 @@ button, select {
 }
 button:hover { border-color: var(--accent); }
 #run { background: var(--accent); border-color: var(--accent); color: #1d1d1f; font-weight: 600; }
+#run.stop { background: var(--error); border-color: var(--error); color: #fff; } /* a running program: Stop (card playground-turn) */
 
 main { display: grid; grid-template-columns: var(--guide-width, minmax(16rem, 26rem)) 10px minmax(0, 1fr); gap: 0 6px; align-items: stretch; }
 .workspace { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -113,8 +114,9 @@ output.error { color: var(--error); }
 .listening-note { color: var(--muted); font-size: 0.9em; margin-bottom: 6px; }
 .paintings { display: flex; flex-wrap: wrap; gap: 8px; }
 .painting { margin-top: 10px; max-width: 100%; image-rendering: pixelated; border: 1px solid var(--line); }
-/* ⛶ (playground.js toggleFullScreen): over the paintings' corner; full screen shows the last one, as large as fits */
-.painted { position: relative; display: inline-block; max-width: 100%; }
+/* ⛶ (playground.js toggleFullScreen): over the paintings' corner; full screen shows the last one, as large as fits.
+   Top-aligned: no gap below for letters' descenders, which playground.js viewSize does not leave free */
+.painted { position: relative; display: inline-block; max-width: 100%; vertical-align: top; }
 .full-screen { position: absolute; top: 14px; right: 4px; z-index: 1; padding: 0 6px; font-size: 1.1em; line-height: 1.4; color: var(--muted); background: var(--code-ground); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; opacity: 0.7; }
 .full-screen:hover { opacity: 1; color: inherit; }
 /* ⛶ drawn, not a character: Firefox's fallback fonts have no U+26F6 (card rendered-firefox) */

@@ -17,10 +17,7 @@ fn test_html_warp() {
 // a script element holds JavaScript, as written (card vacuous-tests; `js{…}` as its alias: card js-element)
 #[test]
 fn test_js() {
-	is!(
-		"use markup; to_html(script{\"alert('Hello')\"})",
-		"<script>alert('Hello')</script>"
-	);
+	is!("use markup; to_html(script{\"alert('Hello')\"})", "<script>alert('Hello')</script>");
 	calls_the_page(
 		"use js document; ctx = document.getElementById(\"canvas\").getContext(\"2d\")",
 		&["getElementById", "getContext"],
@@ -30,14 +27,10 @@ fn test_js() {
 /// A page program reaches the DOM through `use js document`: it compiles to the host's foreign calls naming each member;
 /// running it needs a page's document, which neither the native runner nor the browser suite's Worker has: tests/web/test_dom_pages.rs runs such programs on a page
 fn calls_the_page(code: &str, members: &[&str]) {
-	let bytes = warp::wasm_emitter::compile(code)
-		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
-		.bytes;
+	let bytes =
+		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	for member in members {
-		assert!(
-			bytes.windows(member.len()).any(|window| window == member.as_bytes()),
-			"{code} calls no {member}"
-		);
+		assert!(bytes.windows(member.len()).any(|window| window == member.as_bytes()), "{code} calls no {member}");
 	}
 }
 
@@ -45,10 +38,7 @@ fn calls_the_page(code: &str, members: &[&str]) {
 #[test]
 fn test_inner_html() {
 	is!("use markup; to_html(html{b{\"test\"}})", "<html><b>test</b></html>");
-	is!(
-		"use markup; to_html(html{script{\"alert('ok')\"}})",
-		"<html><script>alert('ok')</script></html>"
-	);
+	is!("use markup; to_html(html{script{\"alert('ok')\"}})", "<html><script>alert('ok')</script></html>");
 	calls_the_page(
 		"use js document; results = document.getElementById(\"results\"); results.innerHTML = \"<i>ok</i>\"",
 		&["getElementById", "innerHTML"],
@@ -85,10 +75,7 @@ fn test_canvas() {
 // an element of the page by its id is a WebIDL Element, its members checked at compile time
 #[test]
 fn test_dom() {
-	calls_the_page(
-		"use js document; document.getElementById(\"canvas\").id",
-		&["getElementById"],
-	);
+	calls_the_page("use js document; document.getElementById(\"canvas\").id", &["getElementById"]);
 	crate::common::fails_with(
 		"use js document; document.getElementById(\"canvas\").innerHtml",
 		"did you mean innerHTML",

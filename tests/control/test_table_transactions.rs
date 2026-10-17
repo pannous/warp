@@ -6,7 +6,7 @@ use warp::wasm_emitter::eval;
 const PERSON: &str = "class Person{name: text; age: int}";
 
 fn program(table: &str, rest: &str) -> String {
-	format!("{PERSON}\npeople: [Person] = database.{table}\n{rest}")
+	format!("{PERSON}\nstored people: [Person] in \"{table}\"\n{rest}")
 }
 
 #[test]
@@ -22,10 +22,7 @@ fn a_transaction_commits_its_writes() {
 fn a_failing_transaction_rolls_back_and_fails() {
 	eval(&program("people_rolled_back", "people.add(Person(\"Al\", 40))"));
 	crate::common::fails_with(
-		&program(
-			"people_rolled_back",
-			"transaction {\npeople.add(Person(\"Bo\", 30))\nraise \"no Bo\"\n}",
-		),
+		&program("people_rolled_back", "transaction {\npeople.add(Person(\"Bo\", 30))\nraise \"no Bo\"\n}"),
 		"no Bo",
 	);
 	is!(&program("people_rolled_back", "count(people)"), 1);
@@ -35,10 +32,7 @@ fn a_failing_transaction_rolls_back_and_fails() {
 fn a_field_change_in_a_failing_transaction_is_rolled_back() {
 	eval(&program("people_aged", "people.add(Person(\"Al\", 40))"));
 	crate::common::fails_with(
-		&program(
-			"people_aged",
-			"al = people#1\ntransaction {\nal.age += 1\nraise \"not now\"\n}",
-		),
+		&program("people_aged", "al = people#1\ntransaction {\nal.age += 1\nraise \"not now\"\n}"),
 		"not now",
 	);
 	is!(&program("people_aged", "people#1.age"), 40);
@@ -51,19 +45,10 @@ fn a_rolled_back_transaction_restores_the_instances_held() {
 	let code = "al = people#1\ntry transaction {\nal.age += 1\npeople.add(Person(\"Bo\", 30))\nraise \"not now\"\n} catch e { 0 }\n";
 	is!(&program("people_restored", &format!("{code}al.age")), 40);
 	is!(&program("people_restored", &format!("{code}count(people)")), 1);
-	is!(
-		&program("people_restored", &format!("{code}(people where it.age == 40)#1.age")),
-		40
-	);
+	is!(&program("people_restored", &format!("{code}(people where it.age == 40)#1.age")), 40);
 }
 
 #[test]
 fn a_transaction_gives_its_block_value() {
-	is!(
-		&program(
-			"people_valued",
-			"transaction {\npeople.add(Person(\"Di\", 20))\ncount(people)\n}"
-		),
-		1
-	);
+	is!(&program("people_valued", "transaction {\npeople.add(Person(\"Di\", 20))\ncount(people)\n}"), 1);
 }

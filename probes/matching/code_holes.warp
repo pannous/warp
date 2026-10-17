@@ -1,8 +1,0 @@
-# code holes: $name in a data(…) pattern binds the subtree there (card code-holes, tree-patterns step 7)
-simplify(code) := match code {
-	data($a + 0) => a
-	data($a * 1) => a
-	data($f($x, $x)) => data twice
-	_ => code
-}
-[simplify(data (n * 1)), simplify(data (n * 2 + 0)), simplify(data (g(y, y))), simplify(data (g(y, z)))]

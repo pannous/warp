@@ -1,5 +1,5 @@
 // Transitions (a part of markup.js, card web-css, P188: stay close to HTML and CSS): an element's inline CSS
-// transition (`li{ transition: opacity 200ms }`, src/lowering/transitions.rs) times it; its starting style
+// transition (`li{ transition: opacity 200ms }`, src/lowering/web/transitions.rs) times it; its starting style
 // (`starting-style: { opacity: 0 }`, CSS's @starting-style, which an inline style cannot hold) is what it enters from
 // when it appears and leaves towards before it is removed; a keyed element whose transition covers transform glides to
 // its new place (FLIP). `leave: pop 400ms reverse` (data-warp-leave) is the CSS animation an element plays before it is

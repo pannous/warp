@@ -1,6 +1,6 @@
 # Library words: `.word`, `word(x)`, `word x`
 
-`src/lowering/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/library_ops.rs` holds the
+`src/lowering/words/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/reflection/library_ops.rs` holds the
 runtime functions. A user function or a variable of the same name wins (the word is not lowered).
 
 | Word (aliases) | Args | How |
@@ -45,7 +45,7 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
 
 ## Map words (fix-maps, Dijkstra field test)
 
-One map path for every spelling (tests/welcoming/test_welcoming_maps.rs, probes/maps/):
+One map path for every spelling (tests/welcoming/test_welcoming_maps.rs):
 - Keys compare by name at runtime: `map_key_name` turns a text or a character (`"A"` is a Codepoint) into the symbol of the
   same letters, used by `map_entry_has_key` and `field_with`. So `{"A":1}`, `{A:1}`, `m["A"]`, `m.A`, `k="A"; m[k]` are one key.
 - `{}` is the empty object: `d["A"]=5` grows it (`field_with` on ø returns the entry), `d[k]=v` with a variable key too.
@@ -78,7 +78,7 @@ One map path for every spelling (tests/welcoming/test_welcoming_maps.rs, probes/
 # Typed and fixed arrays
 
 `x : 100 int`, `x : 100 * int`, `pixel:int[100]`, `letters = char[3]`, `upcases = 26 * char` (also `x = int[4]`) are zero-filled
-lists (`declaration_forms::typed_array_value`, `zero_list`). `x:[number]` is `x:list of number`, `numbers x = [1 2]` declares a list
+lists (`filled_lists::typed_array_value`, `zero_list`). `x:[number]` is `x:list of number`, `numbers x = [1 2]` declares a list
 (a plural type word before a name is a declaration). The bracket spelling `[number]` hints the plural `numbers`
 (`ListTypeStyle::Bracket`); the fixed-array spellings have no canonical form yet (both are decided as valid), so they get no hint.
 
@@ -96,7 +96,7 @@ Any other hyphenated name stays a symbol. test_hyphen_units stays ignored: it ne
 
 # Type tests
 
-`src/lowering/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
+`src/lowering/types/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
 `3 is int`, `x is a number` (a/an optional), `[1 2] is list of int`, `[1 2] is ints`, `π is real`. The emitter answers it statically from the
 name `type(x)` reports (`static_type_name`); `type_matches`: `number` covers int, rational, real, float; `real` covers int, rational,
 real; `rational` covers int; `list of number` covers every list of numbers; `text` also accepts a codepoint (a one-character string).
@@ -106,7 +106,7 @@ Static means `x=f(); x is int` uses the compile-time kind of x, like `type(x)`.
 
 # Lambdas (compile-time)
 
-`src/lowering/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
+`src/lowering/definitions/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
 `f = x=>x*x`, `f = (x y)->x+y`, `f = (x, y) => x+y`, and `f = {it*2}` (a block only when it uses `it`; `p={a:1}` stays an object) become
 the definition `f(x):=…` at that point, so variables are captured by value there (`n=10; f = x=>x+n; n=20; f 1` is 11). `{x*x}(x=5)` defines
 an anonymous function and calls it (`{x+y}(x=1 y=2)`). `map xs F`, `map(xs, F)`, `xs.map(F)`, `xs.map {it*it}` with F a block, a lambda or a defined function is the loop
@@ -127,7 +127,7 @@ application (write `it < k`).
 # First-class functions (compile-time)
 
 Choice: no funcref table. The emitter gives every user function its own signature (i64, f64 or node per parameter and result, by inferred
-kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/lowering/function_values.rs` specialises: a function
+kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/lowering/definitions/function_values.rs` specialises: a function
 that uses a parameter as a function (`f(x)`, `f x`, `map xs f`, or passing it on) is replaced by one copy per function it is called with,
 `apply(double, 3)` calls `apply__double(3)` with `double` in place of `f` (specialisations sit where the original definition was, so captures by value
 behave). What can be passed: a defined function, `&name` (the parser reads it as the name), an alias (`g = double`, assigned once), an
@@ -150,7 +150,7 @@ Not aliased, on purpose or open:
 - `xs.sort()` / `xs.reverse()` stay copies with the unused-value warning; warp's in-place form is `xs.sort!` (wiki/mutable.md).
 - `xs.insert(i, v)` is the ambiguity error naming both readings (decided earlier).
 - Card python-aliases: `x.pop(k)` (0-based position of a list, -1 the last; key of a map) and `x.clear()` of a variable lower
-  in declaration_forms (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
+  in list_mutations (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
   dispatch with `x is map` at run time; library_words::LOWERED_TO_PRELUDE makes modules load them. `m.popitem()` (lib/map.warp),
   `fromkeys(ks, v)` (prelude), `dict.fromkeys(ks, v)` (library_words method_call drops the `dict` receiver).
 - pop, pop(i) and clear() change the list in place like append/remove (card aliased-list): pop(i) and clear() wrap the

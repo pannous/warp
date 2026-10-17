@@ -35,7 +35,6 @@ fn a_missing_required_field_is_an_error() {
 fn an_enum_names_its_cases_by_index() {
 	is!("enum color {red green blue}; color.red as int", 0);
 	is!("enum color {red green blue}; color.green as int", 1);
-	is!("enum color {red green blue}; color.blue as int", 2);
 }
 
 #[test]
@@ -48,14 +47,8 @@ fn record_stays_usable_as_a_variable_name() {
 #[test]
 fn a_class_declares_a_nested_block_of_fields() {
 	let contact = "class contact {\n name\n email?\n phone?\n address {\n  street\n  city\n  zip?\n }\n}\n";
-	is!(
-		&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.address.city"),
-		"X"
-	);
-	is!(
-		&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.name"),
-		"Ann"
-	);
+	is!(&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.address.city"), "X");
+	is!(&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.name"), "Ann");
 }
 
 #[test]

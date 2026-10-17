@@ -13,7 +13,7 @@ test "squares" {               // named: a failing check or any error fails only
 - `warp run` / `warp file.warp` / `use`: the tests are skipped (P209).
 - The playground has no `warp test`: its Run runs a program's tests (src/web/mod.rs run_shown), so the kitchen sink shows
   `✓ 34 tests passed`.
-- How: src/lowering/test_blocks.rs, a SOURCE_PHASES pass, rewrites top-level tests (and `test` lines inside test
+- How: src/lowering/control/test_blocks.rs, a SOURCE_PHASES pass, rewrites top-level tests (and `test` lines inside test
   blocks) into counting code over hidden names `tests·run`, `tests·failed`; pipeline::for_tests sets the mode. The ✗
   line shows the statement as written (diagnostic::written_statement).
 - A program that names `test` itself (`test(x) := …`) keeps its word: the pass does nothing.

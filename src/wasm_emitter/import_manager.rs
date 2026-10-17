@@ -1,7 +1,7 @@
 //! Import management for WASM modules
 
-use crate::context::Context;
-use crate::function::Function as FuncDef;
+use crate::compiler::context::Context;
+use crate::compiler::function::Function as FuncDef;
 use crate::wasm_emitter::config::EmitterConfig;
 use crate::wasm_emitter::type_manager::TypeManager;
 use wasm_encoder::*;
@@ -10,6 +10,7 @@ use wasm_encoder::*;
 type FfiImport = (String, String, &'static str, Vec<ValType>, Vec<ValType>);
 
 /// Manages WASM imports: host functions, WASI functions, FFI functions
+#[derive(Default)]
 pub struct ImportManager {
 	/// Import section for WASM module
 	imports: ImportSection,
@@ -18,21 +19,7 @@ pub struct ImportManager {
 	next_func_idx: u32,
 }
 
-impl Default for ImportManager {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
 impl ImportManager {
-	/// Create a new import manager
-	pub fn new() -> Self {
-		Self {
-			imports: ImportSection::new(),
-			next_func_idx: 0,
-		}
-	}
-
 	/// Emit all imports based on configuration
 	/// Must be called before emit_gc_types() since type indices need to be correct
 	pub fn emit_imports(&mut self, config: &EmitterConfig, type_manager: &mut TypeManager, ctx: &mut Context) {
@@ -69,10 +56,8 @@ impl ImportManager {
 		let run_type_idx = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I64]);
 		self.import_function(ctx, "host", "fetch", fetch_type_idx, "host_fetch");
 		// fetch_within: (url_ptr, url_len, timeout_ms: i64) -> (result_ptr, result_len), for an explicit timeout
-		let fetch_within_type_idx = type_manager.function_type(
-			vec![ValType::I32, ValType::I32, ValType::I64],
-			vec![ValType::I32, ValType::I32],
-		);
+		let fetch_within_type_idx = type_manager
+			.function_type(vec![ValType::I32, ValType::I32, ValType::I64], vec![ValType::I32, ValType::I32]);
 		self.import_function(ctx, "host", "fetch_within", fetch_within_type_idx, "host_fetch_within");
 		self.import_function(ctx, "host", "read", fetch_type_idx, "host_read");
 		// warn: (message_ptr, message_len) -> (), a runtime warning (diagnostic::report_runtime_warning)
@@ -84,16 +69,10 @@ impl ImportManager {
 	/// Emit WASI imports: fd_write(fd, iovs, iovs_len, nwritten) -> errno
 	fn emit_wasi_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		let fd_write_type_idx = type_manager.function_type(vec![ValType::I32; 4], vec![ValType::I32]);
-		self.import_function(
-			ctx,
-			"wasi_snapshot_preview1",
-			"fd_write",
-			fd_write_type_idx,
-			"wasi_fd_write",
-		);
-		if ctx.required_functions.contains(super::wasi_emitter::WASI_ENVIRONMENT) {
+		self.import_function(ctx, "wasi_snapshot_preview1", "fd_write", fd_write_type_idx, "wasi_fd_write");
+		if ctx.required_functions.contains(super::host::wasi_emitter::WASI_ENVIRONMENT) {
 			let sizes_type = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I32]);
-			for (name, registered) in super::wasi_emitter::ENVIRON_IMPORTS
+			for (name, registered) in super::host::wasi_emitter::ENVIRON_IMPORTS
 				.into_iter()
 				.zip(["wasi_environ_sizes_get", "wasi_environ_get"])
 			{
@@ -108,15 +87,9 @@ impl ImportManager {
 			.ffi_imports
 			.iter()
 			// the linear words are the module's own functions (linear_arrays.rs)
-			.filter(|(_, sig)| sig.library != super::linear_arrays::LINEAR_LIBRARY)
+			.filter(|(_, sig)| sig.library != super::lists::linear_arrays::LINEAR_LIBRARY)
 			.map(|(name, sig)| {
-				(
-					name.clone(),
-					sig.library.to_string(),
-					sig.name,
-					sig.params.clone(),
-					sig.results.clone(),
-				)
+				(name.clone(), sig.library.to_string(), sig.name, sig.params.clone(), sig.results.clone())
 			})
 			.collect();
 		imports.sort_by(|(a, ..), (b, ..)| a.cmp(b));

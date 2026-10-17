@@ -17,7 +17,7 @@ person = {name: "Ada", address: {city: "London"}}; person.address.city
 ## Numbers
 Integers are unbounded, fractions exact, decimals floats (compare with `≈`), `/` never truncates (`//` floors); `√ ∛ ² π` are operators.
 ```warp => [1267650600228229401496703205376 yes yes 3.5 3 2]
-[2^100, 0.1 + 0.2 ≈ 0.3, 1/3 + 1/6 == 1/2, 7/2, 7//2, √4]
+[2^100, 0.1 + 0.2 ≈ 0.3, 1/3 + 1/6 == 1/2, 7/2, 7/!2, √4]
 ```
 Numbers carry units, converted on arithmetic; `±` is an uncertain value.
 ```warp => 150min
@@ -127,7 +127,7 @@ infix operator divides(d: int, n: int) := n % d == 0; 3 divides 12
 `type(x)`, `x is T` tests (`3 is number`), `x as T` converts; a bare type name is a type value and `==` between
 types is exact (`type(3) == int`, `type(3) == number` is `no`); classes declare typed fields or defaults, methods with `:=`, `extends`.
 Instances are shared references: `==` compares values, `===` identity, `copy(x)` duplicates.
-```warp => [int yes 3 "Rex barks"]
+```warp => [class int yes 3 "Rex barks"]
 class Animal { name: "?"; speak := "..." }
 class Dog extends Animal { speak := name + " barks" }
 [type(3), "3" is text, "3" as int, Dog{name: "Rex"}.speak]
@@ -153,10 +153,11 @@ t = try 10/0
 
 ## Effects
 The compiler infers what a function does (IO, …); `! Pure` declares none. Effect handlers: `emit word` asks, the
-caller answers with `on word { … } in { … }`.
+program answers with `on word { … }`.
 ```warp => 120
 price(net) := net * (1 + emit tax_rate)
-on tax_rate { 0.2 } in { price(100) }
+on tax_rate { 0.2 }
+price(100)
 ```
 ```warp => [IO Pure]
 log(x) := print x

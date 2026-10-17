@@ -9,59 +9,78 @@ pub(super) fn gpu_compute(
 	workgroups: i64,
 ) -> wasmtime::Result<HostNode> {
 	let failure = gpu_failure(GPU_COMPUTE);
-	let shader = given_shader(&mut caller, shader, &failure)?;
-	let numbers = given_node(&mut caller, numbers)?;
-	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
-	if let Some(arrays) = named_arrays(&numbers) {
-		let arrays = arrays
-			.into_iter()
-			.map(|(name, numbers)| {
-				Ok((
-					name,
-					numbers
-						.iter()
-						.map(|number| number_of(&number, &failure).map(f64::from))
-						.collect::<wasmtime::Result<Vec<f64>>>()?,
-				))
-			})
-			.collect::<wasmtime::Result<Vec<_>>>()?;
-		let left = crate::graphics::gpu::compute_named(&shader, &arrays, workgroups).map_err(&failure)?;
-		let entries = left
-			.into_iter()
-			.map(|(name, element, numbers)| {
-				let item = |number: f64| {
-					Node::Number(if element == crate::graphics::gpu::Element::Float {
-						Number::Float(number)
-					} else {
-						Number::Int(number as i64)
-					})
-				};
-				Node::Key(
-					Box::new(Node::Symbol(name)),
-					crate::operators::Op::Colon,
-					Box::new(Node::List(
-						numbers.into_iter().map(item).collect(),
-						crate::node::Bracket::Square,
-						crate::node::Separator::Space,
-					)),
-				)
-			})
-			.collect();
-		return built_in_program(
-			&mut caller,
-			&Node::List(entries, crate::node::Bracket::Curly, crate::node::Separator::Space),
-			GPU_COMPUTE,
-		);
-	}
-	let numbers = numbers
-		.iter()
-		.map(|number| number_of(&number, &failure))
-		.collect::<wasmtime::Result<Vec<Number>>>()?;
-	let left: Vec<Node> = match crate::graphics::gpu::element_of(&shader) {
+	let mut computed = || {
+		let shader = given_shader(&mut caller, shader, &failure)?;
+		let numbers = given_node(&mut caller, numbers)?;
+		let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+		match named_arrays(&numbers) {
+			Some(arrays) => named_arrays_computed(&shader, arrays, workgroups, &failure),
+			None => array_computed(&shader, &numbers, workgroups, &failure),
+		}
+	};
+	let left = computed();
+	let left = raised(&mut caller, left)?;
+	built_in_program(&mut caller, &left, GPU_COMPUTE)
+}
+
+/// `{xs: [1 2 3], ys: [4 5 6]}`: the arrays the shader left, by name, as floats or ints as it declares them
+fn named_arrays_computed(
+	shader: &str,
+	arrays: Vec<(String, &Node)>,
+	workgroups: u32,
+	failure: &impl Fn(String) -> wasmtime::Error,
+) -> wasmtime::Result<Node> {
+	let arrays = arrays
+		.into_iter()
+		.map(|(name, numbers)| {
+			Ok((
+				name,
+				numbers
+					.iter()
+					.map(|number| number_of(&number, failure).map(f64::from))
+					.collect::<wasmtime::Result<Vec<f64>>>()?,
+			))
+		})
+		.collect::<wasmtime::Result<Vec<_>>>()?;
+	let left = crate::graphics::gpu::compute_named(shader, &arrays, workgroups).map_err(failure)?;
+	let entries = left
+		.into_iter()
+		.map(|(name, element, numbers)| {
+			let item = |number: f64| {
+				Node::Number(if element == crate::graphics::gpu::Element::Float {
+					Number::Float(number)
+				} else {
+					Number::Int(number as i64)
+				})
+			};
+			Node::Key(
+				Box::new(Node::Symbol(name)),
+				crate::operators::Op::Colon,
+				Box::new(Node::List(
+					numbers.into_iter().map(item).collect(),
+					crate::node::Bracket::Square,
+					crate::node::Separator::Space,
+				)),
+			)
+		})
+		.collect();
+	Ok(Node::List(entries, crate::node::Bracket::Curly, crate::node::Separator::Space))
+}
+
+/// `[1 2 3]`: the array the shader left, of f32 or of i32/u32 as it declares its array
+fn array_computed(
+	shader: &str,
+	numbers: &Node,
+	workgroups: u32,
+	failure: &impl Fn(String) -> wasmtime::Error,
+) -> wasmtime::Result<Node> {
+	let numbers =
+		numbers.iter().map(|number| number_of(&number, failure)).collect::<wasmtime::Result<Vec<Number>>>()?;
+	let left: Vec<Node> = match crate::graphics::gpu::element_of(shader) {
 		crate::graphics::gpu::Element::Float => {
 			let floats: Vec<f32> = numbers.iter().map(|&number| f64::from(number) as f32).collect();
-			crate::graphics::gpu::compute(&shader, &floats, workgroups)
-				.map_err(&failure)?
+			crate::graphics::gpu::compute(shader, &floats, workgroups)
+				.map_err(failure)?
 				.into_iter()
 				.map(|float| Node::Number(Number::Float(float as f64)))
 				.collect()
@@ -71,26 +90,22 @@ pub(super) fn gpu_compute(
 				.iter()
 				.map(|number| match number {
 					Number::Int(int) => Ok(*int),
-					other => Err(failure(format!(
-						"an array<i32> or array<u32> shader computes over ints, got {other}"
-					))),
+					other => {
+						Err(failure(format!("an array<i32> or array<u32> shader computes over ints, got {other}")))
+					}
 				})
 				.collect::<wasmtime::Result<Vec<i64>>>()?;
-			crate::graphics::gpu::compute_ints(&shader, &ints, workgroups, element)
-				.map_err(&failure)?
+			crate::graphics::gpu::compute_ints(shader, &ints, workgroups, element)
+				.map_err(failure)?
 				.into_iter()
 				.map(|int| Node::Number(Number::Int(int)))
 				.collect()
 		}
 	};
-	built_in_program(
-		&mut caller,
-		&Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space),
-		GPU_COMPUTE,
-	)
+	Ok(Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space))
 }
 
-pub(super) fn number_of(node: &Node, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Number> {
+pub(crate) fn number_of(node: &Node, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Number> {
 	match node.drop_meta() {
 		Node::Number(number) => Ok(*number),
 		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
@@ -123,45 +138,34 @@ pub(super) fn gpu_compute_linear(
 	block: i64,
 	workgroups: i64,
 ) -> wasmtime::Result<i64> {
+	let result = gpu_compute_linear_or_failure(&mut caller, shader, block, workgroups);
+	raised(&mut caller, result)
+}
+
+fn gpu_compute_linear_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	shader: HostNode,
+	block: i64,
+	workgroups: i64,
+) -> wasmtime::Result<i64> {
 	let failure = gpu_failure(GPU_COMPUTE);
-	let shader = given_shader(&mut caller, shader, &failure)?;
-	let floats = linear_floats(&mut caller, block, &failure)?;
+	let shader = given_shader(caller, shader, &failure)?;
+	let floats = linear_floats(caller, block, &failure)?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
 	let left = crate::graphics::gpu::compute(&shader, &floats, workgroups).map_err(&failure)?;
-	write_linear_floats(&mut caller, block, &left, &failure)?;
+	write_linear_floats(caller, block, &left, &failure)?;
 	Ok(block)
 }
 
-/// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over the cells of the block `source`, then the
+/// `ys = xs.map(x => …) @gpu` (src/lowering/foreign/gpu_maps.rs): the kernel over the cells of the block `source`, then the
 /// values of the program's numbers it reads, written into the block `target` of the same count; 1, or 0 without an
 /// adapter (a warning, once), when the program maps on the CPU. `keeping` (gpu_maps.rs KEEP_RESULT, SOURCE_KEPT): the
 /// result's buffer stays on the GPU for a later map of it, the source's items come from such a buffer
-pub(super) fn gpu_map_linear(
-	caller: Caller<'_, HostState>,
-	shader: HostNode,
-	source: i64,
-	values: HostNode,
-	target: i64,
-	workgroups: i64,
-	keeping: i64,
-) -> wasmtime::Result<i64> {
-	gpu_kernel_linear(
-		caller,
-		GPU_MAP_LINEAR,
-		shader,
-		source,
-		values,
-		target,
-		workgroups,
-		keeping,
-		false,
-	)
-}
-
-/// `s = sum(xs.map(x => …) @gpu)`, min, max: as gpu_map_linear, but each workgroup leaves its partial result in a cell
+///
+/// REDUCES, `s = sum(xs.map(x => …) @gpu)`, min, max: as a map, but each workgroup leaves its partial result in a cell
 /// after the values, and those, the only ones read back, go into the block `target` of `workgroups` cells
-pub(super) fn gpu_reduce_linear(
-	caller: Caller<'_, HostState>,
+pub(super) fn gpu_kernel_linear<const REDUCES: bool>(
+	mut caller: Caller<'_, HostState>,
 	shader: HostNode,
 	source: i64,
 	values: HostNode,
@@ -169,52 +173,36 @@ pub(super) fn gpu_reduce_linear(
 	workgroups: i64,
 	keeping: i64,
 ) -> wasmtime::Result<i64> {
-	gpu_kernel_linear(
-		caller,
-		GPU_REDUCE_LINEAR,
-		shader,
-		source,
-		values,
-		target,
-		workgroups,
-		keeping,
-		true,
-	)
+	let result =
+		gpu_kernel_linear_or_failure::<REDUCES>(&mut caller, shader, source, values, target, workgroups, keeping);
+	raised(&mut caller, result)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn gpu_kernel_linear(
-	mut caller: Caller<'_, HostState>,
-	word: &'static str,
+fn gpu_kernel_linear_or_failure<const REDUCES: bool>(
+	caller: &mut Caller<'_, HostState>,
 	shader: HostNode,
 	source: i64,
 	values: HostNode,
 	target: i64,
 	workgroups: i64,
 	keeping: i64,
-	reduces: bool,
 ) -> wasmtime::Result<i64> {
 	pub(super) static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-	let failure = gpu_failure(word);
+	let failure = gpu_failure(if REDUCES { GPU_REDUCE_LINEAR } else { GPU_MAP_LINEAR });
 	let automatic = keeping & crate::gpu_maps::AUTOMATIC != 0;
 	if let Err(problem) = crate::graphics::gpu::available() {
 		// a map the compiler switched says nothing: the program did not ask for the GPU
 		if !automatic && !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-			crate::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
+			crate::errors::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
 		}
 		return Ok(0);
 	}
-	let shader = given_shader(&mut caller, shader, &failure)?;
-	let kept = (keeping & crate::gpu_maps::SOURCE_KEPT != 0)
-		.then(|| crate::graphics::gpu::kept_count(source))
-		.flatten();
-	let mut floats = if kept.is_some() {
-		vec![]
-	} else {
-		linear_floats(&mut caller, source, &failure)?
-	};
+	let shader = given_shader(caller, shader, &failure)?;
+	let kept =
+		(keeping & crate::gpu_maps::SOURCE_KEPT != 0).then(|| crate::graphics::gpu::kept_count(source)).flatten();
+	let mut floats = if kept.is_some() { vec![] } else { linear_floats(caller, source, &failure)? };
 	let items = kept.unwrap_or(floats.len());
-	for value in given_node(&mut caller, values)?.iter() {
+	for value in given_node(caller, values)?.iter() {
 		match value.drop_meta() {
 			Node::Number(number) => floats.push(f64::from(*number) as f32),
 			other => return Err(failure(format!("the lambda reads {}, not a number", other.serialize()))),
@@ -222,26 +210,21 @@ pub(super) fn gpu_kernel_linear(
 	}
 	let partials = kept.unwrap_or(0) + floats.len();
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
-	if reduces {
+	if REDUCES {
 		floats.resize(floats.len() + workgroups as usize, 0.0);
 	}
 	let keeping = crate::graphics::gpu::Keeping {
 		source: kept.map(|_| source),
 		result: (keeping & crate::gpu_maps::KEEP_RESULT != 0).then_some((target, items)),
 	};
-	let left = crate::graphics::gpu::compute_kept(
-		&shader,
-		&floats,
-		workgroups,
-		if reduces { partials } else { 0 },
-		keeping,
-	)
-	.map_err(&failure)?;
-	write_linear_floats(&mut caller, target, &left, &failure)?;
+	let left =
+		crate::graphics::gpu::compute_kept(&shader, &floats, workgroups, if REDUCES { partials } else { 0 }, keeping)
+			.map_err(&failure)?;
+	write_linear_floats(caller, target, &left, &failure)?;
 	if automatic {
-		crate::diagnostic::report_runtime_warning_once(
+		crate::errors::diagnostic::report_runtime_warning_once(
 			crate::gpu_maps::AUTOMATIC_NOTICE,
-			&format!("{} of {items} items", if reduces { "a reduction" } else { "a map" }),
+			&format!("{} of {items} items", if REDUCES { "a reduction" } else { "a map" }),
 		);
 	}
 	Ok(1)
@@ -261,10 +244,7 @@ pub(super) fn linear_memory(
 	caller: &mut Caller<'_, HostState>,
 	failure: &impl Fn(String) -> wasmtime::Error,
 ) -> wasmtime::Result<wasmtime::Memory> {
-	match caller.get_export("memory") {
-		Some(Extern::Memory(memory)) => Ok(memory),
-		_ => Err(failure("the module exports no memory".into())),
-	}
+	exported_memory(caller).ok_or_else(|| failure("the module exports no memory".into()))
 }
 
 /// A linear float array's cells as f32, as the GPU takes them
@@ -273,14 +253,11 @@ pub(super) fn linear_floats(
 	block: i64,
 	failure: &impl Fn(String) -> wasmtime::Error,
 ) -> wasmtime::Result<Vec<f32>> {
-	Ok(linear_doubles(caller, block, failure)?
-		.into_iter()
-		.map(|cell| cell as f32)
-		.collect())
+	Ok(linear_doubles(caller, block, failure)?.into_iter().map(|cell| cell as f32).collect())
 }
 
 /// A linear float array's cells
-pub(super) fn linear_doubles(
+pub(crate) fn linear_doubles(
 	caller: &mut Caller<'_, HostState>,
 	block: i64,
 	failure: &impl Fn(String) -> wasmtime::Error,
@@ -288,12 +265,7 @@ pub(super) fn linear_doubles(
 	let memory = linear_memory(caller, failure)?;
 	let bytes = memory.data(&*caller);
 	let cells = linear_cells(bytes, block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
-	Ok(bytes[cells]
-		.as_chunks::<LINEAR_CELL_BYTES>()
-		.0
-		.iter()
-		.map(|cell| f64::from_le_bytes(*cell))
-		.collect())
+	Ok(bytes[cells].as_chunks::<LINEAR_CELL_BYTES>().0.iter().map(|cell| f64::from_le_bytes(*cell)).collect())
 }
 
 /// The f32 the GPU left, written into a linear float array's cells
@@ -325,22 +297,11 @@ pub(super) fn gpu_render(
 	values: HostNode,
 ) -> wasmtime::Result<HostNode> {
 	let failure = gpu_failure(GPU_RENDER);
-	let shader = given_shader(&mut caller, shader, &failure)?;
-	let pixels: Vec<u32> =
-		crate::graphics::gpu::opaque_colors(&rendered(&mut caller, &shader, width, height, values, &failure)?)
-			.collect();
-	if let Some(list) = list_of_ints(&mut caller, &pixels)? {
-		return Ok(list);
-	}
-	let pixels = pixels
-		.into_iter()
-		.map(|pixel| Node::Number(Number::Int(i64::from(pixel))))
-		.collect();
-	built_in_program(
-		&mut caller,
-		&Node::List(pixels, crate::node::Bracket::Square, crate::node::Separator::Space),
-		GPU_RENDER,
-	)
+	let shader = given_shader(&mut caller, shader, &failure);
+	let image = shader.and_then(|shader| rendered(&mut caller, &shader, width, height, values, &failure));
+	let image = raised(&mut caller, image)?;
+	let pixels: Vec<u32> = crate::graphics::gpu::opaque_colors(&image).collect();
+	list_of_ints(&mut caller, &pixels, GPU_RENDER)
 }
 
 /// `text_coverage(words, size)` through a system font (src/graphics/text_raster.rs): [width, height, coverage row by row]
@@ -349,24 +310,19 @@ pub(super) fn text_coverage(
 	words: HostNode,
 	size: i64,
 ) -> wasmtime::Result<HostNode> {
-	let words = match given_node(&mut caller, words)? {
-		Node::Text(text) => text,
-		other => other.serialize(),
-	};
+	let result = text_coverage_or_failure(&mut caller, words, size);
+	raised(&mut caller, result)
+}
+
+fn text_coverage_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	words: HostNode,
+	size: i64,
+) -> wasmtime::Result<HostNode> {
+	let words = text_or_written(given_node(caller, words)?);
 	let covered = crate::graphics::text_raster::coverage(&words, size as f32)
 		.map_err(|problem| task_failure(format!("{TEXT_COVERAGE}: {problem}")))?;
-	if let Some(list) = list_of_ints(&mut caller, &covered)? {
-		return Ok(list);
-	}
-	let ints = covered
-		.into_iter()
-		.map(|int| Node::Number(Number::Int(i64::from(int))))
-		.collect();
-	built_in_program(
-		&mut caller,
-		&Node::List(ints, crate::node::Bracket::Square, crate::node::Separator::Space),
-		TEXT_COVERAGE,
-	)
+	list_of_ints(caller, &covered, TEXT_COVERAGE)
 }
 
 /// The pixels the fragment shader colors through wgpu (src/graphics/gpu.rs), 0xFFRRGGBB row by row
@@ -400,31 +356,27 @@ pub(super) fn shader_request(
 	Ok((side(width)?, side(height)?, values))
 }
 
-/// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none
-pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32]) -> wasmtime::Result<Option<HostNode>> {
-	use crate::wasm_emitter::int_lists::INTS_TO_LIST;
-	let (Some(Extern::Func(ints_to_list)), Some(Extern::Memory(memory))) =
+/// The ints as a list, built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs) when it has one,
+/// else node by node
+pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32], word: &str) -> wasmtime::Result<HostNode> {
+	use crate::wasm_emitter::lists::int_lists::INTS_TO_LIST;
+	if let (Some(Extern::Func(ints_to_list)), Some(Extern::Memory(memory))) =
 		(caller.get_export(INTS_TO_LIST), caller.get_export("memory"))
-	else {
-		return Ok(None);
-	};
-	let ints_to_list = ints_to_list.typed::<(i32, i32), HostNode>(&*caller)?;
-	let Some(address) = scratch(caller, memory, std::mem::size_of_val(ints))? else {
-		return Ok(None);
-	};
-	let bytes: Vec<u8> = ints.iter().flat_map(|int| int.to_le_bytes()).collect();
-	memory.write(&mut *caller, address as usize, &bytes)?;
-	Ok(Some(
-		ints_to_list.call(&mut *caller, (address as i32, ints.len() as i32))?,
-	))
+	{
+		let ints_to_list = ints_to_list.typed::<(i32, i32), HostNode>(&*caller)?;
+		if let Some(address) = scratch(caller, memory, std::mem::size_of_val(ints))? {
+			let bytes: Vec<u8> = ints.iter().flat_map(|int| int.to_le_bytes()).collect();
+			memory.write(&mut *caller, address as usize, &bytes)?;
+			return ints_to_list.call(&mut *caller, (address as i32, ints.len() as i32));
+		}
+	}
+	let ints = ints.iter().map(|&int| Node::Number(Number::Int(i64::from(int)))).collect();
+	built_in_program(caller, &Node::List(ints, crate::node::Bracket::Square, crate::node::Separator::Space), word)
 }
 
 /// The module's memory, or the task failure "`word`: the module exports no memory"
-pub(super) fn module_memory(caller: &mut Caller<'_, HostState>, word: &str) -> wasmtime::Result<Memory> {
-	match caller.get_export("memory") {
-		Some(Extern::Memory(memory)) => Ok(memory),
-		_ => Err(task_failure(format!("{word}: the module exports no memory"))),
-	}
+pub(crate) fn module_memory(caller: &mut Caller<'_, HostState>, word: &str) -> wasmtime::Result<Memory> {
+	exported_memory(caller).ok_or_else(|| task_failure(format!("{word}: the module exports no memory")))
 }
 
 pub(super) fn gpu_failure(word: &'static str) -> impl Fn(String) -> wasmtime::Error {
@@ -455,10 +407,9 @@ pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::graphics::gpu::S
 			};
 			let name = name.drop_meta().name();
 			let floats_of = |value: &Node| match value.drop_meta() {
-				Node::List(items, _, _) => items
-					.iter()
-					.map(|item| float(&name, item))
-					.collect::<Result<Vec<f32>, String>>(),
+				Node::List(items, _, _) => {
+					items.iter().map(|item| float(&name, item)).collect::<Result<Vec<f32>, String>>()
+				}
 				single => Ok(vec![float(&name, single)?]),
 			};
 			let items: Vec<Node> = match value.drop_meta() {
@@ -479,11 +430,7 @@ pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::graphics::gpu::S
 					vector.resize(crate::graphics::gpu::VECTOR_FLOATS, 0.0);
 					floats.extend(vector);
 				}
-				return Ok(crate::graphics::gpu::ShaderValue {
-					name,
-					floats,
-					array: true,
-				});
+				return Ok(crate::graphics::gpu::ShaderValue { name, floats, array: true });
 			}
 			let floats = floats_of(value)?;
 			let array = floats.len() > crate::graphics::gpu::VECTOR_FLOATS;
@@ -501,9 +448,6 @@ pub(super) fn given_shader(
 	match given_node(caller, shader)? {
 		Node::Text(shader) => Ok(shader),
 		Node::Char(letter) => Ok(letter.to_string()), // a one-letter text reads as a code point
-		other => Err(failure(format!(
-			"the shader is a text of WGSL, got {}",
-			other.serialize()
-		))),
+		other => Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
 	}
 }

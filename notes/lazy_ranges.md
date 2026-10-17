@@ -5,7 +5,7 @@ a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of 
 
 ## What a range is now
 - A range of plain bounds (integer literals or variables), `a..b` or `a to b`, is a descriptor (start, end) in the
-  lowering pass `src/lowering/lazy_ranges.rs` (first of MEANING_PASSES):
+  lowering pass `src/lowering/collections/lazy_ranges.rs` (first of MEANING_PASSES):
   - `count r`, `#r`, `r.count`: `end - start`, at least 0 (constant for literal bounds)
   - `sum r`, `r.sum`: `n * (2 * start + n - 1) / 2` (exact, big integers included)
   - `r#i`: `start + i - 1` when `1 <= i <= n`, else the list's own index, so the error and its hint stay the same

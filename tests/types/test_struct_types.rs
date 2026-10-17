@@ -15,10 +15,7 @@ wasm_struct! {
 
 #[test]
 fn test_class_instance_magic_roundtrip() {
-	let alice = Person {
-		name: "Alice".into(),
-		age: 30,
-	};
+	let alice = Person { name: "Alice".into(), age: 30 };
 	is!("class Person{name:String age:i64}; Person{name:'Alice' age:30}", alice); // IT WORKS!! 🎉
 }
 
@@ -62,10 +59,7 @@ let alice = wasm_object! { Person { name: String = "Alice", age: i64 = 30 } }; i
  */
 
 fn field(name: &str, type_name: &str) -> Node {
-	let typ = Type {
-		name: Box::new(symbol(type_name)),
-		body: Box::new(Empty),
-	};
+	let typ = Type { name: Box::new(symbol(type_name)), body: Box::new(Empty) };
 	key(name, typ)
 }
 

@@ -6,7 +6,7 @@ use warp::wasm_emitter::eval;
 const PERSON: &str = "class Person{name: text; age: int}";
 
 fn program(table: &str, rest: &str) -> String {
-	format!("{PERSON}\npeople: [Person] = database.{table}\n{rest}")
+	format!("{PERSON}\nstored people: [Person] in \"{table}\"\n{rest}")
 }
 
 #[test]
@@ -27,51 +27,36 @@ fn a_row_knows_its_id() {
 
 #[test]
 fn a_field_added_to_the_class_adds_a_column() {
-	eval("class Pet{name: text}\npets: [Pet] = database.pets_grown\npets.add(Pet(\"Rex\"))");
-	is!(
-		"class Pet{name: text; legs: int = 4}\npets: [Pet] = database.pets_grown\ncount(pets)",
-		1
-	);
-	eval("class Pet{name: text; legs: int = 4}\npets: [Pet] = database.pets_grown\npets.add(Pet(\"Tweety\", 2))");
-	is!(
-		"class Pet{name: text; legs: int = 4}\npets: [Pet] = database.pets_grown\npets#2.legs",
-		2
-	);
+	eval("class Pet{name: text}\nstored pets: [Pet] in \"pets_grown\"\npets.add(Pet(\"Rex\"))");
+	is!("class Pet{name: text; legs: int = 4}\nstored pets: [Pet] in \"pets_grown\"\ncount(pets)", 1);
+	eval("class Pet{name: text; legs: int = 4}\nstored pets: [Pet] in \"pets_grown\"\npets.add(Pet(\"Tweety\", 2))");
+	is!("class Pet{name: text; legs: int = 4}\nstored pets: [Pet] in \"pets_grown\"\npets#2.legs", 2);
 }
 
 // a removed field keeps its column (data is never dropped silently), loudly
 #[test]
 fn a_field_removed_from_the_class_keeps_its_column_with_a_warning() {
-	eval("class Car{make: text; color: text}\ncars: [Car] = database.cars_shrunk\ncars.add(Car(\"VW\", \"red\"))");
-	warp::diagnostic::take_runtime_warnings();
-	is!(
-		"class Car{make: text}\ncars: [Car] = database.cars_shrunk\ncars#1.make",
-		"VW"
-	);
-	let warnings = warp::diagnostic::take_runtime_warnings();
+	eval("class Car{make: text; color: text}\nstored cars: [Car] in \"cars_shrunk\"\ncars.add(Car(\"VW\", \"red\"))");
+	warp::errors::diagnostic::take_runtime_warnings();
+	is!("class Car{make: text}\nstored cars: [Car] in \"cars_shrunk\"\ncars#1.make", "VW");
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(warnings.iter().any(|warning| warning.contains("color")), "{warnings:?}");
 }
 
 // a lossless type change converts the column in place, a lossy one is a loud error (notes/orm.md Migrations)
 #[test]
 fn a_field_changed_without_loss_converts_its_column() {
-	eval("class Box{width: int}\nboxes: [Box] = database.boxes_widened\nboxes.add(Box(3))");
-	is!(
-		"class Box{width: float}\nboxes: [Box] = database.boxes_widened\nboxes#1.width",
-		3.0
-	);
-	eval("class Tag{code: int}\ntags: [Tag] = database.tags_spelled\ntags.add(Tag(7))");
-	is!(
-		"class Tag{code: text}\ntags: [Tag] = database.tags_spelled\ntags#1.code",
-		"7"
-	);
+	eval("class Box{width: int}\nstored boxes: [Box] in \"boxes_widened\"\nboxes.add(Box(3))");
+	is!("class Box{width: float}\nstored boxes: [Box] in \"boxes_widened\"\nboxes#1.width", 3.0);
+	eval("class Tag{code: int}\nstored tags: [Tag] in \"tags_spelled\"\ntags.add(Tag(7))");
+	is!("class Tag{code: text}\nstored tags: [Tag] in \"tags_spelled\"\ntags#1.code", "7");
 }
 
 #[test]
 fn a_field_changed_with_loss_is_an_error_naming_both_types() {
-	eval("class Bag{weight: float}\nbags: [Bag] = database.bags_narrowed\nbags.add(Bag(2.5))");
+	eval("class Bag{weight: float}\nstored bags: [Bag] in \"bags_narrowed\"\nbags.add(Bag(2.5))");
 	crate::common::fails_with(
-		"class Bag{weight: int}\nbags: [Bag] = database.bags_narrowed\nbags#1.weight",
+		"class Bag{weight: int}\nstored bags: [Bag] in \"bags_narrowed\"\nbags#1.weight",
 		"bags_narrowed.weight holds",
 	);
 }
@@ -82,54 +67,24 @@ fn a_field_changed_with_loss_is_an_error_naming_both_types() {
 #[cfg(feature = "native")]
 #[test]
 fn a_unit_field_is_stored_and_migrates_within_its_quantity() {
-	let runs =
-		|class: &str, table: &str, rest: &str| format!("class Run{{{class}}}\nruns: [Run] = database.{table}\n{rest}");
-	eval(&runs(
-		"distance: km",
-		"runs_km",
-		"runs.add(Run(5 km))\nruns.add(Run(1500 m))",
-	));
-	assert_eq!(
-		eval(&runs("distance: km", "runs_km", "runs#2.distance"))
-			.serialize()
-			.trim(),
-		"1.5km"
-	);
-	assert_eq!(
-		eval(&runs("distance: m", "runs_km", "runs#1.distance"))
-			.serialize()
-			.trim(),
-		"5000m"
-	);
-	crate::common::fails_with(
-		&runs("distance: kg", "runs_km", "runs#1.distance"),
-		"different quantities",
-	);
-	crate::common::fails_with(
-		&runs("distance: float", "runs_km", "runs#1.distance"),
-		"the unit would be lost",
-	);
+	let runs = |class: &str, table: &str, rest: &str| {
+		format!("class Run{{{class}}}\nstored runs: [Run] in \"{table}\"\n{rest}")
+	};
+	eval(&runs("distance: km", "runs_km", "runs.add(Run(5 km))\nruns.add(Run(1500 m))"));
+	assert_eq!(eval(&runs("distance: km", "runs_km", "runs#2.distance")).serialize().trim(), "1.5km");
+	assert_eq!(eval(&runs("distance: m", "runs_km", "runs#1.distance")).serialize().trim(), "5000m");
+	crate::common::fails_with(&runs("distance: kg", "runs_km", "runs#1.distance"), "different quantities");
+	crate::common::fails_with(&runs("distance: float", "runs_km", "runs#1.distance"), "the unit would be lost");
 	eval(&runs("distance: int", "runs_plain", "runs.add(Run(3))"));
-	warp::diagnostic::take_runtime_warnings();
-	assert_eq!(
-		eval(&runs("distance: km", "runs_plain", "runs#1.distance"))
-			.serialize()
-			.trim(),
-		"3km"
-	);
-	let warnings = warp::diagnostic::take_runtime_warnings();
-	assert!(
-		warnings.iter().any(|warning| warning.contains("read as km")),
-		"{warnings:?}"
-	);
+	warp::errors::diagnostic::take_runtime_warnings();
+	assert_eq!(eval(&runs("distance: km", "runs_plain", "runs#1.distance")).serialize().trim(), "3km");
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
+	assert!(warnings.iter().any(|warning| warning.contains("read as km")), "{warnings:?}");
 }
 
 #[test]
 fn an_add_in_a_block_of_one_statement_inserts() {
-	eval(&program(
-		"people_blocked",
-		"if count(people) == 0 { people.add(Person(\"Hal\", 9)) }",
-	));
+	eval(&program("people_blocked", "if count(people) == 0 { people.add(Person(\"Hal\", 9)) }"));
 	is!(&program("people_blocked", "people#1.id"), 1);
 }
 
@@ -138,21 +93,12 @@ fn an_add_in_a_block_of_one_statement_inserts() {
 #[cfg(feature = "native")]
 #[test]
 fn a_table_loads_its_rows_only_when_read() {
-	eval(&program(
-		"people_lazy",
-		"people.add(Person(\"Jo\", 5))\npeople.add(Person(\"Ki\", 6))",
-	));
-	let before = warp::database::rows_read();
-	is!(
-		&program("people_lazy", "people.add(Person(\"Lu\", 7))\ncount(people)"),
-		3
-	);
-	assert_eq!(warp::database::rows_read(), before, "counting and adding loaded rows");
+	eval(&program("people_lazy", "people.add(Person(\"Jo\", 5))\npeople.add(Person(\"Ki\", 6))"));
+	let before = warp::host::database::rows_read();
+	is!(&program("people_lazy", "people.add(Person(\"Lu\", 7))\ncount(people)"), 3);
+	assert_eq!(warp::host::database::rows_read(), before, "counting and adding loaded rows");
 	is!(&program("people_lazy", "people#2.name"), "Ki");
-	assert!(
-		warp::database::rows_read() > before,
-		"reading an element loads the rows"
-	);
+	assert!(warp::host::database::rows_read() > before, "reading an element loads the rows");
 }
 
 // `people#i` reads that one row, kept so the loaded list holds the same instance
@@ -163,13 +109,9 @@ fn an_element_of_a_table_loads_one_row() {
 		"people_indexed",
 		"people.add(Person(\"Ny\", 5))\npeople.add(Person(\"Oz\", 6))\npeople.add(Person(\"Pi\", 7))",
 	));
-	let before = warp::database::rows_read();
+	let before = warp::host::database::rows_read();
 	is!(&program("people_indexed", "people#2.name"), "Oz");
-	assert_eq!(
-		warp::database::rows_read(),
-		before + 1,
-		"people#2 read more than its row"
-	);
+	assert_eq!(warp::host::database::rows_read(), before + 1, "people#2 read more than its row");
 	is!(
 		&program(
 			"people_indexed",
@@ -183,35 +125,16 @@ fn an_element_of_a_table_loads_one_row() {
 #[cfg(feature = "native")]
 #[test]
 fn iterating_a_table_reads_it_in_pages() {
-	eval(&program(
-		"people_paged",
-		"for i in 1 to 250 { people.add(Person(\"N\" + i, i)) }",
-	));
-	let before = warp::database::rows_read();
+	eval(&program("people_paged", "for i in 1 to 250 { people.add(Person(\"N\" + i, i)) }"));
+	let before = warp::host::database::rows_read();
 	is!(
-		&program(
-			"people_paged",
-			"found = 0\nfor p in people { if p.age == 150 { found = p.age; break } }\nfound"
-		),
+		&program("people_paged", "found = 0\nfor p in people { if p.age == 150 { found = p.age; break } }\nfound"),
 		150
 	);
-	assert_eq!(
-		warp::database::rows_read(),
-		before + 200,
-		"a loop breaking at row 150 read other than two pages"
-	);
+	assert_eq!(warp::host::database::rows_read(), before + 200, "a loop breaking at row 150 read other than two pages");
+	is!(&program("people_paged", "sum = 0\nfor p in people { if p.age > 3 { continue }; sum += p.age }\nsum"), 6);
 	is!(
-		&program(
-			"people_paged",
-			"sum = 0\nfor p in people { if p.age > 3 { continue }; sum += p.age }\nsum"
-		),
-		6
-	);
-	is!(
-		&program(
-			"people_paged",
-			"for p in people { if p.age == 120 { p.name = \"Hundred20\" } }\npeople#120.name"
-		),
+		&program("people_paged", "for p in people { if p.age == 120 { p.name = \"Hundred20\" } }\npeople#120.name"),
 		"Hundred20"
 	);
 }
@@ -231,15 +154,9 @@ fn an_instance_added_before_loading_is_the_loaded_row() {
 // `@was(old)` on a field renames its column, keeping the data; without it a rename reads as add + remove
 #[test]
 fn a_field_marked_was_renames_its_column() {
-	eval("class Dog{nick: text}\ndogs: [Dog] = database.dogs_renamed\ndogs.add(Dog(\"Rex\"))");
-	is!(
-		"class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name",
-		"Rex"
-	);
-	is!(
-		"class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name",
-		"Rex"
-	);
+	eval("class Dog{nick: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs.add(Dog(\"Rex\"))");
+	is!("class Dog{@was(nick) name: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs#1.name", "Rex");
+	is!("class Dog{@was(nick) name: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs#1.name", "Rex");
 }
 
 #[cfg(feature = "native")]
@@ -266,35 +183,27 @@ fn stored_registers_a_table_of_the_same_name() {
 // `save p` writes p's row and is p; field changes are written through already (user default, 2026-10-08)
 #[test]
 fn save_writes_the_row_and_is_the_instance() {
-	let saved = eval(&program(
-		"people_saved",
-		"people.add(Person(\"Eve\", 20))\neve = people#1\neve.age = 21\nsave eve",
-	));
+	let saved =
+		eval(&program("people_saved", "people.add(Person(\"Eve\", 20))\neve = people#1\neve.age = 21\nsave eve"));
 	assert!(saved.serialize().contains("Eve"), "{saved:?}");
 	is!(&program("people_saved", "people#1.age"), 21);
-	crate::common::fails_with(
-		&program("people_unsaved", "save Person(\"Fay\", 3)"),
-		"add it to people first",
-	);
+	crate::common::fails_with(&program("people_unsaved", "save Person(\"Fay\", 3)"), "add it to people first");
 }
 
 // as any expression: the standalone build of a program ending with `save bo` prints it, `print(save bo)` (card orm-standalone)
 #[test]
 fn save_is_an_expression() {
 	is!(
-		&program(
-			"people_saved_inline",
-			"people.add(Person(\"Gus\", 60))\nprint(save people#1)\n(save people#1).age"
-		),
+		&program("people_saved_inline", "people.add(Person(\"Gus\", 60))\nprint(save people#1)\n(save people#1).age"),
 		60
 	);
 }
 
-// samples/orm.warp keeps its rows beside it (in the browser in IndexedDB) and seeds them once; each run makes Bo (row 2)
+// samples/storage/orm.warp keeps its rows beside it (in the browser in IndexedDB) and seeds them once; each run makes Bo (row 2)
 // a year older (the sample ends with `bo.age += 1`, no save needed; the test appends `bo` to read him back)
 #[test]
 fn the_orm_sample_runs_twice_on_the_same_rows() {
-	let sample = format!("{}\nbo", std::fs::read_to_string("samples/orm.warp").unwrap());
+	let sample = format!("{}\nbo", std::fs::read_to_string("samples/storage/orm.warp").unwrap());
 	let runs = [eval(&sample).serialize(), eval(&sample).serialize()];
 	for run in &runs {
 		assert!(run.contains("Bo") && run.contains("id:2"), "{run}");
@@ -307,13 +216,7 @@ fn the_orm_sample_runs_twice_on_the_same_rows() {
 fn remove_deletes_the_row() {
 	let run = |rest: &str| eval(&program("people_removed", rest));
 	run("people.add(Person(\"Al\", 1))\npeople.add(Person(\"Bo\", 2))\npeople.add(Person(\"Cy\", 3))");
-	is!(
-		&program(
-			"people_removed",
-			"people.remove((people where it.name == \"Bo\")#1)\ncount(people)"
-		),
-		2
-	);
+	is!(&program("people_removed", "people.remove((people where it.name == \"Bo\")#1)\ncount(people)"), 2);
 	is!(&program("people_removed", "count(people)"), 2);
 	is!(
 		&program(
@@ -323,22 +226,13 @@ fn remove_deletes_the_row() {
 		1
 	);
 	is!(&program("people_removed", "people#1.name"), "Cy");
-	is!(
-		&program(
-			"people_removed",
-			"people.remove(people#1)\npeople.add(Person(\"Di\", 4))\npeople#1.name"
-		),
-		"Di"
-	);
+	is!(&program("people_removed", "people.remove(people#1)\npeople.add(Person(\"Di\", 4))\npeople#1.name"), "Di");
 }
 
 // card stored-space: a class whose fields stand side by side, without `;`, is a table too
 #[test]
 fn a_class_of_fields_side_by_side_is_a_table() {
-	eval("class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\nhikers.add(Hiker(\"Bo\", 30))\nhikers.add(Hiker(\"Cy\"))");
-	is!("class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\n(hikers where age > 18)#1.name", "Bo");
-	is!(
-		"class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\nhikers#2.age",
-		5
-	);
+	eval("class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\nhikers.add(Hiker(\"Bo\", 30))\nhikers.add(Hiker(\"Cy\"))");
+	is!("class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\n(hikers where age > 18)#1.name", "Bo");
+	is!("class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\nhikers#2.age", 5);
 }

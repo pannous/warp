@@ -1,4 +1,4 @@
-use warp::std_docs::standard_library_markdown;
+use warp::modules::std_docs::standard_library_markdown;
 
 const META_ATTRIBUTES: &str = "html_meta_attributes";
 const SOUND_QUEUED: &str = "sound_queued()";
@@ -30,7 +30,7 @@ fn words_use_the_comment_line_directly_above_their_definition() {
 #[test]
 fn a_wrapped_comment_is_the_whole_doc_of_its_word() {
 	let page = standard_library_markdown();
-	let exec = markdown_entry(&page, "exec(command:any)");
+	let exec = markdown_entry(&page, "exec(command: any)");
 	assert!(exec.contains("`exec sh \"crontab -l\"`"), "{exec}");
 	assert!(exec.ends_with("natively only, the browser runs no processes"), "{exec}");
 	let queued = markdown_entry(&page, SOUND_QUEUED);
@@ -45,26 +45,34 @@ fn a_wrapped_comment_is_the_whole_doc_of_its_word() {
 #[test]
 fn a_hand_wrapped_comment_is_the_whole_doc_of_its_word() {
 	let page = standard_library_markdown();
-	let render = markdown_entry(&page, "html_render(value:any, scope:any, chosen:any)");
-	assert!(
-		render.contains("`scope`: the component") && render.ends_with("card web-bind-select)"),
-		"{render}"
-	);
-	let mark = markdown_entry(&page, "route_part_mark(part:any)");
-	assert!(
-		mark.contains("\"?\" at most once") && mark.ends_with("\"\" exactly once"),
-		"{mark}"
-	);
-	let units = markdown_entry(&page, "unit_names");
-	assert!(
-		units.contains("The units by name") && units.contains("65536·time"),
-		"{units}"
-	);
+	let render = markdown_entry(&page, "html_render(value: any, scope: any, chosen: any)");
+	assert!(render.contains("`scope`: the component") && render.ends_with("card web-bind-select)"), "{render}");
+	let mark = markdown_entry(&page, "route_part_mark(part: any)");
+	assert!(mark.contains("\"?\" at most once") && mark.ends_with("\"\" exactly once"), "{mark}");
+	let units = markdown_entry(&page, "unit_definitions");
+	assert!(units.contains("The quantities and units warp knows") && units.ends_with("in conversions"), "{units}");
 	let signal = markdown_entry(&page, "play_signal(signal, seconds)");
-	assert!(
-		signal.contains("a signal computed") && signal.ends_with("the last is queued"),
-		"{signal}"
-	);
+	assert!(signal.contains("a signal computed") && signal.ends_with("the last is queued"), "{signal}");
 	let square = markdown_entry(&page, "square(x)");
 	assert!(!square.contains("P169"), "{square}");
+}
+
+// card help-markdown-word: a comment belongs to the definition directly below it, the whole block of comment lines
+// without a blank line, whatever its line lengths or full stops; a blank line detaches a section note
+#[test]
+fn the_comment_block_directly_above_is_the_doc_of_its_word() {
+	let page = standard_library_markdown();
+	let swing = markdown_entry(&page, "swing");
+	assert!(swing.contains("patterns in Tidal's mini-notation") && swing.contains("`c4 e4 g4` three steps"), "{swing}");
+	let distortion = markdown_entry(&page, "distortion");
+	assert!(
+		distortion.contains("the signal graph") && distortion.contains("the drive of a soft clipper"),
+		"{distortion}"
+	);
+	let unitless = markdown_entry(&page, "html_unitless_properties");
+	assert!(unitless.contains("CSS properties whose number has no unit"), "{unitless}");
+	let queued = markdown_entry(&page, SOUND_QUEUED);
+	assert!(!queued.contains("block-wise") && !queued.contains("play_blocks"), "{queued}");
+	let signal = markdown_entry(&page, "play_signal(signal, seconds)");
+	assert!(!signal.contains("block-wise"), "{signal}");
 }

@@ -3,7 +3,8 @@ use super::*;
 
 /// The program as the Lean list of W0 items, or why it is outside W0
 pub fn export(code: &str) -> Result<String, String> {
-	let program = crate::warp_parser::parse(code);
+	// the items written into lists and fields, marked as warp's pipeline marks them
+	let program = crate::lowering::data_items::lower(crate::warp_parser::parse(code));
 	let items = Exporter::default().items(&program)?;
 	Ok(format!("[{}]", items.join(",\n  ")))
 }
@@ -18,17 +19,15 @@ pub(super) fn ask_model(name: &str, requests: &str) -> Result<String, String> {
 		.map_err(|e| format!("cannot write {}: {e}", file.display()))?;
 	let mut command = Command::new(lean_executable("lake"));
 	command.current_dir(MODEL_DIR).arg("env").arg("lean").arg(&file);
-	run_with_timeout(command)
+	run_with_timeout(command, LEAN_TIMEOUT)
 }
 
 /// Builds the model (`lake build` fails on any proof error) and returns its verdict for each exported program
 pub fn verdicts(exported: &[String]) -> Result<Vec<ModelVerdict>, String> {
 	let requests = exported.iter().map(|items| format!("verdict {items}")).collect();
-	ask_each("verdicts", requests, "programs", |line| {
-		match line.strip_prefix(ACCEPTED_PREFIX) {
-			Some(type_name) => Some(ModelVerdict::Accepted(type_name.to_string())),
-			None => (line == REJECTED).then_some(ModelVerdict::Rejected),
-		}
+	ask_each("verdicts", requests, "programs", |line| match line.strip_prefix(ACCEPTED_PREFIX) {
+		Some(type_name) => Some(ModelVerdict::Accepted(type_name.to_string())),
+		None => (line == REJECTED).then_some(ModelVerdict::Rejected),
 	})
 }
 
@@ -39,18 +38,11 @@ pub(super) fn ask_each<T>(
 	what: &str,
 	answer: impl Fn(&str) -> Option<T>,
 ) -> Result<Vec<T>, String> {
-	let evaluations: String = requests
-		.iter()
-		.map(|request| format!("#eval IO.println ({request})\n"))
-		.collect();
+	let evaluations: String = requests.iter().map(|request| format!("#eval IO.println ({request})\n")).collect();
 	let output = ask_model(name, &evaluations)?;
 	let answers: Vec<T> = output.lines().filter_map(answer).collect();
 	if answers.len() != requests.len() {
-		return Err(format!(
-			"the model answered {} of {} {what}:\n{output}",
-			answers.len(),
-			requests.len()
-		));
+		return Err(format!("the model answered {} of {} {what}:\n{output}", answers.len(), requests.len()));
 	}
 	Ok(answers)
 }
@@ -61,9 +53,8 @@ pub(super) fn ask_each<T>(
 pub fn admits_disagreements() -> Result<Vec<String>, String> {
 	let words = crate::type_tests::builtin_type_words()
 		.filter(|word| crate::type_tests::held_kind(word).is_some() && type_of_word(word).is_some());
-	let pairs: Vec<(&str, &str, Kind)> = words
-		.flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (word, *value, *kind)))
-		.collect();
+	let pairs: Vec<(&str, &str, Kind)> =
+		words.flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (word, *value, *kind))).collect();
 	let requests = pairs
 		.iter()
 		.map(|(word, value, _)| format!("Ty.admits ({value}) ({})", type_of_word(word).expect("a W0 type word")))
@@ -107,31 +98,24 @@ pub fn warp_value(code: &str) -> String {
 
 /// The axioms the named theorems rest on, as `#print axioms` lists them (a `sorry` shows as sorryAx)
 pub fn axioms(theorems: &[&str]) -> Result<String, String> {
-	ask_model(
-		"axioms",
-		&theorems
-			.iter()
-			.map(|theorem| format!("#print axioms {theorem}\n"))
-			.collect::<String>(),
-	)
+	ask_model("axioms", &theorems.iter().map(|theorem| format!("#print axioms {theorem}\n")).collect::<String>())
 }
 
 /// `lake build` of the model: every theorem is checked again
 pub fn build_model() -> Result<String, String> {
 	let mut command = Command::new(lean_executable("lake"));
 	command.current_dir(MODEL_DIR).arg("build");
-	run_with_timeout(command)
+	if !Path::new(MODEL_DIR).join(MODEL_BUILD_OUTPUT).exists() {
+		eprintln!("building the Lean type model once, a few minutes (lake build in {MODEL_DIR})");
+	}
+	run_with_timeout(command, MODEL_BUILD_TIMEOUT)
 }
 
 /// The proof files of the model
 pub fn model_sources() -> Vec<PathBuf> {
 	let sources = Path::new(MODEL_DIR).join("WarpTypes");
 	let mut files: Vec<PathBuf> = std::fs::read_dir(&sources)
-		.map(|entries| {
-			entries
-				.filter_map(|entry| entry.ok().map(|entry| entry.path()))
-				.collect()
-		})
+		.map(|entries| entries.filter_map(|entry| entry.ok().map(|entry| entry.path())).collect())
 		.unwrap_or_default();
 	files.retain(|path| path.extension().is_some_and(|extension| extension == "lean"));
 	files.sort();
@@ -168,8 +152,5 @@ pub fn report(code: &str) -> String {
 		Ok(values) => values[0].clone(),
 		Err(why) => format!("model failed: {why}"),
 	};
-	format!(
-		"W0: {exported}\nmodel: {model}\nmodel value: {value}\nwarp: {warp}\nwarp value: {}",
-		warp_value(code)
-	)
+	format!("W0: {exported}\nmodel: {model}\nmodel value: {value}\nwarp: {warp}\nwarp value: {}", warp_value(code))
 }

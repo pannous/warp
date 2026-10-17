@@ -1,0 +1,23 @@
+#!/usr/bin/env warp
+# Code as data: data(…) quotes code instead of running it; patterns with $holes take it apart and rewrite it
+
+simplify(code) := match code {
+	data($a + 0) => a
+	data($a * 1) => a
+	_ => code
+}
+print simplify(data (n * 1))           # n
+print simplify(data (n * 2 + 0))       # n*2
+
+# replace rewrites every match inside a larger expression
+print str(data (n * 1 + k * 1) replace data($a * 1) with a)   # n+k
+
+# parse turns a text known only at run time into the same data
+code = parse("n * " + "1")
+print code.op                          # *
+print code == data (n * 1)             # yes
+print try { parse("f(a, a") } else "does not parse"
+
+# quoted code knows where it was written
+quoted = data (n * 1)
+print "line " + quoted.line + ", column " + quoted.column

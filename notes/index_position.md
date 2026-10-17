@@ -34,5 +34,5 @@ Rules and defaults (worker defaults, which the interviewer can change):
   int. A name assigned both a position and something else counts as neither.
 - **Program names take priority.** If a program binds `index` or `position` as a name, that word is no type word.
 
-Code: src/lowering/index_positions.rs (`mark_declarations` runs before the declaration passes; `lower` runs after
+Code: src/lowering/collections/index_positions.rs (`mark_declarations` runs before the declaration passes; `lower` runs after
 library_words names index_of `collection_position`). Tests: tests/types/test_index_position.rs.

@@ -1,13 +1,13 @@
 // card nearest-helper: `nearest(x, rational, limit)` is the fraction closest to x whose denominator is at most limit, as
-// Python's Fraction.limit_denominator; `within: ε` the first convergent that close; neither the first convergent that is
-// the same float (user, 2026-10-10: a fixed 10^6 default was "hard to believe"). An exact √2 or π expands exactly
-// (src/real.rs), a float at run time by lib/prelude.warp
+// Python's Fraction.limit_denominator, with its default 1000000 (user decision 2026-10-14, card nearest-default-limit);
+// `within: ε` the first convergent that close; limit 0 the first convergent that is the same float. An exact √2 or π
+// expands exactly (src/numbers/real.rs), a float at run time by lib/prelude.warp
 use crate::common::fails_with;
 use crate::is;
 
 #[test]
 fn nearest_fraction() {
-	is!("nearest(sqrt(2), rational) == 131836323/93222358", true);
+	is!("nearest(sqrt(2), rational) == 941664/665857", true); // limit 1000000 by default (user decision)
 	is!("nearest(sqrt(2), rational, 1000) == 1393/985", true);
 	is!("nearest(pi, rational, 100) == 311/99", true);
 	is!("type(nearest(sqrt(2), rational))", "rational");
@@ -23,10 +23,7 @@ fn nearest_of_exact_values() {
 
 #[test]
 fn nearest_takes_two_to_four_arguments() {
-	fails_with(
-		"nearest(1.5, rational, 1, 0.1, 2)",
-		"nearest takes 2 to 4 arguments, got 5",
-	);
+	fails_with("nearest(1.5, rational, 1, 0.1, 2)", "nearest takes 2 to 4 arguments, got 5");
 }
 
 #[test]
@@ -35,10 +32,8 @@ fn float_to_exact_refusals_name_nearest() {
 		"x: rational = sqrt(2)",
 		"truncate with `as int`, or use nearest(√(2), rational) for the closest fraction",
 	);
-	fails_with(
-		"sqrt(2) as rational",
-		"or use nearest(√(2), rational) for the closest fraction",
-	);
+	// decision float-as-rational: `as rational` of a float is the fraction of its printed digits
+	is!("sqrt(2) as rational == 14142135623730951/10000000000000000", true);
 }
 
 #[test]
@@ -46,7 +41,7 @@ fn nearest_within_a_precision() {
 	is!("nearest(sqrt(2), rational, within: 1e-6) == 1393/985", true);
 	is!("x = sqrt(2); nearest(x, rational, within: 1e-6) == 1393/985", true);
 	is!("x = sqrt(2); nearest(x, rational, within = 1e-9) == 47321/33461", true);
-	is!("x = sqrt(2); nearest(x, rational) == 131836323/93222358", true);
+	is!("x = sqrt(2); nearest(x, rational) == 665857/470832", true); // a float at run time, as Python
 }
 
 #[test]
@@ -56,8 +51,11 @@ fn nearest_expands_exact_values_beyond_floats() {
 		"r = nearest(sqrt(2), rational, within: 1e-40); r * r - 2 == -1/4689566069222821420312720463003656425961",
 		true
 	);
-	is!("nearest(sqrt(2), rational, 10^38) == 133984184101103275326877813426364627544/94741125149636933417873079920900017937", true);
-	is!("nearest(π, rational) == 245850922/78256779", true);
+	is!(
+		"nearest(sqrt(2), rational, 10^38) == 133984184101103275326877813426364627544/94741125149636933417873079920900017937",
+		true
+	);
+	is!("nearest(π, rational) == 3126535/995207", true);
 }
 
 // card nearest-rational: nearest is a method too, of a variable and of a call's result (card sqrt-round)

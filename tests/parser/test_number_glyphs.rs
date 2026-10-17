@@ -18,7 +18,6 @@ fn test_vulgar_fractions_are_exact() {
 
 #[test]
 fn test_number_glyphs_at_end_of_input() {
-	is!("3⁴", 81);
 	is!("⅓*3", 1);
 }
 

@@ -9,7 +9,9 @@ const SEED: &str =
 	"for i in 1 to 300 { teams.add(Team(\"T\" + i)) }\nfor i in 1 to 300 { people.add(Person(\"N\" + i, teams#i)) }";
 
 fn program(rest: &str) -> String {
-	format!("{CLASSES}\nteams: [Team] = database.teams_batched\npeople: [Person] = database.people_batched\n{rest}")
+	format!(
+		"{CLASSES}\nstored teams: [Team] in \"teams_batched\"\nstored people: [Person] in \"people_batched\"\n{rest}"
+	)
 }
 
 #[cfg(feature = "native")]
@@ -17,25 +19,13 @@ fn program(rest: &str) -> String {
 fn a_page_of_rows_reads_only_the_rows_its_keys_point_to() {
 	eval(&program(SEED));
 	let read = |rest: &str, expected: &str, rows: usize| {
-		let before = warp::database::rows_read();
+		let before = warp::host::database::rows_read();
 		is!(&program(rest), expected);
-		assert_eq!(
-			warp::database::rows_read(),
-			before + rows,
-			"{rest} read other rows than its {rows}"
-		);
+		assert_eq!(warp::host::database::rows_read(), before + rows, "{rest} read other rows than its {rows}");
 	};
 	read("people#7.team.name", "T7", 2);
-	read(
-		"found = \"\"\nfor p in people { if p.name == \"N50\" { found = p.team.name; break } }\nfound",
-		"T50",
-		200,
-	);
-	read(
-		"names = [p.team.name for p in (people where it.name == \"N9\")]\nnames#1",
-		"T9",
-		2,
-	);
+	read("found = \"\"\nfor p in people { if p.name == \"N50\" { found = p.team.name; break } }\nfound", "T50", 200);
+	read("names = [p.team.name for p in (people where it.name == \"N9\")]\nnames#1", "T9", 2);
 }
 
 #[test]

@@ -1,73 +1,61 @@
 //! `use draw` on the GPU (card gpu-draw): clear, dot, rect and circle of lib/draw.warp become shapes, 24 bytes each,
-//! which a shader draws into a canvas texture that stays on the GPU; show() sends only the shapes drawn since the last
+//! which lib/draw.warp's shape_shader (draw_shader) draws into a canvas texture that stays on the GPU; show() sends only the shapes drawn since the last
 //! show, never the pixels. In a window the paint-window process owns the texture (src/graphics/paint_window.rs); headless
 //! (WARP_DRAW=gpu without a window) an offscreen one here, read back for paint's PNG. The CPU draw of lib/draw.warp
 //! stays for headless runs and the playground; the system value gpu_drawing tells lib/draw.warp which one runs.
 //! A shape covers the pixels whose centers the CPU draw would color, so both give the same picture: a circle the
 //! centers within its radius, a rect the cells from cell(x) to cell(x + width); alpha mixes as CPU's mixed() does.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-/// What lib/draw.warp passes as draw_shape's kind
+/// draw_shape's kind of clear (lib/draw.warp clear_shape), from which on the shapes cover all
 pub const CLEAR: u32 = 0;
-pub const RECT: u32 = 1;
-pub const CIRCLE: u32 = 2;
 /// kind u32, color u32 (0xAARRGGBB), four f32 coordinates: rect x y width height, circle x y radius
 pub const SHAPE_BYTES: usize = 24;
-/// The canvas before anything is drawn (lib/draw.warp paper, paint.rs PAPER)
-const PAPER: wgpu::Color = wgpu::Color {
-	r: 250.0 / 255.0,
-	g: 250.0 / 255.0,
-	b: 250.0 / 255.0,
-	a: 1.0,
-};
+/// The canvas before anything is drawn: paint's paper (pixels.rs, lib/draw.warp paper)
+const PAPER_LEVEL: f64 = super::pixels::PAPER as f64 / 255.0;
+const PAPER: wgpu::Color = wgpu::Color { r: PAPER_LEVEL, g: PAPER_LEVEL, b: PAPER_LEVEL, a: 1.0 };
 /// Bytes, mixed as bytes: CPU's mixed() mixes 0–255 channels, not light
 const CANVAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const LABEL: &str = "draw canvas";
 /// Two triangles: the box a shape covers
 const BOX_CORNERS: u32 = 6;
 const CANVAS_SIZE_BYTES: u64 = 16;
-const SHADER: &str = "
-struct Shape { @location(0) kind_color: vec2u, @location(1) place: vec4f }
-struct Covered { @builtin(position) at: vec4f, @location(0) @interpolate(flat) kind_color: vec2u, @location(1) @interpolate(flat) place: vec4f }
-@group(0) @binding(0) var<uniform> canvas: vec4f;
-// the pixels a shape may color: rect from cell(x) to cell(x + width), a circle its square, clear all
-fn box_of(kind: u32, place: vec4f) -> vec4f {
-	if kind == 0u { return vec4f(0.0, 0.0, canvas.xy); }
-	if kind == 1u { return vec4f(floor(place.xy), floor(place.xy + place.zw)); }
-	return vec4f(floor(place.xy - place.z), floor(place.xy + place.z) + 1.0);
-}
-@vertex fn vertex(@builtin(vertex_index) corner: u32, shape: Shape) -> Covered {
-	let box = box_of(shape.kind_color.x, shape.place);
-	let corners = array(vec2u(0u, 0u), vec2u(1u, 0u), vec2u(0u, 1u), vec2u(0u, 1u), vec2u(1u, 0u), vec2u(1u, 1u));
-	let pixel = mix(box.xy, box.zw, vec2f(corners[corner]));
-	let clip = vec2f(pixel.x / canvas.x * 2.0 - 1.0, 1.0 - pixel.y / canvas.y * 2.0);
-	return Covered(vec4f(clip, 0.0, 1.0), shape.kind_color, shape.place);
-}
-@fragment fn fragment(covered: Covered) -> @location(0) vec4f {
-	let kind = covered.kind_color.x;
-	let color = covered.kind_color.y;
-	let place = covered.place;
-	// the pixel's center, as CPU's circle tests col + 0.5, row + 0.5
-	let center = covered.at.xy;
-	if kind == 2u && dot(center - place.xy, center - place.xy) > place.z * place.z { discard; }
-	let rgb = vec3f(f32((color >> 16u) & 255u), f32((color >> 8u) & 255u), f32(color & 255u)) / 255.0;
-	// clear sets the color, as CPU's clear stores it unmixed
-	let alpha = select(f32(color >> 24u) / 255.0, 1.0, kind == 0u);
-	return vec4f(rgb, alpha);
-}";
+/// draw_shader(code) of lib/draw.warp: the shader drawing the shapes (its kinds as draw_shape gives them), in this
+/// process and in the paint window's, which reads it first (paint_window::shape_shader_message)
+static SHAPE_SHADER: Mutex<Option<String>> = Mutex::new(None);
+/// Whether the paint window has the shape shader
+static SHADER_SENT: AtomicBool = AtomicBool::new(false);
 
 /// The shapes drawn since the last show, as they cross to the GPU
 static SHAPES: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+/// The shapes not yet drawn into OFFSCREEN, which keeps the canvas here too: a window's canvas lives in its process,
+/// so a saved picture (snapshot, card save-painting) is drawn here from them. From the last clear on, which covers all
+static UNMIRRORED: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 
 /// draw_shape(kind, a, b, c, d, color): one more shape for the next show
 pub fn add_shape(kind: u32, place: [f64; 4], color: u32) {
-	let mut shapes = SHAPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	shapes.extend(kind.to_le_bytes());
-	shapes.extend(color.to_le_bytes());
+	let mut shape = [kind.to_le_bytes(), color.to_le_bytes()].concat();
 	for coordinate in place {
-		shapes.extend((coordinate as f32).to_le_bytes());
+		shape.extend((coordinate as f32).to_le_bytes());
 	}
+	SHAPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).extend(&shape);
+	let mut unmirrored = UNMIRRORED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	if kind == CLEAR {
+		unmirrored.clear();
+	}
+	unmirrored.extend(shape);
+}
+
+/// draw_shader(code): the shape shader lib/draw.warp writes
+pub fn use_shader(code: String) {
+	*SHAPE_SHADER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(code);
+}
+
+fn shape_shader() -> Result<String, String> {
+	let shader = SHAPE_SHADER.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone();
+	shader.ok_or_else(|| "use draw on the GPU: lib/draw.warp gave no shape shader (draw_shader)".to_string())
 }
 
 /// The shapes since the last show, taken
@@ -84,10 +72,10 @@ pub struct Canvas {
 }
 
 impl Canvas {
-	pub fn new(device: &wgpu::Device) -> Canvas {
+	pub fn new(device: &wgpu::Device) -> Result<Canvas, String> {
 		let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
 			label: Some(LABEL),
-			source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+			source: wgpu::ShaderSource::Wgsl(shape_shader()?.into()),
 		});
 		let attributes = wgpu::vertex_attr_array![0 => Uint32x2, 1 => Float32x4];
 		let shapes = wgpu::VertexBufferLayout {
@@ -130,17 +118,9 @@ impl Canvas {
 		let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
 			label: Some(LABEL),
 			layout: &pipeline.get_bind_group_layout(0),
-			entries: &[wgpu::BindGroupEntry {
-				binding: 0,
-				resource: size_buffer.as_entire_binding(),
-			}],
+			entries: &[wgpu::BindGroupEntry { binding: 0, resource: size_buffer.as_entire_binding() }],
 		});
-		Canvas {
-			pipeline,
-			size_buffer,
-			bindings,
-			texture: None,
-		}
+		Ok(Canvas { pipeline, size_buffer, bindings, texture: None })
 	}
 
 	/// The shapes drawn over the canvas, a new one of paper when the size changed; the encoder still to submit
@@ -152,11 +132,7 @@ impl Canvas {
 		height: u32,
 		shapes: &[u8],
 	) -> wgpu::CommandEncoder {
-		let size = wgpu::Extent3d {
-			width: width.max(1),
-			height: height.max(1),
-			depth_or_array_layers: 1,
-		};
+		let size = wgpu::Extent3d { width: width.max(1), height: height.max(1), depth_or_array_layers: 1 };
 		let fresh = self.texture.as_ref().is_none_or(|texture| texture.size() != size);
 		if fresh {
 			let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
@@ -193,19 +169,12 @@ impl Canvas {
 			queue.write_buffer(&buffer, 0, shapes);
 			buffer
 		});
-		let load = if fresh {
-			wgpu::LoadOp::Clear(PAPER)
-		} else {
-			wgpu::LoadOp::Load
-		};
+		let load = if fresh { wgpu::LoadOp::Clear(PAPER) } else { wgpu::LoadOp::Load };
 		let attachment = wgpu::RenderPassColorAttachment {
 			view: &view,
 			depth_slice: None,
 			resolve_target: None,
-			ops: wgpu::Operations {
-				load,
-				store: wgpu::StoreOp::Store,
-			},
+			ops: wgpu::Operations { load, store: wgpu::StoreOp::Store },
 		};
 		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
 			label: Some(LABEL),
@@ -234,14 +203,27 @@ static OFFSCREEN: Mutex<Option<Canvas>> = Mutex::new(None);
 pub fn show(width: usize, height: usize) -> Result<Option<std::path::PathBuf>, String> {
 	let shapes = take_shapes();
 	if crate::graphics::paint::shows_windows() {
-		crate::graphics::paint_window::show(&crate::graphics::paint_window::shapes_message(width, height, &shapes))?;
+		let mut message = match SHADER_SENT.swap(true, Ordering::Relaxed) {
+			true => vec![],
+			false => crate::graphics::paint_window::shape_shader_message(&shape_shader()?),
+		};
+		message.extend(crate::graphics::paint_window::shapes_message(width, height, &shapes));
+		crate::graphics::paint_window::show(&message)?;
 		return Ok(None);
 	}
-	let rgba = crate::graphics::gpu::with_device(|device, queue| {
+	crate::graphics::paint::paint_rgba(&snapshot(width, height)?, width, height)
+}
+
+/// The canvas as drawn so far, its RGBA bytes: the shapes not drawn here yet drawn into OFFSCREEN, which is read back
+pub fn snapshot(width: usize, height: usize) -> Result<Vec<u8>, String> {
+	let shapes = std::mem::take(&mut *UNMIRRORED.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
+	crate::graphics::gpu::with_device(|device, queue| {
 		let mut offscreen = OFFSCREEN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-		let canvas = offscreen.get_or_insert_with(|| Canvas::new(device));
+		if offscreen.is_none() {
+			*offscreen = Some(Canvas::new(device)?);
+		}
+		let canvas = offscreen.as_mut().expect("made above");
 		let encoder = canvas.draw(device, queue, width as u32, height as u32, &shapes);
 		crate::graphics::gpu::image_rgba(device, queue, encoder, canvas.texture())
-	})??;
-	crate::graphics::paint::paint_rgba(&rgba, width, height)
+	})?
 }

@@ -73,3 +73,33 @@ A test running the warp binary (common::warp_command) reports a failed run whole
 code, or the signal that killed it under load), its stdout and stderr, as tests/programs/test_sound_spectrum.rs
 run_report does. An assert printing only stderr hid why the visualizer run failed in a loaded gate (cards
 visualizer-test-exits, visualizer-test-flakes). An environment skip (no WebGPU adapter) stays separate from a failure.
+
+## Consolidation by judgment (card probes-check, user 2026-10-16)
+A probe becomes test assertions only when it checks decided behaviour with a stable value; exploratory, visual,
+sound, timing and undecided ones stay. A probe listed in tests/parser/self_parser_sources.txt keeps its parse parity:
+its text moves into tests/fixtures/parser_corpus/<folder>.warp (snippets concatenated, names as comments).
+- welcoming (consolidate-welcoming): probes/{listparams,maps,slices,listexpr,elements,break,print,globals}/ deleted.
+- functions (consolidate-functions): english_setter, function_ref_compare, runtime_function_equality,
+  returned_list_alias, union_result, quantity_default, methods_extension, thrice_block, calling_closure,
+  function_values_tour, function_objects/doc_strings, function_values/ deleted. Kept: print_closure (`print &f, g`
+  undecided), effects_last, fail_effects (card print-effects), functions/deep_recursion (stack size),
+  functions/fade_unit_argument (sound), function_objects/print_parse (exploratory).
+- algo/ (549 bisection snippets, no expected values; samples/<algo>.warp are the tests): kept.
+- unreferenced probes (consolidate-unref, list from warp-repo-cleanup): 43 one-off probes deleted, every case already
+  asserted by its card's test but copy of an instance (test_named_arguments). Kept by class: markup with warnings
+  (accessibility, attribute_values, markup_mistakes, field_events, style_rules, page_test_counter), shaders and
+  painting, sound, stored tables (orm_*, units_stress, unit_value, stored), timing (json_parse, global_typed_array,
+  orm_identity, await_any_gated, timers_listen), server/CLI (program_server, use_script, warning_levels, expect,
+  types_first_run), open questions (average_undefined, print_quantity, natural_chain_abs, component_imports),
+  print_closure and fail_effects (card print-effects), takes_three (uniscript module), duration_as_unit,
+  duration_in_unit, print_units (executable: user-touched, never deleted); the .py/.sh/.mjs/.md/.lean
+  files are tools and research.
+- matching (consolidate-matching): 25 of probes/matching/ deleted, their cases asserted in tests/control/test_match_*,
+  test_tree_find, test_parameter_patterns, test_plain_enum. Kept: definition_cases (its diagnostic is cut,
+  cleanup-cuts-2), gap_feeding (phrase calls parked), tree_patterns (design examples), inventory.sh (spec inventory),
+  enum_int_fix, parameter_patterns, variant_equality (executable: user-touched, never deleted).
+- semantics (consolidate-semantics): probes/{semantics,json5,class_forms_ruby}/ deleted, and of self_gaps/, key_names/,
+  values_keys/ all but text_costs (fuel), esc_exits (window), class_map (10000 instances), character_text and
+  list_text_quotes (shebang scripts: user-touched, never deleted). The 12 in the self-parser
+  corpus move into tests/fixtures/parser_corpus/semantics.warp. generators/ kept (cut: cleanup-drop-generators),
+  laws/ kept (Lean).

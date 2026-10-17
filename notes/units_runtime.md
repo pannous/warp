@@ -1,13 +1,20 @@
 # Quantities at run time: survey and proposal
 
-## Today (src/units/static_units.rs, card cleanup-units-answer 2026-10-13)
+Naming (user 2026-10-16): avoid the bare word "dimension", it is ambiguous. An image of 28 × 28 px as a tensor has
+2 dimensions (width, height), so width and height both *are* dimensions and *have* dimensions (length, in px).
+Decided (decisions.md quantity-naming): quantity (ISO 80000 kind of quantity) for length, speed, density; axis for
+width/height; rank for the number of axes; shape for 28 × 28 px; `dimension` only an alias with a hint.
+
+## Today (src/numbers/units/static_units.rs, card cleanup-units-answer 2026-10-13)
 Every program with quantities takes one path: static_units checks the unit signatures at compile time and runs the
 amounts as exact SI numbers (`1 km/h + 1 m/s` → 23/18 m/s). The compile-time interpreter `units::answer` is gone.
 Temperatures run as kelvin from absolute zero: `40°C` is 313.15, shown back as 40°C; a sum or negation of temperatures
 counts one zero (`20°C + 5°C` is 25°C), a sum of °C and °F fails ("one unit only"). `q^2` with a written whole power
-works like `q²`. Still compile-time (units.rs evaluate_in): constant sleep durations, comparisons folded in branches and
-the clock, and tolerances/ranges with units; the tolerance/range cases that only the interpreter's answer covered are
-ignored as `cleanup-edge: cleanup-units-answer` (user decision cleanup-may-drop-edge-cases).
+works like `q²`. Compile-time constants (constant sleep durations, `time < 24h`, comparisons of main-level constants
+`x = 2 km; if x > 1500 m`, a database column's SI amount) fold through `static_units::constant`, the same inference with
+`+ - * /` and comparisons of exact amounts computed. A tolerance with a unit is always the run-time
+`quantity(5 ± 1/100, "m")`. A range with a unit (`1900 - 2000 AD`) is a subtraction now: the range tests are ignored as
+`cleanup-edge: cleanup-units-answer` (user decision cleanup-may-drop-edge-cases; to revisit with card discuss-moving).
 
 ## Survey (branch runtime-units-survey, tests/numbers/test_units_at_run_time.rs): every case fails loudly, none drops a unit
 | written | today |
@@ -41,7 +48,7 @@ time (parsed input), but every operation checks and rescales at run time and nee
 Recommendation: static units first (sound, zero cost, errors at compile time), the dynamic struct only if input with units
 becomes a use case.
 
-## Stage 1 done (branch static-units-1): src/units/static_units.rs
+## Stage 1 done (branch static-units-1): src/numbers/units/static_units.rs
 Variables, loops (`total += 5 m`), while loops and if-branches compute quantities at run time: signatures checked at
 compile time (DimensionError for `+ - ==` and branches of different units, and a variable given another signature), unit
 literals as exact SI amounts, the final value read back in the finest written unit. `compile` of a program whose result is
@@ -106,7 +113,7 @@ input) would need the dynamic struct.
 come first, then the plain ones as an object of them prints them (`{dist:500 m name:"run"}`). A field of a mixed object
 is any-typed at run time; its arithmetic has a text since card text-arithmetic (casts.rs: Kind::Data reads dynamically).
 `q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion: see card static-units below. Since card reflection step 5 the text lives in the entry `units` of the module's one
-`warp.meta` section (src/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.
+`warp.meta` section (src/formats/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.
 
 ## Stage 8 done (card units-dynamic, 2026-10-09): units known only at run time
 The dynamic struct, written in warp: lib/units.warp's `class Quantity {amount; dims; unit; scale}`. `quantity("5 km")`
@@ -137,7 +144,7 @@ yd mi, mg g kg lb, ms s min h, mph, with powers (`m²`, `s^2`), products (`kg·m
 ## Units in texts, imperial units (card units-text, 2026-10-09)
 - `"total: " + (total as km)` and `(v in m/s)` join a text in the conversion's unit (static_units.rs: a parenthesized
   expression keeps its signature, the text arm reads conversion_target).
-- src/units.rs UNITS: inch ft yd mi, lb. Factors count the smallest step of a dimension, so length counts 0.1 mm and
+- src/numbers/units.rs UNITS: inch ft yd mi, lb. Factors count the smallest step of a dimension, so length counts 0.1 mm and
   mass 10 µg (1 ft = 3048, 1 lb = 45_359_237); time stays ms (milliseconds() reads the factor directly). The inch is
   `inch` (`inches`): `in` is the word of `x in xs` and `100 cm in m`.
 - UNIT_ALIASES: `mph` is `mi/h`, rewritten by lower_unit_aliases before any units pass (the parser binds it to the
@@ -153,3 +160,51 @@ a base case `1` is "the branches give a plain number and m"). `fact(n, x) := if 
 → 3m. Recursion that changes the arguments' units (`f(x * x)`, polymorphic recursion) stays left to the evaluator.
 Test: tests/numbers/test_recursive_units.rs.
 
+
+## Dimensions as types (card dimensions-units)
+Dimension names are types of quantities, decided at compile time by static_units (`DIMENSION_NAMES`,
+`dimension_signature`): `3 cm is length` → yes, `4 m² is length²`, `20°C is temperature`; a declared `h: length = 2 inch`
+accepts any unit of the dimension and keeps the written one, `w: mass = 3 m` is a DimensionError. Products, quotients
+and powers name derived dimensions through the same `factor_expression` that reads unit expressions (`km/h`). A program
+naming `length` itself keeps its variable. The time dimension is `duration`, a subtype of `time` (anchor-time): `3 s is
+duration` and `3 s is time` hold; a value without units keeps the time module's test (`now is time`). Derived names speed, area, volume, frequency
+(`DERIVED_DIMENSION_NAMES`, Q4). A unit after a list is each element's (Q3, static_units/list_units.rs): a list's `Signature`
+is its elements' powers with a depth (a matrix 2, a plain list stays plain), so any list-valued expression carries it:
+`[3, 4] cm`, `xs cm` (`map` at run time), `xs * 2`, `f([3, 4] cm)`, `if yes { [1 2] m }`. Index, `for`, `.map`, `sum`/
+`max`/`first` peel one level, `count` is plain, `x in m` converts each element, `xs + [5 cm]` appends, `xs + 1 cm` is a
+compile error (append or map), `type(xs)` is `list of length`. The program's value reads back as a list of quantities
+(`quantity_of` maps lists); `print`/`str` show `[3cm 4cm]`. Open: `sum(xs cm)` reads as two arguments (card parser-glues). Still open
+(decided): Q1 px the device pixel through display.dpi, Q2 unit definitions in lib/units.warp.
+Test: tests/numbers/test_dimension_types.rs.
+
+## Unit definitions in lib/units.warp (card dimensions-units Q2; decisions unit-definitions, dimension-bridges)
+The quantities and units are no Rust tables: lib/units.warp's `unit_definitions = data { … }` block names them in unit
+lines, and src/numbers/units/definitions.rs reads it once with its own small line reader (the parser asks `is_unit` to
+read `201.168 m`, so it cannot parse the block that defines m):
+- `quantity length meter` (`SI quantity …` takes the SI prefixes; decision quantity-naming, the old word `dimension`
+  is refused with a hint): a base quantity and its SI anchor (a new base quantity also needs its `Dimension`
+  variant); `unit m := 1 meter` its symbol, which takes the anchor's place (shown as m), `meter` an alias of it.
+- `quantity speed m/s`: the name of the quantity of an expression of units (`type(5 m/s)` is speed).
+- `unit cm := m/100`, `unit furlong := 201.168 m`: an amount of one known unit, which fixes dimension and factor;
+  `unit °C := (it + 273.15) K` / `unit °R := it * 5/9 K` count from another zero, `it` the amount in the new unit.
+- `unit mph := mi/h`, `unit N := kg*m/s²`, `unit L := dm³`, `unit ° := π/180`: several units or none, an alias (a
+  word for its expression, expanded by units.rs lower_unit_aliases).
+- SI prefixes (G M k h da d c m µ n) come by themselves on units of the SI dimensions (length, mass, duration,
+  temperature) that are powers of ten of their anchor and carry no prefix (m, g, s, K, not kg/cm/furlong/px).
+  Giga..nano keeps every unit whole steps of its dimension in i64 (GK at 9e18 steps is the tightest).
+- No bridges between quantities (user 2026-10-16, decision pixel-lengths): px is its own quantity, `cm as px` a
+  DimensionError; a length becomes px by arithmetic, `3 cm * display.dpi`. module_properties.rs reads display.dpi as
+  `display_dpi * 1dpi`, writes it by `set_system_value("display_dpi", it / 1dpi)`; warp-runtime system_values.rs keeps
+  the set value, else the screen's (CoreGraphics, xrandr), else DEFAULT_DPI 96; the playground host.js keeps
+  holder.displayDpi, else 96·devicePixelRatio.
+Each unit becomes whole steps of its dimension (amount × lcm of the dimension's denominators); only ratios matter. The
+block is also the run-time table (card lib-units): with_run_time_unit_tables replaces the statement by
+unit_names/unit_scales/unit_dimensions (aliases of packable units too), so `quantity(1, "furlong")` works.
+
+A program's own units are unit lines too: `unit furlong := 201.168 m` at the start of a line. pipeline.rs
+lawful_program reads them before parsing (definitions::program_unit_lines, the lib reader extended, kept in
+context.program_unit_lines until the next program, so the result reads back), so `3 furlong` binds like `3 m`;
+units::without_unit_lines then drops them from the program, an unreadable one (`unit x := 3 foo`) is an error. A plain
+`furlong := 201.168 m` stays a constant. definitions() is the lib's plus these lines, read once per distinct lines.
+Tests: tests/numbers/test_unit_definitions.rs, test_pixel_unit.rs. Open: a spaced `9 °R` (degree units bind glued only,
+main too); units bind after a variable (`x m`) although the decision says only after a number.

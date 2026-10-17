@@ -15,14 +15,5 @@ fn trailing_while_stays_a_plain_while_with_a_hint() {
 	is!("i=5; i++ while i<3; i", 5);
 	is!("i=0; i++ while i<3; i", 3);
 	let hints = capture_hints(|| warp::wasm_emitter::eval("i=5; i++ while i<3; i")).1;
-	assert!(
-		hints.iter().any(|hint| hint.canonical.starts_with("while ")),
-		"{hints:?}"
-	);
-}
-
-#[test]
-fn a_trailing_if_guards_the_whole_assignment() {
-	is!("a=1; a = 2 if 0; a", 1);
-	is!("a=1; a = 2 if 1; a", 2);
+	assert!(hints.iter().any(|hint| hint.canonical.starts_with("while ")), "{hints:?}");
 }

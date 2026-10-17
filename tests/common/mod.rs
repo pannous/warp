@@ -5,6 +5,9 @@ use warp::Node;
 
 /// Set to "true" in Claude Code cloud sessions
 const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
+/// Set by tests/nightly.sh: the nightly run checks what the gate only samples (twins.rs)
+#[cfg(feature = "native")]
+const NIGHTLY_VARIABLE: &str = "WARP_NIGHTLY";
 /// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
 /// samples is SAMPLE_SLICES tests, each over one slice
 const SAMPLE_SLICES: usize = 4;
@@ -13,11 +16,57 @@ const SAMPLE_SLICES: usize = 4;
 const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection", "network error"];
 /// How it reads when the host answered: a wrong answer, never retried
 const ANSWERED: &str = "http status";
+/// The folder below the temp dir holding each test process's scratch_root, named by its process id
+#[cfg(feature = "native")]
+const SCRATCH_ROOTS: &str = "warp-tests";
+/// The TMPDIR of the warp processes a test starts, inside its scratch_root
+#[cfg(feature = "native")]
+const CHILD_TMPDIR: &str = "tmp";
 #[cfg(feature = "native")]
 const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+/// Set by test.sh once it built the runtime stubs (built_stub)
+#[cfg(feature = "native")]
+const STUBS_BUILT_VARIABLE: &str = "WARP_TEST_STUBS_BUILT";
 /// The echo server of echo_url: what a POST sent, as httpbin.org/post answers it
 #[cfg(feature = "native")]
 const ECHO_SERVER: &str = "post \"/post\" { {data: request.body, headers: request.headers} }";
+
+/// The sample programs, one folder per chapter of the playground's guide (notes/samples.md)
+pub const SAMPLES: &str = "samples";
+/// Folders of samples/ that hold no menu samples: golf counts bytes, wit holds interfaces, tests links the C++ ones
+const NOT_CHAPTERS: [&str; 3] = ["golf", "wit", "tests"];
+
+/// samples/<chapter>/<name>.warp, every one, sorted, in the folder the samples run from (samples_run_folder)
+pub fn sample_files() -> Vec<std::path::PathBuf> {
+	let entries =
+		|folder: &std::path::Path| std::fs::read_dir(folder).into_iter().flatten().flatten().map(|entry| entry.path());
+	let chapters = entries(samples_run_folder()).filter(|path| {
+		path.is_dir() && !path.file_name().is_some_and(|name| NOT_CHAPTERS.iter().any(|other| name == *other))
+	});
+	let mut files: Vec<_> = chapters
+		.flat_map(|chapter| entries(&chapter))
+		.filter(|path| path.extension().is_some_and(|extension| extension == "warp"))
+		.collect();
+	files.sort();
+	files
+}
+
+/// The name of a sample (the playground menu's): its file name without .warp
+pub fn sample_name(path: &std::path::Path) -> String {
+	path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// The file of the sample of that name, in whichever chapter folder (samples/<chapter>/<name>.warp when there is none)
+pub fn sample_path(name: &str) -> String {
+	let found = sample_files().into_iter().find(|path| sample_name(path) == name);
+	found.map(|path| path.to_string_lossy().into_owned()).unwrap_or_else(|| format!("{SAMPLES}/<chapter>/{name}.warp"))
+}
+
+/// Whether this is the nightly run (tests/nightly.sh), which checks in full what the gate samples
+#[cfg(feature = "native")]
+pub fn nightly() -> bool {
+	std::env::var_os(NIGHTLY_VARIABLE).is_some()
+}
 
 /// Every SAMPLE_SLICES-th item from `slice` on
 pub fn sample_slice<T>(items: &[T], slice: usize) -> impl Iterator<Item = &T> {
@@ -43,10 +92,8 @@ pub const LEAN: Resource = Resource {
 };
 /// binaryen's wasm-split, which splits a built site's module by route (src/web/route_split.rs)
 #[cfg(feature = "native")]
-pub const WASM_SPLIT: Resource = Resource {
-	name: "binaryen's wasm-split",
-	available: || warp::binaryen::available("wasm-split"),
-};
+pub const WASM_SPLIT: Resource =
+	Resource { name: "binaryen's wasm-split", available: || warp::modules::binaryen::available("wasm-split") };
 
 // The test macros (user decision P100: they live with the tests, not in the library). is!(code, value) compiles and
 // runs code through the whole pipeline (parse, analyze, emit, run, read back) and compares the result
@@ -69,13 +116,7 @@ macro_rules! is {
 	// For wasm_struct! types: use reverse comparison (Person == Node)
 	($a:expr, $b:expr, gc) => {{
 		let result = ::warp::wasm_emitter::eval($a);
-		assert!(
-			$b == result,
-			"is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}",
-			$a,
-			$b,
-			result
-		);
+		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
 	}};
 }
 
@@ -178,15 +219,9 @@ pub fn fails_with(code: &str, needle: &str) {
 
 /// The value of `code` and the compile-time warnings it reported
 pub fn warnings_of(code: &str) -> (Node, Vec<String>) {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let value = eval(code);
-	(
-		value,
-		warp::diagnostic::take_warnings()
-			.iter()
-			.map(|warning| warning.to_string())
-			.collect(),
-	)
+	(value, warp::errors::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect())
 }
 
 /// `code` gives `expected` and warns with a message containing `needle`
@@ -209,10 +244,8 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 		for mut stream in listener.incoming().flatten() {
 			let mut request = [0u8; 4096];
 			let _ = stream.read(&mut request);
-			let response = format!(
-				"HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-				body.len()
-			);
+			let response =
+				format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
 			let _ = stream.write_all(response.as_bytes());
 		}
 	});
@@ -223,11 +256,7 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 #[cfg(not(feature = "native"))]
 pub fn serve(status: &'static str, body: &'static str) -> String {
 	let stub = std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)");
-	format!(
-		"{stub}?status={}&body={}",
-		percent_encoded(status),
-		percent_encoded(body)
-	)
+	format!("{stub}?status={}&body={}", percent_encoded(status), percent_encoded(body))
 }
 
 /// A warp server (web_server.rs, end to end) answering POST /post with what it got, as httpbin.org does: {data,
@@ -236,11 +265,7 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 pub fn echo_url() -> String {
 	static URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 	URL.get_or_init(|| {
-		let port = std::net::TcpListener::bind("127.0.0.1:0")
-			.unwrap()
-			.local_addr()
-			.unwrap()
-			.port();
+		let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
 		std::thread::spawn(move || warp::pipeline::serving_at(port, || eval(ECHO_SERVER).serialize()));
 		let started = std::time::Instant::now();
 		while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
@@ -291,27 +316,115 @@ pub fn online_eval(code: &str) -> Node {
 #[cfg(not(feature = "native"))]
 fn percent_encoded(text: &str) -> String {
 	text.bytes()
-		.map(|byte| {
-			if byte.is_ascii_alphanumeric() {
-				(byte as char).to_string()
-			} else {
-				format!("%{byte:02X}")
-			}
-		})
+		.map(|byte| if byte.is_ascii_alphanumeric() { (byte as char).to_string() } else { format!("%{byte:02X}") })
 		.collect()
 }
 
-/// A directory for the scratch files of `name`, unique to this test process: below the system's temp dir, or below /tmp
+/// The scratch files of this test process, also the TMPDIR of the warp processes it starts (warp_command): one folder
+/// per process below SCRATCH_ROOTS. Tests leave what they write (card tests-leak: 475809 WAVs in ten days); the next
+/// test process removes the roots of ended ones, and the headless sound WAVs ended processes left in the temp dir
+#[cfg(feature = "native")]
+pub fn scratch_root() -> &'static std::path::Path {
+	static ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	ROOT.get_or_init(|| {
+		let temp = std::env::temp_dir();
+		let roots = temp.join(SCRATCH_ROOTS);
+		let running = running_processes();
+		remove_left_by_ended(&roots, &running, |name| name.parse().ok());
+		remove_left_by_ended(&temp.join(warp::sound::FOLDER), &running, sound_file_process);
+		let root = roots.join(std::process::id().to_string());
+		std::fs::create_dir_all(root.join(CHILD_TMPDIR)).expect("the test scratch root is writable");
+		root
+	})
+}
+
+/// The ids of the running processes (ps); none known when ps fails, so nothing is swept
+#[cfg(feature = "native")]
+fn running_processes() -> Option<std::collections::HashSet<u32>> {
+	let listed = std::process::Command::new("ps").args(["-A", "-o", "pid="]).output().ok()?;
+	listed.status.success().then(|| {
+		String::from_utf8_lossy(&listed.stdout).split_whitespace().filter_map(|pid| pid.parse().ok()).collect()
+	})
+}
+
+/// The entries of `folder` whose name names a process (`process_of`) that has ended, removed
+#[cfg(feature = "native")]
+fn remove_left_by_ended(
+	folder: &std::path::Path,
+	running: &Option<std::collections::HashSet<u32>>,
+	process_of: impl Fn(&str) -> Option<u32>,
+) {
+	let (Some(running), Ok(entries)) = (running, std::fs::read_dir(folder)) else { return };
+	for entry in entries.flatten() {
+		let ended = process_of(&entry.file_name().to_string_lossy()).is_some_and(|pid| !running.contains(&pid));
+		if ended {
+			let path = entry.path();
+			let _ = if path.is_dir() { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+		}
+	}
+}
+
+/// The process that wrote a sound WAV: sound-<process>.wav or sound-<process>-<handle>.wav (src/sound/mod.rs wav_file)
+#[cfg(feature = "native")]
+fn sound_file_process(name: &str) -> Option<u32> {
+	let rest = name.strip_prefix(warp::sound::FILE_STEM)?.strip_prefix('-')?.strip_suffix(".wav")?;
+	rest.split('-').next()?.parse().ok()
+}
+
+/// A directory for the scratch files of `name`, unique to this test process: below scratch_root, or below /tmp
 /// of the browser's in-memory file system (web/playground/wasi.js; every browser test is an instance of its own), where
 /// std::env::temp_dir and std::process::id panic
 pub fn scratch_directory(name: &str) -> std::path::PathBuf {
 	#[cfg(feature = "native")]
-	return std::env::temp_dir().join(format!("{name}_{}", std::process::id()));
+	return scratch_root().join(name);
 	#[cfg(not(feature = "native"))]
 	return std::path::PathBuf::from(
 		std::env::var("TMPDIR").expect("the browser test page names its temp dir (wasi.js)"),
 	)
 	.join(name);
+}
+
+/// The folder the samples run from. Natively a scratch copy of the committed samples (git ls-files): what a run keeps
+/// beside its program (stored values, database tables) stays out of the checkout, and every test run starts from the
+/// samples as committed (card samples-store). The checkout's other top-level entries are linked beside the copy, so
+/// paths like ../tests/fixtures still reach them. The browser suite's file system is in memory: samples/ itself
+pub fn samples_run_folder() -> &'static std::path::Path {
+	#[cfg(feature = "native")]
+	{
+		static FOLDER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+		FOLDER.get_or_init(copy_of_the_samples)
+	}
+	#[cfg(not(feature = "native"))]
+	std::path::Path::new(SAMPLES)
+}
+
+#[cfg(feature = "native")]
+fn copy_of_the_samples() -> std::path::PathBuf {
+	use std::fs;
+	let root = scratch_directory("samples_run");
+	let _ = fs::remove_dir_all(&root);
+	let listing =
+		std::process::Command::new("git").args(["ls-files", "-z", SAMPLES]).output().expect("git lists the samples");
+	for file in listing.stdout.split(|byte| *byte == 0).filter(|file| !file.is_empty()) {
+		let file = std::path::Path::new(std::str::from_utf8(file).expect("a sample path in UTF-8"));
+		let copy = root.join(file);
+		fs::create_dir_all(copy.parent().expect("a sample lies in a folder")).expect("the copy's folder");
+		// a link stays a link (samples/shapes.wasm → ../tests/fixtures/…), resolved against the linked siblings
+		let copied = match fs::read_link(file) {
+			Ok(target) => std::os::unix::fs::symlink(target, &copy),
+			Err(_) => fs::copy(file, &copy).map(drop),
+		};
+		copied.unwrap_or_else(|error| panic!("copying {}: {error}", file.display()));
+	}
+	let checkout = std::env::current_dir().expect("the checkout");
+	for entry in fs::read_dir(&checkout).expect("the checkout").flatten() {
+		if entry.file_name() != SAMPLES {
+			// the entry's own path, not its resolved one: a dangling link of the checkout stays a dangling link
+			std::os::unix::fs::symlink(entry.path(), root.join(entry.file_name()))
+				.expect("a link beside the samples' copy");
+		}
+	}
+	root.join(SAMPLES)
 }
 
 /// What the warp binary writes to stdout running `code` (no questions asked)
@@ -340,17 +453,19 @@ pub fn page_runtime_stub() -> &'static std::path::Path {
 
 #[cfg(feature = "native")]
 fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
-	let built = std::process::Command::new(env!("CARGO"))
-		.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
-		.args(features)
-		.current_dir(env!("CARGO_MANIFEST_DIR"))
-		.status()
-		.expect("cargo runs");
-	assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	// test.sh builds both stubs before the run: cargo here would wait for the shared target dir's lock while other
+	// worktrees build (notes/test_speed.md)
+	if std::env::var_os(STUBS_BUILT_VARIABLE).is_none() {
+		let built = std::process::Command::new(env!("CARGO"))
+			.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
+			.args(features)
+			.current_dir(env!("CARGO_MANIFEST_DIR"))
+			.status()
+			.expect("cargo runs");
+		assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	}
 	let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name(name);
-	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-		.join("crates")
-		.join("warp-runtime");
+	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
 	let build = checkout_build(
 		&shared,
 		&format!("{}-", name.replace('-', "_")),
@@ -367,6 +482,30 @@ fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
 	own_copy(&build, name).expect("copy the runtime stub")
 }
 
+/// The command's output, or a panic once it ran `limit` without ending (killed first): a run that should end, tested
+#[cfg(feature = "native")]
+pub fn output_within(command: &mut std::process::Command, limit: std::time::Duration) -> std::process::Output {
+	use std::process::Stdio;
+	let mut run = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("the command starts");
+	let started = std::time::Instant::now();
+	while run.try_wait().expect("the command runs").is_none() {
+		if started.elapsed() > limit {
+			run.kill().expect("stop the command");
+			panic!("still running after {limit:?}: {:?}", run.wait_with_output().map(|output| output.stdout));
+		}
+		std::thread::sleep(std::time::Duration::from_millis(50));
+	}
+	run.wait_with_output().expect("the command's output")
+}
+
+/// The command line arguments a program runs with in the tests: the lines of `<path>.args` beside it (path without its
+/// extension: samples/golf/rot13 reads samples/golf/rot13.args), none without that file
+#[cfg(feature = "native")]
+pub fn arguments_beside(path: &std::path::Path) -> Vec<String> {
+	let file = path.with_file_name(format!("{}.args", path.file_name().unwrap_or_default().to_string_lossy()));
+	std::fs::read_to_string(file).map(|lines| lines.lines().map(str::to_string).collect()).unwrap_or_default()
+}
+
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
 /// worktree's build can replace it at any moment while these tests run, and versions overlap (`0.1.1` is a prefix of
 /// every branch's `0.1.1-<branch>`). So the binary is this checkout's own build in target/debug/deps (checkout_build:
@@ -378,17 +517,11 @@ pub fn warp_command() -> std::process::Command {
 	let binary = BINARY.get_or_init(|| {
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp"));
 		let find = || {
-			let candidates = checkout_build(
-				shared,
-				"warp-",
-				env!("CARGO_MANIFEST_DIR"),
-				Some(env!("CARGO_PKG_VERSION")),
-			)
-			.into_iter()
-			.chain([shared.to_path_buf()]);
-			candidates
-				.filter_map(|candidate| own_copy(&candidate, "warp").ok())
-				.find(|own| is_this_version(own))
+			let candidates =
+				checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION")))
+					.into_iter()
+					.chain([shared.to_path_buf()]);
+			candidates.filter_map(|candidate| own_copy(&candidate, "warp").ok()).find(|own| is_this_version(own))
 		};
 		// another checkout's build can replace the shared binary before this one was found: build this checkout's anew
 		let own = find().or_else(|| {
@@ -413,6 +546,8 @@ pub fn warp_command() -> std::process::Command {
 	command.env("WARP_HINTS", "1");
 	// a sample that paints writes PNGs here, no window (src/graphics/paint.rs)
 	command.env(warp::graphics::paint::NO_WINDOW_VARIABLE, "1");
+	// its temporary files (headless sound WAVs, painted PNGs, compiled modules) go where the next test run sweeps them
+	command.env("TMPDIR", scratch_root().join(CHILD_TMPDIR));
 	command
 }
 
@@ -455,12 +590,9 @@ fn checkout_build(
 ) -> Option<std::path::PathBuf> {
 	let deps = uplifted.parent()?.join("deps");
 	let names_this_checkout = |info: &str| {
-		info.lines()
-			.any(|line| line == format!("# env-dep:CARGO_MANIFEST_DIR={manifest_dir}"))
-			&& version.is_none_or(|version| {
-				info.lines()
-					.any(|line| line == format!("# env-dep:CARGO_PKG_VERSION={version}"))
-			})
+		info.lines().any(|line| line == format!("# env-dep:CARGO_MANIFEST_DIR={manifest_dir}"))
+			&& version
+				.is_none_or(|version| info.lines().any(|line| line == format!("# env-dep:CARGO_PKG_VERSION={version}")))
 	};
 	std::fs::read_dir(deps)
 		.ok()?
@@ -468,9 +600,7 @@ fn checkout_build(
 		.map(|entry| entry.path())
 		.filter(|path| {
 			path.extension().is_some_and(|extension| extension == "d")
-				&& path
-					.file_name()
-					.is_some_and(|name| name.to_string_lossy().starts_with(prefix))
+				&& path.file_name().is_some_and(|name| name.to_string_lossy().starts_with(prefix))
 		})
 		.filter(|info| std::fs::read_to_string(info).is_ok_and(|text| names_this_checkout(&text)))
 		.map(|info| info.with_extension(""))
@@ -481,9 +611,8 @@ fn checkout_build(
 /// How many calls the module of `code` makes to the function `name` (by the wasm name section)
 pub fn calls_to(code: &str, name: &str) -> usize {
 	use wasmparser::{KnownCustom, Name, Operator, Parser, Payload};
-	let bytes = warp::wasm_emitter::compile(code)
-		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
-		.bytes;
+	let bytes =
+		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	let mut index = None;
 	let mut calls = Vec::new();
 	for payload in Parser::new(0).parse_all(&bytes) {
@@ -518,9 +647,8 @@ pub fn calls_to(code: &str, name: &str) -> usize {
 
 /// The (module, name) of every import of the module `code` compiles to
 pub fn imports_of(code: &str) -> Vec<(String, String)> {
-	let bytes = warp::wasm_emitter::compile(code)
-		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
-		.bytes;
+	let bytes =
+		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	wasmparser::Parser::new(0)
 		.parse_all(&bytes)
 		.filter_map(|payload| match payload.expect("valid module") {

@@ -1,50 +1,14 @@
-use crate::context::{Context, Param, UserFunctionDef};
-use crate::diagnostic::Diagnostic;
+use crate::compiler::context::{Context, Param, UserFunctionDef};
+use crate::compiler::local::Local;
+use crate::errors::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
-use crate::function::{Function, FunctionRegistry};
-use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
-use crate::words::CONSTANT_KEYWORDS;
+use crate::words::{CONSTANT_KEYWORDS, PRINT_WORD};
 use std::collections::{HashMap, HashSet};
 
-/// Statement words whose argument is never their property: `return count` is no `return.count`
-const PRINT_CALL: &str = "print";
-/// The error for a user function named like a type word; `{name}` is the word
-const TYPE_WORD_FUNCTION_CLASH: &str = "{name} is a type; rename your function";
 const RETURNING_KEYWORDS: [&str; 2] = ["return", "yield"];
-const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
-
-fn is_constant_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
-}
-
-/// `var x = 1` announces a reassignable variable, plain `x = 1`
-const VAR_KEYWORD: &str = "var";
-/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
-const IMMUTABLE_LET: &str = "let";
-
-pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
-}
-
-/// `var`, `let`, `const`, `val` …: a word declaring the name after it
-pub(crate) fn is_declaration_word(word: &str) -> bool {
-	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
-}
-
-/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
-/// is_counting_word (a class's own size method is looked up in this order)
-pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
-/// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
-const BYTE_SIZE: &str = "byte_size";
-/// `x.number` counts too, but `number x` is the type conversion, not a count
-const NUMBER_PROPERTY: &str = "number";
-
-pub(crate) fn is_counting_property(word: &str) -> bool {
-	word == NUMBER_PROPERTY || is_counting_word(word)
-}
 
 /// Check if a node is pure data (not a statement/function call)
 fn is_data_node(node: &Node) -> bool {
@@ -93,17 +57,30 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		// as `sleep(10)`, which gives nothing
 		Node::List(list_items, _, _)
 			if *bracket != Bracket::Square
-				&& matches!(list_items.as_slice(), [word, _] if word.is_symbol(PRINT_CALL) || word.is_symbol(crate::host::SLEEP)) =>
+				&& matches!(list_items.as_slice(), [word, _] if word.is_symbol(PRINT_WORD) || word.is_symbol(crate::host::SLEEP)) =>
 		{
 			true
 		}
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
-			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
-			// `$destructure (h, o) value` is `h, o = value` lowered (tuples.rs)
-			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s) || ["return", crate::tuples::DESTRUCTURE, crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET, crate::wasm_emitter::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
+			list_items[0].symbol_name().is_some_and(heads_statement)
 		}
 		_ => false,
 	}
+}
+
+/// Words other than the function and import keywords that head a statement: `return x`, `$destructure (h, o) value`
+/// (`h, o = value` lowered, tuples.rs), `cell_set(c, v)` (the assignment of a nonlocal variable,
+/// lowering/definitions/nonlocal_cells.rs), the task check and the signal listeners' update
+const STATEMENT_HEADS: [&str; 5] = [
+	"return",
+	crate::tuples::DESTRUCTURE,
+	crate::host::TASK_CHECK,
+	crate::wasm_emitter::functions::cells::CELL_SET,
+	crate::wasm_emitter::functions::cells::SIGNAL_LISTENERS_SET,
+];
+
+fn heads_statement(word: &str) -> bool {
+	is_function_keyword(word) || crate::modules::is_import_keyword(word) || STATEMENT_HEADS.contains(&word)
 }
 
 /// `{a;b;c}` as a definition body: a sequence of statements to run, unlike the value list `{1 2 3}`
@@ -115,23 +92,31 @@ pub(crate) fn is_statement_block(node: &Node) -> bool {
 	}
 }
 
+mod annotations;
 mod booleans;
 mod checks;
 mod counting;
 mod imports;
 mod inference;
+mod main_globals;
 mod upcast_fields;
 mod user_functions;
 mod variables;
 pub use upcast_fields::check_upcast_fields;
+pub mod effects;
 mod list_views;
+pub use annotations::*;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;
-// the declaration and list forms the checks and the inference know (lowering/declaration_forms.rs)
+// the declaration and list forms the checks and the inference know (lowering/definitions/declaration_forms.rs,
+// lowering/collections/list_mutations.rs and filled_lists.rs)
 use crate::lowering::declaration_forms::*;
+use crate::lowering::filled_lists::*;
+use crate::lowering::list_mutations::*;
 pub(crate) use imports::signature_kind;
 pub use imports::*;
 pub use inference::*;
+pub use main_globals::*;
 pub use user_functions::*;
 pub use variables::*;

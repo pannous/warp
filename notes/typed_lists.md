@@ -1,6 +1,6 @@
 # Typed lists and the list dispatch seam
 
-Code: `src/wasm_emitter/list_dispatch.rs`. Tests: `tests/lists/test_typed_lists.rs`.
+Code: `src/wasm_emitter/lists/list_dispatch.rs`. Tests: `tests/lists/test_typed_lists.rs`.
 
 ## What is typed
 
@@ -84,12 +84,12 @@ An `if` statement whose branch appends to a typed list runs its branches as stat
 emit_discarded_branches), else the branch value rebuilt the Node list on every append (filter was quadratic).
 5000 items (probes/night/bench_lists.sh): for loop 41 s → 0.6 s, filter 130 s → 0.5 s, index writes overflowed the
 stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function indexing its list parameter still walks it.
-- Small helpers are inlined (src/lowering/inlining.rs: not recursive, no free variables, no locals shared with the rest of the
+- Small helpers are inlined (src/lowering/definitions/inlining.rs: not recursive, no free variables, no locals shared with the rest of the
   program, ≤ 8 statements, one final return), so `arr = swap(arr, i, j)` updates the caller's array; `x = (t = x; …; t)`
   shares one array without copies (moved_lists). A list parameter indexed in a loop and not reassigned from a call there
   is copied into an array once (`arr·list = arr`). quicksort_partitioned of 1000: 32 s → 12.5 s; what remains is the
   Node conversion per recursive call (a $NodeList ABI for parameters and results would remove it).
-- Array calling convention (src/wasm_emitter/list_abi.rs, 2026-10-04): a function whose list parameter p is used only
+- Array calling convention (src/wasm_emitter/lists/list_abi.rs, 2026-10-04): a function whose list parameter p is used only
   through its copy `p·list = p` takes p as a `$NodeList` (the callee copies it with one array.copy, values stay values);
   a function whose every result is such an array or a call of another such function returns the `$NodeList`. Callers
   convert only where a Node is needed. quicksort_partitioned of 1000: 12.5 s → 0.9 s. Not for closure targets, tuple
@@ -119,7 +119,7 @@ checked like a declared scalar:
   `names: texts = [420]`, a reassignment `names = [420]`, an append `names.add(420)` / `names = names + [420]`, an element
   `names#1 = 420`; a field's constructor (`type_constructor::field_error`) and its append `b.items.add(420)`
   (`struct_backend::misfit_list_item`).
-- Items known only at run time are checked at the store (lowering/list_element_checks.rs, first MEANING pass):
+- Items known only at run time are checked at the store (lowering/collections/list_element_checks.rs, first MEANING pass):
   `if not (v is text) { raise "…" }` as a statement before the store, a call's item held in a temporary `checked·N`
   first, a whole list from a call checked item by item. The store keeps its form, so a typed int list stays an array.
 - `names = other + [v]` checks the items of `other` in a for-loop too, unless `other` is `names` itself or declared
@@ -133,7 +133,7 @@ checked like a declared scalar:
 - Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
   `declared_element_type`, `elements_fit`).
 - A receiver inside an element (`bags#1.n = 5`, `bags#1.items.add(v)`, `bags#1.items#1 = v`) is taken out into
-  `nested·N`, changed, checked and written back (lowering/nested_index.rs); a receiver that is a call's result
+  `nested·N`, changed, checked and written back (lowering/collections/nested_index.rs); a receiver that is a call's result
   (`make().n = 5`) is the error "make() gives a copy" (card list-field-receivers).
 - A character stored into a list of unknown static type (one read from a field) goes as its Node; node_with_at took
   it as an Int, so `x#1 = "z"` gave `[122]` (list_ops `is_exact_int_element`).

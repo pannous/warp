@@ -1,7 +1,7 @@
 //! P145 (user, 2026-10-06): R's `x <- 3` assigns with a got-it note "write x = 3"; the cramped `x<-3` is a loud error
 //! naming both readings, `x = 3` and `x < -3`; `x < -3` compares. `<-` stays reserved: no docs or examples use it
 use crate::is;
-use warp::diagnostic::take_assumptions;
+use warp::errors::diagnostic::take_assumptions;
 
 #[test]
 fn a_spaced_left_arrow_assigns_with_a_note() {

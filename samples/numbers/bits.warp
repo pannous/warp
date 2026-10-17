@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+# Bits and operator words: & and | combine bits, and/or stay logical; most operators have a word spelling too
+n = 624485
+print n & 127          # the low seven bits: 101
+print 101 | 128        # adds bit 7: 229
+print 0b101 + 1        # 6
+print 5 as binary      # 0b101
+print 12 and 10        # the logical and gives its last truthy operand: 10
+
+print yes xor no       # yes
+print 7 modulo 3       # 1
+print 3 is not 4       // yes
+print 3 is at least 3  # yes

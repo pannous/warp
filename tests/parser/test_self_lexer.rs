@@ -6,11 +6,7 @@ use warp::Node;
 
 /// [[start, end], …] of the comments and texts, in characters
 fn spans(text: &str) -> Node {
-	warp_list(
-		comment_and_text_spans(text)
-			.into_iter()
-			.map(|(start, end)| pair(start, end)),
-	)
+	warp_list(comment_and_text_spans(text).into_iter().map(|(start, end)| pair(start, end)))
 }
 
 fn pair(first: usize, second: usize) -> Node {
@@ -19,11 +15,8 @@ fn pair(first: usize, second: usize) -> Node {
 
 /// [[line, column], …] of the atoms of `kind` the parser reads, in source order
 fn positions(text: &str, kind: AtomKind) -> Node {
-	let mut found: Vec<(usize, usize)> = read_atoms(text)
-		.into_iter()
-		.filter(|atom| atom.kind == kind)
-		.map(|atom| (atom.line, atom.column))
-		.collect();
+	let mut found: Vec<(usize, usize)> =
+		read_atoms(text).into_iter().filter(|atom| atom.kind == kind).map(|atom| (atom.line, atom.column)).collect();
 	found.sort();
 	warp_list(found.into_iter().map(|(line, column)| pair(line, column)))
 }

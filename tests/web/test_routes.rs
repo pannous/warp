@@ -2,8 +2,8 @@
 // matches, id bound to that part of the path (a number when it is digits); `route "*"` is the not-found page; a layout
 // shows the matched route where it says `outlet`. Natively the path is "/" unless a render asks for another one.
 use warp::host::with_page_path;
-use warp::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 const SITE: &str = "users = [\"Ann\", \"Bo\"]
 route \"/\" { h1{ \"Home\" } }
@@ -32,10 +32,7 @@ fn without_a_matching_route_the_page_says_so() {
 #[test]
 fn a_layout_shows_the_route_at_its_outlet() {
 	let program = "route \"/\" { p{ \"home\" } }\nroute \"/about\" { p{ \"about\" } }\ndiv{ nav{ a{ href: \"/about\" \"About\" } } outlet }";
-	assert_eq!(
-		page_at("/about", program),
-		"<div><nav><a href=\"/about\">About</a></nav><p>about</p></div>"
-	);
+	assert_eq!(page_at("/about", program), "<div><nav><a href=\"/about\">About</a></nav><p>about</p></div>");
 }
 
 // a site loads a route's own module before showing it (card web-bundle): page·route_index is the index of the route the
@@ -75,10 +72,7 @@ route \"/teams/:team\" {
 route \"*\" { p{ \"not found\" } }";
 	assert_eq!(page_at("/users", program), "<div><h1>Users</h1><p>pick one</p></div>");
 	assert_eq!(page_at("/users/2", program), "<div><h1>Users</h1><p>Bo</p></div>");
-	assert_eq!(
-		page_at("/teams/red/members/3", program),
-		"<section><p>red 3</p></section>"
-	);
+	assert_eq!(page_at("/teams/red/members/3", program), "<section><p>red 3</p></section>");
 	assert_eq!(page_at("/teams/red", program), "<section></section>");
 	assert_eq!(page_at("/users/2/more", program), "<p>not found</p>");
 }

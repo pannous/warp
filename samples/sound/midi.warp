@@ -1,0 +1,22 @@
+#!/usr/bin/env warp
+# MIDI (lib/sound.warp): a Standard MIDI File written and read back, and messages to a MIDI device.
+# Notes are [start, pitch, length, velocity]: seconds, a note or frequency, seconds, 1 to 127.
+# The playground sends through Web MIDI (allow it when the browser asks); the warp command to the first MIDI output,
+# or, when there is none, to its own virtual source "warp" that a synth app can listen to.
+
+use sound
+
+write_midi("tune.mid", [[0, C4, 0.5, 100], [0.5, E4, 0.5, 90], [1, G4, 1, 80]])
+for note in read_midi("tune.mid") { print note }
+
+midi_on C4        # a key down on channel 1, velocity 100
+midi_off C4
+midi_on(E4, 64, 2)
+midi_off(E4, 2)
+
+# messages keep time like sounds: a note of a length, the next one after it, and `at` places one in the bar
+play(C3, 1 beat)                 # the message waits for this sound to end
+midi_note(C4, 1 / 2 beat)          # on now, off half a beat later
+midi_note(E4, 1 / 2 beat, 90)
+at 3 beats midi_note(G4, 1 beat)
+wait_sound()

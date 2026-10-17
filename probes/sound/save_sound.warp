@@ -1,0 +1,7 @@
+// card save-sound: writing audio is the general save, by the value's type
+use sound
+use file
+melody [C4 E4 G4] each: 150ms
+print(save sound as: "melody.wav")
+save "the melody is in melody.wav" as: "melody.txt"
+print(read("melody.txt"))

@@ -1,6 +1,8 @@
 //! Twins, checked (card self-differential, notes/self_hosting.md step 4): a word of a warp-written compiler part in
 //! lib/compiler/ runs over every sample and probe next to its Rust twin, and the first file where the two differ fails
-//! the test with both texts around the first difference.
+//! the test with both texts around the first difference. The gate checks every GATE_SHARE-th source (a different
+//! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
+use crate::common::nightly;
 use std::path::{Path, PathBuf};
 use warp::warp_parser::parse;
 use warp::wasm_emitter::eval;
@@ -15,6 +17,9 @@ const CONTEXT: usize = 40;
 const SOURCES_PER_PROGRAM: usize = 64;
 /// Differing sources named after the first
 const LISTED: usize = 12;
+/// Outside the nightly run the twins check every GATE_SHARE-th source: they were 1100 s of the suite's test time
+const GATE_SHARE: usize = 4;
+const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 /// Every sample and probe source, sorted; a file that is not UTF-8 text is no source
 pub fn sources() -> Vec<PathBuf> {
@@ -60,19 +65,14 @@ pub fn node_view(node: &Node) -> Node {
 		Node::Error(inner) => tagged("error", [node_view(inner)]),
 		Node::Key(left, op, right) => tagged("key", [Node::text(op.as_str()), node_view(left), node_view(right)]),
 		Node::List(items, bracket, separator) => {
-			let mut parts = vec![
-				Node::text(&bracket_glyphs(bracket)),
-				Node::text(&separator_glyph(separator)),
-			];
+			let mut parts = vec![Node::text(&bracket_glyphs(bracket)), Node::text(&separator_glyph(separator))];
 			parts.extend(items.iter().map(node_view));
 			tagged("list", parts)
 		}
 		Node::Type { name, body } => tagged("type", [node_view(name), node_view(body)]),
 		Node::Data(data) => tagged(
 			"data",
-			[Node::text(
-				&warp::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")),
-			)],
+			[Node::text(&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")))],
 		),
 		Node::Meta { node: inner, .. } => meta_view(node, inner),
 	}
@@ -116,7 +116,21 @@ pub fn differential(part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
 
 /// `differential` over the given sources only
 pub fn differential_on(paths: &[PathBuf], part: &str, word: &str, rust_twin: impl Fn(&str) -> Node) {
-	report(word, &differences(paths, part, word, rust_twin));
+	report(word, &differences(&checked_share(paths), part, word, rust_twin));
+}
+
+/// All sources in the nightly run, every GATE_SHARE-th otherwise, starting at the day's offset: the gates of four
+/// days sweep every source at the cost of one share
+fn checked_share(paths: &[PathBuf]) -> Vec<PathBuf> {
+	if nightly() {
+		return paths.to_vec();
+	}
+	paths.iter().skip(todays_offset()).step_by(GATE_SHARE).cloned().collect()
+}
+
+fn todays_offset() -> usize {
+	let since_epoch = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+	(since_epoch.as_secs() / SECONDS_PER_DAY) as usize % GATE_SHARE
 }
 
 /// `word(view)` of lib/compiler/<part>.warp for the node view of every parsed source, against the Rust parse of the
@@ -125,10 +139,7 @@ pub fn view_differential(part: &str, word: &str) {
 	let view_of_source =
 		|_: &Path, text: &str| format!("json({})", warp_text_literal(&view_json(&node_view(&parse(text)))));
 	let serialized = |text: &str| Node::text(&parse(text).serialize());
-	report(
-		word,
-		&differences_with(&sources(), part, word, view_of_source, serialized),
-	);
+	report(word, &differences_with(&checked_share(&sources()), part, word, view_of_source, serialized));
 }
 
 /// Fails with the first difference and the names of the next sources that differ
@@ -136,11 +147,7 @@ fn report(word: &str, differing: &[(String, String, String)]) {
 	let Some((path, warp_text, rust_text)) = differing.first() else {
 		return;
 	};
-	let others: Vec<&str> = differing[1..]
-		.iter()
-		.take(LISTED)
-		.map(|(path, _, _)| path.as_str())
-		.collect();
+	let others: Vec<&str> = differing[1..].iter().take(LISTED).map(|(path, _, _)| path.as_str()).collect();
 	panic!(
 		"{word} differs from its Rust twin on {} sources, first on {path}:\n  warp: …{}…\n  rust: …{}…\nnext: {}",
 		differing.len(),
@@ -171,15 +178,8 @@ fn differences_with(
 ) -> Vec<(String, String, String)> {
 	let mut differing = vec![];
 	for paths in paths.chunks(SOURCES_PER_PROGRAM) {
-		let texts: Vec<String> = paths
-			.iter()
-			.map(|path| std::fs::read_to_string(path).unwrap())
-			.collect();
-		let arguments: Vec<String> = paths
-			.iter()
-			.zip(&texts)
-			.map(|(path, text)| argument(path, text))
-			.collect();
+		let texts: Vec<String> = paths.iter().map(|path| std::fs::read_to_string(path).unwrap()).collect();
+		let arguments: Vec<String> = paths.iter().zip(&texts).map(|(path, text)| argument(path, text)).collect();
 		for ((path, text), value) in paths.iter().zip(&texts).zip(warp_values(part, word, &arguments)) {
 			let (warp_text, rust_text) = (as_compared(value).serialize(), as_compared(rust_twin(text)).serialize());
 			if warp_text != rust_text {
@@ -243,9 +243,7 @@ pub fn view_json(view: &Node) -> String {
 }
 
 fn json_text(text: &str) -> String {
-	quoted(text, |character| {
-		character.is_control().then(|| format!("\\u{:04x}", character as u32))
-	})
+	quoted(text, |character| character.is_control().then(|| format!("\\u{:04x}", character as u32)))
 }
 
 /// A text as a warp text literal: `${…}` would be a hole

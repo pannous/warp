@@ -14,24 +14,24 @@ no_text = "no"
 empty_text = "ø"
 quote = "\""
 
-kind(view:any) := if view is list and #view > 0 then view#1 else ""
-is_empty(view:any) := view == ø
-is_layer(view:any) := kind(view) == "literal" or kind(view) == "attribute"
+kind(view: any) := if view is list and #view > 0 then view#1 else ""
+is_empty(view: any) := view == ø
+is_layer(view: any) := kind(view) == "literal" or kind(view) == "attribute"
 // the node a literal or an attribute is written around
-layered(view:any) := view#(#view)
-bare(view:any) := if is_layer(view) then bare(layered(view)) else view
+layered(view: any) := view#(#view)
+bare(view: any) := if is_layer(view) then bare(layered(view)) else view
 // the source text of a literal under the node's layers, "" for none
-source_literal(view:any) := if kind(view) == "literal" then view#2 else if kind(view) == "attribute" then source_literal(view#4) else ""
+source_literal(view: any) := if kind(view) == "literal" then view#2 else if kind(view) == "attribute" then source_literal(view#4) else ""
 
-is_word_operator(op:any) := #op > 0 and op#1 >= 'a' and op#1 <= 'z'
+is_word_operator(op: any) := #op > 0 and op#1 >= 'a' and op#1 <= 'z'
 // an operator in front of its one operand, ø on the left: `#x`, `-x`, `not x`
-is_prefix_form(view:any) := {
+is_prefix_form(view: any) := {
 	node = bare(view)
 	kind(node) == "key" and is_empty(bare(node#3)) and node#2 in prefix_operators
 }
 
-opening(bracket:any) := if bracket == "" then " " else bracket#1
-closing(bracket:any) := {
+opening(bracket: any) := if bracket == "" then " " else bracket#1
+closing(bracket: any) := {
 	if #bracket == 2 { return bracket#2 }
 	if bracket == "{" { return "}" }
 	if bracket == "[" { return "]" }
@@ -40,18 +40,18 @@ closing(bracket:any) := {
 	" "
 }
 
-attribute_text(name:any, value:any) := if value is bool and value then "@" + name + " " else "@" + name + "(" + serialize(value) + ") "
+attribute_text(name: any, value: any) := if value is bool and value then "@" + name + " " else "@" + name + "(" + serialize(value) + ") "
 // the @name(value) annotations in front of a node, outermost first
-attribute_prefix(view:any) := {
+attribute_prefix(view: any) := {
 	if kind(view) == "attribute" { return attribute_text(view#2, view#3) + attribute_prefix(view#4) }
 	if kind(view) == "literal" { return attribute_prefix(view#3) }
 	""
 }
 
-serialize(view:any) := written(view, yes)
+serialize(view: any) := written(view, yes)
 
 // with_attributes: a key prints its value's annotations in front of itself, so the value leaves them out
-written(view:any, with_attributes:any) := {
+written(view: any, with_attributes: any) := {
 	if view is bool { return if view then yes_text else no_text }
 	if view is number { return "" + view }
 	if is_empty(view) { return empty_text }
@@ -70,19 +70,24 @@ written(view:any, with_attributes:any) := {
 	own + written(layered(view), with_attributes)
 }
 
-list_text(view:any) := {
+list_text(view: any) := {
 	bracket = view#2
 	separator = view#3
 	items = view[3:]
-	inside = if #items == 1 then item_text(items#1) else join([item_text(item) for item in items], joint(separator))
+	inside = if #items == 1 then item_text(items#1, bracket) else join([item_text(item, bracket) for item in items], joint(separator))
 	opening(bracket) + inside + closing(bracket)
 }
 
-// a list item: a character is quoted like a text, ["a" "bb"], and reads back as the character it is (P126)
-item_text(item:any) := if kind(bare(item)) == "char" then quoted("" + bare(item)#2) else serialize(item)
+// a list item: one character in single quotes, a one-character text too, as the runtime prints it (chars-codepoints);
+// in code without brackets in double quotes, as the hint `fail "?"` writes it
+item_text(item: any, bracket: any) := {
+	if bracket == "" and kind(bare(item)) == "char" { return quoted("" + bare(item)#2) }
+	if bracket != "" and kind(bare(item)) == "text" and count(bare(item)#2) == 1 { return quoted_by(bare(item)#2, "'") }
+	serialize(item)
+}
 // a text in quotes, a quote or \ in it escaped by a \ so it reads back, as the runtime prints it (P126)
-quoted(text:any) := quoted_by(text, quote)
-quoted_by(text:any, mark:any) := {
+quoted(text: any) := quoted_by(text, quote)
+quoted_by(text: any, mark: any) := {
 	written = "" + mark
 	for c in text {
 		if c == mark or c == "\\" { written += "\\" }
@@ -92,9 +97,9 @@ quoted_by(text:any, mark:any) := {
 }
 
 // items are joined by their separator and a space, unless the separator is one (a newline)
-joint(separator:any) := if separator == "\n" or separator == " " or separator == "\t" then separator else separator + " "
+joint(separator: any) := if separator == "\n" or separator == " " or separator == "\t" then separator else separator + " "
 
-key_text(op:any, left:any, right:any, view:any) := {
+key_text(op: any, left: any, right: any, view: any) := {
 	space = if is_word_operator(op) then " " else ""
 	if is_prefix_form(view) { return op + space + serialize(right) }
 	if is_empty(bare(right)) and op in suffix_operators { return operand_text(left) + op }
@@ -112,11 +117,11 @@ key_text(op:any, left:any, right:any, view:any) := {
 }
 
 // the left side of op: a key of `:` stays bare (`name: 1`), a text or character operand keeps its quotes (`"ab"+x`)
-left_side(left:any, op:any) := if op == ":" then shown(left) else operand_text(left)
-operand_text(left:any) := if kind(bare(left)) == "text" or kind(bare(left)) == "char" then serialize(left) else shown(left)
+left_side(left: any, op: any) := if op == ":" then shown(left) else operand_text(left)
+operand_text(left: any) := if kind(bare(left)) == "text" or kind(bare(left)) == "char" then serialize(left) else shown(left)
 
 // a node as Rust's Display shows it: texts and symbols bare, list items with their separator and a space
-shown(view:any) := {
+shown(view: any) := {
 	if view is number { return "" + view }
 	tag = kind(view)
 	if tag == "symbol" or tag == "text" or tag == "data" or tag == "number" { return view#2 }

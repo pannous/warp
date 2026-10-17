@@ -8,6 +8,7 @@ const BOOP: &str = "to boop x: x + 1; to boop x for y: x + y; ";
 const MISSING_FILE_ERROR: &str = "cannot open x.wav";
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 fn a_block_of_one_phrase_call_runs_it() {
 	is!("to add a to b: a + b; f() := {add 1 to 2}; f()", 3);
 	is!(&format!("{BOOP}f() := {{boop 2}}; f()"), 3);
@@ -17,11 +18,7 @@ fn a_block_of_one_phrase_call_runs_it() {
 
 #[test]
 fn a_block_of_one_sound_word_plays() {
-	for program in [
-		"f() := {play \"x.wav\"}; f()",
-		"if 1 {play \"x.wav\"}",
-		"job = go { play \"x.wav\" }; await job",
-	] {
+	for program in ["f() := {play \"x.wav\"}; f()", "if 1 {play \"x.wav\"}", "job = go { play \"x.wav\" }; await job"] {
 		assert!(eval(program).serialize().contains(MISSING_FILE_ERROR), "{program}");
 	}
 }

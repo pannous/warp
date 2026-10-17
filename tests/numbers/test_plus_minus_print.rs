@@ -1,6 +1,6 @@
 // An interval `x ± r` at run time as text, its parts, negated and ordered (card plus-minus-print, notes/plus_minus.md)
 use crate::common::fails_with;
-use warp::diagnostic::take_runtime_warnings;
+use warp::errors::diagnostic::take_runtime_warnings;
 use warp::wasm_emitter::eval;
 
 #[test]

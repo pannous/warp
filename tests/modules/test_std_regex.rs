@@ -9,15 +9,9 @@ fn use_regex_matches_finds_and_replaces() {
 	is!("use regex; matches(\"no digits\", \"[0-9]+\")", false);
 	is!("use regex; first_match(\"order 66, then 7\", \"[0-9]+\")", "66");
 	is!("use regex; first_match(\"none\", \"[0-9]+\")", parse("ø"));
-	is!(
-		"use regex; find_all(\"a11 b22 c333\", \"[0-9]+\")",
-		parse("[\"11\" \"22\" \"333\"]")
-	);
+	is!("use regex; find_all(\"a11 b22 c333\", \"[0-9]+\")", parse("[\"11\" \"22\" \"333\"]"));
 	is!("use regex; replace_all(\"a1 b22\", \"[0-9]+\", \"#\")", "a# b#");
-	is!(
-		"use regex; replace_all(\"John Smith\", \"(\\\\w+) (\\\\w+)\", \"$2 $1\")",
-		"Smith John"
-	);
+	is!("use regex; replace_all(\"John Smith\", \"(\\\\w+) (\\\\w+)\", \"$2 $1\")", "Smith John");
 }
 
 #[test]

@@ -1,8 +1,8 @@
 //! Uniscript (wiki/uniscript.md) in warp: the uniscript package (packages.warp): its uniscript.wasp over its data/entities.idx
 
 use crate::is;
-use warp::diagnostic::take_runtime_warnings;
 use warp::error;
+use warp::errors::diagnostic::take_runtime_warnings;
 use warp::node::Node;
 use warp::wasm_emitter::eval;
 
@@ -19,14 +19,9 @@ fn spells(cases: &[(&str, &str)]) {
 
 /// `function(input)` of every (input, expected) case in one program: [function("a"), function("b"), …]
 fn each_gives(function: &str, cases: &[(&str, &str)]) {
-	let calls: Vec<String> = cases
-		.iter()
-		.map(|(input, _)| format!("{function}(\"{input}\")"))
-		.collect();
+	let calls: Vec<String> = cases.iter().map(|(input, _)| format!("{function}(\"{input}\")")).collect();
 	let results = eval(&format!("use uniscript; [{}]", calls.join(", ")));
-	let Node::List(results, _, _) = results.drop_meta() else {
-		panic!("{function} of {cases:?} gave {results:?}")
-	};
+	let Node::List(results, _, _) = results.drop_meta() else { panic!("{function} of {cases:?} gave {results:?}") };
 	assert_eq!(results.len(), cases.len(), "{results:?}");
 	for ((input, expected), result) in cases.iter().zip(results) {
 		assert_eq!(result, expected, "{function}(\"{input}\")");
@@ -94,22 +89,19 @@ fn warns(uniscript: &str, unicode: &str, warning: &str) {
 fn unsupported_characters_and_combinations_warn() {
 	warns("<:greek q>", "q", "uniscript: no greek form of q at byte 0"); // c types ς since uniscript 1.0.6
 	warns("x <:fracture 7>", "x 7", "uniscript: no fracture form of 7 at byte 2");
-	warns("<:red 𓀀>", "𓀀", "uniscript: red does not apply to 𓀀 at byte 0");
-	warns(
-		"<:mirror red 狗>",
-		"狗\u{E004D}",
-		"uniscript: red does not apply to 狗 at byte 0",
-	);
+	// a color that does not apply stays as color meta, a TAG sequence (uniscript 1.0.8; user decision
+	// uniscript-binary-import: uniscript's own implementation is the truth)
+	const RED_META: &str =
+		"\u{E003A}\u{E0063}\u{E006F}\u{E006C}\u{E006F}\u{E0072}\u{E0020}\u{E0072}\u{E0065}\u{E0064}\u{E007F}";
+	warns("<:red 𓀀>", &format!("𓀀{RED_META}"), "uniscript: red on 𓀀 kept as color meta at byte 0");
+	warns("<:mirror red 狗>", &format!("狗\u{E004D}{RED_META}"), "uniscript: red on 狗 kept as color meta at byte 0");
 	warns("<:beside a b>", "ab", "uniscript: no beside group of a at byte 0");
 }
 
 #[test]
 fn use_strict_makes_uniscript_warnings_errors() {
 	// the first problem is the error, not the opening-tag warning a bare tag would add (uniscript 1.0.3)
-	is!(
-		"use strict; use uniscript; uniscript(\"<:greek q>\")",
-		error("uniscript: no greek form of q at byte 0")
-	);
+	is!("use strict; use uniscript; uniscript(\"<:greek q>\")", error("uniscript: no greek form of q at byte 0"));
 	is!("use strict; use uniscript; uniscript(\"<:greek a/>\")", "α");
 }
 
@@ -134,10 +126,7 @@ fn effect_words_stack_on_one_operand() {
 		("<:mirror red A b>", "A\u{E0072}\u{E004D}b\u{E0072}\u{E004D}"),
 		("<:mirror red circle>", "🔴\u{E004D}"),
 	]);
-	spells(&[(
-		"A\u{E0072}\u{E004D} 🔴\u{E004D}",
-		"\\:mirror-red-A \\:mirror-red-circle",
-	)]);
+	spells(&[("A\u{E0072}\u{E004D} 🔴\u{E004D}", "\\:mirror-red-A \\:mirror-red-circle")]);
 }
 
 #[test]
@@ -160,10 +149,15 @@ fn the_header_declares_uniscript_and_its_version() {
 		(&format!("{header} <:alpha>"), " α"),
 		("<:uniscript><:alpha>", "α"),
 	]);
+	// any https://uniscript.org/vN reads without warning, only another URL warns (uniscript's AGENTS.md "stay backwards
+	// compatible"; uniscript 1.0.8, user decision uniscript-binary-import)
+	take_runtime_warnings();
+	converts(&[("<:uniscript version=\\\"https://uniscript.org/v9\\\">A", "A")]);
+	assert_eq!(take_runtime_warnings(), Vec::<String>::new());
 	warns(
-		"<:uniscript version=\\\"https://uniscript.org/v9\\\">A",
+		"<:uniscript version=\\\"https://example.com/v2\\\">A",
 		"A",
-		"uniscript: unsupported uniscript version https://uniscript.org/v9 at byte 0",
+		"uniscript: unsupported uniscript version https://example.com/v2 at byte 0",
 	);
 	is!(
 		&format!("use uniscript; uniscript(\"x {header}\")"),
@@ -173,10 +167,7 @@ fn the_header_declares_uniscript_and_its_version() {
 
 #[test]
 fn an_unknown_entity_is_an_error() {
-	is!(
-		"use uniscript; uniscript(\"<:nosuchthing> x\")",
-		error("unknown uniscript entity: nosuchthing")
-	);
+	is!("use uniscript; uniscript(\"<:nosuchthing> x\")", error("unknown uniscript entity: nosuchthing"));
 }
 
 #[test]
@@ -191,16 +182,13 @@ fn unicode_spells_back_as_uniscript() {
 #[test]
 fn spelling_back_round_trips() {
 	let text = "∀x∈ℝ: 𝔄 A\u{E0072} 𓀀\u{13440} <: é";
-	is!(
-		&format!("use uniscript; t=\"{text}\"; uniscript(unicode_to_uniscript(t)) == t"),
-		true
-	);
+	is!(&format!("use uniscript; t=\"{text}\"; uniscript(unicode_to_uniscript(t)) == t"), true);
 }
 
 /// The binary index and the readable entity file agree entry by entry: the package's own checker, its prebuilt
 /// uniscript.wasm (never `cargo run` in the package: that built it into the shared cargo target directory)
 #[test]
 fn the_index_matches_the_readable_entities() {
-	let check = warp::package_tools::run_package_tool("uniscript", &["check"]).unwrap();
+	let check = warp::modules::package_tools::run_package_tool("uniscript", &["check"]).unwrap();
 	assert!(check.success(), "{}{}", check.stdout, check.stderr);
 }

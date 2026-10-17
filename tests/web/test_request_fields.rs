@@ -36,13 +36,8 @@ fn a_dollar_name_is_the_request_s_field() {
 		.read_to_string()
 		.expect("a text");
 	assert_eq!(posted, "added tea");
-	let searched = agent
-		.get(&url("/search?q=jam"))
-		.call()
-		.expect("an answer")
-		.body_mut()
-		.read_to_string()
-		.expect("a text");
+	let searched =
+		agent.get(&url("/search?q=jam")).call().expect("an answer").body_mut().read_to_string().expect("a text");
 	assert_eq!(searched, "looking for jam");
 	let _ = server.join();
 }

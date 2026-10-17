@@ -6,14 +6,8 @@ const PAGE: &str = "page = {top: {logo: {type: \"image\", src: \"logo.png\"}}, b
 
 #[test]
 fn find_collects_a_name_at_any_depth() {
-	is!(
-		&format!("{PAGE}sources = page find {{type: \"image\", src}}\nsources#1"),
-		"logo.png"
-	);
-	is!(
-		&format!("{PAGE}sources = page find {{type: \"image\", src}}\nsources#2"),
-		"cat.jpg"
-	);
+	is!(&format!("{PAGE}sources = page find {{type: \"image\", src}}\nsources#1"), "logo.png");
+	is!(&format!("{PAGE}sources = page find {{type: \"image\", src}}\nsources#2"), "cat.jpg");
 }
 
 #[test]
@@ -23,24 +17,22 @@ fn find_without_names_gives_the_subtrees() {
 
 #[test]
 fn find_takes_a_named_pattern() {
-	is!(
-		&format!("{PAGE}pattern Image = {{type: \"image\", src}}\ncount(page find Image)"),
-		2
-	);
+	is!(&format!("{PAGE}pattern Image = {{type: \"image\", src}}\ncount(page find Image)"), 2);
 }
 
 #[test]
 fn find_matches_list_patterns_in_nested_lists() {
-	is!(
-		"xs = [[1, 2], [3, [1, 5]]]\nfound = xs find [1, x]\nfound#1 + found#2",
-		7
-	);
+	is!("xs = [[1, 2], [3, [1, 5]]]\nfound = xs find [1, x]\nfound#1 + found#2", 7);
+}
+
+#[test]
+fn find_with_two_names_gives_the_maps_that_have_both() {
+	let page = "page = {top: {logo: {type: \"image\", src: \"logo.png\"}}, body: [{type: \"image\", src: \"cat.jpg\", alt: \"a cat\"}]}\n";
+	is!(&format!("{page}count(page find {{src, alt}})"), 1);
+	is!(&format!("{page}described = page find {{src, alt}}\ndescribed#1.alt"), "a cat");
 }
 
 #[test]
 fn two_finds_walk_apart() {
-	is!(
-		&format!("{PAGE}count(page find {{type: \"text\"}}) + count(page find {{src}})"),
-		3
-	);
+	is!(&format!("{PAGE}count(page find {{type: \"text\"}}) + count(page find {{src}})"), 3);
 }

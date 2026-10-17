@@ -10,8 +10,8 @@ One source file is compiled twice:
 
 | build | what it makes of | made by |
 |---|---|---|
-| server (native, `warp run app.warp`) | `serve 8080 { get "/api/x" {…} }` serves HTTP, `server def f` is also POST /rpc/f, the page's site answers GET / and any other path | lowering/serve.rs, web_server.rs, site::served_files |
-| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, each call of a `server def f` is a value fetched from POST /rpc/f | lowering/routes.rs, lowering/serve.rs without_serving, site.js |
+| server (native, `warp run app.warp`) | `serve 8080 { get "/api/x" {…} }` serves HTTP, `server def f` is also POST /rpc/f, the page's site answers GET / and any other path | lowering/web/serve.rs, web_server.rs, site::served_files |
+| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, each call of a `server def f` is a value fetched from POST /rpc/f | lowering/web/routes.rs, lowering/web/serve.rs without_serving, site.js |
 
 Example (probes/server_routes/one_source.warp, which runs and was checked in a browser):
 
@@ -42,7 +42,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    because every definition is in both.
 2. **Server-only code** (`server def`), done (cards rpc-stub, rpc-everywhere; probes/server_routes/rpc_everywhere.warp,
    checked in a browser: the button's handler doubles n through the server, "next" is fetched anew):
-   - The page build reads **every** call of a server function from a main-level variable, `f·rpc·0` (lowering/serve.rs
+   - The page build reads **every** call of a server function from a main-level variable, `f·rpc·0` (lowering/web/serve.rs
      asking_the_server; `g := f(x)` names it g). The shipped page leaves the server functions out (their bodies and
      secrets stay out of app.wasm) and fetches the value: `f·rpc·0 := fetch ["/rpc/f", [args]] ?? first value`, a
      POST of the arguments as JSON, fetched anew when an argument changes. Markup, expressions and handlers read the
@@ -51,7 +51,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      functions, calls them directly as the server does, renders the HTML and exports `rpc·values`; the shipped page
      starts from those values (pipeline::with_server_values), so hydration shows the same text and the ø check is
      satisfied. headless.rs prerenders too.
-   - `x := fetch url ?? default` (lowering/fetch_signals.rs) is the general form: the default until the reply is in,
+   - `x := fetch url ?? default` (lowering/signals/fetch_signals.rs) is the general form: the default until the reply is in,
      and in place of a failed one. A POSTed reply is JSON of any value, a number or a text too (src/web/fetches.rs,
      host-tasks.js fetchReply); a GET reply stays as before (objects and arrays parsed, else the text).
    - Refused, loudly: an argument the page only knows inside a function (`def show(k) { p{ doubled(k) } }`). The page
@@ -70,7 +70,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    secret ships, the server gives out only what the route displays). Server data is a variable registered from the
    database (`users: [User] = database.users`, `stored users: [User]`, `prefs = database.prefs`). A plain main-level
    value (`users = ["Ann", "Bo"]` above) is still a value at build time in the page.
-   - lowering/serve.rs with_route_data: each value of a route's block that reads server data (`"User " + users#id.name`
+   - lowering/web/serve.rs with_route_data: each value of a route's block that reads server data (`"User " + users#id.name`
      inside `h1{…}`; markup and blocks are looked into, any other value is asked for whole) becomes the server function
      `route·data·N(path)`. It binds the route's parameters from the path and gives that value, ø for a path of another
      route. So POST /rpc/route·data·N with `["/users/2"]` gives "User Bo" and nothing else of the table.
@@ -106,13 +106,13 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      /users/app-route-1.wasm).
 6. **`warp serve [app.warp] [port]`** (P222, done; the CGI mode is retired): serves any program without a `serve PORT
    {…}` statement: its page (site.rs), its `server def`s as POST /rpc/f and its top-level `get`/`post "/path" {…}` routes,
-   at the port (8080; the file app.warp or main.warp of the folder). pipeline::serving_at(port) makes lowering/serve.rs
+   at the port (8080; the file app.warp or main.warp of the folder). pipeline::serving_at(port) makes lowering/web/serve.rs
    append the serving after the program's statements; a program with its own `serve PORT {…}` keeps it. Plain
    `warp app.warp` serves too when serve::serves finds a route, a `get`/`post`, a `server def` or a `serve` (a static
    check), printing "serving http://localhost:8080 (routes found; `warp run app.warp` runs it once without serving)";
    `warp run` and `warp test` never serve. Probe: probes/warp_serve/app.warp; tests/web/test_warp_serve.rs.
 
-7. **samples/server.warp** (card sample-server, 2026-10-09) runs under `warp serve` and in the playground. Found on the way:
+7. **samples/servers/server.warp** (card sample-server, 2026-10-09) runs under `warp serve` and in the playground. Found on the way:
    - The serving instance lives as long as the server, but a page render runs in an instance of its own and may add
      rows. So every served route (get/post/RPC) starts with `global users; users = database.users` for each table
      variable (serve.rs reading_tables), and database_tables.rs reopens a registered table for that plain assignment.
@@ -129,7 +129,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      answers `[]` (card served-empty). A `server def` whose value is one (or a call of such a function) is a list word
      too, so its POST /rpc/f answers `[]` (serve.rs ServerData, card server-def-giving).
 
-8. **samples/todo_app.warp** (card todo-app, 2026-10-09): a stored `Todo{title: text; done: bool}` table, a list page,
+8. **samples/storage/todo_app.warp** (card todo-app, 2026-10-09): a stored `Todo{title: text; done: bool}` table, a list page,
    a form POSTing a todo, `post "/todos/:id:int/toggle"`, `todos where not done`. It runs under `warp serve`, `warp run`
    and in the playground. Checks: tests/web/test_served_forms.rs `the_todo_sample_creates_toggles_and_lists` (create,
    toggle, list over HTTP), probes/todo_app/check_served.sh (the same with curl against a running `warp serve`), and the
@@ -177,4 +177,4 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
 - A page path: the single page answers every path a route matches, `route "*"` included, with 200 (user 2026-10-07,
   supervisor 2026-10-09). The answer is 404 only when no route matches at all (site.rs matches_no_route_at) or when a
   matched route's lookup misses (`users#9`).
-- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/server.warp <port>`.
+- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/servers/server.warp <port>`.

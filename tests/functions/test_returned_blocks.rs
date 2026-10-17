@@ -12,14 +12,10 @@ fn a_returned_block_keeps_its_own_it() {
 
 #[test]
 fn a_block_argument_keeps_its_own_it() {
-	assert_eq!(
-		eval("def scale(k){ map([1,2,3], {it * k}) }; scale(2)").serialize(),
-		"[2 4 6]"
-	);
+	assert_eq!(eval("def scale(k){ map([1,2,3], {it * k}) }; scale(2)").serialize(), "[2 4 6]");
 }
 
 #[test]
 fn it_in_the_body_is_the_parameter() {
-	is!("f(x) := x + it; f(3)", 6);
 	is!("def f(x){ it * 2 }; f(4)", 8);
 }

@@ -38,38 +38,23 @@ fn an_executable_calls_python_and_node() {
 #[test]
 fn values_cross_both_ways_as_warp_does() {
 	assert_eq!(
-		printed(
-			"exe_python_json",
-			"use python json\njson.loads(\"{\\\"a\\\": [1, 2.5, \\\"x\\\"]}\")"
-		),
-		"{a:[1 2.5 \"x\"]}\n"
+		printed("exe_python_json", "use python json\njson.loads(\"{\\\"a\\\": [1, 2.5, \\\"x\\\"]}\")"),
+		"{a:[1 2.5 'x']}\n"
 	);
+	assert_eq!(printed("exe_python_big", "use python math\nmath.factorial(25)"), "15511210043330985984000000\n");
 	assert_eq!(
-		printed("exe_python_big", "use python math\nmath.factorial(25)"),
-		"15511210043330985984000000\n"
-	);
-	assert_eq!(
-		printed(
-			"exe_python_handle",
-			"use python datetime\nd = datetime.date(2020, 1, 2)\nd.isoformat()"
-		),
+		printed("exe_python_handle", "use python datetime\nd = datetime.date(2020, 1, 2)\nd.isoformat()"),
 		"2020-01-02\n" // an executable prints a text result plainly
 	);
 }
 
 #[test]
 fn a_missing_interpreter_is_named() {
-	let run = run_executable(
-		"exe_python_missing",
-		"use python math\nmath.sqrt(16)",
-		&[("WARP_PYTHON", "no-such-python3")],
-	);
+	let run =
+		run_executable("exe_python_missing", "use python math\nmath.sqrt(16)", &[("WARP_PYTHON", "no-such-python3")]);
 	let errors = String::from_utf8_lossy(&run.stderr);
 	assert!(!run.status.success());
-	assert!(
-		errors.contains("cannot start no-such-python3") && errors.contains("WARP_PYTHON"),
-		"{errors}"
-	);
+	assert!(errors.contains("cannot start no-such-python3") && errors.contains("WARP_PYTHON"), "{errors}");
 }
 
 #[test]
@@ -92,19 +77,10 @@ fn the_runtime_reads_and_builds_nodes_with_warps_codes() {
 	for (code, kind) in kinds {
 		assert_eq!(code, kind as u8, "{kind:?}");
 	}
-	assert_eq!(
-		(runtime::KIND_MASK, runtime::KIND_BITS, runtime::BOOL_INFO),
-		(KIND_MASK, KIND_BITS, BOOL_INFO)
-	);
+	assert_eq!((runtime::KIND_MASK, runtime::KIND_BITS, runtime::BOOL_INFO), (KIND_MASK, KIND_BITS, BOOL_INFO));
 	assert_eq!(runtime::COLON, warp::operators::op_to_code(&warp::operators::Op::Colon));
-	assert_eq!(
-		runtime::CURLY,
-		warp::wasm_emitter::bracket_info(&warp::node::Bracket::Curly)
-	);
-	assert_eq!(
-		runtime::SQUARE,
-		warp::wasm_emitter::bracket_info(&warp::node::Bracket::Square)
-	);
+	assert_eq!(runtime::CURLY, warp::wasm_emitter::bracket_info(&warp::node::Bracket::Curly));
+	assert_eq!(runtime::SQUARE, warp::wasm_emitter::bracket_info(&warp::node::Bracket::Square));
 	assert_eq!(runtime::BUILDERS[8..], warp::wasm_emitter::EXACT_BUILDERS[..3]);
 	assert_eq!(runtime::TEXT_HEAP, warp::host::TEXT_HEAP_EXPORT);
 }

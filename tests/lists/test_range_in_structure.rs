@@ -1,7 +1,7 @@
 // A range held by a structure (card range-descriptor): an object field, a list item, a list variable inside a list.
 // `r: 1..n` and `r = 1..n` are the same range: `..` already says it is a value, no block (user, 2026-10-09)
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::ints;
 
 #[test]
@@ -12,9 +12,7 @@ fn a_range_after_colon_is_its_value() {
 	is!("n = 3; o = {r: n..6}; o.r", ints(vec![3, 4, 5]));
 	take_warnings();
 	warp::wasm_emitter::eval("o = {r: 1..10}; count o.r");
-	assert!(!take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("keeps the block")));
+	assert!(!take_warnings().iter().any(|warning| warning.message.contains("keeps the block")));
 }
 
 /// collected once, in linear time: a quadratic collection runs out of fuel

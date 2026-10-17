@@ -31,8 +31,5 @@ fn parsed_json_is_tested_against_a_schema() {
 
 #[test]
 fn an_arm_matches_a_schema() {
-	is!(
-		&format!("{CONFIG}match {{port: 80, host: \"x\"}} {{ Config => \"config\"; _ => \"other\" }}"),
-		"config"
-	);
+	is!(&format!("{CONFIG}match {{port: 80, host: \"x\"}} {{ Config => \"config\"; _ => \"other\" }}"), "config");
 }

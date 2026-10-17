@@ -11,12 +11,8 @@ fn folder() -> PathBuf {
 fn checked_text(file: &str, content: &str) -> String {
 	let page = folder().join(file);
 	std::fs::write(&page, content).unwrap();
-	let output = crate::common::warp_command()
-		.args(["app", "--check"])
-		.arg(&page)
-		.env("WARP_NO_WINDOW", "1")
-		.output()
-		.unwrap();
+	let output =
+		crate::common::warp_command().args(["app", "--check"]).arg(&page).env("WARP_NO_WINDOW", "1").output().unwrap();
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 	String::from_utf8_lossy(&output.stdout).into_owned()
 }
@@ -39,18 +35,14 @@ fn a_program_shows_its_page_with_what_a_command_printed() {
 fn without_check_no_window_opens_under_warp_no_window() {
 	let page = folder().join("refused.html");
 	std::fs::write(&page, "<p>x</p>").unwrap();
-	let output = crate::common::warp_command()
-		.arg(&page)
-		.env("WARP_NO_WINDOW", "1")
-		.output()
-		.unwrap();
+	let output = crate::common::warp_command().arg(&page).env("WARP_NO_WINDOW", "1").output().unwrap();
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("--check"));
 }
 
 #[test]
 fn a_page_survives_losing_focus() {
-	// --check replays the focus loss (windowDidResignKey) that crashed `warp app samples/crontab.warp` with
+	// --check replays the focus loss (windowDidResignKey) that crashed `warp app samples/system/crontab.warp` with
 	// "tried to access uninitialized instance variable" (card focus-crash)
 	assert!(checked_text("focus.html", "<p>still here</p>").contains("still here"));
 }
@@ -59,23 +51,13 @@ fn a_page_survives_losing_focus() {
 // from a terminal, as routes make `warp app.warp` serve; piped, redirected or under WARP_NO_WINDOW it prints the HTML
 #[test]
 fn a_program_ending_in_an_html_page_is_shown() {
-	assert!(warp::serve::shows_page(
-		"jobs = [1]\nhtml{ lang:\"en\" body{ \"hi\" } }"
-	));
+	assert!(warp::serve::shows_page("jobs = [1]\nhtml{ lang:\"en\" body{ \"hi\" } }"));
 	assert!(warp::serve::shows_page("html { body{ \"hi\" } }"));
-	assert!(
-		warp::serve::shows_page("div{ \"hi\" }"),
-		"any element is a page (card div-opens-app, user)"
-	);
+	assert!(warp::serve::shows_page("div{ \"hi\" }"), "any element is a page (card div-opens-app, user)");
 	assert!(!warp::serve::shows_page("page = html{ body{ \"hi\" } }\ncount(page)"));
 	let page = folder().join("printed.warp");
 	std::fs::write(&page, "html{ body{ \"hi\" } }").unwrap();
-	let output = crate::common::warp_command()
-		.arg("run")
-		.arg(&page)
-		.env("WARP_NO_WINDOW", "1")
-		.output()
-		.unwrap();
+	let output = crate::common::warp_command().arg("run").arg(&page).env("WARP_NO_WINDOW", "1").output().unwrap();
 	assert!(
 		String::from_utf8_lossy(&output.stdout).contains("<body>hi</body>"),
 		"{}",

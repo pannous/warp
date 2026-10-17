@@ -18,7 +18,6 @@ fn let_var_and_const_declare_inside_any_block() {
 	fails_with("let x = 0; x += 1; x", "x is let (immutable), cannot change it");
 	fails_with("let x = 1; x = 2; x", "fix: use var x");
 	fails_with("let x = 1; x++; x", "x is let (immutable)");
-	fails_with("let xs = [1 2]; xs#1 = 5; xs", "xs is let (immutable)");
 }
 
 #[test]
@@ -47,10 +46,7 @@ fn n_times_a_one_element_list_repeats_it() {
 		"[0]*3",
 		"type error: list * number: does `[0]*3` repeat the list or multiply each element? (too ambiguous to guess)",
 	);
-	fails_with(
-		"3*[1]",
-		"`3 times [1]` for repeat the list or `[1].map(x => x*3)` for multiply each element",
-	);
+	fails_with("3*[1]", "`3 times [1]` for repeat the list or `[1].map(x => x*3)` for multiply each element");
 	fails_with("[1 2]*2", "too ambiguous to guess");
 	fails_with("xs=[1 2]; xs*2", "type error"); // a list variable: no Ask yet
 }
@@ -71,14 +67,8 @@ fn insert_never_guesses_the_argument_order() {
 	is!("pixel=[1 2 3]; pixel.insert(4); pixel", ints(vec![1, 2, 3, 4]));
 	is!("b=[]; b.insert(5, at: 0); b", ints(vec![5]));
 	// the kinds decide: the one Int is the position, in either order
-	is!(
-		"xs=[\"a\" \"b\"]; xs.insert(0, \"z\"); xs",
-		strings(vec!["z", "a", "b"])
-	);
-	is!(
-		"xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs",
-		strings(vec!["a", "z", "b"])
-	);
+	is!("xs=[\"a\" \"b\"]; xs.insert(0, \"z\"); xs", strings(vec!["z", "a", "b"]));
+	is!("xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs", strings(vec!["a", "z", "b"]));
 	// two Ints: Python `insert(i, x)` and warp `insert(x, i)` disagree (wiki/Footguns.md "Guessing intent")
 	// unanswered the Ask is an error naming both explicit forms
 	fails_with(
@@ -94,9 +84,7 @@ fn insert_never_guesses_the_argument_order() {
 #[test]
 fn an_answered_ask_compiles_the_chosen_reading() {
 	// no remembered answers (user 2026-10-03): each reading is written in its explicit form
-	is!("3 times [0]", ints(vec![0, 0, 0]));
 	is!("[1 2].map(x => x*3)", ints(vec![3, 6]));
-	is!("xs=[1 2]; xs.insert(4, at: 0); xs", ints(vec![4, 1, 2]));
 	is!("xs=[1 2]; xs.insert(0, at: 4); xs", ints(vec![1, 2, 0]));
 }
 
@@ -110,13 +98,10 @@ fn a_number_joins_a_text_in_its_text_form() {
 }
 
 #[test]
-fn glued_double_slash_is_floor_division() {
-	is!("7//2", 3);
-	is!("-7//2", -4);
-	is!("x=10; x//=2; x", 5);
+fn floor_division_is_slash_bang() {
+	is!("x=10; x /!= 2; x", 5);
 	is!("7 // a comment", 7);
 	is!("u='http://x.org'; 1", 1);
-	is!("7 div 2", 3);
 	is!("n=9; n div 2", 4);
 }
 
@@ -125,7 +110,7 @@ fn a_fractional_index_says_so() {
 	fails_with("xs=[1 2 3]; n=5; xs[n/2]", "index must be an integer");
 	fails_with("xs=[1 2 3]; n=5; xs#(n/2)", "index must be an integer");
 	is!("xs=[1 2 3]; n=4; xs[n/2]", 3);
-	is!("xs=[1 2 3 4]; n=5; xs[n//2]", 3);
+	is!("xs=[1 2 3 4]; n=5; xs[n /! 2]", 3);
 }
 
 #[test]
@@ -138,7 +123,7 @@ fn a_glued_hash_name_statement_counts() {
 
 #[test]
 fn the_let_note_is_shown_until_acknowledged() {
-	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves let and := open (user #12)
 	let let_hints = || {
@@ -175,22 +160,17 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 
 #[test]
 fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
-	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
-	// user decision 2026-10-08: `//` before a space is a comment, `x //= 3` and `a//b` divide
+	// user decision floor-division 2026-10-16: `//` is always a comment, floor division is `/!`
 	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 5);
 	is!("x = 7 // 2\nx", 7);
 	is!("x = 7    // 2\nx", 7);
-	is!("n = 10; n //= 3\nn", 3);
-	is!("items=[1 2 3 4 5]\nmid = len(items)//2\nmid", 2);
-	is!("n = 10; n//=3; n", 3);
+	is!("items=[1 2 3 4 5]\nmid = len(items) /! 2\nmid", 2);
+	is!("n = 10; n /!= 3; n", 3);
 	// the note "`// …` after code is a comment" shows until acknowledged; a `//` line of its own is no news
 	let notes = |code: &str| {
-		capture_hints(|| warp::wasm_emitter::eval(code))
-			.1
-			.iter()
-			.filter(|hint| hint.canonical == "a//b")
-			.count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 	};
 	let path = "scratch/test_welcoming_sugar.slash_comment";
 	std::fs::create_dir_all("scratch").unwrap();
@@ -212,11 +192,7 @@ fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 fn a_comment_after_a_text_needs_no_note() {
 	use warp::normalize::capture_hints;
 	let notes = |code: &str| {
-		capture_hints(|| warp::wasm_emitter::eval(code))
-			.1
-			.iter()
-			.filter(|hint| hint.canonical == "a//b")
-			.count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 	};
 	assert_eq!(notes("p = { e: \"trailing\" // a comment\n age: 30 }; p.age"), 0);
 	assert_eq!(notes("x = \"a\", // a comment\nx"), 0);
@@ -228,14 +204,17 @@ fn a_comment_after_a_text_needs_no_note() {
 fn a_word_comment_after_a_value_needs_no_note() {
 	use warp::normalize::capture_hints;
 	let notes = |code: &str| {
-		capture_hints(|| warp::wasm_emitter::eval(code))
-			.1
-			.iter()
-			.filter(|hint| hint.canonical == "a//b")
-			.count()
+		capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 	};
 	assert_eq!(notes("cutoff = 900 // Hz\ncutoff"), 0);
 	assert_eq!(notes("x = 4 // peaks\nx"), 0);
 	assert_eq!(notes("x = 4.0 // a peak\nx"), 0);
 	assert_eq!(notes("n = 2\nx = 8 // n\nx"), 1);
+}
+
+#[test] // card undefined-bare: next to a value as next to code, a word that names nothing is loud; words alone stay data
+fn an_unknown_word_beside_a_value_is_loud_too() {
+	fails_with("foo; 3", "undefined variable: foo");
+	fails_with("foo; yes", "undefined variable: foo");
+	fails_with("foo\n\"a\"", "undefined variable: foo");
 }

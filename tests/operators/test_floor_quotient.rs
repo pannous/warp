@@ -1,19 +1,18 @@
-// `a // b` is the Euclidean quotient that goes with `%` (a == b*(a//b) + a%b): floor(a/b) for a positive divisor,
+// `a /! b` is the Euclidean quotient that goes with `%` (a == b*(a /! b) + a%b): floor(a/b) for a positive divisor,
 // ceil(a/b) for a negative one. Each operand runs once, an exact quotient rounds exactly beyond the f64 range, and no
 // Euclidean-% warning is given for code the user never wrote
 use crate::is;
 
 #[test]
 fn floor_division_is_euclidean() {
-	is!("7//-2", -3);
-	is!("-7//2", -4);
-	is!("7.5//2", 3);
-	is!("a=-7; b=-2; a//b * b + a%b == a", 1);
+	is!("7 /! -2", -3);
+	is!("7.5 /! 2", 3);
+	is!("a=-7; b=-2; a /! b * b + a%b == a", 1);
 }
 
 #[test]
 fn the_dividend_is_evaluated_once() {
-	is!("global n=0; f() := { n = n + 1; 7 }; f()//2; n", 1);
+	is!("global n=0; f() := { n = n + 1; 7 }; f() /! 2; n", 1);
 }
 
 #[test]
@@ -24,9 +23,7 @@ fn floor_of_an_exact_number_beyond_f64() {
 
 #[test]
 fn floor_division_warns_nothing_about_percent() {
-	let _ = warp::diagnostic::take_warnings();
-	is!("-7//2", -4);
-	assert!(warp::diagnostic::take_warnings()
-		.iter()
-		.all(|warning| !warning.to_string().contains('%')));
+	let _ = warp::errors::diagnostic::take_warnings();
+	is!("-7 /! 2", -4);
+	assert!(warp::errors::diagnostic::take_warnings().iter().all(|warning| !warning.to_string().contains('%')));
 }

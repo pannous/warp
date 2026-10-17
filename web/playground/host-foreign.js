@@ -5,11 +5,10 @@
 /// C names of libm functions (ffi "m") that Math spells differently
 const LIBM = { fabs: Math.abs, fmin: Math.min, fmax: Math.max, fmod: (a, b) => a % b, ceil: Math.ceil, floor: Math.floor };
 const LIBC_URL = new URL("lib/libc.wasm", self.location.href).href; // libc for `use c` (lib/build_libc.sh, P147)
-const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
-const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
-const C_CALLS_SECTION = "warp.c_calls"; // src/wasm_modules.rs C_CALLS_SECTION
+const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTENSIONS
+const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
+const C_CALLS_SECTION = "warp.c_calls"; // src/modules/wasm_modules.rs C_CALLS_SECTION
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
-const SETTER = /^set (.+)$/; // src/lowering/foreign_modules.rs SETTER_PREFIX: "set innerHTML" sets the member to the one argument
 // a promise is awaited only by an awaited run's main (host.js JSPI), not where the browser has no JSPI (Safari), nor in a
 // page event's handler, nor in a warp function JavaScript calls back (a JavaScript frame between: the engine refuses
 // to suspend it, SUSPENSION_FAILURE)
@@ -27,12 +26,12 @@ function registerForeignRuntime(name, runtime) {
 }
 const prepareForeignRuntimes = code => Promise.all([...foreignRuntimes.values()].map(runtime => runtime.prepare?.(code)));
 
-// what warp's operators on a value of the page forward to (src/lowering/foreign_modules.rs), as in src/foreign.rs's loop
+// what warp's operators on a value of the page forward to (src/lowering/foreign/foreign_modules.rs), as in src/modules/foreign.rs's loop
 const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
 
-// `use python` in the page: the bridge of src/foreign.rs (foreign_python.py) in Pyodide, which worker.js loads before
+// `use python` in the page: the bridge of src/modules/foreign.rs (foreign_python.py) in Pyodide, which worker.js loads before
 // a program that says `use python` runs; requests and answers are the same JSON, handles stay in Pyodide
 // `use python`: Pyodide's bridge (web/playground/foreign_python.py), which the playground's worker.js loads before a run
 registerForeignRuntime("python", {
@@ -47,20 +46,56 @@ registerForeignRuntime("python", {
 // `use js Math`: the page's own globalThis.Math; npm modules need the native host
 registerForeignRuntime("js", {
 	call(moduleName, memberName, argumentValues) {
-		// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
-		let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
+		// a module's name, or a handle: an object of the page kept behind an id (src/modules/foreign.rs)
+		const value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
+		if (value instanceof PageObject || (value === undefined && self.askPageCall)) return callOnPage(value ?? moduleName, memberName, argumentValues);
 		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
-		// member "": the module constructed, `new URL(…)` (src/lowering/foreign_modules.rs CONSTRUCTOR_MEMBER)
-		if (memberName === "") return new value(...argumentValues.map(unhandled));
-		const set = memberName.match(SETTER);
-		if (set) return value[set[1]] = unhandled(argumentValues[0]);
-		for (const part of memberName.split(".")) {
-			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
-			[owner, value] = [value, value[part]];
-		}
-		return argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+		return jsMember(value, moduleName, memberName, argumentValues?.map(unhandled) ?? null);
 	},
 });
+
+// a global only the page has (`use js document`, `document`, `$who`) in the program's Worker: the page calls it while the
+// Worker waits (host-tasks.js askPage; task-workers.js answerPageCall), and an object it gives stays on the page, here
+// a PageObject naming its id there (card browser-interaction)
+class PageObject {
+	constructor({ $page, type, text }) {
+		Object.assign(this, { $page, type, text });
+	}
+	toString() {
+		return this.text;
+	}
+}
+// one PageObject per id while one lives, counting how often the page gave the id; once it is collected the page hears how
+// often, and lets the object go when no Worker holds it (task-workers.js releaseFrom, card page-pageobjects)
+const pageObjectsHere = new Map(); // id → {ref: WeakRef(PageObject), received}
+const releasedOnPage = new FinalizationRegistry(({ id, entry }) => {
+	if (pageObjectsHere.get(id) !== entry) return; // a newer PageObject of the id took over the count
+	pageObjectsHere.delete(id);
+	self.postMessage({ releasePageObject: { id, received: entry.received } });
+});
+function pageObjectOf(value) {
+	const entry = pageObjectsHere.get(value.$page);
+	const living = entry?.ref.deref();
+	if (living) {
+		entry.received++;
+		return Object.assign(living, { type: value.type, text: value.text });
+	}
+	const made = new PageObject(value);
+	// a collected one not yet finalized: its count goes on in the new entry
+	const fresh = { ref: new WeakRef(made), received: (entry?.received ?? 0) + 1 };
+	pageObjectsHere.set(value.$page, fresh);
+	releasedOnPage.register(made, { id: value.$page, entry: fresh });
+	return made;
+}
+const fromPage = value => Array.isArray(value) ? value.map(fromPage) : value?.$page ? pageObjectOf(value) : value;
+const toPage = value => value instanceof PageObject ? { $page: value.$page, type: value.type } : value;
+function callOnPage(receiver, memberName, argumentValues) {
+	const label = `js ${receiver.type ?? receiver}.${memberName}`;
+	const request = { receiver: toPage(receiver), member: memberName, arguments: argumentValues?.map(value => toPage(unhandled(value))) ?? null };
+	if (!self.askPage) throw new Error(`${label}: only the page has it, and this Worker carries no way to ask it (host-tasks.js)`);
+	const { value } = self.askPage(label, shared => self.askPageCall(shared, request));
+	return fromPage(value);
+}
 
 // the NUL-terminated bytes at `address` of a linear memory
 function cText(memory, address) {
@@ -69,7 +104,7 @@ function cText(memory, address) {
 	return bytes.slice(0, end < 0 ? bytes.length : end);
 }
 
-// the program's C calls (src/wasm_modules.rs c_calls, which lists the letters) by "module\tname"
+// the program's C calls (src/modules/wasm_modules.rs c_calls, which lists the letters) by "module\tname"
 function cCalls(run) {
 	if (!run.cCalls) {
 		const lines = WebAssembly.Module.customSections(run.module, C_CALLS_SECTION).flatMap(section => decode(new Uint8Array(section)).split("\n"));
@@ -154,7 +189,7 @@ function libcImports(holder) {
 	});
 }
 
-// the exports of a WebAssembly module the program imports by path (src/wasm_modules.rs link): instantiated once per
+// the exports of a WebAssembly module the program imports by path (src/modules/wasm_modules.rs link): instantiated once per
 // run at the first call, with its own imports linked like the program's; a global reads through a getter and is set
 // through `set g`
 function moduleImports(holder, hooks, path) {
@@ -188,7 +223,7 @@ function moduleImports(holder, hooks, path) {
 	});
 }
 
-// what the module changed in its copy of an argument, made to the program's own Node (src/wasm_modules.rs write_back)
+// what the module changed in its copy of an argument, made to the program's own Node (src/modules/wasm_modules.rs write_back)
 function writtenBack(program, value, module, copy) {
 	if (copy === value || !isNode(value) || !isNode(copy)) return;
 	const changed = readNode(module, copy);
@@ -197,7 +232,7 @@ function writtenBack(program, value, module, copy) {
 
 // a module warp compiled reads its Nodes (reader.js) and builds them (host.js buildValue)
 const isWarpModule = exports => typeof exports.reflect_data === "function" && typeof exports.new_text === "function";
-// a Node of one warp instance as a copy in the other (src/wasm_modules.rs call_with_values): its texts live in the
+// a Node of one warp instance as a copy in the other (src/modules/wasm_modules.rs call_with_values): its texts live in the
 // memory of the instance that made it
 const isNode = value => value !== null && typeof value === "object";
 const copied = (from, to, value) => isNode(value) && isWarpModule(from) && isWarpModule(to) ? buildValue(to, readNode(from, value)) : value;
@@ -245,7 +280,7 @@ function awaitingCall(call) {
 
 addHostPart({
 	words: (holder, hooks, { program }) => {
-		// a module of another runtime (src/foreign.rs), run by the runtime registered under its name
+		// a module of another runtime (src/modules/foreign.rs), run by the runtime registered under its name
 		const foreignCall = (runtime, module, member, call, argumentList) => {
 			const program_ = program();
 			const [runtimeName, moduleName, memberName] = [runtime, module, member].map(node => plainOfTree(readNode(program_, node)));
@@ -266,7 +301,7 @@ addHostPart({
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
 		c: libcImports(holder),
-		// `use { memory, table } from "env"` (src/wasm_reader.rs define_imported_entities): a fresh memory and table
+		// `use { memory, table } from "env"` (src/run/wasm_reader.rs define_imported_entities): a fresh memory and table
 		env: {
 			get memory() { return new WebAssembly.Memory({ initial: IMPORTED_MEMORY_PAGES }); },
 			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },

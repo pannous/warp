@@ -19,10 +19,7 @@ fn a_variable_of_the_modules_name_keeps_its_methods() {
 
 #[test]
 fn a_qualified_word_without_its_use_names_the_module() {
-	crate::common::fails_with(
-		"list.zip([1], [2])",
-		"zip is in the standard module list: write `use list`",
-	);
+	crate::common::fails_with("list.zip([1], [2])", "zip is in the standard module list: write `use list`");
 }
 
 #[test]
@@ -30,8 +27,5 @@ fn a_std_word_without_its_use_shows_no_hint_of_the_std_source() {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval("list.zip([1],[2])"));
 	let written: Vec<String> = hints.iter().map(|hint| hint.original.clone()).collect();
 	// the note on the qualified call is the program's own; lib/map.warp's `out[k]` is not
-	assert!(
-		written.iter().all(|original| original.starts_with("list.zip")),
-		"{written:?}"
-	);
+	assert!(written.iter().all(|original| original.starts_with("list.zip")), "{written:?}");
 }

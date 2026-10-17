@@ -38,10 +38,7 @@ fn run_in_page(code: &str, name: &str, system_values: Option<&str>) -> String {
 
 #[test]
 fn the_playground_paints_a_canvas_of_its_size() {
-	assert_eq!(
-		run_in_host("use draw\ncanvas(2, 1)\nshow()", "paint-small"),
-		"painted 2×1\nran"
-	);
+	assert_eq!(run_in_host("use draw\ncanvas(2, 1)\nshow()", "paint-small"), "painted 2×1\nran");
 }
 
 #[test]
@@ -52,8 +49,5 @@ fn the_playground_paints_the_default_canvas() {
 #[test]
 fn the_default_canvas_fills_the_output_pane() {
 	let pane = r#"{"view_width": 300, "view_height": 200}"#;
-	assert_eq!(
-		run_in_page("use draw\nshow()", "paint-pane", Some(pane)),
-		"painted 300×200\nran"
-	);
+	assert_eq!(run_in_page("use draw\nshow()", "paint-pane", Some(pane)), "painted 300×200\nran");
 }

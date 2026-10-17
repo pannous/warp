@@ -7,11 +7,11 @@ signals, the server is the same program. The cards are the web-* cards on the bo
 order and what each builds on. Defaults below are undoable; open questions go to the Interviewer.
 
 ## What exists already
-- **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/html.warp, html_dsl.warp; repeated
+- **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/web/html.warp, html_dsl.warp; repeated
   keys like `li li li` since 49a48ece1, tests/web/test_markup_tags.rs). It is only a value today: nothing renders it.
 - **Signals** (notes/signals.md): every variable is a signal once something listens; `:=` derives one and knows what it
   reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground (phase 7)
-  and in `warp app` (`on key { exit }` closes it, samples/hello_div.warp, tests/web/test_app_keys.rs).
+  and in `warp app` (`on key { exit }` closes it, samples/web/hello_div.warp, tests/web/test_app_keys.rs).
 - **Page plumbing** (notes/web_playground.md): the compiler runs in a worker, host words reach the page
   (host.js), paint draws pixels, `use draw` shapes (lib/draw.warp), fetch, channels, components, threads.
 
@@ -42,9 +42,9 @@ Each step is useful on its own and is what the next ones stand on.
 ## Server and page (agreed with warp-f0, 2026-10-07; card web-server)
 - **Routes**: `serve 8080 { get "/api/users" { users } post "/api/users" { … } }`. A route's block value is the response:
   a text as text/plain, any other value as JSON (std json to_json). `request` holds method, path, query and body (the
-  body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/serve.rs
+  body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/web/serve.rs
   with_answer_headers makes them the host word response_header, `status` as the CGI header Status; natively
-  web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/route_headers.warp).
+  web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/servers/route_headers.warp).
   A WAGI build (`warp build --wagi`, card wagi-build) has no host: there they are lib/wagi.warp wagi_header calls,
   which globals collect for the CGI answer; a set Content-Type replaces the answer's own, a failing route answers 500
   whatever status it set (tests/web/test_wagi_headers.rs, probes/hosting/wagi_routes.sh /teapot).
@@ -61,7 +61,7 @@ Each step is useful on its own and is what the next ones stand on.
   whose last line is `users` show it. A fetch with `timeout` keeps the old meaning (fetched on each read).
 - A URL reading main-level variables (`"/api/users?page=" + page`) is fetched anew when one changes; a reply of an
   older fetch of the same name is dropped.
-- Lowering (src/lowering/fetch_signals.rs): the variables users, users·loading, users·error, the call
+- Lowering (src/lowering/signals/fetch_signals.rs): the variables users, users·loading, users·error, the call
   `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
   (src/web/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
   system_signals await_ready; `warp run` stays until the reply arrived); in the page a task Worker fetches into shared
@@ -90,7 +90,7 @@ Each step is useful on its own and is what the next ones stand on.
   a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
   "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
 - Done (compute side, card web-fine-holes): the holes of shown markup are the outermost elements holding a computed
-  text, attribute or child directly (src/markup.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
+  text, attribute or child directly (src/web/markup.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
   the path its element indices from the root, which the fixed elements above it keep stable. After a handler worker.js
   reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
   value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
@@ -124,8 +124,8 @@ Each step is useful on its own and is what the next ones stand on.
 ## Step 4 (web-components), what is done and what is left
 - A component is a function returning markup; props are its parameters, positional or named (`Card(title:"Hi")`).
 - Children: a block after a call that leaves a parameter without its value is that argument, for any function
-  (trailing closure, lowering/ruby_blocks.rs): `Card("Hi") { p:"text" }`, `apply(3) { it*2 }`.
-- Own state per instance (lowering/component_state.rs, before element_events): a variable of a component that one of
+  (trailing closure, lowering/control/blocks.rs lower_trailing_blocks): `Card("Hi") { p:"text" }`, `apply(3) { it*2 }`.
+- Own state per instance (lowering/web/component_state.rs, before element_events): a variable of a component that one of
   its element handlers mentions is the main-level list `Counter·count`, one entry per instance; an instance is the n-th
   call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
   handler's element carries `data-warp-instance`, the page passes it as `event.instance`. The program's last line
@@ -141,12 +141,12 @@ Each step is useful on its own and is what the next ones stand on.
   every one's. `Counter.instances` is the long form, with a hint to write `counters` (`Counter.all` would clash with the
   list method all); `Counter.count` stays short for `counters.count`. A program's own variable `counters` stays its
   own. component_state.rs with_state_lists maps them to the state lists `Counter·count`. Sample
-  samples/component_totals.warp.
+  samples/web/component_totals.warp.
 - Keyed instances (card web-instance-keys): `Counter(t, key: t.id)` ties an instance's state to its key. A keyed
   component gets the parameter `key = ø` and the list `Counter·keys`; each instance moves its key's entries of the
   render before to its position (a swap), a new key takes a fresh slot (what stood there moves to the end), so after
   the render the state lists are in page order again and truncation, cleanup and `event.instance` work as before;
-  mount runs for a new key. Unkeyed calls keep the order rule. Sample samples/keyed_counters.warp.
+  mount runs for a new key. Unkeyed calls keep the order rule. Sample samples/web/keyed_counters.warp.
 
 ## Step 5 (web-keyed), what is done and what is left
 - A comprehension or method call among an element's children gives children: `ul{ h2{"todo"} [li{t} for t in ts] }`,
@@ -168,12 +168,12 @@ Each step is useful on its own and is what the next ones stand on.
 - `form{ on submit { … event.fields.name … } }` (card web-submit): `submit` is a page event; the page sends
   {fields}, the form's named fields (a number field's a number, a checkbox's checked), and keeps a form with the
   handler on the page (markup-forms.js, a part a built site ships only when its module has `on·submit`); a form without
-  one still goes to its route. Headless: `Page::submit(label, fields)`. Sample samples/form_submit.warp.
+  one still goes to its route. Headless: `Page::submit(label, fields)`. Sample samples/web/form_submit.warp.
 - A handler on a line of its own inside an element (`form{⏎ on submit { … }⏎ button{…} }`) is the element's, not the
   tag `on{submit{…}}` (markup_tags.rs attributes, element_events.rs handler_at).
 - `select{ bind: choice }` (card web-bind-select): lib/markup.warp hands a select's value to its options (html_render's
   `chosen`), and the option whose value, else text, equals it is `selected`, from the first render on; later the page
-  sets select.value (morphElement). Sample samples/select_binding.warp.
+  sets select.value (morphElement). Sample samples/web/select_binding.warp.
 - Markup mistakes (card our-html, accessibility.rs markup_mistakes, beside the a11y warnings): a key that is no
   attribute (`hreff:`, shown as text; fix the near attribute, else `data-…`), a handler of no page event (`on clik`), an
   input type the browser does not know (`nubmer`), content of a void element (`img{ "x" }`, dropped). Handlers are taken
@@ -184,19 +184,19 @@ Each step is useful on its own and is what the next ones stand on.
   right after the bound variable (`bind: fruit ["apple" "pear"]`) is split off it, no longer glued into the value.
 - `bind:` inside a component (card web-bind-component): element_events::lower_binds spells binds out before
   component_state, which then keeps the bound variable per instance like any handler's. Sample
-  samples/component_binding.warp.
+  samples/web/component_binding.warp.
 - Validation from declared types (card web-validate): element_events::lower_binds gives a bound field the checks of
   its variable's declared type (`age: int = 30`): int → type number, step 1 (the browser marks 2.5 :invalid and a
   form will not send it); float → number, step any; bool → checkbox. An attribute the element sets wins. The C-style
   `int age = 30` is the same declaration: type_name_matching::lower_prefixed_declarations rewrites it early to
   `age: int = 30`, so handlers also treat it as the main-level variable (card bind-ignores). Not yet: ranges or text
-  patterns as types. Sample samples/typed_form.warp.
+  patterns as types. Sample samples/web/typed_form.warp.
 
 ## Step 7 (web-styles), what is done and what is left
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
   sheet of rules (lib/markup.warp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
-- CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
+- CSS as CSS (classes-42, src/lowering/web/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
   lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
   solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. In a style sheet a blank before
@@ -231,7 +231,7 @@ Each step is useful on its own and is what the next ones stand on.
   so its page events draw no warning.
 
 ## Step 15 (web-transitions), what is done and what is left
-- CSS form (P188, card web-css; lowering/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
+- CSS form (P188, card web-css; lowering/web/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
   the element's inline CSS transition, joined to its own `style`; `starting-style: { opacity: 0 }` (CSS's
   @starting-style, which an inline style cannot hold) is the attribute `data-warp-starting-style`, rendered as
   declarations by lib/markup.warp. Words are data (not variables), durations normalized to ms, a text taken as written,
@@ -250,14 +250,14 @@ Each step is useful on its own and is what the next ones stand on.
   probes/transitions/leave_check.py.
 - Leaving space (card web-leave-space): a leaving item keeps its space while it animates out (no absolute
   positioning); when it is removed, its keyed siblings with a transform transition glide into the space (FLIP in
-  markup-transitions.js leave) instead of jumping. Sample samples/leaving_list.warp; probes/transitions/leave_check.py
+  markup-transitions.js leave) instead of jumping. Sample samples/web/leaving_list.warp; probes/transitions/leave_check.py
   reports `glided`.
 - Keyframes are CSS's own (card web-keyframes, user decision via P188): `style{ "@keyframes pop": { from: {…} "60%":
   {…} to: {…} } }` in the sheet, `animation: pop 400ms` in an element joins its inline style beside a transition.
   What CSS lacks is a removal that waits: `leave: pop 400ms reverse` is the attribute data-warp-leave, the animation
   markup-transitions.js plays before it removes the element (then its siblings glide into the space). The sheet's key
   must be quoted: unquoted `@keyframes pop { from … to … }` reads `from … to` as a range. The invented inline
-  `keyframes: [...]` list was dropped. Sample samples/keyframes.warp.
+  `keyframes: [...]` list was dropped. Sample samples/web/keyframes.warp.
 - Left: `0.3s` (card fractional-durations).
 - Scoped (card web-scoped): a component whose markup holds a style sheet names itself on its root element
   (`data-warp-scope="Card"`, component_state.rs) and its sheet's selectors are prefixed with
@@ -269,9 +269,9 @@ Each step is useful on its own and is what the next ones stand on.
 - `warp build --site app.warp` writes app-site/ (inline code: site/): index.html, app.wasm and the scripts reader.js,
   host.js, markup.js, site.js, carried in the warp binary (src/web/site.rs include_str!, one source with the playground).
 - One renderer, written in warp (warp-96: "Warp is wasm-first"): lib/markup.warp's to_html (`use markup`; not `html`,
-  which samples/html.warp would shadow) is the one renderer: the CLI and the playground render a markup value with it
-  too (src/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
-  compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
+  which samples/web/html.warp would shadow) is the one renderer: the CLI and the playground render a markup value with it
+  too (src/web/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
+  compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/web/page_html.rs); its
   page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
   definition, print, use). `warp build --site` runs main and page·html natively (wasm_reader::read_export_after_main)
   for index.html, so the page reads without JavaScript; the page calls the same export after each handler. Page builds also export the reflection getters
@@ -283,7 +283,7 @@ Each step is useful on its own and is what the next ones stand on.
 - lib/markup.warp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
   inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
 - Scoped style sheets (card web-scoped): an element with data-warp-scope:"Card" prefixes the selectors of the sheets
-  inside it with `[data-warp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
+  inside it with `[data-warp-scope="Card"] `; src/web/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
 - Timers in a built page: site.js starts them after main (host.js startTimers, shared with the playground worker),
   each handler morphs the page; a failing handler stops them (probes/site/ticker.warp).
 - A program serving its own page: `warp run app.warp` with `serve 8080 {…}` and a page as its last line answers GET /
@@ -315,7 +315,7 @@ Each step is useful on its own and is what the next ones stand on.
   (html_meta_attributes). Test: tests/web/test_html_meta.rs; probe probes/html_meta/page_facts.warp.
 
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
-- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.warp): each route is the function page·route·N,
+- `route "/users/:id" { UserPage(id) }` (lowering/web/routes.rs, lib/router.warp): each route is the function page·route·N,
   `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the
   patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
   path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
@@ -340,7 +340,7 @@ Each step is useful on its own and is what the next ones stand on.
   page·value, else page·routed. A routes program stays listening for that. Tour example routes.
 - Nested routes (card route-nested): `route "/users" { div{ h1{ "Users" } outlet } route "/" {…} route ":id:int" {…} }`.
   Inner patterns are relative to the outer one, the outer block's other items are its layout, showing the inner route
-  at `outlet`. Flattened in lowering/routes.rs: each inner route is a page route with the whole pattern
+  at `outlet`. Flattened in lowering/web/routes.rs: each inner route is a page route with the whole pattern
   ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
   parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
   "/" route answers the outer path first. page·routes lists the whole patterns.
@@ -354,7 +354,7 @@ Each step is useful on its own and is what the next ones stand on.
 - `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
-- Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
+- Persisted signals: `stored theme = "dark"` (lowering/data/stored_values.rs, soft keyword) is the variable theme holding the
   value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
   are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
   localStorage (`warp stored <name>`): the worker gets them at start and sends each save back (host.js
@@ -375,14 +375,14 @@ Each step is useful on its own and is what the next ones stand on.
   database in the browser. Checked by hand in the playground across reloads; a built site's path is not yet checked
   in a browser (card web-database-site). Probe: probes/stores/database.warp.
 - Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
-  std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
+  std_io("clipboard", "write", [text]) (lowering/signals/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
   markup.js copyText (navigator.clipboard.writeText, which needs a recent click; a refusal goes to the console), from a
   Worker through its page (self.writeClipboard). `clipboard.read()` is `clipboard` (natively pbpaste). In the browser
   (card web-apis-rest, 2026-10-10, warp-web) the program's Worker asks its page (host-tasks.js askPage, the word in
   host-tasks.js so only a program reading the clipboard ships it) and waits on shared memory while the page reads
   navigator.clipboard.readText (task-workers.js pasteInto/answerInto); the browser may refuse it without a recent
   click: a loud error. The tour checks it where the browser allows (CLIPBOARD_READ).
-- Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
+- Undo history (lowering/definitions/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
   `stored` are soft keywords.
@@ -425,7 +425,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Lazy loading per route (2026-10-07, src/web/route_split.rs, tests/web/test_route_modules.rs, browser probe
   probes/lazy_routes/check_in_browser.sh): `warp build --site` moves each route's function page·route·N and the
   functions only it reaches into app-route-N.wasm with binaryen's `wasm-split --multi-split` (features named one by one,
-  src/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
+  src/modules/binaryen.rs: --all-features would emit exact imports no browser takes). app.wasm keeps a table slot and a
   placeholder import (`placeholder.app-route-N`) per moved function. site.js instantiates app.wasm (host.js
   instantiateProgram), loads the module of the route the path picks (host-routes.js loadRouteModule: page·route_index,
   instantiated with app.wasm's exports as `primary`), then runs main (runMain); each navigation loads the next route's
@@ -481,7 +481,7 @@ Each step is useful on its own and is what the next ones stand on.
   width×height rgba8unorm image and gives its pixels as paint takes them, 0xFFRRGGBB row by row (alpha dropped).
   warp appends the vertex stage (warp_full_image: one triangle covering the image) after the shader, so compile errors
   keep the user's line numbers. Same task-Worker path as gpu_compute (host-gpu.js GPU_JOBS), natively src/graphics/gpu.rs
-  render. samples/webgpu.warp animates rings (a frame per loop step: paint + sleep), in the playground menu again.
+  render. samples/graphics/webgpu.warp animates rings (a frame per loop step: paint + sleep), in the playground menu again.
   Without an adapter the samples test skips it loudly (CI).
 - Values (uniforms): `gpu_render(shader, w, h, {frame: 3, size: [128, 128]})`: the shader reads the map as `values.frame`
   (f32), `values.size` (vec2f; lists of 2–4 numbers are vec2f…vec4f). warp appends `struct WarpValues {…}` and
@@ -492,7 +492,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Holes (card shader-holes, 2026-10-09, warp-web, P235b amended): `$name` in a shader block is a warp variable, written
   as `values.name` (the parser, src/graphics/shader_holes.rs shader_text, marks the text with attribute shader_holes). The source
   pass shader_holes::lower adds `name: name` to the values map of each paint / gpu_render of that block or of a variable
-  holding it, so the value is read at each call; an entry written out wins (samples/webgpu.warp: `$size` is the vec2
+  holding it, so the value is read at each call; an entry written out wins (samples/graphics/webgpu.warp: `$size` is the vec2
   given). A values map that is not a literal (a variable) cannot take entries: a loud error naming them. Bare WGSL
   names never capture; `$1` stays. This also answers would-blue: `$blue` is the warp spelling, `values.blue` the WGSL
   it becomes. tests/programs/test_shader_holes.rs.
@@ -513,7 +513,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Next: GPU vectors: card gpu-vectors, notes/gpu.md.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)
-- `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads
+- `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/formats/web_idl.rs reads
   lib/web.webidl (bundled from w3c/webref's @webref/idl 3.85.0 by scripts/webidl_bundle.py: console, Crypto,
   Performance, Storage, Navigator, Location, Clipboard whole, i.e. with every partial, mixin and parent of all 334 spec
   files; Window and its mixins only with the attributes that name those globals). foreign_modules.rs checks a member of
@@ -535,7 +535,7 @@ Each step is useful on its own and is what the next ones stand on.
   objects, promises and overloads with differing returns stay untyped foreign values. Fixed alongside: `(f() as text)`
   / `str(…)` of a foreign call gave the source of the call (emitter mentions_call now counts host::VALUE_GIVING_WORDS).
 - Nullable results (card text-generally): `DOMString?` is `text?` (web_idl.rs optional_result_type), lowered by
-  src/lowering/optional_casts.rs: `x as T?` keeps ø, any other value is cast to T, the call held once in `optional·N`.
+  src/lowering/types/optional_casts.rs: `x as T?` keeps ø, any other value is cast to T, the call held once in `optional·N`.
   Natively a JS null (getItem of a missing key) arrives as ø (foreign.rs plain), no longer as a handle of null.
 - DOM (slice 5): the bundle adds Document, Element, NodeList, HTMLCollection, DOMTokenList, Event and every
   HTML…Element of html.idl (lib/web.webidl ~100 KB; arguments in scripts/webidl_bundle.py's docstring). What an
@@ -547,13 +547,13 @@ Each step is useful on its own and is what the next ones stand on.
 - Global object (slice 6): `use js self` / `globalThis` (`window` on a page; in the Worker an error naming self) is
   the program's scope, with WindowOrWorkerGlobalScope bundled whole (fetch, atob, setTimeout…) plus Response and
   Headers. The scope is bundled in part, so a member it lacks stays unchecked (`window.innerWidth`). A `Promise<T>`
-  result is T: node's loop awaits a call (src/foreign.rs), so `self.fetch(url)` is a Response, `.text()` a text,
+  result is T: node's loop awaits a call (src/modules/foreign.rs), so `self.fetch(url)` is a Response, `.text()` a text,
   `.status` an int. Natively node mirrors self/window as globalThis. In the browser host main awaits it via JSPI
   (card jspi-page, notes/web_playground.md "Foreign runtimes"); without JSPI (Safari) a promise is a clear error. warp's own `fetch "/x"` is unaffected.
 - P203 (user): `use js <global>` is the annotation (like `use c` headers), so these checks stay compile errors
   (warp-dc, 2026-10-08).
 - Constructors (slice 7): `use js URL; URL(text)` calls the constructor (JavaScript's `new`: foreign_call member "",
-  foreign_modules.rs CONSTRUCTOR_MEMBER; src/foreign.rs and host-foreign.js construct). WebIDL's `constructor(…)`
+  foreign_modules.rs CONSTRUCTOR_MEMBER; src/modules/foreign.rs and host-foreign.js construct). WebIDL's `constructor(…)`
   members (web_idl.rs Definition.constructors) check the argument count, an interface without one is an error
   (`Location()`), and the value is typed as the interface. Bundled for this: URL, URLSearchParams, Blob, Headers,
   WebSocket. A global WebIDL does not declare (Date) is constructed unchecked.
@@ -608,7 +608,7 @@ Each step is useful on its own and is what the next ones stand on.
   hover (tests/web/test_dev_marks.rs runs it under node). Warnings of a good build are not shown.
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
-- Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of
+- Welcoming warnings over the markup as written (src/web/accessibility.rs, run on the parsed program at the start of
   pipeline lower_for_emission, tests/web/test_accessibility.rs): img without alt (alt:"" marks a decoration); input /
   select / textarea without a label (label{for}, a label around it, aria-label, aria-labelledby or title count; a
   placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text
@@ -622,8 +622,8 @@ Each step is useful on its own and is what the next ones stand on.
   same rules; a computed tag comes back as a text (`("h" + level): title` as `"h2": …`) and is named like a tag as
   written. Problems the markup as written already showed are not repeated; the others are runtime warnings
   (`markup built at run time: h3 after h1 skips a heading level; fix: h2`), each once a run. Sample
-  samples/computed_tags.warp. Not checked: markup only a later page event builds (the playground renders it in its
+  samples/web/computed_tags.warp. Not checked: markup only a later page event builds (the playground renders it in its
   module, headless Page re-renders through page·html).
 - Live regions (card web-a11y-live): the outermost element whose own content reads a fetched value (`users := fetch …`)
   gets aria-live="polite" (fetch_signals.rs with_live_regions), so a screen reader announces it when it arrives; an
-  element setting aria-live keeps its own. Sample samples/live_region.warp.
+  element setting aria-live keeps its own. Sample samples/web/live_region.warp.

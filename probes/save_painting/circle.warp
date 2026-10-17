@@ -1,0 +1,5 @@
+use draw
+canvas(64, 48)
+clear(white)
+circle(32, 24, 16, red)
+save canvas as: "painting.png"

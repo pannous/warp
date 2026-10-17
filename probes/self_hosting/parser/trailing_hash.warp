@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+// card parser-parses: a trailing # comment after a block, as `warp fix` wrote it into the samples
+use "lib/compiler/parser.warp"
+print tree("at 0 bars { f(1) }   # the tune, bar 1\nat 1 bars { g(2) }")
+print tree("at 0 bars { f(1) }   // the tune, bar 1\nat 1 bars { g(2) }")
+print tree("x = 1 # one\ny = 2")
+print tree("x = 1 // one\ny = 2")

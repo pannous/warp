@@ -25,10 +25,7 @@ fn test_declared_list_parameters_take_the_list() {
 #[test]
 fn a_declared_list_variable_broadcasts() {
 	assert_eq!(printed("names: texts = [\"hi\"]; upper names"), "[\"HI\"]");
-	assert_eq!(
-		printed("names: texts = [\"hi\", \"yo\"]; upper names"),
-		"[\"HI\" \"YO\"]"
-	);
+	assert_eq!(printed("names: texts = [\"hi\", \"yo\"]; upper names"), "[\"HI\" \"YO\"]");
 	assert_eq!(printed("names: list of text = [\"hi\"]; upper names"), "[\"HI\"]");
 	assert_eq!(printed("xs: ints = [1 2]; inc(x:int):=x+1; inc xs"), "[2 3]");
 }

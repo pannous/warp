@@ -11,10 +11,7 @@ fn test_float_parameter_keeps_fraction() {
 
 #[test]
 fn test_float_parameter_keeps_all_digits() {
-	is!(
-		"half(x:float) := x/2; half(180.17933438838418)*2 == 180.17933438838418",
-		true
-	);
+	is!("half(x:float) := x/2; half(180.17933438838418)*2 == 180.17933438838418", true);
 }
 
 #[test]
@@ -34,11 +31,13 @@ fn test_float_local_inside_float_function() {
 	is!("quarters(n) := {q=1/4; q*n}; quarters(2)", 0.5);
 }
 
-#[test] // samples/raytracer.warp: `normalize(v) := mul(v, 1.0 / length(v))` with length returning a float typed s as Int
+#[test] // samples/advanced/raytracer.warp: `normalize(v) := mul(v, 1.0 / length(v))` with length returning a float typed s as Int
 fn test_parameter_passed_a_float_returning_call() {
-	is!(
-		"def half(x) := sqrt(x) / 2; def scale(v, s) := v * s; scale(2, 1.0 / half(16.0))",
-		1.0
-	);
+	is!("def half(x) := sqrt(x) / 2; def scale(v, s) := v * s; scale(2, 1.0 / half(16.0))", 1.0);
 	is!("def f() := 0.5 * random() + 1.5; def g(s) := s * 2; g(f()) >= 3", true);
+}
+
+#[test] // samples/sound/gpu_visualizer_warp.warp: `turned(p.xy, p.z * 0.12 + time * 0.4)` and `turned(q, time * 1.3)` typed angle as Int
+fn test_parameter_passed_a_float_and_a_run_time_number() {
+	is!("global t = float(0); g(a) := a; f(z) := g(z#1 + t); h(z) := g(t); t = 2.5 as float; f([1 2]) + h(0)", 6.0);
 }

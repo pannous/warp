@@ -16,8 +16,7 @@ bo.age += 1                            // UPDATE people SET age = 31 WHERE id = 
 
 ## Registration
 - `name: [C] = database.t` with C a class of the program registers table t for C. `database.t` without a class list
-  stays what it is today: one value under the key t of the key-value store (lowering/stored_values.rs).
-- `indexedDB.t` is the same (the alias of `database`).
+  stays what it is today: one value under the key t of the key-value store (lowering/data/stored_values.rs).
 - `stored people: [Person]` is the short form of `people: [Person] = database.people` (user, 2026-10-08).
 - The schema comes from C's layout:
   - one column per field: int → INTEGER, float and quantities → REAL in the field's unit, text → TEXT, bool → INTEGER
@@ -126,7 +125,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   under `try … catch`; a failure rolls back, then each open table's `people·restore()` gives the instances the program
   holds their rows' values again (an instance whose row is gone gets id 0) and loads anew, then the failure is raised
   again. Its value is the block's. The browser's store snapshots the file's tables at begin (host-files.js).
-  Sample: samples/orm_transaction.warp.
+  Sample: samples/storage/orm_transaction.warp.
 
 ## Migrations: stored schema vs class layout, at registration
 | change | what happens |
@@ -141,11 +140,11 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
 | a rename | the field's annotation `@was(old_name) name: text` renames the column (RENAME COLUMN); without it, it reads as add + remove |
 
 ## How step 1 works
-- lowering/database_tables.rs (a source pass before class_methods): the registered class gets `id: int = 0`; the
+- lowering/data/database_tables.rs (a source pass before class_methods): the registered class gets `id: int = 0`; the
   registration becomes `[Person(row#2, row#3, row#1) for row in std_io("table", "open", [t, schema, file])]`;
   `people.add(p)` adds and then sets `p.id` from `std_io("table", "insert", …)`; after each `v.f op= e` of a column f:
   `if v is C and v.id > 0 { std_io("table", "update", …) }`.
-- src/database.rs: the SQLite C API through libloading (the system's libsqlite3, ffi/link.rs get_or_load_library), one
+- src/host/database.rs: the SQLite C API through libloading (the system's libsqlite3, ffi/link.rs get_or_load_library), one
   connection per file and thread, `:memory:` for inline code. An added column takes the field's default, else the
   type's zero. A changed column type: see step 7. Browser: web/playground/host-files.js `table` (step 6).
 
@@ -198,12 +197,12 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
 - Gaps: a loop reading `t.players` of every team runs a SELECT per team (the getter is a query at each read, so a moved
   row shows at once; foreign keys are batched, one-to-many lists are not); a required back key
   (`team: Team`) makes `people·found` load the table, as any filter of such a table does.
-- Sample: samples/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
+- Sample: samples/storage/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
   the sample wrote before the column read ø (card orm-dangling); `climbers.players.add(bo)` writes bo.team through.
 - An add or field write in a one-statement block (`if … { teams.add(t) }`) is lowered like a statement of its own.
 
 ## Steps
-1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):
+1. **Prototype, native, eager** (done: lowering/data/database_tables.rs, src/host/database.rs, tests/control/test_database_tables.rs):
    - registration, schema and the implicit id;
    - add and field updates written through;
    - migrations for added/removed columns;
@@ -239,5 +238,5 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
      entry of a unit field carries its quantity and SI amount per unit (`[distance km ø ø m 1000]`, the 4th entry ø
      unless renamed; units::static_units::unit_type), the store keeps each unit column's quantity (`quantities`).
      An optional unit field (`climb: m?`, card unit-field) is a nullable `NUMERIC m` column declared `number?`; ø has
-     no dimension, so `Run(5 km, ø)` and `r.climb == ø` pass static units. Sample: samples/orm_units.warp.
+     no dimension, so `Run(5 km, ø)` and `r.climb == ø` pass static units. Sample: samples/storage/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

@@ -137,8 +137,8 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   main polls at its start (which installs the handler) and before it returns; a ctrl-c also ends a `sleep` early
   (it sleeps in 10 ms slices once watching) and runs the handler. Test: tests/control/test_system_signals.rs
   (a real `warp run` gets a real SIGINT). The playground's host.js has `signal_poll` as a no-op.
-- Timers (P120, 2026-10-06): `on every 50 ms {…}` (src/lowering/system_signals.rs) is the handler `on·every·N()` and
-  `signal_every(N, ms)` where it is written; the runtime (crates/warp-runtime/src/system_signals.rs) runs due handlers
+- Timers (P120, 2026-10-06): `on every 50 ms {…}` (src/lowering/signals/system_signals.rs) is the handler `on·every·N()` and
+  `signal_listen(0, N, ms)` (one host word starts every timer, kind 0 every / 1 frame / 2 clock) where it is written; the runtime (crates/warp-runtime/src/system_signals.rs) runs due handlers
   at every check point (loop starts, sleeps, which wake for them, main's start and end). `warp run`, `warp <file>` and
   executables stay after main while a timer lives and say so once on stderr ("listening: every 5 seconds (ctrl-c to
   stop)"); in-process eval and tests never wait. Only a program with `on interrupt` watches ctrl-c: any other ends at
@@ -160,29 +160,29 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   host.js withExitHandler in the page. `event` is ø for now (the exit code would need a host-built Int).
   Test: tests/control/test_exit_signal.rs.
 - Times of day (P135, user: `on every day at 9:00 {…}`, and `at 9:00 {…}` runs once; card time-day): the timer
-  handler `on·every·N` started by `signal_daily(N, minute_of_day, weekdays)` or, for `at 9:00 {…}`,
-  `signal_at(N, minute_of_day)`. `weekdays` is a mask, bit 0 Sunday … bit 6 Saturday (C's tm_wday): `day` 127,
+  handler `on·every·N` started by `signal_listen(2, N, weekdays·10000 + minute_of_day)`, weekdays 0 for
+  `at 9:00 {…}` (once). `weekdays` is a mask, bit 0 Sunday … bit 6 Saturday (C's tm_wday): `day` 127,
   `monday` (or `mondays`) 2, `weekday` Monday to Friday 62, `weekend` 65. Times are `21:30`, `9:30pm`, `9:30 pm`,
   `9pm`, `9 pm` (12am is 0:00, 12pm noon); `at 13pm`, `25:00` are "needs a time of day", an unknown day word names the
   day words. Each next time is computed from the local clock anew (libc localtime_r, UTC without it), so summer time
   shifts nothing; a one-shot timer is dropped after it fired, so `warp run` ends then ("listening: at 9:00",
   "listening: every monday at 9:00"). Tests: tests/control/test_daily_timer.rs, test_time_of_day.rs.
   Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings.
-- Frames (card frame-event, user TODOs in samples/shader_brush.warp, 2026-10-12): `on frame {…}` is the handler
-  `on·every·N` started by `signal_frame(N, 16)` (Trigger::WindowShows): it runs every 16 ms while the paint window
+- Frames (card frame-event, user TODOs in samples/graphics/shader_brush.warp, 2026-10-12): `on frame {…}` is the handler
+  `on·every·N` started by `signal_listen(1, N, 16)` (Trigger::WindowShows): it runs every 16 ms while the paint window
   shows and the timer ends as the window closes, so `warp run` ends with the window; without a window (headless) it
   runs once, one paint = one PNG. "listening: …" leaves frames out. The page (host-timers.js) runs it every 16 ms until
   the next run: its canvas always shows. Replaces `while window_open { …; sleep 16ms }`.
 - Native keys (card native-keys, user: "on key must listen to native signals"): natively `on key {…}` gets the keys
   pressed over the paint window. system_values.rs queues each press (a key held that was not held before, from the
-  viewer's `input x y down key` lines) and `system_value("key_pressed")` pops one (0: none); lowering/system_signals.rs
+  viewer's `input x y down key` lines) and `system_value("key_pressed")` pops one (0: none); lowering/signals/system_signals.rs
   adds a frame handler after the first `on key` that emits `key{key: …}` per press, named as the page's
   KeyboardEvent.key: the character, ArrowUp/Down/Left/Right, Enter, Escape, Backspace, Tab (KEY_NAMES). Not for a page
   or a program serving its page (the page raises key itself). Not yet: keys in a terminal, the `warp app` web view.
 - Native clicks (card native-window): `on click {…}` likewise hears the clicks over the paint window. system_values.rs
   queues each button press (down that was up) with its place; a frame handler pops them (`click_pressed`, then
   `click_x`, `click_y`) and emits `click{x, y}` in the painted frame's pixels, as the page's canvas raises it.
-- Key names (card key-if, lowering/key_names.rs): inside `on key {…}` a bare `key` is `event.key` (a program's own
+- Key names (card key-if, lowering/collections/key_names.rs): inside `on key {…}` a bare `key` is `event.key` (a program's own
   variable `key` wins) and key words name keys: Escape/ESC, Enter/RETURN, Tab, Backspace, Space, Delete, the arrows
   (UP, DOWN, LEFT, RIGHT), F1 … F12, so `on key { if key == ESC { exit } }`. Letters stay texts (`key == "a"`). Only a
   handler statement, not yet an element's `on key` among its items. A comparison there with a word naming nothing
@@ -191,11 +191,17 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   window's held key, in the playground canvas.js trackKey's), for loops as mouse_down: `if key_down { clear(white) }`.
 - Held key (card held-key): `held_key` names the key held now as `on key` names a press ("a", "ArrowUp", "Enter",
   "" for none), for loops that steer: `if held_key == LEFT { x -= 1 }`. The key words compare with it anywhere as in
-  `on key` (lowering/key_names.rs lower_held_comparisons, before system_values; a capitalized word naming nothing
+  `on key` (lowering/collections/key_names.rs lower_held_comparisons, before system_values; a capitalized word naming nothing
   warns, interviewer decision 2026-10-12), texts such as "ArrowLeft" work too. It reads the system value
   `key code held` once into `held·code` and names it by system_signals.rs key_named, which the native `on key` reader
   shares (KEY_NAMES); the playground's canvas.js KEY_CODES gives Enter, Escape, Backspace and Tab their codes too.
   Test: tests/control/test_held_key.rs; probe probes/held_key/steer.warp.
+- Several keys held (card allow-diagonals): a comparison with `held_key` asks whether that key is among those held,
+  so LEFT and UP held together make both `held_key == LEFT` and `held_key == UP` true (samples/events/arrow_keys.warp steers
+  diagonally); `held_key` alone names the last to go down, `held_key == ""` none held. The comparison lowers to the
+  host word `key_held(code) != 0` (system_signals.rs key_code). Natively the
+  viewer's input line carries every held code after the key (paint_window.rs, cleared when the window loses focus);
+  in the playground canvas.js keeps them in the shared slots "held 0" … "held 7" (host.js key_held).
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
   `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
 - System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),
@@ -205,7 +211,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   macOS `pmset -g batt` and `defaults read -g AppleInterfaceStyle`, Linux /sys/class/power_supply and `gsettings`;
   `online` is whether a UDP socket can connect to 1.1.1.1 (only the routing table is asked, nothing is sent). A
   reading is kept for a second, so polling costs at most one subprocess per value per second. A value the machine
-  cannot give is a loud run-time error ("battery: this Mac has no battery"). Listening: lowering/system_values.rs
+  cannot give is a loud run-time error ("battery: this Mac has no battery"). Listening: lowering/signals/system_values.rs
   marks the reads (`system·battery`) before signal_values::poll_shared, which treats them like shared values (a check
   in `on·shared` comparing with the last reading), adds the timer `on every 1000 ms` right after the first listener
   (so `warp run` stays and wakes once a second; it says "listening: every 1 second"), then makes the marks host calls.
@@ -224,16 +230,15 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   ctrl-break; the rule shared with Unix is `ctrl_c_ends_run` (tests/control/test_ctrl_c_rule.rs); checked by
   `cargo check --target x86_64-pc-windows-gnu -p warp-runtime`, never run on Windows yet.
 - Not yet: directories and `created` / `deleted` as separate events, `stop listening`.
-- Timers in the playground (2026-10-06, branch web-showcase): host.js records `signal_every` / `signal_daily` /
-  `signal_at` while main runs, worker.js starts them after it (setInterval, setTimeout to the next local time) until
+- Timers in the playground (2026-10-06, branch web-showcase): host.js records the `signal_listen` timers while main runs, worker.js starts them after it (setInterval, setTimeout to the next local time) until
   the next run; each tick runs `on·every·N` and shows the output binding `page·value` (event_signals.rs makes it for
   programs with timers too). A host without a page loop (test-worker.js) still only warns.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
   Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as warp text to every program on this
   machine listening with `on message from "chat" {…}`, where `event` is the value; without a name both use the channel
-  "warp". Natively (unix, src/channels.rs) a channel is the directory `<temp>/warp-channels/<channel>` of Unix datagram
+  "warp". Natively (unix, src/host/channels.rs) a channel is the directory `<temp>/warp-channels/<channel>` of Unix datagram
   sockets, one per listener, removed when its run ends; a broadcast sends to each and drops dead ones. A listener is
-  a timer handler (`on·every·N`, every 20 ms, lowering/system_signals.rs) pulling `channel_pending` / `channel_next`,
+  a timer handler (`on·every·N`, every 20 ms, lowering/signals/system_signals.rs) pulling `channel_pending` / `channel_next`,
   so a listening program stays after main in `warp run` like one with a timer. The playground sends on a
   `BroadcastChannel` and receives on one (a queue the listener's timer empties), so programs in two tabs talk; Windows has no channels yet (named pipes).
 - `send` and named events across programs (P129, P129b, card signals-send; tests/control/test_named_broadcast.rs):

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Headless probe of web/playground: serves the repository, loads the page with agent-browser (headless Chrome),
-evaluates the tour, the Ask flow and every samples/*.warp of the playground's menu in the browser, and compares each
+evaluates the tour, the Ask flow and every samples/<chapter>/*.warp of the playground's menu in the browser, and compares each
 value with the CLI's (`warp --no-ask`); exits 1 on any failure or difference. Needs web/playground/build.sh run first
 (`optimized`; `debug` too for the debug-build check) and builds the native warp binary itself.
 Usage: probes/web_playground.py [sample names…]"""
-import json, os, re, shutil, subprocess, sys, time, http.server, threading, functools
+import glob, json, os, re, shutil, subprocess, sys, time, http.server, threading, functools
 if not os.environ.get("CI"):
 	sys.exit(print("browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"))
 
@@ -34,7 +34,9 @@ CHECKS = {
 }
 DEBUG_BUILD = os.path.join(REPOSITORY, "web", "playground", "warp.debug.wasm")
 EXCLUDED = os.path.join(REPOSITORY, "web", "playground", "excluded_samples.txt")
-TEST_LINE = r"^\s*test\b"  # a program with tests runs them in the page, as `warp test` does (lowering/test_blocks.rs)
+# samples/<chapter>/<name>.warp; golf/ and wit/ hold no menu samples
+NOT_CHAPTERS = ("golf", "wit")
+TEST_LINE = r"^\s*test\b"  # a program with tests runs them in the page, as `warp test` does (lowering/control/test_blocks.rs)
 UPTO = "x=0; for i in 1 upto 4 {x+=i}; x"
 
 
@@ -80,7 +82,7 @@ def cli_value(warp, name, code):
 	"""the CLI's value of a sample as the page shows it: the page's Run runs a program's `test` lines as `warp test`
 	does (pipeline::for_tests), its summary a text; a program whose value is ø shows no » line, only what it printed"""
 	tests = re.search(TEST_LINE, code, re.MULTILINE)
-	command = ["test", os.path.join("samples", name + ".warp")] if tests else ["eval", code]
+	command = ["test", sample_files()[name]] if tests else ["eval", code]
 	try:
 		run = subprocess.run([warp, "--no-ask", *command], capture_output=True, text=True, timeout=CLI_TIMEOUT, cwd=REPOSITORY)
 	except subprocess.TimeoutExpired:
@@ -91,11 +93,18 @@ def cli_value(warp, name, code):
 	return run.stdout.rsplit("» ", 1)[-1].strip() if "» " in run.stdout else "ø"
 
 
+@functools.cache
+def sample_files():
+	"""each sample's name (the menu's) and its file, relative to the repository"""
+	paths = glob.glob("samples/*/*.warp", root_dir=REPOSITORY)
+	return {os.path.basename(path)[:-5]: path for path in paths if path.split("/")[1] not in NOT_CHAPTERS}
+
+
 def page_samples():
-	"""samples/*.warp the playground's menu offers: excluded_samples.txt names the others (a window, a server), which
+	"""samples/<chapter>/*.warp the playground's menu offers: excluded_samples.txt names the others (a window, a server), which
 	the probe never runs, so no native window opens"""
 	excluded = {line.split("\t")[0] for line in open(EXCLUDED, encoding="utf-8") if line.strip() and not line.startswith("#")}
-	return sorted(name[:-5] for name in os.listdir(os.path.join(REPOSITORY, "samples")) if name.endswith(".warp") and name[:-5] not in excluded)
+	return sorted(name for name in sample_files() if name not in excluded)
 
 
 def serve():
@@ -200,7 +209,7 @@ def main():
 		print(f"skip the debug build: no {os.path.relpath(DEBUG_BUILD, REPOSITORY)} (web/playground/build.sh debug)")
 
 	names = sys.argv[1:] or page_samples()
-	sources = [open(os.path.join(REPOSITORY, "samples", name + ".warp"), encoding="utf-8").read() for name in names]
+	sources = [open(os.path.join(REPOSITORY, sample_files()[name]), encoding="utf-8").read() for name in names]
 	reports = evaluate_in_page(sources)
 	same = 0
 	for name, source, report in zip(names, sources, reports):
@@ -209,7 +218,7 @@ def main():
 			same += 1
 		else:
 			failures.append(f"samples/{name}")
-			print(f"DIFF samples/{name}.warp\n     page: {shown_value(report)[:200]}\n     cli:  {cli[:200]}")
+			print(f"DIFF {sample_files()[name]}\n     page: {shown_value(report)[:200]}\n     cli:  {cli[:200]}")
 	print(f"samples: {same}/{len(names)} give the CLI's value in the page")
 	browser("close")
 	server.shutdown()

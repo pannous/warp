@@ -1,4 +1,4 @@
-// card g_odW4: paint reads a list of Ints in one call of the module's list_to_ints (src/wasm_emitter/int_lists.rs);
+// card g_odW4: paint reads a list of Ints in one call of the module's list_to_ints (src/wasm_emitter/lists/int_lists.rs);
 // any other pixel (a float, a bool, a negative) is read node by node as before, and a short list still fails loudly
 #![cfg(feature = "native")]
 use std::io::Read;
@@ -12,63 +12,39 @@ pub(crate) fn painted_rows(code: &str, folder: &str) -> Vec<u8> {
 pub(crate) fn painted_rows_by(mut command: std::process::Command, code: &str, folder: &str) -> Vec<u8> {
 	let folder = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(folder);
 	std::fs::create_dir_all(&folder).unwrap();
-	let run = command
-		.env("TMPDIR", &folder)
-		.args(["--no-ask", "eval", code])
-		.output()
-		.unwrap();
+	let run = command.env("TMPDIR", &folder).args(["--no-ask", "eval", code]).output().unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr);
 	let path = errors.lines().find_map(|line| {
-		line.split_once(": ")
-			.filter(|(said, _)| said.starts_with("painted "))
-			.map(|(_, path)| path.to_string())
+		line.split_once(": ").filter(|(said, _)| said.starts_with("painted ")).map(|(_, path)| path.to_string())
 	});
 	let png = std::fs::read(path.unwrap_or_else(|| panic!("no painted line: {errors}"))).unwrap();
 	let data_start = png.windows(4).position(|window| window == b"IDAT").unwrap() + 4;
 	let data_length = u32::from_be_bytes(png[data_start - 8..data_start - 4].try_into().unwrap()) as usize;
 	let mut rows = vec![];
-	flate2::read::ZlibDecoder::new(&png[data_start..data_start + data_length])
-		.read_to_end(&mut rows)
-		.unwrap();
+	flate2::read::ZlibDecoder::new(&png[data_start..data_start + data_length]).read_to_end(&mut rows).unwrap();
 	rows
 }
 
 #[test]
 fn paint_reads_ints_from_a_built_list() {
-	let rows = painted_rows(
-		"pixels = []; for i in 0..6 { pixels.push(i % 2) }; paint(pixels, 3, 2)",
-		"paint-built",
-	);
+	let rows = painted_rows("pixels = []; for i in 0..6 { pixels.push(i % 2) }; paint(pixels, 3, 2)", "paint-built");
 	assert_eq!(rows, [0, 250, 29, 250, 0, 29, 250, 29]);
 }
 
 #[test]
 fn paint_reads_other_pixels_node_by_node() {
-	assert_eq!(
-		painted_rows("paint([-1, 0, 2.5, true, false], 5, 1)", "paint-mixed"),
-		[0, 29, 250, 29, 29, 250]
-	);
+	assert_eq!(painted_rows("paint([-1, 0, 2.5, true, false], 5, 1)", "paint-mixed"), [0, 29, 250, 29, 29, 250]);
 }
 
 #[test]
 fn paint_takes_the_first_pixels_of_a_longer_list() {
-	assert_eq!(
-		painted_rows("paint([1, 0, 1, 1, 1], 2, 1)", "paint-longer"),
-		[0, 29, 250]
-	);
+	assert_eq!(painted_rows("paint([1, 0, 1, 1, 1], 2, 1)", "paint-longer"), [0, 29, 250]);
 }
 
 #[test]
 fn paint_of_too_few_ints_fails() {
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", "paint([1, 0], 3, 1)"])
-		.output()
-		.unwrap();
-	let said = format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	);
+	let run = crate::common::warp_command().args(["--no-ask", "eval", "paint([1, 0], 3, 1)"]).output().unwrap();
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	assert!(said.contains("paint: 3×1 needs 3 pixels, got 2"), "{said}");
 }
 
@@ -76,15 +52,8 @@ fn paint_of_too_few_ints_fails() {
 // default canvas (user 2026-10-10: defaults, no errors)
 #[test]
 fn show_before_canvas_paints_the_default_canvas() {
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", "use draw; show()"])
-		.output()
-		.unwrap();
-	let said = format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	);
+	let run = crate::common::warp_command().args(["--no-ask", "eval", "use draw; show()"]).output().unwrap();
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	assert!(said.contains("painted 640×480") && !said.contains("panicked"), "{said}");
 }
 
@@ -93,10 +62,7 @@ fn show_before_canvas_paints_the_default_canvas() {
 #[test]
 fn paint_reads_a_typed_int_list_from_its_array() {
 	assert_eq!(
-		painted_rows(
-			"pixels = int[6]; pixels[2] = 1; pixels[4] = -1; paint(pixels, 3, 2)",
-			"paint-typed"
-		),
+		painted_rows("pixels = int[6]; pixels[2] = 1; pixels[4] = -1; paint(pixels, 3, 2)", "paint-typed"),
 		[0, 250, 250, 29, 0, 250, 29, 250]
 	);
 }
@@ -104,10 +70,7 @@ fn paint_reads_a_typed_int_list_from_its_array() {
 #[test]
 fn paint_saturates_a_big_int_in_a_typed_list() {
 	assert_eq!(
-		painted_rows(
-			"pixels = int[2]; pixels[1] = 2^70; paint(pixels, 2, 1)",
-			"paint-typed-big"
-		),
+		painted_rows("pixels = int[2]; pixels[1] = 2^70; paint(pixels, 2, 1)", "paint-typed-big"),
 		[0, 250, 250, 250, 255, 255, 255]
 	);
 }

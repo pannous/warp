@@ -1,9 +1,9 @@
-# The Python side of foreign_call (src/foreign.rs, notes/stdlib_connectors.md): one JSON request, one JSON answer.
+# The Python side of foreign_call (src/modules/foreign.rs, notes/stdlib_connectors.md): one JSON request, one JSON answer.
 # Natively a python3 child reads requests from stdin; the browser playground runs it in Pyodide with
 # WARP_BRIDGE_LOOP = False and calls answer() itself.
 import sys, json, importlib, numbers, operator, types
 handles = {}
-SETTER_PREFIX = "set "  # src/lowering/foreign_modules.rs: "set name" sets the attribute to the one argument
+SETTER_PREFIX = "set "  # src/lowering/foreign/foreign_modules.rs: "set name" sets the attribute to the one argument
 operators = types.SimpleNamespace(**vars(operator), len=len, list=list)
 def handle(value):
     handles[len(handles) + 1] = value

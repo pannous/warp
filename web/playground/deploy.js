@@ -14,7 +14,9 @@ const LOGIN_WINDOW = "width=520,height=720";
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const TICKET_POLL_MS = 1500; // hosting.mjs TICKET_POLL_MS
 const TICKET_BYTES = 24;
-const REFUSED_LOGIN = [401, 403];
+// the answers that a new login fixes: an expired one, and for a Cloudflare login a token from before a scope was added
+// (a 403 of warp-hosting, "not yours", is no login problem)
+const REFUSED_LOGIN = { github: [401], cloudflare: [401, 403] };
 
 // the pasted-token field is optional: index.html may leave it out, then only the Cloudflare login deploys there
 const tokenInput = () => $("cloudflare-token");
@@ -92,7 +94,7 @@ async function upload(provider, address, body, ticket) {
 	const reply = await fetch(address, { method: "POST", body, headers: await credentials(provider, ticket) });
 	const answer = await reply.json().catch(() => ({ error: `HTTP ${reply.status}` }));
 	// an expired session or token: the next click logs in again (only a click may open the login window)
-	if (REFUSED_LOGIN.includes(reply.status) && !pastedToken()) {
+	if (REFUSED_LOGIN[provider].includes(reply.status) && !pastedToken()) {
 		store(SESSION_KEYS[provider], null);
 		throw new Error(`${answer.error ?? "the login expired"}: press the button again to log in`);
 	}
@@ -109,9 +111,9 @@ const TARGETS = {
 
 async function workerUpload(name, ticket) {
 	setStatus("building the Worker…");
-	const { module, scripts, error } = await bundleOf(editor.getValue());
+	const { module, query, error } = await bundleOf(editor.getValue());
 	if (error) throw new Error(error);
-	return [`${HOSTING}/deploy?name=${name}&scripts=${scripts.join(",")}&ticket=${ticket}`, module];
+	return [`${HOSTING}/deploy?name=${name}&${query}&ticket=${ticket}`, module];
 }
 
 async function deploy(target) {

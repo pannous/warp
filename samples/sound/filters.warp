@@ -1,0 +1,26 @@
+#!/usr/bin/env warp
+# A synth voice: a resonant lowpass filter, vibrato, tremolo, detuned unison voices and stereo pan.
+
+use sound
+
+wave_shape = "sawtooth"
+loudness = -9 dB
+filter = "lowpass"              # or "highpass", "bandpass"
+cutoff = 900                    # in Hz
+resonance = 4.0                 # Q, peaks at the cutoff (0.707: flat)
+melody([A2 C3 E3 A3], 1 / 2 beat)
+
+unison = 3                      # three voices per note
+detune = 0.15                   # spread over 0.15 semitones: a fuller sound
+pan = -0.6                      # toward the left speaker (-1 left, 1 right)
+play(chord(A3, minor), 1 bar)
+
+filter = "none"
+unison = 1
+wave_shape = "sine"
+pan = 0.6                       # toward the right
+vibrato = 0.5                   # half a semitone up and down
+vibrato_rate = 6                # six times a second
+tremolo = 0.4                   # the gain dips by 40 %
+play(E5, 1 bar)
+wait_sound()

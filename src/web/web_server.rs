@@ -85,12 +85,9 @@ impl Route {
 	/// The answer of the route's value; ø is the empty list, which reads back as nothing, so a list route says []
 	pub fn answer_of(&self, value: &Node) -> Answer {
 		match value.drop_meta() {
-			Node::Empty if self.lists => Answer {
-				status: 200,
-				content_type: JSON_TYPE,
-				body: b"[]".to_vec(),
-				headers: vec![],
-			},
+			Node::Empty if self.lists => {
+				Answer { status: 200, content_type: JSON_TYPE, body: b"[]".to_vec(), headers: vec![] }
+			}
 			Node::Error(message) => self.failed(&message.to_string()),
 			_ => Answer::of(value),
 		}
@@ -121,7 +118,7 @@ impl Route {
 	fn failure_answer(&self, failure: &RouteFailure, request: &Node) -> Answer {
 		let missing = failure
 			.message
-			.strip_prefix(crate::wasm_emitter::list_ops::NO_FIELD_MESSAGE)
+			.strip_prefix(crate::wasm_emitter::lists::list_ops::NO_FIELD_MESSAGE)
 			.and_then(|rest| rest.split_whitespace().next()) // the field, without the ` at line:column` of the program
 			.filter(|field| !has_field(request, field));
 		match missing {
@@ -142,12 +139,9 @@ pub struct Answer {
 impl Answer {
 	pub fn of(value: &Node) -> Answer {
 		match value.drop_meta() {
-			Node::Text(text) => Answer {
-				status: 200,
-				content_type: TEXT_TYPE,
-				body: text.clone().into_bytes(),
-				headers: vec![],
-			},
+			Node::Text(text) => {
+				Answer { status: 200, content_type: TEXT_TYPE, body: text.clone().into_bytes(), headers: vec![] }
+			}
 			Node::Char(character) => Answer {
 				status: 200,
 				content_type: TEXT_TYPE,
@@ -158,9 +152,7 @@ impl Answer {
 			other => Answer {
 				status: 200,
 				content_type: JSON_TYPE,
-				body: crate::foreign::json_of(&without_classes(other))
-					.to_string()
-					.into_bytes(),
+				body: crate::modules::foreign::json_of(&without_classes(other)).to_string().into_bytes(),
 				headers: vec![],
 			},
 		}
@@ -172,20 +164,15 @@ impl Answer {
 
 	/// With the headers the route set (`header "name" "value"`); the CGI header Status (`status 418`) is the status
 	pub fn with_headers(self, headers: Vec<(String, String)>) -> Answer {
-		let (statuses, headers): (Vec<_>, Vec<_>) = headers
-			.into_iter()
-			.partition(|(name, _)| name.eq_ignore_ascii_case(crate::host::STATUS_HEADER));
+		let (statuses, headers): (Vec<_>, Vec<_>) =
+			headers.into_iter().partition(|(name, _)| name.eq_ignore_ascii_case(crate::host::STATUS_HEADER));
 		let status = statuses.last().map(|(_, status)| status.trim().parse::<u16>());
 		match status {
 			Some(Err(_)) | Some(Ok(0..=99 | 600..)) => {
 				let given = statuses.last().map_or("", |(_, status)| status.as_str());
 				Answer::failed(&format!("status {given}: not an HTTP status (100 to 599)"))
 			}
-			Some(Ok(status)) => Answer {
-				status,
-				headers,
-				..self
-			},
+			Some(Ok(status)) => Answer { status, headers, ..self },
 			None => Answer { headers, ..self },
 		}
 	}
@@ -193,12 +180,9 @@ impl Answer {
 	/// A page with `message` shown at its top, as an alert: the first thing after <body>, else before the whole page
 	fn with_message(self, message: &str) -> Answer {
 		let page = String::from_utf8_lossy(&self.body).to_string();
-		let alert = format!("<p role=\"alert\">{}</p>", crate::markup::escaped(message));
+		let alert = format!("<p role=\"alert\">{}</p>", crate::web::markup::escaped(message));
 		let at = page.find(PAGE_BODY_TAG).map_or(0, |start| start + PAGE_BODY_TAG.len());
-		Answer {
-			body: format!("{}{alert}{}", &page[..at], &page[at..]).into_bytes(),
-			..self
-		}
+		Answer { body: format!("{}{alert}{}", &page[..at], &page[at..]).into_bytes(), ..self }
 	}
 }
 
@@ -220,11 +204,9 @@ fn without_classes(value: &Node) -> Node {
 			Bracket::Curly,
 			separator.clone(),
 		),
-		Node::List(items, bracket, separator) => Node::List(
-			items.iter().map(without_classes).collect(),
-			bracket.clone(),
-			separator.clone(),
-		),
+		Node::List(items, bracket, separator) => {
+			Node::List(items.iter().map(without_classes).collect(), bracket.clone(), separator.clone())
+		}
 		other => other.clone(),
 	}
 }
@@ -239,12 +221,7 @@ fn answer_failing(path: &str, status: u16, message: &str) -> Answer {
 			body: serde_json::json!({ "error": message }).to_string().into_bytes(),
 			headers: vec![],
 		},
-		false => Answer {
-			status,
-			content_type: TEXT_TYPE,
-			body: message.as_bytes().to_vec(),
-			headers: vec![],
-		},
+		false => Answer { status, content_type: TEXT_TYPE, body: message.as_bytes().to_vec(), headers: vec![] },
 	}
 }
 
@@ -255,10 +232,7 @@ fn is_json_path(path: &str) -> bool {
 
 /// 404 for a lookup that found nothing, else 500
 fn failure_status(message: &str) -> u16 {
-	match NOT_FOUND_ERRORS
-		.iter()
-		.any(|error| message.contains(&error.replace('_', " ")))
-	{
+	match NOT_FOUND_ERRORS.iter().any(|error| message.contains(&error.replace('_', " "))) {
 		true => NOT_FOUND,
 		false => FAILED,
 	}
@@ -273,21 +247,14 @@ pub fn routes_of(routes: &Node) -> Vec<Route> {
 		.iter()
 		.filter_map(|route| match route.drop_meta() {
 			Node::List(parts, _, _) if (3..=4).contains(&parts.len()) => Some(Route {
-				method: text_of(&parts[0]),
-				path: text_of(&parts[1]),
-				function: text_of(&parts[2]),
-				lists: parts
-					.get(3)
-					.is_some_and(|mark| text_of(mark) == crate::serve::LIST_ANSWER),
+				method: parts[0].text_or_name(),
+				path: parts[1].text_or_name(),
+				function: parts[2].text_or_name(),
+				lists: parts.get(3).is_some_and(|mark| mark.text_or_name() == crate::serve::LIST_ANSWER),
 			}),
 			_ => None,
 		})
 		.collect()
-}
-
-/// A text of the route table; the path "/" arrives as a one-character Char
-fn text_of(node: &Node) -> String {
-	crate::routes::pattern_text(node)
 }
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
@@ -311,27 +278,17 @@ pub fn serve(
 		let (path, query) = request
 			.url()
 			.split_once('?')
-			.map_or((request.url().to_string(), String::new()), |(path, query)| {
-				(path.to_string(), query.to_string())
-			});
+			.map_or((request.url().to_string(), String::new()), |(path, query)| (path.to_string(), query.to_string()));
 		let path = percent_decoded(&path);
 		let mut body = String::new();
 		let _ = request.as_reader().read_to_string(&mut body);
 		let header_of = |name: &'static str| {
-			request
-				.headers()
-				.iter()
-				.find(|header| header.field.equiv(name))
-				.map(|header| header.value.to_string())
+			request.headers().iter().find(|header| header.field.equiv(name)).map(|header| header.value.to_string())
 		};
 		let is_form = header_of("Content-Type").is_some_and(|content_type| content_type.starts_with(FORM_TYPE));
 		let from_a_browser_form = is_form && header_of("Accept").is_some_and(|accepted| accepted.contains(PAGE_TYPE));
 		let back = header_of("Referer").map_or(HOME.to_string(), |referer| page_of(&referer));
-		let body = if is_form {
-			form_fields(&body)
-		} else {
-			value_of_body(body)
-		};
+		let body = if is_form { form_fields(&body) } else { value_of_body(body) };
 		let headers = headers_node(request.headers());
 		let mut answer_at = |method: &str, path: &str, query: &str, body: Node| match route_at(routes, method, path) {
 			Some(route) => {
@@ -347,14 +304,10 @@ pub fn serve(
 			Err((_, failure, _)) if failure.raised && from_a_browser_form => {
 				let (page_path, page_query) = back.split_once('?').unwrap_or((&back, ""));
 				match answer_at(SITE_METHOD, page_path, page_query, Node::Empty) {
-					Ok(page) if page.status == 200 => Answer {
-						status: BAD_REQUEST,
-						..page.with_message(&failure.message)
-					},
-					_ => Answer {
-						status: BAD_REQUEST,
-						..Answer::failed(&failure.message)
-					},
+					Ok(page) if page.status == 200 => {
+						Answer { status: BAD_REQUEST, ..page.with_message(&failure.message) }
+					}
+					_ => Answer { status: BAD_REQUEST, ..Answer::failed(&failure.message) },
 				}
 			}
 			Err((route, failure, request)) => route.failure_answer(&failure, &request),
@@ -404,12 +357,9 @@ fn site_file(site: &ServedSite, method: &str, path: &str) -> Option<Answer> {
 	}
 	let status = if site.matches_no_route_at(path) { NOT_FOUND } else { 200 };
 	Some(match site.file_at(path)? {
-		Ok((name, body)) => Answer {
-			status,
-			content_type: crate::web::site::content_type(&name),
-			body,
-			headers: vec![],
-		},
+		Ok((name, body)) => {
+			Answer { status, content_type: crate::web::site::content_type(&name), body, headers: vec![] }
+		}
 		Err(failure) => Answer::failed(&failure),
 	})
 }
@@ -419,7 +369,7 @@ pub fn value_of_body(body: String) -> Node {
 	serde_json::from_str::<serde_json::Value>(&body)
 		.ok()
 		.filter(|value| value.is_object() || value.is_array())
-		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value))
+		.map_or(Node::Text(body), |value| crate::modules::foreign::node_of(&value))
 }
 
 /// `/rpc/route%C2%B7data%C2%B70` → `/rpc/route·data·0` (a browser's fetch encodes the path); an invalid escape stays
@@ -449,9 +399,7 @@ fn percent_decoded(path: &str) -> String {
 /// The path and query of a Referer URL, where a browser's form goes back to
 fn page_of(referer: &str) -> String {
 	let after_scheme = referer.split_once("://").map_or(referer, |(_, rest)| rest);
-	after_scheme
-		.find(PATH_SEPARATOR)
-		.map_or(HOME.to_string(), |start| after_scheme[start..].to_string())
+	after_scheme.find(PATH_SEPARATOR).map_or(HOME.to_string(), |start| after_scheme[start..].to_string())
 }
 
 /// `title=buy+milk&done=on`, a form's body or a query, as the map {title: "buy milk", done: "on"}
@@ -461,10 +409,7 @@ fn form_fields(encoded: &str) -> Node {
 		.filter(|pair| !pair.is_empty())
 		.map(|pair| {
 			let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-			Node::key(
-				&percent_decoded(&key.replace('+', " ")),
-				Node::Text(percent_decoded(&value.replace('+', " "))),
-			)
+			Node::key(&percent_decoded(&key.replace('+', " ")), Node::Text(percent_decoded(&value.replace('+', " "))))
 		})
 		.collect();
 	Node::List(fields, Bracket::Curly, crate::node::Separator::Space)
@@ -490,12 +435,7 @@ fn request_node(method: &str, path: &str, query: &str, body: Node, headers: Node
 fn headers_node(headers: &[tiny_http::Header]) -> Node {
 	let fields = headers
 		.iter()
-		.map(|header| {
-			Node::key(
-				&header_name(header.field.as_str().as_str()),
-				Node::Text(header.value.to_string()),
-			)
-		})
+		.map(|header| Node::key(&header_name(header.field.as_str().as_str()), Node::Text(header.value.to_string())))
 		.collect();
 	Node::List(fields, Bracket::Curly, crate::node::Separator::Space)
 }
@@ -515,10 +455,7 @@ fn header_name(name: &str) -> String {
 
 /// Whether the request's body or query holds the field
 fn has_field(request: &Node, field: &str) -> bool {
-	FIELD_PARTS
-		.iter()
-		.filter_map(|part| entry_value(request, part))
-		.any(|fields| entry_value(fields, field).is_some())
+	FIELD_PARTS.iter().filter_map(|part| entry_value(request, part)).any(|fields| entry_value(fields, field).is_some())
 }
 
 /// The value of a map's entry by key
@@ -540,10 +477,7 @@ fn respond(request: tiny_http::Request, response: tiny_http::Response<std::io::C
 		let _ = request.respond(response);
 		return;
 	}
-	let reason = REASONS_TINY_HTTP_LACKS
-		.iter()
-		.find(|(code, _)| *code == status.0)
-		.map_or("", |(_, reason)| reason);
+	let reason = REASONS_TINY_HTTP_LACKS.iter().find(|(code, _)| *code == status.0).map_or("", |(_, reason)| reason);
 	let version = request.http_version().clone();
 	let mut head = format!("HTTP/{}.{} {} {reason}\r\n", version.0, version.1, status.0);
 	for header in response.headers() {
@@ -552,8 +486,5 @@ fn respond(request: tiny_http::Request, response: tiny_http::Response<std::io::C
 	let body = response.into_reader().into_inner();
 	head += &format!("Content-Length: {}\r\nConnection: close\r\n\r\n", body.len());
 	let mut writer = request.into_writer();
-	let _ = writer
-		.write_all(head.as_bytes())
-		.and_then(|_| writer.write_all(&body))
-		.and_then(|_| writer.flush());
+	let _ = writer.write_all(head.as_bytes()).and_then(|_| writer.write_all(&body)).and_then(|_| writer.flush());
 }

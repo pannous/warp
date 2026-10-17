@@ -2,17 +2,9 @@
 
 use wasm_encoder::MemArg;
 
-pub const BYTE: MemArg = MemArg {
-	offset: 0,
-	align: 0,
-	memory_index: 0,
-};
+pub const BYTE: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 /// A 4-byte aligned i32 access
-pub const WORD: MemArg = MemArg {
-	offset: 0,
-	align: 2,
-	memory_index: 0,
-};
+pub const WORD: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
 
 /// UTF-8: the code point ranges of 1-, 2-, 3- and 4-byte sequences, their lead bytes, and the payload bits each byte keeps
 pub mod utf8 {
@@ -24,7 +16,6 @@ pub mod utf8 {
 	pub const TWO_BYTE_LEAD: i32 = 0xC0;
 	pub const THREE_BYTE_LEAD: i32 = 0xE0;
 	pub const FOUR_BYTE_LEAD: i32 = 0xF0;
-	pub const ONE_BYTE_PAYLOAD: i32 = 0x7F;
 	pub const TWO_BYTE_PAYLOAD: i32 = 0x1F;
 	pub const THREE_BYTE_PAYLOAD: i32 = 0x0F;
 	pub const FOUR_BYTE_PAYLOAD: i32 = 0x07;

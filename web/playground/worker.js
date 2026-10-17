@@ -6,7 +6,7 @@
 const stage = name => self.postMessage({ type: "stage", stage: name });
 
 stage("loading its scripts");
-importScripts("reader.js", "imports.js", "exact.js", "std.js", "host.js");
+importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
@@ -37,36 +37,30 @@ const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
 let warming = false; // the warm-up's run says nothing to the page
-const post = message => warming || self.postMessage(message);
+const post = (message, transfer) => warming || self.postMessage(message, transfer);
 // the first markup program compiles the markup renderer (lib/markup.warp's to_html) once: ~0.5 s in Chrome, seconds in
 // Safari. The page asks for it while idle after its first run (card guide-warmup), so a guide's first ▶ is quick too
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", shared }); // host.js clipboard_text
-// play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively
-let soundHandles = 0;
-const nextSoundHandle = () => ++soundHandles;
-self.lastSoundHandle = () => soundHandles;
-self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
-self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
-self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
-self.sendMidi = (port, message) => post({ type: "midi", port, message }); // host-files.js STD_ADAPTERS.midi
-self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
-self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
-// a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
-// task's sound comes relayed with its own voice's start
-self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() }); // a signal's blocks share one
+self.askPageDecode = (shared, url, bytes) => self.postMessage({ type: "sound decode", shared, url, bytes }); // host-sound.js pageDecoded
+self.askPageCall = (shared, request) => self.postMessage({ type: "page call", shared, request }); // host-foreign.js callOnPage
+self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // save sound's WAV, for the page's download link
+addPageSoundWords(post); // host-tasks.js
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
-	paint: (pixels, width, height, canvas) => post({ type: "paint", pixels, width, height, canvas }),
-	gpuCanvas: ({ port, ...canvas }) => self.postMessage({ type: "gpu canvas", port, ...canvas }, [port]), // host-gpu.js gpuPainted
+	// host-media.js paintFrame: its words move to the page, not copied
+	paint: (frame, width, height, canvas, shaded) => post({ type: "paint", frame, width, height, canvas, shaded }, frame && [frame.words.buffer]),
+	gpuCanvas: canvas => post({ type: "gpu canvas", ...canvas }), // host-gpu.js gpuPainted
+	savePicture: (path, words, width, height) => post({ type: "picture", path, words, width, height }, [words.buffer]), // host-media.js save_picture
 	sound: sound => self.playSamples(sound),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
+	resizeWindow: (width, height) => post({ type: "window", width, height }), // window.width = 800 (canvas.js)
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
@@ -116,12 +110,7 @@ async function loadCompiler() {
 	webWorkerBundle = awaitedEntry(compiler.web_worker_bundle);
 }
 
-function passText(text) {
-	const bytes = utf8.encode(text);
-	const pointer = compiler.web_alloc(bytes.length);
-	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
-	return [pointer, bytes.length];
-}
+const passText = text => passedBytes(compiler, utf8.encode(text)); // host-compiler.js
 
 // a program's main may wait for a promise (host.js JSPI): the compiler waits with it
 async function evaluate(code, acknowledged) {
@@ -182,7 +171,7 @@ function handleNavigation(path) {
 	showHandled(live, { result: true });
 }
 
-// the page's path for the playground's address bar: only a program with routes has one (lowering/routes.rs)
+// the page's path for the playground's address bar: only a program with routes has one (lowering/web/routes.rs)
 const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
 
 // a form of the page was sent (playground.js submitForm): the live run's route answers it, then its page shows anew
@@ -190,19 +179,36 @@ function handleSubmit(request) {
 	if (live) showHandled(live, runSubmitted(live, hooks, request));
 }
 
-// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web/mod.rs
-// worker_bundle), `{scripts, module}` or `{error}`
+// the playground's Deploy (deploy.js): the program's Worker module and the query naming the scripts warp-hosting
+// composes its Worker of (src/web/mod.rs worker_bundle), `{query, module}` or `{error}`
 async function workerBundle(code) {
 	const codeText = passText(code);
 	try {
 		const length = await webWorkerBundle(...codeText);
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
-		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, compiler.web_bundle_module(), report.module_length).slice();
+		// the call first: memory it grows would detach a buffer read before it
+		const modulePointer = report.error ? undefined : compiler.web_bundle_module();
+		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, modulePointer, report.module_length).slice();
 		compiler.web_free(...codeText);
-		return { scripts: report.scripts, module, error: report.error };
+		return { query: report.query, module, error: report.error };
 	} catch (crash) {
 		compiler = undefined; // as in evaluate: load it again
 		return { error: `compiler crashed: ${panicMessage ?? crash.message}` };
+	}
+}
+
+// the members to offer after the code and a dot (completion.js, src/lowering/data/members.rs): a list of names
+function memberNames(code) {
+	const codeText = passText(code);
+	try {
+		const length = compiler.web_member_names(...codeText);
+		const names = JSON.parse(compilerText(compiler.web_report(), length));
+		compiler.web_free(...codeText);
+		return names;
+	} catch (crash) {
+		compiler = undefined; // as in evaluate: load it again
+		console.warn(`member completion failed: ${panicMessage ?? crash.message}`);
+		return [];
 	}
 }
 
@@ -211,7 +217,7 @@ function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
 }
 
-// what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/event_signals.rs
+// what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/signals/event_signals.rs
 // PAGE_VALUE), the program's last name read anew, else the handler's own value (a timer's only when it failed)
 function showHandled(holder, handled, timer = false) {
 	const binding = holder.exports[PAGE_VALUE] ?? holder.exports[PAGE_ROUTED_EXPORT];
@@ -234,7 +240,7 @@ function shownOf(outcome) {
 	return shown;
 }
 
-// markup with holes (PAGE_HOLE·<path>, src/lowering/event_signals.rs, card web-fine-holes): only the elements holding
+// markup with holes (PAGE_HOLE·<path>, src/lowering/signals/event_signals.rs, card web-fine-holes): only the elements holding
 // computed parts, or their computed texts alone between children (TEXT_HOLE), are read, the page gets those whose HTML changed; the whole value follows once the events pause.
 // False when there are none, or one fails (the whole value then shows the error)
 function showHoles(holder) {
@@ -292,6 +298,10 @@ async function handleMessage(data) {
 		if (!compiler) await loadCompiler();
 		return post({ type: "bundle", bundle: await workerBundle(data.bundle) });
 	}
+	if (data.members !== undefined) { // the running program keeps running
+		if (!compiler) await loadCompiler();
+		return post({ type: "members", id: data.id, names: memberNames(data.members) });
+	}
 	if (live) stopListening(live);
 	live = undefined;
 	stage("checking the compiler");
@@ -301,7 +311,10 @@ async function handleMessage(data) {
 	stage("waiting for the task workers");
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
-	soundHandles = 0;
+	self.newSoundHandles(); // host-tasks.js
+	self.liveHandover = data.liveHandover ?? {}; // the page's live loops of the run before (host-tasks.js liveCycleStarted)
+	self.programFile = data.file; // host-files.js besideProgram
+	self.programArguments = data.arguments ?? []; // host-files.js os.args
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

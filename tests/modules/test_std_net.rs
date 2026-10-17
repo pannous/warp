@@ -7,10 +7,7 @@ use crate::is_online;
 #[test]
 fn use_net_posts_a_text() {
 	is_online!(
-		&format!(
-			"use net; use json; answer = parse_json(post(\"{}\", \"hello warp\")); answer.data",
-			echo_url()
-		),
+		&format!("use net; use json; answer = parse_json(post(\"{}\", \"hello warp\")); answer.data", echo_url()),
 		"hello warp"
 	);
 }
@@ -38,11 +35,7 @@ fn only_a_network_failure_is_retried() {
 		);
 		attempts.get()
 	};
-	let closed_port = std::net::TcpListener::bind("127.0.0.1:0")
-		.unwrap()
-		.local_addr()
-		.unwrap()
-		.port(); // listener dropped: refused
+	let closed_port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port(); // listener dropped: refused
 	assert_eq!(attempts_at(format!("http://127.0.0.1:{closed_port}/post")), 2);
 	assert_eq!(attempts_at(serve("401 Unauthorized", "no")), 1);
 }

@@ -7,5 +7,8 @@ use crate::is;
 #[test]
 fn a_render_mixes_a_tasks_sounds_in() {
 	// the task's 0.2 s along with the program's 0.1 s: 0.2 s; dropped it would be 0.1, queued behind 0.3
-	is!("use sound\njob = go { play C4 for 0.2s }\nplay E4 for 0.1s\nawait job\nround(render_sound(\"voices.wav\") * 10)", 2);
+	is!(
+		"use sound\njob = go { play(C4, 0.2s) }\nplay(E4, 0.1s)\nawait job\nround(save(sound, \"voices.wav\") * 10)",
+		2
+	);
 }

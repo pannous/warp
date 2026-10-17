@@ -1,4 +1,4 @@
-//! The cursor over the source: characters, positions, keywords, whitespace and comments
+//! The cursor over the source: characters, positions, keywords, whitespace
 
 use super::*;
 
@@ -40,12 +40,7 @@ impl WarpParser {
 		let (start, line, column) = (self.pos, self.line_nr, self.column);
 		let value = read(self);
 		let written = self.chars[start..self.pos].iter().collect();
-		self.atoms.push(Atom {
-			kind,
-			line,
-			column,
-			written,
-		});
+		self.atoms.push(Atom { kind, line, column, written });
 		value
 	}
 
@@ -71,41 +66,6 @@ impl WarpParser {
 
 	pub(super) fn peek_char(&self, offset: usize) -> char {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
-	}
-
-	/// `else => …` at the cursor: the catch-all arm of a match on its own line, no else branch of the line before
-	pub(super) fn else_arm_key(&self) -> bool {
-		let after: String = self.chars[(self.pos + 4).min(self.chars.len())..]
-			.iter()
-			.skip_while(|ch| matches!(ch, ' ' | '\t'))
-			.take(2)
-			.collect();
-		after == "=>"
-	}
-
-	/// The cursor is in the key of a match arm: `=>` follows before the statement or block ends (`1 | 2 | 3 => …`)
-	pub(super) fn in_arm_key(&self) -> bool {
-		let rest = &self.chars[self.pos.min(self.chars.len())..];
-		let end = rest
-			.iter()
-			.position(|ch| matches!(ch, ';' | '\n' | '{' | '}'))
-			.unwrap_or(rest.len());
-		rest[..end].windows(2).any(|pair| pair == ['=', '>'])
-	}
-
-	/// The operator a block holds alone, the cursor at its start: `{++}`, `{ * }`, and its length up to the `}`
-	pub(super) fn bare_operator_in_block(&self) -> Option<(String, usize)> {
-		const OPERATOR_CHARS: &str = "+-*/%^<>=!&|";
-		let is_blank = |ch: &char| matches!(ch, ' ' | '\t');
-		let opened = self.chars[..self.pos].iter().rev().find(|ch| !is_blank(ch)) == Some(&'{');
-		let rest = &self.chars[self.pos..];
-		let operator: String = rest.iter().take_while(|ch| OPERATOR_CHARS.contains(**ch)).collect();
-		let length = operator.chars().count()
-			+ rest[operator.chars().count()..]
-				.iter()
-				.take_while(|ch| is_blank(ch))
-				.count();
-		(opened && !operator.is_empty() && rest.get(length) == Some(&'}')).then_some((operator, length))
 	}
 
 	/// Do blanks, an identifier, optional blanks and a `{` follow the cursor: `record point {…}`
@@ -166,17 +126,6 @@ impl WarpParser {
 		self.parse_symbol().map_or_else(|message| error(&message), build)
 	}
 
-	/// The operand after a single `|`: a bare word or word operator is marked as a possible pipe stage, any other operand gets the hint
-	/// toward `or`
-	pub(super) fn pipe_operand(&self, operand: Node, line: usize, column: usize) -> Node {
-		if crate::pipes::may_be_stage(&operand) {
-			return crate::pipes::pipe_stage(operand);
-		}
-		set_hint_position(line, column);
-		norm::operator(PIPE_GLYPH, false);
-		operand
-	}
-
 	pub(super) fn get_position(&self) -> (usize, usize) {
 		(self.line_nr, self.column)
 	}
@@ -202,159 +151,6 @@ impl WarpParser {
 	pub(super) fn matches_keyword(&self, keyword: &str) -> bool {
 		keyword.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
 			&& !is_identifier_char(self.peek_char(keyword.len()))
-	}
-
-	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`, `#include x`, `#import f from "m"`, every import keyword) starts a comment;
-	/// `#` directly followed by anything else counts (`#s`, `#a-1`, `#f(x)`)
-	pub(super) fn at_hash_comment(&self) -> bool {
-		if matches!(self.peek_char(1), ' ' | '\t' | '\n' | '\r' | '\0' | '!' | '#') {
-			return true;
-		}
-		let word: String = (1..)
-			.map(|offset| self.peek_char(offset))
-			.take_while(|&c| is_identifier_char(c))
-			.collect();
-		crate::modules::is_import_keyword(&word)
-	}
-
-	/// `//` after an operand with no space behind it (`7//2`, `x //= 2`, `f(x) //2`) divides; followed by a space or the end
-	/// of the line it starts a comment, as it does after no operand (`//note` on a line of its own, `://` in URLs)
-	pub(super) fn at_floor_division(&self) -> bool {
-		let divisor_follows = self.chars.get(self.pos + 2).is_some_and(|next| !next.is_whitespace());
-		self.current_char() == '/' && self.peek_char(1) == '/' && divisor_follows && self.follows_operand_on_its_line()
-	}
-
-	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator (`./mozart.mp3` is a path)
-	pub(super) fn element_wise_operator(&self) -> Option<Op> {
-		if self.current_char() != '.' || self.starts_path_literal() {
-			return None;
-		}
-		let glyph = self.peek_char(1).to_string();
-		crate::operators::ELEMENT_WISE_OPERATORS
-			.into_iter()
-			.find(|op| op.as_str() == glyph)
-	}
-
-	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
-	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`.
-	/// Inside a list literal a space and a glued sign start the next item after anything (decision list-sign):
-	/// `a=5; [a -1]` is [5 -1], while `[a - 1]` and `[a-1]` subtract
-	pub(super) fn signed_number_starts_a_list(&mut self, lhs: &Node) -> Result<bool, Node> {
-		if self.signed_list_element == Some(self.pos) {
-			return Ok(true); // answered for the operand inside
-		}
-		if self.in_spaced_list && self.prev_char().is_whitespace() && self.sign_glued_to_operand() {
-			self.signed_list_element = Some(self.pos);
-			return Ok(true);
-		}
-		if !matches!(lhs.drop_meta(), Node::Number(_)) || !self.prev_char().is_whitespace() || !self.number_starts_at(1)
-		{
-			return Ok(false);
-		}
-		let signed: String = self.chars[self.pos..]
-			.iter()
-			.take_while(|ch| !ch.is_whitespace() && !matches!(ch, ']' | ')' | '}' | ',' | ';'))
-			.collect();
-		let (first, sign, number) = (lhs.serialize(), self.current_char(), &signed[1..]);
-		let written = format!("{first} {signed}");
-		let readings = vec![
-			crate::diagnostic::reading("the list", &format!("{first} ({signed})")), // also inside brackets: `[1 (-1) 2]`
-			crate::diagnostic::reading("arithmetic", &format!("{first} {sign} {number}")),
-		];
-		let question = crate::diagnostic::Ask::new(
-			SIGNED_OPERAND_TOPIC,
-			format!("is `{written}` a list or arithmetic?"),
-			readings,
-			crate::diagnostic::Fallback::Warning,
-		)
-		.written(&written)
-		.at(self.line_nr, self.column);
-		let is_list = crate::diagnostic::ask(&question)? == 0;
-		if is_list {
-			self.signed_list_element = Some(self.pos);
-		}
-		Ok(is_list)
-	}
-
-	/// `-1`, `-x`, `+(…)`: the sign at the cursor is glued to the operand after it, no operator like `->` or `-=`
-	fn sign_glued_to_operand(&self) -> bool {
-		let next = self.peek_char(1);
-		next.is_alphanumeric() || matches!(next, '(' | '[' | '"' | '\'' | '.' | '_' | '√')
-	}
-
-	/// R's `<-` at the cursor (P145): `x <- 3` assigns with a note to write `x = 3`; the cramped `x<-3` is an error
-	/// naming `x = 3` and `x < -3`
-	pub(super) fn left_arrow_assignment(&self, op: Op, target: &Node) -> Result<(), Node> {
-		if op != Op::Assign || (self.current_char(), self.peek_char(1)) != ('<', '-') {
-			return Ok(());
-		}
-		let ends_value = |ch: &char| ch.is_whitespace() || matches!(ch, ';' | '(' | ')' | ']' | '}');
-		let rest: Vec<char> = self.chars[self.pos + 2..]
-			.iter()
-			.copied()
-			.skip_while(|ch| *ch == ' ')
-			.collect();
-		let token: String = rest.iter().take_while(|ch| !ends_value(ch)).collect();
-		let continues = rest
-			.get(token.chars().count())
-			.is_some_and(|ch| !matches!(ch, '\n' | ';' | ')' | ']' | '}'));
-		let value = if continues { format!("{token} …") } else { token };
-		let name = target.serialize();
-		let assignment = format!("{name} = {value}");
-		let is_spaced = self.peek_char(2).is_whitespace();
-		let (written, readings, fallback) = match is_spaced {
-			true => (
-				format!("{name} <- {value}"),
-				vec![reading("the assignment", &assignment)],
-				Fallback::Warning,
-			),
-			false => (
-				format!("{name}<-{value}"),
-				vec![
-					reading("the assignment", &assignment),
-					reading("the comparison", &format!("{name} < -{value}")),
-				],
-				Fallback::Error,
-			),
-		};
-		let forms: Vec<String> = readings.iter().map(|reading| reading.explicit_form.clone()).collect();
-		let question = format!("`{written}`: write {}", forms.join(" or "));
-		let question = Ask::new(LEFT_ARROW_TOPIC, question, readings, fallback)
-			.written(&written)
-			.at(self.line_nr, self.column);
-		ask(&question).map(|_| ())
-	}
-
-	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
-	/// Code that could be divided ends right before: a name, a number, `)` or `]` (`xs[1] // 2`); after a text, a comma
-	/// or a brace `//` is plainly a comment
-	fn follows_operand_on_its_line(&self) -> bool {
-		let last = self.chars[..self.pos]
-			.iter()
-			.rev()
-			.take_while(|&&c| c != '\n')
-			.find(|c| !c.is_whitespace());
-		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
-	}
-
-	/// The `//` at the cursor is set apart from the code by a tab or two spaces: `x = 5  // 14`, a result written beside
-	/// it (card hint-comment-floordiv), never a spaced-out division
-	fn is_set_apart(&self) -> bool {
-		let before = &self.chars[..self.pos];
-		before.ends_with(&['\t']) || before.ends_with(&[' ', ' '])
-	}
-
-	/// The `//` at the cursor is followed by what a divisor could be: a number or short name (`// 2`, `// n`) or an
-	/// expression (`// n + 1`), not prose (`// property with value list`) nor a word (`// Hz`, `// peaks`)
-	fn comment_reads_like_divisor(&self) -> bool {
-		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
-		let rest = rest.trim();
-		let has_operator = rest.contains(DIVISOR_OPERATORS);
-		if rest.contains(char::is_whitespace) {
-			has_operator && !has_adjacent_words(rest)
-		} else {
-			has_operator || is_number_or_short_name(rest)
-		}
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -383,7 +179,6 @@ impl WarpParser {
 		(had_newline, line_indent)
 	}
 
-	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
 	/// Neither a data literal file nor a WIT file: warp code with its keywords
 	pub(super) fn in_code(&self) -> bool {
 		!self.options.wit_mode && !self.options.data_mode
@@ -396,6 +191,7 @@ impl WarpParser {
 		}
 	}
 
+	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
 	pub(super) fn skip_spaces(&mut self) {
 		loop {
 			if self.current_char() == ' ' || self.current_char() == '\t' {
@@ -411,30 +207,19 @@ impl WarpParser {
 	/// Is the keyword at the cursor followed (after blanks) by `{`: `div {…}` is a tag, not the operator
 	pub(super) fn word_opens_block(&self, word: &str) -> bool {
 		let after = word.chars().count();
-		let gap = (after..)
-			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-			.count();
+		let gap = (after..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
 		self.peek_char(after + gap) == '{'
 	}
 
 	/// Does an operand follow, after blanks, the `width` characters at the cursor (not the line's end or a closing bracket)
 	pub(super) fn operand_after(&self, width: usize) -> bool {
-		let gap = (width..)
-			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-			.count();
-		gap > 0
-			&& !matches!(
-				self.peek_char(width + gap),
-				'\n' | '\r' | '\0' | ')' | ']' | '}' | ';' | ','
-			)
+		let gap = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		gap > 0 && !matches!(self.peek_char(width + gap), '\n' | '\r' | '\0' | ')' | ']' | '}' | ';' | ',')
 	}
 
 	/// The identifier starting `offset` characters ahead
 	pub(super) fn word_at(&self, offset: usize) -> String {
-		(offset..)
-			.map(|at| self.peek_char(at))
-			.take_while(|c| is_identifier_char(*c))
-			.collect()
+		(offset..).map(|at| self.peek_char(at)).take_while(|c| is_identifier_char(*c)).collect()
 	}
 
 	/// The identifier that ends right before the cursor and the blanks before it, on this line
@@ -460,11 +245,7 @@ impl WarpParser {
 
 	/// The source line up to the cursor
 	pub(super) fn input_before_cursor(&self) -> String {
-		let before: String = self.chars[..self.pos]
-			.iter()
-			.rev()
-			.take_while(|c| **c != '\n')
-			.collect();
+		let before: String = self.chars[..self.pos].iter().rev().take_while(|c| **c != '\n').collect();
 		before.chars().rev().collect()
 	}
 
@@ -494,185 +275,41 @@ impl WarpParser {
 		(self.peek_char(length) == '\n').then_some(length + 1)
 	}
 
-	pub(super) fn consume_rest_of_line(&mut self) -> String {
-		let line_comment = self.consume_to_line_end();
-		if self.current_char() == '\n' {
-			self.advance();
-		}
-		line_comment
-	}
-
-	/// The rest of the line, trimmed; the newline stays
-	fn consume_to_line_end(&mut self) -> String {
-		let mut rest = String::new();
-		while !matches!(self.current_char(), '\n' | '\0') {
-			rest.push(self.current_char());
-			self.advance();
-		}
-		rest.trim().to_string()
-	}
-
-	/// A `// …` or `# …` comment ending the line the parser is on: it documents that line's last item, `a: 1 // c`
-	/// (card parse-word); the newline stays a separator
-	pub(super) fn take_trailing_comment(&mut self) -> Option<String> {
-		self.skip_spaces();
-		if !self.at_line_comment() {
-			return None;
-		}
-		self.educate_on_spaced_floor_division();
-		self.advance_by(if self.current_char() == '/' { 2 } else { 1 });
-		Some(self.consume_to_line_end()).filter(|text| !text.is_empty())
-	}
-
-	/// `a // b` after code reads like division: say once that it is a comment
-	fn educate_on_spaced_floor_division(&mut self) {
-		if self.current_char() == '/'
-			&& self.follows_operand_on_its_line()
-			&& !self.is_set_apart()
-			&& self.comment_reads_like_divisor()
-		{
-			self.set_hint_pos();
-			crate::diagnostic::educate_once(
-				SLASH_COMMENT_TOPIC,
-				"a // b",
-				"a//b",
-				"`// …` after code is a comment; floor division has no space after //: a //b",
-			);
-		}
-	}
-
-	/// `// note` or `# note` here: a comment to the end of the line, not floor division (`7//2`), a URL (`://`) or a
-	/// count (`#xs`)
-	pub(super) fn at_line_comment(&self) -> bool {
-		match (self.current_char(), self.peek_char(1)) {
-			('/', '/') => self.prev_char() != ':' && !self.at_floor_division(),
-			('#', ' ' | '\t') => true,
-			_ => false,
-		}
-	}
-
-	/// `/* … */` and `/# … #/` open a block comment
-	pub(super) fn at_block_comment_start(&self) -> bool {
-		self.current_char() == '/' && matches!(self.peek_char(1), '*' | '#')
-	}
-
-	/// The text of a `/* … */` or `/# … #/` comment, the parser standing on its opening; comments nest:
-	/// `/* outer /* inner */ still outer */`
-	pub(super) fn consume_block_comment(&mut self) -> String {
-		let mark = if self.peek_char(1) == '#' { '#' } else { '*' };
-		self.advance_by(2);
-		let mut block = String::new();
-		let mut depth = 1;
-		while self.current_char() != '\0' {
-			let pair = (self.current_char(), self.peek_char(1));
-			if pair == (mark, '/') || pair == ('/', mark) {
-				depth += if pair.0 == '/' { 1 } else { -1 };
-				if depth == 0 {
-					self.advance_by(2);
-					break;
-				}
-				block.extend([pair.0, pair.1]);
-				self.advance_by(2);
-				continue;
-			}
-			block.push(self.current_char());
-			self.advance();
-		}
-		block
-	}
-
-	/// Spaces and the comments that may sit inside a line: `1 /* inline */ + 1` and `a b # note`; the newline stays a separator
-	pub(super) fn skip_spaces_and_inline_comments(&mut self) {
-		loop {
-			self.skip_spaces();
-			match (self.current_char(), self.peek_char(1)) {
-				_ if self.at_block_comment_start() => {
-					self.consume_block_comment();
-				}
-				('#', ' ' | '\t') => {
-					while !matches!(self.current_char(), '\n' | '\0') {
-						self.advance();
-					}
-				}
-				_ => return,
-			}
-		}
-	}
-
-	pub(super) fn skip_whitespace_and_comments(&mut self) -> (bool, usize, Option<String>) {
-		let mut had_newline = false;
-		let mut line_indent = 0;
-		let mut comments = Vec::new();
-		loop {
-			let (newline, indent) = self.skip_whitespace();
-			had_newline |= newline;
-			if newline {
-				line_indent = indent;
-			}
-
-			let c1 = self.current_char();
-
-			// # line comment (shell-style) at line start: `# note`, `#!`, `##`, `#use …`; `#x`, `#(…)`, `#a-1` count
-			if c1 == '#' && self.is_at_line_start() && self.at_hash_comment() {
-				self.advance();
-				let text = self.consume_rest_of_line();
-				if !text.is_empty() {
-					comments.push(text);
-				}
-				had_newline = true;
-				continue;
-			}
-			// // line comment (but not :// URL scheme)
-			if c1 == '/' && self.at_line_comment() {
-				self.educate_on_spaced_floor_division();
-				self.advance_by(2);
-				let text = self.consume_rest_of_line();
-				if !text.is_empty() {
-					comments.push(text);
-				}
-				had_newline = true;
-				continue;
-			}
-			// /* block comment */ and /# block comment #/
-			if self.at_block_comment_start() {
-				let block = self.consume_block_comment();
-				had_newline |= block.contains('\n');
-				let trimmed = block.trim();
-				if !trimmed.is_empty() {
-					comments.push(trimmed.to_string());
-				}
-				continue;
-			}
-			break;
-		}
-		let comment = if comments.is_empty() {
-			None
-		} else {
-			Some(comments.join("\n"))
-		};
-		(had_newline, line_indent, comment)
-	}
-
 	/// Skip characters until the target character is found
 	pub(super) fn skip_until(&mut self, target: char) {
 		while !self.end_of_input() && self.current_char() != target {
 			self.advance();
 		}
 	}
+
+	pub(super) fn at_identifier_start(&self) -> bool {
+		self.current_char().is_alphabetic() || self.current_char() == '_'
+	}
+
+	pub(crate) fn blanks_ahead(&self) -> usize {
+		(0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
+	}
 }
 
-const DIVISOR_OPERATORS: [char; 7] = ['+', '-', '*', '/', '%', '(', '^'];
 const MAX_DIVISOR_NAME_LENGTH: usize = 2;
 
-fn is_number_or_short_name(word: &str) -> bool {
+pub(crate) fn is_number_or_short_name(word: &str) -> bool {
 	let is_name = word.len() <= MAX_DIVISOR_NAME_LENGTH && word.chars().all(|c| c.is_ascii_lowercase() || c == '_');
 	is_name || word.parse::<f64>().is_ok()
 }
 
-/// Prose, not an expression: two words side by side with no operator between them (`data for`, `GET /api` stays one)
-fn has_adjacent_words(text: &str) -> bool {
-	let words: Vec<&str> = text.split_whitespace().collect();
-	words
-		.windows(2)
-		.any(|pair| pair[0].ends_with(char::is_alphanumeric) && pair[1].starts_with(char::is_alphanumeric))
+pub(crate) fn is_identifier_char(c: char) -> bool {
+	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
+}
+
+/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/words/music_words.rs)
+pub(crate) fn is_music_accidental(c: char) -> bool {
+	matches!(c, '♯' | '♭')
+}
+
+/// The atoms the parser reads in a source, in order, as code: the token stream of this scannerless parser
+pub fn read_atoms(source: &str) -> Vec<Atom> {
+	let mut parser = WarpParser::new_with_options(source.to_string(), ParserOptions::default());
+	parser.parse_list_with_separators(None, Bracket::None);
+	parser.atoms
 }

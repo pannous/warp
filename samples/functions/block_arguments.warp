@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+
+def repeats(n: int, block) := {
+	for i in 1...n {
+		block()
+	}
+}
+
+repeats 3{
+	print "Hello"
+}
+
+# ^^ That was just a demonstration. It was already built in:
+3 times{
+	print "Hi"
+}

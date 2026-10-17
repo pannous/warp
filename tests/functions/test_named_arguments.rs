@@ -47,12 +47,15 @@ fn a_bare_flag_name_in_a_call_sets_it() {
 	is!("f(a, loud = false) := if loud then a * 10 else a; f(3)", 3);
 	is!("f(a, loud: false) := if loud then a * 10 else a; f(3, loud)", 30);
 	// a variable of that name is passed as it is
+	is!("f(a, loud = false) := if loud then a * 10 else a; loud = false; f(3, loud)", 3);
+	is!("f(a, loud = false) := if loud then a * 10 else a; g(loud) := f(2, loud); g(false)", 2);
+}
+
+#[test]
+fn a_shallow_copy_of_an_instance_shares_its_lists() {
+	let team = "class Team { name: text; members: list }; a = Team(\"red\", [\"ann\"]); ";
 	is!(
-		"f(a, loud = false) := if loud then a * 10 else a; loud = false; f(3, loud)",
-		3
-	);
-	is!(
-		"f(a, loud = false) := if loud then a * 10 else a; g(loud) := f(2, loud); g(false)",
-		2
+		&format!("{team}b = copy(a, shallow: true); c = copy(a); b.members.add(\"bob\"); [count(a.members), count(c.members)]"),
+		warp::ints(vec![2, 1])
 	);
 }

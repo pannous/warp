@@ -40,7 +40,7 @@ What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed v
 `image like photo` declares that an image may stand wherever a photo is expected. It is a promise, not a conversion:
 the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
 of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
-fields are a decision the writer states once, in one line). Implemented in src/lowering/traits.rs (`Likeness`,
+fields are a decision the writer states once, in one line). Implemented in src/lowering/types/traits.rs (`Likeness`,
 `Dispatch::refused_argument`), tests/operators/test_like.rs, wiki page wiki_pages/like.md.
 
 ## Field test 2026-10-02
@@ -50,14 +50,14 @@ Fix branches fix-<topic> carry the compiler changes.
 
 User decisions from that round:
 - text + number concatenates (`"F:" + 13` → "F:13")
-- `//` with no space before it is floor division (`7//2`, `x//=2`); `x // note` stays a comment
+- floor division is `/!` (`7 /! 2`, `x /!= 2`); `//` is always a comment, glued (`7//2`) with a severe warning naming `/!`
 - `#ident` with no space is count (`#s`); `# text` stays a comment; directives (#use, #include, #!) keep working
 - `upto` excludes the end, with a warning naming the explicit forms (`..<`/`..` exclusive, `to`/`...` inclusive)
 - missing map key `m["Z"]` stays an error (as in Python); `m.get(k)`, `m.get(k, default)`, `k in m`, `m.has(k)` are the soft forms
 - an expression of `it` where a function is expected is that function: `xs.map(it * 2)`, `apply(it + 3, 1)`; inside a
-  function of one parameter its `it` stays the argument function's (card map-it, src/lowering/lambdas.rs it_function)
+  function of one parameter its `it` stays the argument function's (card map-it, src/lowering/definitions/lambdas.rs it_function)
 
-## Ask: how it works (src/diagnostic.rs)
+## Ask: how it works (src/diagnostics/diagnostic.rs)
 - `Ask { topic, written, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;
   `ask(&Ask) -> Result<usize, Node>` returns the default reading or the error. It never asks and never remembers a reading.
 - Fallback Warning prints `warning: <question> (taking <default>) at l:c; fix: <explicit form>` and takes the default.
@@ -106,7 +106,7 @@ constants, so `pi = …` / `pi := …` is the compile error "pi is a constant; f
 (`f() := pi * r`), everywhere else `pi` stays the constant (parser state `type_fields`).
 src/warp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.
 
-Control flow as other languages write it (samples/control_flow.warp, tests/control/test_match_guards_and_finally.rs):
+Control flow as other languages write it (samples/conditions/control_flow.warp, tests/control/test_match_guards_and_finally.rs):
 - match guards (Rust, Scala): `n if n < 0 => "negative"` binds n to the subject and holds when the condition does;
   a list pattern takes a guard too (`[a, b] if a > b => …`). switch.rs split_guard.
 - an assigned match `d = match v {k => …, _ => …}` parses as `match (v {…})`; welcome_forms turns its arrow cases into
@@ -114,14 +114,10 @@ Control flow as other languages write it (samples/control_flow.warp, tests/contr
 - `try … catch/else/except … finally {Z}` (Java, Python): `(finally·N = try…; Z; finally·N)`, Z runs either way and
   the value stays the try's or the catch's. lookahead.rs with_finally. `try X finally Z` without a catch is not parsed.
 - `global a, b` (Python) declares both; several `global` lines in a block are no duplicate key.
-- English operator words are aliases (samples/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
+- English operator words are aliases (samples/hello/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
   `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
   (= `to`), `is in` (= `in`), `for each x in xs`; a word operator needs a blank after it, so `plus(a, b)` stays a call.
   `10 down to 1` is `reverse(1 to 10)`; letters make ranges (`'a' to 'e'`, `c to 'z'` counts codepoints).
-  List phrases of a method chain (src/lowering/list_phrases.rs, undoable defaults): `xs.keep only positive` is
-  `xs where it > 0` (positive, negative, even, odd, or a function of the program), `xs.sort by k` sorts by the
-  program's function or counting word k, else by the field k (`sort by price`), `xs.take first n` is `xs.slice(0, n)`.
-  The parser reads a chain `xs.keep only p.sort by k` as one list `[xs.keep, only, p.sort, by, k]`.
   A parenthesized filter is closed: `(xs where it > 0).slice(0, 1)` slices the filtered list.
   Open (asked): number words (`one plus two`, then `three times four` multiplies like `3 times 4`).
 - a comparison without its left side is a relational pattern in a match arm (`> 100 => "big"`, C#), elsewhere the

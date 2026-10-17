@@ -1,5 +1,5 @@
 // card check-assert (user): `check C` is `assert C`: it throws an error naming the failed condition, as written.
-// samples/polymorphism.warp combines numbers (user: float stays IEEE, so a float variant would give 3.3000000000000003)
+// samples/types/polymorphism.warp combines numbers (user: float stays IEEE, so a float variant would give 3.3000000000000003)
 use crate::common::fails_with;
 use crate::is;
 
@@ -14,14 +14,12 @@ fn check_throws_when_the_condition_fails() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase call `combine 1.1 with 2.2` parked until card prepositions-call"]
 fn check_passes_a_condition_that_holds() {
 	is!("check 1 == 1; 7", 7);
 	is!("check 1.1 + 2.2 == 3.3; 7", 7);
 	is!(&format!("{COMBINE}check combine 1.1 with 2.2 == 3.3; 7"), 7);
-	is!(
-		&format!("{COMBINE}check combine(1.1, 2.2) == 3.3; check combine(2, 3) == 6; 7"),
-		7
-	);
+	is!(&format!("{COMBINE}check combine(1.1, 2.2) == 3.3; check combine(2, 3) == 6; 7"), 7);
 	is!("def check(n, i) = n + i; check(1, 2)", 3);
 }
 

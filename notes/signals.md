@@ -9,8 +9,8 @@ wiki/charged.md. Board card signals-first.
 
 | piece | where | what it is in signal terms |
 |---|---|---|
-| `z := y*y` (P71) | lowering/getters.rs | a **derived value** (Solid `createMemo`, Vue `computed`, Svelte `$derived`) without a cache: pulled, recomputed at every use |
-| `once cond {…}`, `whenever cond {…}`, `on set x {…}` | lowering/variable_signals.rs | **effects** (Solid `createEffect`, Vue `watch`): a check inserted after each later write of a variable the condition reads, decided at compile time |
+| `z := y*y` (P71) | lowering/definitions/getters.rs | a **derived value** (Solid `createMemo`, Vue `computed`, Svelte `$derived`) without a cache: pulled, recomputed at every use |
+| `once cond {…}`, `whenever cond {…}`, `on set x {…}` | lowering/signals/variable_signals.rs | **effects** (Solid `createEffect`, Vue `watch`): a check inserted after each later write of a variable the condition reads, decided at compile time |
 | `after tested: …`, `before save: …` | variable_signals.rs | listeners on calls (aspect oriented), static |
 | `once job finishes: …`, `on job.stop: …` | declarations.rs TaskHandlers | task events, checked after each later statement through task_status |
 | `shared done = false` (P106), `after done return x` | shared_arrays.rs, go_blocks.rs | the only state tasks share; `after` waits by polling it in a task |
@@ -129,14 +129,14 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
   `once` gets a flag global, `on change` a `change_last_N` variable with the last seen value.
 - **Events (phase 2)**: `emit e{…}` with handlers known at compile time is a direct call of a generated `on·e(event)`
   that runs the handlers in order; an emit with no handler is nothing (P163).
-  Done: lowering/event_signals.rs. Handlers are program-wide (a raise before the `on` line reaches it too, as a
+  Done: lowering/signals/event_signals.rs. Handlers are program-wide (a raise before the `on` line reaches it too, as a
   function defined later is callable); the function declares `global` the main-level variables the bodies mention.
 - **`on error of f {handler}`** (card g_ADRM, Error.md "a catch outside a block catches for its function"): f's
   body becomes `try body else handler` (event_signals.rs with_function_error_handlers), so every call of f, before
   or after the line, has the handler's value when it fails; forms `{…}`, `: …`, `do …`; an f the program does not
   define is the error "on error of g: the program defines no function g". `error` is not bound in the handler yet
   (as in `try … else`).
-- **Escaping signals (phase 5, done: lowering/signal_values.rs)**: a $Signal is a cell (wasm_emitter/cells.rs: a
+- **Escaping signals (phase 5, done: lowering/signals/signal_values.rs)**: a $Signal is a cell (wasm_emitter/cells.rs: a
   `$Node` of Kind::Data over a `$node_array`) with a second slot, the list of listener closures: `signal_new(v)`,
   `cell_get` / `cell_set` its value, `signal_listeners(s)` / `signal_listeners_set(s, list)`. A write is the generated
   `signal·set(s, v)`: store, then `closure_call_2(listener, new, old)` for each listener. Only variables that escape
@@ -156,11 +156,12 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
 2. **Named event signals in one module** (done, branch signals-events): `raise name{data}` → `on name {…}` (payload
    `event`), static dispatch; `on set` of a derived value means `on change`. tests/control/test_event_signals.rs.
 3. **Program-wide listeners** (done): writes to a watched main-level variable inside
-   functions (via `global x`) run the checks: the listener's check is the function `signal·check·N()`, guarded by
-   `signal_listening_N` (set where the listener is declared), called after each such write in a function body.
+   functions (via `global x`) run the listeners: since decision watched-cells (2026-10-14) such a variable is a cell
+   and its main-level listeners subscribe to it (signal_values::subscribe), as in phase 5; a variable only the main
+   level writes keeps the static check after each write.
    Done too (card signals-phase-rest): `whenever f() > 3` follows the variables f reads, transitively through the
-   functions it calls (function_reads); effects need nothing new: effects.rs runs on the lowered program, where the
-   check is a call inside the writing function, so `effects of f` includes its listeners' IO.
+   functions it calls (function_reads); effects.rs runs on the lowered program, where a cell write is State and a
+   closure call carries every lifted lambda's effects, so `effects of f` includes its listeners' IO.
 4. **Batching** (done, branch signals-events): a multi-assignment `a, b = 1, 2` checks once, after all its writes
    (P112: no batching block); tuples::destructured_names names its targets.
 5. **Signals as values** (done, branch signals-values, warp-3a; tests/control/test_signal_values.rs): static part
@@ -194,7 +195,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
      variable of `for s in xs {…}` over its parameter xs takes a list of signals; the variables of a list literal
      passed there (`watch_all([a, b])`, or `watched = [a, b]; watch_all(watched)`) become signals and the list holds
      the signals themselves (the one place a list keeps no copy).
-   - Signals in fields (branch signal-fields, tests/control/test_signal_fields.rs, samples/signal_fields.warp; cards
+   - Signals in fields (branch signal-fields, tests/control/test_signal_fields.rs, samples/signals/signal_fields.warp; cards
      signal-param-field, signal-field-escape): a field signal is named by its path `p.age` in the same name sets.
      `watch(p) := on change p.age {…}` subscribes to that field of its argument; the object literal assigned to a
      variable passed there keeps a cell in the field (`map_of_entry` of a one-entry literal too), and a variable kept
@@ -221,7 +222,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    rendering itself, is `dispatch_event(name, data)` (card page-custom-event, branch page-custom-event): host.js
    dispatches it as `CustomEvent(name, {detail})` on the document (markup.js dispatchToPage; a Worker posts it to its
    page), natively the headless Page keeps it (`Page::dispatched`; tests/web/test_page_custom_events.rs,
-   samples/page_custom_event.warp). A handler body inside an element stays code: markup_tags::handlers_kept keeps
+   samples/web/page_custom_event.warp). A handler body inside an element stays code: markup_tags::handlers_kept keeps
    `emit saved{id: 7}` from turning into the tag `emit{saved{…}}`. A plain program's unhandled emit does nothing (P202). Tour
    example `events`; tests/control/test_page_events.rs). `broadcast` / channel listeners: done natively (notes/system_signals.md, Channels); still open
    (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.

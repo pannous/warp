@@ -20,7 +20,8 @@ Spawned sessions get generated names (warp-6c …). Find them with ListAgents: t
 
 ## Files
 - common.md: rules every spawned session follows (standing instruction, worktrees, test queue, never blocked).
-- supervisor.md, integrator.md, interviewer.md, fixer.md, worker.md: one prompt per role.
+- supervisor.md, integrator.md, interviewer.md, fixer.md, worker.md, refactorer.md, reviewer.md: one prompt per role. The
+  refactorer is not a default service: `notes/agents/start.sh refactorer` when the Supervisor decides.
 - start.sh: spawns roles via ~/dev/bin/claude-remote.sh (refuses at high load; FORCE_SPAWN=1 overrides).
 - api_worker.sh: a worker headless on the Anthropic API key (ANTHROPIC_KEY_WARP) instead of the subscription:
   `notes/agents/api_worker.sh <name> "<task>"`. User 2026-10-10: when the plan's weekly limit runs low, only the
@@ -34,7 +35,7 @@ Open questions are queued in notes/open_decisions.md ("Pending questions"), the 
 
 ## End of day
 Workers remove their worktrees after the merge; the Integrator deletes merged remote branches. Leftovers:
-`git worktree list`, `ls /Users/me/dev/angles/warp.worktrees.noindex`, `git branch -r` (delete what is merged).
+`git worktree list`, `ls /Volumes/Worktrees /Users/me/dev/angles/warp.worktrees.noindex`, `git branch -r` (delete what is merged).
 
 ## Context swap
 A global Stop hook swaps any tmux-hosted session at 300k context tokens (handover + replacement + notice to peers): notes/agent_swap.md.

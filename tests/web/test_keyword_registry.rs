@@ -17,12 +17,7 @@ fn registered_keywords() -> serde_json::Value {
 #[test]
 fn keywords_of_passes_are_highlighted() {
 	let keywords = registered_keywords();
-	let soft: Vec<&str> = keywords["soft"]
-		.as_array()
-		.unwrap()
-		.iter()
-		.filter_map(|word| word.as_str())
-		.collect();
+	let soft: Vec<&str> = keywords["soft"].as_array().unwrap().iter().filter_map(|word| word.as_str()).collect();
 	for word in ["where", "loop", "when", "finally", "emit", "try"] {
 		assert!(soft.contains(&word), "{word} is not highlighted: {soft:?}");
 	}

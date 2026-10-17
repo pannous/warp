@@ -57,8 +57,8 @@ function moveLines(editor, step) {
 }
 
 const SHORTCUTS = {
-	"Ctrl-Enter": () => runPressed(),
-	"Cmd-Enter": () => runPressed(),
+	"Ctrl-Enter": () => runPressed(true),
+	"Cmd-Enter": () => runPressed(true),
 	"Ctrl-/": toggleComment,
 	"Cmd-/": toggleComment,
 	"Cmd-Ctrl-Up": editor => moveLines(editor, -1),

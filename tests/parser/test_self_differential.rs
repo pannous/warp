@@ -16,7 +16,7 @@ fn line_widths(text: &str) -> Node {
 #[test]
 fn every_sample_and_probe_is_a_source() {
 	let found = sources();
-	assert!(found.iter().any(|path| path.ends_with("samples/hello.warp")));
+	assert!(found.iter().any(|path| path.ends_with("samples/hello/hello.warp")));
 	assert!(found.iter().any(|path| path.starts_with("probes/self_hosting")));
 }
 

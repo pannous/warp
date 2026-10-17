@@ -12,10 +12,7 @@ fn shown(rest: &str) -> String {
 #[test]
 fn a_field_read_shows_the_declared_unit() {
 	assert_eq!(shown("runs#2.distance"), "1.5km");
-	assert_eq!(
-		shown("total = 0 km\nfor run in runs { total += run.distance }\ntotal"),
-		"18.5km"
-	);
+	assert_eq!(shown("total = 0 km\nfor run in runs { total += run.distance }\ntotal"), "18.5km");
 }
 
 #[test]

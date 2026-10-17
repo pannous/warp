@@ -42,10 +42,7 @@ fn test_data_is_never_validated() {
 #[test]
 fn test_construction_needs_every_required_field() {
 	fails_with(&with_point("point{x:1}"), "point needs field y");
-	fails_with(
-		"class person{name!; email?}; person{email:'a@b'}",
-		"person needs field name",
-	);
+	fails_with("class person{name!; email?}; person{email:'a@b'}", "person needs field name");
 }
 
 #[test]
@@ -61,20 +58,11 @@ fn test_an_unknown_word_with_a_block_stays_data() {
 	is!("(a{x:1}) == (a:{x:1})", true);
 }
 
-/// `email?: text` (samples/types.warp, the fix the 'needs field' error suggests) is the typed optional field, not the
+/// `email?: text` (samples/types/types.warp, the fix the 'needs field' error suggests) is the typed optional field, not the
 /// elvis `email ?: text`
 #[test]
 fn test_a_typed_optional_field_puts_the_question_mark_on_its_name() {
-	is!(
-		"class contact{name; email?: text}; c = contact{name:'Jo'}; c.name",
-		"Jo"
-	);
-	is!(
-		"class contact{name; email?: text}; c = contact{name:'Jo' email:'j@x'}; c.email",
-		"j@x"
-	);
-	fails_with(
-		"class contact{name; email?: text}; contact{name:'Jo' email:3}",
-		"contact.email is text",
-	);
+	is!("class contact{name; email?: text}; c = contact{name:'Jo'}; c.name", "Jo");
+	is!("class contact{name; email?: text}; c = contact{name:'Jo' email:'j@x'}; c.email", "j@x");
+	fails_with("class contact{name; email?: text}; contact{name:'Jo' email:3}", "contact.email is text");
 }

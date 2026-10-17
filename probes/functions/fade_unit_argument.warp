@@ -1,0 +1,4 @@
+// card fade-unit-argument: a duration with its unit as the fade time
+use sound
+h = play(440)
+fade_sound(h, 0, 1s)

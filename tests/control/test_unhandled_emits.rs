@@ -9,9 +9,7 @@ fn reasons_of(code: &str) -> Vec<String> {
 }
 
 fn warns_unhandled(code: &str) -> bool {
-	reasons_of(code)
-		.iter()
-		.any(|reason| reason.contains("no handler for event"))
+	reasons_of(code).iter().any(|reason| reason.contains("no handler for event"))
 }
 
 #[test]
@@ -21,7 +19,14 @@ fn an_emit_nobody_handles_warns() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn a_handled_emit_does_not_warn() {
 	assert!(!warns_unhandled("n = 0; on ping { n += 1 }; emit ping; n"));
 	assert!(!warns_unhandled("compute() := emit ask; on ask { 2 } in { compute() }"));
+}
+
+// card hint-emit-page: in a program that shows a page an emit nobody handles reaches the page (its script may listen)
+#[test]
+fn an_emit_in_a_page_program_does_not_warn() {
+	assert!(!warns_unhandled("div{ button{ on click { emit saved } \"Save\" } }"));
 }

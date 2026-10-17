@@ -1,0 +1,17 @@
+[package]
+name = "process_path"
+version = "0.1.4"
+authors = ["Wesley Wiser <wwiser@gmail.com>", "Moritz Moeller <virtualritz@gmail.com>"]
+license = "MIT/Apache-2.0"
+repository = "https://github.com/wesleywiser/process_path"
+documentation = "https://docs.rs/process_path"
+readme = "README.md"
+edition = "2018"
+description = "Gets the path of the currently executing process or dynamic library."
+keywords = ["current", "process", "executable", "dylib", "dll"]
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = ["errhandlingapi", "libloaderapi", "minwindef", "winerror" ] }
+
+[target.'cfg(any(target_os="linux", target_os="freebsd", target_os="dragonfly", target_os="netbsd", target_os="macos"))'.dependencies]
+libc = "0.2.81"

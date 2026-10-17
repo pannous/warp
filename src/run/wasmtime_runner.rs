@@ -1,5 +1,5 @@
 use crate::node::Node;
-use crate::wasm_reader;
+use crate::run::wasm_reader;
 
 /// Run a compiled .wasm file (or its machine code, a .cwasm) with every import family linked, since a file does not
 /// say which it needs; a failure is an error node

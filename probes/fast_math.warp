@@ -1,0 +1,8 @@
+// The values of sin cos exp pow atan2 at n + 1 points each, one per line: probes/fast_math.sh runs it with and without
+// `warp fast` and prints the largest errors of lib/fast_math.warp
+n = 20000
+for i in 0 to n {
+	t = i / n
+	x = (t - 0.5) * 2000.0
+	print [sin(x), cos(x), exp((t - 0.5) * 1400.0), pow(0.001 + t * 50.0, (t - 0.5) * 20.0), atan2(sin(x * 7.0), cos(x * 3.0))]
+}

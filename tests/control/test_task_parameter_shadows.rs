@@ -5,9 +5,6 @@ use crate::is;
 #[test]
 fn a_parameter_named_like_a_function_is_the_parameter() {
 	is!("inc = x => x + 1; f(inc) := { inc(3) }; await go f(inc)", 4);
-	is!(
-		"inc = x => x + 1; twice = x => x * 2; f(inc) := { inc(3) }; await go f(twice)",
-		6
-	);
+	is!("inc = x => x + 1; twice = x => x * 2; f(inc) := { inc(3) }; await go f(twice)", 6);
 	is!("inc = x => x + 1; f(inc) := { inc(3) }; f(inc)", 4);
 }

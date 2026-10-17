@@ -1,15 +1,15 @@
 # .github/workflows/crates.yml
 name: Crates
 
-# Prebuilt components for `use cargo <crate>` (src/cargo_crates.rs, notes/cargo_crates.md): builds warp, lets it build
+# Prebuilt components for `use cargo <crate>` (src/modules/cargo_crates/, notes/cargo_crates.md): builds warp, lets it build
 # every crate of CRATES as a component and uploads each as the asset <crate>.<version>.wasm (with Rust function names)
 # and <crate>.<version>.debug.wasm (with DWARF: file and line in traps, WARP_DEBUG_CRATES=1) of the prerelease
-# crates-<generation> (GENERATION matches src/cargo_crates.rs). warp downloads those, checked against the SHA-256
+# crates-<generation> (GENERATION matches src/modules/cargo_crates/mod.rs). warp downloads those, checked against the SHA-256
 # GitHub publishes, before building a crate itself. Add a crate: append it to CRATES.
 on:
   push:
     branches: [ main ]
-    paths: [ .github/workflows/crates.yml, src/cargo_crates.rs ]
+    paths: [ .github/workflows/crates.yml, "src/modules/cargo_crates/**" ]
   schedule:
   - cron: "17 4 * * 1" # weekly: new crate versions
   workflow_dispatch:

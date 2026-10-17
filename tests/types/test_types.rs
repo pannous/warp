@@ -403,14 +403,8 @@ fn test_polymorphism2() {
 
 #[test]
 fn test_polymorphism3() {
-	is!(
-		"fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')",
-		"ok"
-	);
-	is!(
-		"fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)",
-		2.0
-	);
+	is!("fun test(string a){return a};\nfun test(float b){return b+1};\ntest('ok')", "ok");
+	is!("fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)", 2.0);
 }
 
 // a generic type: a list of int16, written [int16] or list<int16> (card vacuous-tests; checking its elements: card
@@ -427,10 +421,7 @@ fn test_generics() {
 fn test_function_argument_cast() {
 	is!("float addi(int x,int y){x+y};'hello'+5", "hello5");
 	is!("float addi(int x,int y){x+y};'hello'+5.9", "hello5.9");
-	crate::common::fails_with(
-		"float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)",
-		"2.2 is no int: write 2.2 as int",
-	);
+	crate::common::fails_with("float addi(int x,int y){x+y};'hello'+addi(2.2,2.2)", "2.2 is no int: write 2.2 as int");
 	//     is!("float addi(int x,int y){x+y};'hello'+addi(2,3)", "hello5.") // OK some float cast going on!
 
 	is!("fun addier(a,b){b+a};addier(42.0,1.0)", 43);
@@ -456,14 +447,10 @@ fn test_type_node() {
 				Op::Colon,
 				Box::new(Node::Symbol("Text".to_string())),
 			),
-			Node::Key(
-				Box::new(Node::Symbol("age".to_string())),
-				Op::Colon,
-				Box::new(Node::Symbol("Int".to_string())),
-			),
+			Node::Key(Box::new(Node::Symbol("age".to_string())), Op::Colon, Box::new(Node::Symbol("Int".to_string()))),
 		],
 		Bracket::Curly,
-		Separator::Colon, // Colon is comma separator
+		Separator::Comma,
 	));
 	let type_node = Node::Type { name, body: fields };
 
@@ -487,14 +474,8 @@ fn test_type_registry() {
 	let tag = registry.register(
 		"Person".to_string(),
 		vec![
-			FieldDef {
-				name: "name".to_string(),
-				type_name: "Text".to_string(),
-			},
-			FieldDef {
-				name: "age".to_string(),
-				type_name: "Int".to_string(),
-			},
+			FieldDef { name: "name".to_string(), type_name: "Text".to_string() },
+			FieldDef { name: "age".to_string(), type_name: "Int".to_string() },
 		],
 	);
 	assert_eq!(tag, USER_TYPE_TAG_START);
@@ -515,14 +496,8 @@ fn test_type_registry() {
 	let tag2 = registry.register(
 		"Point".to_string(),
 		vec![
-			FieldDef {
-				name: "x".to_string(),
-				type_name: "Float".to_string(),
-			},
-			FieldDef {
-				name: "y".to_string(),
-				type_name: "Float".to_string(),
-			},
+			FieldDef { name: "x".to_string(), type_name: "Float".to_string() },
+			FieldDef { name: "y".to_string(), type_name: "Float".to_string() },
 		],
 	);
 	assert_eq!(tag2, USER_TYPE_TAG_START + 1);
@@ -560,7 +535,7 @@ fn test_type_registry_from_node() {
 				),
 			],
 			Bracket::Curly,
-			Separator::Colon,
+			Separator::Comma,
 		)),
 	};
 
@@ -587,14 +562,8 @@ fn test_user_type_wasm_emission() {
 	registry.register(
 		"Person".to_string(),
 		vec![
-			FieldDef {
-				name: "name".to_string(),
-				type_name: "String".to_string(),
-			},
-			FieldDef {
-				name: "age".to_string(),
-				type_name: "i64".to_string(),
-			},
+			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
+			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
 		],
 	);
 
@@ -602,14 +571,8 @@ fn test_user_type_wasm_emission() {
 	registry.register(
 		"Point".to_string(),
 		vec![
-			FieldDef {
-				name: "x".to_string(),
-				type_name: "f32".to_string(),
-			},
-			FieldDef {
-				name: "y".to_string(),
-				type_name: "f32".to_string(),
-			},
+			FieldDef { name: "x".to_string(), type_name: "f32".to_string() },
+			FieldDef { name: "y".to_string(), type_name: "f32".to_string() },
 		],
 	);
 

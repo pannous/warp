@@ -1,4 +1,4 @@
-// A component's world (card wasm-interop-rest, samples/wasm_interop.warp): `component name { import …: {…} export …: … }`
+// A component's world (card wasm-interop-rest, samples/wasm/wasm_interop.warp): `component name { import …: {…} export …: … }`
 // declares what a component imports and exports; its WIT is what `warp build --wit` writes. The declaration does
 // nothing when the program runs.
 use crate::is;
@@ -36,7 +36,7 @@ fn a_built_component_is_used_by_another_program() {
 	std::fs::create_dir_all(&directory).unwrap();
 	let path = directory.join("calc.wasm");
 	let source = "interface calculator { add: (i32, i32) -> i32; scale: (f64) -> f64 }\ncomponent calc { export api: calculator }\nexport def add(a: i32, b: i32) -> i32 { a + b }\nexport def scale(x: f64) -> f64 { x * 2.5 }\n0";
-	std::fs::write(&path, warp::component_builder::build(source).expect("a component")).unwrap();
+	std::fs::write(&path, warp::modules::component_builder::build(source).expect("a component")).unwrap();
 	let using = format!("use wasm \"{}\" as calc\n", path.display());
 	is!(&format!("{using}calc.add(2, 3)"), 5);
 	is!(&format!("{using}calc.scale(2.0)"), 5.0);
@@ -48,7 +48,7 @@ fn built_component(name: &str, source: &str) -> String {
 	let directory = crate::common::scratch_directory("built_components");
 	std::fs::create_dir_all(&directory).unwrap();
 	let path = directory.join(format!("{name}.wasm"));
-	std::fs::write(&path, warp::component_builder::build(source).expect("a component")).unwrap();
+	std::fs::write(&path, warp::modules::component_builder::build(source).expect("a component")).unwrap();
 	format!("use wasm \"{}\" as {name}\n", path.display())
 }
 

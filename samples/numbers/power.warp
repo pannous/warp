@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+# Power function - recursive
+def pow(base, exp) = if exp == 0 then 1 else base * pow(base, exp - 1)
+
+print [2⁻¹ 2⁰ 2¹ 2² 2³ 2⁴ 2⁵ 2⁶ 2⁷ 2⁸ 2⁹ 2¹⁰]
+
+# test pow(2, 10) == 2**10
+test pow(2, 10) == 2 ^ 10
+
+pow(2, 10)

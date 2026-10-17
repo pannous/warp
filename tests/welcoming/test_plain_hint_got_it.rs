@@ -1,17 +1,13 @@
 // card hints-dismissed: a plain hint ("prefer xs#1 over xs[0]") is a got-it hint too: "a" silences every hint of its
 // reason, "y" the one expression, for good (the acknowledgements file; the CLI keeps it in the home folder)
-use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::normalize::capture_hints;
 
 const INDEXING: &str = "xs = [1 2 3]; xs[0] + xs[1]";
 const INDEX_TOPIC: &str = "hint:use # for indexing";
 
 fn index_hints(code: &str) -> usize {
-	capture_hints(|| warp::wasm_emitter::eval(code))
-		.1
-		.iter()
-		.filter(|hint| hint.reason == "use # for indexing")
-		.count()
+	capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.reason == "use # for indexing").count()
 }
 
 #[test]
@@ -25,11 +21,7 @@ fn an_acknowledged_kind_of_hint_stays_away() {
 	});
 	with_acknowledger(Acknowledging(vec![INDEX_TOPIC.to_string()]), || {
 		use_acknowledgements_file(path);
-		assert_eq!(
-			index_hints(INDEXING),
-			1,
-			"the first one shown, then got it for all of them"
-		);
+		assert_eq!(index_hints(INDEXING), 1, "the first one shown, then got it for all of them");
 	});
 	with_acknowledger(Acknowledging(vec![]), || {
 		use_acknowledgements_file(path);
@@ -37,4 +29,12 @@ fn an_acknowledged_kind_of_hint_stays_away() {
 		assert_eq!(index_hints("ys = [4 5]; ys[1]"), 0, "for every expression of the kind");
 	});
 	let _ = std::fs::remove_file(path);
+}
+
+// card natural-sample-hints: a `// got it` comment silences the hints of its line too, as it does warnings
+#[test]
+fn a_got_it_comment_silences_the_hints_of_its_line() {
+	let reasons = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.len();
+	assert!(reasons("x = three times four\nx") > 0);
+	assert_eq!(reasons("x = three times four // got it\nx"), 0);
 }

@@ -15,9 +15,7 @@ fn where_filters_by_it() {
 
 #[test]
 fn a_where_condition_without_it_is_an_error() {
-	let Node::Error(message) = eval("xs = [1, 2, 3]; xs where x > 1") else {
-		panic!("should be an error")
-	};
+	let Node::Error(message) = eval("xs = [1, 2, 3]; xs where x > 1") else { panic!("should be an error") };
 	assert!(format!("{message}").contains("where it > 1"), "{message}");
 }
 
@@ -30,10 +28,16 @@ fn where_with_an_assignment_binds() {
 
 #[test]
 fn a_where_condition_of_a_bare_word_suggests_the_field() {
-	// samples/netbase.warp: `results where country is germany`
+	// samples/storage/netbase.warp: `results where country is germany`, of a list whose fields are known only at run time
 	crate::common::fails_with(
-		"results = [{country: germany}]; results where country is germany",
+		"rows() := [{country: germany}]; results = rows(); results where country is germany",
 		"or results where it.country==germany for a field country",
+	);
+	// a list of map literals names its fields (card field-list)
+	assert_eq!(
+		warp::wasm_emitter::eval("results = [{country: germany}, {country: france}]; results where country is germany")
+			.serialize(),
+		"[country:germany]"
 	);
 }
 
@@ -41,8 +45,5 @@ fn a_where_condition_of_a_bare_word_suggests_the_field() {
 #[test]
 fn an_assigned_filter_may_start_with_not() {
 	is!("xs = [yes, no, no]; waiting = xs where not it; count(waiting)", 2);
-	is!(
-		"todos = [{done: yes}, {done: no}]; open = todos where not it.done; count(open)",
-		1
-	);
+	is!("todos = [{done: yes}, {done: no}]; open = todos where not it.done; count(open)", 1);
 }

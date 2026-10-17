@@ -2,7 +2,7 @@
 // `cargo run --release --example multi_value_bench`: each program is compiled once, then run alternately
 use std::time::Instant;
 use warp::wasm_emitter::compile;
-use warp::wasm_reader::read_bytes;
+use warp::run::wasm_reader::read_bytes;
 
 const PROGRAMS: [(&str, &str); 3] = [
 	("big-int digit sum", "fac(n) := n<2 ? 1 : n*fac(n-1); f = fac(1000); s = 0; while f > 0 { s += f % 10; f = f//10 }; s"),

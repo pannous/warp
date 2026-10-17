@@ -46,8 +46,9 @@ fn an_instances_fields_and_their_aliases() {
 
 #[test]
 fn a_classes_methods() {
-	is!(&format!("{POINT}; p.methods"), warp::texts(vec!["sq"]));
-	is!(&format!("{POINT}; P.methods"), warp::texts(vec!["sq"]));
+	// the methods themselves (decision reflection, card module-methods): their names
+	is!(&format!("{POINT}; [m.name for m in p.methods]"), warp::texts(vec!["sq"]));
+	is!(&format!("{POINT}; [m.name for m in P.methods]"), warp::texts(vec!["sq"]));
 }
 
 #[test]
@@ -60,10 +61,7 @@ fn dir_of_an_instance_a_class_and_a_map() {
 
 #[test]
 fn inherited_fields_come_first() {
-	is!(
-		"class A{x:int}; class B extends A{y:int; f() := y}; b = B(1, 2); b.fields",
-		warp::texts(vec!["x", "y"])
-	);
+	is!("class A{x:int}; class B extends A{y:int; f() := y}; b = B(1, 2); b.fields", warp::texts(vec!["x", "y"]));
 }
 
 #[test]
@@ -76,15 +74,13 @@ fn a_real_field_named_fields_wins() {
 fn a_functions_params() {
 	is!("f(a:int, b:int) := a+b\nf.params", warp::texts(vec!["a", "b"]));
 	is!("def g(x){x*2}\ng.parameters", warp::texts(vec!["x"]));
+	is!("twice = x => x * 2\ntwice.params", warp::texts(vec!["x"]));
 }
 
 #[test]
 fn a_functions_signature() {
-	is!("f(a:int, b:int) := a+b\nf.signature", "(a:int, b:int) -> int");
-	is!(
-		"def greet(name:text){\"hi \" + name}\ngreet.signature",
-		"(name:text) -> text"
-	);
+	is!("f(a:int, b:int) := a+b\nf.signature", "(a: int, b: int) -> int");
+	is!("def greet(name:text){\"hi \" + name}\ngreet.signature", "(name: text) -> text");
 }
 
 // step 4: x.doc is x.@comment (under `use comments`), also of a function
@@ -103,43 +99,25 @@ fn a_real_field_named_doc_wins() {
 // step 4: a core module's exports, read off the module at compile time
 #[test]
 fn a_modules_exports() {
-	is!(
-		"import tests/fixtures/wasm/fourty_two; (\"twice\" in fourty_two.exports) > 0",
-		true
-	);
-	is!(
-		"import tests/fixtures/wasm/fourty_two; (\"ft\" in dir(fourty_two)) > 0",
-		true
-	);
+	is!("import tests/fixtures/wasm/fourty_two; (\"twice\" in fourty_two.exports) > 0", true);
+	is!("import tests/fixtures/wasm/fourty_two; (\"ft\" in dir(fourty_two)) > 0", true);
 	is!("import tests/fixtures/wasm/fourty_two; fourty_two.exports#1", "add32");
 }
 
 // step 5: an object known only at run time, one of the program's classes: a type test over them picks its names
 #[test]
 fn fields_of_an_instance_known_at_run_time() {
-	is!(
-		&format!("{POINT}; class Q{{z:int}}; f(o) := o.fields; f(Q(3))"),
-		warp::texts(vec!["z"])
-	);
-	is!(
-		&format!("{POINT}; f(o) := o.methods; f(P(1, 2))"),
-		warp::texts(vec!["sq"])
-	);
-	is!(
-		&format!("{POINT}; xs = [P(1, 2)]; dir(xs#1)"),
-		warp::texts(vec!["x", "y", "sq"])
-	);
+	is!(&format!("{POINT}; class Q{{z:int}}; f(o) := o.fields; f(Q(3))"), warp::texts(vec!["z"]));
+	is!(&format!("{POINT}; f(o) := o.methods; [m.name for m in f(P(1, 2))]"), warp::texts(vec!["sq"]));
+	is!(&format!("{POINT}; xs = [P(1, 2)]; dir(xs#1)"), warp::texts(vec!["x", "y", "sq"]));
 }
 
 // card reflection-def: a definition with its result type written (`-> int`, Python's `-> int:`) reflects too
 #[test]
 fn a_typed_results_functions_params_and_signature() {
-	is!(
-		"def add(left:int) -> int { left }\nadd.params",
-		warp::texts(vec!["left"])
-	);
+	is!("def add(left:int) -> int { left }\nadd.params", warp::texts(vec!["left"]));
 	is!("def add(left:int) -> int: left\nadd.params", warp::texts(vec!["left"]));
-	is!("def add(left:int) -> int { left }\nadd.signature", "(left:int) -> int");
+	is!("def add(left:int) -> int { left }\nadd.signature", "(left: int) -> int");
 }
 
 // card reflection-classes: a module compiled from warp (probes/reflection_classes/shapes.warp) keeps its classes and
@@ -160,17 +138,14 @@ fn a_warp_modules_classes() {
 	is!(&format!("{SHAPES}; dir(shapes.P)"), warp::texts(vec!["x", "y", "sq"]));
 }
 
-// card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/reflection.warp)
+// card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/types/reflection.warp)
 #[test]
 fn a_functions_dump() {
-	is!(
-		"area(width: int, height: int) := width * height\narea.dump",
-		"area(width:int, height:int) := width*height"
-	);
+	is!("area(width: int, height: int) := width * height\narea.dump", "area(width: int, height: int) := width*height");
 	is!("twice(x) := x * 2\ntwice.dump", "twice(x) := x*2");
 	is!(
 		"greet(name:text, greeting:text = \"hi\") := greeting + \" \" + name\ngreet.dump",
-		"greet(name:text, greeting:text = \"hi\") := greeting+' '+name"
+		"greet(name: text, greeting: text = \"hi\") := greeting+' '+name"
 	);
 	// pasted back, the dump is the same function
 	is!("fib(n) := {if n<2 then { return n }; (fib n-1)+(fib n-2)}\nfib(10)", 55);

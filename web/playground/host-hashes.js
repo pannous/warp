@@ -42,7 +42,7 @@ const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
 });
 const crc32Of = bytes => (bytes.reduce((crc, byte) => CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8), 0xffffffff) ^ 0xffffffff) >>> 0;
 
-// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/std_adapters.rs)
+// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/modules/std_adapters.rs)
 function withoutClassTags(value, classes) {
 	if (Array.isArray(value)) return value.map(item => withoutClassTags(item, classes));
 	if (value === null || typeof value !== "object") return value;
@@ -50,7 +50,7 @@ function withoutClassTags(value, classes) {
 	if (keys.length === 1 && classes.has(keys[0]) && value[keys[0]] !== null && typeof value[keys[0]] === "object" && !Array.isArray(value[keys[0]])) return withoutClassTags(value[keys[0]], classes);
 	return Object.fromEntries(keys.map(key => [key, withoutClassTags(value[key], classes)]));
 }
-// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
+// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/modules/std_adapters.rs regex_of)
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
 	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);
@@ -66,6 +66,33 @@ const jsonPart = part => part[0] === '"' ? part
 const jsonOfJson5 = text => text.replace(JSON5_PARTS, jsonPart);
 // strict JSON by the built-in parser, the JSON5 rewrite only when that fails
 const jsonOrJson5 = text => { try { return JSON.parse(text); } catch { return JSON.parse(jsonOfJson5(text)); } };
+// a value JSON cannot express is an error, never a silent null (as src/modules/std_adapters.rs inexpressible_in_json)
+// a big integer keeps all its digits (decision json-exactness)
+const finiteForJson = (key, value) => {
+	if (typeof value === "number" && !Number.isFinite(value)) throw new Error(`JSON has no ${value}: it cannot be written as JSON`);
+	return typeof value === "bigint" ? JSON.rawJSON(String(value)) : value;
+};
+// the numerator and denominator of the first fraction among the arguments as read without decimal digits, ["1", "3"],
+// which JSON writes only as its float; 0.1 and 19.99 are decimal, so exact (as src/node/json_xml.rs inexact_in_json)
+const hasDecimalDigits = denominator => [2n, 5n].reduce((rest, factor) => { while (rest % factor === 0n) rest /= factor; return rest; }, denominator < 0n ? -denominator : denominator) === 1n;
+const firstFraction = tree => {
+	const ratio = tree?.data?.ratio?.map(part => BigInt(part.int ?? integerOfPayload(part)));
+	if (ratio && !hasDecimalDigits(ratio[1])) return ratio.map(String);
+	for (const part of [tree?.data?.node, ...(tree?.chain ?? [])]) {
+		const found = part && firstFraction(part);
+		if (found) return found;
+	}
+};
+// to_json warns of a fraction's loss, exact_json (to_json under `use strict`) refuses it
+function jsonText(value, classes, exact) {
+	const text = JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value, finiteForJson);
+	const fraction = firstFraction(this.tree);
+	if (!fraction) return text;
+	const [numerator, denominator] = fraction;
+	if (exact) throw new Error(`JSON has no exact ${numerator}/${denominator}: it cannot be written as JSON exactly`);
+	this.warn(`JSON has no exact ${numerator}/${denominator}: it is written as the float ${Number(numerator) / Number(denominator)}`);
+	return text;
+}
 
 addHostPart({
 	words: (holder, hooks, { program }) => ({
@@ -73,7 +100,7 @@ addHostPart({
 	}),
 	adapters: {
 		hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
-		json: { parse: jsonOrJson5, to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
+		json: { parse: jsonOrJson5, to_json(value, classes) { return jsonText.call(this, value, classes, false); }, exact_json(value, classes) { return jsonText.call(this, value, classes, true); } },
 		regex: {
 			matches: (subject, pattern) => regexOf(pattern).test(subject),
 			first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,

@@ -19,7 +19,7 @@
 - text_fold is text_lower's emitter with CaseMapping::Fold: a letter whose canonical decomposition adds only combining
   marks maps to its base letter's lower case. Hangul syllables stay themselves. No full case folding: `ß` stays `ß`.
 
-## `~` looser than `≈` (card g_YHSM, P211, P212)
+## `~` looser than `≈` (P211, P212)
 - `a ~ b` (also `~~`) is Op::Rough: the same rules with `rough_tolerance` (default 0.01), and texts are trimmed of
   whitespace, control characters and ASCII punctuation at both ends before folding (text_rough_trim):
   `"Hello!" ~ "hello"`. Lists, objects and instances compare entry by entry with `~` again.

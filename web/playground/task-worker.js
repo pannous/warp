@@ -1,39 +1,49 @@
-// A task of a program on its own Worker (host.js startTask, src/tasks.rs natively): the function runs in a fresh instance
+// A task of a program on its own Worker (host.js startTask, src/host/tasks.rs natively): the function runs in a fresh instance
 // of the program's module, and its result (or failure) and printed output go back as JSON in the shared buffer the
 // starting program waits on with Atomics.wait.
 
 // a built site's task Worker gets the site's scripts as ?scripts=… (host-tasks.js addTaskWorker)
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts")?.split(",");
-importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "exact.js", "std.js", "host.js"]));
+importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 // the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
 let program;
 self.onmessage = ({ data }) => {
+	if (data.paintCanvas) return paintCanvasArrived(data.paintCanvas); // host-gpu.js, from the page
 	program = data.port;
 	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
 	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)
 };
 
-// what a task does for the page goes through the program's Worker (host-tasks.js relayed)
-const relay = (method, ...values) => program.postMessage({ relay: [method, ...values] });
-for (const method of ["playSoundFile", "stopSound", "stopSoundFiles", "fadeSound"]) self[method] = (...values) => relay(method, ...values);
+// a promise failing without a reason (Firefox's WebGPU, card uncaught-exception-undefined) is said with where it failed,
+// not as the console's bare "uncaught exception: undefined"
+self.addEventListener("unhandledrejection", event => {
+	if (event.reason !== undefined) return;
+	event.preventDefault();
+	console.error("warp task Worker: a browser API failed without saying why", event.promise);
+});
+
+// a task's sounds and MIDI go to the page, which made this Worker (task-workers.js), straight: the program's Worker
+// may be waiting for the task
+addPageSoundWords(message => self.postMessage(message)); // host-tasks.js
 // the files a task writes go back with its result (host-tasks.js finishedTask), bytes as their numbers in its JSON
 let taskFiles = new Map();
 self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "string" ? content : { bytes: Array.from(content) });
 
 
 // the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
-function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels, files, voice }) {
+function runTaskInto({ module, name, values, shared, arrays, captured, control, channels, files, voice, soundHandles, liveHandover }) {
 	Atomics.store(control, TASK_TAKEN_SLOT, 1);
 	Atomics.notify(control, TASK_TAKEN_SLOT);
 	let output = "";
 	self.takeWrittenFiles?.(files);
 	taskFiles = new Map();
 	self.joinVoice?.(voice);
+	self.joinSoundHandles(soundHandles); // host-tasks.js: the run's counter
+	self.liveHandover = liveHandover ?? {};
 	try {
-		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: sound => relay("playSamples", sound) };
-		const record = runTask(module, hooks, [], name, ints, values, arrays, captured, control, channels);
-		if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
+		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: sound => self.playSamples(sound) };
+		const record = runTask(module, hooks, [], name, values, arrays, captured, control, channels);
 		writeShared(shared, { ...record, value: taskTree(record.value), output, files: [...taskFiles] });
 	} catch (failure) {
 		console.error(failure);

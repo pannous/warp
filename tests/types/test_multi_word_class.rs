@@ -7,26 +7,14 @@ const FULL_NAME: &str = "class full name { given:text; family:text }; ";
 
 #[test]
 fn a_kebab_class_constructs() {
-	is!(
-		"class full-name{given:text; family:text}; p = full-name{given:\"Ann\", family:\"Lee\"}; p.family",
-		"Lee"
-	);
+	is!("class full-name{given:text; family:text}; p = full-name{given:\"Ann\", family:\"Lee\"}; p.family", "Lee");
 }
 
 #[test]
 fn a_class_of_several_words_is_its_kebab_name() {
-	is!(
-		&format!("{FULL_NAME}p = full name{{given:\"Ann\", family:\"Lee\"}}; p.family"),
-		"Lee"
-	);
-	is!(
-		&format!("{FULL_NAME}p = full-name{{given:\"Ann\", family:\"Lee\"}}; p.given"),
-		"Ann"
-	);
-	is!(
-		&format!("{FULL_NAME}p = full name{{given:\"Ann\", family:\"Lee\"}}; type of p"),
-		"full-name"
-	);
+	is!(&format!("{FULL_NAME}p = full name{{given:\"Ann\", family:\"Lee\"}}; p.family"), "Lee");
+	is!(&format!("{FULL_NAME}p = full-name{{given:\"Ann\", family:\"Lee\"}}; p.given"), "Ann");
+	is!(&format!("{FULL_NAME}p = full name{{given:\"Ann\", family:\"Lee\"}}; type of p"), "full-name");
 }
 
 #[test]

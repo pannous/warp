@@ -14,6 +14,7 @@ import filesScript from "../playground/host-files.js";
 import soundScript from "../playground/host-sound.js";
 import hashesScript from "../playground/host-hashes.js";
 import tasksScript from "../playground/host-tasks.js";
+import jsMembersScript from "../playground/js-members.js";
 import foreignScript from "../playground/host-foreign.js";
 import compilerScript from "../playground/host-compiler.js";
 import routesScript from "../playground/host-routes.js";
@@ -22,6 +23,17 @@ import timersScript from "../playground/host-timers.js";
 import randomScript from "../playground/host-random.js";
 import mediaScript from "../playground/host-media.js";
 import cloudWorkerScript from "../playground/cloud-worker.js";
+import cloudSiteScript from "../playground/cloud-site.js";
+import markupScript from "../playground/markup.js";
+import markupTransitionsScript from "../playground/markup-transitions.js";
+import markupFormsScript from "../playground/markup-forms.js";
+import siteScript from "../playground/site.js";
+import canvasScript from "../playground/canvas.js";
+import siteThreadScript from "../playground/site-thread.js";
+import taskWorkersScript from "../playground/task-workers.js";
+import siteWorkerScript from "../playground/site-worker.js";
+import taskWorkerScript from "../playground/task-worker.js";
+import coiServiceWorkerScript from "../playground/coi-serviceworker.js";
 
 // the host scripts by the names src/web/site.rs host_scripts_of gives them (HOST_SCRIPTS, HOST_PARTS)
 const HOST_SCRIPTS = {
@@ -31,7 +43,7 @@ const HOST_SCRIPTS = {
 	"host-sound.js": soundScript,
 	"host-hashes.js": stdScript + hashesScript,
 	"host-tasks.js": importsScript + exactScript + tasksScript,
-	"host-foreign.js": exactScript + foreignScript,
+	"host-foreign.js": exactScript + jsMembersScript + foreignScript,
 	"host-compiler.js": exactScript + compilerScript,
 	"host-routes.js": importsScript + routesScript,
 	"host-gpu.js": gpuScript,
@@ -40,6 +52,20 @@ const HOST_SCRIPTS = {
 	"host-media.js": mediaScript,
 };
 const ALWAYS_SCRIPTS = ["reader.js", "host.js"];
+// the files a browser program's site ships besides the host scripts, by the names src/host/page_parts.rs gives them
+const SITE_FILES = {
+	...HOST_SCRIPTS,
+	"markup.js": markupScript,
+	"markup-transitions.js": markupTransitionsScript,
+	"markup-forms.js": markupFormsScript,
+	"site.js": siteScript,
+	"canvas.js": canvasScript,
+	"site-thread.js": siteThreadScript,
+	"task-workers.js": jsMembersScript + taskWorkersScript,
+	"site-worker.js": siteWorkerScript,
+	"task-worker.js": taskWorkerScript,
+	"coi-serviceworker.js": coiServiceWorkerScript,
+};
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_AUTHORIZE = "https://github.com/login/oauth/authorize";
@@ -47,7 +73,11 @@ const GITHUB_TOKEN = "https://github.com/login/oauth/access_token";
 const GITHUB_USER = "https://api.github.com/user";
 const CLOUDFLARE_AUTHORIZE = "https://dash.cloudflare.com/oauth2/auth";
 const CLOUDFLARE_TOKEN = "https://dash.cloudflare.com/oauth2/token";
-const CLOUDFLARE_SCOPES = "workers-scripts.edit user-details.read account-settings.read";
+// workers-scripts.admin: only Admin creates Workers ("Workers Editor", workers-scripts.edit, updates existing ones and
+// answers a new program's upload "No access to the specified resource"); each must be among the OAuth client's scopes
+const CLOUDFLARE_SCOPES = "workers-scripts.admin user-details.read account-settings.read";
+const CLOUDFLARE_INVALID_TOKEN = 9109; // an expired or revoked token: logging in again helps, unlike a missing permission
+const CLOUDFLARE_WORKERS_DASHBOARD = "https://dash.cloudflare.com/?to=/:account/workers-and-pages";
 const SCRIPT_PREFIX = "warp-";
 const CALLBACK_PATH = "/callback";
 const NAME_PATTERN = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -153,7 +183,7 @@ function deployingStatus({ login, program, error }, late) {
 	if (error) return `${who}Not deployed: ${escapedHtml(error)}`;
 	if (!program) return `${who}Deploying: the program's link shows here as soon as it is known.`;
 	const link = `<a href="${escapedHtml(program)}">${escapedHtml(program)}</a>`;
-	return `${who}Deployed at ${link}: ${late ? "it does not answer yet, the link works once it does." : "this window opens it as soon as it answers…"}`;
+	return `${who}Deploying at ${link}: ${late ? "it does not answer yet, the link works once it does." : "this window opens it as soon as it answers…"}`;
 }
 
 // GET /deploying?ticket=: the deploy window (card user-click): the program's link as soon as the ticket knows it, and
@@ -214,7 +244,7 @@ async function ticketRequest(request, env) {
 	const [program, error] = ["program", "error"].map(field => url.searchParams.get(field));
 	if (program) checkedProgram(program);
 	if (!program && !error) throw new Refusal(400, "POST /ticket?ticket=…&program=… or &error=…");
-	await storeTicket(env, ticket, program ? { program } : { error: error.slice(0, 500) });
+	await storeTicket(env, ticket, program ? { program } : { error: error.slice(0, 500), program: undefined });
 	return json({ stored: true });
 }
 
@@ -275,9 +305,11 @@ async function finishLogin(request, env, provider) {
 async function cloudflare(token, path, init = {}) {
 	const reply = await fetch(`${CLOUDFLARE_API}${path}`, { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers } });
 	const answer = await reply.json().catch(() => ({ success: false, errors: [{ message: `HTTP ${reply.status}` }] }));
-	if (!answer.success) throw new Refusal(reply.status === 401 || reply.status === 403 ? 403 : 502,
-		`Cloudflare ${path.split("/").slice(3, 5).join("/")}: ${(answer.errors ?? []).map(error => error.message).join("; ")}`);
-	return answer.result;
+	if (answer.success) return answer.result;
+	const errors = answer.errors ?? [];
+	const expired = reply.status === 401 || errors.some(error => error.code === CLOUDFLARE_INVALID_TOKEN);
+	throw new Refusal(expired ? 401 : [403, 404].includes(reply.status) ? reply.status : 502,
+		`Cloudflare ${init.method ?? "GET"} ${path.split("/").slice(3).join("/")}: ${errors.map(error => error.message).join("; ")}`);
 }
 
 function checkedWasm(bytes) {
@@ -287,9 +319,21 @@ function checkedWasm(bytes) {
 	return bytes;
 }
 
-// POST /deploy?name=…&scripts=…, the module as the body
-async function programOf(request) {
-	return { wasm: checkedWasm(await request.arrayBuffer()), scripts: checkedScripts(new URL(request.url).searchParams.get("scripts")) };
+// POST /deploy?name=…&scripts=…, the module as the body; a browser program's site (card deploy-browser-site) names
+// its page's scripts, those of the program's Worker and every file shipped instead: ?site=…&worker=…&files=…
+async function programOf(request, name) {
+	const asked = new URL(request.url).searchParams;
+	const wasm = checkedWasm(await request.arrayBuffer());
+	if (!asked.has("site")) return { wasm, scripts: checkedScripts(asked.get("scripts")) };
+	const [scripts, workerScripts, files] = ["site", "worker", "files"].map(key => checkedSiteFiles(asked.get(key)));
+	return { wasm, site: { title: name, scripts, workerScripts, files: Object.fromEntries(files.map(file => [file, SITE_FILES[file]])) } };
+}
+
+function checkedSiteFiles(names) {
+	const asked = (names ?? "").split(",").filter(Boolean);
+	const unknown = asked.filter(name => !SITE_FILES[name]);
+	if (unknown.length) throw new Refusal(400, `warp-hosting has no site file ${unknown.join(", ")}: it needs a redeploy with this warp's web/playground`);
+	return asked;
 }
 
 function checkedName(name) {
@@ -305,26 +349,30 @@ function checkedScripts(names) {
 	return [...ALWAYS_SCRIPTS, ...asked];
 }
 
-// the program's Worker as src/web/deploy.rs worker_files makes it: worker.js, app.wasm compiled, app.bin as bytes
-function scriptForm({ wasm, scripts }) {
-	const worker = [...scripts.map(name => HOST_SCRIPTS[name]), cloudWorkerScript].join("");
+// the program's Worker as src/web/deploy.rs worker_files makes it: worker.js, app.wasm compiled, app.bin as bytes; a
+// site's worker.js serves the site (cloud-site.js) and needs only app.bin
+function scriptForm({ wasm, scripts, site }) {
+	const worker = site ? `const SITE = ${JSON.stringify(site)};\n${cloudSiteScript}` : [...scripts.map(name => HOST_SCRIPTS[name]), cloudWorkerScript].join("");
 	const form = new FormData();
 	form.append("metadata", JSON.stringify({ main_module: "worker.js", compatibility_date: COMPATIBILITY_DATE }));
 	form.append("worker.js", new File([worker], "worker.js", { type: "application/javascript+module" }));
-	form.append("app.wasm", new File([wasm], "app.wasm", { type: "application/wasm" }));
+	if (!site) form.append("app.wasm", new File([wasm], "app.wasm", { type: "application/wasm" }));
 	form.append("app.bin", new File([wasm], "app.bin", { type: "application/octet-stream" }));
 	return form;
 }
 
-// the program's address goes under the deploy's ticket (?ticket=) before the upload, so the deploy window links it at once
+const missing = refusal => { if (refusal.status === 404) return {}; throw refusal; };
+
+// the program's address goes under the deploy's ticket (?ticket=) once uploaded, so the deploy window never links a failed one
 async function upload(env, request, { token, account, script, program }) {
-	const { subdomain } = await cloudflare(token, `/accounts/${account}/workers/subdomain`);
-	const url = `https://${script}.${subdomain}.workers.dev`;
-	const ticket = new URL(request.url).searchParams.get("ticket");
-	if (ticket) await storeTicket(env, checkedTicket(ticket), { program: url });
+	const { subdomain } = await cloudflare(token, `/accounts/${account}/workers/subdomain`).catch(missing);
+	if (!subdomain) throw new Refusal(409, `the Cloudflare account has no workers.dev subdomain yet: choose one once at ${CLOUDFLARE_WORKERS_DASHBOARD}, then deploy again`);
 	await cloudflare(token, `/accounts/${account}/workers/scripts/${script}`, { method: "PUT", body: scriptForm(program) });
 	await cloudflare(token, `/accounts/${account}/workers/scripts/${script}/subdomain`, { method: "POST",
 		headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: true, previews_enabled: false }) });
+	const url = `https://${script}.${subdomain}.workers.dev`;
+	const ticket = new URL(request.url).searchParams.get("ticket");
+	if (ticket) await storeTicket(env, checkedTicket(ticket), { program: url });
 	return url;
 }
 
@@ -353,7 +401,7 @@ async function claim(env, name, owner) {
 async function deployHere(request, env, name) {
 	const owner = await user(request, env);
 	if (!env.CLOUDFLARE_API_TOKEN) throw new Refusal(501, "warp-hosting has no CLOUDFLARE_API_TOKEN yet (notes/hosting.md)");
-	const program = await programOf(request);
+	const program = await programOf(request, name);
 	await claim(env, name, owner);
 	const url = await upload(env, request, { token: env.CLOUDFLARE_API_TOKEN, account: env.ACCOUNT_ID, script: SCRIPT_PREFIX + name, program });
 	return json({ url, owner: owner.login });
@@ -367,7 +415,7 @@ async function deployToOwnAccount(request, env, name) {
 		if (accounts.length !== 1) throw new Refusal(400, `the token reaches ${accounts.length} accounts: say which (X-Cloudflare-Account)`);
 		account = accounts[0].id;
 	}
-	const program = await programOf(request);
+	const program = await programOf(request, name);
 	return json({ url: await upload(env, request, { token, account, script: name, program }) });
 }
 

@@ -1,8 +1,4 @@
-// ⚠️ TEST WITH  cargo test --features optimizer
-#![cfg(feature = "optimizer")]
-
 use crate::is;
-use warp::wasm_optimizer::{ExportMode, OptimizationMode, WasmOptimizer};
 use warp::*;
 
 #[test]
@@ -29,7 +25,6 @@ fn test_compact_int() {
 	emitter.emit_node_main(&Node::Number(Number::Int(42)));
 	let bytes = emitter.finish();
 	assert!(!bytes.is_empty());
-	is!("42", 42);
 }
 
 #[test]
@@ -40,31 +35,4 @@ fn test_compact_float() {
 	let bytes = emitter.finish();
 	assert!(!bytes.is_empty());
 	is!("3.11", 3.11);
-}
-
-#[test]
-fn test_tools_available() {
-	if std::env::var("CI").is_ok() {
-		eprintln!("Skipping: binaryen tools not available on CI");
-		return;
-	}
-	if !WasmOptimizer::tools_available() {
-		eprintln!("Skipping: wasm-opt not found");
-		return;
-	}
-	if !WasmOptimizer::tree_shaking_available() {
-		eprintln!("Skipping: wasm-metadce not found");
-	}
-}
-
-#[test]
-fn test_optimizer_graph_generation() {
-	let optimizer = WasmOptimizer::executable(OptimizationMode::Standard, vec!["main".to_string(), "init".to_string()]);
-
-	if let ExportMode::Executable { ref entry_points } = optimizer.export_mode {
-		let graph = optimizer.build_roots_graph(entry_points);
-		assert!(graph.contains("\"export\": \"main\""));
-		assert!(graph.contains("\"export\": \"init\""));
-		assert!(graph.contains("\"root\": true"));
-	}
 }

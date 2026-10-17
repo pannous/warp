@@ -1,0 +1,3 @@
+// card parameter-module-word: a parameter named like a sound word (melody) is the parameter, no `use sound` needed
+f(x, melody) := x + melody
+f(1, 2)

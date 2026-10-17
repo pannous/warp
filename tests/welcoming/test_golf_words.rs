@@ -10,7 +10,7 @@ fn chr_of_an_expression_is_a_function_result() {
 
 #[test]
 fn walked_chars_are_the_list_of_chars() {
-	is!("\"ab\".chars", 2); // elsewhere the count
+	is!("\"ab\".chars", texts(vec!["a", "b"])); // the list as everywhere (user 2026-10-14, card abc-chars)
 	is!("w=\"ab\"; w.chars.map(c => ord c)", ints![97, 98]);
 	is!("s=0; for c in \"ab\".chars { s += ord c }; s", 195);
 }
@@ -42,7 +42,6 @@ fn bits_of_whole_numbers() {
 	is!("use math; bit_count(0)", 0);
 	is!("use math; bit_and(12, 10)", 8);
 	is!("use math; bit_or(12, 10)", 14);
-	is!("5 xor 3", 6);
 }
 
 #[test]

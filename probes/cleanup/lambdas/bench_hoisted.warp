@@ -1,0 +1,10 @@
+// as bench_higher_order.warp, the lambda made once before the loop
+apply(f, x) := f(x)
+g = y => y * 2 + 1
+total = 0
+k = 0
+while k < 10000000 {
+	total += apply(g, k)
+	k += 1
+}
+total

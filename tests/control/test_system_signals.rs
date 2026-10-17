@@ -11,7 +11,7 @@ i = 0
 while not stop {
 	if i == 1 { print \"ready\" }
 	i += 1
-	sleep(10)
+	sleep(10ms)
 }
 print \"done\"
 ";
@@ -20,10 +20,7 @@ print \"done\"
 fn on_interrupt_runs_at_the_next_loop_start() {
 	let (rest, status) = interrupted_run("on_interrupt.warp", PROGRAM);
 	assert_eq!(rest, ["interrupted", "done"]);
-	assert!(
-		status.success(),
-		"the handler ended the loop, the run ends normally: {status}"
-	);
+	assert!(status.success(), "the handler ended the loop, the run ends normally: {status}");
 }
 
 /// A ctrl-c during sleep(…) ends the sleep and runs the handler at once
@@ -32,15 +29,11 @@ fn on_interrupt_cuts_a_sleep_short() {
 	let started = std::time::Instant::now();
 	let (rest, status) = interrupted_run(
 		"on_interrupt_sleep.warp",
-		"on interrupt { print \"interrupted\" }\nprint \"ready\"\nsleep(20000)\nprint \"done\"\n",
+		"on interrupt { print \"interrupted\" }\nprint \"ready\"\nsleep(20000ms)\nprint \"done\"\n",
 	);
 	assert_eq!(rest, ["interrupted", "done"]);
 	assert!(status.success(), "{status}");
-	assert!(
-		started.elapsed().as_secs() < 15,
-		"the sleep of 20 s was cut short: {:?}",
-		started.elapsed()
-	);
+	assert!(started.elapsed().as_secs() < 15, "the sleep of 20 s was cut short: {:?}", started.elapsed());
 }
 
 /// Runs the program, sends SIGINT once it printed "ready", and gives the lines it printed after that and its status
@@ -54,15 +47,8 @@ fn interrupted_run(name: &str, program: &str) -> (Vec<String>, std::process::Exi
 		.spawn()
 		.expect("warp runs");
 	let mut lines = BufReader::new(run.stdout.take().unwrap()).lines();
-	assert_eq!(
-		lines.next().and_then(Result::ok).as_deref(),
-		Some("ready"),
-		"the program started"
-	);
-	let sent = std::process::Command::new("kill")
-		.args(["-INT", &run.id().to_string()])
-		.status()
-		.expect("kill runs");
+	assert_eq!(lines.next().and_then(Result::ok).as_deref(), Some("ready"), "the program started");
+	let sent = std::process::Command::new("kill").args(["-INT", &run.id().to_string()]).status().expect("kill runs");
 	assert!(sent.success());
 	let rest: Vec<String> = lines.map_while(Result::ok).collect();
 	(rest, run.wait().expect("warp ends"))
@@ -73,10 +59,7 @@ fn interrupted_run(name: &str, program: &str) -> (Vec<String>, std::process::Exi
 fn a_timer_fires_while_main_runs() {
 	// the handler stops counting at 3: under load one loop turn can hold two check points with a tick due (its sleep's
 	// wake and the loop start), so an unbounded count could pass 3 before `n < 3` is read again
-	crate::is!(
-		"n=0; on every 10 ms { if n < 3 { n += 1 } }; while n < 3 { sleep(5 ms) }; n",
-		3
-	);
+	crate::is!("n=0; on every 10 ms { if n < 3 { n += 1 } }; while n < 3 { sleep(5 ms) }; n", 3);
 }
 
 /// `warp run` keeps a program with a timer after main: the timer goes on firing until the run is stopped
@@ -90,11 +73,7 @@ fn a_program_with_a_timer_stays_after_main() {
 		.stderr(Stdio::null())
 		.spawn()
 		.expect("warp runs");
-	let lines: Vec<String> = BufReader::new(run.stdout.take().unwrap())
-		.lines()
-		.map_while(Result::ok)
-		.take(4)
-		.collect();
+	let lines: Vec<String> = BufReader::new(run.stdout.take().unwrap()).lines().map_while(Result::ok).take(4).collect();
 	run.kill().expect("stop the run");
 	run.wait().expect("warp ends");
 	assert_eq!(lines, ["ready", "1", "2", "3"]);
@@ -113,25 +92,13 @@ fn exit_gives_the_process_its_code() {
 	let run = |name: &str, program: &str| {
 		let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
 		std::fs::write(&file, program).expect("write the program");
-		warp_command()
-			.args(["run", file.to_str().unwrap()])
-			.stderr(Stdio::null())
-			.output()
-			.expect("warp runs")
+		warp_command().args(["run", file.to_str().unwrap()]).stderr(Stdio::null()).output().expect("warp runs")
 	};
 	let coded = run("exit_code.warp", "print \"a\"\nexit(3)\nprint \"b\"\n");
-	assert_eq!(
-		(String::from_utf8_lossy(&coded.stdout).as_ref(), coded.status.code()),
-		("a\n", Some(3))
-	);
-	let ticking = run(
-		"exit_timer.warp",
-		"n = 0\non every 10 ms { n += 1; print n; if n == 2 { exit } }\nprint \"ready\"\n",
-	);
-	assert_eq!(
-		(String::from_utf8_lossy(&ticking.stdout).as_ref(), ticking.status.code()),
-		("ready\n1\n2\n", Some(0))
-	);
+	assert_eq!((String::from_utf8_lossy(&coded.stdout).as_ref(), coded.status.code()), ("a\n", Some(3)));
+	let ticking =
+		run("exit_timer.warp", "n = 0\non every 10 ms { n += 1; print n; if n == 2 { exit } }\nprint \"ready\"\n");
+	assert_eq!((String::from_utf8_lossy(&ticking.stdout).as_ref(), ticking.status.code()), ("ready\n1\n2\n", Some(0)));
 }
 
 /// `on file "x" change {…}`: a program that stays runs the handler when the file changes (or appears)
@@ -140,10 +107,7 @@ fn a_file_change_runs_its_handler() {
 	let watched = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("watched.txt");
 	std::fs::write(&watched, "one").expect("write the watched file");
 	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_file_change.warp");
-	let program = format!(
-		"on file \"{}\" change {{ print \"changed\"; exit }}\nprint \"ready\"\n",
-		watched.display()
-	);
+	let program = format!("on file \"{}\" change {{ print \"changed\"; exit }}\nprint \"ready\"\n", watched.display());
 	std::fs::write(&file, program).expect("write the program");
 	let mut run = warp_command()
 		.args(["run", file.to_str().unwrap()])

@@ -28,23 +28,12 @@ fn build_finds_or_builds_the_runtime_stub_by_itself() {
 
 	let stubless = build();
 	let complaint = String::from_utf8_lossy(&stubless.stderr);
-	assert!(
-		!stubless.status.success() && complaint.contains("warp-runtime ships next to warp"),
-		"{complaint}"
-	);
-	assert!(
-		!complaint.contains("building the runtime stub"),
-		"an installed warp never builds the stub: {complaint}"
-	);
+	assert!(!stubless.status.success() && complaint.contains("warp-runtime ships next to warp"), "{complaint}");
+	assert!(!complaint.contains("building the runtime stub"), "an installed warp never builds the stub: {complaint}");
 
 	std::fs::copy(crate::common::runtime_stub(), &stub).unwrap();
 	let built = build();
 	assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
 	let run = std::process::Command::new(&executable).output().unwrap();
-	assert_eq!(
-		String::from_utf8_lossy(&run.stdout),
-		"7\n",
-		"{}",
-		String::from_utf8_lossy(&run.stderr)
-	);
+	assert_eq!(String::from_utf8_lossy(&run.stdout), "7\n", "{}", String::from_utf8_lossy(&run.stderr));
 }

@@ -1,5 +1,5 @@
 // Reads a WASM GC result node into the JSON tree src/web/mod.rs node_from_tree turns into a Node: JavaScript cannot read
-// GC struct fields, so it calls the module's reflection exports (src/wasm_emitter/reflection.rs).
+// GC struct fields, so it calls the module's reflection exports (src/wasm_emitter/reflection/exports.rs).
 // A node is {kind, data, chain}: chain holds the nodes reached through value fields (a list's cons cells), kept flat.
 
 // the order of PAYLOAD_TAGS in reflection.rs
@@ -9,7 +9,7 @@ const KIND_FLOAT = "2";
 const KIND_MASK = 0xFFn;
 const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
 const KIND_SYMBOL = "5";
-const CYCLE_MARK = "…"; // src/wasm_reader.rs CYCLE_MARK: a node met again inside itself (objects pointing to each other)
+const CYCLE_MARK = "…"; // src/run/wasm_reader.rs CYCLE_MARK: a node met again inside itself (objects pointing to each other)
 const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
 
 function readText(module, pointer, length) {

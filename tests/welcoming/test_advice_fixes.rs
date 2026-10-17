@@ -1,6 +1,6 @@
 //! Advice whose preferred form can replace some text offers it as an "I meant" fix (card advise-fix): the playground
 //! shows it as a button like a hint's; advice that names no replacement (`on … before the loop`) stays without one
-use warp::fixits::{fixed, Fix};
+use warp::errors::fixits::{fixed, Fix};
 use warp::normalize::{capture_hints, CapturedHint};
 use warp::wasm_emitter::eval;
 
@@ -28,11 +28,7 @@ fn a_block_assignment_offers_global_at_main() {
 
 #[test]
 fn then_after_a_comparison_offers_the_pipe() {
-	assert_advice_fix(
-		"yes_no(b) := if b then \"y\" else \"n\"; 1 < 2 then yes_no",
-		"(1<2) |> yes_no",
-		"'y'",
-	);
+	assert_advice_fix("yes_no(b) := if b then \"y\" else \"n\"; 1 < 2 then yes_no", "(1<2) |> yes_no", "'y'");
 }
 
 #[test]

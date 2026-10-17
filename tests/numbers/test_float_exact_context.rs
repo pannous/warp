@@ -3,14 +3,8 @@ use crate::is;
 
 #[test]
 fn test_float_read_in_exact_context_is_refused_loudly() {
-	common::fails_with(
-		"f(x:float) := [10,20,30][x]; f(2.0)",
-		"is a float where an exact Int is expected",
-	);
-	common::fails_with(
-		"f(x:float) := x and 1; f(2.5)",
-		"is a float where an exact Int is expected",
-	);
+	common::fails_with("f(x:float) := [10,20,30][x]; f(2.0)", "is a float where an exact Int is expected");
+	common::fails_with("f(x:float) := x and 1; f(2.5)", "is a float where an exact Int is expected");
 }
 
 #[test]
@@ -22,10 +16,7 @@ fn test_explicit_cast_truncates_a_float() {
 
 #[test]
 fn test_ffi_float_result_in_exact_context_is_refused_loudly() {
-	common::fails_with(
-		"import fabs from m; [10,20,30][fabs(0-2.5)]",
-		"fabs is a float where an exact Int is expected",
-	);
+	common::fails_with("import fabs from m; [10,20,30][fabs(0-2.5)]", "fabs is a float where an exact Int is expected");
 	is!("import fabs from m; fabs(0-2.5) % 2", 0.5);
 }
 
@@ -55,16 +46,10 @@ fn test_real_holds_roots_and_exact_unions_refuse_floats() {
 	is!("x: real = 1; x = sqrt(2); x > 1.4", true);
 	is!("f(x: real) := x * 3; f(1/3)", 1);
 	is!("f(x: real) := x > 1.4; f(sqrt(2))", true);
-	common::fails_with(
-		"x: rational|int = sqrt(2)",
-		"√(2) is a float where an exact rational is expected",
-	);
+	common::fails_with("x: rational|int = sqrt(2)", "√(2) is a float where an exact rational is expected");
 	is!("x: int|rational = 1/3; x * 3", 1);
 	common::fails_with("x: int|text = sqrt(2)", "not an int or text");
-	common::fails_with(
-		"f(x: int or text) := x; f(sqrt(2))",
-		"f needs an int or text for parameter x",
-	);
+	common::fails_with("f(x: int or text) := x; f(sqrt(2))", "f needs an int or text for parameter x");
 }
 
 // card typed-real: a variable declared real keeps the exact root, as an undeclared one does; it was stored as a float

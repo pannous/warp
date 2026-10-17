@@ -7,14 +7,8 @@ const PERSON: &str = "class person { first: text; last: text }";
 #[test]
 fn a_known_instance_reads_its_field() {
 	is!(&format!("{PERSON}\nn = person(\"Ada\", \"Lovelace\")\nn.first"), "Ada");
-	is!(
-		&format!("{PERSON}\nn = person(\"Ada\", \"Lovelace\")\nn.first + \" \" + n.last"),
-		"Ada Lovelace"
-	);
-	is!(
-		"class full name { first: text; last: text }\nn = full name(\"Ada\", \"Lovelace\")\nn.last",
-		"Lovelace"
-	);
+	is!(&format!("{PERSON}\nn = person(\"Ada\", \"Lovelace\")\nn.first + \" \" + n.last"), "Ada Lovelace");
+	is!("class full name { first: text; last: text }\nn = full name(\"Ada\", \"Lovelace\")\nn.last", "Lovelace");
 }
 
 #[test]

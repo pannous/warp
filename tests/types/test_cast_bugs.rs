@@ -28,8 +28,8 @@ fn a_one_character_text_can_be_indexed() {
 
 #[test]
 fn a_text_as_list_is_its_characters() {
-	assert_eq!(text_of("\"abc\" as list"), "[\"a\" \"b\" \"c\"]");
-	assert_eq!(text_of("\"a\" as list"), "[\"a\"]");
+	assert_eq!(text_of("\"abc\" as list"), "['a' 'b' 'c']");
+	assert_eq!(text_of("\"a\" as list"), "['a']");
 	assert_eq!(text_of("[1 2] as list"), "[1 2]");
 }
 
@@ -47,4 +47,12 @@ fn nonsense_casts_are_loud() {
 	loud_cast_error("[1 2] as int");
 	loud_cast_error("[1 2] as float");
 	loud_cast_error("[1 2] as char");
+}
+
+#[test]
+fn a_parameter_as_list_takes_lists_and_texts() {
+	is!("l(x) := x as list; 3", 3); // an uncalled definition compiles
+	assert_eq!(text_of("l(x) := x as list; l([1 2]); l(\"ab\")"), "['a' 'b']");
+	assert_eq!(text_of("l(x) := x as list; l(\"ab\"); l([1 2])"), "[1 2]");
+	is!("l(x) := x as list; #l(\"abc\") + #l([1 2])", 5);
 }

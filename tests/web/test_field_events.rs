@@ -26,11 +26,8 @@ fn focus_and_blur_reach_their_handlers() {
 
 #[test]
 fn a_field_event_is_no_markup_mistake() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval("x = 0\ninput{ aria-label: \"n\" on change { x = 1 } on focus { x = 2 } }");
-	let warnings = warp::diagnostic::take_warnings();
-	assert!(
-		!warnings.iter().any(|warning| warning.message.contains("is no event")),
-		"{warnings:?}"
-	);
+	let warnings = warp::errors::diagnostic::take_warnings();
+	assert!(!warnings.iter().any(|warning| warning.message.contains("is no event")), "{warnings:?}");
 }

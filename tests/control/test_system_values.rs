@@ -6,9 +6,7 @@ use crate::is;
 use warp::Node;
 
 fn lowered(code: &str) -> String {
-	warp::pipeline::lower(code)
-		.expect("a program that needs a module")
-		.serialize()
+	warp::pipeline::lower(code).expect("a program that needs a module").serialize()
 }
 
 #[test]
@@ -26,16 +24,11 @@ fn a_program_keeps_its_own_names() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: host-word: pins the old host words signal_at/signal_daily/signal_every; one_host_word_starts_every_timer checks signal_listen"]
 fn a_listener_on_a_system_value_polls_it() {
 	let code = lowered("whenever battery < 20% { print \"plug me in\" }");
-	assert!(
-		code.contains("(system_value \"battery\")") && code.contains("20") && code.contains("on·shared"),
-		"{code}"
-	);
-	assert!(
-		code.contains("signal_every"),
-		"a program listening to the machine stays: {code}"
-	);
+	assert!(code.contains("(system_value \"battery\")") && code.contains("20") && code.contains("on·shared"), "{code}");
+	assert!(code.contains("signal_every"), "a program listening to the machine stays: {code}");
 	assert!(lowered("whenever dark mode { print \"dark\" }").contains("system_value"));
 }
 
@@ -98,10 +91,7 @@ fn method_arguments_read_system_values() {
 fn the_mouse_is_a_system_value_of_the_page() {
 	// a float source (decision exact-decimals): the pointer's pixels are a measurement
 	let read = lowered("print mouse_x");
-	assert!(
-		read.contains("system_value") && read.contains("mouse_x") && read.contains("as float"),
-		"{read}"
-	);
+	assert!(read.contains("system_value") && read.contains("mouse_x") && read.contains("as float"), "{read}");
 	let pressed = lowered("if mouse_down { print 1 }");
 	assert!(pressed.contains("(system_value mouse_down)!=0"), "{pressed}");
 	is!("mouse_y = 3; mouse_y + 1", 4);
@@ -109,11 +99,7 @@ fn the_mouse_is_a_system_value_of_the_page() {
 	#[cfg(feature = "native")]
 	assert_eq!(
 		String::from_utf8_lossy(
-			&crate::common::warp_command()
-				.args(["--no-ask", "eval", "mouse_x"])
-				.output()
-				.unwrap()
-				.stdout
+			&crate::common::warp_command().args(["--no-ask", "eval", "mouse_x"]).output().unwrap().stdout
 		)
 		.trim(),
 		"» 0"
@@ -155,9 +141,12 @@ fn window_open_is_no_without_a_window() {
 #[test]
 fn listening_to_a_system_value_gives_no_hint_about_generated_code() {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::pipeline::lower("on change online { print 1 }\n2"));
-	let shown: Vec<String> = hints
-		.iter()
-		.map(|hint| format!("{} {}", hint.position, hint.original))
-		.collect();
+	let shown: Vec<String> = hints.iter().map(|hint| format!("{} {}", hint.position, hint.original)).collect();
 	assert!(shown.is_empty(), "{shown:?}");
+}
+
+// card cleanup-signal-listen: listening to the machine polls it with the one timer word
+#[test]
+fn a_system_value_listener_starts_a_timer() {
+	assert!(lowered("whenever battery < 20% { print \"plug me in\" }").contains("signal_listen"));
 }

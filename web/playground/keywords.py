@@ -3,20 +3,23 @@
 #   keywords.py              → {"hard", "soft", "modules"} as JSON on stdout, for editor plugins
 #   keywords.py keywords.js  → the playground's keywords.js (build.sh), and keywords.txt beside it: the two lists in
 #                              words, part of what the assistant tells Claude about warp (assistant.json "guides")
-# hard and soft: src/lowering/soft_keywords.rs's lists; soft also every `const …_KEYWORD: &str = "word"` in src/, so a
+# hard and soft: src/lowering/welcoming/soft_keywords.rs's lists; soft also every `const …_KEYWORD: &str = "word"` in src/, so a
 # pass registers the word it gives meaning by naming its constant so (card where-infix)
 import glob, json, re, sys
 
-KEYWORD_LISTS = "src/lowering/soft_keywords.rs"
-MODULES = "src/modules.rs"
+KEYWORD_LISTS = "src/lowering/welcoming/soft_keywords.rs"
+MODULES = ["src/modules.rs", "src/modules/**/*.rs"]  # STD_MODULES and its aliases, wherever the modules folder keeps them
 SOURCES = "src/**/*.rs"
 KEYWORD_CONSTANT = re.compile(r'const [A-Z_]+_KEYWORD: &str = "([a-z_]+)"')
 
 def read(path):
 	return open(path, encoding="utf-8").read()
 
+def read_all(patterns):
+	return "\n".join(read(path) for pattern in patterns for path in sorted(glob.glob(pattern, recursive=True)))
+
 def listed(source, name):
-	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] = \[(.*?)\];", source, re.S).group(1))
+	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] =\s*\[(.*?)\];", source, re.S).group(1))
 
 # the standard modules `use` completes (completion.js): STD_MODULES' names, their aliases, the named constants'
 def module_names(modules):
@@ -30,7 +33,7 @@ def keywords():
 	hard = listed(lists, "HARD_KEYWORDS")
 	constants = [word for path in sorted(glob.glob(SOURCES, recursive=True)) for word in KEYWORD_CONSTANT.findall(read(path))]
 	soft = [word for word in dict.fromkeys(listed(lists, "SOFT_KEYWORDS") + listed(lists, "HIGHLIGHTED_WORDS") + constants) if word not in hard]
-	return {"hard": hard, "soft": soft, "modules": module_names(read(MODULES))}
+	return {"hard": hard, "soft": soft, "modules": module_names(read_all(MODULES))}
 
 def in_words(found):
 	return f"Keywords: {' '.join(found['hard'])}\nSoft keywords (a local may take the name): {' '.join(found['soft'])}\n"

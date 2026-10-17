@@ -24,12 +24,6 @@ fn count_stays_a_word_and_a_variable_name() {
 // program's `count = 0`
 #[test]
 fn a_global_count_does_not_hide_the_word_in_functions() {
-	is!(
-		"count = 5\ntwice() := count * 2\nsized(xs) := count(xs)\nsized([1, 2, 3]) + twice()",
-		13
-	);
-	is!(
-		"count = 5\ntwice() := count * 2\nlabel(xs) := \"n \" + count(xs)\nlabel([1, 2, 3])",
-		"n 3"
-	);
+	is!("count = 5\ntwice() := count * 2\nsized(xs) := count(xs)\nsized([1, 2, 3]) + twice()", 13);
+	is!("count = 5\ntwice() := count * 2\nlabel(xs) := \"n \" + count(xs)\nlabel([1, 2, 3])", "n 3");
 }

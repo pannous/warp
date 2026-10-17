@@ -14,20 +14,14 @@ fn a_go_block_prints_after_the_program_goes_on() {
 
 #[test]
 fn a_go_block_does_not_hold_up_the_program() {
-	is!(
-		"def hi: {sleep(1000);print('hi')}; started = clock(); go { hi() }; clock() - started < 500",
-		true
-	);
-	is!(
-		"hi() := { sleep(1000); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500",
-		true
-	);
+	is!("def hi: {sleep(1000ms);print('hi')}; started = clock(); go { hi() }; clock() - started < 500", true);
+	is!("hi() := { sleep(1000ms); print(\"hi\") }; started = clock(); go hi(); clock() - started < 500", true);
 }
 
 #[test]
 fn a_task_of_no_arguments_gives_its_value() {
-	is!("hi() := { sleep(10); \"hi\" }; await go hi()", "hi");
-	is!("def hi: { sleep(10); \"hi\" }; job = go hi(); await job", "hi");
+	is!("hi() := { sleep(10ms); \"hi\" }; await go hi()", "hi");
+	is!("def hi: { sleep(10ms); \"hi\" }; job = go hi(); await job", "hi");
 }
 
 #[test]
@@ -47,7 +41,7 @@ fn sleep_takes_a_duration() {
 #[test]
 fn go_blocks_fill_a_job_list() {
 	is!(
-		"jobs = []; for i in 1..4 { jobs.add(go { sleep(100); i * 10 }) }; await all jobs",
+		"jobs = []; for i in 1..4 { jobs.add(go { sleep(100ms); i * 10 }) }; await all jobs",
 		warp::ints(vec![10, 20, 30])
 	);
 	is!("f(n) := { job = go { n + 1 }; await job }; f(4)", 5);
@@ -60,10 +54,7 @@ fn lines_printed_by_tasks_stay_whole() {
 	let printed = crate::common::printed("for i in 10..30 { go { print(i) } }");
 	let lines: Vec<&str> = printed.lines().filter(|line| !line.starts_with('»')).collect();
 	assert_eq!(lines.len(), 20, "printed {printed:?}");
-	assert!(
-		lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()),
-		"printed {printed:?}"
-	);
+	assert!(lines.iter().all(|line| line.len() == 2 && line.parse::<i64>().is_ok()), "printed {printed:?}");
 }
 
 /// `f() := { go h(2) }` is a function in braces, no getter: no warning about running at every read
@@ -85,5 +76,5 @@ fn a_failure_nobody_awaits_ends_the_run() {
 	crate::common::fails_with("f(x) := { [1,2]#x }; go f(5); 1", "index out of range");
 	crate::common::fails_with("go { raise \"boom\" }; 1", "boom");
 	is!("f(x) := { [1,2]#x }; job = go f(5); try await job else 3", 3);
-	is!("job = go { sleep(3000); 1 }; stop job; 2", 2);
+	is!("job = go { sleep(3000ms); 1 }; stop job; 2", 2);
 }

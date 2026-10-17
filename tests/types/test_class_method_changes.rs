@@ -21,9 +21,6 @@ fn an_element_of_a_list_field_changes() {
 #[test]
 fn a_counter_of_texts_from_init() {
 	let counter = "class Counter { names = []; counts = []\n add(x) := { i = x in names; if i { counts#i += 1 } else { names.add(x); counts.add(1) } }\n init(xs) := { for x in xs { add(x) } }\n}\n";
-	is!(
-		&format!("{counter}c = Counter([\"ab\", \"cd\", \"ab\"]); c.counts#1"),
-		2
-	);
+	is!(&format!("{counter}c = Counter([\"ab\", \"cd\", \"ab\"]); c.counts#1"), 2);
 	is!(&format!("{counter}c = Counter([\"a\", \"b\", \"a\"]); c.names#2"), "b");
 }

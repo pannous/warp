@@ -20,17 +20,8 @@ fn a_sound_in_a_task_plays_its_length() {
 	let wav = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("task-sound.wav");
 	std::fs::write(&wav, warp::sound::wav(&[32768, 40000, 32768], 22050)).unwrap();
 	let played = crate::common::warp_command()
-		.args([
-			"--no-ask",
-			"eval",
-			&format!("use sound\njob = go {{ play \"{}\" }}\nawait job", wav.display()),
-		])
+		.args(["--no-ask", "eval", &format!("use sound\njob = go {{ play \"{}\" }}\nawait job", wav.display())])
 		.output()
 		.unwrap();
-	assert_eq!(
-		String::from_utf8_lossy(&played.stdout).trim(),
-		"» 1",
-		"{}",
-		String::from_utf8_lossy(&played.stderr)
-	);
+	assert_eq!(String::from_utf8_lossy(&played.stdout).trim(), "» 1", "{}", String::from_utf8_lossy(&played.stderr));
 }

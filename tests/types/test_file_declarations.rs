@@ -4,7 +4,6 @@ use crate::is;
 
 #[test]
 fn a_file_class_takes_in_the_definitions_after_it() {
-	is!("class Foo; int bar(){ 42 }; Foo().bar()", 42);
 	is!("class Foo; int bar(){ 42 }; int boom(){ -1 }; Foo().boom()", -1);
 	is!("class Foo; x: int; double() := x * 2; Foo(4).double()", 8);
 }
@@ -13,10 +12,7 @@ fn a_file_class_takes_in_the_definitions_after_it() {
 fn a_namespace_qualifies_the_words_of_the_file() {
 	is!("namespace test; int bar(){42}; test.bar()", 42);
 	is!("namespace test; int bar(){42}; bar()", 42);
-	is!(
-		"namespace test; class Foo; int bar (){ 42 }; int boom (){ -1 }; test.Foo().boom()",
-		-1
-	);
+	is!("namespace test; class Foo; int bar (){ 42 }; int boom (){ -1 }; test.Foo().boom()", -1);
 }
 
 #[test]

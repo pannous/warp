@@ -5,11 +5,10 @@
 //! as in Python and warp.
 
 use super::{assigned_locals, cell_class, function_definition, parameter_word, statements};
+use crate::lowering::nodes::typed;
 use crate::lowering::FunctionHead;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-
-const NONLOCAL_WORD: &str = "nonlocal";
 
 struct Nested {
 	name: String,
@@ -41,11 +40,8 @@ pub(super) fn lift(program: &Node, globals: &[String]) -> Result<Node, String> {
 }
 
 fn has_nested(statement: &Node) -> bool {
-	function_definition(statement).is_some_and(|outer| {
-		body_items(outer.body)
-			.iter()
-			.any(|item| function_definition(item).is_some())
-	})
+	function_definition(statement)
+		.is_some_and(|outer| body_items(outer.body).iter().any(|item| function_definition(item).is_some()))
 }
 
 fn body_items(body: &Node) -> &[Node] {
@@ -58,34 +54,21 @@ fn body_items(body: &Node) -> &[Node] {
 /// The lifted functions, then outer without them
 fn lift_from(lifted_from: &FunctionHead, globals: &[String]) -> Result<Vec<Node>, String> {
 	let (outer, parameters) = (lifted_from.name, lifted_from.parameters());
-	let (definitions, rest): (Vec<&Node>, Vec<&Node>) = body_items(lifted_from.body)
-		.iter()
-		.partition(|item| function_definition(item).is_some());
-	let rest_body = Node::List(
-		rest.into_iter().cloned().collect(),
-		Bracket::Curly,
-		Separator::Semicolon,
-	);
+	let (definitions, rest): (Vec<&Node>, Vec<&Node>) =
+		body_items(lifted_from.body).iter().partition(|item| function_definition(item).is_some());
+	let rest_body = Node::List(rest.into_iter().cloned().collect(), Bracket::Curly, Separator::Semicolon);
 	let mut outer_names: Vec<String> = parameters.iter().map(|parameter| parameter_word(parameter)).collect();
 	let outer_cells = assigned_locals(&rest_body, globals);
-	outer_names.extend(
-		outer_cells
-			.iter()
-			.filter(|cell| !outer_names.contains(cell))
-			.cloned()
-			.collect::<Vec<_>>(),
-	);
+	outer_names.extend(outer_cells.iter().filter(|cell| !outer_names.contains(cell)).cloned().collect::<Vec<_>>());
 	let mut nested: Vec<Nested> = definitions
 		.iter()
 		.map(|definition| {
 			let nested = function_definition(definition).expect("a function definition");
 			let (name, parameters, body) = (nested.name, nested.parameters(), nested.body);
 			let own: Vec<String> = parameters.iter().map(|parameter| parameter_word(parameter)).collect();
-			let references = nonlocal_names(body);
-			let locals: Vec<String> = assigned_locals(body, globals)
-				.into_iter()
-				.filter(|local| !references.contains(local))
-				.collect();
+			let references = crate::late_binding::declared_nonlocals(body);
+			let locals: Vec<String> =
+				assigned_locals(body, globals).into_iter().filter(|local| !references.contains(local)).collect();
 			let captures = outer_names
 				.iter()
 				.filter(|name| !own.contains(name) && !locals.contains(name) && body.mentions(name))
@@ -120,17 +103,9 @@ fn lift_from(lifted_from: &FunctionHead, globals: &[String]) -> Result<Vec<Node>
 		}
 	}
 	for function in &mut nested {
-		function
-			.captures
-			.sort_by_key(|capture| outer_names.iter().position(|name| name == capture));
-		if let Some(missing) = function
-			.references
-			.iter()
-			.find(|reference| !outer_cells.contains(reference))
-		{
-			return Err(format!(
-				"not in W0: nonlocal {missing} of {outer}, which {outer} does not assign"
-			));
+		function.captures.sort_by_key(|capture| outer_names.iter().position(|name| name == capture));
+		if let Some(missing) = function.references.iter().find(|reference| !outer_cells.contains(reference)) {
+			return Err(format!("not in W0: nonlocal {missing} of {outer}, which {outer} does not assign"));
 		}
 	}
 	let mut lifted = vec![];
@@ -140,10 +115,7 @@ fn lift_from(lifted_from: &FunctionHead, globals: &[String]) -> Result<Vec<Node>
 			_ => parameters
 				.iter()
 				.find(|parameter| parameter_word(parameter) == *capture)
-				.map_or_else(
-					|| Node::Symbol(capture.clone()),
-					|parameter| parameter.drop_meta().clone(),
-				),
+				.map_or_else(|| Node::Symbol(capture.clone()), |parameter| parameter.drop_meta().clone()),
 		});
 		let head = Node::List(
 			std::iter::once(Node::Symbol(function.lifted.clone()))
@@ -153,11 +125,7 @@ fn lift_from(lifted_from: &FunctionHead, globals: &[String]) -> Result<Vec<Node>
 			Bracket::Round,
 			Separator::None,
 		);
-		lifted.push(definition(
-			head,
-			function.result.as_ref(),
-			with_lifted_calls(&function.body, &nested),
-		));
+		lifted.push(definition(head, function.result.as_ref(), with_lifted_calls(&function.body, &nested)));
 	}
 	let outer_head = Node::List(
 		std::iter::once(Node::Symbol(outer.to_string()))
@@ -166,11 +134,7 @@ fn lift_from(lifted_from: &FunctionHead, globals: &[String]) -> Result<Vec<Node>
 		Bracket::Round,
 		Separator::None,
 	);
-	lifted.push(definition(
-		outer_head,
-		lifted_from.result,
-		with_lifted_calls(&rest_body, &nested),
-	));
+	lifted.push(definition(outer_head, lifted_from.result, with_lifted_calls(&rest_body, &nested)));
 	Ok(lifted)
 }
 
@@ -194,36 +158,10 @@ fn definition(head: Node, result: Option<&Node>, body: Node) -> Node {
 	Node::Key(Box::new(target), Op::Define, Box::new(body))
 }
 
-fn typed(name: &str, type_word: &str) -> Node {
-	Node::Key(
-		Box::new(Node::Symbol(name.to_string())),
-		Op::Colon,
-		Box::new(Node::Symbol(type_word.to_string())),
-	)
-}
-
-/// `nonlocal y` (parsed `nonlocal: y`)
-fn nonlocal_declaration(statement: &Node) -> Option<String> {
-	match statement.drop_meta() {
-		Node::Key(word, Op::Colon, name) if matches!(word.drop_meta(), Node::Symbol(word) if word == NONLOCAL_WORD) => {
-			Some(name.name())
-		}
-		_ => None,
-	}
-}
-
-fn nonlocal_names(body: &Node) -> Vec<String> {
-	body_items(body).iter().filter_map(nonlocal_declaration).collect()
-}
-
 fn without_nonlocal(body: &Node) -> Node {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, separator) => Node::List(
-			items
-				.iter()
-				.filter(|item| nonlocal_declaration(item).is_none())
-				.cloned()
-				.collect(),
+			items.iter().filter(|item| crate::late_binding::nonlocal_names(item).is_empty()).cloned().collect(),
 			Bracket::Curly,
 			separator.clone(),
 		),
@@ -238,9 +176,7 @@ fn with_lifted_calls(node: &Node, nested: &[Nested]) -> Node {
 		return node;
 	};
 	let Some(function) = items.first().and_then(|first| {
-		nested
-			.iter()
-			.find(|function| matches!(first.drop_meta(), Node::Symbol(name) if *name == function.name))
+		nested.iter().find(|function| matches!(first.drop_meta(), Node::Symbol(name) if *name == function.name))
 	}) else {
 		return node;
 	};
@@ -248,11 +184,7 @@ fn with_lifted_calls(node: &Node, nested: &[Nested]) -> Node {
 	let parameter_count = function.parameters.len() + function.captures.len();
 	let captured = function.captures.iter().map(|capture| match parameter_count {
 		1 => Node::Symbol(capture.clone()),
-		_ => Node::Key(
-			Box::new(Node::Symbol(capture.clone())),
-			Op::Assign,
-			Box::new(Node::Symbol(capture.clone())),
-		),
+		_ => Node::Key(Box::new(Node::Symbol(capture.clone())), Op::Assign, Box::new(Node::Symbol(capture.clone()))),
 	});
 	let items = std::iter::once(Node::Symbol(function.lifted.clone()))
 		.chain(arguments.iter().cloned())

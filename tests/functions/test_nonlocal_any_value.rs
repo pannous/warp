@@ -3,22 +3,13 @@ use crate::is;
 
 #[test]
 fn test_inner_changes_a_nonlocal_text() {
-	is!(
-		"def outer(){ s=\"a\"; def inner(){ nonlocal s; s = s + \"!\" }; inner(); inner(); s }; outer()",
-		"a!!"
-	);
+	is!("def outer(){ s=\"a\"; def inner(){ nonlocal s; s = s + \"!\" }; inner(); inner(); s }; outer()", "a!!");
 }
 
 #[test]
 fn test_inner_changes_a_nonlocal_list() {
-	is!(
-		"def outer(){ xs=[1]; def inner(){ nonlocal xs; xs = xs + [5] }; inner(); xs#2 }; outer()",
-		5
-	);
-	is!(
-		"def outer(){ xs=[1]; def inner(){ nonlocal xs; xs = xs + [2] }; inner(); inner(); count xs }; outer()",
-		3
-	);
+	is!("def outer(){ xs=[1]; def inner(){ nonlocal xs; xs = xs + [5] }; inner(); xs#2 }; outer()", 5);
+	is!("def outer(){ xs=[1]; def inner(){ nonlocal xs; xs = xs + [2] }; inner(); inner(); count xs }; outer()", 3);
 }
 
 #[test]

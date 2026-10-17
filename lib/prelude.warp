@@ -3,30 +3,52 @@
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
+// Python's `list(x)`: the list itself, a text's characters
+as_list(x) := x as list
+// `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
+// occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
+count_item(xs, x) := #filter(xs, item => item == x)
+count_of(t, part) := #split(t, part) - 1
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
-first_items(xs, n) := xs[0:min(n, count(xs))]
-last_items(xs, n) := xs[max(count(xs) - n, 0):count(xs)]
+first_items(xs, n) := xs[0: min(n, count(xs))]
+last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 // x rounded to that many digits after the point
-round_to(x, places) := round(x * 10^places) / 10^places
+round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
+// x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
+// another type declares its own `infix operator ↑(v: V, n: int) := …`
+infix operator ↑(x: number, n: number) := x ^ n
+infix operator ↓(x: number, b: number) := log(x, b)
 replace(t, old, new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
 is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
-// x as a fraction, by its continued fraction (src/real.rs computes it exactly for √2, π, … written in the program):
+// the digits of n in a base up to 36, letters past 9 (upper: true capitals): to_base(255, 16) is "ff",
+// from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
+// symbols, which needs the grapheme runtime
+to_base(n: int, base: int, upper = false) := { if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest /! base }; if n < 0 then "-" + out else out }
+from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in lower(t) { out = out * base + index_of(symbols, c) - 1 }; out }
+// how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
+// "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
+radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
+hex_text(n: int) := radix_text(n, 16, "0x")
+binary_text(n: int) := radix_text(n, 2, "0b")
+// x as a fraction, by its continued fraction (src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
-// (Python's limit_denominator), neither the first convergent that is the same float; 0 means not given
-nearest(x, kind, limit = 0, within = 0) := {
+// (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
+// convergent that is the same float. A precision replaces the default limit (`within: 1e-40` reaches beyond it)
+nearest(x, kind, limit = 1000000, within = 0) := {
 	p0 = 0; q0 = 1; p1 = 1; q1 = 0; rest = x
+	cap = if within > 0 and limit == 1000000 then 0 else limit
 	while true {
 		a = floor(rest) as int
 		q2 = q0 + a * q1
-		if limit > 0 and q2 > limit {
+		if cap > 0 and q2 > cap {
 			// the closer of the last convergent and the semiconvergent with the largest denominator in the limit
-			k = (limit - q0) div q1
+			k = (cap - q0) /! q1
 			below = (p0 + k * p1) / (q0 + k * q1)
 			above = p1 / q1
 			return if abs(above - x) <= abs(below - x) then above else below
@@ -51,3 +73,50 @@ popped_item(x, k) := if x is map then x.get(k) else x#(popped_position(x, k))
 popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x#i for i in 1 to count(x) if i != popped_position(x, k)]
 // Python's xs.clear() and m.clear() (card python-aliases, declaration_lowering cleared_collection): the empty list or map
 cleared(x) := if x is map then {} else []
+// `a .op b` where the compiler cannot tell which side is a list (broadcasting.rs, card compile-shaders): each item of
+// a list with the other side, two lists paired by index, two numbers plainly; `combined` is `(l, r) => l op r`. Both
+// sides are `any`: inferred from the body, one call with a number made it a list
+element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
+// `norm x`, `‖x‖`: a number's absolute value, a list's Euclidean length (decision S3: `count`/`length` stay the number
+// of items); magnitude is its other name (card compile-shaders)
+norm(x: any) := if x is list then { var total = 0; for i in 1 to count(x) { total = total + x#i * x#i }; sqrt(total) } else abs(x)
+magnitude(x: any) := norm(x)
+// a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
+// that color as 0xAARRGGBB, as the shader paints it; a number stays itself
+pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
+pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
+// paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
+// row) of every pixel, row by row
+paint_each(f, width, height) := paint([pixel_color(f(i % width, i /! width)) for i in 0..width * height], width, height)
+// random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
+// a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
+random_fraction(a, b) := a + random() * (b - a)
+random_until(a, b) := if a is int and b is int then a + random_below(b - a) else random_fraction(a, b)
+random_between(a, b) := if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b)
+// random(x) by the value's type (card random-dispatches): of a list one of its elements, of a whole number n one of 0…n-1,
+// of a fraction a float from 0 up to it
+random_element(xs) := xs#(random_below(count(xs)) + 1)
+random_of(x) := if x is list then random_element(x) else if x is int then random_below(x) else random_fraction(0, x)
+// random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
+random_int() := (random_below(4294967296) - 2147483648) * 4294967296 + random_below(4294967296)
+random_bool() := random_below(2) == 1
+// a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
+random_codepoint() := { n = random_below(1112064); if n >= 55296 then n = n + 2048; n as codepoint }
+// the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
+// listens; written, the window resizes
+window.width := window_width
+window.width(new_width) := set_system_value("window_width", new_width)
+window.height := window_height
+window.height(new_height) := set_system_value("window_height", new_height)
+// a program cannot resize the display: set window.width or canvas.width instead
+display.width := display_width
+display.height := display_height
+// the device pixels per length (decision display-names, other names display.dpi and display.ppi), a quantity in dpi
+// that turns lengths into px, `3 cm * display.density`; a program sets it in dpi, `display.density = 300 dpi`
+display.density := display_dpi * 1dpi
+display.density(density) := set_system_value("display_dpi", density / 1dpi)
+// width × height in px (other names display.dimensions and display.resolution)
+display.size := [display_width, display_height] px
+// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
+// float)
+display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)

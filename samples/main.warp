@@ -1,6 +1,0 @@
-#!/usr/bin/env warp
-#use lib
-puts "Hello main.warp"
-# print "Hello main.warp"
-# fun doub(float a):int{return a*2}
-42

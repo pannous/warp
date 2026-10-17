@@ -1,7 +1,7 @@
 class Team{name: text}
 class Person{name: text; age: int; team: Team}
-teams: [Team] = database.teams_probe
-people: [Person] = database.people_probe
+stored teams: [Team] in "teams_probe"
+stored people: [Person] in "people_probe"
 t0 = clock()
 for i in 1 to 2000 { t = Team("t"); teams.add(t); people.add(Person("p", i, t)) }
 t1 = clock()

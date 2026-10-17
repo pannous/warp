@@ -8,16 +8,15 @@ const CLASSES: &str = "class Team{name: text; players: [Person]}\nclass Person{n
 const SEED: &str = "teams.add(Team(\"Red\"))\nteams.add(Team(\"Blue\"))\npeople.add(Person(\"Bo\", teams#1))";
 
 fn program(tables: &str, rest: &str) -> String {
-	format!("{CLASSES}\nteams: [Team] = database.teams_{tables}\npeople: [Person] = database.people_{tables}\n{rest}")
+	format!(
+		"{CLASSES}\nstored teams: [Team] in \"teams_{tables}\"\nstored people: [Person] in \"people_{tables}\"\n{rest}"
+	)
 }
 
 #[test]
 fn adding_a_row_to_a_list_field_moves_it() {
 	eval(&program("moved", SEED));
-	is!(
-		&program("moved", "teams#2.players.add(people#1)\ncount(teams#2.players)"),
-		1
-	);
+	is!(&program("moved", "teams#2.players.add(people#1)\ncount(teams#2.players)"), 1);
 	is!(&program("moved", "people#1.team.name"), "Blue");
 	is!(&program("moved", "count(people)"), 1);
 }
@@ -25,12 +24,6 @@ fn adding_a_row_to_a_list_field_moves_it() {
 #[test]
 fn adding_a_new_instance_to_a_list_field_inserts_it() {
 	eval(&program("inserted", SEED));
-	is!(
-		&program(
-			"inserted",
-			"teams#1.players.add(Person(\"Cy\", teams#2))\ncount(teams#1.players)"
-		),
-		2
-	);
+	is!(&program("inserted", "teams#1.players.add(Person(\"Cy\", teams#2))\ncount(teams#1.players)"), 2);
 	is!(&program("inserted", "people#2.team.name"), "Red");
 }

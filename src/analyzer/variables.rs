@@ -1,8 +1,11 @@
 //! Variables and scope: collecting a program's variables, main-level bindings, the Scope of locals
 
 use super::*;
-use crate::lowering::nodes::children_rewritten;
+use crate::words::{ANY_TYPE, FLOAT_WORD, LET_WORD, MAP_WORD};
 use std::collections::HashSet;
+
+/// `var x = 1` announces a reassignable variable, plain `x = 1`
+pub(crate) const VAR_KEYWORD: &str = "var";
 
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
@@ -28,9 +31,7 @@ pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
 		let widened = std::mem::take(&mut scope.widened_bindings);
 		split_globals.extend(split);
 		*scope = before.clone();
-		scope
-			.globals
-			.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
+		scope.globals.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
 		scope.widened_bindings = widened;
 	}
 }
@@ -46,22 +47,20 @@ pub(super) fn global_binding(declaration: &Node, scope: &Scope) -> Option<Local>
 		_ => return None,
 	};
 	let (kind, type_node) = value_binding(value, scope);
-	Some(Local {
-		type_node,
-		..Local::new(0, name.clone(), kind)
-	})
+	Some(Local { type_node, ..Local::new(0, name.clone(), kind) })
 }
 
 /// Kind and type of a variable bound to `value` without a declared type; a list keeps its element type
 pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<Node>>) {
 	let kind = binding_kind(value, scope);
 	let type_name = match kind {
+		_ if super::is_code(value, scope) => Some(crate::words::CODE_WORD.to_string()),
 		Kind::List => Some(list_type_name(value, scope)),
 		Kind::Int if is_boolean(value, scope) => Some(BOOL_TYPE.to_string()),
 		// `x = 255 as hex`, `x = 255 as byte`: x shows in hex too (card hex-printing), without the byte's range
 		Kind::Int
 			if let Node::Key(_, Op::As, target) = value.drop_meta()
-				&& let Some(radix) = crate::wasm_emitter::radix::shown_radix(&target.name()) =>
+				&& let Some(radix) = crate::wasm_emitter::numbers::radix::shown_radix(&target.name()) =>
 		{
 			Some(radix.word.to_string())
 		}
@@ -77,10 +76,7 @@ pub(super) fn function_definition_body(node: &Node) -> Option<&Node> {
 		Node::Key(left, Op::Assign | Op::Define, body) if matches!(left.drop_meta(), Node::List(items, _, _) if starts_with_symbol(items)) => {
 			Some(body)
 		}
-		Node::List(items, _, _)
-			if items.len() >= 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword)) =>
-		{
+		Node::List(items, _, _) if items.len() >= 2 && items[0].symbol_name().is_some_and(is_function_keyword) => {
 			items.last()
 		}
 		_ => None,
@@ -125,11 +121,8 @@ pub(super) fn collect_variables_inner(
 		}
 		// Define (:=) always creates a variable, Assign (=) only outside structure context
 		Node::Key(left, Op::Define, right) => {
-			if let Some(name) = left.symbol_name().filter(|_| !skip_first_assign) {
-				if scope.lookup(name).is_none() && !scope.is_global(name) {
-					let kind = binding_kind(right, scope);
-					scope.define(name.to_string(), None, kind);
-				}
+			if !skip_first_assign {
+				define_new(left, right, scope);
 			}
 			visit(right, scope)
 		}
@@ -145,41 +138,48 @@ pub(super) fn collect_variables_inner(
 		// the value's variables come first, as for `=`: `r += (t = l[b]; t)` (a lowered max) widens r by t's kind
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let inner_temporaries = visit(right, scope);
-			if let Some(name) = left.symbol_name() {
-				mark_ratio(left, right, scope);
-				widen_to_float(scope, name, right);
-				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
-				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
-				if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
-					widen_to_node(scope, name, &Node::Key(left.clone(), op.base_op(), right.clone()));
-				}
-				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
-				if *op == Op::AddAssign {
-					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
-				}
-			}
+			widen_by_compound_assign(left, op, right, scope);
 			visit(left, scope) + inner_temporaries
 		}
 		// While loop needs temp locals for the result and for "the body ran"
 		Node::Key(left, Op::Do, right) => 2 + visit(left, scope) + visit(right, scope),
 		// Integer abs needs a temp local for the if-then-else pattern
-		Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => 1 + visit(right, scope),
+		Node::Key(left, Op::Abs, right) if left.is_empty_node() => 1 + visit(right, scope),
 		Node::Key(left, _, right) => visit(left, scope) + visit(right, scope),
 		// a group of statements in a structure is code: `ul{ (made = ø; for … ; made) }`, a lowered `[li{t} for t in ts]`
-		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => items
-			.iter()
-			.map(|item| collect_variables_inner(item, scope, false, false))
-			.sum(),
-		// `ran_without_abort(i, {…})` keeps the try depth of its start in a temp local (try_guard.rs)
-		Node::List(items, Bracket::Round, Separator::None)
-			if items
-				.first()
-				.is_some_and(|head| head.is_symbol(crate::wasm_emitter::RAN_WITHOUT_ABORT)) =>
-		{
-			1 + items.iter().map(|item| visit(item, scope)).sum::<u32>()
+		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => {
+			items.iter().map(|item| collect_variables_inner(item, scope, false, false)).sum()
 		}
 		Node::List(items, _, _) => items.iter().map(|item| visit(item, scope)).sum(),
 		_ => 0,
+	}
+}
+
+/// `x := v` of a name not yet a local or global defines it
+fn define_new(left: &Node, right: &Node, scope: &mut Scope) {
+	if let Some(name) = left.symbol_name() {
+		if scope.lookup(name).is_none() && !scope.is_global(name) {
+			let kind = binding_kind(right, scope);
+			scope.define(name.to_string(), None, kind);
+		}
+	}
+}
+
+/// `x += v` widens x by the kind of v: a ratio, a float, a Node of run-time kind, a list by its first append
+fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scope) {
+	let Some(name) = left.symbol_name() else {
+		return;
+	};
+	mark_ratio(left, right, scope);
+	widen_to_float(scope, name, right);
+	// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
+	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
+	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
+		widen_to_node(scope, name, &Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())));
+	}
+	// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
+	if *op == Op::AddAssign {
+		type_list_by_first_append(name, &Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone())), scope);
 	}
 }
 
@@ -271,9 +271,8 @@ pub(super) fn type_list_by_first_append(name: &str, value: &Node, scope: &mut Sc
 		return;
 	}
 	let appended_type = list_type_name(appended, scope);
-	if let Some(local) = scope
-		.own_binding_mut(name)
-		.filter(|local| local.kind == Kind::Empty && local.type_node.is_none())
+	if let Some(local) =
+		scope.own_binding_mut(name).filter(|local| local.kind == Kind::Empty && local.type_node.is_none())
 	{
 		local.kind = Kind::List;
 		local.type_node = Some(Box::new(Node::Symbol(appended_type)));
@@ -289,7 +288,7 @@ fn type_map_by_first_entry(name: &str, value: &Node, scope: &mut Scope) {
 		.own_binding_mut(name)
 		.filter(|local| local.kind == Kind::Empty && local.type_node.is_none() && !local.is_param)
 	{
-		local.type_node = Some(Box::new(Node::Symbol(super::checks::MAP_TYPE.to_string())));
+		local.type_node = Some(Box::new(Node::Symbol(MAP_WORD.to_string())));
 	}
 }
 
@@ -324,9 +323,7 @@ fn set_widened_list_type(scope: &mut Scope, name: &str, widened: String) {
 	if let Some(local) = scope.own_binding_mut(name) {
 		local.type_node = Some(type_node.clone());
 	}
-	scope
-		.widened_bindings
-		.insert(name.to_string(), (Kind::List, Some(type_node)));
+	scope.widened_bindings.insert(name.to_string(), (Kind::List, Some(type_node)));
 }
 
 /// `ys = ["a"]; ys = [3]`: a variable given lists of two element types holds the items of both, of their common type
@@ -336,10 +333,7 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 		return;
 	}
 	let assigned = list_type_name(value, scope);
-	let Some(local) = scope
-		.own_binding_mut(name)
-		.filter(|local| local.kind == Kind::List && !local.is_param)
-	else {
+	let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::List && !local.is_param) else {
 		return;
 	};
 	let Some(held) = local.type_node.as_ref().map(|type_node| type_node.name()) else {
@@ -354,9 +348,7 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 		return;
 	}
 	let common = super::checks::common_type_word(&[held_element.to_string(), assigned_element.to_string()]);
-	let widened = common.map_or(NODE_LIST_TYPE.to_string(), |element| {
-		format!("{LIST_OF_PREFIX}{element}")
-	});
+	let widened = common.map_or(NODE_LIST_TYPE.to_string(), |element| format!("{LIST_OF_PREFIX}{element}"));
 	set_widened_list_type(scope, name, widened);
 }
 
@@ -366,9 +358,8 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
 	let is_local = scope.locals.contains_key(name);
-	if let Some(local) = scope
-		.own_binding_mut(name)
-		.filter(|local| local.kind == Kind::Int && local.type_node.is_none())
+	if let Some(local) =
+		scope.own_binding_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none())
 	{
 		if float_value {
 			local.kind = Kind::Float;
@@ -384,14 +375,8 @@ pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 /// of them that do not mix (a list, then an Int; a text, then an Int) is a compile error when both kinds are evident
 /// from the source (P45, check_kind_changes); where the compiler only infers them it is held as a Node of run-time kind.
 /// Int and Float widen to Float instead (widen_to_float), a text and a character are both texts.
-pub(super) const CONCRETE_KINDS: [Kind; 6] = [
-	Kind::Int,
-	Kind::Float,
-	Kind::Text,
-	Kind::Codepoint,
-	Kind::List,
-	Kind::Symbol,
-];
+pub(super) const CONCRETE_KINDS: [Kind; 6] =
+	[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List, Kind::Symbol];
 
 pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let assigned = binding_kind(value, scope);
@@ -407,15 +392,9 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 			|| [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float))
 			|| [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint))
 	};
-	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
-	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
-	// a number of run-time kind may be a float: `out = out + x` of an element of unknown kind, `total = total + run.load`
-	let run_time_number = local.kind == Kind::Int
-		&& crate::analyzer::inference::is_run_time_kind(&assigned)
-		&& !matches!(value.drop_meta(), Node::Empty)
-		|| assigned == Kind::Data && matches!(value.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic());
-	let other_kind =
-		unknown_element || run_time_number || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
+	// a value of run-time kind may be anything: `for item in basket` after `item = 2`, `total = total + run.load`
+	let run_time_value = crate::analyzer::inference::is_run_time_kind(&assigned) && !value.is_empty_node();
+	let other_kind = run_time_value || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
@@ -426,246 +405,18 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	}
 }
 
-/// The kind a value evidently has as written: a literal, a list literal, arithmetic of numbers, or a name or call whose
-/// kind `known` gives; None for anything else (a variable, a loop variable), whose kind only inference knows
-pub(super) fn evident_kind(value: &Node, known: &HashMap<String, Kind>) -> Option<Kind> {
-	match value.drop_meta() {
-		Node::Number(Number::Float(_)) => Some(Kind::Float),
-		Node::Number(_) => Some(Kind::Int),
-		Node::Text(_) | Node::Char(_) => Some(Kind::Text),
-		Node::List(_, Bracket::Square, _) => Some(Kind::List),
-		// `3.7 as int`: the type's kind (card kind-name)
-		Node::Key(_, Op::As, type_name) => super::checks::builtin_type_kind(&type_name.drop_meta().name()),
-		Node::Key(left, op, right) if op.is_arithmetic() => {
-			match (evident_kind(left, known)?, evident_kind(right, known)?) {
-				(Kind::Int, Kind::Int) => Some(Kind::Int),
-				(Kind::Int | Kind::Float, Kind::Int | Kind::Float) => Some(Kind::Float),
-				_ => None,
-			}
-		}
-		Node::Symbol(name) => known.get(name).copied(),
-		Node::List(items, Bracket::Round, Separator::None) => match items.first().map(Node::drop_meta) {
-			Some(Node::Symbol(function)) => known.get(&format!("{function}{CALL_SUFFIX}")).copied(),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
-/// Marks a function's result in the `known` kinds of evident_kind, apart from a variable of the same name
-const CALL_SUFFIX: &str = "()";
-
-/// The result kind of each user function whose last expression's kind is evident, its declared parameters known:
-/// `f(x: int) := x + 1` gives an Int, `f() := "a"` a Text
-fn evident_results(program: &Node) -> HashMap<String, Kind> {
-	let mut ctx = Context::new();
-	extract_user_functions_inner(&mut ctx, program);
-	ctx.user_functions
-		.values()
-		.filter_map(|function| {
-			let parameters = function
-				.params
-				.iter()
-				.filter_map(|param| {
-					let kind = builtin_type_kind(annotated_builtin_type(param.annotation.as_ref()?)?)?;
-					Some((
-						param.name.clone(),
-						if kind == Kind::Codepoint { Kind::Text } else { kind },
-					))
-				})
-				.collect();
-			let kind = evident_kind(last_expression(&function.body), &parameters)?;
-			Some((format!("{}{CALL_SUFFIX}", function.name), kind))
-		})
-		.collect()
-}
-
-/// The expression a body gives: its last statement
-fn last_expression(body: &Node) -> &Node {
-	match body.drop_meta() {
-		Node::List(items, Bracket::Curly | Bracket::None, Separator::Semicolon | Separator::Newline)
-			if !items.is_empty() =>
-		{
-			last_expression(items.last().expect("not empty"))
-		}
-		Node::List(items, Bracket::Curly, _) if items.len() == 1 => last_expression(&items[0]),
-		other => other,
-	}
-}
-
-/// P45 (user: "compile error unless we are in script mode, which is not defined yet"): a variable given values of
-/// evidently different kinds that do not mix, `x = [1]; x = 5`, in the program or in one function body
-pub fn check_kind_changes(program: &Node) -> Option<Diagnostic> {
-	let mut bodies = vec![program];
-	program.visit(&mut |node| {
-		if let Node::Key(_, Op::Define, body) = node {
-			bodies.push(body);
-		}
-	});
-	let results = evident_results(program);
-	let globals = global_variables(program);
-	bodies
-		.into_iter()
-		.find_map(|body| first_kind_change(body, &mut HashMap::new(), &results, &globals))
-}
-
-/// The variables declared `global y` (at this stage late_binding has moved a function's `global y` to main)
-fn global_variables(program: &Node) -> HashSet<String> {
-	let mut globals = HashSet::new();
-	program.visit(&mut |node| {
-		if let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() {
-			if keyword.drop_meta().name() == crate::late_binding::GLOBAL {
-				let target = if let Node::Key(target, Op::Assign, _) = declared.drop_meta() {
-					target
-				} else {
-					declared
-				};
-				globals.insert(target.name());
-			}
-		}
-	});
-	globals
-}
-
-/// The evident kind of a value for P45's kind changes, with bools apart from ints: int ≰ bool, bool ≤ int (card bool-assign)
-#[derive(Clone, Copy, PartialEq)]
-pub(super) enum EvidentKind {
-	Of(Kind),
-	Bool,
-	/// a name a function definition binds, `f = x => x*2` lowered to `(f x) := x*2` included
-	Function,
-}
-
-impl EvidentKind {
-	fn of(value: &Node, results: &HashMap<String, Kind>) -> Option<EvidentKind> {
-		match value.drop_meta() {
-			Node::True | Node::False => Some(EvidentKind::Bool),
-			Node::Key(_, op, _) if op.is_comparison() => Some(EvidentKind::Bool),
-			Node::Key(_, Op::As, type_name) if super::checks::is_bool_type(&type_name.drop_meta().name()) => {
-				Some(EvidentKind::Bool)
-			}
-			Node::Key(_, Op::Arrow | Op::FatArrow, _) => Some(EvidentKind::Function),
-			_ => evident_kind(value, results).map(EvidentKind::Of),
-		}
-	}
-
-	/// The kind a variable that was `self` has after it is given `now`, None when `now` does not mix with it
-	fn given(self, now: EvidentKind) -> Option<EvidentKind> {
-		use EvidentKind::{Bool, Function, Of};
-		match (self, now) {
-			(Bool, Bool) => Some(Bool),
-			(Function, Function) => Some(Function),
-			(Of(Kind::Int | Kind::Float), Bool) => Some(self),
-			(Of(was), Of(now)) if was == now => Some(self),
-			(Of(Kind::Int | Kind::Float), Of(Kind::Int | Kind::Float)) => {
-				Some(if now == Of(Kind::Float) { now } else { self })
-			}
-			_ => None,
-		}
-	}
-
-	fn with_article(self) -> String {
-		match self {
-			EvidentKind::Bool => "a Bool".to_string(),
-			EvidentKind::Function => "a function".to_string(),
-			EvidentKind::Of(kind) => kind_with_article(kind),
-		}
-	}
-}
-
-/// Walks the assignments in program order, not into function definitions or lambdas (their own scopes);
-/// `kinds` holds each variable's evident kind, None once it was given a value of no evident kind
-pub(super) fn first_kind_change(
-	node: &Node,
-	kinds: &mut HashMap<String, Option<EvidentKind>>,
-	results: &HashMap<String, Kind>,
-	globals: &HashSet<String>,
-) -> Option<Diagnostic> {
-	match node.drop_meta() {
-		Node::Key(head, Op::Define, value) => match head.drop_meta() {
-			// `(f x) := …`: f names a function from here on; its body gives the variables it shares, the globals and
-			// its `nonlocal` ones, values of their kinds (card nonlocal-assign)
-			Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-				given_kind(&items[0].name(), Some(EvidentKind::Function), value, kinds).or_else(|| {
-					let nonlocals = crate::late_binding::declared_nonlocals(value);
-					let is_shared = |name: &String| globals.contains(name) || nonlocals.contains(name);
-					let mut body_kinds: HashMap<_, _> = kinds
-						.iter()
-						.filter(|(name, _)| is_shared(name))
-						.map(|(name, kind)| (name.clone(), *kind))
-						.collect();
-					let change = first_kind_change(value, &mut body_kinds, results, globals);
-					kinds.extend(body_kinds.into_iter().filter(|(name, _)| is_shared(name)));
-					change
-				})
-			}
-			_ => None,
-		},
-		Node::Key(_, Op::Arrow | Op::FatArrow, _) => None,
-		Node::Key(target, Op::Assign, value) => {
-			if let Some(change) = first_kind_change(value, kinds, results, globals) {
-				return Some(change);
-			}
-			let Node::Symbol(name) = target.drop_meta() else {
-				return None;
-			};
-			given_kind(name, EvidentKind::of(value, results), value, kinds)
-		}
-		Node::Key(left, _, right) => first_kind_change(left, kinds, results, globals)
-			.or_else(|| first_kind_change(right, kinds, results, globals)),
-		Node::List(items, _, _) => items
-			.iter()
-			.find_map(|item| first_kind_change(item, kinds, results, globals)),
-		_ => None,
-	}
-}
-
-/// The variable `name` is given `value` of the evident kind `given`: the kinds it holds from here on, or the change
-fn given_kind(
-	name: &str,
-	given: Option<EvidentKind>,
-	value: &Node,
-	kinds: &mut HashMap<String, Option<EvidentKind>>,
-) -> Option<Diagnostic> {
-	// a first evident value fixes the kind (Int widens to Float); any value of no evident kind ends the check
-	let kind = match (kinds.get(name).copied(), given) {
-		(None, given) => given,
-		// P199: 1 and 0 are yes and no, a bool variable stays one
-		(Some(Some(EvidentKind::Bool)), Some(_)) if crate::analyzer::is_zero_or_one(value) => Some(EvidentKind::Bool),
-		(Some(Some(was)), Some(now)) => match was.given(now) {
-			Some(kind) => Some(kind),
-			None => {
-				let message = format!(
-					"{name} was {}, is given {}: use another name",
-					was.with_article(),
-					now.with_article()
-				);
-				return Some(Diagnostic::at(value, message));
-			}
-		},
-		_ => None,
-	};
-	kinds.insert(name.to_string(), kind);
-	None
-}
-
-/// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
 /// The kind of the `index`-th name of `x, y = …`: the tuple function's value kind, or that of the value in that position
 pub(super) fn destructured_kind(values: &[Node], index: usize, scope: &Scope) -> Kind {
 	match values {
 		[call] => call
 			.call_parts()
-			.and_then(|(function, _)| {
-				scope
-					.function_kinds
-					.get(&crate::tuples::element_key(function, index))
-					.copied()
-			})
+			.and_then(|(function, _)| scope.function_kinds.get(&crate::tuples::element_key(function, index)).copied())
 			.unwrap_or(Kind::Data),
 		_ => values.get(index).map_or(Kind::Data, |value| binding_kind(value, scope)),
 	}
 }
 
+/// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
 pub(super) fn binding_kind(value: &Node, scope: &Scope) -> Kind {
 	held_kind(value, || infer_type(value, scope))
 }
@@ -691,9 +442,9 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 	let type_name = type_name.as_str();
 	match type_name.strip_suffix('?') {
 		Some(_) => Some(Kind::Empty),
-		None if super::user_functions::names_empty_type(type_node) => Some(Kind::Empty),
+		None if super::annotations::names_empty_type(type_node) => Some(Kind::Empty),
 		// `y: any`: any value, held as a Node, never the kind of the first value given (card yes-stores)
-		None if type_name == crate::type_kinds::UNTYPED_FIELD => Some(Kind::Empty),
+		None if type_name == ANY_TYPE => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
 		// `number` keeps whatever number it is given, an exact 1/3 or a float (card number-keeps-exact)
@@ -725,312 +476,18 @@ pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(Str
 	captured
 }
 
-/// A function may change a main-level variable only when it is declared `global` (wiki/effects.md: State effect).
-/// Assigning one from a function would otherwise silently either shadow it (Python) or mutate it (JavaScript):
-/// reading or updating it first (`n += 1`) is an error that educates; a fresh `n = value` is ambiguous and asks
-/// (`local-or-global`). Names the user means as main's variable become `global` declarations of the program.
-pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
-	let mut ctx = Context::new();
-	extract_user_functions_inner(&mut ctx, &program);
-	let mut main = Scope::new();
-	// `f := (y = 1; y * it)`: y is f's own, no main-level variable
-	let defined: HashSet<String> = ctx.user_functions.keys().cloned().collect();
-	collect_variables(&without_block_bodies(program.clone(), &defined), &mut main);
-	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
-	functions.sort_by(|a, b| a.name.cmp(&b.name));
-	let mut meant_global: Vec<String> = vec![];
-	let blocks = block_function_names(&program);
-	let mut outside_blocks = Scope::new(); // a variable a block binds for itself is no outer variable
-	collect_variables(&without_block_bodies(program.clone(), &blocks), &mut outside_blocks);
-	// a used module's functions never see the program's variables (card module-locals)
-	for function in functions
-		.into_iter()
-		.filter(|function| !crate::modules::is_module_definition(&function.name))
-	{
-		let looped = crate::lowering::for_loop::loop_variables(&function.body);
-		let is_main_variable = |name: &String| {
-			!is_compiler_temporary(name)
-				&& main.lookup(name).is_some()
-				&& !main.is_global(name)
-				&& !function.params.iter().any(|param| param.name == *name)
-				&& !declares_local(&function.body, name)
-				&& !looped.contains(name)
-		};
-		let mut decided: HashSet<&String> = HashSet::new();
-		for (node, name) in find_changes(&function.body, &is_main_variable) {
-			if !decided.insert(name) {
-				continue;
-			}
-			if blocks.contains(&function.name) {
-				if outside_blocks.lookup(name).is_some() {
-					educate_block_assignment(node, name, &function.name, main_assignment(&program, name));
-				}
-				continue;
-			}
-			if !starts_with_fresh_binding(&function.body, name) {
-				return Err(Diagnostic::at(node, format!(
-					"{name} is a main-level variable: declare it `global {name}` to change it from a function, or use a new local name"))
-					.fix(format!("global {name}")).into_error());
-			}
-			if ask_local_or_global(node, name, &function.name, main_assignment(&program, name))? == MAIN_LEVEL_READING
-				&& !meant_global.contains(name)
-			{
-				meant_global.push(name.clone());
-			}
-		}
-	}
-	Ok(declare_global(program, &meant_global))
-}
-
-/// The functions defined as a block of statements, `inc := {x = x+1}`
-pub(super) fn block_function_names(program: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	program.visit(&mut |node| {
-		if let Node::Key(name, Op::Define, body) = node {
-			if let (Node::Symbol(name), true) = (name.drop_meta(), is_statement_block(body)) {
-				names.insert(name.clone());
-			}
-		}
-	});
-	names
-}
-
-pub(super) fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node {
-	match node {
-		Node::Key(name, Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(name) if blocks.contains(name)) => {
-			Node::Empty
-		}
-		other => children_rewritten(other, |child| without_block_bodies(child, blocks)),
-	}
-}
-
-/// A block captures the outer variables by value (user decision D7): its assignment changes the block's own copy,
-/// so `x=1; inc:={x=x+1}; do inc; x` stays 1. Educate toward the forms that change x: `global x`, or returning the value.
-pub(super) fn educate_block_assignment(assignment: &Node, name: &str, block: &str, main_assignment: Option<&Node>) {
-	crate::normalize::set_position_of(assignment);
-	let written = crate::normalize::operand_text(assignment);
-	let reason = format!("the block {block} captures {name} by value: its change stays inside the block");
-	crate::normalize::advise(
-		&written,
-		&format!("global {name}"),
-		&reason,
-		global_at_main(&reason, name, main_assignment),
-	);
-	crate::normalize::advise(
-		&written,
-		&format!("{name} = {block}()"),
-		"or return the value from the block and assign it",
-		None,
-	);
-}
-
-pub(super) const LOCAL_OR_GLOBAL: &str = "local-or-global";
-pub(super) const MAIN_LEVEL_READING: usize = 1;
-
-/// The main-level statement that first assigns `name`: `n=0` of `n=0; def f(x){n=5;x}`
-pub(super) fn main_assignment<'a>(program: &'a Node, name: &str) -> Option<&'a Node> {
-	let statements = match program.drop_meta() {
-		Node::List(items, _, _) => items.as_slice(),
-		_ => std::slice::from_ref(program),
-	};
-	statements
-		.iter()
-		.find(|statement| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if target.is_symbol(name)))
-}
-
-/// `n = …` inside f where main has an n: a new local of f (the default, as in Python) or main's n? The fix of main's n
-/// declares it where main assigns it: `global n=0`
-pub(super) fn ask_local_or_global(
-	assignment: &Node,
-	name: &str,
-	function: &str,
-	main_assignment: Option<&Node>,
-) -> Result<usize, Node> {
-	use crate::diagnostic::{ask, reading, Ask, Fallback};
-	let question =
-		format!("does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}?");
-	let main_level = reading(&format!("the main-level {name}"), &format!("global {name}"));
-	let main_level = match global_at_main(&main_level.meaning, name, main_assignment) {
-		Some(fix) => main_level.fixed_by(fix),
-		None => main_level.replacing("", ""), // no main-level assignment to declare: no edit
-	};
-	let readings = vec![
-		reading(&format!("a new local of {function}"), &format!("let {name} = …"))
-			.replacing(format!("{name} ="), format!("let {name} =")),
-		main_level,
-	];
-	ask(&Ask::new(LOCAL_OR_GLOBAL, question, readings, Fallback::Warning)
-		.written(&format!("{name} = …"))
-		.at_node(assignment))
-}
-
-/// `global n=0` where main assigns n: the fix that makes every `n = …` change main's n; none without such an assignment
-fn global_at_main(meaning: &str, name: &str, main_assignment: Option<&Node>) -> Option<crate::fixits::Fix> {
-	let (line, column) = main_assignment.and_then(crate::diagnostic::position)?;
-	Some(crate::fixits::fix(meaning, format!("{name} ="), format!("global {name} =")).at(line, column))
-}
-
-/// `let n = …`, `var n = …`, `const n = …` in `body`: n is explicitly the function's own
-pub(super) fn declares_local(body: &Node, name: &str) -> bool {
-	let mut declared = false;
-	body.visit(&mut |node| {
-		if let Node::List(items, _, _) = node {
-			if let [keyword, declaration] = items.as_slice() {
-				declared |= matches!(keyword.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
-					&& global_binding(declaration, &Scope::new()).is_some_and(|binding| binding.name == name);
-			}
-		}
-	});
-	declared
-}
-
-/// The program's first main-level assignment of each name becomes its `global` declaration (`global n` if none)
-pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
-	if names.is_empty() {
-		return program;
-	}
-	let as_global = |declaration: Node| {
-		Node::Key(
-			Box::new(Node::Symbol("global".to_string())),
-			Op::Colon,
-			Box::new(declaration),
-		)
-	};
-	let (mut items, bracket, separator) = match program {
-		Node::List(items, bracket, separator) => (items, bracket, separator),
-		single => (vec![single], Bracket::None, Separator::Newline),
-	};
-	for name in names {
-		let assigns = |assignment: &&Node| matches!(assignment, Node::Key(target, Op::Assign, _) if declared_name(target) == Some(name));
-		let found = items.iter().enumerate().find_map(|(index, item)| {
-			statement_assignment(item)
-				.filter(assigns)
-				.map(|assignment| (index, assignment.clone()))
-		});
-		match found {
-			Some((index, assignment)) => items[index] = as_global(assignment),
-			None => items.insert(0, as_global(Node::Symbol(name.clone()))),
-		}
-	}
-	Node::List(items, bracket, separator)
-}
-
-/// The assignment a main-level statement makes: `k = v`, and of the constant `const k = v` (as `global const k = v`)
-fn statement_assignment(item: &Node) -> Option<&Node> {
-	match item.drop_meta() {
-		Node::List(items, _, _) => match items.as_slice() {
-			[keyword, assignment] if is_constant_keyword(keyword) => Some(assignment.drop_meta()),
-			_ => None,
-		},
-		assignment => Some(assignment),
-	}
-}
-
-/// The variable a declaration binds: `k` of `k` and of the typed `k: int`
-fn declared_name(target: &Node) -> Option<&String> {
-	match target.drop_meta() {
-		Node::Symbol(name) => Some(name),
-		Node::Key(name, Op::Colon, _) => declared_name(name),
-		_ => None,
-	}
-}
-
-/// Is the first mention of `name` in `body` a plain `name = value` not reading it (`primes = []`)? Then the body
-/// binds its own local, as in Python; reading or updating it first (`n += 1`, `xs#i = v`) means main's variable.
-pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
-	let mut first_mention = None;
-	body.visit(&mut |node| {
-		if first_mention.is_some() {
-			return;
-		}
-		match node {
-			Node::Key(target, Op::Assign, value) if target.is_symbol(name) => {
-				let mut reads = false;
-				value.visit(&mut |part| reads |= matches!(part, Node::Symbol(symbol) if symbol == name));
-				first_mention = Some(!reads);
-			}
-			Node::Symbol(symbol) if symbol == name => first_mention = Some(false),
-			_ => {}
-		}
-	});
-	first_mention.unwrap_or(false)
-}
-
-/// The assignments (kept with their positions) whose changed variable satisfies `wanted`, in source order
-pub(crate) fn find_assignments<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
-	find_changes_by(node, wanted, assignment_target_root)
-}
-
-/// The assignments and list updates (`xs.add(x)`, lowered to an assignment later) whose variable satisfies `wanted`
-fn find_changes<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
-	find_changes_by(node, wanted, |node| {
-		assignment_target_root(node).or_else(|| updated_list_root(node))
-	})
-}
-
-fn find_changes_by<'a>(
-	node: &'a Node,
-	wanted: &dyn Fn(&String) -> bool,
-	changed: fn(&Node) -> Option<&String>,
-) -> Vec<(&'a Node, &'a String)> {
-	let mut found: Vec<(&'a Node, &'a String)> = changed(node.drop_meta())
-		.filter(|name| wanted(name))
-		.map(|name| (node, name))
-		.into_iter()
-		.collect();
-	match node.drop_meta() {
-		Node::Key(left, _, right) => found.extend(
-			find_changes_by(left, wanted, changed)
-				.into_iter()
-				.chain(find_changes_by(right, wanted, changed)),
-		),
-		Node::List(items, _, _) => found.extend(items.iter().flat_map(|item| find_changes_by(item, wanted, changed))),
-		_ => {}
-	}
-	found
-}
-
-/// The list variable a list method changes: `xs` in `xs.add(x)`, `xs.pop()`
-fn updated_list_root(node: &Node) -> Option<&String> {
-	let Node::Key(target, Op::Dot, call) = node else {
-		return None;
-	};
-	let Node::List(items, _, _) = call.drop_meta() else {
-		return None;
-	};
-	let is_update =
-		matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if is_list_mutating_method(method));
-	match target.drop_meta() {
-		Node::Symbol(name) if is_update => Some(name),
-		_ => None,
-	}
-}
-
-/// The variable an assignment changes: `n` in `n = …`, `n += …`, `n++` and `xs#i = …`
-pub(super) fn assignment_target_root(node: &Node) -> Option<&String> {
-	let target = match node {
-		Node::Key(target, Op::Assign | Op::Inc | Op::Dec, _) => target,
-		Node::Key(target, op, _) if op.is_compound_assign() => target,
-		_ => return None,
-	};
-	let mut target = target.drop_meta();
-	// `xs#i`, `p.x`, and the declared `k: int`
-	while let Node::Key(container, Op::Hash | Op::Dot | Op::Colon, _) = target {
-		target = container.drop_meta();
-	}
-	match target {
-		Node::Symbol(name) => Some(name),
-		_ => None,
-	}
-}
+/// The return kinds of user functions, shared by every scope built from them (a Scope is cloned often)
+pub type FunctionKinds = std::rc::Rc<HashMap<String, Kind>>;
+/// Variables that hold a closure → `closure_new` targets they may contain, shared like FunctionKinds
+pub type ClosureTargets = std::rc::Rc<HashMap<String, HashSet<String>>>;
 
 /// Scope for tracking variable bindings
 #[derive(Clone, Debug, Default)]
 pub struct Scope {
 	pub locals: HashMap<String, Local>,
-	pub function_kinds: HashMap<String, Kind>, // Return kinds of user functions, which shadow FFI names like `pow`
+	pub function_kinds: FunctionKinds, // Return kinds of user functions, which shadow FFI names like `pow`
 	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
-	pub closure_variable_targets: HashMap<String, HashSet<String>>,
+	pub closure_variable_targets: ClosureTargets,
 	pub globals: HashMap<String, Local>, // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
 	/// Locals a later write widened (an int to a float, a list's element type): their kind and type from the start
 	/// (collect_variables)
@@ -1043,15 +500,12 @@ impl Scope {
 		Scope::default()
 	}
 
-	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
-		Scope {
-			function_kinds,
-			..Scope::default()
-		}
+	pub fn with_function_kinds(function_kinds: impl Into<FunctionKinds>) -> Self {
+		Scope { function_kinds: function_kinds.into(), ..Scope::default() }
 	}
 
-	pub fn with_closure_targets(mut self, closure_variable_targets: HashMap<String, HashSet<String>>) -> Self {
-		self.closure_variable_targets = closure_variable_targets;
+	pub fn with_closure_targets(mut self, closure_variable_targets: impl Into<ClosureTargets>) -> Self {
+		self.closure_variable_targets = closure_variable_targets.into();
 		self
 	}
 
@@ -1067,9 +521,7 @@ impl Scope {
 	}
 
 	pub fn global(&self, name: &str) -> Option<&Local> {
-		self.globals
-			.get(name)
-			.or_else(|| self.parent.as_ref().and_then(|parent| parent.global(name)))
+		self.globals.get(name).or_else(|| self.parent.as_ref().and_then(|parent| parent.global(name)))
 	}
 
 	/// The local or declared global a name refers to, for its kind and type
@@ -1086,10 +538,7 @@ impl Scope {
 	}
 
 	pub fn function_kind(&self, name: &str) -> Option<Kind> {
-		self.function_kinds
-			.get(name)
-			.copied()
-			.or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
+		self.function_kinds.get(name).copied().or_else(|| self.parent.as_ref().and_then(|p| p.function_kind(name)))
 	}
 
 	/// A parameter here: it shadows a function of its name (`g(f, b) := [f, b]` lists f)
@@ -1099,9 +548,7 @@ impl Scope {
 
 	/// Look up a variable by name, checking parent scopes
 	pub fn lookup(&self, name: &str) -> Option<&Local> {
-		self.locals
-			.get(name)
-			.or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
+		self.locals.get(name).or_else(|| self.parent.as_ref().and_then(|p| p.lookup(name)))
 	}
 
 	/// The names of the variables in this scope and its parents
@@ -1132,7 +579,7 @@ impl Scope {
 	}
 
 	/// Define a function parameter, with its declared type (`r: any`)
-	pub fn define_param(&mut self, param: &crate::context::Param, kind: Kind) -> Local {
+	pub fn define_param(&mut self, param: &crate::compiler::context::Param, kind: Kind) -> Local {
 		let mut local = self.define(param.name.clone(), param.annotation.clone().map(Box::new), kind);
 		local.is_param = true;
 		local.declared = param.annotation.is_some();
@@ -1152,4 +599,17 @@ impl Scope {
 	pub fn local_count(&self) -> u32 {
 		self.locals.len() as u32
 	}
+}
+
+pub(crate) fn is_constant_keyword(node: &Node) -> bool {
+	node.symbol_name().is_some_and(|word| CONSTANT_KEYWORDS.contains(&word))
+}
+
+pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
+	node.symbol_name().is_some_and(is_declaration_word)
+}
+
+/// `var`, `let`, `const`, `val` …: a word declaring the name after it
+pub(crate) fn is_declaration_word(word: &str) -> bool {
+	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == LET_WORD
 }

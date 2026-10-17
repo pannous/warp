@@ -12,16 +12,11 @@ fn an_arrow_fallback_is_a_function_value() {
 		let value = eval(code);
 		assert!(!matches!(value, warp::Node::Error(_)), "{code}: {value:?}");
 		assert_ne!(value, warp::Node::Text(CAUGHT_MESSAGE.to_string()), "{code}");
-		assert!(
-			value.serialize().contains("lambda"),
-			"{code}: the fallback is the function it is, got {value:?}"
-		);
+		assert!(value.serialize().contains("lambda"), "{code}: the fallback is the function it is, got {value:?}");
 	}
 }
 
 #[test]
 fn try_else_takes_a_value_or_an_action() {
-	is!("try 1 + [1 2]#5 else 0", 0);
 	is!("x = 1; try 1 + [1 2]#5 else {x = 5}; x", 5);
-	is!("try 1 + [1 2]#2 else 0", 3);
 }

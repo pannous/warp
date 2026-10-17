@@ -1,11 +1,11 @@
 // card hint-comment-floordiv: `expr  // result`, a comment set apart by two spaces or a tab, is the samples' habit of
 // writing the result beside the code; it gets no floor-division note and stays a comment
-use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::normalize::capture_hints;
 
 fn slash_notes_and_value(code: &str) -> (usize, warp::Node) {
 	let (value, hints) = capture_hints(|| warp::wasm_emitter::eval(code));
-	let notes = hints.iter().filter(|hint| hint.canonical == "a//b").count();
+	let notes = hints.iter().filter(|hint| hint.canonical == "a /! b").count();
 	(notes, value)
 }
 

@@ -36,7 +36,7 @@ fn test_nested_for() {
 	is!("n=0;for a in [1 2] {for b in [1 2 3] {n+=1}};n", 6);
 }
 
-#[test] // samples/snake.warp: a list-valued statement in a loop body was read as a number ("not an int")
+#[test] // samples/advanced/snake.warp: a list-valued statement in a loop body was read as a number ("not an int")
 fn test_loop_body_with_a_list_statement() {
 	is!("x=[1]; for t in 1 to 2 { x }; 0", 0);
 	is!("def f() { return [1] }; for t in [1,2] { f() }; 0", 0);
@@ -45,29 +45,18 @@ fn test_loop_body_with_a_list_statement() {
 
 /// card todo-app robustness: the iterable of a loop may be a phrase, `for todo in todos sorted by priority {…}`
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: `sorted by` phrase parked until card prepositions-call"]
 fn a_loop_walks_a_filter_or_a_sorted_list() {
 	is!("xs = [3, 1, 2]; s = 0; for x in xs where it > 1 { s += x }; s", 5);
-	is!(
-		"xs = [{p: 3}, {p: 1}]; s = \"\"; for x in xs sorted by p { s += x.p }; s",
-		"13"
-	);
-	is!(
-		"xs = [3, 1, 2]; s = 0; for x in xs where it > 1 and it < 3 { s += x }; s",
-		2
-	);
+	is!("xs = [{p: 3}, {p: 1}]; s = \"\"; for x in xs sorted by p { s += x.p }; s", "13");
+	is!("xs = [3, 1, 2]; s = 0; for x in xs where it > 1 and it < 3 { s += x }; s", 2);
 }
 
 // a computed range end is evaluated once, before the loop, as a walked list is: growing xs in the body adds no rounds
 #[test]
 fn test_for_range_end_is_evaluated_once() {
-	is!(
-		"xs=[1,2,3]; for i in 0..count(xs) { xs += [i] }; string(xs)",
-		"[1 2 3 0 1 2]"
-	);
-	is!(
-		"global calls=0; def end(){ calls += 1; 3 }; for i in 0..end() { }; calls",
-		1
-	);
+	is!("xs=[1,2,3]; for i in 0..count(xs) { xs += [i] }; string(xs)", "[1 2 3 0 1 2]");
+	is!("global calls=0; def end(){ calls += 1; 3 }; for i in 0..end() { }; calls", 1);
 }
 
 // a variable range end is read once too, as in Python: changing n in the body adds no rounds (interviewer, 2026-10-10)

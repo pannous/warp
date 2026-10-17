@@ -23,8 +23,5 @@ fn a_file_shadowing_a_std_module_is_named() {
 	let code = "use hash; crc32(\"abc\")";
 	let result = warp::modules::with_program_file(&folder.join("app.warp"), || eval(code));
 	let message = result.serialize();
-	assert!(
-		message.contains("finds the file") && message.contains("hash.warp"),
-		"{message}"
-	);
+	assert!(message.contains("finds the file") && message.contains("hash.warp"), "{message}");
 }

@@ -12,8 +12,5 @@ fn a_loop_over_the_characters_of_a_text_takes_linear_time() {
 		if clock() - t0 < {MILLISECONDS} then c else -1");
 	is!(&program, PIECES);
 	// another text counted in between, and a text grown after its count
-	is!(
-		"t = \"abc\"; w = \"xy\"; n = 0; for ch in t { n += #w }; t += \"d\"; [n, #t]",
-		warp::parse("[6 4]")
-	);
+	is!("t = \"abc\"; w = \"xy\"; n = 0; for ch in t { n += #w }; t += \"d\"; [n, #t]", warp::parse("[6 4]"));
 }

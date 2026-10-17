@@ -1,8 +1,0 @@
-// the whole matched value in an arm (card match-binding-arm): the word value, a named subject, the subject's own name
-pair(x) := [x, x + 1]
-by_value = match pair(3) { [a, b] => #value; _ => 0 }
-by_name = match alle = pair(3) { [a, b] => #alle + b; _ => 0 }
-xs = [7, 8, 9]
-by_subject = match xs { [first, ...rest] => #xs; _ => 0 }
-greeting = match "bob" { "alice" => "hey"; name => "hi " + name }
-[by_value, by_name, alle, by_subject, greeting]

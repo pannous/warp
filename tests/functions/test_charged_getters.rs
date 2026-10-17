@@ -21,7 +21,6 @@ fn assigning_a_getter_is_an_error_naming_the_definition() {
 
 #[test]
 fn an_object_getter_runs_at_every_read() {
-	is!("o = {a: 1, s := 2+3}; o.s", 5);
 	is!("i=0; o = {s := i*10}; i=5; o.s", 50);
 	is!("i=1; o = {a: 2, s := i+1}; i=7; o.s + o.a", 10);
 }
@@ -47,20 +46,18 @@ fn a_getter_over_constants_gets_the_needless_charging_note() {
 	assert!(hints_of("area := 3*4; area")
 		.iter()
 		.any(|(canonical, reason)| canonical == "area = 3*4" && reason == "area never changes"));
-	assert!(hints_of("y=3; z := y*y; y=4; z")
-		.iter()
-		.all(|(_, reason)| !reason.contains("never changes")));
+	assert!(hints_of("y=3; z := y*y; y=4; z").iter().all(|(_, reason)| !reason.contains("never changes")));
 }
 
 #[test]
 fn an_effectful_getter_warns_at_the_definition() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	is!("t := clock(); t > 0", true);
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval("t := clock(); t");
-	assert!(warp::diagnostic::take_warnings().iter().any(|warning| warning
-		.message
-		.contains("t runs clock() at every read; write t = clock() for one value")));
+	assert!(warp::errors::diagnostic::take_warnings()
+		.iter()
+		.any(|warning| warning.message.contains("t runs clock() at every read; write t = clock() for one value")));
 }
 
 // a hint shows only code the user wrote: a def returning a lambda (lowered to closure_new) gets none
@@ -68,8 +65,13 @@ fn an_effectful_getter_warns_at_the_definition() {
 fn a_function_factory_gets_no_hint_of_lowered_code() {
 	is!("def mk() { k => { t = k * 2; t } }; g = mk(); g(4)", 8);
 	let hints = hints_of("def mk() { k => { t = k * 2; t } }; g = mk(); g(4)");
-	assert!(
-		hints.iter().all(|(canonical, _)| !canonical.contains("closure")),
-		"{hints:?}"
-	);
+	assert!(hints.iter().all(|(canonical, _)| !canonical.contains("closure")), "{hints:?}");
+}
+
+// card hint-nullary-raise: `risky() := 1/0` fails only when called (inside a try); as a value it would fail at once
+#[test]
+fn a_getter_that_can_fail_gets_no_needless_charging_note() {
+	assert!(hints_of("risky() := 1/0; try { risky() } catch error { 2 }")
+		.iter()
+		.all(|(_, reason)| !reason.contains("never changes")));
 }

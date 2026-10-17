@@ -3,7 +3,7 @@
 use crate::is;
 use warp::wasm_emitter::eval;
 
-const CUPS: &str = "class Cup{size: text; count: int}\ncups: [Cup] = database.cups_field_named";
+const CUPS: &str = "class Cup{size: text; count: int}\nstored cups: [Cup] in \"cups_field_named\"";
 
 fn program(rest: &str) -> String {
 	format!("{CUPS}\n{rest}")
@@ -22,8 +22,6 @@ fn a_stored_row_reads_its_size_field() {
 #[cfg(feature = "native")]
 #[test]
 fn a_loop_over_a_table_prints_each_row() {
-	let printed = crate::common::printed(&program(
-		"cups.add(Cup(\"small\", 1))\nfor cup in cups { print cup.size }",
-	));
+	let printed = crate::common::printed(&program("cups.add(Cup(\"small\", 1))\nfor cup in cups { print cup.size }"));
 	assert!(printed.contains("small"), "{printed}");
 }

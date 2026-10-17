@@ -16,7 +16,7 @@ fn inlined(code: &str) -> String {
 #[cfg(feature = "native")]
 fn compiled(code: &str) -> Node {
 	let module = warp::pipeline::compile(code).expect("compiles");
-	warp::wasm_reader::read_bytes(&module.bytes).expect("runs")
+	warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs")
 }
 
 /// The same value through eval and, natively, through the compiled (precomputed) module
@@ -42,10 +42,7 @@ fn constant_arithmetic_is_computed_after_inlining() {
 	same_value(code, 10);
 	let code = "def f(x){x + 3*4}; f(1)";
 	let program = inlined(code);
-	assert!(
-		program.contains("x+3*4"),
-		"a body without inlined variable keeps its form: {program}"
-	);
+	assert!(program.contains("x+3*4"), "a body without inlined variable keeps its form: {program}");
 }
 
 #[test]

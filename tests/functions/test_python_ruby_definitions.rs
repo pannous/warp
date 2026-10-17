@@ -27,14 +27,8 @@ fn test_ruby_def_end() {
 // Ruby blocks (card functions-ruby-yield): `yield v` calls the block the caller passes after the arguments
 #[test]
 fn test_ruby_yield_calls_the_block() {
-	is!(
-		"total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal",
-		3
-	);
-	is!(
-		"def twice(n)\n  yield n\n  yield n * 2\nend\nsum = 0\ntwice(3) { |x| sum += x }\nsum",
-		9
-	);
+	is!("total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal", 3);
+	is!("def twice(n)\n  yield n\n  yield n * 2\nend\nsum = 0\ntwice(3) { |x| sum += x }\nsum", 9);
 	is!("def apply(n)\n  yield n\nend\napply(3) do |x| x * 2 end", 6);
 	is!("def pair\n  yield 3, 4\nend\npair { |a, b| a * b }", 12);
 	is!("def run\n  yield\nend\nrun { 5 }", 5);
@@ -43,29 +37,16 @@ fn test_ruby_yield_calls_the_block() {
 // A block shares the variables it changes (P124): main's `total` is changed, not a copy
 #[test]
 fn test_block_changes_the_callers_variable() {
-	is!(
-		"total = 0\ndef each_twice\n  yield 1\n  yield 2\nend\neach_twice { |x| total += x }\ntotal",
-		3
-	);
 	is!("total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal", 3);
-	is!(
-		"global total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal",
-		3
-	);
+	is!("global total = 0\ndef g(h)\n  h(1)\n  h(2)\nend\ng(x => total += x)\ntotal", 3);
 	is!("n = 0\ninc = () => { n += 1; n }\ninc()\ninc()", 2);
 }
 
 #[test]
 fn test_python_spread_object() {
 	is!("def f(**kw): return kw.a\nm = {a: 7}\nf(**m)", 7);
-	is!(
-		"def g(a, b, c): return a * 100 + b * 10 + c\nm = {b: 2, c: 3}\ng(1, **m)",
-		123
-	);
-	is!(
-		"def g(a, b, c): return a * 100 + b * 10 + c\nm = {b: 2, c: 3}\ng(1, c=9, **m)",
-		129
-	);
+	is!("def g(a, b, c): return a * 100 + b * 10 + c\nm = {b: 2, c: 3}\ng(1, **m)", 123);
+	is!("def g(a, b, c): return a * 100 + b * 10 + c\nm = {b: 2, c: 3}\ng(1, c=9, **m)", 129);
 }
 
 #[test]
@@ -81,9 +62,6 @@ fn test_julia_definitions() {
 fn test_ruby_loops_in_def() {
 	is!("def f(n)\n  k = 0\n  while k < n\n    k += 1\n  end\n  k\nend\nf(3)", 3);
 	is!("k = 0\nwhile k < 3\n  k += 1\nend\nk", 3);
-	is!(
-		"def f\n  k = 0\n  loop do\n    k += 1\n    break if k > 2\n  end\n  k\nend\nf()",
-		3
-	);
+	is!("def f\n  k = 0\n  loop do\n    k += 1\n    break if k > 2\n  end\n  k\nend\nf()", 3);
 	is!("k = 0\nloop do\n  k += 1\n  break if k > 2\nend\nk", 3);
 }

@@ -8,10 +8,7 @@ use warp::{Node, Op};
 fn else_if_chains_another_if() {
 	is!("x=0\nr=1\nif r == 0 { x += 1 } else if r == 2 { x += 10 }\nx", 0);
 	is!("x=0\nr=2\nif r == 0 { x += 1 } else if r == 2 { x += 10 }\nx", 10);
-	is!(
-		"x = 0\n{\nr = 2\nif r == 0 {\n x += 1\n} else if r == 2 {\n x += 10\n} else {\n x += 100\n}\n}\nx",
-		10
-	);
+	is!("x = 0\n{\nr = 2\nif r == 0 {\n x += 1\n} else if r == 2 {\n x += 10\n} else {\n x += 100\n}\n}\nx", 10);
 	is!(
 		"fun f(n) {\n  if n == 0 { return 0 } else if n == 1 { return 10 } else { return 20 }\n}\nf(0) + f(1) + f(2)",
 		30
@@ -20,14 +17,8 @@ fn else_if_chains_another_if() {
 
 #[test]
 fn elif_elsif_and_elseif_are_else_if() {
-	is!(
-		"x = 0\nn = 3\nif n == 2 { x = 1 } elif n == 3 { x = 2 } else { x = 3 }\nx",
-		2
-	);
-	is!(
-		"x = 0\nn = 1\nif n == 2 { x = 1 } elsif n == 3 { x = 2 } else { x = 3 }\nx",
-		3
-	);
+	is!("x = 0\nn = 3\nif n == 2 { x = 1 } elif n == 3 { x = 2 } else { x = 3 }\nx", 2);
+	is!("x = 0\nn = 1\nif n == 2 { x = 1 } elsif n == 3 { x = 2 } else { x = 3 }\nx", 3);
 	is!("x = 0\nn = 3\nif n == 2 { x = 1 } elseif n == 3 { x = 2 }\nx", 2);
 	is!("x = 0\nn = 3\nif n == 2: x = 1 elif n == 3: x = 2 else: x = 3\nx", 2);
 }
@@ -48,10 +39,7 @@ fn return_takes_the_whole_expression() {
 #[test]
 fn a_counting_word_after_return_is_the_variable() {
 	is!("fun f(i) { count = 7; return count }\nf(10)", 7);
-	is!(
-		"fun f(i) {\n  count = 0\n  count = count + i\n  return count\n}\nf(5)",
-		5
-	);
+	is!("fun f(i) {\n  count = 0\n  count = count + i\n  return count\n}\nf(5)", 5);
 	is!("xs = [1, 2, 3]\nxs count", 3); // still the property of a list
 }
 
@@ -74,10 +62,7 @@ fn membership_in_binds_like_a_comparison() {
 		panic!("if condition expected, got {if_condition:?}")
 	};
 	assert!(membership(condition), "membership condition, got {condition:?}");
-	assert!(
-		matches!(body.drop_meta(), Node::List(_, warp::Bracket::Curly, _)),
-		"block body, got {body:?}"
-	);
+	assert!(matches!(body.drop_meta(), Node::List(_, warp::Bracket::Curly, _)), "block body, got {body:?}");
 	let Node::Key(_, Op::Assign, value) = parse("x = \"Z\" in v").drop_meta().clone() else {
 		panic!("assignment expected")
 	};
@@ -88,9 +73,7 @@ fn membership_in_binds_like_a_comparison() {
 #[test]
 fn for_destructures_a_tuple_or_comma_names() {
 	let parsed = parse("for (r, c) in [(0, 1), (2, 3)] { x += r*10+c }");
-	let Node::List(items, _, _) = parsed.drop_meta() else {
-		panic!("for loop expected, got {parsed:?}")
-	};
+	let Node::List(items, _, _) = parsed.drop_meta() else { panic!("for loop expected, got {parsed:?}") };
 	assert!(
 		matches!(items[1].drop_meta(), Node::List(names, _, _) if names.len() == 2),
 		"loop names, got {:?}",
@@ -102,9 +85,7 @@ fn for_destructures_a_tuple_or_comma_names() {
 		items[3]
 	);
 	let parsed = parse("for k, v in m { x += v }");
-	let Node::List(items, _, _) = parsed.drop_meta() else {
-		panic!("for loop expected, got {parsed:?}")
-	};
+	let Node::List(items, _, _) = parsed.drop_meta() else { panic!("for loop expected, got {parsed:?}") };
 	assert!(
 		matches!(items[1].drop_meta(), Node::List(names, _, _) if names.len() == 2),
 		"loop names, got {:?}",

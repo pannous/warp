@@ -5,9 +5,9 @@ tempo = 110
 lap = 0
 while lap < 40 {
 	start = clock()
-	bass = go { melody [C3 G2 A2 F2] each 1 beat }
-	drum = go { melody [C5 G5 A5 F5] each 1/8 beat }
-	melody [E4 G4 C5 B4 A4 C5 F4 A4] each 1/2 beat
+	bass = go { melody([C3 G2 A2 F2], 1 beat) }
+	drum = go { melody([C5 G5 A5 F5], 1/8 beat) }
+	melody([E4 G4 C5 B4 A4 C5 F4 A4], 1/2 beat)
 	await bass
 	await drum
 	print "lap ${lap} tempo ${tempo}: ${clock() - start} ms for ${240000 / tempo} ms"

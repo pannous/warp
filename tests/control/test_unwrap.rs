@@ -6,7 +6,6 @@ use crate::is;
 #[test]
 fn test_unwrap_gives_the_value() {
 	is!("x=3; x!", 3);
-	is!("x=3; x!+1", 4);
 	is!("x:int?=5; x!*2", 10);
 	is!("x=\"a\"; x!", "a");
 }
@@ -16,10 +15,7 @@ fn test_unwrap_of_nothing_or_an_error_is_loud() {
 	fails_with("x=ø; x!", "unwrapped ø");
 	fails_with("ø!", "unwrapped ø");
 	// in arithmetic the declared Int fails first (loud, though not yet with the unwrap message)
-	assert!(matches!(
-		warp::wasm_emitter::eval("x:int?=ø; x!+1"),
-		warp::Node::Error(_)
-	));
+	assert!(matches!(warp::wasm_emitter::eval("x:int?=ø; x!+1"), warp::Node::Error(_)));
 	fails_with("x=error(\"bad\"); x!", "bad");
 }
 

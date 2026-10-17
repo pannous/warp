@@ -10,10 +10,7 @@ fn run_into_closed_pipe(arguments: &[&str], closed_stderr: bool) -> Output {
 	let (reader, writer) = std::io::pipe().unwrap();
 	drop(reader);
 	let mut command = crate::common::warp_command();
-	command
-		.args(arguments)
-		.env("WARP_CRASH_CARDS", "0")
-		.stdin(Stdio::null());
+	command.args(arguments).env("WARP_CRASH_CARDS", "0").stdin(Stdio::null());
 	if closed_stderr {
 		command.stdout(Stdio::null()).stderr(writer);
 	} else {
@@ -26,10 +23,7 @@ fn run_into_closed_pipe(arguments: &[&str], closed_stderr: bool) -> Output {
 fn a_value_into_a_closed_pipe_ends_warp_quietly() {
 	let output = run_into_closed_pipe(&["eval", "42"], false);
 	assert_eq!(output.status.signal(), Some(SIGPIPE), "{output:?}");
-	assert!(
-		!String::from_utf8_lossy(&output.stderr).contains("panicked"),
-		"{output:?}"
-	);
+	assert!(!String::from_utf8_lossy(&output.stderr).contains("panicked"), "{output:?}");
 }
 
 #[test]

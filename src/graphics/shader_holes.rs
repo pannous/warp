@@ -8,6 +8,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_constructor::entry_name;
 use std::collections::{HashMap, HashSet};
 
 /// The attribute of a shader text listing its holes' names
@@ -24,20 +25,29 @@ const SIZE_WORDS: [&str; 2] = ["width", "height"];
 /// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
 /// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
 /// and `$previous(at)`, the shader's own previous frame at a pixel (src/graphics/gpu.rs PREVIOUS_FRAME)
-pub const BUILTIN_HOLES: [&str; 9] = [
-	"width",
-	"height",
-	"size",
-	"time",
-	"frame",
-	"mouse",
-	"mouse_down",
-	"key",
-	PREVIOUS_HOLE,
-];
+pub const BUILTIN_HOLES: [&str; 9] =
+	["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key", PREVIOUS_HOLE];
 pub const PREVIOUS_HOLE: &str = "previous";
 /// other words for $previous, which stay the program's own names: a value missing under one of them hints at $previous
 pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
+
+/// Underscore spellings of a built-in hole's member, aliases that hint at the dotted form (user 2026-10-14, card
+/// values-number): `$mouse_x` is `$mouse.x`; and The Book of Shaders' uniform names (glslCanvas, GLSL Sandbox; card
+/// compute-toys): `$u_time` is `$time`, `$u_resolution` `$size`, `$u_mouse` `$mouse`
+pub const HOLE_ALIASES: [(&str, &str, &str); 5] = [
+	("mouse_x", "mouse.x", POINTER_REASON),
+	("mouse_y", "mouse.y", POINTER_REASON),
+	("u_time", "time", BOOK_OF_SHADERS_REASON),
+	("u_resolution", "size", BOOK_OF_SHADERS_REASON),
+	("u_mouse", "mouse", BOOK_OF_SHADERS_REASON),
+];
+const POINTER_REASON: &str = "the pointer is the built-in hole $mouse, a vec2f";
+const BOOK_OF_SHADERS_REASON: &str = "The Book of Shaders' uniform names are aliases of warp's built-in holes";
+
+/// The dotted form of an aliased hole (`mouse_x` → `mouse.x`), any other name itself
+fn dotted(name: &str) -> &str {
+	HOLE_ALIASES.iter().find(|(alias, ..)| *alias == name).map_or(name, |(_, dotted, _)| dotted)
+}
 
 /// what a shader missing the value `name` may have meant ("" for nothing)
 pub fn missing_value_hint(name: &str) -> &'static str {
@@ -55,16 +65,16 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 	while let Some(at) = rest.find('$') {
 		text.push_str(&rest[..at]);
 		let after = &rest[at + 1..];
-		let length = after
-			.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
-			.unwrap_or(after.len());
+		let length = after.find(|ch: char| !is_name_character(ch)).unwrap_or(after.len());
 		let name = &after[..length];
 		if name.is_empty() || name.starts_with(|ch: char| ch.is_ascii_digit()) {
 			text.push('$');
 			rest = after;
 			continue;
 		}
-		text.push_str(&format!("{VALUES}.{name}"));
+		let read = dotted(name);
+		text.push_str(&format!("{VALUES}.{read}"));
+		let name = read.split('.').next().unwrap_or(read);
 		if !names.iter().any(|known| known == name) {
 			names.push(name.to_string());
 		}
@@ -76,18 +86,34 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 
 /// The shader text of a block, marked with its holes
 pub fn shader_text(wgsl: &str) -> Node {
+	hint_aliases(wgsl);
 	let (text, names) = written(wgsl);
 	match names.is_empty() {
 		true => Node::Text(text),
 		false => Node::Text(text).with_attribute(
 			HOLES_ATTRIBUTE,
-			Node::List(
-				names.into_iter().map(Node::Symbol).collect(),
-				Bracket::Square,
-				Separator::Space,
-			),
+			Node::List(names.into_iter().map(Node::Symbol).collect(), Bracket::Square, Separator::Space),
 		),
 	}
+}
+
+/// `$mouse_x` works as `$mouse.x`, with a hint to write that
+fn hint_aliases(wgsl: &str) {
+	for (alias, dotted, reason) in HOLE_ALIASES {
+		let written = format!("${alias}");
+		if mentions(wgsl, &written) {
+			crate::normalize::hint(&written, &format!("${dotted}"), reason);
+		}
+	}
+}
+
+/// Whether the text has `name` where no letter, digit or underscore continues it
+pub fn mentions(text: &str, name: &str) -> bool {
+	text.match_indices(name).any(|(at, _)| !text[at + name.len()..].starts_with(is_name_character))
+}
+
+fn is_name_character(character: char) -> bool {
+	character.is_alphanumeric() || character == '_'
 }
 
 pub fn lower(program: Node) -> Node {
@@ -113,10 +139,7 @@ pub fn lower(program: Node) -> Node {
 			.filter(|name| !BUILTIN_HOLES.contains(&name.as_str()) || variables.contains(name))
 			.collect::<Vec<_>>()
 	};
-	let shaders = shaders
-		.into_iter()
-		.map(|(shader, holes)| (shader, passed(holes)))
-		.collect();
+	let shaders = shaders.into_iter().map(|(shader, holes)| (shader, passed(holes))).collect();
 	with_values(program, &shaders, &passed)
 }
 
@@ -125,10 +148,7 @@ fn sizes(variables: &HashSet<String>) -> [Node; 2] {
 	let own = SIZE_WORDS.iter().all(|word| variables.contains(*word));
 	let words = match own {
 		true => SIZE_WORDS,
-		false => [
-			warp_runtime::host_words::VIEW_WIDTH,
-			warp_runtime::host_words::VIEW_HEIGHT,
-		],
+		false => [warp_runtime::host_words::VIEW_WIDTH, warp_runtime::host_words::VIEW_HEIGHT],
 	};
 	words.map(|word| Node::Symbol(word.to_string()))
 }
@@ -181,11 +201,10 @@ fn with_values(
 		return node;
 	};
 	let rendering = renders(items);
-	let holes = items.get(1).filter(|_| rendering).and_then(|shader| {
-		holes_of(shader)
-			.map(passed)
-			.or_else(|| shaders.get(&shader.drop_meta().name()).cloned())
-	});
+	let holes = items
+		.get(1)
+		.filter(|_| rendering)
+		.and_then(|shader| holes_of(shader).map(passed).or_else(|| shaders.get(&shader.drop_meta().name()).cloned()));
 	let Some(holes) =
 		holes.filter(|holes| !holes.is_empty() && items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1)
 	else {
@@ -195,48 +214,33 @@ fn with_values(
 	let entries = |given: &[Node]| {
 		holes
 			.iter()
-			.filter(|name| {
-				!given
-					.iter()
-					.any(|entry| entry_name(entry).as_deref() == Some(name.as_str()))
-			})
+			.filter(|name| !given.iter().any(|entry| entry_name(entry).as_deref() == Some(name.as_str())))
 			.map(|name| entry(name))
 			.collect::<Vec<_>>()
 	};
 	match items.get(VALUES_INDEX).map(|values| values.drop_meta().clone()) {
-		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Colon)),
+		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Comma)),
 		Some(Node::List(given, Bracket::Curly, map_separator)) => {
 			let added = entries(&given);
 			items[VALUES_INDEX] = Node::List(given.into_iter().chain(added).collect(), Bracket::Curly, map_separator)
 				.with_meta_of(&items[VALUES_INDEX]);
 		}
 		Some(_) => {
-			let names = holes
-				.iter()
-				.map(|name| format!("${name}"))
-				.collect::<Vec<_>>()
-				.join(", ");
+			let names = holes.iter().map(|name| format!("${name}")).collect::<Vec<_>>().join(", ");
 			let message = format!(
 				"the shader's holes {names} need the values map written out here, `{{{}}}`, to add their entries",
-				holes
-					.iter()
-					.map(|name| format!("{name}: {name}"))
-					.collect::<Vec<_>>()
-					.join(", ")
+				holes.iter().map(|name| format!("{name}: {name}")).collect::<Vec<_>>().join(", ")
 			);
-			return crate::diagnostic::Diagnostic::at(&items[VALUES_INDEX], message).into_error();
+			return crate::errors::diagnostic::Diagnostic::at(&items[VALUES_INDEX], message).into_error();
 		}
 	}
 	Node::List(items, bracket.clone(), separator.clone()).with_meta_of(&node)
 }
 
-fn entry_name(entry: &Node) -> Option<String> {
-	match entry.drop_meta() {
-		Node::Key(key, Op::Colon, _) => Some(key.drop_meta().name()),
-		_ => None,
-	}
-}
-
+/// `name: name`; a system value's in parentheses, so its word is read rather than kept as data (`$mouse_x` is the
+/// pointer, system_values.rs is_bare_word; card values-number)
 fn entry(name: &str) -> Node {
-	Node::key(name, Node::Symbol(name.to_string()))
+	let word = Node::Symbol(name.to_string());
+	let is_system_value = warp_runtime::host_words::SYSTEM_VALUES.iter().any(|(system, _)| *system == name);
+	Node::key(name, if is_system_value { Node::List(vec![word], Bracket::Round, Separator::None) } else { word })
 }

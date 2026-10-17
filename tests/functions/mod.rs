@@ -1,30 +1,43 @@
+mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
 mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
+mod test_argument_cast;
 mod test_argument_kinds;
 mod test_argument_labels;
+mod test_arity_and_type_overloads; // card use-sound-play
 mod test_arity_overloads;
 mod test_arrow_defaults_and_types;
+mod test_arrow_result_type; // card undefined-function
+mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
+mod test_bare_host_words; // card random-should
 mod test_block_function;
 mod test_body_statement;
 mod test_braced_it_warning;
+mod test_braceless_call_in_logic; // card braceless-call
+mod test_braceless_calls; // card braceless-calls
+mod test_braceless_closure_call; // card calling-closure
+mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;
 mod test_broadcasting_declared;
 mod test_builtin_clash;
+mod test_builtin_function_values; // card builtin-functions
 mod test_c_style_definitions;
 mod test_call_arity;
 mod test_call_efficiency;
 mod test_call_result_fields;
+mod test_callable_parameter; // card callable
 mod test_captured_containers;
 mod test_captured_copy_of_global;
 mod test_captured_node_return; // card captured-node-return
 mod test_character_results;
 mod test_charged_getters;
+mod test_closure_float_arguments; // card if-list
 mod test_closure_value_arguments;
 mod test_closures;
 mod test_comma_calls;
@@ -35,6 +48,7 @@ mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
 mod test_deep_recursion;
+mod test_def_block_without_parentheses; // card def-hello
 mod test_def_bool_result;
 mod test_def_forms;
 mod test_def_without_parameters;
@@ -45,6 +59,7 @@ mod test_definition_value;
 mod test_destructuring_in_a_body;
 mod test_deterministic_inference;
 mod test_dollar_body;
+mod test_dot_lambda; // card dot-lambda
 mod test_each_spellings;
 mod test_effect_block_operand;
 mod test_effects;
@@ -53,41 +68,60 @@ mod test_effects_value;
 mod test_empty_call;
 mod test_empty_function_bodies;
 mod test_event_effects;
+mod test_fail_effect;
 mod test_failed_word;
 mod test_field_function_values;
+mod test_float_list_parameters; // card untyped-parameters
 mod test_float_to_int_parameter;
 mod test_float_values_of_tuples;
 mod test_folding_in_bodies;
 mod test_foreign_modifiers;
+mod test_foreign_spellings;
 mod test_free_var_if_arms;
 mod test_function_aliases;
 mod test_function_head; // card cleanup-definition-view
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
+mod test_function_type_at_run_time; // card type-function
 mod test_function_values;
 mod test_functions;
+mod test_functions_passed_by_name; // card specialise-named-functions
 mod test_gap_feeding; // card gap-feeding
 mod test_generator_arguments;
 mod test_generators; // card generators-function
 mod test_getter_warning_text;
 mod test_global_with_closures;
 mod test_go_functions;
+mod test_ignored_parameters;
+mod test_infix_iteration; // cards infix-map, map-dot
 mod test_inlining;
 mod test_it_arguments; // card map-it
+mod test_it_reserved; // card it-reserved
 mod test_kebab_members;
 mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
+mod test_lambda_held_by_field; // card lambda-held
 mod test_lambda_spaced_body;
 mod test_lambda_spellings;
+mod test_lambda_tuple_arguments; // card errors-needs
 mod test_lambdas;
 mod test_late_binding;
 mod test_let_in;
 mod test_libm_pure;
+mod test_library_word_aliases;
+mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
+mod test_list_word; // card sum-list
+mod test_map_function_first; // card map-function
+mod test_map_library_word_first; // cards map-library-first, map-library-word
+mod test_map_list_fields; // card field-list
 mod test_map_phrase;
+mod test_map_real_function; // card map-sin
+mod test_math_broadcast; // card cos-instead
+mod test_member_phrases; // card xs-insert
 mod test_memoization;
 mod test_method_syntax_calls;
 mod test_method_words;
@@ -96,6 +130,7 @@ mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;
 mod test_nested_it;
+mod test_nested_library_calls; // card broadcast-library
 mod test_nested_prefix_calls;
 mod test_nested_two_deep; // card nested-two
 mod test_nonlocal_any_value;
@@ -104,6 +139,8 @@ mod test_nonlocal_kind_change; // card nonlocal-assign
 mod test_nonlocal_lambdas;
 mod test_nonlocal_passed_around;
 mod test_object_arguments;
+mod test_ocaml_fun; // card fun-x-loud
+mod test_one_item_list_math; // card sin-scalar
 mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
@@ -116,6 +153,7 @@ mod test_parameter_map_patterns; // cards param-map-pattern, param-pattern-local
 mod test_parameter_overloads;
 mod test_parameter_patterns; // card parameter-patterns
 mod test_parameter_retype;
+mod test_parameter_shadows_function; // card stack-overflow
 mod test_parameter_shapes;
 mod test_parens_getter_warning;
 mod test_partial_application;
@@ -127,12 +165,16 @@ mod test_phrase_slot_words;
 mod test_picked_calls;
 mod test_ported_calls;
 mod test_precomputed;
+mod test_preposition_calls; // card prepositions-call
 mod test_print_closure; // card print-closure
+mod test_print_function_value; // card print-function
 mod test_property_access;
 mod test_property_assign;
 mod test_property_words;
 mod test_python_higher_order;
 mod test_python_ruby_definitions;
+mod test_random_dispatch; // card random-dispatches
+mod test_real_function_values; // card sin-cos
 mod test_recursive_list_functions;
 mod test_render_as;
 mod test_return_type_dispatch;
@@ -143,12 +185,15 @@ mod test_round8_call_forms;
 mod test_rounding_builtins;
 mod test_runtime_function_equality; // card runtime-function
 mod test_runtime_kind_arithmetic;
+mod test_rust_references;
+mod test_rust_return_arrow;
 mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;
 mod test_soft_keywords;
 mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
+mod test_sort_labels; // card sort-xs
 mod test_spaced_assign_definition;
 mod test_specialised_variants;
 mod test_statement_blocks; // card statement-block
@@ -165,8 +210,9 @@ mod test_typed_lambda;
 mod test_typed_returns;
 mod test_typed_signatures;
 mod test_undefined_calls;
+mod test_untyped_predicate_passed; // card untyped-passed
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
 mod test_whole_float_to_int_parameter;
-mod test_words_in_phrases; // card arctan-allow // card render-as
+mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow

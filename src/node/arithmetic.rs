@@ -9,10 +9,7 @@ fn keeping_left_meta(left: &Node, right: &Node, compute: impl FnOnce(&Node, &Nod
 		_ => right,
 	};
 	match left {
-		Meta { node, data } => Meta {
-			node: Box::new(compute(node, right)),
-			data: data.clone(),
-		},
+		Meta { node, data } => Meta { node: Box::new(compute(node, right)), data: data.clone() },
 		_ => compute(left, right),
 	}
 }

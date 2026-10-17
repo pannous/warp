@@ -16,8 +16,5 @@ fn a_unit_word_walks_the_text_by_that_unit() {
 fn the_loop_variable_byte_walks_a_text_by_its_bytes() {
 	is!("s = 0; for each byte in \"Hello\" { s += byte }; s", 500);
 	is!("t = \"héllo\"; n = 0; for byte in t: n += 1; n", 6);
-	is!(
-		"out = \"\"; for each char in \"你好\" { out = char + out }; out",
-		"好你"
-	);
+	is!("out = \"\"; for each char in \"你好\" { out = char + out }; out", "好你");
 }

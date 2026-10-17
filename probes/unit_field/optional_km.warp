@@ -1,5 +1,5 @@
 class Run{label: text; distance: km?}
-runs: [Run] = database.probe_optional_units
+stored runs: [Run] in "probe_optional_units"
 runs.add(Run("park", 5 km))
 runs.add(Run("rest", ø))
 runs

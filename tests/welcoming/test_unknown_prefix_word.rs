@@ -1,15 +1,13 @@
 // An unknown word applied to a value (`cube 3`): P51 (user, 2026-10-05) made it a loud error in code, no longer data with
 // a warning (notes/unknown_prefix_word.md, test_unknown_word_error.rs)
 use crate::common::fails_with;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warns_unknown_word(code: &str) -> bool {
 	take_warnings();
 	eval(code);
-	take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("is no function"))
+	take_warnings().iter().any(|warning| warning.message.contains("is no function"))
 }
 
 #[test]

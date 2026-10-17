@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+# Signals in object fields (cards signal-param-field, signal-field-escape): a function listening to a field of its
+# parameter subscribes to that field of the object it is given; a variable kept in the field stays a signal there.
+watch(p) := on change p.age { print "age now " + value }
+birthday = 30
+person = {name: "Alice", age: birthday}
+watch(person)
+birthday = 31
+person.age = 32
+person.age

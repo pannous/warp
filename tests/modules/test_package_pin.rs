@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use warp::modules::{fetch_package_into, package_repository};
 
-const PINNED: &str = ".cache/warp/packages/uniscript@1.0.7";
+const PINNED: &str = ".cache/warp/packages/uniscript@1.0.9";
 
 /// An empty packages directory of its own for a test
 fn packages_for(test: &str) -> PathBuf {
@@ -17,30 +17,17 @@ fn packages_for(test: &str) -> PathBuf {
 }
 
 fn git(directory: &Path, arguments: &[&str]) {
-	let status = Command::new("git")
-		.arg("-C")
-		.arg(directory)
-		.args(arguments)
-		.status()
-		.unwrap();
+	let status = Command::new("git").arg("-C").arg(directory).args(arguments).status().unwrap();
 	assert!(status.success(), "git {arguments:?}");
 }
 
 /// packages/uniscript as an unpinned fetch leaves it: a clone whose origin is the registered repository
 fn clone_like_a_fetch(test: &str, packages: &Path) -> PathBuf {
-	let pinned = fetch_package_into(&packages_for(&format!("{test}-source")), "uniscript")
-		.unwrap()
-		.canonicalize()
-		.unwrap();
+	let pinned =
+		fetch_package_into(&packages_for(&format!("{test}-source")), "uniscript").unwrap().canonicalize().unwrap();
 	let clone = packages.join("uniscript");
-	git(
-		Path::new("."),
-		&["clone", "--quiet", pinned.to_str().unwrap(), clone.to_str().unwrap()],
-	);
-	git(
-		&clone,
-		&["remote", "set-url", "origin", &package_repository("uniscript").unwrap()],
-	);
+	git(Path::new("."), &["clone", "--quiet", pinned.to_str().unwrap(), clone.to_str().unwrap()]);
+	git(&clone, &["remote", "set-url", "origin", &package_repository("uniscript").unwrap()]);
 	clone
 }
 
@@ -84,8 +71,5 @@ fn header_signatures_are_parsed_once() {
 	let first = warp::ffi::get_signatures_from_headers("m");
 	assert!(first.contains_key("sqrt"));
 	assert!(std::ptr::eq(first, warp::ffi::get_signatures_from_headers("m")));
-	assert!(std::ptr::eq(
-		warp::ffi::get_ffi_signatures(),
-		warp::ffi::get_ffi_signatures()
-	));
+	assert!(std::ptr::eq(warp::ffi::get_ffi_signatures(), warp::ffi::get_ffi_signatures()));
 }

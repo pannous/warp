@@ -5,16 +5,19 @@
 const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
-// play of a signal (src/sound/mod.rs play_signal, lowering/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
+// play of a signal (src/sound/mod.rs play_signal, lowering/words/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
+// a published site ships only the host parts its words need (src/host/host_parts.rs), without the compiler that measures
+// a spectrum or the page that decodes a sound file
+const WITHOUT_PLAYGROUND = "measured in the playground and by the warp CLI, not on a published site yet";
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
 const SIGNAL_POLL_MS = 10;
 // heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound/mod.rs PLAY_AHEAD)
 const PLAY_AHEAD_SECONDS = 0.5;
-// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
+// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/lists/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
 // MIDI (card midi-out, src/sound/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
@@ -120,13 +123,13 @@ const wholeNumbers = list => Array.from(list, Number);
 // `at 1s beep()` keeps its second of silence
 // the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound/mod.rs
 // render): the samples interleaved and the channels
-// play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
-// samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
+// play(hum, 2s) (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
+// samples from `first` on. Played to someone (heard: playground.js tellSystemValues), each block is a sound of
 // the signal's handle, computed when the voice holds less than SIGNAL_AHEAD_SECONDS, the wait a sleep (no runaway
 // time); else all of them at once, one sound. Its handle
 function playedSignal(holder, seconds, rate, channels, block, blockOf) {
 	const total = Math.round(Math.max(0, Number(seconds)) * rate);
-	const paced = Boolean(self.pageSystemValues?.window_open);
+	const paced = Boolean(self.pageSystemValues?.heard);
 	let samples = [];
 	let handle;
 	const played = () => {
@@ -192,6 +195,50 @@ function fadedGain(fades, place) {
 	return ramped(...ramp, place);
 }
 
+// interleaved samples at another rate, each channel's linearly interpolated between its neighbours (src/sound/mod.rs at_rate)
+function atRate(samples, channels, from, to) {
+	if (from === to || samples.length < channels) return samples;
+	const frames = samples.length / channels;
+	const converted = Math.round(frames * to / from);
+	const out = new Array(converted * channels);
+	for (let frame = 0; frame < converted; frame++) {
+		const position = frame * from / to;
+		const before = Math.min(Math.floor(position), frames - 1), after = Math.min(before + 1, frames - 1), share = position - before;
+		for (let channel = 0; channel < channels; channel++) {
+			const a = Number(samples[before * channels + channel]), b = Number(samples[after * channels + channel]);
+			out[frame * channels + channel] = Math.round(a + (b - a) * share);
+		}
+	}
+	return out;
+}
+
+// a WAV's [rate, channels, offset 16-bit frames …] (src/sound/audio_files.rs decoded): PCM 8, 16, 24, 32 or float 32, 64
+function wavFrames(bytes, name) {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const ascii = (at, length) => String.fromCharCode(...bytes.subarray(at, at + length));
+	if (bytes.length < 12 || ascii(0, 4) !== "RIFF" || ascii(8, 4) !== "WAVE") throw new Error(`sample ${name}: the playground reads WAV samples only`);
+	let format;
+	for (let at = 12; at + 8 <= bytes.length;) {
+		const size = view.getUint32(at + 4, true);
+		if (ascii(at, 4) === "fmt ") format = at + 8;
+		if (ascii(at, 4) === "data") {
+			if (format === undefined) throw new Error(`sample ${name}: its data comes before its format`);
+			let tag = view.getUint16(format, true);
+			if (tag === 0xFFFE) tag = view.getUint16(format + 24, true);
+			const channels = view.getUint16(format + 2, true) || 1, rate = view.getUint32(format + 4, true), bits = view.getUint16(format + 14, true);
+			const scaled = amplitude => Math.round(Math.max(-1, Math.min(1, amplitude)) * 32767);
+			const amplitude = { "1 8": i => (view.getUint8(i) - 128) << 8, "1 16": i => view.getInt16(i, true), "1 24": i => view.getInt16(i + 1, true),
+				"1 32": i => view.getInt16(i + 2, true), "3 32": i => scaled(view.getFloat32(i, true)), "3 64": i => scaled(view.getFloat64(i, true)) }[`${tag} ${bits}`];
+			if (!amplitude) throw new Error(`sample ${name}: its format ${tag} with ${bits} bits is not supported (PCM 8, 16, 24, 32 or float 32, 64)`);
+			const width = bits / 8, end = Math.min(bytes.length, at + 8 + size), flat = [rate, channels];
+			for (let i = at + 8; i + width <= end; i += width) flat.push(amplitude(i) + SAMPLE_OFFSET);
+			return flat;
+		}
+		at += 8 + size + size % 2;
+	}
+	throw new Error(`sample ${name}: no audio data`);
+}
+
 function wavOf(samples, rate, channels = 1) {
 	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
 	const view = new DataView(bytes.buffer);
@@ -207,16 +254,58 @@ function wavOf(samples, rate, channels = 1) {
 	return bytes;
 }
 
+// ["delay", 0.25, 0.4, 0.5] with plain numbers, as JSON takes them
+const plainEffect = effect => Array.from(effect, setting => typeof setting === "bigint" ? Number(setting) : setting);
+
+// the samples through the effects of the bus the run sends to (card shared-buses stage 2), a delay's or reverb's tail
+// added; each sound apart, which is the bus's sound for its linear effects (filters, delay, reverb, gain), while compress
+// and distort act on each sound alone
+function onBus(holder, samples, rate, channels) {
+	const chain = holder.run.busChains?.[holder.run.sentBus ?? 0];
+	if (!chain?.length) return samples;
+	const floats = Float32Array.from(samples, sample => (Number(sample) - SAMPLE_OFFSET) / SAMPLE_OFFSET);
+	const processed = holder.effected(chain, floats, rate, channels);
+	return Array.from(processed, sample => Math.round(Math.max(-1, Math.min(1, sample)) * (SAMPLE_OFFSET - 1)) + SAMPLE_OFFSET);
+}
+
+// a sound file's first channel, amplitudes around 0, decoded once per run (lib/sound.warp spectrum of a file,
+// sound_seconds): a WAV here, any other format by the page, since a Worker has no decodeAudioData (task-workers.js
+// decodeSoundInto, while the Worker waits)
+function monoOf(holder, path) {
+	const name = besideProgram(contentText(path), programFileOf(holder.run)); // host-files.js
+	const decoded = holder.run.decodedSounds ??= {};
+	return decoded[name] ??= /\.wav$/i.test(name) ? wavMono(name) : pageDecoded(name);
+}
+
+function wavMono(name) {
+	const flat = wavFrames(readBytes(name), name), [rate, channels] = flat;
+	const amplitudes = Float32Array.from({ length: Math.floor((flat.length - 2) / channels) }, (_, at) => flat[2 + at * channels] - SAMPLE_OFFSET);
+	return { rate, amplitudes };
+}
+
+function pageDecoded(name) {
+	const written = writtenFiles.has(filePath(name));
+	const ask = self.askPageDecode && (shared => self.askPageDecode(shared, fileUrl(name), written ? readBytes(name) : undefined));
+	if (!self.askPage) throw new Error(`sound ${name}: ${WITHOUT_PLAYGROUND}`);
+	const { rate, amplitudes } = self.askPage(`sound ${name}`, ask); // host-tasks.js
+	return { rate, amplitudes: Float32Array.from(amplitudes) };
+}
+
 addHostPart({
 	words: (holder, hooks, { program }) => {
-		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
+		holder.effected = (chain, floats, rate, channels) => effectsProcessed(hooks, chain, floats, rate, channels); // host-compiler.js
+		holder.spectrum = (window, rate, bands, low, high) => {
+			if (typeof spectrumLevels !== "function") throw new Error(`spectrum: ${WITHOUT_PLAYGROUND}`);
+			return spectrumLevels(hooks, window, rate, Number(bands), Number(low), Number(high)); // host-compiler.js
+		};
+		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
 		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
 		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
-			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
-			const sound = { samples, rate, channels };
+			while (self.pageSystemValues?.heard && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
-			hooks.sound?.({ ...sound, at, handle });
+			const sound = { samples: onBus(holder, samples, rate, channels), rate, channels };
+			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
 			return own;
@@ -224,24 +313,26 @@ addHostPart({
 		return {
 			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
 			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
-			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
+			// speakers and stays silent, as natively save sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate, channels) => {
 				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
 			},
 		};
 	},
 	adapters: {
-		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
-		// the Web MIDI access (playground.js sendMidi). A Worker cannot wait for the page's device list or its input
+		// MIDI (card midi-out, lib/sound.warp): files are bytes as save sound's; a message goes to the page, which holds
+		// the Web MIDI access (playground.js sendMidi), timed on the voice's clock. A Worker cannot wait for the page's device list or its input
 		midi: {
 			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
 			read_file: path => midiNotesOf(readBytes(contentText(path))),
 			send: (port, message) => {
 				if (!self.sendMidi) return null; // a run without a page (tests, node) has no devices, silent as sound is
-				self.sendMidi(contentText(port), wholeNumbers(message));
+				// at the voice's moment on the shared clock, after the sounds before it (card midi-clock)
+				self.sendMidi(contentText(port), wholeNumbers(message), self.voiceSounded?.(0).at);
 				return null;
 			},
 			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
+			inputs: () => { throw new Error("midi.inputs: the playground's page owns the MIDI devices and a program cannot wait for their list"); },
 			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
 		},
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
@@ -249,8 +340,8 @@ addHostPart({
 		sound: {
 			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
 			// that is not there fails as natively (card browser-play)
-			play_file: path => {
-				const name = contentText(path);
+			play_file(path) {
+				const name = besideProgram(contentText(path), programFileOf(this.holder.run)); // host-files.js
 				const written = writtenFiles.has(filePath(name));
 				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
 				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
@@ -259,7 +350,7 @@ addHostPart({
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
-			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, render_sound from where
+			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, save sound from where
 			// the speaker stood on this voice
 			fade(handle, gain, seconds) {
 				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
@@ -271,12 +362,56 @@ addHostPart({
 				self.fadeSound?.(handle, gain, seconds);
 				return null;
 			},
+			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively, its chain ([["reverb", 0.4], …]) kept
+			// for the sounds sent to it (onBus)
+			bus(number, chain) {
+				const id = Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
+				(this.holder.run.busChains ??= {})[id] = Array.from(chain ?? [], plainEffect);
+				return id;
+			},
+			// a list signal through one effect (lib/sound.warp effected): the DSP in warp.wasm as natively, on amplitudes of
+			// the full scale
+			effect(effect, signal, rate, fullScale) {
+				const scale = Number(fullScale) || 1;
+				const floats = Float32Array.from(signal, amplitude => Number(amplitude) / scale);
+				return Array.from(this.holder.effected([plainEffect(effect)], floats, Number(rate), 1), sample => sample * scale);
+			},
+			// the bus before, as natively, so out(signal, bus) restores it
+			send(number) {
+				const before = this.holder.run.sentBus ?? 0;
+				this.holder.run.sentBus = Number(number);
+				return before;
+			},
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
+			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },
+			// the voice's moment on the clock every Worker shares (src/sound/mod.rs moment_seconds, card live-redefine)
+			moment: () => self.voiceMoment?.() ?? 0,
+			// a named live loop's cycle starts (lib live_cycle_started, host-tasks.js liveCycleStarted)
+			live_cycle: name => { self.liveCycleStarted?.(contentText(name)); return null; },
 			wait: () => null,
-			// play hum for 2s: hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
+			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
+			// decodes WAV only, a Worker has no decoder for the other formats
+			load: path => wavFrames(readBytes(contentText(path)), contentText(path)),
+			// spectrum(samples, seconds, bands): the bands of the window, the samples around sample_offset (src/sound/spectrum.rs in warp.wasm);
+			// a window past the end is the empty list, ø: null here
+			spectrum(window, rate, bands, low, high) {
+				return this.holder.spectrum(Array.from(window ?? [], sample => Number(sample) - SAMPLE_OFFSET), Number(rate), bands, low, high);
+			},
+			// spectrum("song.mp3", seconds, bands) of the file's window then, and how long a file sounds
+			file_spectrum(path, seconds, windowSeconds, bands, low, high) {
+				const { rate, amplitudes } = monoOf(this.holder, path);
+				const start = Math.min(amplitudes.length, Math.round(Math.max(0, Number(seconds)) * rate));
+				const window = amplitudes.subarray(start, Math.min(amplitudes.length, start + Math.round(Number(windowSeconds) * rate)));
+				return this.holder.spectrum(window, rate, bands, low, high);
+			},
+			file_seconds(path) {
+				const { rate, amplitudes } = monoOf(this.holder, path);
+				return amplitudes.length / rate;
+			},
+			// play(hum, 2s): hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
 			signal(functions, seconds, rate) {
 				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));
 				return playedSignal(this.holder, seconds, Number(rate), signals.length, SIGNAL_BLOCK, (first, count) => {
@@ -285,7 +420,7 @@ addHostPart({
 					return blocks;
 				});
 			},
-			// play fill for 2s of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
+			// play(fill, 2s) of a block function (lowering/words/music_words.rs with_block_signals): the program's fill·blocks(t)
 			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
 			blocks(caller, addresses, seconds, rate) {
 				const blocks = [addresses].flat().map(Number);
@@ -301,10 +436,10 @@ addHostPart({
 			render(path) {
 				const sounds = this.holder.run.unrenderedSounds ?? [];
 				this.holder.run.unrenderedSounds = [];
-				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
-				const other = sounds.find(sound => sound.rate !== rate);
-				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
-				const { samples, channels } = mixed(sounds, rate, this.holder.run);
+				// the highest rate of the sounds, the others converted to it (src/sound/mod.rs render)
+				const rate = sounds.length ? Math.max(...sounds.map(sound => sound.rate)) : DEFAULT_SAMPLE_RATE;
+				const converted = sounds.map(sound => ({ ...sound, rate, samples: atRate(sound.samples, sound.channels ?? 1, sound.rate, rate) }));
+				const { samples, channels } = mixed(converted, rate, this.holder.run);
 				keepWritten(contentText(path), wavOf(samples, rate, channels));
 				return samples.length / channels / rate;
 			},

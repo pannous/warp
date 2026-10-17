@@ -66,8 +66,8 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    - Foreign calls in an executable (card exe-foreign, done 2026-10-12): `use python`/`use js` work in an
      executable. It starts python3 or node from PATH when it runs (user decision) and fails loudly naming a missing
      interpreter ("cannot start python3 (…); set WARP_PYTHON to an interpreter"). One bridge for both:
-     warp-runtime/src/foreign.rs holds the children, loop scripts and callbacks on serde_json::Value; warp's
-     src/foreign.rs only turns Nodes into JSON and back and calls components. warp-runtime/src/gc_values.rs reads a
+     warp-runtime/src/modules/foreign.rs holds the children, loop scripts and callbacks on serde_json::Value; warp's
+     src/modules/foreign.rs only turns Nodes into JSON and back and calls components. warp-runtime/src/gc_values.rs reads a
      program's GC Node as JSON and builds JSON back through its constructor exports (new_text … exact_add);
      stub_calls_export_with_foreign_calls keeps those exports when the program imports foreign_call.
      `use python` no longer imports fetch, read, warn and run (wasm_emitter emit_host_imports only for those words).
@@ -121,8 +121,8 @@ stub (a debug warp built the stub in its own profile; that stub is 5.6 MB today)
 
 | executable (release stub) | before | after | machine code (raw) |
 |---|---|---|---|
-| samples/quicksort.warp | 1131568 | 927296 | 215856 → 179752 |
-| samples/game_of_life.warp | 1115744 | 919616 | 200032 → 163680 |
+| samples/lists/quicksort.warp | 1131568 | 927296 | 215856 → 179752 |
+| samples/loops/game_of_life.warp | 1115744 | 919616 | 200032 → 163680 |
 | `6*7` | 1045520 | 906816 | |
 The rest is the stub. Start time unchanged (~19 ms per run with process start). Next steps if needed: a stub without
 the system signals and values (optional packages chosen by the program's imports), or the shared runtime module
@@ -141,7 +141,7 @@ the system signals and values (optional packages chosen by the program's imports
 1. Done: Cranelift crates optimized in dev builds (largest win, tests 8×).
 2. Done (branch aot): the on-disk module cache for every native run, and `warp compile --aot`.
 3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build`.
-4. Done (2026-10-05): dead-function elimination of every emitted module (src/dead_functions.rs): functions no export,
+4. Done (2026-10-05): dead-function elimination of every emitted module (src/compiler/dead_functions.rs): functions no export,
    start, element segment or global reaches are dropped. `f(x):=x+1; f(41)`: 113 → 52 functions, 7.6 → 5.0 KB wasm,
    cwasm 131 → 92 KB, single-threaded Cranelift 17.0 → 14.7 ms; ackermann 10.9 → 8.4 KB, cwasm 149 → 128 KB;
    functions:: (289 tests, one thread, cache off) 17.1 → 13.4 s.
@@ -179,3 +179,15 @@ every_sample_runs_without_a_compiler_error 15.6 s, test_upper_and_lower 14.9 s, 
 - A plain run of a fresh file costs ~85 ms more: the printing variant compiled once more and its machine code
   written into the executable; unchanged files skip it (the executable is newer).
 
+
+## Why samples/lists/quicksort.warp's executable grew (card samples-quicksort, 2026-10-16)
+
+No single commit: the wasm of the sample grew steadily, 21838 bytes at the tree-shaking commit 5dabc3882 (2026-10-09), 23785
+(10-11), 25472 (10-14), 26094 (10-15), 26436 (10-16), and the carried machine code with it (~45 KB → ~60 KB). Per function
+(`probes/wasm_function_sizes.py old.wasm new.wasm`, builds per commit with `probes/quicksort_size_at.sh <commit>`), 10-11 → 10-16:
+- list_text +604: `str(numbers)` prints a list of unknown items, and that printer learned each shape's written form (brackets and
+  separators of nested lists, bool text, instance text, key operators: card print-shows, bool-type, print-parse).
+- text_grapheme_offset/back/count +414: `arr[j]` on a parameter of unknown type may index a text, which counts graphemes (not bytes) now.
+- quicksort, partitioned, main +~600 together: the same untyped arithmetic and comparison going through exact_* and node_order.
+Intended correctness, each paid for by programs that need it; the carried-size limit follows it. Shrinking further is a general
+job (typed parameters shrink the generic paths: `arr: list`), not a revert.

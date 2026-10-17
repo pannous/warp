@@ -23,13 +23,7 @@ fn a_closure_of_one_known_target_is_called_directly() {
 	// its captured k is read once before the loop, the loop calls the lambda itself: no entry unboxing k per call
 	assert_eq!(calls_to(RETURNED, "closure_entry_closure_lambda_1"), 0);
 	// a variable that may hold either of two closures still dispatches
-	is!(
-		"def mk(k){ x => x + k }; def mul(k){ x => x * k }; h = mk(1); if 1 > 2 { h = mul(3) }; h(4)",
-		5
-	);
+	is!("def mk(k){ x => x + k }; def mul(k){ x => x * k }; h = mk(1); if 1 > 2 { h = mul(3) }; h(4)", 5);
 	// a parameter is never taken for a variable of the same name
-	is!(
-		"def mk(k){ x => x + k }; h = mk(1); def twice(h, x){ h(h(x)) }; twice(y => y * 3, 2)",
-		18
-	);
+	is!("def mk(k){ x => x + k }; h = mk(1); def twice(h, x){ h(h(x)) }; twice(y => y * 3, 2)", 18);
 }

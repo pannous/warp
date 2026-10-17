@@ -2,8 +2,8 @@
 //! every warning and ambiguity error offers each reading the user might have meant as an edit of the source
 //! (notes/fixits.md). Each test applies a fix to the source and checks that the result compiles, without a warning,
 //! to the reading the fix names.
-use warp::diagnostic::{take_error_diagnostics, take_warnings, with_warning_mode, Diagnostic, WarningMode};
-use warp::fixits::fixed;
+use warp::errors::diagnostic::{take_error_diagnostics, take_warnings, with_warning_mode, Diagnostic, WarningMode};
+use warp::errors::fixits::fixed;
 use warp::normalize::capture_hints;
 use warp::wasm_emitter::eval;
 
@@ -25,11 +25,7 @@ fn diagnostics(code: &str) -> Vec<Diagnostic> {
 fn fixed_by(code: &str, meaning: &str) -> String {
 	let all = diagnostics(code);
 	let found = all.iter().find_map(|diagnostic| {
-		diagnostic
-			.fixes
-			.iter()
-			.find(|fix| fix.meaning.contains(meaning))
-			.map(|fix| (diagnostic, fix))
+		diagnostic.fixes.iter().find(|fix| fix.meaning.contains(meaning)).map(|fix| (diagnostic, fix))
 	});
 	let (diagnostic, fix) = found.unwrap_or_else(|| panic!("no fix meaning {meaning:?} for {code}: {all:?}"));
 	fixed(code, diagnostic.line, diagnostic.column, fix)
@@ -40,11 +36,7 @@ fn fixed_by(code: &str, meaning: &str) -> String {
 fn assert_fix(code: &str, meaning: &str, expected: &str) {
 	let source = fixed_by(code, meaning);
 	let value = with_warning_mode(WarningMode::Error, || eval(&source));
-	assert_eq!(
-		value.serialize().trim(),
-		expected,
-		"{code} fixed to {meaning}: {source}"
-	);
+	assert_eq!(value.serialize().trim(), expected, "{code} fixed to {meaning}: {source}");
 }
 
 #[test]
@@ -80,8 +72,8 @@ fn list_operator_fixes() {
 
 #[test]
 fn bare_list_fixes() {
-	assert_fix("a=1 2 3; a", "a list", "[1 2 3]");
-	assert_fix("a=1 2 3; a", "separate statements", "1");
+	assert_fix("a=1,2,3; a", "a list", "[1 2 3]");
+	assert_fix("a=1,2,3; a", "separate statements", "1");
 }
 
 #[test]
@@ -129,10 +121,7 @@ fn loop_it_fix() {
 /// The hint about `original` in `code` offers its preferred form, which gives `expected`
 fn assert_hint_fix(code: &str, original: &str, expected: &str) {
 	let (_, hints) = capture_hints(|| eval(code));
-	let hint = hints
-		.iter()
-		.find(|hint| hint.original == original)
-		.unwrap_or_else(|| panic!("{hints:?}"));
+	let hint = hints.iter().find(|hint| hint.original == original).unwrap_or_else(|| panic!("{hints:?}"));
 	let (line, column) = hint.line_and_column();
 	let source = fixed(code, line, column, &hint.fix().expect("a rewrite")).expect("the hint's text is in the source");
 	assert_eq!(eval(&source).serialize(), expected, "{source}");
@@ -147,9 +136,7 @@ fn a_hint_offers_its_preferred_form() {
 #[test]
 fn the_page_gets_each_fix_as_an_edit() {
 	let report = warp::web::evaluate(&format!("{SQUARE}square 3 + square 4"), Default::default());
-	let fixes = report["errors"][0]["fixes"]
-		.as_array()
-		.unwrap_or_else(|| panic!("{report}"));
+	let fixes = report["errors"][0]["fixes"].as_array().unwrap_or_else(|| panic!("{report}"));
 	assert_eq!(fixes.len(), 2, "{report}");
 	assert_eq!(fixes[0]["label"], "I meant: square(3) + square(4)");
 	assert_eq!(
@@ -175,19 +162,13 @@ fn codepoint_is_the_preferred_name() {
 fn the_page_says_got_it_for_one_expression() {
 	let code = "x=0; for i in 1 upto 4 {x+=i}; for i in 1 upto 3 {x+=i}; x";
 	let report = warp::web::evaluate(code, Default::default());
-	let first = report["warnings"][0]["expression_key"]
-		.as_str()
-		.unwrap_or_else(|| panic!("{report}"))
-		.to_string();
+	let first = report["warnings"][0]["expression_key"].as_str().unwrap_or_else(|| panic!("{report}")).to_string();
 	assert!(first.starts_with("upto@"), "{first}");
 	assert_eq!(report["got_it"][0]["topic"], "upto");
 	let silenced = warp::web::evaluate(code, [first].into_iter().collect());
 	let warnings = silenced["warnings"].as_array().unwrap();
 	assert_eq!(warnings.len(), 1, "the other upto still warns: {silenced}");
-	assert!(
-		warnings[0]["message"].as_str().unwrap().contains("upto 3"),
-		"{silenced}"
-	);
+	assert!(warnings[0]["message"].as_str().unwrap().contains("upto 3"), "{silenced}");
 	assert_eq!(silenced["value"], report["value"]);
 }
 
@@ -204,11 +185,7 @@ fn kebab_key_fixes() {
 
 #[test]
 fn filter_loop_fixes() {
-	assert_fix(
-		"xs=[1,\"a\",2]; s=0; for int in xs: s += it\ns",
-		"filter the items",
-		"3",
-	);
+	assert_fix("xs=[1,\"a\",2]; s=0; for int in xs: s += it\ns", "filter the items", "3");
 	assert_fix("xs=[1,5,3]; s=0; for (it>2) in xs: s += it\ns", "filter the items", "8");
 	assert_fix(
 		"type Friend {name}; xs=[Friend{name:\"a\"}, 3]; n=0; for Friend in xs: n += 1\nn",
@@ -230,10 +207,7 @@ fn the_page_gets_every_edit_of_a_fix() {
 	let edits = renamed["edits"].as_array().unwrap();
 	assert_eq!(edits.len(), 2, "{renamed}");
 	// the last in the text first: the read at the end, then the key
-	assert_eq!(
-		(edits[0]["start"].as_u64(), edits[1]["start"].as_u64()),
-		(Some(code.len() as u64 - 3), Some(10))
-	);
+	assert_eq!((edits[0]["start"].as_u64(), edits[1]["start"].as_u64()), (Some(code.len() as u64 - 3), Some(10)));
 }
 
 #[test]
@@ -241,10 +215,7 @@ fn ambiguous_call_comparison_fixes() {
 	assert_fix("say(x) := x\nsay 3 == 4", "the call compared", "no");
 	assert_fix("say(x) := x\nsay 3 == 4", "the comparison as the argument", "no");
 	assert_fix("say(x) := x\nsay 3 == 3", "the call compared", "yes");
-	assert_eq!(
-		fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"),
-		"say(x) := x\nsay(3 == 3)"
-	);
+	assert_eq!(fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"), "say(x) := x\nsay(3 == 3)");
 }
 
 /// card more-fixes (user): an error with an evident fix offers it; a missing closer is added where it was left open
@@ -297,9 +268,12 @@ fn missing_kebab_field_fix() {
 #[test]
 fn int_for_enum_parameter_fix() {
 	// card coin-errors, decision enum-case B: an int becomes a case explicitly, so f(1) for f(c: Coin) offers f(1 as Coin)
-	assert_fix(
-		"enum Coin { Penny, Nickel, Dime }; f(c: Coin) := c; f(1)",
-		"the Coin case at index 1",
-		"Nickel",
-	);
+	assert_fix("enum Coin { Penny, Nickel, Dime }; f(c: Coin) := c; f(1)", "the Coin case at index 1", "Nickel");
+}
+
+/// decision labels-calls: a bare label in a call is an error offering its colon, like the warning on `play C4 for 1s`
+#[test]
+fn a_bare_label_fixes_to_its_colon() {
+	assert_fix("move(x, from a, to b) := x + a - b\nmove 1 from 10 to: 3", "colon", "8");
+	assert_fix("f(x, to y) := x - y\nf 9 to 4", "colon", "5");
 }

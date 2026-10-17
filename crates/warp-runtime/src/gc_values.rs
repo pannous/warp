@@ -40,19 +40,8 @@ const NEW_LIST: &str = "new_list";
 const SHIFT_LEFT: &str = "int_shift_left";
 const ADD: &str = "exact_add";
 const SUBTRACT: &str = "exact_sub";
-pub const BUILDERS: [&str; 11] = [
-	NEW_EMPTY,
-	NEW_INT,
-	NEW_FLOAT,
-	NEW_CODEPOINT,
-	NEW_TEXT,
-	NEW_SYMBOL,
-	NEW_KEY,
-	NEW_LIST,
-	SHIFT_LEFT,
-	ADD,
-	SUBTRACT,
-];
+pub const BUILDERS: [&str; 11] =
+	[NEW_EMPTY, NEW_INT, NEW_FLOAT, NEW_CODEPOINT, NEW_TEXT, NEW_SYMBOL, NEW_KEY, NEW_LIST, SHIFT_LEFT, ADD, SUBTRACT];
 /// The global holding the end of the program's texts (warp's TEXT_HEAP_EXPORT)
 pub const TEXT_HEAP: &str = "text_heap";
 pub const MEMORY: &str = "memory";
@@ -87,29 +76,18 @@ pub fn json_of<T>(node: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory
 			None => Value::from(integer_of(&data, store)?),
 		},
 		FLOAT => Value::from(
-			as_struct(&data, store)
-				.map_or(Ok(Val::F64(0)), |boxed| boxed.field(&mut *store, 0))?
-				.unwrap_f64(),
+			as_struct(&data, store).map_or(Ok(Val::F64(0)), |boxed| boxed.field(&mut *store, 0))?.unwrap_f64(),
 		),
 		CODEPOINT => {
-			let code = data
-				.unwrap_anyref()
-				.and_then(|reference| reference.unwrap_i31(&*store).ok());
-			Value::String(
-				code.and_then(|code| char::from_u32(code.get_u32()))
-					.unwrap_or('\0')
-					.to_string(),
-			)
+			let code = data.unwrap_anyref().and_then(|reference| reference.unwrap_i31(&*store).ok());
+			Value::String(code.and_then(|code| char::from_u32(code.get_u32())).unwrap_or('\0').to_string())
 		}
 		TEXT | SYMBOL | ERROR => Value::String(text_of(&data, store, memory)?),
 		KEY => Value::Object(Map::from_iter([entry_of(&data, &value, store, memory)?])),
 		BLOCK => object_of(items_of(data, value, store)?, store, memory)?,
 		LIST if high_bits == CURLY => object_of(items_of(data, value, store)?, store, memory)?,
 		LIST => Value::Array(
-			items_of(data, value, store)?
-				.iter()
-				.map(|item| json_of(item, store, memory))
-				.collect::<Result<_>>()?,
+			items_of(data, value, store)?.iter().map(|item| json_of(item, store, memory)).collect::<Result<_>>()?,
 		),
 		FUNCTION => {
 			wasmtime::bail!("an executable cannot give a warp function to a foreign call yet; run it with warp")
@@ -197,9 +175,7 @@ fn integer_of<T>(payload: &Val, store: &mut StoreContextMut<'_, T>) -> Result<f6
 				.collect::<Vec<_>>()
 				.iter()
 				.rev()
-				.fold(0.0, |high, limb| {
-					high * 2f64.powi(LIMB_BITS as i32) + f64::from(limb.unwrap_i32() as u32)
-				});
+				.fold(0.0, |high, limb| high * 2f64.powi(LIMB_BITS as i32) + f64::from(limb.unwrap_i32() as u32));
 			if negative != 0 {
 				-magnitude
 			} else {
@@ -233,19 +209,12 @@ pub struct Builders {
 
 impl Builders {
 	pub fn of(lookup: &mut dyn FnMut(&str) -> Option<wasmtime::Extern>) -> Result<Builders> {
-		let functions = BUILDERS
-			.iter()
-			.filter_map(|&name| Some((name, lookup(name)?.into_func()?)))
-			.collect();
+		let functions = BUILDERS.iter().filter_map(|&name| Some((name, lookup(name)?.into_func()?))).collect();
 		let memory = lookup(MEMORY)
 			.and_then(|export| export.into_memory())
 			.ok_or_else(|| wasmtime::Error::msg("the program exports no memory"))?;
 		let heap = lookup(TEXT_HEAP).and_then(|export| export.into_global());
-		Ok(Builders {
-			functions,
-			memory,
-			heap,
-		})
+		Ok(Builders { functions, memory, heap })
 	}
 
 	fn call<T>(&self, name: &str, arguments: &[Val], result: Val, store: &mut StoreContextMut<'_, T>) -> Result<Val> {
@@ -264,9 +233,7 @@ impl Builders {
 	}
 
 	fn int_operation<T>(&self, name: &str, a: i64, b: i64, store: &mut StoreContextMut<'_, T>) -> Result<i64> {
-		Ok(self
-			.call(name, &[Val::I64(a), Val::I64(b)], Val::I64(0), store)?
-			.unwrap_i64())
+		Ok(self.call(name, &[Val::I64(a), Val::I64(b)], Val::I64(0), store)?.unwrap_i64())
 	}
 
 	/// JSON as a node of the program: null ø, booleans 1/0, objects `{key:value …}`, `{$int: digits}` an exact integer,
@@ -277,28 +244,17 @@ impl Builders {
 			Value::Bool(truth) => self.node(NEW_INT, &[Val::I64(i64::from(*truth))], store),
 			Value::Number(number) => match number.as_i64() {
 				Some(integer) => self.integer(&integer.to_string(), store),
-				None => self.node(
-					NEW_FLOAT,
-					&[Val::F64(number.as_f64().unwrap_or(f64::NAN).to_bits())],
-					store,
-				),
+				None => self.node(NEW_FLOAT, &[Val::F64(number.as_f64().unwrap_or(f64::NAN).to_bits())], store),
 			},
 			Value::String(text) => self.text(NEW_TEXT, text, store),
-			Value::Array(items) => self.list(
-				items
-					.iter()
-					.map(|item| self.build(item, store))
-					.collect::<Result<_>>()?,
-				SQUARE,
-				store,
-			),
+			Value::Array(items) => {
+				self.list(items.iter().map(|item| self.build(item, store)).collect::<Result<_>>()?, SQUARE, store)
+			}
 			Value::Object(entries) => match single_text(entries) {
 				Some((BIG_INTEGER_KEY, digits)) if is_integer(digits) => self.integer(digits, store),
-				Some((CODEPOINT_KEY, letter)) if letter.chars().count() == 1 => self.node(
-					NEW_CODEPOINT,
-					&[Val::I32(letter.chars().next().unwrap_or('\0') as i32)],
-					store,
-				),
+				Some((CODEPOINT_KEY, letter)) if letter.chars().count() == 1 => {
+					self.node(NEW_CODEPOINT, &[Val::I32(letter.chars().next().unwrap_or('\0') as i32)], store)
+				}
 				_ => {
 					let mut keys = vec![];
 					for (key, value) in entries {
@@ -312,9 +268,7 @@ impl Builders {
 	}
 
 	fn text<T>(&self, constructor: &str, text: &str, store: &mut StoreContextMut<'_, T>) -> Result<Val> {
-		let heap = self
-			.heap
-			.ok_or_else(|| wasmtime::Error::msg(format!("the program exports no {TEXT_HEAP}")))?;
+		let heap = self.heap.ok_or_else(|| wasmtime::Error::msg(format!("the program exports no {TEXT_HEAP}")))?;
 		let (pointer, length) = write_to_heap(&self.memory, heap, store, text.as_bytes())?;
 		self.node(constructor, &[Val::I32(pointer as i32), Val::I32(length as i32)], store)
 	}
@@ -324,9 +278,10 @@ impl Builders {
 		if items.is_empty() {
 			return self.node(NEW_EMPTY, &[], store);
 		}
-		items.into_iter().rev().try_fold(Val::AnyRef(None), |rest, first| {
-			self.node(NEW_LIST, &[first, rest, Val::I64(bracket)], store)
-		})
+		items
+			.into_iter()
+			.rev()
+			.try_fold(Val::AnyRef(None), |rest, first| self.node(NEW_LIST, &[first, rest, Val::I64(bracket)], store))
 	}
 
 	/// The Int of decimal digits: a fixnum as it is, a larger integer composed from 32-bit limbs

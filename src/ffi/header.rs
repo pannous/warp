@@ -48,136 +48,40 @@ pub(crate) const C_TYPE_WORDS: [&str; 13] = [
 /// C keywords that start a statement: a line holding one declares no function
 const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
 
+/// Line starts of comments (also a block comment's continued lines: `** See also: [sqlite3_libversion()]`),
+/// preprocessor directives and declarations of no function (typedef, struct, enum, union)
+const NO_FUNCTION_STARTS: [&str; 8] = ["//", "#", "/*", "*", "typedef", "struct", "enum", "union"];
+
+/// Storage qualifiers and API macros a declaration may carry (RLAPI, SDL_CALL, etc.), dropped
+const DROPPED_QUALIFIERS: [&str; 12] = [
+	"extern ",
+	"static ",
+	"inline ",
+	"RLAPI ",
+	"RAYGUIAPI ",
+	"RMAPI ",
+	"PHYSACDEF ",
+	"RL_API ",
+	"SDL_CALL ",
+	"SDLCALL ",
+	"__cdecl ",
+	"__stdcall ",
+];
+
 /// Extract function signature from a C declaration string
 /// e.g., "double sqrt(double x);" -> FfiHeaderSignature
 pub fn extract_function_signature(declaration: &str, library: &str) -> Option<FfiHeaderSignature> {
 	let decl = declaration.trim();
-
-	// Skip empty lines, comments (also a block comment's continued lines: `** See also: [sqlite3_libversion()]`),
-	// preprocessor directives
-	if decl.is_empty()
-		|| decl.starts_with("//")
-		|| decl.starts_with('#')
-		|| decl.starts_with("/*")
-		|| decl.starts_with('*')
-	{
+	if decl.is_empty() || NO_FUNCTION_STARTS.iter().any(|start| decl.starts_with(start)) {
 		return None;
 	}
-
-	// Skip non-function declarations (typedef, struct, enum, etc.)
-	if decl.starts_with("typedef")
-		|| decl.starts_with("struct")
-		|| decl.starts_with("enum")
-		|| decl.starts_with("union")
-	{
-		return None;
-	}
-
-	// Remove extern, static, inline qualifiers and API macros (RLAPI, SDL_CALL, etc.)
-	let decl = decl
-		.replace("extern ", "")
-		.replace("static ", "")
-		.replace("inline ", "")
-		.replace("RLAPI ", "")
-		.replace("RAYGUIAPI ", "")
-		.replace("RMAPI ", "")
-		.replace("PHYSACDEF ", "")
-		.replace("RL_API ", "")
-		.replace("SDL_CALL ", "")
-		.replace("SDLCALL ", "")
-		.replace("__cdecl ", "")
-		.replace("__stdcall ", "");
-	let decl = without_libc_annotations(decl.trim());
-	let decl = decl.trim();
-	// zlib's K&R-compatible prototypes: `zlibVersion OF((void));` declares `zlibVersion(void);`
-	let decl = match decl.find(" OF((") {
-		Some(start) => format!(
-			"{}({}",
-			&decl[..start],
-			decl[start + " OF((".len()..].replacen("))", ")", 1)
-		),
-		None => decl.to_string(),
-	};
-	let decl = decl.as_str();
-
-	// Find the opening parenthesis (marks start of params)
+	let decl = plain_declaration(decl);
 	let paren_pos = decl.find('(')?;
-
-	// Everything before '(' is return_type + name
-	let before_paren = &decl[..paren_pos];
-
-	// Find function name (last word before parenthesis)
-	let parts: Vec<&str> = before_paren.split_whitespace().collect();
-	if parts.is_empty() {
-		return None;
-	}
-
-	// `return f(x);` in an inline function body of a header is a statement, not a declaration
-	if parts.iter().any(|part| C_STATEMENT_KEYWORDS.contains(part)) {
-		return None;
-	}
-
-	// Function name is the last part, may have pointer marker
-	// `char *getenv(…)` returns char *
-	let (name, pointer_marks) = split_pointer_marks(parts.last()?);
-	if name.is_empty() || C_TYPE_WORDS.contains(&name.as_str()) {
-		return None;
-	}
-
-	// Return type is everything before the name
-	let return_type = if parts.len() > 1 {
-		parts[..parts.len() - 1].join(" ")
-	} else {
-		"int".to_string() // C default
-	};
-	let return_type = if pointer_marks.is_empty() {
-		return_type
-	} else {
-		format!("{return_type} {pointer_marks}")
-	};
-
+	let (name, return_type) = name_and_return_type(&decl[..paren_pos])?;
 	// the `)` closing the parameters: a macro may follow it (`fopen(…) __DARWIN_ALIAS(fopen);`); a line without one
 	// (sqlite3.h has such) declares nothing
-	let close_paren = matching_paren(decl, paren_pos)?;
-	let params_str = &decl[paren_pos + 1..close_paren];
-
-	let mut param_types = Vec::new();
-	let mut param_names = Vec::new();
-
-	if params_str.trim() != "void" && !params_str.trim().is_empty() {
-		for param in params_str.split(',') {
-			let param = param.trim();
-			if param.is_empty() || param == "..." {
-				continue;
-			}
-
-			// Split param into type and name
-			let parts: Vec<&str> = param.split_whitespace().collect();
-			if parts.is_empty() {
-				continue;
-			}
-
-			// Handle "type *name" or "type* name" or "type name"
-			let (ptype, pname) = if parts.len() == 1 {
-				(parts[0].to_string(), String::new())
-			} else {
-				let last = parts.last().unwrap();
-				let name = last.trim_start_matches('*').to_string();
-				// Reconstruct type (everything except pure name); `sqlite3 **ppDb` keeps both stars
-				let stars = &last[..last.len() - name.len()];
-				let type_str = if !stars.is_empty() {
-					format!("{} {stars}", parts[..parts.len() - 1].join(" "))
-				} else {
-					parts[..parts.len() - 1].join(" ")
-				};
-				(type_str, name)
-			};
-
-			param_types.push(ptype);
-			param_names.push(pname);
-		}
-	}
-
+	let close_paren = matching_paren(&decl, paren_pos)?;
+	let (param_types, param_names) = parameters(&decl[paren_pos + 1..close_paren]).into_iter().unzip();
 	Some(FfiHeaderSignature {
 		name,
 		return_type,
@@ -186,6 +90,57 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
 		library: library.to_string(),
 		raw: declaration.to_string(),
 	})
+}
+
+/// A declaration without qualifiers, API macros and annotations; zlib's K&R-compatible prototypes
+/// `zlibVersion OF((void));` declare `zlibVersion(void);`
+fn plain_declaration(declaration: &str) -> String {
+	let decl = DROPPED_QUALIFIERS.iter().fold(declaration.to_string(), |decl, qualifier| decl.replace(qualifier, ""));
+	let decl = without_libc_annotations(decl.trim());
+	let decl = decl.trim();
+	match decl.find(" OF((") {
+		Some(start) => format!("{}({}", &decl[..start], decl[start + " OF((".len()..].replacen("))", ")", 1)),
+		None => decl.to_string(),
+	}
+}
+
+/// The function name (the last word before the parameters) and return type (the words before it, `int` by C
+/// default); `char *getenv(…)` returns char *
+fn name_and_return_type(before_paren: &str) -> Option<(String, String)> {
+	let parts: Vec<&str> = before_paren.split_whitespace().collect();
+	// `return f(x);` in an inline function body of a header is a statement, not a declaration
+	if parts.iter().any(|part| C_STATEMENT_KEYWORDS.contains(part)) {
+		return None;
+	}
+	let (name, pointer_marks) = split_pointer_marks(parts.last()?);
+	if name.is_empty() || C_TYPE_WORDS.contains(&name.as_str()) {
+		return None;
+	}
+	let return_type = if parts.len() > 1 { parts[..parts.len() - 1].join(" ") } else { "int".to_string() };
+	let return_type = if pointer_marks.is_empty() { return_type } else { format!("{return_type} {pointer_marks}") };
+	Some((name, return_type))
+}
+
+/// The type and name of each parameter; `(void)` has none, a variadic `...` is skipped
+fn parameters(params_str: &str) -> Vec<(String, String)> {
+	if params_str.trim() == "void" {
+		return vec![];
+	}
+	params_str.split(',').map(str::trim).filter(|param| *param != "...").filter_map(parameter).collect()
+}
+
+/// "type *name" or "type* name" or "type name", or a type alone
+fn parameter(param: &str) -> Option<(String, String)> {
+	let parts: Vec<&str> = param.split_whitespace().collect();
+	let (last, type_words) = parts.split_last()?;
+	if type_words.is_empty() {
+		return Some((last.to_string(), String::new()));
+	}
+	let name = last.trim_start_matches('*').to_string();
+	// Reconstruct type (everything except pure name); `sqlite3 **ppDb` keeps both stars
+	let stars = &last[..last.len() - name.len()];
+	let type_str = if !stars.is_empty() { format!("{} {stars}", type_words.join(" ")) } else { type_words.join(" ") };
+	Some((type_str, name))
 }
 
 /// The macOS SDK's bounds annotations (`char *_LIBC_CSTR strchr(…)`, `_LIBC_COUNT(__n)`) dropped: no C type or name
@@ -197,9 +152,8 @@ fn without_libc_annotations(declaration: &str) -> String {
 	while let Some(start) = rest.find(LIBC_ANNOTATION_PREFIX) {
 		kept.push_str(&rest[..start]);
 		let after = &rest[start..];
-		let word_end = after
-			.find(|letter: char| !(letter.is_ascii_alphanumeric() || letter == '_'))
-			.unwrap_or(after.len());
+		let word_end =
+			after.find(|letter: char| !(letter.is_ascii_alphanumeric() || letter == '_')).unwrap_or(after.len());
 		rest = &after[word_end..];
 		if rest.starts_with('(') {
 			rest = matching_paren(rest, 0).map_or("", |close| &rest[close + 1..]);
@@ -217,11 +171,7 @@ const UNLINKABLE_C_TYPES: [&str; 1] = ["long double"];
 pub fn unlinkable_type(hsig: &FfiHeaderSignature) -> Option<&'static str> {
 	std::iter::once(&hsig.return_type)
 		.chain(&hsig.param_types)
-		.find_map(|c_type| {
-			UNLINKABLE_C_TYPES
-				.into_iter()
-				.find(|unlinkable| bare_c_type(c_type) == *unlinkable)
-		})
+		.find_map(|c_type| UNLINKABLE_C_TYPES.into_iter().find(|unlinkable| bare_c_type(c_type) == *unlinkable))
 }
 
 /// Convert FfiHeaderSignature to FfiSignature (using 'static lifetime via leak); none for a function wasm cannot call
@@ -229,26 +179,20 @@ pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> 
 	if unlinkable_type(hsig).is_some() {
 		return None;
 	}
-	let params: Vec<wasm_encoder::ValType> = warp_parameters(&hsig.param_types)
-		.filter_map(|t| map_c_type_to_valtype(t))
-		.collect();
+	let params: Vec<wasm_encoder::ValType> =
+		warp_parameters(&hsig.param_types).filter_map(|t| map_c_type_to_valtype(t)).collect();
 	let results: Vec<wasm_encoder::ValType> = header_result(hsig).into_iter().collect();
 
 	// Leak strings for 'static lifetime (acceptable for long-running process)
 	let name: &'static str = Box::leak(hsig.name.clone().into_boxed_str());
 	let library: &'static str = Box::leak(hsig.library.clone().into_boxed_str());
 
-	Some(FfiSignature {
-		name,
-		library,
-		params,
-		results,
-	})
+	Some(FfiSignature { name, library, params, results })
 }
 
 /// Get standard header file paths for a library (delegates to ffi_parser)
 pub fn get_library_header_paths(library: &str) -> Vec<String> {
-	crate::ffi_parser::find_library_headers(resolve_library_alias(library))
+	crate::formats::ffi_parser::find_library_headers(resolve_library_alias(library))
 }
 
 /// glibc's math.h declares libm through the macros of this header: `__MATHCALL (sqrt,, (_Mdouble_ __x));`
@@ -269,14 +213,12 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
 	if !content.contains(GLIBC_MATHCALLS) {
 		return content;
 	}
-	let header_dir = std::path::Path::new(header_path)
-		.parent()
-		.map(|dir| dir.to_string_lossy().to_string())
-		.unwrap_or_default();
-	let dirs: Vec<String> = std::iter::once(header_dir)
-		.chain(crate::ffi_parser::include_dirs())
-		.collect();
-	match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| crate::web::read_text(&path)) {
+	let header_dir =
+		std::path::Path::new(header_path).parent().map(|dir| dir.to_string_lossy().to_string()).unwrap_or_default();
+	let dirs: Vec<String> = std::iter::once(header_dir).chain(crate::formats::ffi_parser::include_dirs()).collect();
+	match crate::formats::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs)
+		.and_then(|path| crate::web::read_text(&path))
+	{
 		Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
 		None => content,
 	}
@@ -286,10 +228,9 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
 /// `int ilogb (double __x);`: plain declarations of the double variants
 pub fn expand_glibc_math_macros(source: &str) -> String {
 	let declaration = |line: &str| -> Option<String> {
-		let (macro_name, typed) = GLIBC_MATH_MACROS.iter().find(|(name, _)| {
-			line.strip_prefix(name)
-				.is_some_and(|rest| rest.trim_start().starts_with('('))
-		})?;
+		let (macro_name, typed) = GLIBC_MATH_MACROS
+			.iter()
+			.find(|(name, _)| line.strip_prefix(name).is_some_and(|rest| rest.trim_start().starts_with('(')))?;
 		let inner = line[macro_name.len()..].trim_start().strip_prefix('(')?;
 		let inner = &inner[..inner.rfind(')')?];
 		let mut parts = vec![String::new()];
@@ -306,23 +247,12 @@ pub fn expand_glibc_math_macros(source: &str) -> String {
 			}
 			parts.last_mut()?.push(c);
 		}
-		let (result, rest) = if *typed {
-			(parts.first()?.trim().to_string(), &parts[1..])
-		} else {
-			("double".to_string(), &parts[..])
-		};
+		let (result, rest) =
+			if *typed { (parts.first()?.trim().to_string(), &parts[1..]) } else { ("double".to_string(), &parts[..]) };
 		let (name, arguments) = (rest.first()?.trim(), rest.get(2)?.trim());
-		Some(format!(
-			"{} {name} {};",
-			result.replace("_Mdouble_", "double"),
-			arguments.replace("_Mdouble_", "double")
-		))
+		Some(format!("{} {name} {};", result.replace("_Mdouble_", "double"), arguments.replace("_Mdouble_", "double")))
 	};
-	source
-		.lines()
-		.filter_map(|line| declaration(line.trim()))
-		.collect::<Vec<_>>()
-		.join("\n")
+	source.lines().filter_map(|line| declaration(line.trim())).collect::<Vec<_>>().join("\n")
 }
 
 /// Parse a header file and extract all function signatures
@@ -346,24 +276,20 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
 		}
 
 		struct_types.read(line);
-		// Skip empty lines and typedefs/structs in the middle of accumulation
+		// an empty line ends whatever was accumulating
 		if line.is_empty() {
 			current_decl.clear();
 			continue;
 		}
 
-		// Strip inline comments (// ...) for processing but keep declaration
-		let line_for_check = if let Some(comment_pos) = line.find("//") {
-			line[..comment_pos].trim()
-		} else {
-			line
-		};
+		let line_for_check = line.find("//").map_or(line, |comment_start| line[..comment_start].trim());
 
-		// Accumulate multi-line declarations (use original line content)
+		// a declaration may span lines: accumulate them without their trailing comments
 		current_decl.push_str(line_for_check);
 		current_decl.push(' ');
 
-		// If we have a complete declaration (ends with ; or })
+		// `…);` ends a function declaration; `}` or a `;` without parameters ends anything else (typedefs are refused by
+		// extract_function_signature)
 		if line_for_check.ends_with(';') && current_decl.contains('(') {
 			if let Some(sig) = extract_function_signature(&current_decl, library) {
 				signatures.push(sig);
@@ -398,10 +324,7 @@ impl StructTypes {
 		} else if self.in_definition && line.starts_with('}') && line.ends_with(';') {
 			self.in_definition = false;
 			self.names.extend(
-				words
-					.last()
-					.map(|name| name.trim_start_matches('}').to_string())
-					.filter(|name| !name.is_empty()),
+				words.last().map(|name| name.trim_start_matches('}').to_string()).filter(|name| !name.is_empty()),
 			);
 		}
 	}
@@ -432,7 +355,6 @@ pub(super) fn is_struct_type(name: &str) -> bool {
 			.is_some_and(|names| names.contains(name))
 }
 
-/// The position of the `)` closing the `(` at `open`
 /// A C type without its surrounding spaces and leading `const`
 pub(crate) fn bare_c_type(c_type: &str) -> &str {
 	let t = c_type.trim();
@@ -445,6 +367,7 @@ pub(crate) fn split_pointer_marks(word: &str) -> (String, String) {
 	(name.to_string(), "*".repeat(word.len() - name.len()))
 }
 
+/// The position of the `)` closing the `(` at `open`
 pub(crate) fn matching_paren(text: &str, open: usize) -> Option<usize> {
 	let mut depth = 0;
 	for (position, c) in text[open..].char_indices() {
@@ -463,9 +386,7 @@ fn is_annotation_line(line: &str) -> bool {
 	let Some(open) = line.find('(') else { return false };
 	let name = &line[..open];
 	!name.is_empty()
-		&& name
-			.chars()
-			.all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+		&& name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 		&& line.ends_with(')')
 }
 

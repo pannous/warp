@@ -1,8 +1,8 @@
 //! Card web-fine-holes (notes/web_framework.md step 3): the elements of a page's markup that hold a computed text,
 //! attribute or child are read on their own after a handler (`page·hole·<path>`, the element indices from the root),
 //! and the page changes only the ones whose HTML differs
-use warp::markup::holes;
 use warp::warp_parser::parse;
+use warp::web::markup::holes;
 
 const TOGGLE: &str = "done = false\ntoggles = 0\ndiv{ button{ on click { done = not done; toggles += 1 } \"toggle\" } p{ class: done ? \"done\" : \"open\" \"state\" } ul{ li{ \"toggled \" + toggles + \" times\" } } }";
 
@@ -19,10 +19,7 @@ fn the_elements_holding_computed_parts_are_the_holes() {
 		vec![vec![1], vec![2, 0]]
 	);
 	// a fixed list's elements count as children; an element holding none itself is no hole, its children may be
-	assert_eq!(
-		hole_paths("div{ [p{\"a\"} p{\"b\"}] section{ h1{\"t\"} p{ n } } }"),
-		vec![vec![2, 1]]
-	);
+	assert_eq!(hole_paths("div{ [p{\"a\"} p{\"b\"}] section{ h1{\"t\"} p{ n } } }"), vec![vec![2, 1]]);
 	// a hole holds its whole element, nested ones included
 	assert_eq!(hole_paths("div{ p{ n b{ m } } }"), vec![vec![0]]);
 }

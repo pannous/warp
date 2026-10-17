@@ -26,14 +26,8 @@ fn indexes_in_any_order_find_their_grapheme() {
 		"t = \"aé👍🏽\\r\\nb\"; o = \"\"; for i in [0 1 2 3 4 3 2 1 0 4 2] { o += t[i] + \"|\" }; o",
 		"a|é|👍🏽|\r\n|b|\r\n|👍🏽|é|a|b|👍🏽|"
 	);
-	is!(
-		"t = \"ab\\r\\ncd\"; o = \"\"; for i in [4 3 2 1 0 2] { o += t[i] }; o",
-		"dc\r\nba\r\n"
-	);
+	is!("t = \"ab\\r\\ncd\"; o = \"\"; for i in [4 3 2 1 0 2] { o += t[i] }; o", "dc\r\nba\r\n");
 	// the same bytes grown or cut: an append in place, a prefix
 	is!("t = \"abc\"; x = t[2]; t += \"de\"; t[2] + t[4]", "ce");
-	is!(
-		"t = \"abcdef\"; x = t[4]; p = t[0..3]; [p.length, t[4]]",
-		warp::parse("[3 'e']")
-	);
+	is!("t = \"abcdef\"; x = t[4]; p = t[0..3]; [p.length, t[4]]", warp::parse("[3 'e']"));
 }

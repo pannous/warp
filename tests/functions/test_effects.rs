@@ -1,7 +1,7 @@
 //! Effect inference, `effects of f`, declared constraints, effect-driven imports
 
 use crate::is;
-use warp::effects::{effects_of, Effect::*, EffectReport, EffectSet};
+use warp::analyzer::effects::{effects_of, Effect::*, EffectReport, EffectSet};
 use warp::warp_parser::WarpParser;
 use warp::wasm_emitter::eval;
 use warp::{Node, WasmGcEmitter};
@@ -52,10 +52,7 @@ fn test_effects_are_inferred_from_calls() {
 	assert_eq!(effects("f := puts it", "f"), EffectSet::of(&[IO]));
 	assert_eq!(effects("x=fetch https://a.com/t;x", "main"), EffectSet::of(&[IO]));
 	assert_eq!(effects("use m;floor(4.5)", "main"), EffectSet::PURE); // libm is pure (P26)
-	assert_eq!(
-		effects("import strlen from \"c\"; strlen(\"ab\")", "main"),
-		EffectSet::of(&[FFI])
-	);
+	assert_eq!(effects("import strlen from \"c\"; strlen(\"ab\")", "main"), EffectSet::of(&[FFI]));
 	assert_eq!(effects("puts", "fd_write"), EffectSet::of(&[IO, Unsafe]));
 }
 
@@ -93,10 +90,7 @@ fn test_constraint_on_non_function_is_loud() {
 #[test]
 fn test_declared_constraint_violation_names_span_and_chain() {
 	let message = error_text(eval("log(x) := puts x\nsquare(x) := log(x) ! Pure\nsquare(3)"));
-	assert!(
-		message.contains("square is declared ! Pure but performs IO"),
-		"{message}"
-	);
+	assert!(message.contains("square is declared ! Pure but performs IO"), "{message}");
 	assert!(message.contains("square → log → puts"), "{message}");
 	assert!(message.contains("at 2:"), "{message}");
 	let message = error_text(eval("f(x) := puts x ! FFI\nf(1)"));
@@ -106,18 +100,9 @@ fn test_declared_constraint_violation_names_span_and_chain() {
 #[test]
 fn test_imports_follow_effects() {
 	assert!(imports_of("square(x) := x*x\nsquare(3)").is_empty());
-	assert!(
-		imports_of("x='puts ';x").is_empty(),
-		"text mentioning puts is no IO call"
-	);
-	assert!(
-		imports_of("use m;3").is_empty(),
-		"declared but uncalled FFI is not imported"
-	);
-	assert_eq!(
-		imports_of("puts('ok')"),
-		[("wasi_snapshot_preview1".into(), "fd_write".into())]
-	);
+	assert!(imports_of("x='puts ';x").is_empty(), "text mentioning puts is no IO call");
+	assert!(imports_of("use m;3").is_empty(), "declared but uncalled FFI is not imported");
+	assert_eq!(imports_of("puts('ok')"), [("wasi_snapshot_preview1".into(), "fd_write".into())]);
 	assert_eq!(imports_of("use m;fmod(4.5, 2.0)"), [("m".into(), "fmod".into())]);
 	assert!(imports_of("x=fetch https://a.com/t;x").contains(&("host".into(), "fetch".into())));
 }
@@ -126,21 +111,12 @@ fn test_imports_follow_effects() {
 #[test]
 fn test_allocation_and_async_are_inferred() {
 	assert_eq!(effects("pair(x) := [x, x]", "pair"), EffectSet::of(&[Allocation]));
-	assert_eq!(
-		effects("person(n) := {name: n}", "person"),
-		EffectSet::of(&[Allocation])
-	);
-	assert_eq!(
-		effects("greet(n) := \"hi \" + n", "greet"),
-		EffectSet::of(&[Allocation])
-	);
+	assert_eq!(effects("person(n) := {name: n}", "person"), EffectSet::of(&[Allocation]));
+	assert_eq!(effects("greet(n) := \"hi \" + n", "greet"), EffectSet::of(&[Allocation]));
 	assert!(EffectSet::of(&[Allocation]).is_pure());
 	is!("pair(x) := [x, x]\neffects of pair", Node::Symbol("Allocation".into()));
 	is!("first(x) := [x, x]#1 ! Pure\nfirst(3)", 3);
-	is!(
-		"g() := 1\nf() := await go g()\neffects of f",
-		Node::Symbol("Async".into())
-	);
+	is!("g() := 1\nf() := await go g()\neffects of f", Node::Symbol("Async".into()));
 	let message = error_text(eval("g() := 1\nf() := await go g() ! Pure\nf()"));
 	assert!(message.contains("f is declared ! Pure but performs Async"), "{message}");
 }

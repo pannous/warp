@@ -1,6 +1,6 @@
 //! `x and y or z` warns only when y can be falsy (card done-done): `done and "done" or "open"` is a well-defined
 //! ternary and says nothing; the warning that stays offers "got it" as an Ask's warning does
-use warp::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::wasm_emitter::eval;
 
 const FALSY_MIDDLE: &str = "x = 1; x and 0 or 2";
@@ -8,10 +8,7 @@ const FALSY_MIDDLE: &str = "x = 1; x and 0 or 2";
 fn and_or_warnings(code: &str) -> usize {
 	take_warnings();
 	eval(code);
-	take_warnings()
-		.iter()
-		.filter(|warning| warning.message.contains("is falsy"))
-		.count()
+	take_warnings().iter().filter(|warning| warning.message.contains("is falsy")).count()
 }
 
 #[test]

@@ -30,11 +30,8 @@ fn programs_writing_one_database_at_once_wait_for_each_other() {
 #[test]
 fn a_test_thread_keeps_a_samples_tables_apart() {
 	let folder = std::env::var("WARP_TEST_TABLES").expect("WARP_TEST_TABLES from .cargo/config.toml");
-	let thread = std::thread::current()
-		.name()
-		.expect("libtest names its threads")
-		.replace("::", ".");
-	eval("samples/orm.warp");
+	let thread = std::thread::current().name().expect("libtest names its threads").replace("::", ".");
+	eval("samples/storage/orm.warp");
 	let file = std::path::Path::new(&folder).join(thread).join("orm.database.sqlite");
 	assert!(file.exists(), "{}", file.display());
 }

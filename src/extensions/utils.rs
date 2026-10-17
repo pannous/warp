@@ -1,6 +1,6 @@
 use std::fs::{create_dir_all, File};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 //noinspection ALL
 
 /// Without the native feature (the compiler in the browser) there is no network: the page's host does the fetching at run time
@@ -63,14 +63,11 @@ pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<Strin
 #[cfg(all(feature = "native", not(test)))]
 pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut response = agent_within(timeout, true)
-		.get(&with_default_scheme(url))
-		.call()
-		.map_err(reason)?;
+	let mut response = agent_within(timeout, true).get(&with_default_scheme(url)).call().map_err(reason)?;
 	response.body_mut().read_to_string().map_err(reason)
 }
 
-/// `post(url, body, headers)` of the stdlib module net (src/std_adapters.rs): the body sent as UTF-8 text (plain text
+/// `post(url, body, headers)` of the stdlib module net (src/modules/std_adapters.rs): the body sent as UTF-8 text (plain text
 /// unless a header names its Content-Type), the answer's text; an answer of status >= 400 is the error, with its body
 /// (an API's own reason, `{"error": … "invalid x-api-key"}`)
 #[cfg(feature = "native")]
@@ -99,11 +96,7 @@ pub fn post_within(
 #[cfg(feature = "native")]
 /// `status_is_error`: an answer of status >= 400 fails the call itself, its body unread
 fn agent_within(timeout: std::time::Duration, status_is_error: bool) -> ureq::Agent {
-	ureq::Agent::config_builder()
-		.timeout_global(Some(timeout))
-		.http_status_as_error(status_is_error)
-		.build()
-		.into()
+	ureq::Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(status_is_error).build().into()
 }
 
 /// A failed request in a few words: DNS, timeout, HTTP status >= 400, else ureq's own
@@ -134,4 +127,22 @@ pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {
 	}
 
 	File::create(filename).and_then(|mut f| f.write_all(bytes)).is_ok()
+}
+
+/// The bytes written to `<stem>.<extension>` in the system's temporary `folder` for the first file of a kind,
+/// `<stem>-<number>.<extension>` for the later ones; `writer` names who failed (sound's WAVs, paint's PNGs)
+pub fn numbered_temporary_file(
+	folder: &str,
+	stem: &str,
+	number: usize,
+	extension: &str,
+	bytes: &[u8],
+	writer: &str,
+) -> Result<PathBuf, String> {
+	let folder = std::env::temp_dir().join(folder);
+	create_dir_all(&folder).map_err(|failure| format!("{writer}: cannot create {}: {failure}", folder.display()))?;
+	let name = if number == 1 { format!("{stem}.{extension}") } else { format!("{stem}-{number}.{extension}") };
+	let path = folder.join(name);
+	std::fs::write(&path, bytes).map_err(|failure| format!("{writer}: cannot write {}: {failure}", path.display()))?;
+	Ok(path)
 }

@@ -1,7 +1,0 @@
-// card binary-int: 0b101 reads as 5, `as binary` (alias bin) shows binary
-// gives 6
-print(0b101 + 1)
-// gives 0b101
-print(5 as binary)
-// gives 0b110
-print(6 as bin)

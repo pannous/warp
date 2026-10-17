@@ -36,10 +36,7 @@ fn a_nested_include_is_found_next_to_the_including_file() {
 
 #[test]
 fn including_a_file_twice_includes_it_once_and_cycles_terminate() {
-	is!(
-		"include tests/fixtures/counter; include tests/fixtures/counter; counter",
-		11
-	);
+	is!("include tests/fixtures/counter; include tests/fixtures/counter; counter", 11);
 	is!("include tests/fixtures/cycle_a; a_done + b_done", 3);
 }
 
@@ -50,4 +47,14 @@ fn a_missing_include_lists_the_searched_paths() {
 	for directory in ["./include", "./lib", "./src", "./source"] {
 		assert!(message.contains(directory), "{directory} missing: {message}");
 	}
+}
+
+// card samples-name: a sample named like a standard module (samples/modules/agent.warp) never stands in for it when a
+// program runs in the repository root; the samples' own modules (lib, square) are still found there
+#[test]
+fn a_sample_never_shadows_a_standard_module() {
+	assert!(warp::modules::shadows_with_a_sample(std::path::Path::new("samples/modules/agent.warp")));
+	assert!(!warp::modules::shadows_with_a_sample(std::path::Path::new("samples/modules/square.warp")));
+	assert!(!warp::modules::shadows_with_a_sample(std::path::Path::new("lib/agent.warp")));
+	is!("use square; square 7", 49);
 }

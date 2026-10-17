@@ -6,7 +6,7 @@
 // into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
 // printed text after the clicks; `address` the address bar's path after
 // them).
-// samples.js (made by build.sh) adds samples/*.warp.
+// samples.js (made by build.sh) adds samples/<chapter>/*.warp.
 const EXAMPLES = {
 	hello: { value: '"Hello, world"', code: `// your first program: the value of the last line shows below
 "Hello, world"` },
@@ -35,6 +35,9 @@ alice.age + 1` },
 	conditions: { value: '"warm"', code: `// if … then … else gives a value
 temperature = 25
 if temperature > 20 then "warm" else "cold"` },
+	matching: { value: '["logo.png" "cat.jpg"]', code: `// a pattern names the parts it wants; find collects every match, at any depth
+page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+page find {type: "image", src}` },
 	loops: { value: "55", code: `// add up the numbers 1 to 10
 total = 0
 for i in 1 to 10 { total += i }
@@ -132,7 +135,7 @@ for x in 0..32 {
   clear(paper)
   circle(x, 8, 4, orange)
   show()
-  sleep(30)
+  sleep(30ms)
 }
 "done"` },
 	frames: { value: '"done"', canvases: 1, code: `// without a sleep too: each show() replaces the picture of the same size
@@ -142,6 +145,7 @@ for x in 0..32 {
   clear(paper)
   circle(x, 8, 4, purple)
   show()
+  sleep(50ms)
 }
 "done"` },
 	shader: { value: '"done"', canvases: 1, code: `// paint a WGSL fragment shader: the GPU colors every pixel, values change each frame
@@ -161,7 +165,7 @@ for frame in 0..200 {
   clear(paper)
   circle(mouse_x, mouse_y, 3, if mouse_down then red else blue)
   show()
-  sleep(30)
+  sleep(30ms)
 }
 "done"` },
 	"shader mouse": { value: '"done"', canvases: 1, code: `// a shader under the mouse: rings ripple out from the pointer, a press lights them up
@@ -170,7 +174,7 @@ start = clock()
 ripples = shader {
   @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
     let away = distance(at.xy, $mouse);
-    let ring = 0.5 + 0.5 * sin(away * 0.8 - $seconds * 6.0);
+    let ring = 0.5*$mouse.x/10 + 0.5 * sin(away * 0.8 - $seconds * 6.0);
     let light = 0.35 + 0.65 * $mouse_down;
     return vec4f(ring * light, ring * light * 0.4, light * (1.0 - away / 64.0), 1.0);
   }
@@ -179,7 +183,7 @@ for frame in 0..300 {
   mouse = [mouse_x + 0.5, mouse_y + 0.5]
   seconds = (clock() - start) / 1000
   paint(ripples, 64, 32)
-  sleep(30)
+  sleep(30ms)
 }
 "done"` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, a step every half second
@@ -232,7 +236,7 @@ div{ button{ "+1" on click { count += 1 } } button{ "reset" on click { count = 0
 done = false
 toggles = 0
 div{ style{ .done = "green" } button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
-	components: { value: 'div{div{button{data-warp-instance:1 data-warp-click:"1" "+"} p:"Apples: 1"} div{button{data-warp-instance:2 data-warp-click:"1" "+"} p:"Pears: 5"}}', clicks: ["+"], clicked: 'div{div{button{data-warp-instance:1 data-warp-click:"1" "+"} p:"Apples: 2"} div{button{data-warp-instance:2 data-warp-click:"1" "+"} p:"Pears: 5"}}', kept: true, code: `// a component is a function that returns markup; each keeps its own count
+	components: { value: 'div{div{button{data-warp-instance:1 data-warp-click:"1" \'+\'} p:"Apples: 1"} div{button{data-warp-instance:2 data-warp-click:"1" \'+\'} p:"Pears: 5"}}', clicks: ["+"], clicked: 'div{div{button{data-warp-instance:1 data-warp-click:"1" \'+\'} p:"Apples: 2"} div{button{data-warp-instance:2 data-warp-click:"1" \'+\'} p:"Pears: 5"}}', kept: true, code: `// a component is a function that returns markup; each keeps its own count
 def Counter(label, start) {
 	count = start
 	div{ button{ on click { count += 1 } "+" } p{ label + ": " + count } }
@@ -281,7 +285,12 @@ div{
 	button{ on click { todos = todos[1..] } "remove" }
 	ul{ [li{ key: todo.id starting-style: { opacity: 0 } transition: "opacity 150ms, transform 150ms" todo.text } for todo in todos] }
 }` },
-	"wasm components": { value: '[12586269025 ["a" "bc" "d"] 7]', code: `// a Rust library compiled to a WebAssembly component
+	melody: { value: '"done"', code: `// notes by name: one after another, then together as a chord
+use sound
+melody([C4 E4 G4], 100ms)
+play([C4 E4 G4], 300ms)
+"done"` },
+	"wasm components": { value: '[12586269025 [\'a\' "bc" \'d\'] 7]', code: `// a Rust library compiled to a WebAssembly component
 use rust_demo as demo
 c = demo.counter(5)
 c.increment(2)

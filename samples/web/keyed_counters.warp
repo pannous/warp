@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+# Keyed component state (card web-instance-keys): `key:` on a call ties the instance's state to the key, not to its
+# position, so a count stays with its item when the list is reversed or an item leaves. Run it in the playground.
+def Counter(name) {
+	count = 0
+	div{ button{ on click { count += 1 } name } p{ name + " " + count } }
+}
+items = ["apples", "bread", "cheese"]
+div{
+	button{ on click { items = items.reverse() } "Reverse" }
+	button{ on click { items = items[1..] } "Drop the first" }
+	[Counter(item, key: item) for item in items]
+}

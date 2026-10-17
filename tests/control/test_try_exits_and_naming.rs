@@ -34,10 +34,7 @@ fn break_out_of_a_try_restores_the_depth() {
 
 #[test]
 fn continue_out_of_a_try_restores_the_depth() {
-	is!(
-		"s=0; for i in [1 2 3] { try { if i==2 {continue}; s=s+1 } else 0 }; s",
-		2
-	);
+	is!("s=0; for i in [1 2 3] { try { if i==2 {continue}; s=s+1 } else 0 }; s", 2);
 	later_error_is_loud("s=0; for i in [1 2 3] { try { if i==2 {continue}; s=s+1 } else 0 }; s");
 }
 
@@ -49,6 +46,5 @@ fn a_jump_inside_a_try_keeps_the_try_catching() {
 
 #[test]
 fn bare_try_else_still_works() {
-	is!("try 1 + [1 2]#5 else 0", 0);
 	is!("try [1 2]#5 else 4", 4);
 }

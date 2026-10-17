@@ -1,17 +1,16 @@
 // card print-oldest (user, 2026-10-10): a text joins anything in its str() form, `"oldest first: " + list` needs no
 // str(list); the one exception, a text spelling a number plus a number (`"3"+3`), warns ("a"+3 does not)
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 
 fn warns_of_spelled_number(code: &str) -> bool {
 	take_warnings();
 	warp::wasm_emitter::eval(code);
-	take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("spells a number"))
+	take_warnings().iter().any(|warning| warning.message.contains("spells a number"))
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: `sorted by` phrase parked until card prepositions-call"]
 fn a_text_joins_anything_in_its_text_form() {
 	is!("\"oldest: \" + [1, 2]", "oldest: [1 2]");
 	is!("[1 2] + \"z\"", "[1 2]z");

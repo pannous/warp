@@ -1,0 +1,61 @@
+// The standard library module shell (card unix-words, part of `use script`): the basic Unix commands as warp words with
+// warp results, lists and texts instead of printed shell output. A path needs no quotes: `ls ~/`, `cat ./notes.txt`,
+// `cd /tmp`; `~` is the home folder. The words of a shell line that aren't here run with command("…")
+use os
+use file
+use regex
+use text
+use list
+// the names in a folder, the working directory by default, sorted and without the hidden ones, as ls shows them
+ls(folder:text = ".") := [name for name in list_files(folder) if not name.starts_with(".")]
+// the working directory, as cwd gives it
+pwd := cwd
+// `cd ~/projects`: the working directory changes, for this program and the commands it runs; the new one
+cd(folder:text = "~") := std_io("os", "cd", [folder])
+// a file's text
+cat(path:text) := read(path)
+// prints its value, as print does
+echo(value:any) := print(value)
+// a folder made with the folders above it, if missing
+mkdir(folder:text) := std_io("file", "mkdir", [folder])
+// a file copied, to a folder (keeping its name) or a file
+cp(from:text, to:text) := std_io("file", "copy", [from, to])
+// a file or folder moved or renamed, into a folder or to a new name
+mv(from:text, to:text) := std_io("file", "move", [from, to])
+// an empty file made if missing, else its time of change set to now
+touch(path:text) := std_io("file", "touch", [path])
+// `rm "old.txt"`: a file or an empty folder moved to the Trash; never a pattern, a full folder, the root, the home
+// folder or the working directory and the folders above it
+rm(path:text) := std_io("file", "remove", [path])
+// a file's lines without their line ends: the first n, the last n
+file_lines(path:text) := split(remove_suffix(read(path), "\n"), "\n")
+head(path:text, n:int = 10) := file_lines(path).first(n)
+tail(path:text, n:int = 10) := file_lines(path).last(n)
+// `wc ./a.txt` → {lines: 3, words: 5, bytes: 20}
+wc(path:text) := {
+	all = file_lines(path)
+	{"lines": count(all), "words": sum([count(words(line)) for line in all]), "bytes": file_size(path)}
+}
+// a file's lines sorted, without repeats
+sort_lines(path:text) := sort(file_lines(path))
+unique_lines(path:text) := unique(file_lines(path))
+// `grep "fn " "main.rs"`: the lines of a file the regular expression matches
+grep(pattern:text, path:text) := [line for line in file_lines(path) if matches(line, pattern)]
+// `find_files(~/dev, "*.warp")`: the paths below a folder whose name matches, hidden folders skipped (find itself
+// searches a list)
+find_files(folder:text, pattern:text) := std_io("file", "find", [folder, pattern])
+// the bytes of a file or of all files below a folder, as du counts them (size itself is a list's)
+file_size(path:text) := std_io("file", "size", [path])
+// `info ./a.txt` → {size: 20, modified: 1760536980000, kind: "file"}, modified in milliseconds as clock() counts
+info(path:text) := std_io("file", "info", [path])
+// `open ./photo.png`: the file in its app; natively only
+open(path:text) := std_io("os", "open", [path])
+// the path of the program a command runs, ø when no folder of the PATH has it
+which(name:text) := std_io("os", "which", [name])
+// A path written without quotes is a Path where a word has a method for one (card cross-module-overload): `sort
+// ./names.txt` sorts the file's lines, `sort [3 1 2]` stays the list's sort; the same for unique, find and size
+class Path { name: text }
+sort(file:Path) := sort_lines(file.name)
+unique(file:Path) := unique_lines(file.name)
+find(folder:Path, pattern:text) := find_files(folder.name, pattern)
+size(file:Path) := file_size(file.name)

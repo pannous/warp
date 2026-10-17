@@ -17,7 +17,7 @@ Decided (user, 2026-10-12, notes/decisions.md "self-hosting"):
 - Language gaps: fixed in the language as cards of this topic, never worked around in the warp code.
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k (src/warp_parser), Node 2.1k (src/node), analyzer 6.6k, emitter
-23k, lowering + top-level src ~59k. The warp written so far: lib/*.warp 1.5k, samples/json_parser.warp 95.
+23k, lowering + top-level src ~59k. The warp written so far: lib/*.warp 1.5k, samples/objects/json_parser.warp 95.
 
 ## What warp can do today (probes/self_hosting/, 2026-10-12)
 Works:
@@ -41,7 +41,7 @@ Gaps (each a card below):
   escaped by a `\` (a lone character escapes `'` and `\`), the same in the runtime print (text_quoted),
   Node::serialize and serializer.warp (`quoted`). Read a message's text with Display (`to_string()`), never
   `serialize().trim_matches('"')`, which keeps the escapes.
-- ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/node_api.rs): `n.key`, `n.value`, `n.op`,
+- ~~No Node API on data values~~ fixed (self-node-api, src/wasm_emitter/reflection/node_api.rs): `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket` (a field of that name wins), `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`;
   the kind is `type(n)`, items `n#i`, `#n`, `for x in n` (node_access.warp, tests/node/test_node_api.rs). Still
   missing: a list's separator (`,` `;` newline) is not kept in the wasm Node at all → self-node-separator
@@ -49,7 +49,7 @@ Gaps (each a card below):
   3f7e212a1, `xs += [x]`, `xs.add(x)`), one text too (it grows in place at the heap top). Texts built in turn
   (`w += "x"; v += "y"`, a lexer's token and its output) were quadratic and passed the 2 GB memory cap at 100k appends.
   Now text_append, the concat of a variable's text, gives a copied text of 64+ bytes as much room again behind it and
-  remembers 8 rooms (src/wasm_emitter/text_rooms.rs); text_concat of other texts stays small (a program without
+  remembers 8 rooms (src/wasm_emitter/text/text_rooms.rs); text_concat of other texts stays small (a program without
   building pays nothing, quicksort's executable stays under its size limit). probes/self_hosting/text_builders.warp:
   400k appends to each of two texts in 70 ms; tests/text/test_text_builders.rs.
 
@@ -83,6 +83,10 @@ Rules
 ## Next phase: passes, analyzer, emitter (card self-next-phase, 2026-10-13)
 Order: the lowering passes first, then the analyzer, then the emitter. Each stage can start before the previous one
 is complete; only the bootstrap waits for all three.
+
+- Next item of this roadmap (user, 2026-10-14; card standalone-math-units): lib/math.warp and lib/units.warp become
+  complete standalone warp files, and the parser fetches its lists of special functions and special operators from
+  them instead of hard-coded Rust tables.
 
 - Lowering passes first. src/pipeline.rs runs ~150 passes, each `fn(Node) -> Node`, in SOURCE_PHASES and
   MEANING_PASSES (~50k lines in src/lowering). A pass is the smallest unit with a twin: one function, one input tree,
@@ -146,3 +150,32 @@ number, yes, no or ø as itself, every other node a list tagged by its kind (["k
   into `"\∞`: text_or_comment_end now skips escapes (same card). A Data node without a unit description is written
   `Data(…)`, so its view carries that text. Small floats keep their exponent on both sides (`2.5e-6`, decision
   float-text): Node's Display writes numbers as Number does (writes-node).
+
+## Runtime calls into prelude words (card hex-binary, late calls)
+Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written
+word by index. `late_call(callee, params, results)` (src/wasm_emitter/functions/late_calls.rs) gives the callee a
+funcref global `late·<callee>` that main fills with ref.func before anything runs; the runtime calls it with call_ref
+(as witness.rs does for Comparable). The loader must load the word although the program never calls it: an
+`implied_words` hook in modules::called_names (radix.rs: a named `hex`, `binary`, `byte` … implies hex_text /
+binary_text). First user: lib/prelude.warp hex_text, binary_text over to_base.
+- Size: a warp word with `%` or `//` on int pulls the exact-rational runtime (~5 KB): card int-i64.
+- A host calling an exported runtime function before main would find the global null (trap): only main-run code uses it.
+
+## Text search words in warp: measured, not moved (card card-3, 2026-10-16)
+probes/text_search/words.warp writes trim, starts_with, ends_with and find over byte_at / byte_slice; check.warp
+gives the builtins' answers. Benchmark: bench_find_builtin.warp vs bench_find_warp.warp (20 000 finds in a 2 KB
+text, 40 M byte comparisons), `warp compile --wasm` each, then `hyperfine -N -i 'warp bench_find_builtin.wasm' 'warp
+bench_find_warp.wasm'` (-i: the exit code is the result mod 256).
+- Speed: warp find 2.0 s vs 0.30 s builtin, 6.2x slower; `t: text, offset: int` types change nothing, `fast` on the
+  words nothing either. trim / starts_with / ends_with on short edges: ~2x on the time after the ~12 ms startup.
+- Size: the same, ~17 KB modules either way (±1.5%); the warp words are small, the hand loops too.
+- Why (WAT of matches_at): every `+` and `<` still tests the 2^62 range and branches to exact_add / exact_cmp, also
+  under fast (card fast-int), and each byte_at is a call that re-resolves the text (text_argument) instead of one
+  i32.load8_u on an address held outside the loop (card loop-calls). A prelude call is also never inlined (sum-list).
+- fast-int landed (whole fast expressions on machine i64s): find unchanged at 6.4x. What is left is ~9 calls per
+  offset at ~5 ns each, and those 5 ns are mostly fuel (card fuel-metering, notes/performance.md "Still slow").
+- loop-calls: `byte_at(t, i)` and `t.bytes` of a text are inline (a kind test; another value still goes through
+  text_argument / node_bytes): find 6.4x → 1.7x (0.50 s against 0.29 s). Left: the matches_at call per offset and
+  fuel (card fuel-metering, decided: epochs by default). Rerun the two bench files once that lands, then decide
+  whether find moves to warp. TEXT_FIND has a second caller, `in` /
+  contains (fields_and_keys.rs), which needs a late_call (above) once find moves.

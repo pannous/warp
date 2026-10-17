@@ -40,14 +40,17 @@ fn an_int_becomes_a_case_explicitly() {
 	is!(&with_coin("Coin(1)"), symbol("Nickel"));
 	is!(&with_coin("n = 0; n as Coin"), symbol("Penny"));
 	fails_with(&with_coin("9 as Coin"), "9 is no Coin case");
+	is!(
+		&with_coin(
+			"cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }; cents(Coin.Nickel) + cents(2 as Coin)"
+		),
+		15
+	);
 }
 
 #[test]
 fn other_languages_enums_are_plain_enums_too() {
-	is!(
-		"enum Direction { case north, south }\nlet d = Direction.south\nd",
-		symbol("south")
-	);
+	is!("enum Direction { case north, south }\nlet d = Direction.south\nd", symbol("south"));
 	is!("enum class Color { RED, GREEN }\nColor.GREEN is Color", true);
 	is!("enum color {red green blue}; color.blue as int", 2);
 }

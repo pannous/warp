@@ -1,6 +1,6 @@
-# bool: a shallow type of its own (cards bool-type, zero-false)
+# bool: a shallow type of its own
 
-Decision (notes/decisions.md): true/false act as 1/0 in arithmetic and comparisons, `type(true)` is bool, they print
+true/false act as 1/0 in arithmetic and comparisons, `type(true)` is bool, they print
 as yes/no (src/node/serialization.rs YES/NO; true/false stay accepted as input). `0 == false` is true, `0 === false`
 is false.
 
@@ -12,7 +12,7 @@ is false.
 - Run-time type tests of a value of unknown static type (`value:any`): node_kind_in gives a bool its own mask bit
   (BOOL_MASK_BIT), so it is no int; run-time values_equal takes a bool as a number (`false == 0`).
 - Tasks: a bool crosses as 1/0; where a bool function's task is awaited the result is compared `!= 0`, a bool again
-  (lowering/declarations.rs checked_await, card bool-crossing).
+  (lowering/definitions/declarations.rs checked_await, card bool-crossing).
 
 ## Which values are bools
 src/analyzer/booleans.rs `is_boolean(node, scope)`: literals, comparisons (incl. `===`), prefix `not`, and/or of bools,
@@ -29,8 +29,5 @@ unknown static type (`value:any`) is told apart by boolness only. `1.0` is lower
 P195: `true + 1` is 2, literal or variable (the analyzer error "arithmetic on a boolean" is gone).
 
 ## Rust side
-`Node::True == 1` and `Node::False == 0` (PartialEq<i64>), so `is!(…, 1)` tests keep passing; serialized output
-changed to true/false (tests upgraded in their own commit).
+`Node::True == 1` and `Node::False == 0` (PartialEq<i64>), so `is!(…, 1)` tests pass.
 
-## Open
-- Cards true-lowers (`[true, 2]` lowers to ø) and bool-crossing (a task's bool result arrives as 1).

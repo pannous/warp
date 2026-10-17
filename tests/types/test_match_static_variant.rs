@@ -6,20 +6,11 @@ const SHAPE: &str = "type Shape = Circle(r) | Rect(w, h) | Dot";
 
 #[test]
 fn a_bare_variant_skips_the_class_arms() {
-	is!(
-		&format!("{SHAPE}; s = Dot; match s {{ Circle(r) => 3 * r * r, Rect(w, h) => w * h, Dot => 0 }}"),
-		0
-	);
-	is!(
-		&format!("{SHAPE}; s = Dot; match s {{ Circle(r) => r * r, _ => 7 }}"),
-		7
-	);
+	is!(&format!("{SHAPE}; s = Dot; match s {{ Circle(r) => 3 * r * r, Rect(w, h) => w * h, Dot => 0 }}"), 0);
+	is!(&format!("{SHAPE}; s = Dot; match s {{ Circle(r) => r * r, _ => 7 }}"), 7);
 }
 
 #[test]
 fn an_instance_still_takes_its_arm() {
-	is!(
-		&format!("{SHAPE}; s = Rect(2, 3); match s {{ Circle(r) => 3 * r * r, Rect(w, h) => w * h, Dot => 0 }}"),
-		6
-	);
+	is!(&format!("{SHAPE}; s = Rect(2, 3); match s {{ Circle(r) => 3 * r * r, Rect(w, h) => w * h, Dot => 0 }}"), 6);
 }

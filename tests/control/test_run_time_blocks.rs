@@ -1,6 +1,6 @@
 // Run-time `!` (wiki/charged.md §5, notes/runtime_eval.md, package 4). Step 0, user 2026-10-05: "give a compiler
 // warning if the code contains unresolved symbol arithmetic": a block over names the program defines nowhere.
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 
 fn warnings_of(code: &str) -> Vec<String> {
 	take_warnings();
@@ -12,24 +12,16 @@ fn warnings_of(code: &str) -> Vec<String> {
 fn a_block_over_names_defined_nowhere_warns() {
 	let warnings = warnings_of("x : a+b; x");
 	assert!(
-		warnings
-			.iter()
-			.any(|message| message.contains("x keeps a+b over a, b, defined nowhere in the program")),
+		warnings.iter().any(|message| message.contains("x keeps a+b over a, b, defined nowhere in the program")),
 		"{warnings:?}"
 	);
-	assert!(warnings_of("x : a*2 > limit; x")
-		.iter()
-		.any(|message| message.contains("over a, limit")));
+	assert!(warnings_of("x : a*2 > limit; x").iter().any(|message| message.contains("over a, limit")));
 }
 
 #[test]
 fn a_block_over_defined_names_does_not_warn() {
-	assert!(warnings_of("a=1; x : a+b; b=2; x!")
-		.iter()
-		.all(|message| !message.contains("defined nowhere")));
-	assert!(warnings_of("x : a+1; a=5; x!")
-		.iter()
-		.all(|message| !message.contains("defined nowhere")));
+	assert!(warnings_of("a=1; x : a+b; b=2; x!").iter().all(|message| !message.contains("defined nowhere")));
+	assert!(warnings_of("x : a+1; a=5; x!").iter().all(|message| !message.contains("defined nowhere")));
 }
 
 // Step 2: a block known only at run time runs through the host (run_block), natively
@@ -52,19 +44,20 @@ fn a_run_time_block_reads_the_values_where_it_runs() {
 
 #[test]
 fn a_failing_run_time_block_names_the_block() {
-	crate::common::fails_with(
-		"y = data q+1; interpret y",
-		"the block q+1 failed: undefined variable: q",
-	);
+	crate::common::fails_with("y = data q+1; interpret y", "the block q+1 failed: undefined variable: q");
 }
 
 // Step 3 and 5: running a block at run time is the effect Eval, and the block itself is pure by default
 #[test]
 fn running_a_run_time_block_is_the_eval_effect() {
-	crate::is!(
-		"f(xs) := interpret(xs#1); effects of f",
-		warp::Node::Symbol("Eval".into())
-	);
+	// xs#1 of an empty list fails as well (card fail-effect-indexing)
+	let answer = warp::wasm_emitter::eval("f(xs) := interpret(xs#1); effects of f").serialize();
+	assert_eq!(answer, "(Eval Fail)");
+}
+
+#[test]
+fn running_a_whole_run_time_block_is_the_eval_effect_alone() {
+	crate::is!("f(xs) := interpret(xs); effects of f", warp::Node::Symbol("Eval".into()));
 }
 
 #[test]
@@ -78,23 +71,15 @@ fn a_run_time_block_gets_no_capabilities() {
 fn compiling_a_run_time_block_warns_about_the_host() {
 	take_warnings();
 	assert!(warp::pipeline::compile("xs = [data a+1, data a*2]; a = 5; interpret(xs#2)").is_ok());
-	assert!(take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("its host must provide host.run_block")));
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("its host must provide host.run_block")));
 }
 
 // The program's functions inside a run-time block, and exact numbers beyond the fixnums as its value
 #[test]
 fn a_run_time_block_calls_the_programs_functions() {
 	crate::is!("def twice(x): x*2; y = data twice(21); interpret y", 42);
-	crate::is!(
-		"def fib(n): n<2 ? n : fib(n-1)+fib(n-2); k=10; y = data fib(k)+1; interpret y",
-		56
-	);
-	crate::common::fails_with(
-		"y = data nope(2); interpret y",
-		"the block (nope 2) failed: undefined function: nope",
-	);
+	crate::is!("def fib(n): n<2 ? n : fib(n-1)+fib(n-2); k=10; y = data fib(k)+1; interpret y", 56);
+	crate::common::fails_with("y = data nope(2); interpret y", "the block (nope 2) failed: undefined function: nope");
 }
 
 #[test]
@@ -130,8 +115,5 @@ fn a_bang_on_a_parameter_or_a_call_result_decides_at_run_time() {
 
 #[test]
 fn a_run_time_block_hands_back_a_pair() {
-	assert_eq!(
-		warp::wasm_emitter::eval("y = data (p = (1 : 2); p); z = interpret y; z").serialize(),
-		"1:2"
-	);
+	assert_eq!(warp::wasm_emitter::eval("y = data (p = (1 : 2); p); z = interpret y; z").serialize(), "1:2");
 }

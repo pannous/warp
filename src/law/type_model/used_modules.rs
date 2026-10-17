@@ -3,11 +3,13 @@
 //! Builtins that warp computes the way a warp definition would come along the same way when called.
 
 use super::{function_definition, statements};
+use crate::lowering::library_words::expanded_word_definition;
 use crate::modules::{std_module_source, USE_KEYWORDS};
 use crate::node::{Bracket, Node, Separator};
+use crate::words::SUM_WORD;
 
-/// builtin words as warp definitions giving what warp gives: `sum` folds from 0 (`sum(["a", "b"])` is "0ab")
-const LIBRARY_WORDS: [(&str, &str); 1] = [("sum", "sum(xs) := { out = 0; for x in xs { out = out + x }; out }")];
+/// builtin words read as the warp definitions library_words expands them to: `sum` folds from 0 (`sum(["a", "b"])` is "0ab")
+const LIBRARY_WORDS: [&str; 1] = [SUM_WORD];
 
 /// The program with each `use` of a standard module replaced by the definitions it needs from it
 pub(super) fn inline(program: &Node) -> Result<Node, String> {
@@ -16,22 +18,14 @@ pub(super) fn inline(program: &Node) -> Result<Node, String> {
 	let own: Vec<&Node> = parts.to_vec();
 	let words: Vec<Node> = LIBRARY_WORDS
 		.iter()
-		.filter(|(word, _)| own.iter().any(|statement| calls(statement, word)) && !defines(&own, word))
-		.flat_map(|(_, source)| {
-			statements(&crate::warp_parser::parse(source))
-				.into_iter()
-				.cloned()
-				.collect::<Vec<_>>()
-		})
+		.filter(|&&word| own.iter().any(|statement| calls(statement, word)) && !defines(&own, word))
+		.filter_map(|word| expanded_word_definition(word))
+		.flat_map(|source| statements(&crate::warp_parser::parse(&source)).into_iter().cloned().collect::<Vec<_>>())
 		.collect();
 	if words.is_empty() {
 		return Ok(with_modules);
 	}
-	Ok(Node::List(
-		words.into_iter().chain(parts.into_iter().cloned()).collect(),
-		Bracket::None,
-		Separator::Semicolon,
-	))
+	Ok(Node::List(words.into_iter().chain(parts.into_iter().cloned()).collect(), Bracket::None, Separator::Semicolon))
 }
 
 /// whether node calls the word: `sum xs`, `sum(xs)`
@@ -44,9 +38,7 @@ fn calls(node: &Node, word: &str) -> bool {
 }
 
 fn defines(program: &[&Node], word: &str) -> bool {
-	program
-		.iter()
-		.any(|statement| function_definition(statement).is_some_and(|definition| definition.name == word))
+	program.iter().any(|statement| function_definition(statement).is_some_and(|definition| definition.name == word))
 }
 
 fn inline_modules(program: &Node) -> Result<Node, String> {
@@ -54,11 +46,7 @@ fn inline_modules(program: &Node) -> Result<Node, String> {
 	if !parts.iter().any(|statement| used_module(statement).is_some()) {
 		return Ok(program.clone());
 	}
-	let own: Vec<&Node> = parts
-		.iter()
-		.copied()
-		.filter(|statement| used_module(statement).is_none())
-		.collect();
+	let own: Vec<&Node> = parts.iter().copied().filter(|statement| used_module(statement).is_none()).collect();
 	let mut inlined = vec![];
 	for statement in &parts {
 		match used_module(statement) {

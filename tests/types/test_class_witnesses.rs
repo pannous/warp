@@ -23,8 +23,5 @@ fn an_equals_method_is_how_instances_compare() {
 fn a_compare_method_is_how_instances_order() {
 	is!("class P{x:int; compare(o) := x - o.x}; P(3) < P(4)", true);
 	is!("class P{x:int; compareTo(o) := x - o.x}; P(5) < P(4)", false);
-	is!(
-		"class P{x:int; compareTo(o) := x - o.x}; (sort [P(3), P(1), P(2)])#1.x",
-		1
-	);
+	is!("class P{x:int; compareTo(o) := x - o.x}; (sort [P(3), P(1), P(2)])#1.x", 1);
 }

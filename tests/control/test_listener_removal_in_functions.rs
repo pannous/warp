@@ -16,10 +16,7 @@ fn a_listener_is_removed_inside_a_block() {
 #[cfg(feature = "native")]
 fn a_listener_removed_by_a_function_stops_listening() {
 	let output = crate::common::printed("t = 0\nalarm = whenever t > 30 {print \"hot \" + t}\ncalm() := { remove alarm from listeners of t }\nt = 35\ncalm()\nt = 40");
-	let printed: String = output
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(|line| format!("{line}\n"))
-		.collect();
+	let printed: String =
+		output.lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect();
 	assert_eq!(printed, "hot 35\n");
 }

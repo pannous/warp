@@ -20,11 +20,8 @@ pub fn link_output<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
 				return ERRNO_FAULT;
 			};
 			let bytes = memory.data(&caller);
-			let word = |at: usize| {
-				bytes
-					.get(at..at + 4)
-					.map(|word| u32::from_le_bytes(word.try_into().unwrap()) as usize)
-			};
+			let word =
+				|at: usize| bytes.get(at..at + 4).map(|word| u32::from_le_bytes(word.try_into().unwrap()) as usize);
 			let mut text = Vec::new();
 			for index in 0..count.max(0) as usize {
 				let at = iovecs as usize + index * IOVEC_BYTES;

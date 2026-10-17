@@ -26,17 +26,19 @@ fn quoted_by(text: &str, quote: char) -> String {
 impl Node {
 	/// An operator in front of its one operand, ø on the left in the tree (`#x`, `-x`)
 	pub(super) fn is_prefix_form(&self) -> bool {
-		matches!(self.drop_meta(), Key(k, op, _) if matches!(k.drop_meta(), Empty) && writes_as_prefix(op))
+		matches!(self.drop_meta(), Key(k, op, _) if k.is_empty_node() && writes_as_prefix(op))
 	}
 
 	pub fn serialize(&self) -> String {
 		self.serialize_recurse(false)
 	}
 
-	/// A list item: a character is quoted like a text, `["a" "bb"]`, and reads back as the character it is (P126)
-	fn item_text(&self) -> String {
+	/// A list item: one character in single quotes, a one-character text too, as the runtime prints it
+	/// (chars-codepoints: `['a' "bc"]`); in code without brackets in double quotes, as the hint `fail "?"` writes it
+	fn item_text(&self, bracket: &Bracket) -> String {
 		match self.drop_meta() {
-			Char(c) => quoted(&c.to_string()),
+			Char(c) if *bracket == Bracket::None => quoted(&c.to_string()),
+			Text(t) if t.chars().count() == 1 && *bracket != Bracket::None => quoted_by(t, '\''),
 			_ => self.serialize(),
 		}
 	}
@@ -100,32 +102,15 @@ impl Node {
 			Text(t) => quoted(t),
 			Char(c) => quoted_by(&c.to_string(), '\''),
 			List(nodes, bracket, separator) => {
-				let close = bracket.closing();
-				if nodes.is_empty() {
-					format!("{}{}", bracket, close)
-				} else if nodes.len() == 1 {
-					format!("{}{}{}", bracket, nodes[0].item_text(), close)
-				} else {
-					let items: Vec<String> = nodes.iter().map(Node::item_text).collect();
-					let separator = separator.to_string();
-					let joint = if separator.ends_with(char::is_whitespace) {
-						separator
-					} else {
-						separator + " "
-					};
-					format!("{}{}{}", bracket, items.join(&joint), close)
-				}
+				let items: Vec<String> = nodes.iter().map(|node| node.item_text(bracket)).collect();
+				format!("{bracket}{}{}", items.join(&separator.joint()), bracket.closing())
 			}
 			// the operand a prefix or suffix operator lacks is ø in the tree, not in the text: `#x`, `not x`, `x++`
 			Key(_, op, v) if self.is_prefix_form() => {
-				let space = if op.as_str().starts_with(char::is_alphabetic) {
-					" "
-				} else {
-					""
-				};
+				let space = if op.as_str().starts_with(char::is_alphabetic) { " " } else { "" };
 				format!("{op}{space}{}", v.serialize_recurse(meta))
 			}
-			Key(k, op, v) if matches!(v.drop_meta(), Empty) && op.is_suffix() => {
+			Key(k, op, v) if v.is_empty_node() && op.is_suffix() => {
 				format!("{}{op}", k.operand_text(meta))
 			}
 			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => {
@@ -139,20 +124,10 @@ impl Node {
 			Key(k, Op::Hash, v) if matches!(v.drop_meta(), Key(..)) && !v.is_prefix_form() => {
 				format!("{}#({})", k.operand_text(meta), v.serialize_recurse(meta))
 			}
-			Key(k, op, v) if v.is_prefix_form() => format!(
-				"{}{}{} {}",
-				v.attribute_prefix(),
-				k.key_text(op, meta),
-				op,
-				v.serialize_with(meta, false)
-			),
-			Key(k, op, v) => format!(
-				"{}{}{}{}",
-				v.attribute_prefix(),
-				k.key_text(op, meta),
-				op,
-				v.serialize_with(meta, false)
-			),
+			Key(k, op, v) => {
+				let space = if v.is_prefix_form() { " " } else { "" };
+				format!("{}{}{op}{space}{}", v.attribute_prefix(), k.key_text(op, meta), v.serialize_with(meta, false))
+			}
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
 			True => YES.to_string(),
@@ -161,11 +136,10 @@ impl Node {
 				if let Some(literal) = self.source_literal() {
 					return literal.to_string();
 				}
-				let own_prefix = if attributes {
-					self.own_attribute_prefix()
-				} else {
-					String::new()
-				};
+				if let Some(name) = self.type_value_name() {
+					return format!("class {name}");
+				}
+				let own_prefix = if attributes { self.own_attribute_prefix() } else { String::new() };
 				let inner = format!("{own_prefix}{}", node.serialize_with(meta, attributes));
 				if meta {
 					format!("{} {}", inner, data.meta_string())
@@ -174,7 +148,7 @@ impl Node {
 				}
 			}
 			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
-			Data(d) => crate::units::describe(d).unwrap_or_else(|| format!("Data({:?})", d)),
+			Data(d) => crate::numbers::units::describe(d).unwrap_or_else(|| format!("Data({:?})", d)),
 			// _ => format!("{:?}", self),
 		}
 	}

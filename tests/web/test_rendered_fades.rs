@@ -5,5 +5,5 @@ use crate::is;
 
 #[test]
 fn fade_sound_runs_in_the_browser() {
-	is!("use sound\na = tone 440Hz for 0.1s\nb = tone 440Hz for 0.1s\nfade_sound(a, 0, 0.05)\nfade_sound(0, 0.5)\nround(render_sound(\"fade.wav\") * 10)", 2);
+	is!("use sound\na = tone(440Hz, 0.1s)\nb = tone(440Hz, 0.1s)\nfade_sound(a, 0, 0.05)\nfade_sound(0, 0.5)\nround(save(sound, \"fade.wav\") * 10)", 2);
 }

@@ -1,9 +1,9 @@
 //! P91: one analysis per program state. The same tree is analysed once (analysis_memo.rs); an analysis that says
 //! something (a warning, a hint) is not remembered, so a repeat says it again
 use std::cell::Cell;
-use warp::analysis_memo::analysed;
-use warp::context::Context;
-use warp::diagnostic::{report, take_warnings, Diagnostic};
+use warp::compiler::analysis_memo::analysed;
+use warp::compiler::context::Context;
+use warp::errors::diagnostic::{report, take_warnings, Diagnostic};
 use warp::warp_parser::parse;
 
 #[test]

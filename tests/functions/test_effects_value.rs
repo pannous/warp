@@ -5,11 +5,7 @@ use crate::is;
 
 #[cfg(feature = "native")] // the warp binary: not in the browser build
 fn printed_lines(code: &str) -> Vec<String> {
-	crate::common::printed(code)
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(String::from)
-		.collect()
+	crate::common::printed(code).lines().filter(|line| !line.starts_with('»')).map(String::from).collect()
 }
 
 #[test]
@@ -21,11 +17,14 @@ fn effects_of_last_keeps_the_prints() {
 
 #[test]
 fn effects_of_as_a_value() {
-	is!(
-		"square(x) := x*x\ne = effects of square\n\"square is \" + e",
-		"square is Pure"
-	);
+	is!("square(x) := x*x\ne = effects of square\n\"square is \" + e", "square is Pure");
 	is!("f(x) := print x\ne = f.effects\ne", "IO");
 	is!("f(x) := print x\n\"f does \\(f.effects)\"", "f does IO");
 	is!("g() := { puts \"hi\"; emit ask }\nes = effects of g\nes#2", "ask");
+}
+
+#[test]
+fn effects_of_a_parameter_reads_its_field() {
+	// a parameter is no function: `b.effects` reads the field effects (card lib-field-name)
+	is!("chain_of(b) := b.effects\ncount(chain_of({id:1, effects:[5, 6]}))", 2);
 }

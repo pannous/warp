@@ -25,14 +25,8 @@ fn an_uncalled_function_updating_its_list_parameter_compiles() {
 
 #[test]
 fn a_function_updating_a_main_list_asks_for_global() {
-	is!(
-		"names = [\"a\"]; grow() := { global names; names.add(420) }; grow(); count(names)",
-		2
-	);
-	crate::common::fails_with(
-		"names = [\"a\"]; grow() := { names.add(420) }; 1",
-		"declare it `global names`",
-	);
+	is!("names = [\"a\"]; grow() := { global names; names.add(420) }; grow(); count(names)", 2);
+	crate::common::fails_with("names = [\"a\"]; grow() := { names.add(420) }; 1", "declare it `global names`");
 }
 
 #[test]

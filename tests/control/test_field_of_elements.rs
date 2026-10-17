@@ -31,28 +31,18 @@ fn with_filters_a_list_of_instances() {
 #[test]
 fn a_field_of_a_filtered_table_reads_only_its_rows() {
 	let stored = |rest: &str| {
-		format!("class Person{{name: text; age: int}}\npeople: [Person] = database.people_field_of\n{rest}")
+		format!("class Person{{name: text; age: int}}\nstored people: [Person] in \"people_field_of\"\n{rest}")
 	};
 	eval(&stored("for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }"));
-	let before = warp::database::rows_read();
-	is!(
-		&stored("names = name of people with age > 48\nnames#1 + names#2"),
-		"N49N50"
-	);
-	assert_eq!(
-		warp::database::rows_read(),
-		before + 2,
-		"name of a filtered table read other rows than its two"
-	);
+	let before = warp::host::database::rows_read();
+	is!(&stored("names = name of people with age > 48\nnames#1 + names#2"), "N49N50");
+	assert_eq!(warp::host::database::rows_read(), before + 2, "name of a filtered table read other rows than its two");
 }
 
 // card name-people: a list literal of one class's instances is a list of that class without the declared type
 #[test]
 fn with_filters_an_untyped_list_of_instances() {
 	let untyped = "class P{name: text; age: int}\npeople = [P(\"Al\", 30), P(\"Bo\", 10), P(\"Cy\", 40)]";
-	is!(
-		&format!("{untyped}\nstr(name of people with age > 20)"),
-		"[\"Al\" \"Cy\"]"
-	);
+	is!(&format!("{untyped}\nstr(name of people with age > 20)"), "[\"Al\" \"Cy\"]");
 	is!(&format!("{untyped}\ncount(people where age > 20)"), 2);
 }

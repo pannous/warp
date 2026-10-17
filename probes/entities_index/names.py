@@ -17,7 +17,7 @@ hyphen = {k: v for k, v in names.items() if re.fullmatch(r"[A-Za-z0-9-]+", k.rep
 print("names as \\:a-b-c", len(hyphen), "bytes", sum(len(k) + len(v.encode()) + 2 for k, v in hyphen.items()))
 for k in ["world", "alpha", "infinity", "leq", "nat", "Delta", "in", "to", "fracture A", "xyzzy", "alphabet"]:
     print(repr(k), repr(names.get(k)))
-# warp's hand table (src/uniscript_entities.rs ENTITIES) against the index
+# warp's hand table (src/text/uniscript_entities.rs ENTITIES) against the index
 if len(sys.argv) > 2:
     table = re.findall(r'\("(\w+)", \'(.)\'\)', open(sys.argv[2]).read())
     missing = [(k, c) for k, c in table if k not in names]

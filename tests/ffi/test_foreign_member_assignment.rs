@@ -10,10 +10,7 @@ fn a_js_member_is_set() {
 
 #[test]
 fn a_member_of_a_call_result_is_set() {
-	is!(
-		"use js Map; m = Map(); m.set(\"k\", Map()); m.get(\"k\").answer = 3; m.get(\"k\").answer",
-		3
-	);
+	is!("use js Map; m = Map(); m.set(\"k\", Map()); m.get(\"k\").answer = 3; m.get(\"k\").answer", 3);
 }
 
 #[cfg(feature = "native")] // as tests/web/test_web.rs: the browser suite's Worker has no document
@@ -30,8 +27,5 @@ fn a_page_element_member_assignment_compiles() {
 #[cfg(feature = "native")] // python3
 #[test]
 fn a_python_attribute_is_set() {
-	is!(
-		"use python \"types\"; n = types.SimpleNamespace(); n.answer = 4; n.answer",
-		4
-	);
+	is!("use python \"types\"; n = types.SimpleNamespace(); n.answer = 4; n.answer", 4);
 }

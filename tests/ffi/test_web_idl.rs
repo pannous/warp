@@ -45,16 +45,16 @@ fn a_worker_has_no_local_storage_and_its_own_navigator() {
 #[cfg(feature = "native")]
 #[test]
 fn a_page_has_local_storage_and_the_clipboard() {
-	assert!(warp::web_idl::check("localStorage", "getItem", Some(1)).is_ok());
-	assert!(warp::web_idl::check("localStorage", "setItem", Some(1))
+	assert!(warp::formats::web_idl::check("localStorage", "getItem", Some(1)).is_ok());
+	assert!(warp::formats::web_idl::check("localStorage", "setItem", Some(1))
 		.is_err_and(|error| error.contains("setItem(DOMString key, DOMString value)")));
-	assert!(warp::web_idl::check("navigator", "clipboard", None).is_ok());
+	assert!(warp::formats::web_idl::check("navigator", "clipboard", None).is_ok());
 }
 
 #[test]
 fn a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface() {
 	is!("use js navigator; navigator.hardwareConcurrency > 0", 1);
-	assert!(warp::web_idl::check("Storage", "anything", None).is_ok()); // the constructor, no instance
+	assert!(warp::formats::web_idl::check("Storage", "anything", None).is_ok()); // the constructor, no instance
 }
 
 // an attribute's value is typed by its interface: navigator.clipboard is a Clipboard, also held in a variable
@@ -65,10 +65,7 @@ fn an_attributes_value_is_typed_by_its_interface() {
 		"use js navigator; navigator.clipboard.writeTxt(\"x\")",
 		"navigator.clipboard (Clipboard in WebIDL) has no member writeTxt; did you mean writeText",
 	);
-	fails_with(
-		"use js navigator; board = navigator.clipboard; board.writeText()",
-		"writeText(DOMString data)",
-	);
+	fails_with("use js navigator; board = navigator.clipboard; board.writeText()", "writeText(DOMString data)");
 }
 
 // a declared text, bool, int or float is a warp value: warp's methods apply, a variable holds it
@@ -77,11 +74,12 @@ fn a_declared_primitive_result_is_a_warp_value() {
 	is!("use js crypto; count crypto.randomUUID().upper()", 36);
 	is!("use js crypto; id = crypto.randomUUID(); count id", 36);
 	is!("use js navigator; navigator.hardwareConcurrency + 0.5 > 1", 1);
-	eq!(warp::web_idl::result_type("Crypto", "randomUUID", true), Some("text"));
-	eq!(warp::web_idl::result_type("Navigator", "onLine", false), Some("bool"));
-	eq!(warp::web_idl::result_type("Performance", "now", true), Some("float"));
-	eq!(warp::web_idl::result_type("Storage", "getItem", true), None); // DOMString? may be ø
-	eq!(warp::web_idl::result_type("Navigator", "clipboard", false), None); // an object
+	eq!(warp::formats::web_idl::result_type("Crypto", "randomUUID", true), Some("text"));
+	eq!(warp::formats::web_idl::result_type("Navigator", "onLine", false), Some("bool"));
+	eq!(warp::formats::web_idl::result_type("Performance", "now", true), Some("float"));
+	eq!(warp::formats::web_idl::result_type("Storage", "getItem", true), None); // DOMString? may be ø
+	eq!(warp::formats::web_idl::result_type("Navigator", "clipboard", false), None);
+	// an object
 }
 
 // the text of a foreign call is the text of its value, not of the call
@@ -93,54 +91,26 @@ fn a_foreign_calls_value_as_text() {
 // a nullable result is the optional type: getItem's DOMString? is text? (ø or a text, optional_casts.rs)
 #[test]
 fn a_nullable_result_is_optional() {
-	eq!(
-		warp::web_idl::optional_result_type("Storage", "getItem", true),
-		Some("text?".to_string())
-	);
-	eq!(
-		warp::web_idl::optional_result_type("Crypto", "randomUUID", true),
-		Some("text".to_string())
-	);
-	eq!(
-		warp::web_idl::optional_result_type("Navigator", "clipboard", false),
-		None
-	);
+	eq!(warp::formats::web_idl::optional_result_type("Storage", "getItem", true), Some("text?".to_string()));
+	eq!(warp::formats::web_idl::optional_result_type("Crypto", "randomUUID", true), Some("text".to_string()));
+	eq!(warp::formats::web_idl::optional_result_type("Navigator", "clipboard", false), None);
 }
 
 // the DOM: document is a Document; what an operation gives is typed too (getElementById: Element), and an Element
 // takes the members of the elements deriving from it (an input's value)
-#[cfg(feature = "native")] // a Worker has no document
 #[test]
 fn the_dom_is_typed() {
-	fails_with(
-		"use js document; document.getElementByID(\"x\")",
-		"did you mean getElementById",
-	);
+	fails_with("use js document; document.getElementByID(\"x\")", "did you mean getElementById");
 	fails_with(
 		"use js document; document.getElementById(\"x\").innerHtml",
 		"document.getElementById(…) (Element in WebIDL) has no member innerHtml; did you mean innerHTML",
 	);
-	fails_with(
-		"use js document; e = document.querySelector(\"p\"); e.classList.ad(\"x\")",
-		"DOMTokenList",
-	);
-	fails_with(
-		"use js document; document.body.appendChild(1, 2)",
-		"appendChild(Node node)",
-	);
-	fails_with(
-		"use js document; document.getElementById(\"x\").valu",
-		"did you mean value",
-	);
-	assert!(warp::web_idl::check_member("Element", "e", "value", None).is_ok()); // HTMLInputElement's
-	eq!(
-		warp::web_idl::result_interface("Document", "getElementById", true),
-		Some("Element".to_string())
-	);
-	eq!(
-		warp::web_idl::result_interface("Document", "body", false),
-		Some("HTMLElement".to_string())
-	);
+	fails_with("use js document; e = document.querySelector(\"p\"); e.classList.ad(\"x\")", "DOMTokenList");
+	fails_with("use js document; document.body.appendChild(1, 2)", "appendChild(Node node)");
+	fails_with("use js document; document.getElementById(\"x\").valu", "did you mean value");
+	assert!(warp::formats::web_idl::check_member("Element", "e", "value", None).is_ok()); // HTMLInputElement's
+	eq!(warp::formats::web_idl::result_interface("Document", "getElementById", true), Some("Element".to_string()));
+	eq!(warp::formats::web_idl::result_interface("Document", "body", false), Some("HTMLElement".to_string()));
 }
 
 // the global object (self, globalThis; window on a page) has WindowOrWorkerGlobalScope's members typed: fetch gives a
@@ -153,35 +123,27 @@ fn the_global_object_is_typed() {
 		"use js self; r = self.fetch(\"https://example.com\"); r.stauts",
 		"(Response in WebIDL) has no member stauts; did you mean status",
 	);
-	eq!(
-		warp::web_idl::result_interface("Window", "fetch", true),
-		Some("Response".to_string())
-	);
-	eq!(warp::web_idl::result_type("Response", "text", true), Some("text")); // Promise<USVString>
-	eq!(warp::web_idl::result_type("Response", "status", false), Some("int"));
+	eq!(warp::formats::web_idl::result_interface("Window", "fetch", true), Some("Response".to_string()));
+	eq!(warp::formats::web_idl::result_type("Response", "text", true), Some("text")); // Promise<USVString>
+	eq!(warp::formats::web_idl::result_type("Response", "status", false), Some("int"));
 }
 
+// a Worker asks its page for window (host-foreign.js callOnPage)
 #[cfg(not(feature = "native"))]
 #[test]
-fn a_worker_has_no_window() {
-	fails_with("use js window; window.atob(\"aGk=\")", "self is the Worker's global");
+fn a_worker_reaches_the_pages_window() {
+	is!("use js window; window.atob(\"aGk=\")", "hi");
 }
 
 // a constructor is called as a function (JavaScript's `new`): checked against WebIDL's constructors, the value typed
 #[test]
 fn a_constructor_is_a_plain_call() {
 	is!("use js URL; u = URL(\"https://a.b/c?d=1\"); u.pathname", "/c");
-	is!(
-		"use js URLSearchParams; p = URLSearchParams(\"a=1&b=2\"); p.get(\"b\")",
-		"2"
-	);
+	is!("use js URLSearchParams; p = URLSearchParams(\"a=1&b=2\"); p.get(\"b\")", "2");
 	is!("use js Blob; b = Blob([\"abc\"]); b.size", 3);
 	is!("use js Date; d = Date(0); d.getTime()", 0); // ECMAScript: constructed, unchecked
 	fails_with("use js URL; URL(\"https://a.b/c\").pathnam", "did you mean pathname");
-	fails_with(
-		"use js URL; URL()",
-		"URL(USVString url, optional USVString base), not 0 arguments",
-	);
+	fails_with("use js URL; URL()", "URL(USVString url, optional USVString base), not 0 arguments");
 	fails_with("use js Location; Location()", "Location has no constructor in WebIDL");
 }
 
@@ -206,7 +168,7 @@ fn a_canvas_context_is_typed() {
 		"(GPU in WebIDL) has no member requestAdaptor; did you mean requestAdapter",
 	);
 	eq!(
-		warp::web_idl::context_interface("OffscreenCanvas", "getContext", "2d"),
+		warp::formats::web_idl::context_interface("OffscreenCanvas", "getContext", "2d"),
 		Some("OffscreenCanvasRenderingContext2D".to_string())
 	);
 }

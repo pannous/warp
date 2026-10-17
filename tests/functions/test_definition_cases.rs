@@ -5,20 +5,20 @@ use crate::common::fails_with;
 use crate::is;
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-cut-definition-cases: the defined-twice diagnostic is cut (cleanup-cuts-2)"]
 fn definitions_by_cases_are_defined_twice() {
-	fails_with(
-		"fib(0) := 0; fib(1) := 1; fib(n) := fib(n-1) + fib(n-2); fib(10)",
-		"fib is defined twice",
-	);
+	fails_with("fib(0) := 0; fib(1) := 1; fib(n) := fib(n-1) + fib(n-2); fib(10)", "fib is defined twice");
 	fails_with("f(x) := 1; f(y) := 2; f(3)", "f is defined twice");
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-cut-definition-cases: the defined-twice diagnostic is cut (cleanup-cuts-2)"]
 fn the_fix_joins_the_cases_in_a_match() {
 	fails_with("fib(0) := 0; fib(n) := n; fib(3)", "fib(n) := match n {");
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-cut-definition-cases: the defined-twice diagnostic is cut (cleanup-cuts-2)"]
 fn a_literal_parameter_alone_is_refused() {
 	fails_with("f(0) := 1; f(3)", "a parameter of f is a name");
 }

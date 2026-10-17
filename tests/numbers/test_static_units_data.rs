@@ -9,18 +9,12 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn test_object_fields_hold_quantities() {
-	assert_eq!(
-		shown("p = {dist: 0 m}; for i in 1..3 { p.dist += 250 m }; p.dist"),
-		"500m"
-	);
+	assert_eq!(shown("p = {dist: 0 m}; for i in 1..3 { p.dist += 250 m }; p.dist"), "500m");
 	assert_eq!(
 		shown("p = {dist: 0 km, name: \"run\"}; for i in 1..3 { p.dist += 250 m }; p"),
 		"{dist:500m name:\"run\"}"
 	);
-	assert_eq!(
-		shown("p = {dist: 1 km}; for i in 1..2 { p.dist = p.dist * 2 }; p.dist / 4 h"),
-		"0.5km/h"
-	);
+	assert_eq!(shown("p = {dist: 1 km}; for i in 1..2 { p.dist = p.dist * 2 }; p.dist / 4 h"), "0.5km/h");
 	fails_with("p = {dist: 1 m}; for i in 1..2 { p.dist = 2 s }; p", "DimensionError");
 	// `dist: 5 m` is data, no block to run later
 	assert_eq!(shown("p = {dist: 5 m, t: 2 s}; p"), "{dist:5m t:2s}");
@@ -58,10 +52,8 @@ fn test_a_whole_object_shows_its_units() {
 		"\"{dist:500m t:1s}\""
 	);
 	#[cfg(feature = "native")]
-	assert!(
-		crate::common::printed("p = {dist: 0 km, name: \"run\"}; for i in 1..3 { p.dist += 250 m }; print p")
-			.starts_with("{dist:500m name:\"run\"}\n")
-	);
+	assert!(crate::common::printed("p = {dist: 0 km, name: \"run\"}; for i in 1..3 { p.dist += 250 m }; print p")
+		.starts_with("{dist:500m name:\"run\"}\n"));
 }
 
 #[test]

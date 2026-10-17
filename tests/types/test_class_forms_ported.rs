@@ -3,14 +3,8 @@ use crate::is;
 
 #[test]
 fn a_kotlin_primary_constructor_declares_the_fields() {
-	is!(
-		"class Point(val x: Int, val y: Int) { fun sum() = x + y }; Point(1, 2).sum()",
-		3
-	);
-	is!(
-		"data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\np.x + p.y",
-		3
-	);
+	is!("class Point(val x: Int, val y: Int) { fun sum() = x + y }; Point(1, 2).sum()", 3);
+	is!("data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\np.x + p.y", 3);
 	is!("data class P(val x: Int); P(1) == P(1)", 1);
 	is!("class Box(var w: Int = 2); Box().w", 2);
 }
@@ -33,10 +27,7 @@ fn a_python_class_with_init() {
 #[test]
 fn a_swift_struct_with_a_mutating_method() {
 	let counter = "struct Counter {\n    var count = 0\n    mutating func increment() { count += 1 }\n}\n";
-	is!(
-		&format!("{counter}var c = Counter()\nc.increment()\nc.increment()\nc.count"),
-		2
-	);
+	is!(&format!("{counter}var c = Counter()\nc.increment()\nc.increment()\nc.count"), 2);
 }
 
 #[test]
@@ -51,10 +42,7 @@ fn a_rust_struct_takes_the_methods_of_its_impl() {
 
 #[test]
 fn a_copy_with_changed_fields() {
-	is!(
-		"data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\nval q = p.copy(y = 5)\nq.y * 10 + p.y",
-		52
-	);
+	is!("data class Point(val x: Int, val y: Int)\nval p = Point(1, 2)\nval q = p.copy(y = 5)\nq.y * 10 + p.y", 52);
 }
 
 #[test]
@@ -71,10 +59,7 @@ fn a_typescript_class_with_typed_members() {
 
 #[test]
 fn csharp_auto_properties_and_an_object_initializer() {
-	is!(
-		"class Point { public int X { get; set; } }\nvar p = new Point { X = 3 };\np.X",
-		3
-	);
+	is!("class Point { public int X { get; set; } }\nvar p = new Point { X = 3 };\np.X", 3);
 }
 
 #[test]
@@ -87,10 +72,7 @@ fn a_go_struct_with_methods() {
 	let point = "type Point struct {\n    X int\n    Y int\n}\n";
 	is!(&format!("{point}p := Point{{X: 1, Y: 2}}\np.Y"), 2);
 	is!("type Point struct {\n    X, Y int\n}\nPoint{X: 1, Y: 2}.Y", 2);
-	is!(
-		&format!("{point}func (p Point) Sum() int {{ return p.X + p.Y }}\nPoint{{X: 1, Y: 2}}.Sum()"),
-		3
-	);
+	is!(&format!("{point}func (p Point) Sum() int {{ return p.X + p.Y }}\nPoint{{X: 1, Y: 2}}.Sum()"), 3);
 	is!(
 		&format!("{point}func (p *Point) Move(dx int) {{ p.X += dx }}\nvar p = Point{{X: 1, Y: 2}}\np.Move(3)\np.X"),
 		4
@@ -110,4 +92,13 @@ fn ruby_endless_methods() {
 	is!("def twice = 8; twice", 8);
 	is!("class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice", 10);
 	is!("class P{x:int; def twice = x*2}; P(3).twice", 6);
+}
+
+#[test]
+fn a_ruby_reader_and_a_go_struct_of_lowercase_fields() {
+	is!("class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice + Point.new(1).x", 11);
+	is!(
+		"type P struct {\n\tx int\n\ty int\n}\nfunc (p P) Sum() int { return p.x + p.y }\nq := P{x: 3, y: 4}\nq.Sum()",
+		7
+	);
 }

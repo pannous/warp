@@ -6,10 +6,7 @@ use warp::modules::{fetch_package, package_repository};
 
 #[test]
 fn the_registry_names_repositories() {
-	assert_eq!(
-		package_repository("uniscript").as_deref(),
-		Some("https://github.com/pannous/uniscript.git")
-	);
+	assert_eq!(package_repository("uniscript").as_deref(), Some("https://github.com/pannous/uniscript.git"));
 	assert_eq!(package_repository("nosuchpackage"), None);
 }
 

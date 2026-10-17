@@ -3,11 +3,11 @@
 //! (`def fib(n): …; fib(10)` compiles to 55), also inside a function body or a loop (an invariant part hoisted to
 //! compile time). Only `compile` folds: `eval` would do the same work twice.
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
-//! program computes; a call that fails or runs out of fuel stays a call.
+//! program computes; a call that fails or computes past FOLDING_FUEL stays a call.
 
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{any_part, branches, call, children_rewritten, key, round_call, word_headed};
+use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
-use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
 use crate::function_values::{definitions, Definition};
 use crate::late_binding::{changes_in, functions_in, map_statements};
@@ -20,6 +20,10 @@ use std::collections::{HashMap, HashSet};
 const MAX_VARIANTS: usize = 32;
 /// Between a function's name and the constant arguments of its variant: `power·n3`
 const VARIANT_SEPARATOR: &str = "·";
+/// The steps a compile spends on its constant calls, counted as fuel so the compiled program doesn't depend on the
+/// machine's load (decision fuel-metering); a call taking more is computed when the program runs. About 0.5 to 2 s:
+/// a tight loop burns ~1.5e10 steps a second, calls ~4 times fewer (probes/fast_int/fuel_cost.sh)
+const FOLDING_FUEL: u64 = 10_000_000_000;
 
 /// The function a variant was made of, as its messages name it: `f` of `f·a1`
 pub fn unspecialised_name(name: &str) -> &str {
@@ -60,8 +64,8 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = statement.drop_meta() else {
 		return statement;
 	};
-	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name));
-	if !is_head || defines_functions(body) {
+	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|name| *name == function.name));
+	if !is_head || contains_definition(body) {
 		return statement;
 	}
 	let constants: Vec<(String, Node)> = captured_variables(function, main)
@@ -79,10 +83,7 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 	}
 	let rewritten = Node::Key(head.clone(), *op, Box::new(computed(folded)));
 	match statement {
-		Node::Meta { data, .. } => Node::Meta {
-			node: Box::new(rewritten),
-			data,
-		},
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(rewritten), data },
 		_ => rewritten,
 	}
 }
@@ -90,15 +91,10 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 /// The constant `name` is bound to by the only change of it in main: a statement `name = constant` before the
 /// definition in statement `index`, the name without a declared type
 fn constant_binding(statements: &[Node], index: usize, name: &str) -> Option<Node> {
-	let mut changes = statements
-		.iter()
-		.enumerate()
-		.filter(|(_, statement)| functions_in(statement).is_empty())
-		.flat_map(|(at, statement)| {
-			changes_in(statement, name)
-				.into_iter()
-				.map(move |change| (at, statement, change))
-		});
+	let mut changes =
+		statements.iter().enumerate().filter(|(_, statement)| functions_in(statement).is_empty()).flat_map(
+			|(at, statement)| changes_in(statement, name).into_iter().map(move |change| (at, statement, change)),
+		);
 	let (at, statement, change) = changes.next()?;
 	if changes.next().is_some() || at >= index || !std::ptr::eq(statement.drop_meta(), change.drop_meta()) {
 		return None;
@@ -121,10 +117,8 @@ fn is_plain_symbol(node: &Node) -> bool {
 }
 
 /// A function or lambda defined inside the body: its parameters could shadow a main-level name
-fn defines_functions(body: &Node) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _)));
-	found
+fn contains_definition(body: &Node) -> bool {
+	any_part(body, |node| matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)))
 }
 
 /// Is every use of `name` in `node` a read of its value: not a property (`m.k`), a key (`m#k`, `{k: 1}`), a target
@@ -135,9 +129,9 @@ fn is_read_as_value_only(node: &Node, name: &str) -> bool {
 		Node::Meta { node, .. } => is_read_as_value_only(node, name),
 		// `c ? a : b`: both branches are values
 		Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
-			Node::Key(chosen, Op::Colon, otherwise) => [condition, chosen, otherwise]
-				.iter()
-				.all(|part| is_read_as_value_only(part, name)),
+			Node::Key(chosen, Op::Colon, otherwise) => {
+				[condition, chosen, otherwise].iter().all(|part| is_read_as_value_only(part, name))
+			}
 			_ => is_read_as_value_only(condition, name) && is_read_as_value_only(branches, name),
 		},
 		Node::Key(left, Op::Colon, right) => !mentions(left) && is_read_as_value_only(right, name),
@@ -161,14 +155,7 @@ fn computed(node: Node) -> Node {
 				_ => node,
 			}
 		}
-		Node::Key(if_then, Op::Else, _) => match if_then.drop_meta() {
-			Node::Key(head, Op::Then, _) => match head.drop_meta() {
-				Node::Key(_, Op::If, condition) if is_int_comparison(condition) => decided(node),
-				_ => node,
-			},
-			_ => node,
-		},
-		Node::Key(condition, Op::Question, _) if is_int_comparison(condition) => decided(node),
+		_ if branches(&node).is_some_and(|(condition, ..)| is_int_comparison(condition)) => decided(node),
 		_ => node,
 	}
 }
@@ -194,28 +181,19 @@ pub fn fold_constant_calls(program: Node) -> Node {
 	if calls.is_empty() {
 		return program;
 	}
-	let definitions = statements.iter().filter(|statement| {
-		functions_in(statement)
-			.iter()
-			.any(|function| foldable.contains(&function.name))
-	});
-	let probe = [
-		definitions.cloned().collect(),
-		vec![Node::List(calls.clone(), Bracket::Square, Separator::Colon)],
-	]
-	.concat();
+	let definitions = statements
+		.iter()
+		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)));
+	let probe =
+		[definitions.cloned().collect(), vec![Node::List(calls.clone(), Bracket::Square, Separator::Comma)]].concat();
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return program;
 	};
-	let values = match crate::pipeline::run_module(module).drop_meta() {
+	let values = match computed_at_compile_time(module).drop_meta() {
 		Node::List(values, _, _) if values.len() == calls.len() => values.clone(),
 		_ => return program,
 	};
-	let folded: Vec<(Node, Node)> = calls
-		.into_iter()
-		.zip(values)
-		.filter(|(_, value)| is_constant(value))
-		.collect();
+	let folded: Vec<(Node, Node)> = calls.into_iter().zip(values).filter(|(_, value)| is_constant(value)).collect();
 	replaced(program, &folded)
 }
 
@@ -246,36 +224,20 @@ pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
 	}
 	let definitions = statements
 		.iter()
-		.filter(|statement| {
-			functions_in(statement)
-				.iter()
-				.any(|function| foldable.contains(&function.name))
-		})
+		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)))
 		.map(|definition| without_result_checks(definition.clone()));
-	let computed = calls
-		.iter()
-		.map(|(_, name, arguments)| call(name, arguments.clone()))
-		.collect();
-	let probe = [
-		definitions.collect(),
-		vec![Node::List(computed, Bracket::Square, Separator::Colon)],
-	]
-	.concat();
+	let computed = calls.iter().map(|(_, name, arguments)| call(name, arguments.clone())).collect();
+	let probe = [definitions.collect(), vec![Node::List(computed, Bracket::Square, Separator::Comma)]].concat();
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return Ok(program);
 	};
-	let Node::List(values, _, _) = crate::pipeline::run_module(module).drop_meta().clone() else {
+	let Node::List(values, _, _) = computed_at_compile_time(module).drop_meta().clone() else {
 		return Ok(program);
 	};
 	for ((called, name, arguments), value) in calls.iter().zip(values) {
 		if let Some(refusal) = crate::analyzer::assignment_mismatch(called, CHECKED_RESULT, &declared[name], &value) {
 			let arguments: Vec<String> = arguments.iter().map(Node::serialize).collect();
-			let message = format!(
-				"{name}({}) gives {}: {}",
-				arguments.join(", "),
-				value.serialize(),
-				refusal.message
-			);
+			let message = format!("{name}({}) gives {}: {}", arguments.join(", "), value.serialize(), refusal.message);
 			return Err(refusal.message(message).into_error());
 		}
 	}
@@ -287,12 +249,9 @@ fn constant_call<T>(node: &Node, functions: &HashMap<String, T>) -> Option<(Stri
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
 		return None;
 	};
-	let (head, arguments) = items.split_first()?;
-	let Node::Symbol(name) = head.drop_meta() else {
-		return None;
-	};
+	let (name, arguments) = word_headed(items)?;
 	(functions.contains_key(name) && !arguments.is_empty() && arguments.iter().all(is_constant))
-		.then(|| (name.clone(), arguments.to_vec()))
+		.then(|| (name.to_string(), arguments.to_vec()))
 }
 
 /// The type of a body's checked result (type_name_matching checked_result: `the result: int = v`, the type kept on the
@@ -326,32 +285,29 @@ fn without_result_checks(node: Node) -> Node {
 /// Pure functions (no effect, not even possible divergence) that read no main-level variable: their value depends
 /// only on their arguments
 fn foldable_functions(program: &Node, statements: &[Node]) -> HashSet<String> {
-	functions_within(program, statements, crate::effects::EffectSet::PURE)
+	functions_within(program, statements, crate::analyzer::effects::EffectSet::PURE)
 }
 
 /// The functions whose effects stay within `allowed` and that read no main-level variable
-fn functions_within(program: &Node, statements: &[Node], allowed: crate::effects::EffectSet) -> HashSet<String> {
+fn functions_within(
+	program: &Node,
+	statements: &[Node],
+	allowed: crate::analyzer::effects::EffectSet,
+) -> HashSet<String> {
 	let report = EffectReport::of(program);
 	let mut main = Scope::new();
 	collect_variables(program, &mut main);
 	statements
 		.iter()
 		.flat_map(functions_in)
-		.filter(|function| {
-			report
-				.effects_of(&function.name)
-				.is_some_and(|effects| effects.is_subset_of(allowed))
-		})
+		.filter(|function| report.effects_of(&function.name).is_some_and(|effects| effects.is_subset_of(allowed)))
 		.filter(|function| captured_variables(function, &main).is_empty())
 		.map(|function| function.name)
 		.collect()
 }
 
 fn is_constant(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Number(Number::Int(_) | Number::Float(_)) | Node::Text(_) | Node::Char(_)
-	)
+	matches!(node.drop_meta(), Node::Number(Number::Int(_) | Number::Float(_)) | Node::Text(_) | Node::Char(_))
 }
 
 /// `f(10)`, `f(2, "a")`: a foldable function applied to constants only
@@ -381,7 +337,7 @@ pub fn specialise_constant_arguments(program: Node) -> Node {
 	let pure = functions_within(
 		&program,
 		&statements,
-		crate::effects::EffectSet::of(&[crate::effects::Effect::Div]),
+		crate::analyzer::effects::EffectSet::of(&[crate::analyzer::effects::Effect::Div]),
 	);
 	let mut found = vec![];
 	definitions(&program, &mut found);
@@ -393,11 +349,7 @@ pub fn specialise_constant_arguments(program: Node) -> Node {
 	if definitions.is_empty() {
 		return program;
 	}
-	let mut specialiser = Specialiser {
-		definitions,
-		variants: vec![],
-		names: vec![],
-	};
+	let mut specialiser = Specialiser { definitions, variants: vec![], names: vec![] };
 	let rewritten = specialiser.rewrite(program);
 	if specialiser.variants.is_empty() {
 		return rewritten;
@@ -408,10 +360,7 @@ pub fn specialise_constant_arguments(program: Node) -> Node {
 		.iter()
 		.filter(|(name, _)| {
 			calls(&rewritten, name)
-				|| specialiser
-					.variants
-					.iter()
-					.any(|(other, definition)| other != name && calls(definition, name))
+				|| specialiser.variants.iter().any(|(other, definition)| other != name && calls(definition, name))
 		})
 		.map(|(_, definition)| definition.clone())
 		.collect();
@@ -441,13 +390,7 @@ impl Specialiser {
 	/// `f(y, 3)` → `f·n3(y)`, or None when f is no pure function, no argument or every argument is constant (folding
 	/// takes that), or the chain of variants would be too deep
 	fn specialised_call(&mut self, called: &Node, depth: usize) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = called.drop_meta() else {
-			return None;
-		};
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = round_call(called)?;
 		let definition = self.definitions.get(name)?.clone();
 		let parameters = definition.param_names();
 		if parameters.len() != arguments.len() {
@@ -464,26 +407,16 @@ impl Specialiser {
 			return None;
 		}
 		let variant = self.variant(&definition, &constants, depth)?;
-		let kept: Vec<Node> = arguments
-			.iter()
-			.filter(|argument| !constant(argument))
-			.cloned()
-			.collect();
+		let kept: Vec<Node> = arguments.iter().filter(|argument| !constant(argument)).cloned().collect();
 		Some(call(&variant, kept))
 	}
 
 	/// The variant of `definition` with `constants` in place, made once per key; None (and nothing kept of the attempt)
 	/// when its chain reaches MAX_VARIANTS
 	fn variant(&mut self, definition: &Definition, constants: &[(String, Node)], depth: usize) -> Option<String> {
-		let suffix: Vec<String> = constants
-			.iter()
-			.map(|(parameter, value)| format!("{parameter}{}", value.serialize()))
-			.collect();
-		let name = format!(
-			"{}{VARIANT_SEPARATOR}{}",
-			definition.name,
-			suffix.join(VARIANT_SEPARATOR)
-		);
+		let suffix: Vec<String> =
+			constants.iter().map(|(parameter, value)| format!("{parameter}{}", value.serialize())).collect();
+		let name = format!("{}{VARIANT_SEPARATOR}{}", definition.name, suffix.join(VARIANT_SEPARATOR));
 		if self.names.contains(&name) {
 			return Some(name);
 		}
@@ -527,13 +460,9 @@ impl Specialiser {
 		let Some((head, arguments)) = items.split_first() else {
 			return node;
 		};
-		let plain = arguments
-			.iter()
-			.all(|argument| matches!(argument.drop_meta(), Node::Symbol(_) | Node::Number(_)));
-		let Some((_, Node::Key(variant_head, Op::Define, body))) = self
-			.variants
-			.iter()
-			.find(|(name, _)| matches!(head.drop_meta(), Node::Symbol(called) if called == name))
+		let plain = arguments.iter().all(|argument| matches!(argument.drop_meta(), Node::Symbol(_) | Node::Number(_)));
+		let Some((_, Node::Key(variant_head, Op::Define, body))) =
+			self.variants.iter().find(|(name, _)| matches!(head.drop_meta(), Node::Symbol(called) if called == name))
 		else {
 			return node;
 		};
@@ -541,9 +470,7 @@ impl Specialiser {
 			return node;
 		};
 		// a declared parameter `b: int` checks its argument at the call: inlined, `f(1, 2.5)` would pass 2.5 unchecked
-		let declares_types = head_items[1..]
-			.iter()
-			.any(|parameter| !matches!(parameter.drop_meta(), Node::Symbol(_)));
+		let declares_types = head_items[1..].iter().any(|parameter| !matches!(parameter.drop_meta(), Node::Symbol(_)));
 		if !plain || declares_types || depth >= MAX_VARIANTS || !is_expression(body) {
 			return node;
 		}
@@ -558,22 +485,14 @@ impl Specialiser {
 	fn specialise_body(&mut self, node: Node, depth: usize) -> Option<Node> {
 		let node = match node {
 			Node::List(items, bracket, separator) => Node::List(
-				items
-					.into_iter()
-					.map(|item| self.specialise_body(item, depth))
-					.collect::<Option<_>>()?,
+				items.into_iter().map(|item| self.specialise_body(item, depth)).collect::<Option<_>>()?,
 				bracket,
 				separator,
 			),
-			Node::Key(left, op, right) => key(
-				self.specialise_body(*left, depth)?,
-				op,
-				self.specialise_body(*right, depth)?,
-			),
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.specialise_body(*node, depth)?),
-				data,
-			},
+			Node::Key(left, op, right) => {
+				key(self.specialise_body(*left, depth)?, op, self.specialise_body(*right, depth)?)
+			}
+			Node::Meta { node, data } => Node::Meta { node: Box::new(self.specialise_body(*node, depth)?), data },
 			other => other,
 		};
 		let is_specialisable = |node: &Node| {
@@ -600,6 +519,9 @@ fn decided(node: Node) -> Node {
 		Node::Number(Number::Int(value)) => Some(*value),
 		_ => None,
 	};
+	if let Some((condition, chosen, otherwise)) = branches(&node).filter(|(condition, ..)| int(condition).is_some()) {
+		return if int(condition) != Some(0) { chosen } else { otherwise }.clone();
+	}
 	match node.drop_meta() {
 		Node::Key(left, op, right) if int(left).is_some() && int(right).is_some() => {
 			let (a, b) = (int(left).expect("guarded"), int(right).expect("guarded"));
@@ -617,33 +539,6 @@ fn decided(node: Node) -> Node {
 			};
 			value.map_or(node.clone(), |value| Node::Number(Number::Int(value)))
 		}
-		// `if c then a else b` with c decided
-		Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
-			Node::Key(head, Op::Then, chosen) => match head.drop_meta() {
-				Node::Key(empty, Op::If, condition)
-					if matches!(empty.drop_meta(), Node::Empty) && int(condition).is_some() =>
-				{
-					if int(condition) != Some(0) {
-						chosen.as_ref().clone()
-					} else {
-						otherwise.as_ref().clone()
-					}
-				}
-				_ => node,
-			},
-			_ => node,
-		},
-		// `c ? a : b` with c decided
-		Node::Key(condition, Op::Question, branches) if int(condition).is_some() => match branches.drop_meta() {
-			Node::Key(chosen, Op::Colon, otherwise) => {
-				if int(condition) != Some(0) {
-					chosen.as_ref().clone()
-				} else {
-					otherwise.as_ref().clone()
-				}
-			}
-			_ => node,
-		},
 		_ => node,
 	}
 }
@@ -664,7 +559,13 @@ fn is_expression(body: &Node) -> bool {
 
 /// Does `node` call the function `name`
 fn calls(node: &Node, name: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(called)) if called == name)));
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|called| called == name)),
+	)
+}
+
+/// The values of the constant calls `module` computes, within FOLDING_FUEL
+fn computed_at_compile_time(module: crate::pipeline::CompiledModule) -> Node {
+	crate::util::with_fuel(FOLDING_FUEL, || crate::pipeline::run_module(module))
 }

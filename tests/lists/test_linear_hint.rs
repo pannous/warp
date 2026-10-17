@@ -12,9 +12,7 @@ fn linear_hinted(code: &str) -> bool {
 #[test]
 fn linear_arrays_of_dot_are_hinted_too() {
 	assert!(linear_hinted("linear xs = float[3]; linear ys = float[3]; dot(xs, ys)"));
-	assert!(linear_hinted(
-		"linear xs = float[3]; linear ys = float[3]; sum(xs .* ys)"
-	));
+	assert!(linear_hinted("linear xs = float[3]; linear ys = float[3]; sum(xs .* ys)"));
 	assert!(linear_hinted("linear xs = float[3]; zs = xs .* xs; zs#1"));
 }
 

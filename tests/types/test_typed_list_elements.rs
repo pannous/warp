@@ -18,3 +18,13 @@ fn a_fixed_width_list_checks_its_range() {
 	fails_with("xs: [int16] = [1, 7]; xs.add(70000); xs", "int16");
 	is!("xs: [int16] = [1, 32767]; xs#2", 32767);
 }
+
+#[test] // a parameter typed [T] is a list of T, as `T list` and `list of T` are, never T itself (card typed-list)
+fn a_bracketed_list_parameter_holds_its_element_type() {
+	is!(
+		"def f(values: [float]) -> float { last = 0.0 as float; for x in values { last = x + 0.5 * last }; last }\nf([1.0 as float, 2.0 as float])",
+		2.5
+	);
+	is!("def f(values: [float]) { values#1 + 0.5 }\nf([1.0 as float, 2.0 as float])", 1.5);
+	is!("def f(xs: [text]) { xs#2 }\nf([\"a\", \"b\"])", "b");
+}

@@ -18,8 +18,8 @@ impl WasmGcEmitter {
 		if self.emit_raised_error(func, node) || self.emit_undefined_comparison(func, node) {
 			return;
 		}
-		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
-			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
+		if let Some((list, sum_loop)) = lists::list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, lists::list_dispatch::Wanted::Int);
 		}
 		if self.emit_loop_jump(func, node)
 			|| self.emit_tuple_statement(func, node, Self::emit_numeric_value)
@@ -29,17 +29,11 @@ impl WasmGcEmitter {
 		}
 		let located = node;
 		let node = node.drop_meta();
-		// Handle global declaration: global:Key(name, =, value)
-		if let Node::Key(left, Op::Colon, right) = node {
-			if let Node::Symbol(kw) = left.drop_meta() {
-				if kw == "global" {
-					// Emit global and return value on stack
-					self.emit_global_numeric(func, right);
-					return;
-				}
-			}
-		}
 		match node {
+			// `global x = value`: the global declared, its value on the stack
+			Node::Key(left, Op::Colon, right) if left.is_symbol(crate::words::GLOBAL_WORD) => {
+				self.emit_global_numeric(func, right)
+			}
 			Node::Number(num) => {
 				match num {
 					Number::Int(_) | Number::BigInt(_) => {
@@ -80,7 +74,7 @@ impl WasmGcEmitter {
 			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
 			Node::Key(value, Op::As, target)
 				if self.get_type(value) == Kind::Int
-					&& is_int_type_word(target)
+					&& super::numbers::casts::is_int_type_word(target)
 					&& !self.computes_at_run_time_kind(value) =>
 			{
 				self.emit_int_value_truncated(func, value)
@@ -109,15 +103,7 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::And, right) => {
 				// Truthy and: if left is 0, return 0; else return right
 				self.emit_numeric_value(func, left);
-				Self::emit_list(
-					func,
-					&[
-						I::I64Eqz,
-						I::If(BlockType::Result(ValType::I64)),
-						I::I64Const(0),
-						I::Else,
-					],
-				);
+				Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(ValType::I64)), I::I64Const(0), I::Else]);
 				self.emit_numeric_value(func, right);
 				func.instruction(&I::End);
 			}
@@ -140,16 +126,15 @@ impl WasmGcEmitter {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)
-			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, op, right) if op.is_prefix() && left.is_empty_node() => {
 				self.emit_numeric_prefix(func, located, op, right)
 			}
 			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
-			Node::Key(counted, Op::Dot, property) if self.counting_getter(property).is_some() => {
-				let counter = self.counting_getter(property).expect("guarded");
+			Node::Key(counted, Op::Dot, property) if let Some(counter) = self.counting_getter(property) => {
 				self.emit_list_count(func, counted, counter);
 			}
 			// Prefix # means count/length: #list returns element count
-			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, Op::Hash, right) if left.is_empty_node() => {
 				self.emit_list_count(func, right, "node_count");
 			}
 			// Index operator: list#index (1-based)
@@ -173,11 +158,7 @@ impl WasmGcEmitter {
 				self.emit_if_then_else_numeric(func, if_then, Some(else_expr));
 			}
 			// If-then (no else): if condition then then_expr
-			Node::Key(if_cond, Op::Then, then_expr) => {
-				// Construct node for emit_if_then_else_numeric
-				let full_node = Node::Key(if_cond.clone(), Op::Then, then_expr.clone());
-				self.emit_if_then_else_numeric(func, &full_node, None);
-			}
+			Node::Key(_, Op::Then, _) => self.emit_if_then_else_numeric(func, node, None),
 			// Variable lookup (local or global)
 			Node::Symbol(name) => self.emit_numeric_symbol(func, name),
 			// Statement sequence or function call
@@ -216,7 +197,7 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
-			match (text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
+			match (text::text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
 				(Some(Kind::Int), _) => {
 					self.emit_integer_text_builtin(func, fn_name, arguments);
 					return true;
@@ -233,10 +214,7 @@ impl WasmGcEmitter {
 		let Node::Symbol(fn_name) = word.drop_meta() else {
 			return false;
 		}; // `count xs` without parentheses keeps its position
-		if self.emit_shadowed_counting(func, fn_name, argument) {
-			return true;
-		}
-		// floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
+	 // floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
 		if fn_name == "floor"
 			&& !self.ctx.ffi_imports.contains_key(fn_name)
 			&& !self.ctx.user_functions.contains_key(fn_name)
@@ -249,7 +227,7 @@ impl WasmGcEmitter {
 			return true;
 		}
 		// floor, ceil and round of a float as the i64, without the Int node list_emitter builds for it as a value
-		if super::list_emitter::float_rounding(fn_name).is_some()
+		if super::lists::list_emitter::float_rounding(fn_name).is_some()
 			&& !self.ctx.ffi_imports.contains_key(fn_name)
 			&& self.get_type(argument).is_float()
 		{
@@ -274,14 +252,14 @@ impl WasmGcEmitter {
 		if self.emit_raised_error(func, node) {
 			return;
 		}
-		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
-			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
+		if let Some((list, sum_loop)) = lists::list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, lists::list_dispatch::Wanted::Float);
 		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
 		}
 		// `return x` in a branch: the numeric path returns it (as the function's kind); the value after is never reached
-		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return"))
+		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD))
 		{
 			self.emit_numeric_value(func, node);
 			func.instruction(&I::F64ConvertI64S);
@@ -349,18 +327,18 @@ impl WasmGcEmitter {
 				self.emit_float_operation(func, left, op, right);
 			}
 			// Prefix operators: √x, ∛x (return f64)
-			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if left.is_empty_node() => {
 				self.emit_float_value(func, right);
 				self.emit_float_root(func, root);
 			}
 			// Prefix negation: -x (returns f64)
-			Node::Key(left, Op::Neg, right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, Op::Neg, right) if left.is_empty_node() => {
 				func.instruction(&I::F64Const(0.0.into()));
 				self.emit_float_value(func, right);
 				func.instruction(&I::F64Sub);
 			}
 			// Prefix abs: ‖x‖ (returns f64)
-			Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, Op::Abs, right) if left.is_empty_node() => {
 				self.emit_float_value(func, right);
 				func.instruction(&I::F64Abs);
 			}
@@ -368,14 +346,12 @@ impl WasmGcEmitter {
 			Node::Key(value, Op::As, _)
 				if self.get_type(node).is_float()
 					&& matches!(self.get_type(value), Kind::Text | Kind::Empty)
-					&& !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
+					&& !value.is_text_literal() =>
 			{
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+				self.emit_call(func, lists::list_ops::TEXT_AS_FLOAT);
 			}
-			Node::Key(value, Op::As, _)
-				if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
-			{
+			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !value.is_text_literal() => {
 				self.emit_float_value(func, value);
 			}
 			// `"1.5" as float`: the literal's cast as everywhere (a number, or loud for "x"), its f64
@@ -416,46 +392,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit a range as a list of integers
-	/// inclusive: true for .../ (0...3 = [0,1,2,3]), false for .. (0..3 = [0,1,2])
-	pub(super) fn emit_range(&mut self, func: &mut Function, start: &Node, end: &Node, inclusive: bool) {
-		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) =
-			(start.drop_meta(), end.drop_meta())
-		else {
-			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) {
-				end
-			} else {
-				start
-			};
-			self.emit_malformed(func, bound, "a constant integer as range bound");
-			return;
-		};
-		let (start_val, end_val) = (*start_val, *end_val);
-		let actual_end = if inclusive { end_val + 1 } else { end_val };
-		let items: Vec<Node> = (start_val..actual_end).map(|i| Node::Number(Number::Int(i))).collect();
-		if items.is_empty() {
-			self.emit_call(func, "new_empty");
-			return;
-		}
-		self.emit_list_structure(func, &items, &Bracket::Square, &Separator::None);
-	}
-
-	/// Emit a list as linked cons cells
-	pub(super) fn emit_list_structure(
-		&mut self,
-		func: &mut Function,
-		items: &[Node],
-		bracket: &Bracket,
-		separator: &Separator,
-	) {
-		self.emit_list_structure_with(
-			func,
-			items,
-			&items_info(items, bracket, separator),
-			Self::emit_node_instructions,
-		);
-	}
-
 	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b
 	pub(super) fn emit_literal(&mut self, func: &mut Function, node: &Node) {
 		match node.drop_meta() {
@@ -479,48 +415,11 @@ impl WasmGcEmitter {
 		let Some((line, column, comment)) = node.written_at() else {
 			return;
 		};
-		func.instruction(&I::I64Const(line));
-		func.instruction(&I::I64Const(column));
+		Self::emit_list(func, &[I::I64Const(line), I::I64Const(column)]);
 		match comment {
 			Some(comment) => self.emit_node_instructions(func, &Node::Text(comment)),
 			None => self.emit_node_null(func),
 		}
-		self.emit_call(func, super::node_api::NODE_AT);
+		self.emit_call(func, super::reflection::node_api::NODE_AT);
 	}
-
-	pub(super) fn emit_list_structure_with(
-		&mut self,
-		func: &mut Function,
-		items: &[Node],
-		info: &i64,
-		emit: fn(&mut Self, &mut Function, &Node),
-	) {
-		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself
-		emit(self, func, &items[0]);
-		if items.len() > 1 {
-			self.emit_list_structure_with(func, &items[1..], info, emit);
-		} else {
-			self.emit_node_null(func);
-		}
-
-		func.instruction(&I::I64Const(*info));
-		if self.ctx.func_registry.contains("new_list") {
-			self.emit_call(func, "new_list");
-		} else {
-			// new_list is always emitted; reaching this is a compiler bug, reported as an error value
-			self.emit_type_error(func, "internal error: new_list is not available".to_string());
-		}
-	}
-}
-
-/// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
-pub(super) fn is_int_type_word(target: &Node) -> bool {
-	let word = target.drop_meta().name().to_lowercase();
-	crate::type_tests::canonical_spec_word(&word) == "int" && !super::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
-}
-
-/// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)
-fn items_info(items: &[Node], bracket: &Bracket, separator: &Separator) -> i64 {
-	let separator = if items.len() > 1 { separator } else { &Separator::None };
-	list_info(bracket, separator)
 }

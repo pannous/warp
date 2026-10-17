@@ -23,8 +23,6 @@ mod test_memory_cap;
 mod test_name_subsection_order;
 #[cfg(feature = "native")] // a warp process in a temporary directory: not in the browser build
 mod test_no_cwd_debris; // card cwd-artifacts
-mod test_optimizer_exceptions;
-mod test_optimizer_extended_const;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_own_runtime_stub; // card stub-race
 mod test_parameter_names; // card reflection-classes
@@ -35,6 +33,7 @@ mod test_runtime_stub_note; // card runtime-stub-note
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_standalone_executable;
 mod test_standalone_needs_runtime;
+mod test_start_function_name; // card traps-task (reviewer)
 mod test_wasm;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_wasm_emitter;
@@ -44,4 +43,3 @@ mod test_wasm_names_order;
 mod test_wasm_reader;
 mod test_wit;
 mod test_wit_types;
-mod wasm_optimizer_test; // card emitter-deterministic

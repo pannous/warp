@@ -1,8 +1,0 @@
-#!/usr/bin/env warp
-// Transitions are CSS (card web-transitions): a removed item fades out towards its starting style, then the items after
-// it glide up into its space instead of jumping (card web-leave-space). Run it in the playground and click remove.
-todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
-div{
-	button{ on click { todos = todos[1..] } "remove" }
-	ul{ [li{ key: todo.id starting-style: { opacity: 0 } transition: "opacity 300ms, transform 300ms" todo.text } for todo in todos] }
-}

@@ -2,8 +2,8 @@
 
 A name a lowering pass makes carries the mark `·` (analyzer::TEMPORARY_SEPARATOR): `word·sum·3`, `x·iterator`,
 `try·value·1`. The program cannot write `·` in a name (`a·b` parses as a product), so:
-- `analyzer::is_compiler_temporary(name)` tells them apart; the local-or-global scope check skips them (card
-  sum-helper: `total(xs) := sum(xs)` plus a main-level `sum(…)` asked whether `word_sum` was main's).
+- `analyzer::is_compiler_temporary(name)` tells them apart; the local-or-global scope check skips them (else `total(xs) := sum(xs)` plus a main-level `sum(…)` asks whether
+  the helper is main's).
 - `diagnostic::written_text` shows the source instead of a node holding one.
 
 Making them:

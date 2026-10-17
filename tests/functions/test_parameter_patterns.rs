@@ -15,10 +15,12 @@ fn a_list_parameter_names_its_items() {
 #[test]
 fn a_class_parameter_names_its_fields() {
 	is!(&format!("{POINT}; sum(Point{{x, y}}) := x + y; sum(Point(1, 2))"), 3);
-	fails_with(
-		&format!("{POINT}; total(Point{{x, y}}) := x + y; total(5)"),
-		"needs a Point",
-	);
+	fails_with(&format!("{POINT}; total(Point{{x, y}}) := x + y; total(5)"), "needs a Point");
+}
+
+#[test]
+fn pattern_names_leave_a_global_of_the_same_name_alone() {
+	is!(&format!("{POINT}; total(Point{{x, y}}) := x + y; x = 10; total(Point{{x: 3, y: 4}}) + x"), 17);
 }
 
 #[test]

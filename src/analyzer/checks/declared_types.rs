@@ -1,17 +1,14 @@
 //! Declared types: annotations must name known types (inline unions too), and every value given to a declared variable, parameter or list must fit
 use super::*;
+use crate::words::{ANY_TYPE, LIST_WORD, NUMBER_WORD, OF_WORD};
 
 /// A parameter annotation must name a builtin or a user-defined type, `x:flaot` is a typo
 pub(in crate::analyzer) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> {
 	let known_types = KnownTypes::of(program);
-	function_definitions(program)
-		.user_functions
-		.values()
-		.flat_map(|function| &function.params)
-		.find_map(|param| {
-			let annotation = param.annotation.as_ref()?;
-			known_types.unknown_annotation(annotation, &format!("parameter {}", param.name), &param.name)
-		})
+	function_definitions(program).user_functions.values().flat_map(|function| &function.params).find_map(|param| {
+		let annotation = param.annotation.as_ref()?;
+		known_types.unknown_annotation(annotation, &format!("parameter {}", param.name), &param.name)
+	})
 }
 
 /// A variable's declared type must be known too: `p: foo = 2.5` names no type (card unknown-type)
@@ -43,15 +40,13 @@ impl KnownTypes {
 	pub(super) fn of(program: &Node) -> Self {
 		let mut user_types = crate::type_kinds::TypeRegistry::new();
 		collect_all_types(&mut user_types, program);
-		KnownTypes {
-			user_types,
-			traits: crate::traits::Traits::of(program),
-		}
+		KnownTypes { user_types, traits: crate::traits::Traits::of(program) }
 	}
 
 	pub(super) fn is_known_name(&self, name: &str) -> bool {
 		type_word_kind(name).is_some()
-			|| name == crate::type_kinds::UNTYPED_FIELD
+			|| crate::type_tests::builtin_type_name(name).is_some()
+			|| name == ANY_TYPE
 			|| crate::lowering::declarations::is_collection_type_word(name)
 			|| self.user_types.get_by_name(name).is_some()
 			|| self.traits.is_trait(name)
@@ -88,9 +83,12 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 	};
 	match (name, type_name) {
 		(Node::Symbol(name), Node::Symbol(type_name)) => Some((name, type_name)),
-		// `xs: [int]` is `xs: list of int`
+		// `xs: [int]` is `xs: list of int`, `xs: [int or error]` a list of `int or error`, no union itself
 		(Node::Symbol(name), Node::List(items, Bracket::Square, _)) => match items.as_slice() {
-			[element] => Some((name, format!("{LIST_OF_PREFIX}{}", element.drop_meta().name()))),
+			[element] => match union_type_name(element.drop_meta()) {
+				Some(union) => Some((name, format!("{LIST_OF_PREFIX}{union}"))),
+				None => Some((name, format!("{LIST_OF_PREFIX}{}", element.drop_meta().name()))),
+			},
 			_ => None,
 		},
 		(Node::Symbol(name), union) => Some((name, union_type_name(&union)?)),
@@ -100,14 +98,16 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 
 /// An inline union type joins its parts with it: `x: int | text` and `x: int or text` declare x "int or text", the
 /// anonymous form of P179's sum types (card inline-union)
-pub(super) const UNION_JOINER: &str = " or ";
-/// The empty part of a union, `int | ø`, makes it optional: `int?`
-pub(super) const NONE_WORDS: [&str; 3] = ["none", "nil", "null"];
+pub(crate) const UNION_JOINER: &str = " or ";
+/// The empty part of a union, `int | ø` (or any other name of the empty type), makes it optional: `int?`
+fn is_empty_type(word: &str) -> bool {
+	crate::type_tests::builtin_type_name(word) == Some(crate::type_tests::EMPTY_TYPE)
+}
 
-/// The parts of an inline union type name: "int or text" → int, text; None for a single type
+/// The parts of an inline union type name: "int or text" → int, text; None for a single type and a list of a union
+/// ("list of int or text")
 pub(crate) fn union_parts(type_name: &str) -> Option<Vec<&str>> {
-	type_name
-		.contains(UNION_JOINER)
+	(type_name.contains(UNION_JOINER) && !type_name.starts_with(LIST_OF_PREFIX))
 		.then(|| type_name.split(UNION_JOINER).collect())
 }
 
@@ -132,7 +132,7 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 				Some(())
 			}
 			Node::Empty => {
-				parts.push(NONE_WORDS[0].to_string());
+				parts.push(crate::type_tests::EMPTY_TYPE.to_string());
 				Some(())
 			}
 			_ => None,
@@ -143,14 +143,11 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 	};
 	let mut parts = vec![];
 	collect_parts(node, &mut parts)?;
-	if !parts
-		.iter()
-		.any(|part| builtin_type_kind(part).is_some() || is_declared(part))
-	{
+	if !parts.iter().any(|part| builtin_type_kind(part).is_some() || is_declared(part)) {
 		return None;
 	}
-	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
-	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
+	let optional = parts.iter().any(|part| is_empty_type(part));
+	parts.retain(|part| !is_empty_type(part));
 	parts.dedup();
 	// only a builtin type covers another: `Point | text` keeps both, `int | zork` keeps zork to be refused
 	let admits_part = |wide: &String, narrow: &String| {
@@ -164,24 +161,14 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 			&& admits_part(wide, narrow)
 			&& (!admits_part(narrow, wide) || crate::type_tests::type_matches(narrow, wide))
 	};
-	let kept: Vec<&String> = parts
-		.iter()
-		.filter(|part| !parts.iter().any(|other| covers(other, part)))
-		.collect();
-	let joined = kept
-		.iter()
-		.map(|part| part.as_str())
-		.collect::<Vec<_>>()
-		.join(UNION_JOINER);
+	let kept: Vec<&String> = parts.iter().filter(|part| !parts.iter().any(|other| covers(other, part))).collect();
+	let joined = kept.iter().map(|part| part.as_str()).collect::<Vec<_>>().join(UNION_JOINER);
 	Some(if optional { format!("{joined}?") } else { joined })
 }
 
 /// A builtin type or an inline union of builtin types: `int`, `int or text`
 pub(super) fn is_builtin_or_union(type_name: &str) -> bool {
-	union_parts(type_name)
-		.unwrap_or_else(|| vec![type_name])
-		.iter()
-		.all(|part| builtin_type_kind(part).is_some())
+	union_parts(type_name).unwrap_or_else(|| vec![type_name]).iter().all(|part| builtin_type_kind(part).is_some())
 }
 
 pub(super) fn strip_round(node: &Node) -> &Node {
@@ -233,7 +220,12 @@ pub(in crate::analyzer) fn check_union_fields(program: &Node) -> Option<Diagnost
 pub(crate) fn unsupported_union_part<'a>(type_name: &'a str, classes: &HashSet<String>) -> Option<&'a str> {
 	union_parts(type_name.trim_end_matches('?'))?
 		.into_iter()
-		.find(|part| builtin_type_kind(part).is_none() && !classes.contains(*part))
+		.find(|part| !is_builtin_type(part) && !classes.contains(*part))
+}
+
+/// A type held by a kind (`int16`, `String`) or a builtin type word held as a Node (`symbol`, `error`, `time`)
+fn is_builtin_type(word: &str) -> bool {
+	builtin_type_kind(word).is_some() || crate::type_tests::builtin_type_name(word).is_some()
 }
 
 /// The names of the classes a program declares
@@ -268,50 +260,16 @@ pub(in crate::analyzer) fn check_declared_types(
 		Node::Key(target, Op::Assign | Op::Define, value)
 			if super::super::variables::function_definition_body(node).is_some() =>
 		{
-			check_declared_types(
-				value,
-				&mut with_parameters_declared(target, declared),
-				&mut Scope::new(),
-				classes,
-			)
+			check_declared_types(value, &mut with_parameters_declared(target, declared), &mut Scope::new(), classes)
 		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
-			let declaration = match target.drop_meta() {
-				Node::Symbol(name) => declared
-					.get_key_value(name)
-					.map(|(name, type_name)| (name.clone(), type_name.clone())),
-				declaring => declaring_name_and_type(declaring),
-			};
-			if let Some((name, type_name)) = declaration {
-				if let Some(part) = unsupported_union_part(&type_name, classes) {
-					return Some(unknown_union_part(node, &name, &name, &type_name, part));
-				}
-				declared.insert(name.clone(), type_name.clone());
-				if let Some(mismatch) = assignment_mismatch(node, &name, &type_name, value)
-					.or_else(|| evident_items_mismatch(node, &name, &type_name, value, lists))
-				{
-					return Some(mismatch);
-				}
-				if list_element_type(&type_name).is_some() {
-					lists.define(name, Some(Box::new(Node::Symbol(type_name))), Kind::List);
-				}
-			} else if let Node::Symbol(name) = target.drop_meta() {
-				let (kind, type_node) = super::super::variables::value_binding(value, lists);
-				lists.define(name.clone(), type_node, kind);
-			}
-			check_declared_types(value, declared, lists, classes)
+			assignment_checked(node, target, value, declared, lists, classes)
+				.or_else(|| check_declared_types(value, declared, lists, classes))
 		}
 		// `names.add(420)`, `names.insert(420, at: 0)`: the method call appends before mutation lowers it to
 		// `names = names + [420]`
-		Node::Key(list, Op::Dot, _) if appended_items(node).or_else(|| inserted_item(node)).is_some() => {
-			let Node::Symbol(name) = list.drop_meta() else {
-				return None;
-			};
-			let type_name = declared.get(name)?;
-			let element = list_element_type(type_name)?;
-			let items = appended_items(node).or_else(|| inserted_item(node))?;
-			let appended = Node::List(items.to_vec(), Bracket::Square, Separator::Space);
-			list_items_mismatch(node, name, type_name, element, &appended)
+		Node::Key(list, Op::Dot, _) if let Some(items) = appended_items(node).or_else(|| inserted_item(node)) => {
+			appended_mismatch(node, list, items, declared)
 		}
 		Node::Key(left, _, right) => check_declared_types(left, declared, lists, classes)
 			.or_else(|| check_declared_types(right, declared, lists, classes)),
@@ -321,15 +279,60 @@ pub(in crate::analyzer) fn check_declared_types(
 			if let Some(declaration) = of_type_declaration(items, bracket, separator) {
 				return check_declared_types(&declaration, declared, lists, classes);
 			}
-			let prefixed = items
-				.windows(2)
-				.filter_map(|pair| prefixed_declaration(&pair[0], &pair[1]));
-			prefixed
-				.chain(items.iter().cloned())
-				.find_map(|item| check_declared_types(&item, declared, lists, classes))
+			let prefixed = items.windows(2).filter_map(|pair| prefixed_declaration(&pair[0], &pair[1]));
+			prefixed.chain(items.iter().cloned()).find_map(|item| check_declared_types(&item, declared, lists, classes))
 		}
 		_ => None,
 	}
+}
+
+/// `x:int = …` or `x = …` of a declared x: the value must fit the type, which the assignment declares; a list's
+/// element type is kept in `lists`, as an undeclared variable's binding
+fn assignment_checked(
+	node: &Node,
+	target: &Node,
+	value: &Node,
+	declared: &mut HashMap<String, String>,
+	lists: &mut Scope,
+	classes: &HashSet<String>,
+) -> Option<Diagnostic> {
+	let declaration = match target.drop_meta() {
+		Node::Symbol(name) => declared.get_key_value(name).map(|(name, type_name)| (name.clone(), type_name.clone())),
+		declaring => declaring_name_and_type(declaring),
+	};
+	let Some((name, type_name)) = declaration else {
+		if let Node::Symbol(name) = target.drop_meta() {
+			let (kind, type_node) = super::super::variables::value_binding(value, lists);
+			lists.define(name.clone(), type_node, kind);
+		}
+		return None;
+	};
+	if let Some(part) = unsupported_union_part(&type_name, classes) {
+		return Some(unknown_union_part(node, &name, &name, &type_name, part));
+	}
+	declared.insert(name.clone(), type_name.clone());
+	let mismatch = assignment_mismatch(node, &name, &type_name, value)
+		.or_else(|| evident_items_mismatch(node, &name, &type_name, value, lists));
+	if mismatch.is_none() && list_element_type(&type_name).is_some() {
+		lists.define(name, Some(Box::new(Node::Symbol(type_name))), Kind::List);
+	}
+	mismatch
+}
+
+/// The items appended to a declared list must fit its element type
+fn appended_mismatch(
+	node: &Node,
+	list: &Node,
+	items: &[Node],
+	declared: &HashMap<String, String>,
+) -> Option<Diagnostic> {
+	let Node::Symbol(name) = list.drop_meta() else {
+		return None;
+	};
+	let type_name = declared.get(name)?;
+	let element = list_element_type(type_name)?;
+	let appended = Node::List(items.to_vec(), Bracket::Square, Separator::Space);
+	list_items_mismatch(node, name, type_name, element, &appended)
 }
 
 /// The declared types inside a function `(f n:int m)`: its annotated parameters are declared, a plain one hides an outer
@@ -362,10 +365,7 @@ pub(super) fn destructured_mismatch(node: &Node, declared: &HashMap<String, Stri
 	if values.len() != names.len() {
 		return None;
 	}
-	names
-		.iter()
-		.zip(values)
-		.find_map(|(name, value)| assignment_mismatch(node, name, declared.get(name)?, value))
+	names.iter().zip(values).find_map(|(name, value)| assignment_mismatch(node, name, declared.get(name)?, value))
 }
 
 /// Does a value of kind `actual` fit the builtin type `type_name` (W0 subtyping, notes/type_theory.md)? An int fits a
@@ -376,7 +376,10 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 		return parts.iter().any(|part| admits(part, actual));
 	}
 	let Some(expected) = builtin_type_kind(type_name) else {
-		return true;
+		// symbol, key, error, time …: a builtin type held as a Node admits a number only among the kinds it holds
+		let refused_number = matches!(actual, Kind::Int | Kind::Float)
+			&& crate::type_tests::runtime_kind_mask(type_name).is_some_and(|mask| mask & 1 << actual as i64 == 0);
+		return !refused_number;
 	};
 	// a type held as a Node (`real`: an exact Int or a float) admits the kinds it holds at run time
 	if expected == Kind::Empty {
@@ -395,6 +398,16 @@ pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
 	}
 }
 
+/// A list annotation as one type name, so that its name is the list type rather than its first word: `[text]`
+/// (named `text` as a list node) and the spaced `list of text` (named `list`)
+pub(crate) fn named_list_annotation(annotation: &Node) -> Node {
+	match (annotation.drop_meta(), declared_element_type(annotation)) {
+		(Node::List(_, Bracket::Square, _), Some(element)) => Node::Symbol(format!("[{element}]")),
+		(Node::List(..), Some(element)) => Node::Symbol(format!("{LIST_OF_PREFIX}{element}")),
+		_ => annotation.clone(),
+	}
+}
+
 /// The element type a list annotation names: `texts`, `[text]` and `list of text` are lists of `text`
 pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 	match annotation.drop_meta() {
@@ -408,22 +421,20 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 	}
 }
 
-/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
-/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
 /// Is the type `word` (an alias too: `double`, `exact`) the type `within` or one it covers (BUILTIN_TYPES)
 pub(super) fn is_type_within(word: &str, within: &str) -> bool {
 	crate::type_tests::type_matches(crate::type_tests::canonical_spec_word(word), within)
 }
 
+/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
+/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
 pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else {
 		return true;
 	};
 	// `list of int or text` (`[1] + ["a"]`): every part must fit
 	if let Some(parts) = union_parts(element) {
-		return parts
-			.iter()
-			.all(|part| elements_fit(declared_element, &format!("{LIST_OF_PREFIX}{part}")));
+		return parts.iter().all(|part| elements_fit(declared_element, &format!("{LIST_OF_PREFIX}{part}")));
 	}
 	// a number int does not cover (rational, real, float …) may be a fraction an int list loses (`rational` names the
 	// exact Int representation)
@@ -439,19 +450,28 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	if let Node::Key(_, Op::Assign, assigned) = value.drop_meta() {
 		return assignment_mismatch(assignment, name, type_name, assigned);
 	}
-	if let Some(base) = type_name.strip_suffix('?') {
-		return match value.drop_meta() {
-			Node::Empty => None,
-			_ => assignment_mismatch(assignment, name, base, value),
-		};
+	// `int? i = "a"`: checked against int, the error names the type as written, "declared int?"
+	match (type_name.strip_suffix('?'), value.drop_meta()) {
+		(Some(_), Node::Empty) => None,
+		(Some(base), _) => base_type_mismatch(assignment, name, base, type_name, value),
+		(None, _) => base_type_mismatch(assignment, name, type_name, type_name, value),
 	}
-	if matches!(value.drop_meta(), Node::Empty) && builtin_type_kind(type_name).is_some() {
+}
+
+fn base_type_mismatch(
+	assignment: &Node,
+	name: &str,
+	type_name: &str,
+	written: &str,
+	value: &Node,
+) -> Option<Diagnostic> {
+	if value.is_empty_node() && builtin_type_kind(type_name).is_some() {
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
-		return Some(
-			Diagnostic::at(assignment, message)
-				.fix(format!("declare {name}:{type_name}? to allow ø"))
-				.offer("allow ø", format!("{name}:{type_name}"), format!("{name}:{type_name}?")),
-		);
+		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")).offer(
+			"allow ø",
+			format!("{name}:{type_name}"),
+			format!("{name}:{type_name}?"),
+		));
 	}
 	if let Some(element) = list_element_type(type_name) {
 		return list_items_mismatch(assignment, name, type_name, element, value);
@@ -459,7 +479,7 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	let actual = literal_misfit(type_name, value)?;
 	let value_text = value.serialize();
 	let message = format!(
-		"type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}",
+		"type mismatch: {name} is declared {written}, cannot assign {} {value_text}",
 		format!("{actual:?}").to_lowercase()
 	);
 	let actual = format!("{actual:?}").to_lowercase();
@@ -481,29 +501,17 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 		);
 	}
 	if union_parts(type_name).is_some() {
-		return Some(
-			Diagnostic::at(assignment, message)
-				.fix(format!("declare {name}:{widened}"))
-				.offer(
-					format!("{name} holds {actual} too"),
-					format!("{name}:{type_name}"),
-					format!("{name}:{widened}"),
-				),
-		);
+		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{widened}")).offer(
+			format!("{name} holds {actual} too"),
+			format!("{name}:{type_name}"),
+			format!("{name}:{widened}"),
+		));
 	}
 	Some(
 		Diagnostic::at(assignment, message)
 			.fix(format!("{name}={type_name}({value_text}) or declare {name}:{actual}"))
-			.offer(
-				format!("the {type_name} of the value"),
-				&value_text,
-				format!("{type_name}({value_text})"),
-			)
-			.offer(
-				format!("{name} holds {actual}"),
-				format!("{name}:{type_name}"),
-				format!("{name}:{actual}"),
-			),
+			.offer(format!("the {type_name} of the value"), &value_text, format!("{type_name}({value_text})"))
+			.offer(format!("{name} holds {actual}"), format!("{name}:{type_name}"), format!("{name}:{actual}")),
 	)
 }
 
@@ -522,7 +530,8 @@ pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	if is_bool_type(type_name) {
 		return bool_misfit(value);
 	}
-	if !is_builtin_or_union(type_name) {
+	let parts = union_parts(type_name).unwrap_or_else(|| vec![type_name]);
+	if !parts.iter().all(|part| is_builtin_type(part)) {
 		return None;
 	}
 	// a list literal fits no scalar type: `x: int = [1 2]`
@@ -543,7 +552,7 @@ pub(super) fn bool_misfit(value: &Node) -> Option<Kind> {
 
 /// `bool`, `boolean`: a bool, held as an Int (builtin_type_kind)
 pub(crate) fn is_bool_type(type_name: &str) -> bool {
-	BOOL_TYPES.contains(&type_name.trim_end_matches('?').to_lowercase().as_str())
+	crate::type_tests::builtin_type_name(&type_name.trim_end_matches('?').to_lowercase()) == Some(BOOL_TYPE)
 }
 
 /// P199 (user): 1 and 0 are yes and no wherever a bool is expected
@@ -551,9 +560,11 @@ pub(crate) fn is_zero_or_one(value: &Node) -> bool {
 	matches!(value.drop_meta(), Node::Number(Number::Int(0 | 1)))
 }
 
-/// The element type of a list type: `texts` and `list of text` hold `text`
+/// The element type of a list type: `texts`, `list of text` and `[text]` hold `text`
 pub(crate) fn list_element_type(type_name: &str) -> Option<&str> {
-	plural_element_type(type_name).or_else(|| type_name.strip_prefix(LIST_OF_PREFIX))
+	plural_element_type(type_name)
+		.or_else(|| type_name.strip_prefix(LIST_OF_PREFIX))
+		.or_else(|| type_name.strip_prefix('[')?.strip_suffix(']'))
 }
 
 /// The items a list value is given literally: all of `[a b]`, the appended ones of `xs + [c]` and of
@@ -561,7 +572,7 @@ pub(crate) fn list_element_type(type_name: &str) -> Option<&str> {
 pub(crate) fn added_items(value: &Node) -> Option<&[Node]> {
 	let appended = match value.drop_meta() {
 		Node::Key(_, Op::Add, appended) => appended.as_ref(),
-		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [call, _, _] if call.drop_meta().name() == crate::wasm_emitter::list_ops::LIST_EXTEND) => {
+		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [call, _, _] if call.drop_meta().name() == crate::wasm_emitter::lists::list_ops::LIST_EXTEND) => {
 			&items[2]
 		}
 		literal => literal,
@@ -583,9 +594,7 @@ pub(super) fn evident_items_mismatch(
 ) -> Option<Diagnostic> {
 	let element = list_element_type(type_name)?;
 	let list_type = list_type_name(value, lists);
-	let items = list_type
-		.strip_prefix(LIST_OF_PREFIX)
-		.filter(|_| !elements_fit(element, &list_type))?;
+	let items = list_type.strip_prefix(LIST_OF_PREFIX).filter(|_| !elements_fit(element, &list_type))?;
 	// the value may be a temporary of the element checks (`checked·1`): its items are named, not it
 	let message = format!(
 		"type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}: the assigned items are {items}"
@@ -596,16 +605,13 @@ pub(super) fn evident_items_mismatch(
 /// The first literal item of a list value that does not fit `element`, with its kind: of another kind, or an int
 /// outside a fixed width (`xs: [int16] = [70000]`)
 pub(crate) fn misfit_item<'a>(element: &str, value: &'a Node) -> Option<(&'a Node, Kind)> {
-	added_items(value)?.iter().find_map(|item| {
-		Some((
-			item,
-			literal_misfit(element, item).or_else(|| out_of_width(element, item))?,
-		))
-	})
+	added_items(value)?
+		.iter()
+		.find_map(|item| Some((item, literal_misfit(element, item).or_else(|| out_of_width(element, item))?)))
 }
 
 pub(super) fn out_of_width(element: &str, item: &Node) -> Option<Kind> {
-	let width = crate::fixed_width::fixed_width(element)?;
+	let width = crate::numbers::fixed_width::fixed_width(element)?;
 	let Node::Number(Number::Int(value)) = item.drop_meta() else {
 		return None;
 	};
@@ -651,9 +657,40 @@ pub(super) fn list_items_mismatch(
 ) -> Option<Diagnostic> {
 	let (item, actual) = misfit_item(element, value)?;
 	let actual = format!("{actual:?}").to_lowercase();
-	let message = format!(
-		"type mismatch: {name} is declared {type_name}, cannot hold {actual} {}",
-		item.serialize()
-	);
+	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold {actual} {}", item.serialize());
 	Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:list to hold any items")))
+}
+
+/// Kind of a built-in type name (type_tests BUILTIN_TYPES, a fixed width an Int); an exact number (`exact`, `real`) is
+/// an Int that may hold a ratio (wasm_emitter/exact.rs)
+pub fn builtin_type_kind(name: &str) -> Option<Kind> {
+	let name = name.to_lowercase();
+	crate::type_tests::held_kind(&name).or_else(|| crate::numbers::fixed_width::fixed_width(&name).map(|_| Kind::Int))
+}
+
+/// A whole-number type (`int`, `long`, `byte` …): never a fraction, unlike `exact`
+pub fn is_whole_type(name: &str) -> bool {
+	let name = name.trim_end_matches('?').to_lowercase();
+	!crate::type_tests::is_exact_fraction_type(&name) && builtin_type_kind(&name) == Some(Kind::Int)
+}
+
+/// A declared type a decimal loses digits in: a whole type, or an inline union with a whole part and no fractional
+/// one (`int or text` refuses 2.5, `int or float` takes it)
+pub fn refuses_decimals(type_name: &str) -> bool {
+	match union_parts(type_name.trim_end_matches('?')) {
+		// a class part (`point or int`) takes no number
+		Some(parts) => {
+			parts.iter().any(|part| is_whole_type(part))
+				&& !parts.iter().any(|part| builtin_type_kind(part).is_some() && admits(part, Kind::Float))
+		}
+		None => is_whole_type(type_name),
+	}
+}
+
+/// A declared type held as an exact Int, or a union of such (`rational`, `int or rational`): an IEEE float loses its
+/// value there
+pub fn refuses_floats(type_name: &str) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let exact = |name: &str| builtin_type_kind(name) == Some(Kind::Int);
+	union_parts(type_name).map_or_else(|| exact(type_name), |parts| parts.iter().all(|part| exact(part)))
 }

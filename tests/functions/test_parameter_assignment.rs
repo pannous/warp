@@ -6,18 +6,9 @@ use crate::is;
 
 #[test]
 fn assigning_an_annotated_parameter_checks_its_type() {
-	fails_with(
-		"f(n: int) := { n = \"x\"; n }; f(3)",
-		"n is declared int, cannot assign",
-	);
-	fails_with(
-		"def f(n: int) { n = 2.5; n }; f(3)",
-		"n is declared int, cannot assign float 2.5",
-	);
-	fails_with(
-		"f(n: int, m: text) := { m = 1; m }; f(3, \"a\")",
-		"m is declared text, cannot assign int 1",
-	);
+	fails_with("f(n: int) := { n = \"x\"; n }; f(3)", "n is declared int, cannot assign");
+	fails_with("def f(n: int) { n = 2.5; n }; f(3)", "n is declared int, cannot assign float 2.5");
+	fails_with("f(n: int, m: text) := { m = 1; m }; f(3, \"a\")", "m is declared text, cannot assign int 1");
 	fails_with("f(n: int) := { t = [\"x\"]; n = t#1; n }; f(3)", "not an int");
 	is!("f(n: int) := { n = 4; n }; f(3)", 4);
 	is!("f(n: float) := { n = 4; n }; f(3)", 4.0);

@@ -10,6 +10,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 pub use super::pixels::{COLOR_FROM, INK, PAPER};
 const FILE_STEM: &str = "paint";
 const FOLDER: &str = "warp-paint";
+/// The runtime warning of a warp function painted on the CPU for want of a GPU (paints_shaders), its reason after it
+const PAINTS_ON_CPU: &str = "paint: a function paints on the CPU";
 /// Set when tests or a headless machine must not see windows (tests/common warp_command, tests/queue.sh)
 pub const NO_WINDOW_VARIABLE: &str = "WARP_NO_WINDOW";
 const CI_VARIABLE: &str = "CI";
@@ -35,15 +37,10 @@ pub fn shade(value: u64) -> [u8; 3] {
 
 /// The warp binary's paint calls show windows, unless WARP_NO_WINDOW or CI is set (main.rs)
 pub fn allow_windows() {
-	let headless = [NO_WINDOW_VARIABLE, CI_VARIABLE]
-		.iter()
-		.any(|variable| std::env::var_os(variable).is_some());
+	let headless = [NO_WINDOW_VARIABLE, CI_VARIABLE].iter().any(|variable| std::env::var_os(variable).is_some());
 	WINDOWS.store(!headless, Ordering::Relaxed);
 	let chosen = std::env::var(DRAW_VARIABLE).ok().filter(|choice| !choice.is_empty());
-	if let Some(unknown) = chosen
-		.as_ref()
-		.filter(|choice| !DRAW_CHOICES.contains(&choice.as_str()))
-	{
+	if let Some(unknown) = chosen.as_ref().filter(|choice| !DRAW_CHOICES.contains(&choice.as_str())) {
 		eprintln!(
 			"warning: {DRAW_VARIABLE}={unknown} is neither {}: use draw draws as without it",
 			DRAW_CHOICES.join(" nor ")
@@ -56,6 +53,7 @@ pub fn allow_windows() {
 	warp_runtime::system_values::tell_gpu_drawing(on_gpu);
 	if !headless {
 		warp_runtime::system_values::tell_window_opener(open_blank_window);
+		warp_runtime::system_values::tell_window_resizer(crate::graphics::paint_window::resize);
 	}
 }
 
@@ -82,11 +80,7 @@ pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathB
 		return Ok(None); // nothing to show, as the playground's canvas (user 2026-10-10: defaults, no errors)
 	}
 	if pixels.len() < width * height {
-		return Err(format!(
-			"paint: {width}×{height} needs {} pixels, got {}",
-			width * height,
-			pixels.len()
-		));
+		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
 	shown_or_written(
 		|| crate::graphics::paint_window::frame_bytes(pixels, width, height),
@@ -103,8 +97,27 @@ pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<Pat
 }
 
 fn rgba_png_file(rgba: &[u8], width: usize, height: usize) -> Result<PathBuf, String> {
-	let pixels: Vec<u64> = crate::graphics::gpu::opaque_colors(rgba).map(u64::from).collect();
-	png_file(&pixels, width, height)
+	png_file(&rgba_pixels(rgba), width, height)
+}
+
+/// RGBA bytes as pixel values, each an opaque color
+fn rgba_pixels(rgba: &[u8]) -> Vec<u64> {
+	crate::graphics::gpu::opaque_colors(rgba).map(u64::from).collect()
+}
+
+/// Whether a shader can paint (system value GPU_PAINTS): in a window the window's process renders it, else this process's
+/// GPU does; without one a warp function paints on the CPU, said once
+pub fn paints_shaders() -> bool {
+	if shows_windows() {
+		return true;
+	}
+	match crate::graphics::gpu::available() {
+		Ok(()) => true,
+		Err(problem) => {
+			crate::errors::diagnostic::report_runtime_warning_once(PAINTS_ON_CPU, &problem);
+			false
+		}
+	}
 }
 
 /// paint of a shader: in a window the window's process renders it (card paint-keeps), only the shader and its values
@@ -115,13 +128,10 @@ pub fn paint_shader(
 	height: u32,
 	values: &[crate::graphics::gpu::ShaderValue],
 ) -> Result<Option<PathBuf>, String> {
-	if WINDOWS.load(Ordering::Relaxed) {
+	if shows_windows() {
 		let values = crate::graphics::gpu::checked_values(shader, width, height, values)?;
-		match crate::graphics::paint_window::show(&crate::graphics::paint_window::shader_message(
-			width, height, shader, &values,
-		)) {
-			Ok(()) => return Ok(None),
-			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
+		if shown(&crate::graphics::paint_window::shader_message(width, height, shader, &values)) {
+			return Ok(None);
 		}
 	}
 	let rgba = crate::graphics::gpu::render_rgba(shader, width, height, values)?;
@@ -133,34 +143,37 @@ fn shown_or_written(
 	frame: impl FnOnce() -> Vec<u8>,
 	write: impl FnOnce() -> Result<PathBuf, String>,
 ) -> Result<Option<PathBuf>, String> {
-	if WINDOWS.load(Ordering::Relaxed) {
-		match crate::graphics::paint_window::show(&frame()) {
-			Ok(()) => return Ok(None),
-			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
-		}
+	if shows_windows() && shown(&frame()) {
+		return Ok(None);
 	}
 	write().map(Some)
 }
 
+/// Whether the window shows the message; its failure said, as the picture goes to a PNG instead
+fn shown(message: &[u8]) -> bool {
+	crate::graphics::paint_window::show(message).map_err(|failure| eprintln!("{failure}, so it goes to a PNG")).is_ok()
+}
+
 /// The image as a PNG in the temporary folder
 fn png_file(pixels: &[u64], width: usize, height: usize) -> Result<PathBuf, String> {
-	let folder = std::env::temp_dir().join(FOLDER);
-	std::fs::create_dir_all(&folder)
-		.map_err(|failure| format!("paint: cannot create {}: {failure}", folder.display()))?;
-	let path = folder.join(file_name(PAINTED.fetch_add(1, Ordering::Relaxed) + 1));
-	std::fs::write(&path, png(pixels, width, height))
-		.map_err(|failure| format!("paint: cannot write {}: {failure}", path.display()))?;
+	let call = PAINTED.fetch_add(1, Ordering::Relaxed) + 1;
+	let png = png(pixels, width, height);
+	let path = crate::extensions::utils::numbered_temporary_file(FOLDER, FILE_STEM, call, "png", &png, "paint")?;
 	eprintln!("painted {width}×{height}: {}", path.display());
 	Ok(path)
 }
 
-/// paint.png for the first call of a run, paint-2.png for the second …
-fn file_name(call: usize) -> String {
-	if call == 1 {
-		format!("{FILE_STEM}.png")
-	} else {
-		format!("{FILE_STEM}-{call}.png")
+/// `save canvas as "painting.png"` (card save-painting, lib/draw.warp): the pixels as a PNG at that path
+pub fn save_png(pixels: &[u64], width: usize, height: usize, path: &str) -> Result<(), String> {
+	if pixels.len() < width * height {
+		return Err(format!("save: a {width}×{height} picture needs {} pixels, got {}", width * height, pixels.len()));
 	}
+	std::fs::write(path, png(pixels, width, height)).map_err(|failure| format!("save: cannot write {path}: {failure}"))
+}
+
+/// A picture the GPU drew (gpu_canvas::snapshot) as a PNG at that path
+pub fn save_rgba_png(rgba: &[u8], width: usize, height: usize, path: &str) -> Result<(), String> {
+	save_png(&rgba_pixels(rgba), width, height, path)
 }
 
 /// A grayscale PNG of ink and paper, a truecolor one when a pixel has a color
@@ -185,11 +198,8 @@ fn png(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
 	]
 	.concat();
 	let mut file = PNG_SIGNATURE.to_vec();
-	for (kind, data) in [
-		(b"IHDR", header),
-		(b"IDAT", deflated.finish().expect("writing to memory")),
-		(b"IEND", vec![]),
-	] {
+	for (kind, data) in [(b"IHDR", header), (b"IDAT", deflated.finish().expect("writing to memory")), (b"IEND", vec![])]
+	{
 		file.extend((data.len() as u32).to_be_bytes());
 		let checked = [kind.as_slice(), &data].concat();
 		file.extend(&checked);

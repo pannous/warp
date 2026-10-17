@@ -9,9 +9,6 @@ const LONG: usize = 100000;
 fn a_long_list_result_reads_back() {
 	match eval(&format!("(0..{LONG}).map(x=>x)")) {
 		Node::List(items, _, _) => assert_eq!(items.len(), LONG),
-		other => panic!(
-			"not a list: {}",
-			other.serialize().chars().take(200).collect::<String>()
-		),
+		other => panic!("not a list: {}", other.serialize().chars().take(200).collect::<String>()),
 	}
 }

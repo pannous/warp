@@ -4,22 +4,13 @@ use crate::is;
 
 #[test]
 fn test_a_sibling_calls_a_nested_function() {
-	is!(
-		"def outer(){ y=1; def inner(){ nonlocal y; y }; def sibling(){ inner() }; y=7; sibling() }; outer()",
-		7
-	);
+	is!("def outer(){ y=1; def inner(){ nonlocal y; y }; def sibling(){ inner() }; y=7; sibling() }; outer()", 7);
 }
 
 #[test]
 fn test_a_nested_function_passed_around_reads_the_current_value() {
-	is!(
-		"def apply(f){ f() }; def outer(){ y=1; def inner(){ nonlocal y; y }; y=9; apply(inner) }; outer()",
-		9
-	);
-	is!(
-		"def outer(){ y=1; def inner(){ nonlocal y; y }; g = function inner; y=4; g() }; outer()",
-		4
-	);
+	is!("def apply(f){ f() }; def outer(){ y=1; def inner(){ nonlocal y; y }; y=9; apply(inner) }; outer()", 9);
+	is!("def outer(){ y=1; def inner(){ nonlocal y; y }; g = function inner; y=4; g() }; outer()", 4);
 }
 
 #[test]

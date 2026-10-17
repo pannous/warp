@@ -1,5 +1,0 @@
-// decision approx-zero: ≈ near zero has an absolute floor of 1e-12
-// gives yes
-print(sin(π) ≈ 0)
-// gives no
-print(1e-11 ≈ 0)

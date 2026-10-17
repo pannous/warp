@@ -2,9 +2,10 @@
 // fresh instance, since a panic aborts the instance (wasm has panic=abort). `is!` and friends compile and run their
 // programs through warp_host (host.js), exactly like the playground.
 
-importScripts("reader.js", "imports.js", "exact.js", "std.js", "host.js");
+importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "wasi.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
+self.askPageCall = (shared, request) => self.postMessage({ type: "page call", shared, request }); // host-foreign.js callOnPage
 
 let module; // the compiled test binary
 

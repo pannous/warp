@@ -1,6 +1,6 @@
-# Float text at run time (card floats-print, user decision float-text)
+# Float text at run time
 
-Floats print their shortest digits that read back (Python/JS repr), in pure wasm: src/wasm_emitter/float_text.rs.
+Floats print their shortest digits that read back (Python/JS repr), in pure wasm: src/wasm_emitter/numbers/float_text.rs.
 
 - float_digits(x): estimate the exponent, scale x to 17 digits with float_scaled (double-double: Dekker's exact
   product, one exact power ≤ 10^22 a step, rescaled by 2^∓128 beyond 2^±900), and the two halfways to the neighbours

@@ -15,16 +15,18 @@ const PAGE_HTML = "page·html";
 let site; // the program's run (host.js runProgram's holder)
 let pagePath = "/";
 
-const post = message => self.postMessage(message);
+const post = (message, transfer) => self.postMessage(message, transfer);
 self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ clipboard: text }); // host-files.js STD_ADAPTERS.clipboard: the page has the clipboard
 self.askPageClipboard = shared => post({ clipboardRead: shared }); // host.js clipboard_text
+self.askPageDecode = (shared, url, bytes) => post({ soundDecode: { shared, url, bytes } }); // host-sound.js pageDecoded
+self.askPageCall = (shared, request) => post({ pageCall: { shared, request } }); // host-foreign.js callOnPage
 const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
 	print: (text, stream) => post({ print: { text, stream } }),
 	dispatch: event => post({ dispatch: event }), // site-thread.js: markup.js dispatchToPage
-	paint: (pixels, width, height) => post({ paint: { pixels, width, height } }), // shown by the page (site-thread.js)
+	paint: (frame, width, height, canvas, shaded) => post({ paint: { frame, width, height, shaded } }, frame && [frame.words.buffer]), // shown by the page (site-thread.js)
 	listen: holder => holder.timers && startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))), // host-timers.js
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
 };

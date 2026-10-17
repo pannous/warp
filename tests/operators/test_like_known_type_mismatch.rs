@@ -7,17 +7,8 @@ const TYPES: &str = "class photo{width:int height:int}; class pic{width:int}; ";
 
 #[test]
 fn a_known_other_type_lacking_a_field_teaches_like() {
-	fails_with(
-		&format!("{TYPES}p:photo = pic{{width:3}}; p.width"),
-		"declare `pic like photo`",
-	);
-	fails_with(
-		&format!("{TYPES}keep(p:photo) := p.width; keep(pic{{width:3}})"),
-		"declare `pic like photo`",
-	);
+	fails_with(&format!("{TYPES}p:photo = pic{{width:3}}; p.width"), "declare `pic like photo`");
+	fails_with(&format!("{TYPES}keep(p:photo) := p.width; keep(pic{{width:3}})"), "declare `pic like photo`");
 	is!(&format!("{TYPES}pic like photo; p:photo = pic{{width:3}}; p.width"), 3);
-	fails_with(
-		&format!("{TYPES}pic like photo; p:photo = pic{{width:3}}; p.height"),
-		"no field height",
-	);
+	fails_with(&format!("{TYPES}pic like photo; p:photo = pic{{width:3}}; p.height"), "no field height");
 }

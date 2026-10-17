@@ -1,3 +1,0 @@
-#!/usr/bin/env warp
-// how many words are in a sentence?
-#"the quick brown fox".split # todo default = " "

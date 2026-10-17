@@ -3,6 +3,7 @@
 //! page runs the compiled module (`run_in_host`) and hands its result back as a JSON tree that its reader
 //! (web/playground/reader.js) walked through the module's reflection exports (wasm_emitter/reflection.rs).
 
+pub mod accessibility;
 #[cfg(feature = "native")]
 pub mod deploy;
 #[cfg(feature = "native")]
@@ -10,11 +11,14 @@ pub mod dev_server;
 #[cfg(feature = "native")]
 pub mod fetches;
 pub mod headless;
+pub mod markup;
 pub mod page_tests;
 #[cfg(feature = "native")]
 pub mod route_split;
 #[cfg(feature = "native")]
 pub mod site;
+#[cfg(feature = "native")]
+pub mod site_modules;
 #[cfg(feature = "native")]
 pub mod web_server;
 #[cfg(feature = "native")]
@@ -22,10 +26,10 @@ pub mod web_sockets;
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub mod webview;
 
-use crate::diagnostic::{self, Acknowledger};
+use crate::compiler::meta::{DataType, DataValue};
+use crate::errors::diagnostic::{self, Acknowledger};
+use crate::errors::fixits::{self, Fix};
 use crate::extensions::numbers::Number;
-use crate::fixits::{self, Fix};
-use crate::meta::{DataType, DataValue};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::KIND_BITS;
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -57,11 +61,9 @@ impl Acknowledger for PageAcknowledger {
 	}
 
 	/// The page answers later, with its "got it" buttons: this expression, or all of the kind
-	fn acknowledge(&self, topic: &str, written: &str) -> crate::diagnostic::GotIt {
-		self.notes
-			.borrow_mut()
-			.push((topic.to_string(), diagnostic::expression_key(topic, written)));
-		crate::diagnostic::GotIt::No
+	fn acknowledge(&self, topic: &str, written: &str) -> crate::errors::diagnostic::GotIt {
+		self.notes.borrow_mut().push((topic.to_string(), diagnostic::expression_key(topic, written)));
+		crate::errors::diagnostic::GotIt::No
 	}
 }
 
@@ -73,19 +75,14 @@ impl Acknowledger for PageAcknowledger {
 /// holds topics and expression keys. Acknowledging silences a warning, never changes the value.
 pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	let notes = Rc::new(RefCell::new(Vec::new()));
-	let acknowledger = PageAcknowledger {
-		acknowledged,
-		notes: notes.clone(),
-	};
+	let acknowledger = PageAcknowledger { acknowledged, notes: notes.clone() };
 	diagnostic::take_warnings();
 	diagnostic::take_error_diagnostics();
 	diagnostic::take_runtime_warnings();
 	let (result, hints) =
 		diagnostic::with_acknowledger(acknowledger, || crate::normalize::capture_hints(|| run_shown(code)));
-	let warnings: Vec<Value> = diagnostic::take_warnings()
-		.iter()
-		.map(|warning| diagnostic_json(code, warning))
-		.collect();
+	let warnings: Vec<Value> =
+		diagnostic::take_warnings().iter().map(|warning| diagnostic_json(code, warning)).collect();
 	let is_error = matches!(result.drop_meta(), Node::Error(_));
 	let errors: Vec<Value> = unique(diagnostic::take_error_diagnostics())
 		.iter()
@@ -123,11 +120,11 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 /// itself, else by the renderer compiled on its own
 fn html_of(value: &Node) -> Value {
 	let rendered = RENDERED.with(|rendered| rendered.borrow_mut().take());
-	json!(crate::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::markup::to_html(value))))
+	json!(crate::web::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::web::markup::to_html(value))))
 }
 
 /// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself). The page has no
-/// `warp test`: a program's tests run, and their summary is its value (lowering/test_blocks.rs)
+/// `warp test`: a program's tests run, and their summary is its value (lowering/control/test_blocks.rs)
 fn run_shown(code: &str) -> Node {
 	crate::pipeline::for_tests(|| match renders_itself(code) {
 		true => crate::pipeline::rendering_itself(|| crate::wasm_emitter::eval(code)),
@@ -140,7 +137,7 @@ pub fn renders_itself(code: &str) -> bool {
 	let mut holds_markup = false;
 	// quietly: the compile that follows says what the parse finds
 	diagnostic::quietly(|| crate::warp_parser::parse(code))
-		.visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
+		.visit(&mut |part| holds_markup |= crate::web::markup::is_markup(part));
 	holds_markup
 }
 
@@ -187,14 +184,10 @@ fn unique(diagnostics: Vec<diagnostic::Diagnostic>) -> Vec<diagnostic::Diagnosti
 /// acknowledged topics (its other keys were remembered Ask answers, which no longer exist)
 pub fn acknowledged_topics(json: &str) -> HashSet<String> {
 	match serde_json::from_str::<Value>(json).unwrap_or_default() {
-		Value::Array(topics) => topics
-			.iter()
-			.filter_map(|topic| topic.as_str().map(str::to_string))
-			.collect(),
-		Value::Object(answers) => answers
-			.keys()
-			.filter_map(|key| key.strip_prefix("ack:").map(str::to_string))
-			.collect(),
+		Value::Array(topics) => topics.iter().filter_map(|topic| topic.as_str().map(str::to_string)).collect(),
+		Value::Object(answers) => {
+			answers.keys().filter_map(|key| key.strip_prefix("ack:").map(str::to_string)).collect()
+		}
 		_ => HashSet::new(),
 	}
 }
@@ -209,34 +202,18 @@ pub fn acknowledged_topics(json: &str) -> HashSet<String> {
 /// `{"failure": message}` (the module did not compile, link or instantiate)
 pub fn run_outcome(outcome: &Value) -> Node {
 	RENDERED.with(|rendered| *rendered.borrow_mut() = outcome.get("html").and_then(Value::as_str).map(str::to_string));
-	for warning in outcome
-		.get("warnings")
-		.and_then(Value::as_array)
-		.into_iter()
-		.flatten()
-		.filter_map(Value::as_str)
-	{
+	for warning in outcome.get("warnings").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
 		diagnostic::report_runtime_warning(warning);
 	}
 	if let Some(tree) = outcome.get("result") {
 		return node_from_tree(tree);
 	}
 	if let Some(message) = outcome.get("trap").and_then(Value::as_str) {
-		let mut trace = outcome
-			.get("trace")
-			.and_then(Value::as_str)
-			.unwrap_or_default()
-			.to_string();
+		let mut trace = outcome.get("trace").and_then(Value::as_str).unwrap_or_default().to_string();
 		if let Some(detail) = outcome.get("detail").filter(|detail| !detail.is_null()) {
-			trace.push_str(&format!(
-				"\n{}",
-				crate::wasm_emitter::trap_detail_line(&node_from_tree(detail))
-			));
+			trace.push_str(&format!("\n{}", crate::wasm_emitter::trap_detail_line(&node_from_tree(detail))));
 		}
-		let position = outcome
-			.get("position")
-			.and_then(Value::as_str)
-			.and_then(|position| position.parse().ok());
+		let position = outcome.get("position").and_then(Value::as_str).and_then(|position| position.parse().ok());
 		if let Some(line) = position.and_then(crate::wasm_emitter::trap_position_line) {
 			trace.push_str(&format!("\n{line}"));
 		}
@@ -245,10 +222,7 @@ pub fn run_outcome(outcome: &Value) -> Node {
 	if let Some(message) = outcome.get("error").and_then(Value::as_str) {
 		return crate::node::error(message); // a host word failed with its own message (run_block)
 	}
-	let failure = outcome
-		.get("failure")
-		.and_then(Value::as_str)
-		.unwrap_or("the page sent no outcome");
+	let failure = outcome.get("failure").and_then(Value::as_str).unwrap_or("the page sent no outcome");
 	crate::node::error(&format!("could not run the program: {failure}"))
 }
 
@@ -259,13 +233,22 @@ pub fn shown(outcome: &Value) -> Value {
 	json!({ "value": value.serialize(), "html": html_of(&value) })
 }
 
-/// The playground's Deploy (deploy.js, notes/hosting.md): `{scripts, module_length}` (the host scripts' names, which
-/// warp-hosting takes as ?scripts=) and the program's module for a Worker, or `{error}` and no module
+/// The playground's Deploy (deploy.js, notes/hosting.md): `{query, scripts, site, module_length}` (the query naming the
+/// scripts warp-hosting composes the Worker of, those scripts, whether it serves a site) and the program's module, or
+/// `{error}` and no module
 pub fn worker_bundle(code: &str) -> (Value, Vec<u8>) {
-	match crate::host_parts::worker_parts(code) {
-		Ok((module, scripts)) => {
+	use crate::host::host_parts::Deployable;
+	match crate::host::host_parts::deployable(code) {
+		Ok(deployable) => {
+			let scripts = match &deployable {
+				Deployable::Server { scripts, .. } => scripts.clone(),
+				Deployable::Site { layout, .. } => layout.shipped(),
+			};
 			let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
-			(json!({ "scripts": names, "module_length": module.len() }), module)
+			let site = matches!(deployable, Deployable::Site { .. });
+			let module = deployable.module().to_vec();
+			let report = json!({ "query": deployable.hosting_query(), "scripts": names, "site": site, "module_length": module.len() });
+			(report, module)
 		}
 		Err(message) => (json!({ "error": message }), Vec::new()),
 	}
@@ -281,13 +264,18 @@ pub fn eval_block_report(request: &Value) -> Value {
 			.text_value()
 			.ok_or_else(|| format!("{}: needs a text", crate::host::PARSE_CODE))
 			.and_then(|source| crate::lowering::parse_word::code_of(&source)),
-		None => crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values"), &tree("definitions")),
+		None => crate::compiler::run_time_blocks::eval_block(
+			tree("block"),
+			&tree("names"),
+			&tree("values"),
+			&tree("definitions"),
+		),
 	};
 	match outcome {
 		Err(message) => json!({ "error": message }),
 		Ok(result) => match tree_of(&result) {
 			Some(tree) => json!({ "result": tree }),
-			None => json!({ "error": crate::pipeline::cannot_hand_back(&result) }),
+			None => json!({ "error": crate::compiler::run_time_blocks::cannot_hand_back(&result) }),
 		},
 	}
 }
@@ -307,7 +295,7 @@ fn tree_of(node: &Node) -> Option<Value> {
 		Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => {
 			json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] })
 		}
-		// beyond the fixnums: host.js composes it from fixnum pieces (src/tasks.rs EXACT_BUILDERS)
+		// beyond the fixnums: host.js composes it from fixnum pieces (src/host/tasks.rs EXACT_BUILDERS)
 		Node::Number(Number::Int(n)) => {
 			json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] })
 		}
@@ -345,31 +333,19 @@ const TRAP_WORDS: [(&str, &str); 12] = [
 	("divide by zero", "integer divide by zero"),
 	("remainder by zero", "integer divide by zero"),
 	("divide result unrepresentable", "integer overflow"),
-	(
-		"float unrepresentable in integer range",
-		"invalid conversion to integer",
-	),
-	(
-		"null function or function signature mismatch",
-		"indirect call type mismatch",
-	),
+	("float unrepresentable in integer range", "invalid conversion to integer"),
+	("null function or function signature mismatch", "indirect call type mismatch"),
 	("dereferencing a null pointer", "null reference"),
 	("illegal cast", "cast failure"),
 	("array element access out of bounds", "out of bounds array access"),
-	(
-		"table index is out of bounds",
-		"undefined element: out of bounds table access",
-	),
+	("table index is out of bounds", "undefined element: out of bounds table access"),
 	("Maximum call stack size exceeded", "call stack exhausted"),
 ];
 const TRAP_PREFIX: &str = "wasm trap: ";
 
 /// The CLI's message for a trap the page reports in the browser engine's words
 fn engine_words(message: &str) -> String {
-	let words = TRAP_WORDS
-		.iter()
-		.find(|(engine, _)| message == *engine)
-		.map_or(message, |(_, wasmtime)| wasmtime);
+	let words = TRAP_WORDS.iter().find(|(engine, _)| message == *engine).map_or(message, |(_, wasmtime)| wasmtime);
 	format!("{TRAP_PREFIX}{words}")
 }
 
@@ -406,10 +382,10 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 				Node::True
 			}
 		}
-		tag if tag == Kind::Int as i64 && crate::wasm_emitter::radix::radix_of_info(info).is_some() => {
+		tag if tag == Kind::Int as i64 && crate::wasm_emitter::numbers::radix::radix_of_info(info).is_some() => {
 			match payload_number(data) {
 				Some(Number::Int(value)) => Node::Number(Number::Int(value)).with_source_literal(
-					&crate::wasm_emitter::radix::marked_literal(info, value).expect("a radix mark"),
+					&crate::wasm_emitter::numbers::radix::marked_literal(info, value).expect("a radix mark"),
 				),
 				number => number.map_or_else(|| crate::node::error("unreadable Int"), Node::Number),
 			}
@@ -420,18 +396,16 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		tag if tag == Kind::Float as i64 => Node::Number(Number::Float(payload_float(data).unwrap_or(0.0))),
 		tag if tag == Kind::Text as i64 => Node::Text(text()),
 		tag if tag == Kind::Error as i64 => Node::Error(Box::new(Node::Text(text()))),
+		tag if tag == Kind::Symbol as i64 && kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
+			Node::type_value(&text())
+		}
 		tag if tag == Kind::Symbol as i64 => Node::Symbol(text()),
 		tag if tag == Kind::Codepoint as i64 => Node::Char(
-			data.get("i31")
-				.and_then(Value::as_u64)
-				.and_then(|code| char::from_u32(code as u32))
-				.unwrap_or('\0'),
+			data.get("i31").and_then(Value::as_u64).and_then(|code| char::from_u32(code as u32)).unwrap_or('\0'),
 		),
-		tag if tag == Kind::Key as i64 => Node::Key(
-			Box::new(data_node()),
-			crate::operators::code_to_op(info),
-			Box::new(value_node()),
-		),
+		tag if tag == Kind::Key as i64 => {
+			Node::Key(Box::new(data_node()), crate::operators::code_to_op(info), Box::new(value_node()))
+		}
 		tag if tag == Kind::Block as i64 => list_node(
 			data.get("node").map(node_from_tree),
 			value,
@@ -453,13 +427,12 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			})
 		}
 		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
-		tag if tag == Kind::TypeDef as i64 => Node::Type {
-			name: Box::new(data_node()),
-			body: Box::new(value_node()),
-		},
+		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },
 		tag if tag == Kind::Uncertain as i64 => {
 			let floats = data.get("floats").and_then(Value::as_array);
-			crate::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
+			crate::numbers::uncertain::Uncertain::read_node(
+				floats.map(|parts| parts.iter().filter_map(float_value).collect()),
+			)
 		}
 		tag if tag == Kind::Time as i64 => crate::time::time_node(kind >> KIND_BITS, payload_number(data)),
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
@@ -499,18 +472,9 @@ fn payload_number(payload: &Value) -> Option<Number> {
 		};
 	}
 	if let Some(big) = payload.get("big") {
-		let limbs: Vec<u32> = big
-			.get("limbs")?
-			.as_array()?
-			.iter()
-			.filter_map(Value::as_u64)
-			.map(|limb| limb as u32)
-			.collect();
-		let sign = if big.get("negative").and_then(Value::as_bool).unwrap_or(false) {
-			Sign::Minus
-		} else {
-			Sign::Plus
-		};
+		let limbs: Vec<u32> =
+			big.get("limbs")?.as_array()?.iter().filter_map(Value::as_u64).map(|limb| limb as u32).collect();
+		let sign = if big.get("negative").and_then(Value::as_bool).unwrap_or(false) { Sign::Minus } else { Sign::Plus };
 		return Some(Number::from_bigint(BigInt::from_slice(sign, &limbs)));
 	}
 	let [numerator, denominator] = payload.get("ratio")?.as_array()?.as_slice() else {
@@ -565,6 +529,35 @@ pub fn read_bytes(path: &str) -> Option<Vec<u8>> {
 	std::fs::read(path).ok()
 }
 
+/// Outside the page every file is looked at directly: nothing to list
+#[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
+pub fn list_directory(_directory: &str, _files: &[String]) {}
+
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+thread_local! {
+	static LISTED_DIRECTORIES: RefCell<Vec<(String, Vec<String>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The page knows every file of `directory` (a package's library: its module and header, card uniscript-commit-wasm):
+/// the compiler's searches there ask for no other file, since every 404 is an error in the console (card console-errors)
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+pub fn list_directory(directory: &str, files: &[String]) {
+	LISTED_DIRECTORIES.with(|listed| listed.borrow_mut().push((directory.to_string(), files.to_vec())));
+}
+
+/// A path below a listed directory that its list lacks
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+fn is_unlisted(address: &str) -> bool {
+	LISTED_DIRECTORIES.with(|listed| {
+		listed.borrow().iter().any(|(directory, files)| {
+			let file = address.strip_prefix(directory.as_str()).and_then(|rest| rest.strip_prefix('/'));
+			// the search's own folder is `.`: dir/./x.wasm is dir/x.wasm
+			let file = file.map(|file| file.trim_start_matches("./"));
+			file.is_some_and(|file| !files.iter().any(|listed| listed == file))
+		})
+	})
+}
+
 /// A file the page fetches for the compiler, remembered per address: a path of the served repository, a file of the page
 /// itself (PAGE_PREFIX `page:lib/libc.h`, resolved by web/playground/host.js against the page) or a URL
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
@@ -576,6 +569,9 @@ pub fn read_bytes(address: &str) -> Option<Vec<u8>> {
 		if let Ok(bytes) = std::fs::read(address) {
 			return Some(bytes);
 		}
+	}
+	if is_unlisted(address) {
+		return None;
 	}
 	thread_local! {
 		static FETCHED: RefCell<std::collections::HashMap<String, Option<Vec<u8>>>> = RefCell::new(std::collections::HashMap::new());
@@ -715,6 +711,57 @@ mod exports {
 		let (report, module) = worker_bundle(text(code, code_length));
 		MODULE.with(|kept| *kept.borrow_mut() = module);
 		kept(report.to_string().into_bytes())
+	}
+
+	/// The members to offer after the code and a dot (completion.js, lowering/data/members.rs), a JSON list of names;
+	/// returns its length, read at `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_member_names(code: *const u8, code_length: usize) -> usize {
+		kept(serde_json::to_vec(&crate::members::member_names(text(code, code_length))).unwrap_or_default())
+	}
+
+	/// The little-endian f32s passed at pointer
+	fn floats(pointer: *const u8, length: usize) -> Vec<f32> {
+		let bytes = if length == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(pointer, length) } };
+		bytes.chunks_exact(4).map(|four| f32::from_le_bytes([four[0], four[1], four[2], four[3]])).collect()
+	}
+
+	/// A sound through effects (card shared-buses stage 2, worker.js busProcessed: a bus's sounds, lib's list effects):
+	/// the chain as JSON (effects::chain_of_json), the samples little-endian f32, interleaved; returns the byte length of
+	/// the processed samples, a delay's or reverb's tail added (effects::with_effects), the same encoding, read at
+	/// `web_report()`; 0 for a chain it cannot read
+	#[no_mangle]
+	pub extern "C" fn web_bus_processed(
+		chain: *const u8,
+		chain_length: usize,
+		samples: *const u8,
+		samples_length: usize,
+		rate: u32,
+		channels: u32,
+	) -> usize {
+		let Ok(effects) = crate::sound::effects::chain_of_json(text(chain, chain_length)) else {
+			return 0;
+		};
+		let samples = floats(samples, samples_length);
+		let processed = crate::sound::effects::with_effects(&samples, &effects, rate, channels as u16);
+		kept(processed.iter().flat_map(|sample| sample.to_le_bytes()).collect())
+	}
+
+	/// How loud each band sounds in a window (lib/sound.warp spectrum, host-sound.js): the window's amplitudes around 0
+	/// as little-endian f32; returns the byte length of the levels (spectrum::window_levels), little-endian f64, read at
+	/// `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_spectrum(
+		window: *const u8,
+		window_length: usize,
+		rate: f64,
+		bands: usize,
+		low: f64,
+		high: f64,
+	) -> usize {
+		let window: Vec<f64> = floats(window, window_length).into_iter().map(f64::from).collect();
+		let levels = crate::sound::spectrum::window_levels(&window, rate, bands, low, high);
+		kept(levels.iter().flat_map(|level| level.to_le_bytes()).collect())
 	}
 
 	#[no_mangle]

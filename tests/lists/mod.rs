@@ -3,6 +3,7 @@ mod test_append_words;
 mod test_auto_linear_floats; // card auto-linear-floats
 mod test_bare_list_assignment;
 mod test_byte_size;
+mod test_calls_in_blocks;
 mod test_captured_call_lists;
 mod test_comprehension_beside_own_push; // card prefix-count-field
 mod test_concat_declared;
@@ -18,11 +19,13 @@ mod test_down_and_letter_ranges;
 mod test_dynamic_range;
 mod test_element_wise_lists;
 mod test_element_wise_scalar;
+mod test_element_wise_vectors;
 mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
 mod test_field_count;
+mod test_filter_element_scope;
 mod test_find_any_all;
 mod test_first_items; // card first-first
 mod test_float_array_writes;
@@ -62,6 +65,7 @@ mod test_lists;
 mod test_lists_read_by_turns; // several long lists read by turns: a read cursor each
 mod test_long_list_copies;
 mod test_long_list_result;
+mod test_map_field_named_like_word; // card map-field
 mod test_map_get_kind;
 mod test_map_index;
 mod test_map_inside_loop; // card map-inside
@@ -81,6 +85,7 @@ mod test_number_keys;
 mod test_number_list_elements; // card winamp-like
 mod test_numbered_fields;
 mod test_object_list_walk; // orm identity map: index walks of object lists
+mod test_one_entry_map_parts; // card age-name
 mod test_one_entry_map_text;
 mod test_pair_values;
 mod test_phrase_in_call; // card phrase-in-call
@@ -98,11 +103,14 @@ mod test_size_count;
 mod test_size_property_word;
 mod test_sort_long;
 mod test_sorted_by_phrase; // card sorted-by-phrase
+mod test_swizzles; // card compile-shaders, decision S1
 mod test_tuple_items_of_lists;
 mod test_tuples;
 mod test_type_word_items;
 mod test_typed_list_insert; // card w0-list-writes
 mod test_typed_lists;
+mod test_unit_named_variable_in; // card chars-chars
+mod test_unit_word_text_in; // card in-text-word
 mod test_unpacking;
 mod test_unpacking_declared;
 mod test_unpacking_into_existing;

@@ -1,0 +1,7 @@
+# cost of mapping every pixel of a 640×480 frame through a warp word (card graphics-shade: hosts get colours only)
+shown_color(v) := if v == 0 then 0xFFFAFAFA else if v >= 16777216 then v else 0xFF1D1D1D
+pixels = int[640 * 480]
+for i in 0..640 * 480 { pixels[i] = i % 3 }
+started = clock()
+for frame in 1..10 { shown = [shown_color(v) for v in pixels] }
+print "per frame ${(clock() - started) / 10} ms"

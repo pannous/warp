@@ -1,22 +1,18 @@
 //! Linking C functions into wasmtime: libm and the hand-linked libc functions, any library through its headers
 //! (libloading + one wrapper per signature shape), and the run's handle table for C pointers
 
-#[cfg(feature = "native")]
 use super::*;
 
 /// Takes turns for calls into libraries with global state that is not thread-safe (SDL_Init and SDL_Quit crash when
 /// two runs of one process call them at once): programs running on several threads queue here. Thread-safe
 /// libraries (libm, sqlite with its own connections) are called in parallel
-#[cfg(feature = "native")]
 static NATIVE_CALL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Lowercase name prefixes of the libraries whose calls take the native call turn
-#[cfg(feature = "native")]
 const NOT_THREAD_SAFE_LIBRARIES: [&str; 2] = ["sdl", "raylib"];
 
 // Extern C Functions and Hardcoded Signatures (Fallback)
 
-#[cfg(feature = "native")]
 // Extern C functions from libc/libm
 extern "C" {
 	// libm math functions
@@ -62,7 +58,6 @@ extern "C" {
 /// Deliberately hand-linked FFI examples (user decision 2026-10-03, kept as marked examples): the explicit form of what
 /// the header-driven path (get_signatures_from_headers + link_dynamic_library) does by reflection; keep the table.
 /// link_libm uses it only when the headers declare nothing for "m" (glibc's __MATHCALL macros): headers first.
-#[cfg(feature = "native")]
 const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 21] = [
 	("fabs", fabs),
 	("floor", floor),
@@ -86,24 +81,13 @@ const LIBM_UNARY: [(&str, unsafe extern "C" fn(f64) -> f64); 21] = [
 	("log1p", log1p),
 	("expm1", expm1),
 ];
-#[cfg(feature = "native")]
-const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 6] = [
-	("fmin", fmin),
-	("fmax", fmax),
-	("fmod", fmod),
-	("pow", pow),
-	("atan2", atan2),
-	("hypot", hypot),
-];
+const LIBM_BINARY: [(&str, unsafe extern "C" fn(f64, f64) -> f64); 6] =
+	[("fmin", fmin), ("fmax", fmax), ("fmod", fmod), ("pow", pow), ("atan2", atan2), ("hypot", hypot)];
 
-#[cfg(feature = "native")]
 pub fn link_ffi_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
 	link_libm(linker, engine, &libm_header_signatures())?;
-	link_libc_functions(linker, engine)
+	link_libc_functions(linker)
 }
-
-/// The import module of libm
-pub const LIBM: &str = "m";
 
 /// Where the libm functions of a run come from
 #[derive(Debug, PartialEq)]
@@ -115,16 +99,14 @@ pub enum LibmSource {
 }
 
 /// The libm functions the system headers declare (none from glibc, which declares them through macros)
-#[cfg(feature = "native")]
 pub fn libm_header_signatures() -> Vec<FfiHeaderSignature> {
-	crate::ffi_parser::find_library_headers(LIBM)
+	crate::formats::ffi_parser::find_library_headers(LIBM)
 		.iter()
 		.flat_map(|header| parse_header_file(header, LIBM))
 		.collect()
 }
 
 /// libm from its headers first; the hand-linked table only when they declare nothing for "m" (user decision 2026-10-03)
-#[cfg(feature = "native")]
 pub fn link_libm(
 	linker: &mut Linker<FfiState>,
 	engine: &Engine,
@@ -140,132 +122,49 @@ pub fn link_libm(
 	if linked > 0 {
 		return Ok(LibmSource::Headers(linked));
 	}
-	link_libm_table(linker, engine)?;
+	link_libm_table(linker)?;
 	Ok(LibmSource::Table)
 }
 
-#[cfg(feature = "native")]
-fn link_libm_table(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
-	use wasmtime::ValType;
-
+fn link_libm_table(linker: &mut Linker<FfiState>) -> Result<()> {
+	use warp_runtime::floats::canonical_nan;
 	for (name, function) in LIBM_UNARY {
-		let unary = FuncType::new(engine, [ValType::F64], [ValType::F64]);
-		linker.func_new("m", name, unary, move |_caller, params, results| {
-			results[0] =
-				Val::F64(unsafe { function(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())) }.to_bits());
-			Ok(())
-		})?;
+		linker.func_wrap("m", name, move |x: f64| unsafe { function(canonical_nan(x)) })?;
 	}
 	for (name, function) in LIBM_BINARY {
-		let binary = FuncType::new(engine, [ValType::F64, ValType::F64], [ValType::F64]);
-		linker.func_new("m", name, binary, move |_caller, params, results| {
-			results[0] = Val::F64(
-				unsafe {
-					function(
-						warp_runtime::floats::canonical_nan(params[0].unwrap_f64()),
-						warp_runtime::floats::canonical_nan(params[1].unwrap_f64()),
-					)
-				}
-				.to_bits(),
-			);
-			Ok(())
-		})?;
+		linker.func_wrap("m", name, move |x: f64, y: f64| unsafe { function(canonical_nan(x), canonical_nan(y)) })?;
 	}
 	Ok(())
 }
 
 /// The hand-linked libc functions under the import module "c"
-#[cfg(feature = "native")]
-fn link_libc_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
-	use wasmtime::ValType::{F64, I32, I64};
-
-	linker.func_new(
-		"c",
-		"abs",
-		FuncType::new(engine, [I32], [I32]),
-		|_caller, params, results| {
-			results[0] = Val::I32(unsafe { abs(params[0].unwrap_i32()) });
-			Ok(())
-		},
-	)?;
-
+fn link_libc_functions(linker: &mut Linker<FfiState>) -> Result<()> {
+	type Caller<'a> = wasmtime::Caller<'a, FfiState>;
+	linker.func_wrap("c", "abs", |x: i32| unsafe { abs(x) })?;
 	// strlen, atoi, atol and atof get a pointer to a null-terminated string in the module's memory
-	linker.func_new(
-		"c",
-		"strlen",
-		FuncType::new(engine, [I32], [I64]),
-		|mut caller, params, results| {
-			let ptr = params[0].unwrap_i32() as usize;
-			let len = memory_bytes(&mut caller)
-				.and_then(|data| data.get(ptr..))
-				.map_or(0, |text| text.iter().take_while(|&&byte| byte != 0).count());
-			results[0] = Val::I64(len as i64);
-			Ok(())
-		},
-	)?;
-	linker.func_new(
-		"c",
-		"atoi",
-		FuncType::new(engine, [I32], [I32]),
-		|mut caller, params, results| {
-			results[0] = Val::I32(parse_c_text(&mut caller, &params[0], atoi).unwrap_or(0));
-			Ok(())
-		},
-	)?;
-	linker.func_new(
-		"c",
-		"atol",
-		FuncType::new(engine, [I32], [I64]),
-		|mut caller, params, results| {
-			results[0] = Val::I64(parse_c_text(&mut caller, &params[0], atol).unwrap_or(0));
-			Ok(())
-		},
-	)?;
-	linker.func_new(
-		"c",
-		"atof",
-		FuncType::new(engine, [I32], [F64]),
-		|mut caller, params, results| {
-			results[0] = Val::F64(parse_c_text(&mut caller, &params[0], atof).unwrap_or(0.0).to_bits());
-			Ok(())
-		},
-	)?;
-
+	linker.func_wrap("c", "strlen", |mut caller: Caller, ptr: i32| -> i64 {
+		memory_bytes(&mut caller)
+			.and_then(|data| data.get(ptr as usize..))
+			.map_or(0, |text| text.iter().take_while(|&&byte| byte != 0).count()) as i64
+	})?;
+	linker.func_wrap("c", "atoi", |mut caller: Caller, ptr: i32| parse_c_text(&mut caller, ptr, atoi).unwrap_or(0))?;
+	linker.func_wrap("c", "atol", |mut caller: Caller, ptr: i32| parse_c_text(&mut caller, ptr, atol).unwrap_or(0))?;
+	linker
+		.func_wrap("c", "atof", |mut caller: Caller, ptr: i32| parse_c_text(&mut caller, ptr, atof).unwrap_or(0.0))?;
 	// strcmp(ptr1, len1, ptr2, len2) and strncmp(…, n) compare two texts of the module's memory
-	linker.func_new(
-		"c",
-		"strcmp",
-		FuncType::new(engine, [I32, I32, I32, I32], [I32]),
-		|mut caller, params, results| {
-			let compared = text_pair(&mut caller, params)
-				.map(|(first, second)| unsafe { strcmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8) });
-			results[0] = Val::I32(compared.unwrap_or(0));
-			Ok(())
-		},
-	)?;
-	linker.func_new(
-		"c",
-		"strncmp",
-		FuncType::new(engine, [I32, I32, I32, I32, I64], [I32]),
-		|mut caller, params, results| {
-			let n = params[4].unwrap_i64() as usize;
-			let compared = text_pair(&mut caller, params).map(|(first, second)| unsafe {
-				strncmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8, n)
-			});
-			results[0] = Val::I32(compared.unwrap_or(0));
-			Ok(())
-		},
-	)?;
-
-	linker.func_new(
-		"c",
-		"rand",
-		FuncType::new(engine, [], [I32]),
-		|_caller, _params, results| {
-			results[0] = Val::I32(unsafe { rand() });
-			Ok(())
-		},
-	)?;
+	linker.func_wrap("c", "strcmp", |mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32| {
+		text_pair(&mut caller, [ptr1, len1, ptr2, len2])
+			.map(|(first, second)| unsafe { strcmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8) })
+			.unwrap_or(0)
+	})?;
+	linker.func_wrap("c", "strncmp", |mut caller: Caller, ptr1: i32, len1: i32, ptr2: i32, len2: i32, n: i64| {
+		text_pair(&mut caller, [ptr1, len1, ptr2, len2])
+			.map(|(first, second)| unsafe {
+				strncmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8, n as usize)
+			})
+			.unwrap_or(0)
+	})?;
+	linker.func_wrap("c", "rand", || unsafe { rand() })?;
 
 	// Add aliases: "libm" → "m", "libc" → "c"
 	// This allows both (import "m" "fmin" ...) and (import "libm" "fmin" ...)
@@ -276,34 +175,25 @@ fn link_libc_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result
 }
 
 /// The module's linear memory, if it exports one
-#[cfg(feature = "native")]
 fn memory_bytes<'caller>(caller: &'caller mut wasmtime::Caller<'_, FfiState>) -> Option<&'caller [u8]> {
-	let memory = caller.get_export("memory")?.into_memory()?;
-	Some(memory.data(caller))
+	Some(crate::host::exported_memory(caller)?.data(caller))
 }
 
 /// `parse` (atoi, atol, atof) of the null-terminated string the pointer `ptr` names, none outside the memory
-#[cfg(feature = "native")]
 fn parse_c_text<T>(
 	caller: &mut wasmtime::Caller<'_, FfiState>,
-	ptr: &Val,
+	ptr: i32,
 	parse: unsafe extern "C" fn(*const i8) -> T,
 ) -> Option<T> {
-	let text = memory_bytes(caller)?
-		.get(ptr.unwrap_i32() as usize..)
-		.filter(|text| !text.is_empty())?;
+	let text = memory_bytes(caller)?.get(ptr as usize..).filter(|text| !text.is_empty())?;
 	Some(unsafe { parse(text.as_ptr() as *const i8) })
 }
 
-/// The UTF-8 texts (ptr1, len1, ptr2, len2) of the first four parameters, null-terminated for C
-#[cfg(feature = "native")]
-fn text_pair(caller: &mut wasmtime::Caller<'_, FfiState>, params: &[Val]) -> Option<(Vec<u8>, Vec<u8>)> {
+/// The UTF-8 texts at (ptr1, len1, ptr2, len2), null-terminated for C
+fn text_pair(caller: &mut wasmtime::Caller<'_, FfiState>, places: [i32; 4]) -> Option<(Vec<u8>, Vec<u8>)> {
 	let data = memory_bytes(caller)?;
 	let text = |index: usize| {
-		let (ptr, len) = (
-			params[index].unwrap_i32() as usize,
-			params[index + 1].unwrap_i32() as usize,
-		);
+		let (ptr, len) = (places[index] as usize, places[index + 1] as usize);
 		let bytes = data.get(ptr..ptr + len)?;
 		std::str::from_utf8(bytes).ok()?;
 		Some([bytes, &[0]].concat())
@@ -316,11 +206,9 @@ fn text_pair(caller: &mut wasmtime::Caller<'_, FfiState>, params: &[Val]) -> Opt
 // Uses direct function pointer calls with signature pattern matching
 
 /// Global cache of loaded dynamic libraries
-#[cfg(feature = "native")]
 static LOADED_LIBRARIES: OnceLock<std::sync::Mutex<HashMap<String, Arc<Library>>>> = OnceLock::new();
 
 /// Get or load a dynamic library
-#[cfg(feature = "native")]
 pub(crate) fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
 	let cache = LOADED_LIBRARIES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
 	let mut guard = cache.lock().ok()?;
@@ -350,7 +238,6 @@ pub(crate) fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
 }
 
 /// Get possible paths for a library
-#[cfg(feature = "native")]
 fn get_library_paths(lib_name: &str) -> Vec<String> {
 	let mut paths = Vec::new();
 
@@ -376,7 +263,6 @@ fn get_library_paths(lib_name: &str) -> Vec<String> {
 }
 
 /// Normalized parameter type for signature matching
-#[cfg(feature = "native")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum ParamType {
 	I32,
@@ -392,7 +278,6 @@ enum ParamType {
 }
 
 /// Normalized return type for signature matching
-#[cfg(feature = "native")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum RetType {
 	Void,
@@ -404,7 +289,6 @@ enum RetType {
 }
 
 /// The C type's parameter: a pointer by what it points to, else by its wasm value type (int, bool, char, short, Color: i32)
-#[cfg(feature = "native")]
 fn c_type_to_param_type(c_type: &str) -> ParamType {
 	let t = bare_c_type(c_type);
 	if t.contains('*') {
@@ -423,7 +307,6 @@ fn c_type_to_param_type(c_type: &str) -> ParamType {
 }
 
 /// The C type's result: a bool by its low byte, else by its wasm value type
-#[cfg(feature = "native")]
 fn c_type_to_ret_type(c_type: &str) -> RetType {
 	match c_type_to_wasm_valtype(c_type) {
 		_ if bare_c_type(c_type) == "bool" => RetType::Bool,
@@ -436,7 +319,6 @@ fn c_type_to_ret_type(c_type: &str) -> RetType {
 }
 
 /// The C type's wasm value type (map_c_type_to_valtype) for wasmtime
-#[cfg(feature = "native")]
 fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
 	map_c_type_to_valtype(c_type).map(|value_type| match value_type {
 		wasm_encoder::ValType::I64 => ValType::I64,
@@ -446,8 +328,7 @@ fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
 	})
 }
 
-/// Link all functions from a library discovered through header reflection
-#[cfg(feature = "native")]
+/// Link the functions of a library the module imports, as its headers declare them
 pub fn link_dynamic_library(
 	linker: &mut Linker<FfiState>,
 	engine: &Engine,
@@ -457,38 +338,23 @@ pub fn link_dynamic_library(
 	// the module imports under the name the program wrote (`use zlib`), the library and its headers go by their own (z)
 	let import_name = lib_name;
 	let lib_name = resolve_library_alias(lib_name);
-	let library = match get_or_load_library(lib_name) {
-		Some(lib) => lib,
-		None => {
-			return Ok(0);
-		}
-	};
-
-	// Parse headers to discover function signatures
-	let header_paths = crate::ffi_parser::find_library_headers(lib_name);
-	if header_paths.is_empty() {
+	let Some(library) = get_or_load_library(lib_name) else {
 		return Ok(0);
-	}
-
-	let mut linked_count = 0;
-
+	};
 	// all headers first: their struct types decide how pointers cross (is_struct_type)
-	let signatures: Vec<FfiHeaderSignature> = header_paths
+	let signatures: Vec<FfiHeaderSignature> = crate::formats::ffi_parser::find_library_headers(lib_name)
 		.iter()
 		.flat_map(|path| parse_header_file(path, lib_name))
 		.collect();
 	// only what the module imports: libc's headers declare hundreds of functions
-	for sig in signatures.iter().filter(|sig| imported.contains(&sig.name)) {
-		if link_single_function(linker, engine, import_name, &library, sig).is_ok() {
-			linked_count += 1;
-		}
-	}
-
-	Ok(linked_count)
+	Ok(signatures
+		.iter()
+		.filter(|sig| imported.contains(&sig.name))
+		.filter(|sig| link_single_function(linker, engine, import_name, &library, sig).is_ok())
+		.count())
 }
 
 /// Link a single function from a parsed header signature
-#[cfg(feature = "native")]
 fn link_single_function(
 	linker: &mut Linker<FfiState>,
 	engine: &Engine,
@@ -496,66 +362,36 @@ fn link_single_function(
 	library: &Arc<Library>,
 	sig: &FfiHeaderSignature,
 ) -> Result<()> {
-	let func_name = sig.name.clone();
-
+	let name = sig.name.clone();
 	let func_ptr: usize = unsafe {
-		let symbol: libloading::Symbol<*const ()> = library
-			.get(func_name.as_bytes())
-			.map_err(|e| anyhow::anyhow!("Symbol {} not found: {}", func_name, e))?;
+		let symbol: libloading::Symbol<*const ()> =
+			library.get(name.as_bytes()).map_err(|e| anyhow::anyhow!("Symbol {} not found: {}", name, e))?;
 		*symbol as usize
 	};
-
 	if func_ptr == 0 {
-		return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
+		return Err(anyhow::anyhow!("Null function pointer for {}", name));
 	}
-
-	let wasm_params: Vec<ValType> = warp_parameters(&sig.param_types)
-		.filter_map(|t| c_type_to_wasm_valtype(t))
-		.collect();
-
-	let param_types: Vec<ParamType> = sig.param_types.iter().map(|t| c_type_to_param_type(t)).collect();
-	let ret_type = c_type_to_ret_type(&sig.return_type);
+	let wasm_params: Vec<ValType> =
+		warp_parameters(&sig.param_types).filter_map(|t| c_type_to_wasm_valtype(t)).collect();
 	let result = pointer_result(sig);
-	if result.is_some() || param_types.contains(&ParamType::Handle) {
-		let wasm_results: Vec<ValType> = match result {
-			Some(CPointer::Text) => vec![ValType::ANYREF],
-			Some(_) => vec![ValType::I32],
-			None => c_type_to_wasm_valtype(&sig.return_type).into_iter().collect(),
-		};
-		let func_type = FuncType::new(engine, wasm_params, wasm_results);
-		let out_pointee = sig
-			.param_types
-			.iter()
-			.find(|t| is_handle_out_pointer(t))
-			.map(|t| pointee(t));
-		let call = PointerCall {
-			name: func_name.clone(),
-			func_ptr,
-			param_types,
-			result,
-			ret_type,
-			out_pointee,
-		};
-		return create_pointer_wrapper(linker, lib_name, func_type, call);
-	}
-
-	let wasm_results: Vec<ValType> = c_type_to_wasm_valtype(&sig.return_type).into_iter().collect();
-
-	let func_type = FuncType::new(engine, wasm_params, wasm_results);
-	create_ffi_wrapper(
-		linker,
-		lib_name,
-		&func_name,
-		func_type,
+	let wasm_results: Vec<ValType> = match result {
+		Some(CPointer::Text) => vec![ValType::ANYREF],
+		Some(_) => vec![ValType::I32],
+		None => c_type_to_wasm_valtype(&sig.return_type).into_iter().collect(),
+	};
+	let call = NativeCall {
+		name,
 		func_ptr,
-		&param_types,
-		ret_type,
-	)
+		param_types: sig.param_types.iter().map(|t| c_type_to_param_type(t)).collect(),
+		result,
+		ret_type: c_type_to_ret_type(&sig.return_type),
+		out_pointee: sig.param_types.iter().find(|t| is_handle_out_pointer(t)).map(|t| pointee(t)),
+	};
+	link_native_call(linker, lib_name, FuncType::new(engine, wasm_params, wasm_results), call)
 }
 
 /// Link all dynamic libraries required by a WASM module's imports
 /// Scans the module for import statements and links matching libraries via reflection
-#[cfg(feature = "native")]
 pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, module: &wasmtime::Module) -> Result<()> {
 	use std::collections::HashSet;
 
@@ -566,17 +402,12 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 		let module_name = import.module();
 		// Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
 		let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
-		let wasm_module = crate::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
+		let wasm_module = crate::modules::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
 		if !built_in_libc
 			&& !wasm_module
-			&& !matches!(
-				module_name,
-				"m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY
-			) {
-			libs_to_link
-				.entry(module_name.to_string())
-				.or_default()
-				.insert(import.name().to_string());
+			&& !matches!(module_name, "m" | "libm" | "env" | "wasi_snapshot_preview1" | crate::host::HOST_LIBRARY)
+		{
+			libs_to_link.entry(module_name.to_string()).or_default().insert(import.name().to_string());
 		}
 	}
 
@@ -596,16 +427,12 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 	Ok(())
 }
 
-#[cfg(feature = "native")]
 fn is_thread_safe(lib_name: &str) -> bool {
 	let name = lib_name.to_lowercase();
-	!NOT_THREAD_SAFE_LIBRARIES
-		.iter()
-		.any(|prefix| name.trim_start_matches("lib").starts_with(prefix))
+	!NOT_THREAD_SAFE_LIBRARIES.iter().any(|prefix| name.trim_start_matches("lib").starts_with(prefix))
 }
 
 /// Link a wrapper of a library function; one of a library that is not thread-safe holds the native call turn while it runs
-#[cfg(feature = "native")]
 fn link_native(
 	linker: &mut Linker<FfiState>,
 	lib_name: &str,
@@ -624,46 +451,8 @@ fn link_native(
 	Ok(())
 }
 
-/// The wrapper of a C function of numbers and texts: its arguments go in the integer and float registers by the C
-/// calling convention (call_native_function), whatever the signature
-#[cfg(feature = "native")]
-fn create_ffi_wrapper(
-	linker: &mut Linker<FfiState>,
-	lib_name: &str,
-	func_name: &str,
-	func_type: FuncType,
-	func_ptr: usize,
-	param_types: &[ParamType],
-	ret_type: RetType,
-) -> Result<()> {
-	let param_types = param_types.to_vec();
-
-	link_native(
-		linker,
-		lib_name,
-		func_name,
-		func_type,
-		move |mut caller, params, results| {
-			// lives through the call: a `char **` out-pointer (strtod's endptr) is written there
-			let mut out_slot: usize = 0;
-			let args = native_arguments(&mut caller, "", params, &param_types, &mut out_slot)?;
-
-			let ret = unsafe { call_native_function(func_ptr, &args, ret_type) };
-
-			if let Some(result) = results.first_mut() {
-				*result = native_result(ret, ret_type);
-			}
-
-			Ok(())
-		},
-	)?;
-
-	Ok(())
-}
-
 /// The raw arguments of a native call: up to 8 integers and pointers, and up to 8 floats, each kind in the order of the
 /// C parameters (the ARM64 and x86-64 conventions give them separate registers: `ldexp(double, int)` takes d0 and x0)
-#[cfg(feature = "native")]
 #[derive(Default)]
 struct NativeArguments {
 	integers: [u64; 8],
@@ -673,7 +462,6 @@ struct NativeArguments {
 /// The arguments of a native call, one per C parameter: numbers as they are (a `float` in the low half of its
 /// register), a memory pointer as the address of its text in linear memory, a handle id as its C pointer; the first
 /// out-pointer gets `out_slot`, others NULL
-#[cfg(feature = "native")]
 fn native_arguments(
 	caller: &mut wasmtime::Caller<'_, FfiState>,
 	name: &str,
@@ -732,26 +520,20 @@ fn native_arguments(
 
 /// The C pointers a run got, handed to warp as ids: id n is the n-th pointer, 0 is NULL; the same pointer keeps its id.
 /// The table lives in the run's HostState and goes with it: ids are never addresses, and never outlive the run
-#[cfg(feature = "native")]
 #[derive(Default)]
 pub struct CHandles {
 	pointers: Vec<usize>,
 }
 
-#[cfg(feature = "native")]
 impl CHandles {
 	pub fn id_of(&mut self, pointer: usize) -> i32 {
 		if pointer == 0 {
 			return 0;
 		}
-		let index = self
-			.pointers
-			.iter()
-			.position(|known| *known == pointer)
-			.unwrap_or_else(|| {
-				self.pointers.push(pointer);
-				self.pointers.len() - 1
-			});
+		let index = self.pointers.iter().position(|known| *known == pointer).unwrap_or_else(|| {
+			self.pointers.push(pointer);
+			self.pointers.len() - 1
+		});
 		index as i32 + 1
 	}
 
@@ -764,9 +546,9 @@ impl CHandles {
 	}
 }
 
-/// A C function crossing pointers (notes/ffi_handles.md): handle parameters, an out-pointer, a text or handle result
-#[cfg(feature = "native")]
-struct PointerCall {
+/// A C function as warp calls it: numbers in their registers, and the pointers it crosses (notes/ffi_handles.md):
+/// handle parameters, an out-pointer, a text or handle result
+struct NativeCall {
 	name: String,
 	func_ptr: usize,
 	param_types: Vec<ParamType>,
@@ -777,62 +559,51 @@ struct PointerCall {
 	out_pointee: Option<String>,
 }
 
-/// One wrapper for every C function crossing pointers: `sqlite3_column_text(stmt, i)` takes a handle and gives a text,
+/// One wrapper for every C function: its arguments go in the integer and float registers by the C calling convention
+/// (call_native_function), whatever the signature. `sqlite3_column_text(stmt, i)` takes a handle and gives a text,
 /// `sqlite3_open(name)` gives the handle its out-pointer received (NULL there is an error naming the C status), a
 /// `char *` result is copied into the module as a warp text (NULL is ø)
-#[cfg(feature = "native")]
-fn create_pointer_wrapper(
+fn link_native_call(
 	linker: &mut Linker<FfiState>,
 	lib_name: &str,
 	func_type: FuncType,
-	call: PointerCall,
+	call: NativeCall,
 ) -> Result<()> {
 	let name = call.name.clone();
-	link_native(
-		linker,
-		lib_name,
-		&name,
-		func_type,
-		move |mut caller, params, results| {
-			let mut out_slot: usize = 0;
-			let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
-			let returned = unsafe { call_native_function(call.func_ptr, &args, call.ret_type) };
-			if let Some(pointee) = &call.out_pointee {
-				if out_slot == 0 {
-					return Err(wasmtime::Error::msg(format!(
-						"{} gave no {pointee} (C status {})",
-						call.name, returned as i32
-					)));
-				}
+	link_native(linker, lib_name, &name, func_type, move |mut caller, params, results| {
+		// lives through the call: a `char **` out-pointer (strtod's endptr) is written there
+		let mut out_slot: usize = 0;
+		let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
+		let returned = unsafe { call_native_function(call.func_ptr, &args, call.ret_type) };
+		if let Some(pointee) = &call.out_pointee {
+			if out_slot == 0 {
+				return Err(wasmtime::Error::msg(format!(
+					"{} gave no {pointee} (C status {})",
+					call.name, returned as i32
+				)));
 			}
-			let pointer = if call.out_pointee.is_some() {
-				out_slot
-			} else {
-				returned as usize
-			};
-			let Some(result) = results.first_mut() else {
-				return Ok(());
-			};
-			*result = match call.result {
-				Some(CPointer::Text) => {
-					// copied before anything else runs: a C string from getenv may change with the next call
-					let pointer = pointer as *const std::ffi::c_char;
-					let text =
-						(!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
-					text_node(&mut caller, text.as_deref())
-						.map_err(|failure| wasmtime::Error::msg(failure.to_string()))?
-				}
-				Some(_) => Val::I32(caller.data_mut().c_handles.id_of(pointer)),
-				None => native_result(returned, call.ret_type),
-			};
-			Ok(())
-		},
-	)?;
+		}
+		let pointer = if call.out_pointee.is_some() { out_slot } else { returned as usize };
+		let Some(result) = results.first_mut() else {
+			return Ok(());
+		};
+		*result = match call.result {
+			Some(CPointer::Text) => {
+				// copied before anything else runs: a C string from getenv may change with the next call
+				let pointer = pointer as *const std::ffi::c_char;
+				let text =
+					(!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
+				text_node(&mut caller, text.as_deref()).map_err(|failure| wasmtime::Error::msg(failure.to_string()))?
+			}
+			Some(_) => Val::I32(caller.data_mut().c_handles.id_of(pointer)),
+			None => native_result(returned, call.ret_type),
+		};
+		Ok(())
+	})?;
 	Ok(())
 }
 
 /// A C function's raw return value as the wasm value of its type
-#[cfg(feature = "native")]
 fn native_result(returned: u64, ret_type: RetType) -> Val {
 	match ret_type {
 		RetType::Void | RetType::I32 => Val::I32(returned as i32),
@@ -844,48 +615,31 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
 }
 
 /// A warp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
-#[cfg(feature = "native")]
 pub(crate) fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
 	let export = |caller: &mut wasmtime::Caller<'_, FfiState>, name: &str| {
-		caller
-			.get_export(name)
-			.ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"))
+		caller.get_export(name).ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"))
 	};
 	let mut result = [Val::AnyRef(None)];
 	let Some(bytes) = bytes else {
-		let new_empty = export(caller, "new_empty")?
-			.into_func()
-			.ok_or_else(|| anyhow::anyhow!("new_empty is no function"))?;
+		let new_empty =
+			export(caller, "new_empty")?.into_func().ok_or_else(|| anyhow::anyhow!("new_empty is no function"))?;
 		new_empty.call(&mut *caller, &[], &mut result)?;
 		return Ok(result[0]);
 	};
-	let memory = export(caller, "memory")?
-		.into_memory()
-		.ok_or_else(|| anyhow::anyhow!("memory is no memory"))?;
+	let memory = export(caller, "memory")?.into_memory().ok_or_else(|| anyhow::anyhow!("memory is no memory"))?;
 	let heap = export(caller, crate::host::TEXT_HEAP_EXPORT)?
 		.into_global()
 		.ok_or_else(|| anyhow::anyhow!("the text heap is no global"))?;
-	let new_text = export(caller, "new_text")?
-		.into_func()
-		.ok_or_else(|| anyhow::anyhow!("new_text is no function"))?;
-	let (pointer, length) = crate::host::write_to_heap(
-		&memory,
-		heap,
-		&mut wasmtime::AsContextMut::as_context_mut(caller),
-		bytes,
-	)?;
-	new_text.call(
-		&mut *caller,
-		&[Val::I32(pointer as i32), Val::I32(length as i32)],
-		&mut result,
-	)?;
+	let new_text = export(caller, "new_text")?.into_func().ok_or_else(|| anyhow::anyhow!("new_text is no function"))?;
+	let (pointer, length) =
+		crate::host::write_to_heap(&memory, heap, &mut wasmtime::AsContextMut::as_context_mut(caller), bytes)?;
+	new_text.call(&mut *caller, &[Val::I32(pointer as i32), Val::I32(length as i32)], &mut result)?;
 	Ok(result[0])
 }
 
 /// Get pointer into WASM linear memory
-#[cfg(feature = "native")]
 fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) -> *const u8 {
-	if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
+	if let Some(memory) = crate::host::exported_memory(caller) {
 		unsafe { memory.data_ptr(&caller).add(offset) }
 	} else {
 		std::ptr::null()
@@ -894,7 +648,6 @@ fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) ->
 
 /// Call a native function with its integer and float arguments in their registers: a C function reads only the ones
 /// its parameters name. Its result: the integer register, or the bits of the float register for a float result
-#[cfg(feature = "native")]
 #[inline(never)]
 unsafe fn call_native_function(func_ptr: usize, args: &NativeArguments, ret_type: RetType) -> u64 {
 	let [i0, i1, i2, i3, i4, i5, i6, i7] = args.integers;

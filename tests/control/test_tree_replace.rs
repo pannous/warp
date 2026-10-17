@@ -4,10 +4,7 @@ use crate::is;
 
 #[test]
 fn replace_rewrites_list_matches_at_any_depth() {
-	is!(
-		"xs = [[1, 2], [3, [1, 5]]]\nys = xs replace [1, x] with x\nys#1 + ys#2#2",
-		7
-	);
+	is!("xs = [[1, 2], [3, [1, 5]]]\nys = xs replace [1, x] with x\nys#1 + ys#2#2", 7);
 }
 
 #[test]
@@ -25,16 +22,10 @@ fn replace_keeps_what_does_not_match() {
 
 #[test]
 fn replace_simplifies_code_children_first() {
-	is!(
-		"simplify(code) := code replace data($a * 1) with a\nstr(simplify(data (n * 1 + k * 1)))",
-		"n+k"
-	);
+	is!("simplify(code) := code replace data($a * 1) with a\nstr(simplify(data (n * 1 + k * 1)))", "n+k");
 }
 
 #[test]
 fn replace_takes_a_named_pattern() {
-	is!(
-		"pattern Pair = [x, y]\nxs = [[1, 2], [3, 4], [5, 6]]\nys = xs replace Pair with x + y\nys#1 + ys#2",
-		10
-	);
+	is!("pattern Pair = [x, y]\nxs = [[1, 2], [3, 4], [5, 6]]\nys = xs replace Pair with x + y\nys#1 + ys#2", 10);
 }

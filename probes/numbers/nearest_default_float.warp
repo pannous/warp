@@ -1,0 +1,1 @@
+x=sqrt(2.0); [nearest(x, rational) nearest(x, rational, 0) nearest(1.0/3, rational)]

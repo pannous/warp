@@ -3,7 +3,7 @@
 use warp::wasm_emitter::eval;
 
 fn runs(rest: &str) -> String {
-	format!("class Run{{label: text; distance: km?}}\nruns: [Run] = database.optional_units\n{rest}")
+	format!("class Run{{label: text; distance: km?}}\nstored runs: [Run] in \"optional_units\"\n{rest}")
 }
 
 fn value(code: &str) -> String {

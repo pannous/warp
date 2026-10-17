@@ -3,7 +3,7 @@
 //! and `data e` is e as written
 use crate::common::fails_with;
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 #[test]
@@ -35,9 +35,7 @@ fn test_literals_and_objects_after_colon_keep_their_meaning() {
 fn test_a_computed_colon_warns_where_it_is_written() {
 	take_warnings();
 	eval("x : 1+2; x!");
-	assert!(take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("write x = 1+2 for its value")));
+	assert!(take_warnings().iter().any(|warning| warning.message.contains("write x = 1+2 for its value")));
 }
 
 #[test]

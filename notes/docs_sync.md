@@ -5,12 +5,9 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **3be3d7d25** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e and 3be3d7d25 (internal)), checked with
-  /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
-- notes/decisions.md read through its end at that commit.
-
-The next sweep starts with `git log --oneline 3be3d7d25..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 3be3d7d25 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
+main commit **782cc3878**, checked with /Users/me/dev/bin/warp; notes/decisions.md read through its end at that commit.
+The next sweep starts with `git log --oneline 782cc3878..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 782cc3878 origin/main -- notes/decisions.md`). Update the commit here after each sweep.
 
 ## How
 
@@ -34,31 +31,24 @@ data/docs_sync/sample_hints.txt, card sample-hints).
 
 ## Full wiki audit
 
-User, 2026-10-13: everything the docs mention that is not implemented gets a card, named on the page; conflicts and
-major corrections go to warp-interviewer, tiny fixes are made directly.
+Everything the docs mention that is not implemented gets a card, named on the page; conflicts and major corrections
+go to warp-interviewer, tiny fixes are made directly.
 - `probes/docs_sync/wiki_fences.py` runs every warp/wasp/untagged fence (data/docs_sync/fences.tsv); a fence that
   fails alone is retried after the page's earlier fences. Sketches, other languages and error demos are ```` ```text ````
   (or cpp, swift); `--show page.md:line` prints one fence with its run.
+- A run with page arguments overwrites data/docs_sync/fences.tsv with only those pages: copy the full run first
+  (`cp data/docs_sync/fences.tsv data/docs_sync/fences.full.tsv`) to diff a later full run against it.
 - `--values` runs each `code // value` line and lists mismatches (data/docs_sync/values.tsv); most hits are prose
   comments, not values.
-- `grep -n "not yet" wiki/*.md | grep -v "card "` lists the unimplemented notes without a card; the audit
-  (2026-10-13, wiki 0b4b33f and 4b2a2db) left none, apart from Footguns' detail limitations and hyperreals' prose.
-- Questions sent to warp-interviewer: «» quotes or group, bool.md numbers or bool type, constant binding or value,
-  `reduce` decrement or fold, truthiness `== false` (data/docs_sync/audit_questions.md).
+- `grep -n "not yet" wiki/*.md | grep -v "card "` lists the unimplemented notes without a card.
 
-## Pending cuts (decision cleanup-cuts, foreign-spellings, 2026-10-13)
+## Pending doc changes after landed cuts
 
-Decided, not cut yet; the features still work, so the pages stay until the cut lands, then:
-- scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part).
-- spaced type heads (lands with the cleanup-park-phrases cut; cleanup-drop-type-name-params was withdrawn) `fib int i`, `foo of int`, `square of a number`,
-  `combine number with number` → `fib(i:int) := …`: wiki/=.md:11, Bad.md:51, type.md:59, function.md:5 (list of
-  natural forms), inventions.md:42/96/137, Purpose.md:455, Features.md:60 (`++ of a number reference`).
-  polymorphism.md was rewritten ahead of the cut (wiki 5ec7480, the written form already works).
-- generators/yield: wiki/trait.md, zig.md (count_to), keyword.md's yield row if Ruby's block yield goes too.
-- compile-time lambdas, natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
-  R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
-- reflection dot words → `a of b` ≡ `b.a`; traits as a thin alias of classes; ORM only `stored people: [Person]`.
+Remove each dropped form or rewrite it to its replacement, with no card (a decision, not a gap):
+- spaced type heads `fib int i`, `foo of int`, `combine number with number` → `fib(i:int) := …`: wiki/=.md:11,
+  Bad.md:51, type.md:59 still show them. `square of a number = …` stays. Recheck Features.md:60.
+- OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`, R/PHP forms (to `use R` / `use PHP`): grep the wiki
+  for examples.
+- ORM shows only `stored people: [Person]`.
 
-## Not swept yet
-
-Everything up to the last swept commit is covered. Unimplemented spec features are sub-cards of the topic card spec-gaps (Later, supervisor 2026-10-13: not Next, so workers keep to the plan); documented-but-failing bugs stay in Next.
+Unimplemented spec features are sub-cards of the topic card spec-gaps (Later); documented-but-failing bugs stay in Next.

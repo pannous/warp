@@ -1,7 +1,10 @@
 // The standard library module json (notes/stdlib.md section 7): `use json`. Warp data is a superset of JSON; the
 // adapter std_pure parses and writes it (serde_json natively, JSON.parse / JSON.stringify in the browser); parse reads
-// JSON5 too (comments, single quotes, trailing commas, bare keys), and `json(t)` is json.parse(t) without `use json`
-parse_json(text:any) := std_pure("json", "parse", [text])
-to_json(value:any) := std_pure("json", "to_json", [value])
+// JSON5 too (comments, single quotes, trailing commas, bare keys), and `json(t)` is json.parse(t) without `use json`;
+// `x.json` is the JSON text of any value, to_json(x), also without `use json` (`{a: 1}.json` is {"a":1})
+parse_json(text: any) := std_pure("json", "parse", [text])
+to_json(value: any) := std_pure("json", "to_json", [value])
 // to_json in a program with classes (class_methods lower_json_classes): an instance is its fields
-to_json_of_classes(value:any, classes:any) := std_pure("json", "to_json", [value, classes])
+to_json_of_classes(value: any, classes: any) := std_pure("json", "to_json", [value, classes])
+// to_json under `use strict` (class_methods lower_json_calls): a fraction is an error, not a float with a warning
+exact_json(value: any, classes: any) := std_pure("json", "exact_json", [value, classes])

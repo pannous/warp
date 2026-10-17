@@ -1,12 +1,9 @@
-//! Floats that live in declared fields, conditionals and globals (samples/raytracer.warp)
+//! Floats that live in declared fields, conditionals and globals (samples/advanced/raytracer.warp)
 use crate::is;
 
 #[test] // `def dot(a, b) := a.x * b.x …` of `type V {x: float}` read the field as an Int: "not an int"
 fn test_declared_float_field_in_arithmetic() {
-	is!(
-		"type V { x: float, y: float }; def dot(a, b) := a.x * b.x + a.y * b.y; dot(V(1.5, 2), V(2, 1))",
-		5.0
-	);
+	is!("type V { x: float, y: float }; def dot(a, b) := a.x * b.x + a.y * b.y; dot(V(1.5, 2), V(2, 1))", 5.0);
 	is!("type S { r: float }; def f(s) { disc = s.r - 4; if disc < 0 { return 7 }; return disc }; f(S(8.5)) + f(S(1.0))", 11.5);
 }
 
@@ -19,10 +16,7 @@ fn test_float_conditionals() {
 
 #[test] // a global holding what a user function returns was typed Int before the function kinds were known
 fn test_global_from_a_call() {
-	is!(
-		"type V { x: float, y: float }; def vec(x, y) := V(x, y); global g = vec(1.5, 2); g.x",
-		1.5
-	);
+	is!("type V { x: float, y: float }; def vec(x, y) := V(x, y); global g = vec(1.5, 2); g.x", 1.5);
 	is!("def f(x) := x * 1.5; global g = f(3); g", 4.5);
 }
 

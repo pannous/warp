@@ -1,0 +1,2 @@
+xs = [3 1 2]
+sort xs by >

@@ -1,6 +1,17 @@
 //! Counting words and phrases: count/length/size of a value, units, ranges
 
 use super::*;
+use crate::words::PRINT_WORD;
+
+/// Statement words whose argument is never their property: `return count` is no `return.count`
+pub(crate) const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_WORD, "println", "puts", "not"];
+/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
+/// is_counting_word (a class's own size method is looked up in this order)
+pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
+/// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
+pub(crate) const BYTE_SIZE: &str = "byte_size";
+/// `x.number` counts too, but `number x` is the type conversion, not a count
+pub(crate) const NUMBER_PROPERTY: &str = "number";
 
 /// `count x`, `length x`, `size x`: the runtime function counting the elements of x; a text counts its graphemes
 /// (user-perceived characters). Bytes are only counted by an explicit unit (`x.bytes`); a user function of that name wins.
@@ -19,24 +30,27 @@ pub(crate) fn is_counting_word(name: &str) -> bool {
 	COUNTING_WORDS.contains(&name)
 }
 
-/// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.chars` (code points), `x.graphemes`
+/// `x.count`, `x.length`, `x.size`, and the explicit units `x.bytes` (memory), `x.codepoints`, `x.graphemes` (`x.chars` is the list of characters)
 pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 	match name {
 		_ if is_counting_property(name) => Some("node_count"),
 		"bytes" | BYTE_SIZE => Some("node_bytes"),
-		"chars" | "codepoints" => Some("text_codepoint_count"),
+		"codepoints" => Some("text_codepoint_count"),
 		"graphemes" => Some("text_grapheme_count"),
 		_ => counting_function(name, ctx),
 	}
 }
 
 /// The counting method of a text unit, named in the singular or the plural: `byte`, `chars`, `codepoint`, `graphemes`.
-/// A char is a code point, as `x.chars` and the `char` type; the user-perceived character is a grapheme.
+/// A char is a character (glyph), a grapheme cluster as `x.chars`; a code point is its own unit (`"שָלוֹם"` is 4
+/// characters, 6 code points: decision chars-codepoints amended).
 pub(crate) fn text_unit(word: &str) -> Option<&'static str> {
 	match word {
 		"byte" | "bytes" => Some("bytes"),
-		"char" | "chars" | "character" | "characters" | "codepoint" | "codepoints" => Some("codepoints"),
-		"grapheme" | "graphemes" => Some("graphemes"),
+		"codepoint" | "codepoints" => Some("codepoints"),
+		"char" | "chars" | "character" | "characters" | "glyph" | "glyphs" | "grapheme" | "graphemes" => {
+			Some("graphemes")
+		}
 		_ => None,
 	}
 }
@@ -55,11 +69,7 @@ pub(crate) fn unit_count(node: &Node) -> Option<Node> {
 		let Node::Symbol(word) = unit.drop_meta() else {
 			return None;
 		};
-		Some(Node::Key(
-			Box::new(text),
-			Op::Dot,
-			Box::new(Node::Symbol(text_unit(word)?.to_string())),
-		))
+		Some(Node::Key(Box::new(text), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
 	};
 	match node.drop_meta() {
 		Node::List(items, _, _) if items.len() == 1 => unit_count(&items[0]),
@@ -84,18 +94,14 @@ pub(crate) fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else {
 		return None;
 	};
-	if !matches!(empty.drop_meta(), Node::Empty) || !keyword.is_symbol("in") {
+	if !empty.is_empty_node() || !keyword.is_symbol("in") {
 		return None;
 	}
 	let Node::Symbol(word) = unit.drop_meta() else {
 		return None;
 	};
 	let counted = rest_of(items, 2, &Bracket::None, &Separator::Space);
-	Some(Node::Key(
-		Box::new(counted),
-		Op::Dot,
-		Box::new(Node::Symbol(text_unit(word)?.to_string())),
-	))
+	Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
 }
 
 /// `x size`, `x count`, `x length`, `x number`: a counting property word after a name is the getter `x.size`,
@@ -116,8 +122,6 @@ pub(super) fn property_of_name(items: &[Node], separator: &Separator, variables:
 	Some(Node::Key(Box::new(name.clone()), Op::Dot, Box::new(property.clone())))
 }
 
-/// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
-/// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
 /// `print chars in "hello"`: a name no variable has, in a collection, prints each item as `for chars in "hello": print it`
 pub(crate) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
 	let [print, phrase] = items else { return None };
@@ -143,76 +147,54 @@ pub(crate) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 	if !print.is_symbol("print") || !in_word.is_symbol("in") || variables.contains(name) {
 		return None;
 	}
-	let body = Node::List(
-		vec![print.clone(), Node::Symbol(name.clone())],
-		Bracket::Curly,
-		Separator::Space,
-	);
+	let body = Node::List(vec![print.clone(), Node::Symbol(name.clone())], Bracket::Curly, Separator::Space);
 	Some(Node::List(
-		vec![
-			Node::Symbol("for".into()),
-			Node::Symbol(name.clone()),
-			in_word.clone(),
-			collection.clone(),
-			body,
-		],
+		vec![Node::Symbol("for".into()), Node::Symbol(name.clone()), in_word.clone(), collection.clone(), body],
 		Bracket::None,
 		Separator::Space,
 	))
 }
 
+/// A count in a unit, read after of_lookups made `a of b` into `b.a`: `count bytes of t` (`count t.bytes`), `number of bytes in t` (`bytes.number in t`) and `size of t in bytes`
+/// (`t.size in bytes`) are all `t.bytes`
 pub(crate) fn counting_phrase(
 	items: &[Node],
 	bracket: &Bracket,
 	separator: &Separator,
 	variables: &HashSet<String>,
 ) -> Option<Node> {
-	if let [unit, count, of, _, ..] = items {
-		if unit.is_symbol("byte") && count.is_symbol("count") && of.is_symbol("of") {
-			let counted = rest_of(items, 3, bracket, separator);
-			return Some(Node::Key(
-				Box::new(counted),
-				Op::Dot,
-				Box::new(Node::Symbol("bytes".to_string())),
-			));
-		}
-	}
-	if let [count, unit, of, _, ..] = items {
-		if count.is_symbol("count") && of.is_symbol("of") {
-			if let Some(unit_property) = matches!(unit.drop_meta(), Node::Symbol(_))
-				.then(|| text_unit(&unit.name()))
-				.flatten()
-			{
-				return Some(Node::Key(
-					Box::new(rest_of(items, 3, bracket, separator)),
-					Op::Dot,
-					Box::new(Node::Symbol(unit_property.to_string())),
-				));
-			}
-		}
-	}
 	if let Some(property) = property_of_name(items, separator, variables) {
 		return Some(property);
 	}
-	let [word, of, _, ..] = items else { return None };
-	let Node::Symbol(word) = word.drop_meta() else {
+	let in_unit = |counted: Node, unit: &Node| {
+		let unit = text_unit(unit.symbol_name()?)?;
+		Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(unit.to_string()))))
+	};
+	match items {
+		[count, counted] if count.symbol_name().is_some_and(is_counting_property) => {
+			let (object, member) = dotted(counted)?;
+			in_unit(object.clone(), &Node::Symbol(member.to_string()))
+		}
+		[counted, keyword, rest @ ..] if keyword.is_symbol("in") && !rest.is_empty() => {
+			let (object, member) = dotted(counted)?;
+			if !is_counting_property(member) {
+				return None;
+			}
+			match rest {
+				[unit] if text_unit(&unit.name()).is_some() => in_unit(object.clone(), unit),
+				_ => in_unit(rest_of(items, 2, bracket, separator), object),
+			}
+		}
+		_ => None,
+	}
+}
+
+/// `object.member` with a word as member
+fn dotted(node: &Node) -> Option<(&Node, &str)> {
+	let Node::Key(object, Op::Dot, member) = node.drop_meta() else {
 		return None;
 	};
-	if !is_counting_property(word) {
-		return None;
-	}
-	let counter = "count";
-	if !of.is_symbol("of") {
-		return None;
-	}
-	let counted = rest_of(items, 2, bracket, separator);
-	Some(unit_count(&counted).unwrap_or_else(|| {
-		Node::List(
-			vec![Node::Symbol(counter.to_string()), counted],
-			bracket.clone(),
-			separator.clone(),
-		)
-	}))
+	Some((object, member.symbol_name()?))
 }
 
 /// The most numbers a range of literals is written out as at compile time; a longer one is collected at run time like
@@ -230,13 +212,8 @@ pub(crate) fn range_elements(range: &Node) -> Option<Node> {
 		return None;
 	};
 	let last = if *op == Op::To { *end } else { end - 1 };
-	(start <= &last && last - start < LITERAL_RANGE_MAX_LENGTH).then(|| {
-		Node::List(
-			(*start..=last).map(Node::int).collect(),
-			Bracket::Square,
-			Separator::Space,
-		)
-	})
+	(start <= &last && last - start < LITERAL_RANGE_MAX_LENGTH)
+		.then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
 }
 
 /// The name a range of computed bounds collects its list under where no variable is assigned (`print a..b`)
@@ -263,22 +240,12 @@ pub(crate) fn computed_range(target: &Node, range: &Node) -> Option<Node> {
 		Separator::Semicolon,
 	);
 	let walk = Node::List(
-		vec![
-			Node::Symbol("for".into()),
-			item,
-			Node::Symbol("in".into()),
-			range.clone(),
-			body,
-		],
+		vec![Node::Symbol("for".into()), item, Node::Symbol("in".into()), range.clone(), body],
 		Bracket::None,
 		Separator::Space,
 	);
 	let start = Node::Key(Box::new(items.clone()), Op::Assign, Box::new(Node::Empty));
-	Some(Node::List(
-		vec![start, walk, items],
-		Bracket::Round,
-		Separator::Semicolon,
-	))
+	Some(Node::List(vec![start, walk, items], Bracket::Round, Separator::Semicolon))
 }
 
 pub(super) fn require_counter(ctx: &mut Context, counter: &'static str) {
@@ -286,4 +253,8 @@ pub(super) fn require_counter(ctx: &mut Context, counter: &'static str) {
 		ctx.required_functions.insert("node_count");
 	}
 	ctx.required_functions.insert(counter);
+}
+
+pub(crate) fn is_counting_property(word: &str) -> bool {
+	word == NUMBER_PROPERTY || is_counting_word(word)
 }

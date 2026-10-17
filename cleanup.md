@@ -113,3 +113,34 @@
 - Reuse helpers on `WasmEmitter`; keep callers responsible for computing any nonstandard pointer or length expression.
 - Extract the repeated closure entry-field load into one helper without changing closure layout or call behavior.
 - Establish and rerun focused text and closure test baselines, then run formatting, clippy, and the wasm32 check.
+
+# Park natural phrases
+
+- Remove the dedicated `phrase_calls`, `list_phrases`, and `word_slices` lowering passes and their parser marker.
+- Keep the general call, method, filtering, sorting, and slice forms; rewrite repository samples to those forms.
+- Mark only tests whose contract is the parked syntax as ignored with the card's reimplementation note; preserve tests
+  for general preposition operators such as list/text `add … to …`.
+- Remove stale documentation of the parked forms and record the retained explicit equivalents.
+- Establish and rerun the focused phrase, list-phrase, and word-slice filters, then run formatting, clippy, and the
+  wasm32 library check.
+# Single-statement curly calls
+
+## Done (2026-10-15)
+
+- Library words now use the shared spaced-call predicate for a one-statement curly block and preserve the block wrapper.
+- `if yes {sum [1 2]}` and `if yes {sum 1+1 2+2}` have focused regression coverage.
+
+# Ignored-parameter function cleanup
+
+- Reproduce a `def` function whose sole `_` parameter is discarded before changing production code.
+- Keep `_` as an argument-consuming wildcard without treating it as a named local.
+- Reuse the normal function-definition path so the rule also covers multiple ignored parameters and other bodies.
+- Run the focused definition-form test before and after, then formatting, clippy, and the wasm32 check.
+
+# Standard-library reflection hint cleanup
+
+- Reproduce the leaked style hint through both `function repeat` and `methods("hi")` with a focused regression test.
+- Find the reflection path that analyzes standard-library definitions outside the existing quiet module loader.
+- Apply the standard-library-wide rule there, without hiding hints from the user's program.
+- Run the focused test before and after, then formatting, clippy, and the wasm32 check.
+- Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.

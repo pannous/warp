@@ -9,9 +9,6 @@ fn every_declaration_word_declares_a_local() {
 		let code = format!("x = 1\nf() := {{ {word} x = 2; x }}\nf() + x");
 		let (value, warnings) = warnings_of(&code);
 		assert_eq!(value, Node::from(3), "{code}");
-		assert!(
-			!warnings.iter().any(|warning| warning.contains("make a new local")),
-			"{code}: {warnings:?}"
-		);
+		assert!(!warnings.iter().any(|warning| warning.contains("make a new local")), "{code}: {warnings:?}");
 	}
 }

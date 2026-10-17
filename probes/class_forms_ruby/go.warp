@@ -1,7 +1,0 @@
-type P struct {
-	x int
-	y int
-}
-func (p P) Sum() int { return p.x + p.y }
-q := P{x: 3, y: 4}
-q.Sum()

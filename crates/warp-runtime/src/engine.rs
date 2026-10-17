@@ -1,3 +1,6 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 use wasmtime::{Config, Engine, Store};
 
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every
@@ -50,10 +53,7 @@ fn main_stack_bytes() -> usize {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn main_stack_bytes() -> usize {
-	let mut limit = libc::rlimit {
-		rlim_cur: 0,
-		rlim_max: 0,
-	};
+	let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
 	// SAFETY: fills the limit it is given
 	let known = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut limit) } == 0;
 	match known {
@@ -67,19 +67,120 @@ fn main_stack_bytes() -> usize {
 	0
 }
 
-/// deterministic_config with fuel metering: the settings of warp's gc_engine
-pub fn fueled_config() -> Config {
+/// deterministic_config with epoch interruption, where a run checks its time limit (and a task whether to stop), and
+/// with fuel metering when `fuel`: the settings of warp's engines. Epoch checks cost a few percent, fuel about four
+/// times on calls, so only runs that ask for it count steps (decision fuel-metering).
+pub fn metered_config(fuel: bool) -> Config {
 	let mut config = deterministic_config();
-	config.consume_fuel(true);
+	config.epoch_interruption(true);
+	config.consume_fuel(fuel);
 	config
 }
 
-/// A store with `fuel` steps to run, its memories and GC heap capped (`cap_memory`)
-pub fn fueled_store<T>(engine: &Engine, data: T, fuel: u64) -> Store<T> {
+/// How often a ticking engine's epoch advances: a run passes its time limit by at most about this much
+pub const EPOCH_TICK: Duration = Duration::from_millis(10);
+
+/// `engine` with a thread advancing its epoch every EPOCH_TICK for the rest of the process: its stores check their
+/// time limit at each tick. For engines that live as long as the process (shared or standalone).
+pub fn ticking(engine: Engine) -> Engine {
+	let ticked = engine.clone();
+	std::thread::spawn(move || loop {
+		std::thread::sleep(EPOCH_TICK);
+		ticked.increment_epoch();
+	});
+	engine
+}
+
+/// A store whose run stops: with `fuel` steps on an engine that meters fuel, else after `time` of computing in one turn
+/// (each call from the host into the program: main, a frame, an event handler, so a game or a server runs for as long as
+/// it likes); its memories and GC heap capped (`cap_memory`)
+pub fn limited_store<T: 'static>(engine: &Engine, data: T, fuel: u64, time: Duration) -> Store<T> {
+	checked_store(engine, data, fuel, time, || Ok(()))
+}
+
+/// limited_store that also runs `checkpoint` at every epoch tick (a task's stop and pause), failing the run when it
+/// fails
+pub fn checked_store<T: 'static>(
+	engine: &Engine,
+	data: T,
+	fuel: u64,
+	time: Duration,
+	mut checkpoint: impl FnMut() -> wasmtime::Result<()> + Send + Sync + 'static,
+) -> Store<T> {
 	let mut store = Store::new(engine, data);
-	store.set_fuel(fuel).expect("the engine consumes fuel");
+	let mut clock = store.set_fuel(fuel).is_err().then(|| ComputingClock::new(time));
+	if let Some(clock) = &clock {
+		let new_turn = clock.new_turn.clone();
+		store.call_hook(move |_, hook| {
+			if matches!(hook, wasmtime::CallHook::CallingWasm) {
+				new_turn.store(true, Ordering::Relaxed);
+			}
+			Ok(())
+		});
+	}
+	store.epoch_deadline_callback(move |_| {
+		checkpoint()?;
+		if let Some(clock) = clock.as_mut() {
+			clock.check()?;
+		}
+		Ok(wasmtime::UpdateDeadline::Continue(1))
+	});
+	store.set_epoch_deadline(1);
 	cap_memory(&mut store);
 	store
+}
+
+/// The failure of a run past its time limit
+#[derive(Debug)]
+pub struct OutOfTime(pub Duration);
+
+impl std::fmt::Display for OutOfTime {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let variable = crate::fuel::TIME_LIMIT_VARIABLE;
+		write!(f, "out of time after {:?} of computing in one turn (give it more with {variable}=<seconds>)", self.0)
+	}
+}
+
+impl std::error::Error for OutOfTime {}
+
+/// The computing time of a turn, counted from its first check: the CPU time of the thread running it
+struct ComputingClock {
+	limit: Duration,
+	started: Option<Duration>,
+	/// set when the host calls into the program: the next check starts counting again
+	new_turn: Arc<AtomicBool>,
+}
+
+impl ComputingClock {
+	fn new(limit: Duration) -> Self {
+		ComputingClock { limit, started: None, new_turn: Arc::default() }
+	}
+
+	fn check(&mut self) -> wasmtime::Result<()> {
+		let now = thread_cpu_time();
+		if self.new_turn.swap(false, Ordering::Relaxed) {
+			self.started = None;
+		}
+		match now.saturating_sub(*self.started.get_or_insert(now)) > self.limit {
+			true => Err(OutOfTime(self.limit).into()),
+			false => Ok(()),
+		}
+	}
+}
+
+#[cfg(unix)]
+fn thread_cpu_time() -> Duration {
+	let mut time = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+	// SAFETY: fills the timespec it is given, about the calling thread
+	unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut time) };
+	Duration::new(time.tv_sec as u64, time.tv_nsec as u32)
+}
+
+/// Without a thread clock: the time since the process's first check, waiting included
+#[cfg(not(unix))]
+fn thread_cpu_time() -> Duration {
+	static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+	START.get_or_init(std::time::Instant::now).elapsed()
 }
 
 /// The size any one memory or GC heap of a run may grow to: a runaway program stops with an error instead of
@@ -93,9 +194,7 @@ const BYTES_PER_MB: usize = 1 << 20;
 pub fn memory_cap_bytes() -> usize {
 	static CAP: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 	*CAP.get_or_init(|| {
-		let megabytes = std::env::var(MEMORY_CAP_VARIABLE)
-			.ok()
-			.and_then(|value| value.trim().parse().ok());
+		let megabytes = std::env::var(MEMORY_CAP_VARIABLE).ok().and_then(|value| value.trim().parse().ok());
 		megabytes.unwrap_or(DEFAULT_MEMORY_CAP_MB).saturating_mul(BYTES_PER_MB)
 	})
 }

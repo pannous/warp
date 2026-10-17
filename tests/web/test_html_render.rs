@@ -1,7 +1,7 @@
 //! A markup value renders as HTML (card web-dom, notes/web_framework.md): tags with their attributes, text escaped,
 //! children in order, void elements without a closing tag; anything else is no markup
-use warp::markup::{is_markup, to_html};
 use warp::wasm_emitter::eval;
+use warp::web::markup::{is_markup, to_html};
 
 fn html_of(code: &str) -> String {
 	let value = eval(code);
@@ -15,10 +15,7 @@ fn tags_attributes_and_text() {
 		html_of("div{ class:\"box\" h1{ \"Hi\" } p{ \"x < y & z\" } }"),
 		"<div class=\"box\"><h1>Hi</h1><p>x &lt; y &amp; z</p></div>"
 	);
-	assert_eq!(
-		html_of("ul{ li{ \"a\" } li{ \"b\" } }"),
-		"<ul><li>a</li><li>b</li></ul>"
-	);
+	assert_eq!(html_of("ul{ li{ \"a\" } li{ \"b\" } }"), "<ul><li>a</li><li>b</li></ul>");
 	assert_eq!(
 		html_of("p{ a{ href:\"/home\" \"Home\" } \" and more\" }"),
 		"<p><a href=\"/home\">Home</a> and more</p>"
@@ -59,10 +56,7 @@ fn the_page_gets_the_html_of_markup() {
 // an element's computed child next to an attribute is a child, not part of one sum (card markup-arithmetic)
 #[test]
 fn a_computed_child_next_to_an_attribute() {
-	assert_eq!(
-		html_of("count = 3\np{ class: \"x\" \"c\" + count }"),
-		"<p class=\"x\">c3</p>"
-	);
+	assert_eq!(html_of("count = 3\np{ class: \"x\" \"c\" + count }"), "<p class=\"x\">c3</p>");
 	assert_eq!(
 		html_of("count = 3\ndiv{ p{ style: { fontSize: 12 } \"c\" + count } }"),
 		"<div><p style=\"font-size: 12px\">c3</p></div>"
@@ -72,18 +66,12 @@ fn a_computed_child_next_to_an_attribute() {
 // a for loop among an element's children gives its items as children, as [li{t} for t in todos] does (card markup-ul)
 #[test]
 fn a_for_loop_inside_markup() {
-	assert_eq!(
-		html_of("todos = [\"a\", \"b\"]\nul{ for t in todos { li{ t } } }"),
-		"<ul><li>a</li><li>b</li></ul>"
-	);
+	assert_eq!(html_of("todos = [\"a\", \"b\"]\nul{ for t in todos { li{ t } } }"), "<ul><li>a</li><li>b</li></ul>");
 	assert_eq!(
 		html_of("todos = [\"a\", \"b\"]\ndiv{ p:\"y\" for t in todos { span{ t } } }"),
 		"<div><p>y</p><span>a</span><span>b</span></div>"
 	);
-	assert_eq!(
-		html_of("items = [\"a\"]\nul { for item in items { li: item } }"),
-		"<ul><li>a</li></ul>"
-	);
+	assert_eq!(html_of("items = [\"a\"]\nul { for item in items { li: item } }"), "<ul><li>a</li></ul>");
 }
 
 // the loop nested in html{ ul{ … } } over numbers (card markup-index: it was 'undefined variable: i·index')

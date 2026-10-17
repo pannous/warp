@@ -1,253 +1,63 @@
 # Fixer log
 
-Running list of the small fixes done by the fixer session (branches fix-<topic>).
+One line per fix of the fixer session (newest last). Entries before 2026-10-14: notes/OLD/fixer_log.md.
 
-## 2026-10-03 fix-print-args
-- `print(a, b)` and `print a, b` print their arguments joined by a space (Python), worth the joined text.
-  The parser turns the comma list `[[print a], b]` into the call `print(a, b)` (warp_parser.rs
-  `print_call_with_several_arguments`); the emitter prints `join([a, b], " ")` (list_emitter.rs `printed_value`).
-  tests/text/test_print_arguments.rs (CLI stdout + is!, also in the browser).
-- `warp parse` shows closing brackets and the separators (`,` `;` `⏎`), so a merged statement is visible.
-- Found, in todo.md: one-line statements separated by spaces merge into one list; text * int (proposed to the supervisor).
-
-## 2026-10-03 fix-print-calls
-- `print first [10, 5]` / `print(upper "ab")` / `print upper "ab", "c"`: words separated by spaces after print are ONE
-  expression (warp_parser.rs `grouped_list`, `print_arguments`); only commas separate print's arguments.
-  Before, the call's arguments were flattened (`print(upper "a")` = print(upper, "a")). The parser keeps the
-  canonical forms `[print expr]` (space) and `print(a, b)` (round); `print_arguments_of` reads both.
-- `print "a"\n√9` already gives 3 on main (todo marked DONE).
-
-## 2026-10-03 fix-small
-- analyzer's copy of `collect_assigned_names` removed (identical to library_words').
-- `ages["alice"]` no longer hints `ages#("alice"+1)`: a quoted key counts no position (normalize.rs index_operator).
-  tests/lists/test_key_subscript_hint.rs.
-
-## 2026-10-03 fix-text-as-int
-- `x="12"; x as int` / `int(x)` / `xs#1 as int` parse the text at run time (list_ops.rs `text_as_int`: optional sign,
-  decimal digits; else runtime error "invalid number"); was "not an int". tests/text/test_runtime_text_as_int.rs.
-
-## 2026-10-03 fix-declared-text
-- `string x = "a"`, `x:string = "a"`, `text x = "a"` and a later `x = "c"`: a one-character text (parsed as a codepoint)
-  assigned to a declared text is that text (analyzer.rs assignment_mismatch + lower_declarations_among).
-  tests/text/test_declared_text_one_character.rs.
-
-## 2026-10-03 fix-spaced-required
-- `class person{name! email?}`: a `!` glued to its name and followed by a space is the suffix (required field / evaluate
-  / mutate mark) even when an operand follows (warp_parser.rs try_parse_evaluate_bang); `a ! b` spaced is unchanged.
-  tests/parser/test_spaced_required_fields.rs.
-- `while i<n {i++}` already works on main (todo marked DONE).
-
-## 2026-10-03 fix-constant-text
-- `str(1+2)`, `"" + (1+2)`, `"a" + 2*3`: an Int constant expression converts by its value ("3", "a6"), not its source
-  (emit_cast "string": the source-text branch is for data and names only). Float/real constants still serialize (todo).
-  tests/text/test_constant_expression_text.rs.
-
-## 2026-10-03 fix-wasm-target
-- A package tool build without the wasm32-wasip1 standard library reports "missing rust target wasm32-wasip1; fix:
-  rustup target add wasm32-wasip1" (package_tools.rs build_from_source, rustc's "target may not be installed" note),
-  user decision relayed by BOSS 2026-10-03. Checked rustc's wording with an uninstalled target; no test edits.
-
-## 2026-10-03 fix-one-line-statements
-- `print a    print b` (a print word or print(…) call after the first print of a space list) is the error "two statements
-  on one line? separate them with `;` or a newline" (user decision). tests/parser/test_one_line_statements.rs.
-- notes/open_decisions.md records this and the text * number decision (repeat + got-it warning, an assumption).
-
-## 2026-10-03 fix-text-repeat
-- text * int repeats (`"ab"*2` → "abab", `"5"*3` → "555"), educate_once "got it" warning naming `n times text`, and
-  `int("5")*3` for a digit text (user decision "Python repeat"). `n times "ab"` / `n times g` repeat (parser marker
-  `times·text`, a non-text is an error naming `n times [x]`). text * float/text stay type errors.
-  tests/text/test_text_repeat.rs; approved edits of test_print_type_error, test_footguns, test_welcoming_sugar in their own commit.
-
-## 2026-10-04 fix-ignored (the #[ignore = "next"/"soon"] sweep)
-- Python unpacking (tests/probe_destructuring.rs, all 15 "next" probes now pass): `a, b = xs` of a list, text or
-  `(1, 2)` unpacks by position (tuple_emitter.rs emit_unpacking; another count is the runtime error "wrong number of
-  values"); `a, *rest = …` / `*init, last` / `a, *mid, z` (parser: `*name` → the starred symbol, tuples.rs STARRED;
-  node_slice for the rest); `[a, b] = v`, `(a, b) = 1, 2`, nested `(a, b), c = …` (hidden `unpacked·i` names).
-- `f(int x, float y)` / `fun f(int a, int b){…}`: every comma argument may be a typed parameter (typed_parameters).
-- Exact reals join texts symbolically in constant programs (real.rs Value::Text): `"f" + sqrt(2)` → "f√2", `π/2 as
-  string` → "π/2" (user: "√2 if we preserve that information symbolically").
-- test_types "soon" tests un-ignored where they pass (their assertions are comments): test_typed_functions,
-  test_empty_typed_functions, test_polymorphism, test_polymorphism2. Still ignored, need real features: return-type
-  annotations `def f(x):float := …` (undefined function f), overloading by parameter type (test_polymorphism3), and
-  test_function_argument_cast (C-style `float addi(int x,int y){…}` return-typed definitions, int parameters
-  truncating float arguments).
-
-## 2026-10-05 fix-ignored-2
-- Indexing ø (`x=ø; x#1`, `x[0]`) was a raw "wasm trap: cast failure" a `try` could not catch; ø is the empty list,
-  so emit_list_walk fails index_out_of_range (tests/control/test_try_empty_index.rs).
-- A non-Int list element read as a number inside `try` (`x=[1,"ab"]; try -x#2 else 7`) was a cast trap: list_at reads
-  its element through get_int_value (code point of a character, else not_an_int); the runtime errors and getters are
-  emitted before the list ops now (tests/control/test_try_list_index.rs).
-
-## 2026-10-05 fix-uniscript-entities
-- `\alpha` / `\:infinity` uniscript entities in code (src/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
-  sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
-  `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
-  blocks stay with the uniscript package.
-
-## 2026-10-05 p22-like-error
-- P22 was already the behaviour on main (a known other type is an error teaching `pic like photo`); pinned the
-  missing-field case (tests/operators/test_like_known_type_mismatch.rs). Ad hoc names (`pic{…}` with no class pic) keep
-  their field warnings: `like` needs declared types.
-
-## 2026-10-05 p26-libm-pure
-- P26: libm calls carry no FFI effect; a Libm capability (granted to eval and untrusted code) keeps them imported
-  (tests/functions/test_libm_pure.rs; two pinned tests edited in their own commit).
-
-## 2026-10-05 p49-float-to-int-param
-- P49: a fractional literal or a variable holding one passed to a declared int parameter is the compile error
-  "2.2 is no int: write 2.2 as int" (analyzer infer_parameters_from_calls); 2.0 passes (no digits lost, assumption).
-  test_function_argument_cast edited (approved) and un-ignored.
-
-## 2026-10-05 fix-count-in
-- `count x in y` counts occurrences (items of a list, characters of a text, substrings of a text) instead of being
-  read as count(x in y) = 1; `count bytes in t` is t.bytes. Own pass before the lambdas (library_words::lower_count_in).
-
-## 2026-10-05 fix-try-raise
-- `try f x else y`: the guarded part may be a braceless call (was "`try` needs an `else`" after the first word)
-  (tests/control/test_try_braceless_call.rs).
-
-## 2026-10-05 fix-infinity
-- `∞` is the float infinity (Number::Inf, typed Float): `∞ > 1e300`, `-∞`, `1.0/0.0 == ∞`, `\:infinity`
-  (tests/numbers/test_infinity.rs). P56 (4) default; ω stays the hyperreal.
-
-## 2026-10-05 fix-hash-slices
-- Slices: `xs[a..b]`, `xs[a:b]`, text and variable bounds already worked; new `xs#(a…b)` / `xs#(a..b)` 1-based
-  slices (warp_parser hash_slice_bounds). Unparenthesized `xs#a..b` stays the range from the value xs#a (it works on
-  main: `xs#1..6`), so it is no slice; queued as a question.
-
-## 2026-10-05 fix-is-declaration
-- `x is number 9` of a name assigned nowhere (and no parameter) declares it, `x:number = 9` (wiki Features.md,
-  inventions.md); of a variable it stays the type-and-value test (lowering/type_tests.rs is_declaration).
-
-## 2026-10-05 fix-raise
-- `raise X` / `throw X` / `raise error("m")`: the builtin raise(X) fails the run through returned_error with X as its
-  detail; `try` catches it, an Int if treats it as the failure branch (pipeline::returned_error_message). `catch` is
-  not built: the wiki form (function-level `catch (no food){}` handlers) is queued as a question.
-
-## 2026-10-05 decided-test-edits
-- P55: test_while_nop_issue reads x after the loop, un-ignored. P59: four array tests edited and un-ignored (own commit);
-  `x is 100 times [0]` written as the assignment `x = 100 times [0]` (assumption, `is` compares).
-
-## 2026-10-05 p56-entities
-- P56: entities are `\:name` only, in code and inside double-quoted texts (the text parser expands them); a bare
-  `\alpha` is the error "a uniscript entity is written \:alpha"; unknown `\:name` is loud in code and texts.
-
-## 2026-10-05 p49b-whole-float
-- P49b: a whole float (2.0, y=3.0) passed to an int parameter is refused too ("2.0 is no int: write 2.0 as int").
-
-## 2026-10-05 p58-hash-range-warning
-- P58: `xs#a..b` stays the range from the value xs#a, with a warning naming the slice xs#(a..b) and the range (xs#a)..b
-  (warp_parser hash_range_warning).
-
-## 2026-10-05 p60-catch-except
-- P60: `try {…} catch {…}`, `catch e {…}`, `try: … except: …`, `except E:` / `except E as e:` are synonyms of `try X else Y`
-  (warp_parser FALLBACK_WORDS, parse_caught_name); using the caught name is a loud error for now.
-
-## 2026-10-05 p61-is-teaches-be
-- P61: `is` always compares; `x is v` with x unbound is the error "undefined variable: x; `is` compares, a definition is
-  written `x be v`" (v as written: the parser keeps it as meta "compared with"); the `x is number 9` declaration undone.
-
-## 2026-10-05 p44-atomic
-- P44: `atomic xs = int[n]` is `shared xs = int[n]` (shared_arrays SHARED_WORDS).
-
-## 2026-10-05 p47-task-list-literal (P47 stage 1)
-- `[a, b]` of task variables gave the last result only: inside `[…]` an unbracketed sequence ending in a value (the
-  checked await) is a computed element, not a statement (analyzer is_statement).
-
-## 2026-10-05 p47-job-lists (P47 stages 2-4)
-- `jobs.add(go f(i))` keeps tasks unawaited; reads of the list await every job, `jobs#i` one, `await all xs` every
-  one (notes/threads.md "Job lists"); three one-second jobs take ~1 s.
-
-## 2026-10-05 zero-warnings-2
-- Redo of claude/zero-warnings-0h6ky3 on current main (its 13 commits conflicted with two days of changes; its CI half
-  was already on main): crate-level allows gone, dead code deleted as that branch chose, native-only items cfg-gated;
-  all six CI warning/clippy commands pass locally. The old remote is renamed archive/zero-warnings-0h6ky3.
-
-## 2026-10-06 fix-text-words
-- g-0muE: `strip` is trim's synonym (Python), `s.trim` / `s.strip` need no parentheses (library_words SYNONYMS).
-- print-empty: `print()` writes an empty line and is worth "", as `print ""` (list_emitter emit_empty_print, analyzer Text).
-
-## 2026-10-06 fix-pipe
-- url-ends-at-space: `fetch url | strip` read as `fetch (url or strip)`. Now `x | f` is f(x) when f names a function
-  (D6; pipes.rs, the parser marks the word after a single `|`), a braceless call pipes its result
-  (`square 2 | root`), `|` between values stays or (its `or` hint only then).
-
-## 2026-10-06 fix-empty-operands
-- print-empty-nodes: `(#name as string)` serialized as `(ø#name as string)`; Node::serialize writes a prefix operator's
-  missing left operand (#, -, +, not, √, if, while) and a suffix operator's (x++) as nothing, `x = ø` stays.
-
-## 2026-10-06 fix-todo-comments
-- warp_parser "todo edge case: leading plus": `+5`, `+x`, `3 + +2`, `[+1 -2]` gave "Unexpected character '+'"; a `+`
-  glued to its operand is now the unary plus, the operand itself (a spaced `+` stays the operator word).
-
-## 2026-10-06 lowered-error-text
-- `n=3; cube 1..n` said "undefined: cube in `cube (range_value·range=ø; …)`": diagnostic::written_text quotes the source
-  from the node's position to the end of its statement when the serialization holds compiler temporaries (·).
-  The card's own example `is in of to from` now fails earlier with "undefined variable: from".
-
-## 2026-10-06 build-exe-default
-- g-1KS4: `warp build <file>` makes the standalone executable without --exe (still accepted); `warp build --wasm`
-  and `warp compile` write the module.
-
-## 2026-10-06 p102-exe-naming (P102, P103)
-- `warp hello.warp` runs and leaves the executable `hello` (hello.exe on Windows), rebuilt only when the source is
-  newer; a program the stub cannot carry (fetch, read, run) gets a stderr note. build/compile only make it (failure
-  exits 1), `--wasm` / `--aot` give the module. The program compiles twice on a fresh run (eval, then the printing
-  variant for the executable).
-
-## 2026-10-06 p104-stub-only (P104, P105)
-- No executable is ever a copy of warp: without a warp-runtime stub a run notes it, build exits 1; warp's main no longer
-  looks for a carried program. `warp run <file>` runs without leaving an executable. Tests build the stub once per run.
-
-## 2026-10-06 panics-remaining
-- extensions/numbers.rs: the four `unsupported types` panics and `unimplemented!` go (mixed: complex, exact real, IEEE);
-  wisp_parser had no reachable panics (its 13 are test assertions) but repaired malformed input silently: now errors.
-
-## 2026-10-06 run-fast (P105 follow-up)
-- `warp run` has no machine-code path; fresh 73 ms is front end + emitter (65 ms), JIT ~8 ms; OptLevel::None no gain,
-  so no code change; probes/aot/run_speed.sh and notes/aot.md "Run speed".
-
-## 2026-10-06 fix-diagnostics (user issues #11 #12 #13 #17, g-1pvQ)
-- No hints for 'x'/"x", let/:=, str(x)/x as string, a number joining a text: the default Style leaves those axes Any,
-  Style::canonical keeps one spelling each (hint-machinery tests run under it). sleep(1) warns for a unit. norm = abs.
-
-## 2026-10-06 guillemet-strings
-- «text» ended only at another «: parse_string closes « with ».
-
-## 2026-10-06 hash-index-hint
-- g-2WPo: the xs#n hint only for a literal or a name as index (normalize is_simple_index).
-
-## 2026-10-06 flaky-browser
-- every_sample_runs_without_a_compiler_error timed out when the task pool was empty (Workers not loaded yet, or used up
-  by stopped tasks): host.js then runs a task inline, and threads.warp's `go spin(10^12)`; `stop endless` cannot stop
-  an inline task. Reproduced with prepareTaskPool(0) (120 s timeout); fixed by taskPoolReady before each run and a
-  replacement Worker for a stopped one. Alone the test takes 3.4 s in the browser.
-
-## 2026-10-09 print-quantity (P231)
-- print rounds a quantity fraction to two decimals (6.17km, PRINTED_AMOUNT_TEXT in static_units.rs); str, joins and the result keep (37/6)km.
-## 2026-10-09 print-km
-- `"a: " + x as km` parsed `("a: " + x) as km`: a conversion after a text join converts the last operand (units.rs with_converted_last_operand).
-## 2026-10-09 text-join
-- a longer text join with several quantities: static_units takes any sum with a text in it as a join (units::joins_text, shared with print-km).
-## 2026-10-09 prebuilt-stub
-- an installed warp (not in a cargo target) never builds warp-runtime; it uses the one shipped next to it (main.rs in_cargo_target).
-
-## 2026-10-09 orm-transaction (card orm step 5)
-- transaction { } = BEGIN … COMMIT, ROLLBACK + restore of held instances on failure, re-raised; native and browser.
-- 2026-10-09 orm-where-paging: a table filter reads only the rows it keeps (people·found), not the whole table.
-- 2026-10-09 orm-identity-map: list cursor: a loop over a list of objects indexed and counted it from the head each step (n² per walk); now O(1) per step.
-- 2026-10-09 orm-element-write: people#1.age = 5 (and a filtered row's field) is written to its row; it was refused as a copy.
-- 2026-10-09 units-function-name: a function, parameter or variable named like a unit (g(x) := x + 1 m) shadows only that unit; it switched all units passes off ("undefined variable: m").
-- 2026-10-09 units-holes: quantity comparisons give yes/no, reassigning another dimension / an int annotation / a text repeated by a quantity are DimensionErrors (four W0-model holes).
-- 2026-10-09 orm-method-reads: a class method reading a table saw it empty, and any where-filter in a method was not lowered (class bodies are no map_children children).
-- 2026-10-09 orm-linear: loading rows with a required foreign key and filtering a loaded table were n·m (a list walk per key, `id in ids`) and three list costs made any comprehension over read rows quadratic (append forgot the index cursor and the count of every list, a conditional typed append copied the list). Now keys and filters use the identity map; 2000→8000 rows load in 41→169 ms.
-- 2026-10-09 int-map: maps keyed by a run-time number gave "index out of range" (only written numbers keyed a `{}` map); global maps were cons lists (n² fills); the ORM identity map was a list searched by id (n² loads). Now keys are texts of the number, global maps and removals are hash tables, the identity map is one.
-- 2026-10-09 method-bodies: passes before class_methods::lower skipped methods (xs.keep only positive in a method failed); map_children/visit now enter class code, not fields.
-- 2026-10-09 generators: a function with yield is a generator (user: high priority). for x in g() inlines its body lazily (break/continue/return, endless generators), any other call collects a list. A loop ending in break trapped 'null reference'. notes/generators.md.
-- 2026-10-09 generator-objects: next(counter) / iter(g()) resume a generator (a class with a state-machine next()), for walks objects with next(); a field-changing method's early return gave 'index out of range'.
-- 2026-10-09 generators-zip: take/first/zip/list/sum over generators pull lazily (generator_consumers.rs); a 0-argument generator call in an argument list is a bare symbol.
-- 2026-10-09 generators-generator: (x*x for x in xs) standing alone gave ø; now a generator (generator_expressions.rs); lazy_loops before generator objects. Filed sum-helper (word_sum warning).
-- 2026-10-09 generators-yield: yield from / yield each / yield* delegate (generators.rs delegations); a parameterless Python def with yield was a getter form, now a definition.
-- 2026-10-09 generators-send: x = yield v + g.send(w); numbered ·result temps in class_methods
-- 2026-10-09 sum-helper: compiler temporaries marked with · and skipped by the scope check (notes/compiler_temporaries.md)
+- 2026-10-14 isn-parse: `3 isn't 4` parsed as an unterminated string; isn't/isn’t are negated spellings of is (tests/operators/test_isnt.rs)
+- 2026-10-14 time-type-name: type() of a time said data; node_type_name names its form: instant, date, local time, duration, zoned time (tests/types/test_time_type_names.rs)
+- 2026-10-14 float-as-rational: `x as rational` of a run-time float is the fraction of its shortest digits (float_as_exact on float_digits), ∞/NaN not_a_finite_number; also fixes crash card float-rational-crash (needed the int runtime)
+- 2026-10-14 eval: eval(text) lowers to interpret(parse(text)) in parse_word.rs (tests/node/test_eval_word.rs)
+- 2026-10-14 anchor-time: time and its forms (instant, date, local time, zoned time, duration) are builtin types; a form is tested by type(x)'s name; `x is time` no clock, `d is date` not folded (tests/types/test_time_kinds_are_types.rs)
+- 2026-10-14 error-if: a dropped `error "…"` (statement, if branch, block end) warns toward fail (mutation.rs warn_discarded; tests/welcoming/test_discarded_error_warning.rs)
+- 2026-10-14 expect-make: `expect V C` is the soft test `test C == V`; a program defining expect keeps it (tests/control/test_expect.rs)
+- 2026-10-14 unit-possible: `x as quantity` and `x as unit` (got-it note) are quantity(x) (tests/numbers/test_quantity_cast.rs)
+- 2026-10-14 node-json: `x.json` of any value is to_json(x) without `use json`; a field json wins (tests/modules/test_node_json.rs)
+- 2026-10-14 print-end: Ruby `for x in xs; … end` loops over the statements up to end, with a hint naming the braces (tests/control/test_for_semicolon_end.rs)
+- 2026-10-14 easy-add: `x↓b` is log(x, b), `x↑n` is x^n; a glyph already canonical gets no "standard spelling" note (tests/numbers/test_arrow_operators.rs)
+- 2026-10-14 easy-add: x↑n power and x↓b log to base b are typed infix operators of numbers in lib/prelude.warp; prelude operators keep their name so a program's own `infix operator ↑(v: V, n: int)` overloads them (tests/numbers/test_arrow_operators.rs)
+- 2026-10-14 component-cache: `use lib.wasm` components go through the .cwasm module cache (module_cache CompiledCode for Module and Component); takes-three itself is the package source lowering, reported (tests/wasm/test_compiled_module_cache.rs)
+- 2026-10-14 out-fuel: int_text divides by 10^18 per step (18 digits each), so print(10^10000) no longer runs out of fuel (tests/numbers/test_big_int_text.rs)
+- 2026-10-15 operator-infix: `operator ⊕ := …` without a kind declares an infix operator (declared_kind in definitions/operators.rs; tests/operators/test_operator_default_infix.rs)
+- 2026-10-15 packages: registry entries take short forms: bare `name` (pannous/name), `owner/repo`, `"github:owner/repo"`, `version: latest` or none follows the default branch (package_in/repository_url in modules/packages.rs; tests/modules/test_package_forms.rs)
+- 2026-10-15 use-regex: a word operator glued to `(a, b)` is its call, so `print matches("abd", "a.c$")` prints no (tests/operators/test_library_infix_words.rs)
+- 2026-10-15 counts-parens: one scanner for a glued (…) skips texts, so `print matches("(", "x")` stays a call (tests/operators/test_library_infix_words.rs)
+- 2026-10-15 parameter-named-number: `o = f 2.2 as int` casts the argument like the statement form, with an argument-cast warning (tests/functions/test_argument_cast.rs)
+- 2026-10-15 body-should: f.body and parse("…") are code (type code, `is code`, their form still tests), as_code marks them (tests/types/test_code_type.rs)
+- 2026-10-14 xs-insert: `xs.insert 4` is `xs.insert(4)`: a phrase headed by a member is its call, a lone trailing block excepted (member_phrases.rs; tests/functions/test_member_phrases.rs)
+- 2026-10-15 emit-operand-unhandled: an unhandled emit as an operand of an arithmetic or comparison operator is a compile error naming `on <event> {…}` (unhandled_operand in lowering/signals/event_signals.rs; tests/control/test_unhandled_emit_operand.rs)
+- 2026-10-15 big-int: & | xor of Ints beyond i64 combine 32-bit chunks with floor shifts until both are fixnums, instead of wrapping mod 2^64 (emit_bitwise_functions in numbers/exact.rs; tests/numbers/test_big_int_bits.rs)
+- 2026-10-15 fun-x-loud: OCaml `fun x -> …` / `fun a b -> …` (dropped, decision foreign-spellings) is an error naming `x -> …` (ocaml_fun in welcoming/welcome_forms.rs; tests/functions/test_ocaml_fun.rs)
+- 2026-10-15 key-print: `for key in m print key` runs: for_over_map shares for_in's iterable_and_body, so words after a map are the body (tests/control/test_map_loop_words.rs)
+- 2026-10-15 day-day, day-hours: `1 day > 2 hours` is yes, `1 day == 1 day` prints yes (not 1); durations order when it holds on every date (a day 23-25 h, a month 28-31 days), else an error; run time via duration_order (Duration::compare in time/calendar.rs, wasm_emitter/time/time_arithmetic.rs; tests/types/test_duration_comparison.rs)
+- 2026-10-15 xor-xor: a negated number (`-(4)`, Op::Neg) is numeric, so `-(4) xor 1` combines bits instead of the truthy-or path (is_numeric in numbers/arithmetic.rs; tests/operators/test_xor_negated_group.rs)
+- 2026-10-15 errors-needs: `((f, x) -> f(x))(y -> y + 3, 7)` is 10: a comma list of arguments is never a lambda applied to its next item (immediate_call skips Separator::Colon groups in lowering/definitions/lambdas.rs; tests/functions/test_lambda_tuple_arguments.rs)
+- 2026-10-15 abs-fails: `{abs:5}`, `{sqrt: 9}`, `{if:2}`: a prefix operator word directly before a key colon names the key (peek_prefix_operator asks word_names_key, warp_parser/lookahead.rs; tests/parser/test_operator_word_keys.rs)
+- 2026-10-15 month-days: `1 month <= 31 days` / `>= 28 days` are yes: Duration::compares answers per operator from the possible signs of the difference; a calendar-only difference gets no daylight-saving hour (also in duration_order). Run time still refuses <= / >= at a boundary (node_order gives a sign only) (tests/types/test_duration_comparison.rs)
+- 2026-10-15 cos-instead: `cos([0, 1])` is [1 0.5403]: sin cos tan asin acos atan sinh cosh tanh exp log join SCALAR_LIBRARY_WORDS, and `abs([-1, 2])` / `sqrt([4 9])` broadcast through their parentheses (lowering/collections/broadcasting.rs; tests/functions/test_math_broadcast.rs)
+- 2026-10-15 codepoints-traps: `t = "ä"; t.codepoints` / `.graphemes` are 1: a one-character text held as a codepoint counts one (emit_codepoint_counts_one in list_ops/text_units.rs; tests/text/test_codepoint_counts.rs)
+- 2026-10-15 broadcast-library: `round(floor 2.5)`, `upper(lower "A")`, `first(sorted xs)` nest: library words with a typed first parameter join lower_prefix_calls' arities (typed_first_arity in foreign/library_signatures.rs); `x = floor [1.5 2.5]` is a list variable (tests/functions/test_nested_library_calls.rs)
+- 2026-10-15 log-run, log-log: log(x, 10)/log(x, 2) are log10/log2, exact; log([1 100], 10) is the log of each item; log10/log2 broadcast. log-xs: log(xs, 10) of a list variable maps over xs (LIBRARY_SCALAR_PARAMETERS in broadcasting.rs)
+- 2026-10-15 round-floor-xs: round(floor(xs)) and ys = log(xs, 3); round(ys): a broadcast of a list variable is a list (is_broadcast, broadcasts_a_list in broadcasting.rs; tests/functions/test_broadcast_of_list_variables.rs)
+- 2026-10-15 count-split: count(split "a b c") is 3: count takes the call after it like sum (is_one_value_word in broadcasting.rs; tests/text/test_count_of_split.rs)
+- 2026-10-15 floor-says: f = floor; f(2.5) is 2, [1.5 2.5].map(floor) is [1 2]: a library word (also libm's) assigned or passed to map is value => word value (library_word_values in welcoming/ambiguous_forms.rs; tests/functions/test_library_word_assigned.rs)
+- 2026-10-15 text-float: "+3.5e-2" as float is 0.035 at run time: text_as_float scales by one exact power of ten instead of ten by ten (node_arithmetic.rs; tests/numbers/test_text_float_exact.rs)
+- 2026-10-15 floor-error: f := floor names the library word (an alias like f := g); unnamed() helper in SuffixWords (ambiguous_forms.rs; tests/functions/test_library_word_assigned.rs)
+- 2026-10-15 number-text: number(t) is t as number (library_words word_call), so a run-time text is the number it spells everywhere (== 12, * 2); a Data value as float parses at run time (casts.rs emit_cast_to_float; tests/numbers/test_number_of_text.rs)
+- 2026-10-15 name-after: / name after a word is a path wherever the program defines the word as a function (prescan: := , def, a variable holding a lambda), juxtaposed path literals print as separate values (declaration_scan scan_function_names, Node::as_path_literal; tests/parser/test_path_after_function.rs)
+- 2026-10-15 template-positions: errors inside a library template name the value the word was given (`sum 1` → not a list at 1:5, was 1:78): warp_parser::parse_template(template, at) re-stamps the template positions with at's (library_words expanded/instantiate_template/counts/safe lookup, lambdas iterate, music_words; tests/welcoming/test_template_positions.rs)
+- 2026-10-15 program-last: a program's last value of a class with text() shows bare (V(1) → v1, not "v1"): printable.rs rewrite_program wraps the text in symbol() (tests/types/test_instance_final_bare.rs)
+- 2026-10-16 diagonal-holds: a constructor refusing `D(n inch)` / `D{diagonal: n inch}` hints `write n * 1 inch` (unit_fields.rs unit_after_variable_hint; tests/numbers/test_unit_after_variable_hint.rs)
+- 2026-10-16 matches-call: a std module calling another module's word operator by its word (shell's `matches(line, pattern)`) works: loader.rs hidden_apart lowers call forms over the std definitions before renaming hidden words apart (word_operators.rs lower_call_forms_in)
+- 2026-10-16 decisions-md: a unit after a variable holding a plain number (`y = n km`, `x: inch = n inch`, `n * km`) is refused with "write n * 1 km" (static_units.rs is_plain_scalar_name at the `amount unit` and `amount * unit` sites); a list `xs cm` and `[n, 4] cm` (each element `n * 1 cm`) keep working
+- 2026-10-16 class-diagonal: superseded on main by unit-shallow (field_value names the written unit, holds m/s (mph)); its plain-number warning now offers `n * 1 inch` for a variable, never `n inch` (decisions.md)
+- 2026-10-16 list-printable-items: instances of a class with text() show as their text inside lists, interpolations and values of run-time type: a Printable witness table like Comparable's (witness.rs text·dispatch, text·shown; list_text hook in text_words.rs; tests/types/test_printable_items.rs)
+- 2026-10-16 if-list: a closure takes the float a parameter widened to after the first inference (widen loop reruns infer_closure_parameters), and an element of a list of unknown element kind is passed as a Node (user_functions.rs; tests/functions/test_closure_float_arguments.rs)
+- 2026-10-16 is-text-method, number-words, methods-text: already worked on main e04ca61ed; methods(text) pinned in tests/types/test_printable_items.rs
+- 2026-10-16 callable: `f: callable` parameter takes a function or a block (blocks.rs Takes::Callable; builtin type callable covering function and code; tests/functions/test_callable_parameter.rs)
+- 2026-10-16 literal-test-load: the 100 KB-literal test measures the compiling thread's CPU time (clock_gettime), not wall-clock (tests/parser/test_big_literals.rs)
+- 2026-10-16 function-returning-instance: unit_fields.rs `instance_class` follows a user function call into its body's last value (≤ CALLS_FOLLOWED deep), so `f(n) := D(n * 1 inch); f(96).diagonal` is 96inch. `D(n inch)` stays refused: units bind only after a number (decisions.md).
+- 2026-10-16 def-form definitions: `def long(n) = Run(…)` is no destructuring (destructuring.rs positional_names skips a glued call head); static units see `def f(x) = …`, `def f(x): …` and `def f(x) { … }` (FunctionHead::is_untyped_call, returned_value unwraps the block)
+- 2026-10-16 traps-task: a task (go block, live_loop) runs in a fresh instance that never runs main, so the witness tables were null there (list-printable-items 8dee749dd); the installation of witnesses and late calls is now the module start function (mod.rs emit_installation_start)
+- 2026-10-16 constant-quantity: `2 g0` of a quantity is a spaced list by decision; it now says "write 2g0 or 2 * g0" instead of "undefined variable: m" (function_units.rs, a := constant arrives as a call (g0))
+- 2026-10-16 unit-amount (reviewer on decisions-md): a unit after any amount not written as a number (a field, a call, a sum) is refused like after a variable; one helper with_unit_written writes the advice (tests/numbers/test_unit_after_expression.rs)
+- 2026-10-17 union-result bounce: a declared builtin union checks the variable after the store (x: T = v; check x; x) instead of hoisting v into a temporary, so the compiler still sees and refuses a known misfit (x: int|text = sqrt(2), = [1, 2]); literals stay unchecked at run time
+- 2026-10-17 list-literal bounce: a module alias (`use list as l`) is a name the program defines, so unit aliases (l → dm³) leave it alone (units.rs collect_defined_unit_names reuses welcome_forms::aliased_module)

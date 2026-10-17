@@ -143,7 +143,7 @@ def ratDisplay (q : Rat) : String :=
   let padded := String.ofList (List.replicate (digits - fraction.length) '0') ++ fraction
   (if q.num < 0 then "-" else "") ++ whole ++ (if digits = 0 then "" else "." ++ padded)
 
-/-- warp's float_text constants (src/wasm_emitter/float_text.rs): the most digits a float needs, positional exponents -/
+/-- warp's float_text constants (src/wasm_emitter/numbers/float_text.rs): the most digits a float needs, positional exponents -/
 def mostDigits : Nat := 17
 def smallestPositional : Int := -5
 def largestPositional : Int := 15
@@ -592,6 +592,7 @@ inductive Frame where
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
   | isA (c : String)
   | failed
+  | written (m : String)
   | orElse (b : Expr)
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
@@ -637,6 +638,7 @@ def plug : Frame → Expr → Expr
   | setR o f, e => .set o f e
   | isA c, e => .isA e c
   | failed, e => .failed e
+  | written m, e => .written e m
   | orElse b, e => .orElse e b
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
@@ -716,6 +718,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
   | isA {v c μ} : v.isValue = true → Step P (.isA v c, μ) (.bool (isInstance v c), μ)
   | failed {v μ} : v.isValue = true → Step P (.failed v, μ) (.bool (isFail v), μ)
+  | written {v m μ} : v.isValue = true → Step P (.written v m, μ) (if isFail v then .error m else v, μ)
   | orElse {v b μ} : v.isValue = true → Step P (.orElse v b, μ) (if isEmpty (μ.items v) then b else v, μ)
   /-- the body runs with the handler pushed; the handlers return to what they were -/
   | handleStep {ev h b b' μ μ'} : Step P (b, μ.push ev h) (b', μ') →

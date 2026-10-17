@@ -15,8 +15,11 @@ format(template, values) := {
 // the words between runs of spaces
 words(t) := [w for w in split(t, " ") if w != ""]
 lines(t) := split(t, "\n")
+// the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15);
+// a letter with a case beyond ASCII too (é, Ω), not yet the caseless scripts (card unicode-letters)
+letters(t) := [c for c in chars(t) if is_alpha(c) or upper(c) != lower(c)]
 capitalize(t) := if t == "" then t else upper(t[0]) + t[1..]
-center(t, width) := pad_right(pad_left(t, (width + count(t))//2), width)
+center(t, width) := pad_right(pad_left(t, (width + count(t)) /! 2), width)
 title(t) := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
 slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
@@ -27,9 +30,9 @@ def to_utf8(t: text) {
 	for c in t {
 		n = ord(c)
 		if n < 128 { out = out + [n] }
-		else if n < 2048 { out = out + [192 + n//64, 128 + n % 64] }
-		else if n < 65536 { out = out + [224 + n//4096, 128 + n//64 % 64, 128 + n % 64] }
-		else { out = out + [240 + n//262144, 128 + n//4096 % 64, 128 + n//64 % 64, 128 + n % 64] }
+		else if n < 2048 { out = out + [192 + n /! 64, 128 + n % 64] }
+		else if n < 65536 { out = out + [224 + n /! 4096, 128 + n /! 64 % 64, 128 + n % 64] }
+		else { out = out + [240 + n /! 262144, 128 + n /! 4096 % 64, 128 + n /! 64 % 64, 128 + n % 64] }
 	}
 	out
 }
@@ -52,9 +55,7 @@ is_blank(t) := trim(t) == ""
 is_upper(t) := upper(t) == t and lower(t) != t
 is_lower(t) := lower(t) == t and upper(t) != t
 remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] else t
-remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0:count(t) - count(suffix)] else t
-// how often part occurs, not overlapping: count_of("banana", "an") is 2
-count_of(t, part) := count(split(t, part)) - 1
+remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0: count(t) - count(suffix)] else t
 is_palindrome(t) := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
 word_count(t) := count(words(t))
 // "helloWorld", "Hello World", "hello-world" → "hello_world"
@@ -67,18 +68,18 @@ indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
 is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p == "" { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
-between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0:to - 1] }
+between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0: to - 1] }
 // the words in lines of at most width characters
 wrap(t, width) := { out = []; line = ""; for w in words(t) { if line == "" { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line != "" { out = out + [line] }; join(out, "\n") }
 // a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
 // then `c.peek()` is '1'; `at` counts the characters read (an index)
 class Cursor { source: text; at = 0
-  at_end() := at >= count(source)
-  peek() := source[at]
-  advance() := { taken = source[at]; at += 1; taken }
-  looking_at(part) := source[at : min(at + count(part), count(source))] == part
-  skip(part) := { if looking_at(part) { at += count(part); return true }; false }
-  take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
-  skip_while(ok) := count(take_while(ok))
-  rest() := source[at : count(source)]
+	at_end() := at >= count(source)
+	peek() := source[at]
+	advance() := { taken = source[at]; at += 1; taken }
+	looking_at(part) := source[at : min(at + count(part), count(source))] == part
+	skip(part) := { if looking_at(part) { at += count(part); return true }; false }
+	take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
+	skip_while(ok) := count(take_while(ok))
+	rest() := source[at : count(source)]
 }

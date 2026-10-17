@@ -220,9 +220,7 @@ pub fn edit_distance(a: &str, b: &str) -> usize {
 	for i in 1..=a.len() {
 		for j in 1..=b.len() {
 			let cost = usize::from(a[i - 1] != b[j - 1]);
-			rows[i][j] = (rows[i - 1][j] + 1)
-				.min(rows[i][j - 1] + 1)
-				.min(rows[i - 1][j - 1] + cost);
+			rows[i][j] = (rows[i - 1][j] + 1).min(rows[i][j - 1] + 1).min(rows[i - 1][j - 1] + cost);
 			if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
 				rows[i][j] = rows[i][j].min(rows[i - 2][j - 2] + 1);
 			}
@@ -234,10 +232,40 @@ pub fn edit_distance(a: &str, b: &str) -> usize {
 /// The first of the names one letter away from `word` (two for words of six letters or more): `pirnt` → print
 pub fn near_miss(word: &str, names: impl IntoIterator<Item = String>) -> Option<String> {
 	let allowed = if word.chars().count() < 6 { 1 } else { 2 };
+	names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed)
+}
+
+/// The regular English plural: `name` → names, `city` → cities, `address` → addresses, `day` → days
+pub fn english_plural(word: &str) -> String {
+	const SIBILANT_ENDINGS: [&str; 5] = ["s", "x", "z", "ch", "sh"];
+	const VOWELS: [char; 5] = ['a', 'e', 'i', 'o', 'u'];
+	if SIBILANT_ENDINGS.iter().any(|ending| word.ends_with(ending)) {
+		return format!("{word}es");
+	}
+	match word.strip_suffix('y') {
+		Some(stem) if stem.chars().last().is_some_and(|letter| !VOWELS.contains(&letter)) => format!("{stem}ies"),
+		_ => format!("{word}s"),
+	}
+}
+
+/// The singular whose regular plural is `word`: `cities` → city, `addresses` → address, `names` → name
+pub fn english_singular(word: &str) -> Option<String> {
+	let stems = [
+		word.strip_suffix("ies").map(|stem| format!("{stem}y")),
+		word.strip_suffix("es").map(String::from),
+		word.strip_suffix('s').map(String::from),
+	];
+	stems.into_iter().flatten().find(|stem| english_plural(stem) == word)
+}
+
+/// The name among `names` that `word` is: itself, else the one it is the plural of (`names` → name)
+pub fn named_or_plural<'a>(names: &[&'a str], word: &str) -> Option<&'a str> {
+	let singular = english_singular(word);
 	names
-		.into_iter()
-		.filter(|name| name != word)
-		.find(|name| edit_distance(word, name) <= allowed)
+		.iter()
+		.find(|name| **name == word)
+		.or_else(|| names.iter().find(|name| singular.as_deref() == Some(**name)))
+		.copied()
 }
 
 #[cfg(test)]

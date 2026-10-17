@@ -70,7 +70,7 @@ nominal layouts.
 - type and FFI collection;
 - required-runtime-function discovery for tree shaking.
 
-`src/context.rs`, `src/function.rs`, and `src/type_kinds.rs` contain registries
+`src/compiler/context.rs`, `src/compiler/function.rs`, and `src/type_kinds.rs` contain registries
 that can seed a real symbol/type environment. The emitter performs forward collection
 of types and function signatures before compiling bodies.
 

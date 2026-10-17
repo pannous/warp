@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+# Music values: chords and scales by name, transposition and tuning.
+
+use sound
+
+tuning = 442                                  # A4 in Hz, as many orchestras tune (440 unless set)
+tempo = 110
+melody(scale(D4, dorian), 1 / 4 beat)        # D E F G A B C D
+for kind in [major7, minor7, seventh] {       # a kind is a word, or a text: chord(C4, "major7")
+	play(chord(C4, kind), 1 beat)
+}
+play(transpose(chord(C4, major), 7), 1 bar) # up a fifth: G major
+print("\(note_name(G4)) is MIDI note \(midi(G4))")
+wait_sound()

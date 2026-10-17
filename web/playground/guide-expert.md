@@ -66,7 +66,7 @@ Booleans are `yes` and `no`, with word operators `and`, `or`, `not`.
 x = 5; if x > 9 : "big" else if x > 3 : "medium" else "small"
 ```
 
-### Matching
+## Matching
 
 `match` (or `switch`) takes keys with alternatives, ranges, types and guards; `other`, `_`, `default` catch the rest.
 
@@ -154,7 +154,7 @@ def adder(k) = x => x + k; adder(3)(4)
 
 `type`, `is` tests, `as` converts; classes declare typed fields.
 
-```warp => [int yes 3 1]
+```warp => [class int yes 3 1]
 class Point { x: int y: int }; [type(3), "3" is text, "3" as int, Point{x: 1 y: 2}.x]
 ```
 
@@ -208,6 +208,22 @@ Tags are values: `tag{attributes children}`, `li all xs` repeats a tag over a li
 ```warp => div{h1:"Fruit" ul{li:"apple" li:"pear"}}
 fruits = ["apple" "pear"]; div{ h1{"Fruit"} ul{ li all fruits } }
 ```
+
+## Servers
+
+Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cloudflare Workers or the playground's Deploy).
+
+## Pictures
+
+`use draw` keeps a pixel canvas that `show()` paints; WGSL shaders color every pixel on the GPU (WebGPU in the page).
+
+## Acceleration
+
+Number lists run as SIMD loops; heavy float maps move to the GPU by themselves above a size threshold (notes/gpu.md); `@gpu` asks for it explicitly.
+
+## Sound and music
+
+`use sound`: notes, chords, scales, beats, envelopes and filters; a function of time computes a signal sample by sample.
 
 ## WebAssembly
 

@@ -32,7 +32,7 @@ macro_rules! s {
 #[macro_export]
 macro_rules! texts { // Texts // boxed list of Text nodes
 	($($lit:literal),* $(,)?) => {
-		Node::List(vec![$(Node::Text(($lit).to_string())),*], Bracket::None, Separator::Colon)
+		Node::List(vec![$(Node::Text(($lit).to_string())),*], Bracket::None, Separator::Comma)
 	};
 }
 
@@ -42,6 +42,7 @@ macro_rules! symbols { // boxed list of Symbol nodes
 		Node::List(vec![$(Node::Symbol(($lit).to_string())),*],Bracket::None, Separator::Space)
 	};
 }
+
 
 #[macro_export]
 macro_rules! expression { // boxed list of Symbol nodes
@@ -53,12 +54,14 @@ macro_rules! expression { // boxed list of Symbol nodes
 // #[macro_export]
 // macro_rules! ints { // just use primitive integer vec!
 
+
 #[macro_export]
 macro_rules! ints { // List of Int nodes   vs Data(vec![1])!
 	($($lit:literal),* $(,)?) => {
 		Node::List(vec![$(int($lit)),*], Bracket::None, Separator::Space)
 	};
 }
+
 
 // Modules can reside in a file with the same name as the module,
 // or in a file named mod.rs inside a directory with the same name as the module.
@@ -68,6 +71,7 @@ macro_rules! ints { // List of Int nodes   vs Data(vec![1])!
 // #[macro_use]
 // extern crate extensions;
 
+
 #[macro_export]
 macro_rules! exists {
 	($a:expr) => {{
@@ -75,15 +79,21 @@ macro_rules! exists {
 	}};
 }
 
+
 #[macro_export]
-macro_rules! parses_to {
-	// parser eq!
+macro_rules! parses_to { // parser eq!
 	// Evaluate string expressions like "3+3" and roundtrip through WASM
 	($a:expr, $b:expr) => {{
 		let result = parse($a);
 		assert_eq!(result, $b);
 	}};
 }
+
+
+
+
+
+
 
 // PUB : PUBLIC FUNCTIONS
 // you need to explicitly mark each function with the pub keyword in the module definition.
@@ -165,3 +175,4 @@ pub fn assert_throws(code: &str) {
 	}
 	panic!("Expected error, but {code} parsed, analyzed and ran successfully.");
 }
+

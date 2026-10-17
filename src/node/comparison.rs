@@ -106,7 +106,7 @@ impl PartialEq<i64> for Node {
 			False => *other == 0,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
 			Data(data) => data
-				.downcast_ref::<crate::units::Quantity>()
+				.downcast_ref::<crate::numbers::units::Quantity>()
 				.is_some_and(|quantity| quantity.is_amount(*other)),
 			_ => false,
 		}
@@ -273,10 +273,7 @@ impl PartialEq<serde_json::Value> for Node {
 			// Non-curly lists map to arrays
 			(List(items, bracket, _), Value::Array(json_arr)) if !matches!(bracket, Bracket::Curly) => {
 				items.len() == json_arr.len()
-					&& items
-						.iter()
-						.zip(json_arr.iter())
-						.all(|(node, json_val)| node == json_val)
+					&& items.iter().zip(json_arr.iter()).all(|(node, json_val)| node == json_val)
 			}
 			(List(items, bracket, _), Value::Object(json_obj)) => {
 				// Curly lists map to objects
@@ -288,9 +285,7 @@ impl PartialEq<serde_json::Value> for Node {
 					items.iter().all(|item| {
 						if let Key(k, _, v) = item {
 							if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
-								json_obj
-									.get(key_str.as_str())
-									.is_some_and(|json_val| v.as_ref() == json_val)
+								json_obj.get(key_str.as_str()).is_some_and(|json_val| v.as_ref() == json_val)
 							} else {
 								false
 							}
@@ -306,10 +301,7 @@ impl PartialEq<serde_json::Value> for Node {
 			// Key comparison (single-key objects)
 			(Key(k, _, v), Value::Object(json_obj)) => {
 				if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
-					json_obj.len() == 1
-						&& json_obj
-							.get(key_str.as_str())
-							.is_some_and(|json_val| v.as_ref() == json_val)
+					json_obj.len() == 1 && json_obj.get(key_str.as_str()).is_some_and(|json_val| v.as_ref() == json_val)
 				} else {
 					false
 				}

@@ -10,10 +10,7 @@ fn a_click_runs_the_handler_and_shows_the_page_anew() {
 	assert_eq!(page.text(), "Addclicked 0");
 	page.click("Add").expect("clicks");
 	page.click("Add").expect("clicks");
-	assert_eq!(
-		page.html(),
-		"<div><button data-warp-click=\"1\">Add</button><p>clicked 2</p></div>"
-	);
+	assert_eq!(page.html(), "<div><button data-warp-click=\"1\">Add</button><p>clicked 2</p></div>");
 }
 
 #[test]
@@ -36,8 +33,5 @@ fn typing_into_a_bound_field_sets_its_variable() {
 fn a_missing_button_is_a_loud_error() {
 	let mut page = Page::render(COUNTER).expect("renders");
 	let problem = page.click("Remove").expect_err("no such button");
-	assert!(
-		problem.contains("no element showing \"Remove\" handles click"),
-		"{problem}"
-	);
+	assert!(problem.contains("no element showing \"Remove\" handles click"), "{problem}");
 }

@@ -26,19 +26,13 @@ fn receiving_with_no_task_left_is_an_error() {
 	crate::common::fails_with("ch = channel(); ch.receive()", "waits forever");
 }
 
-// `channel "name"` is the machine-wide channel (src/channels.rs) with the same words; a program hears its own sends.
+// `channel "name"` is the machine-wide channel (src/host/channels.rs) with the same words; a program hears its own sends.
 // Native only: the page's BroadcastChannel does not deliver to its sender, and a waiting receive cannot yield to it
 #[cfg(feature = "native")]
 #[test]
 fn a_machine_channel_has_the_same_words() {
-	is!(
-		"chat = channel \"warp-test-p155\"; chat.send(\"hi\"); chat.receive()",
-		"hi"
-	);
-	is!(
-		"chat = channel \"warp-test-p155-to\"; send 5 to chat; chat.receive() + 1",
-		6
-	);
+	is!("chat = channel \"warp-test-p155\"; chat.send(\"hi\"); chat.receive()", "hi");
+	is!("chat = channel \"warp-test-p155-to\"; send 5 to chat; chat.receive() + 1", 6);
 }
 
 // Go panics on a send to a closed channel and on a second close; a task still sending when the program ends stops
@@ -53,9 +47,6 @@ fn closed_channels_and_tasks_left_waiting() {
 // the receiver meets it; run inline it could never answer (card primer-channel-flake)
 #[test]
 fn a_sender_queued_behind_busy_tasks_is_received() {
-	is!(
-		"for k in 1 to 6 { go { sleep(300 ms) } }; ch = channel(); go { ch.send(5) }; ch.receive()",
-		5
-	);
+	is!("for k in 1 to 6 { go { sleep(300 ms) } }; ch = channel(); go { ch.send(5) }; ch.receive()", 5);
 	is!("jobs = []; for k in 1 to 6 { jobs.add(go { sleep(100 ms); k }) }; ch = channel(); go { for k in 1 to 3 { ch.send(k) }; ch.close() }; received = 0; for v in ch { received += v }; [sum(await all jobs), received]", warp::ints(vec![21, 6]));
 }

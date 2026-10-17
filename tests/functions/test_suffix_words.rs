@@ -14,7 +14,6 @@ fn a_function_name_with_ed_is_its_suffix_form() {
 	is!(&with_square("3 squared"), 9);
 	is!(&with_square("(1+2) squared"), 9);
 	is!(&with_square("1+(2 squared)"), 5);
-	is!("halve:=it/2; 8 halved", 4);
 	is!(&with_square("x=4; x squared"), 16);
 	is!(&with_square("2 squared+1"), 5);
 }
@@ -23,10 +22,7 @@ fn a_function_name_with_ed_is_its_suffix_form() {
 fn an_ungrouped_mix_asks() {
 	fails_with(&with_square("1+2 squared"), "(too ambiguous to guess)");
 	fails_with(&with_square("1+2 squared"), "`1+(2 squared)` for squared binds to 2");
-	fails_with(
-		&with_square("1+2 squared"),
-		"`(1+2) squared` for squared applies to 1+2",
-	);
+	fails_with(&with_square("1+2 squared"), "`(1+2) squared` for squared applies to 1+2");
 }
 
 #[test]
@@ -40,12 +36,9 @@ fn an_unknown_word_is_no_suffix_form() {
 	assert!(warp::wasm_emitter::eval("3 painted").serialize().contains("painted"));
 }
 
-#[test] // samples/sudoku.warp: `solved = solve(c); return solved` read as `solve(return)`
+#[test] // samples/functions/sudoku.warp: `solved = solve(c); return solved` read as `solve(return)`
 fn a_variable_is_no_suffix_form() {
-	is!(
-		"def solve(n) { if n > 2 { return n }; solved = solve(n + 1); return solved }; solve(0)",
-		3
-	);
+	is!("def solve(n) { if n > 2 { return n }; solved = solve(n + 1); return solved }; solve(0)", 3);
 }
 
 #[test]

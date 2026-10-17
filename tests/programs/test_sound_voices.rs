@@ -8,29 +8,16 @@ const WAV_HEADER: usize = 44;
 /// The samples of the rendered WAV
 fn rendered_samples(path: &std::path::Path) -> Vec<i16> {
 	let bytes = std::fs::read(path).unwrap();
-	bytes[WAV_HEADER..]
-		.chunks(2)
-		.map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
-		.collect()
+	bytes[WAV_HEADER..].chunks(2).map(|pair| i16::from_le_bytes([pair[0], pair[1]])).collect()
 }
 
 /// The program's printed value; it renders its sounds into the file named `name`
 pub(crate) fn rendered(name: &str, program: &str) -> (String, Vec<i16>) {
-	let path = std::env::temp_dir().join(format!("warp-voices-{name}-{}.wav", std::process::id()));
+	let path = crate::common::scratch_root().join(format!("voices-{name}.wav"));
 	let program = program.replace("SONG", &path.display().to_string());
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", &program])
-		.output()
-		.unwrap();
-	let printed = String::from_utf8_lossy(&run.stdout)
-		.trim()
-		.trim_start_matches("» ")
-		.to_string();
-	assert!(
-		run.status.success(),
-		"{printed} {}",
-		String::from_utf8_lossy(&run.stderr)
-	);
+	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().unwrap();
+	let printed = String::from_utf8_lossy(&run.stdout).trim().trim_start_matches("» ").to_string();
+	assert!(run.status.success(), "{printed} {}", String::from_utf8_lossy(&run.stderr));
 	(printed, rendered_samples(&path))
 }
 
@@ -38,7 +25,7 @@ pub(crate) fn rendered(name: &str, program: &str) -> (String, Vec<i16>) {
 fn a_task_is_a_voice_that_sounds_along() {
 	let (seconds, samples) = rendered(
 		"along",
-		"use sound\njob = go { melody [C4 E4] each 0.1s }\nmelody [G4 C5] each 0.1s\nawait job\nrender_sound(\"SONG\")",
+		"use sound\njob = go { melody([C4 E4], 0.1s) }\nmelody([G4 C5], 0.1s)\nawait job\nsave sound as: \"SONG\"",
 	);
 	assert_eq!(seconds, "0.2");
 	assert_eq!(samples.len(), 4410);
@@ -46,36 +33,23 @@ fn a_task_is_a_voice_that_sounds_along() {
 
 #[test]
 fn a_voice_starts_where_its_starter_stands() {
-	let program = "use sound\nplay C4 for 0.1s\njob = go { play E4 for 0.1s }\nplay G4 for 0.1s\nawait job\nrender_sound(\"SONG\")";
+	let program =
+		"use sound\nplay(C4, 0.1s)\njob = go { play(E4, 0.1s) }\nplay(G4, 0.1s)\nawait job\nsave sound as: \"SONG\"";
 	let (seconds, samples) = rendered("starts", program);
 	assert_eq!(seconds, "0.2");
-	assert!(
-		samples[..2205].iter().any(|&sample| sample > 3000),
-		"the first note sounds first"
-	);
+	assert!(samples[..2205].iter().any(|&sample| sample > 3000), "the first note sounds first");
 }
 
 #[test]
 fn voices_add_up() {
-	let (_, alone) = rendered("alone", "use sound\nplay 440Hz for 0.1s\nrender_sound(\"SONG\")");
+	let (_, alone) = rendered("alone", "use sound\nplay(440Hz, 0.1s)\nsave sound as: \"SONG\"");
 	let (_, both) = rendered(
 		"both",
-		"use sound\njob = go { play 440Hz for 0.1s }\nplay 440Hz for 0.1s\nawait job\nrender_sound(\"SONG\")",
+		"use sound\njob = go { play(440Hz, 0.1s) }\nplay(440Hz, 0.1s)\nawait job\nsave sound as: \"SONG\"",
 	);
 	assert_eq!(alone.len(), both.len());
-	let loudest = |samples: &[i16]| {
-		samples
-			.iter()
-			.map(|sample| u32::from(sample.unsigned_abs()))
-			.max()
-			.unwrap()
-	};
-	assert!(
-		loudest(&both) > loudest(&alone) * 19 / 10,
-		"{} {}",
-		loudest(&both),
-		loudest(&alone)
-	);
+	let loudest = |samples: &[i16]| samples.iter().map(|sample| u32::from(sample.unsigned_abs())).max().unwrap();
+	assert!(loudest(&both) > loudest(&alone) * 19 / 10, "{} {}", loudest(&both), loudest(&alone));
 }
 
 // card real-time-playback: a voice queued further ahead of the speaker than the program may run waits until it is
@@ -87,10 +61,7 @@ fn a_voice_far_ahead_of_the_speaker_waits() {
 	let started = Instant::now();
 	warp::sound::paced(Duration::from_millis(100));
 	let waited = started.elapsed();
-	assert!(
-		waited >= Duration::from_millis(150) && waited < Duration::from_secs(1),
-		"waited {waited:?}"
-	);
+	assert!(waited >= Duration::from_millis(150) && waited < Duration::from_secs(1), "waited {waited:?}");
 	assert!(warp::sound::queued_seconds() <= 0.1);
 	warp::sound::at_end();
 }

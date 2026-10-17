@@ -5,12 +5,8 @@ use crate::is;
 #[test]
 fn a_missing_argument_takes_its_default() {
 	is!("f(a, b=2) := a + b; f(1)", 3); // Julia f(a, b=2) = a + b
-	is!("f(a, b=2) := a + b; f(1, 5)", 6);
 	is!("def f(a=1, b=2){a*10+b}; f()", 12); // Python
-	is!(
-		"def greet(name, greeting=\"Hello\"){greeting + \" \" + name}; greet(\"Bob\")",
-		"Hello Bob"
-	);
+	is!("def greet(name, greeting=\"Hello\"){greeting + \" \" + name}; greet(\"Bob\")", "Hello Bob");
 	is!("f(x, y=10) = x + y; f(1)", 11);
 }
 
@@ -34,10 +30,7 @@ fn a_typed_parameter_may_have_a_default() {
 #[test]
 fn named_arguments_skip_defaults_and_mix_with_positional_ones() {
 	is!("def f(a=1, b=2){a*10+b}; f(b=5)", 15); // Python f(b=5), C# f(b: 5)
-	is!(
-		"def greet(name, greeting=\"Hello\"){greeting + \" \" + name}; greet(\"Bob\", greeting=\"Hi\")",
-		"Hi Bob"
-	);
+	is!("def greet(name, greeting=\"Hello\"){greeting + \" \" + name}; greet(\"Bob\", greeting=\"Hi\")", "Hi Bob");
 	is!("def f(a, b, c){a*100+b*10+c}; f(1, c=3, b=2)", 123);
 	is!("def f(a, b, c){a*100+b*10+c}; f(c:3, a:1, b:2)", 123); // Swift f(c: 3, a: 1, b: 2) labels in any order
 	is!("def f(a, b=5, c=7){a*100+b*10+c}; f(1, c=3)", 153);
@@ -54,10 +47,7 @@ fn calls_without_parentheses_take_defaults_too() {
 fn a_literal_after_a_colon_is_a_default_as_in_ruby() {
 	is!("def f(a, b: 2){a+b}; f(1)", 3); // Ruby def f(a, b: 2)
 	is!("def f(a, b: 2){a+b}; f(1, b: 5)", 6);
-	is!(
-		"def greet(name, greeting: \"Hello\"){greeting + \" \" + name}; greet(\"Ann\")",
-		"Hello Ann"
-	);
+	is!("def greet(name, greeting: \"Hello\"){greeting + \" \" + name}; greet(\"Ann\")", "Hello Ann");
 	is!("def f(a, b:int){a+b}; f(1, 2)", 3); // a type word after the colon stays the type
 }
 

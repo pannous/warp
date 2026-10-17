@@ -6,37 +6,9 @@ use super::*;
 const GLOBAL_EXPORT_LABEL: &str = "global·";
 
 impl WasmGcEmitter {
-	/// `error "…"` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
-	/// so it fails the run with its message through `returned_error`, which `try` catches; true when it was one
-	pub(super) fn emit_raised_error(&mut self, func: &mut Function, node: &Node) -> bool {
-		let Some(message) = returned_error_message(node) else {
-			return false;
-		};
-		self.emit_trap_detail(func, message);
-		self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
-		true
-	}
-
-	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error "…"` from a
-	/// function of numbers fails the run with the message, it cannot give back an Error value
-	pub(super) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
-		if self.returns_list {
-			self.emit_list_abi_value(func, value);
-		} else if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
-			self.emit_trap_detail(func, message);
-			self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
-		} else if self.returns_node {
-			self.emit_node_instructions(func, value);
-		} else if self.returns_float {
-			self.emit_float_value(func, value);
-		} else {
-			self.emit_numeric_value(func, value);
-		}
-	}
-
 	/// The one nullable Node local of every function, after its int scratch locals
 	pub(super) fn node_scratch(&self) -> u32 {
-		self.int_scratch + big_int::INT_SCRATCH_LOCALS
+		self.int_scratch + numbers::big_int::INT_SCRATCH_LOCALS
 	}
 
 	/// A second Node scratch local: a container held while node_scratch serves its items (`a, b = xs` checking an item)
@@ -44,84 +16,6 @@ impl WasmGcEmitter {
 		self.node_scratch() + 1
 	}
 
-	/// Emit a fetch call using the host.fetch import (host.fetch_within for an explicit timeout)
-	/// Returns a Text node with the body, or an Error node with the reason: the host marks a failure by a negative length
-	pub(super) fn emit_fetch_call(
-		&mut self,
-		func: &mut Function,
-		url_node: &Node,
-		timeout: Option<std::time::Duration>,
-	) {
-		let url = self.extract_url_string(url_node);
-		// a URL known only at run time (a text variable, a parameter, a concatenation), else the URL as written
-		if self.is_runtime_text(url_node) {
-			self.emit_string_ptr_len(func, url_node);
-		} else {
-			let (url_ptr, url_len) = self.allocate_string(&url);
-			Self::emit_list(func, &[I32Const(url_ptr as i32), I32Const(url_len as i32)]);
-		}
-		let import = match timeout {
-			Some(timeout) => {
-				func.instruction(&I::I64Const(timeout.as_millis().min(i64::MAX as u128) as i64));
-				"host_fetch_within"
-			}
-			None => "host_fetch",
-		};
-		if let Some(f) = self.ctx.func_registry.get(import) {
-			func.instruction(&I::Call(f.call_index as u32));
-		} else {
-			if timeout.is_some() {
-				func.instruction(&I::Drop);
-			}
-			let reason = format!("fetch {url} failed: host imports are not available");
-			let (ptr, len) = self.allocate_string(&reason);
-			Self::emit_list(func, &[I32Const(ptr as i32), I32Const(-(len as i32))]);
-		}
-		let (len, ptr) = (self.scratch(0), self.scratch(1));
-		Self::emit_list(
-			func,
-			&[I::I64ExtendI32S, I::LocalSet(len), I::I64ExtendI32U, I::LocalSet(ptr)],
-		);
-		self.emit_host_text_result(func, len, ptr);
-	}
-
-	/// Extract URL string from parsed node tree
-	/// Handles patterns like: https://... which parses as Key(Symbol("https"), Colon, ...)
-	pub(super) fn extract_url_string(&self, node: &Node) -> String {
-		fn node_to_string(n: &Node) -> String {
-			match n.drop_meta() {
-				Node::Symbol(s) => s.clone(),
-				Node::Text(s) => s.clone(),
-				Node::Key(left, op, right) => {
-					let left_str = node_to_string(left);
-					let op_str = match op {
-						Op::Colon => ":",
-						Op::Div => "/",
-						Op::Dot => ".",
-						_ => "",
-					};
-					let right_str = node_to_string(right);
-					format!("{}{}{}", left_str, op_str, right_str)
-				}
-				Node::List(items, _, _) => items.iter().map(node_to_string).collect::<Vec<_>>().join(""),
-				Node::Error(inner) => {
-					// Handle parse errors - check if it's an "Unexpected character '/'" error
-					if let Node::Text(msg) = inner.drop_meta() {
-						if msg.contains("Unexpected character '/'") {
-							return "/".to_string();
-						}
-					}
-					// Otherwise recurse into the inner node
-					node_to_string(inner)
-				}
-				_ => format!("{:?}", n),
-			}
-		}
-		node_to_string(node)
-	}
-
-	/// Emit global variable declaration: global x = value
-	/// Creates a mutable WASM global and initializes it, or reassigns existing global
 	/// A local or declared global holding a primitive number, not a Node reference
 	pub(super) fn is_numeric_variable(&self, name: &str) -> bool {
 		match self.scope.lookup(name) {
@@ -223,39 +117,29 @@ impl WasmGcEmitter {
 		_ = crate::analyzer::widen_globals_by_functions(
 			&mut main.globals,
 			self.ctx.user_functions.values(),
-			&self.user_function_kinds(),
+			&main.function_kinds.clone(),
 			&self.ctx.closure_variable_targets,
 		);
-		let mut names: Vec<&String> = main
-			.globals
-			.keys()
-			.filter(|name| !self.ctx.user_globals.contains_key(*name))
-			.collect();
+		let mut names: Vec<&String> =
+			main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
 		// a task's instance copies globals as Nodes, so a program with tasks keeps none in an array or map of its own type
 		let (typed, typed_maps) = if self.spawns_tasks() {
 			Default::default()
 		} else {
-			(
-				self.find_typed_globals(program, &main),
-				self.find_typed_map_globals(program, &main.globals),
-			)
+			(self.find_typed_globals(program, &main), self.find_typed_map_globals(program, &main.globals))
 		};
 		for name in names {
 			if typed_maps.contains(name) {
 				let global = self.declare_typed_map_global();
-				self.ctx
-					.user_globals
-					.insert(name.to_string(), (global, main.globals[name].kind));
+				self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
 				self.typed_map_globals.insert(name.to_string(), global);
 				continue;
 			}
 			match typed.get(name) {
 				Some(&list) => {
 					let global = self.declare_typed_list_global(list.element);
-					self.ctx
-						.user_globals
-						.insert(name.to_string(), (global, main.globals[name].kind));
+					self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
 					self.typed_globals.insert(name.to_string(), (global, list));
 				}
 				None => {
@@ -309,11 +193,7 @@ impl WasmGcEmitter {
 		} else {
 			ConstExpr::i64_const(0)
 		};
-		let val_type = if kind.is_ref() {
-			Ref(self.node_ref(true))
-		} else {
-			self.storage_type(kind)
-		};
+		let val_type = if kind.is_ref() { Ref(self.node_ref(true)) } else { self.storage_type(kind) };
 		self.declare_global_of(val_type, init_expr)
 	}
 
@@ -333,66 +213,9 @@ impl WasmGcEmitter {
 	}
 
 	fn add_global(&mut self, val_type: ValType, mutable: bool, init_expr: ConstExpr) -> u32 {
-		self.globals.global(
-			GlobalType {
-				val_type,
-				mutable,
-				shared: false,
-			},
-			&init_expr,
-		);
+		self.globals.global(GlobalType { val_type, mutable, shared: false }, &init_expr);
 		self.next_global_idx += 1;
 		self.next_global_idx - 1
-	}
-
-	/// Leave `value` in the exported global `trap_detail` (declared on first use), for the runtime error that follows
-	/// to name it: the runner reads it after the trap (wasm_reader::with_trap_detail)
-	pub(super) fn emit_trap_detail(&mut self, func: &mut Function, value: &Node) {
-		self.trap_detail_global();
-		self.emit_global_store(func, TRAP_DETAIL_GLOBAL, value);
-		func.instruction(&I::Drop);
-	}
-
-	/// Leave the position of the statement being emitted in the exported global `trap_position`, for a runtime error of
-	/// it to name: the runner reads it after the trap (wasm_reader::with_trap_detail). Again after a call, whose
-	/// statements left theirs. A statement of a module or of generated code (meta::GENERATED_FILE) clears it: a position
-	/// in another file would be read as the program's
-	pub(super) fn emit_trap_position(&mut self, func: &mut Function) {
-		let Some(position) = self.statement_position.as_ref().filter(|position| position.line_nr > 0) else {
-			return;
-		};
-		let encoded = match position.file {
-			None => encoded_position(position),
-			Some(_) => 0,
-		};
-		let global = self.trap_position_global();
-		Self::emit_list(func, &[I32Const(encoded), I::GlobalSet(global)]);
-	}
-
-	/// The index of the exported global `trap_position`, declared on first use
-	fn trap_position_global(&mut self) -> u32 {
-		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_POSITION_GLOBAL) {
-			return *index;
-		}
-		let index = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
-		self.exports.export(TRAP_POSITION, ExportKind::Global, index);
-		self.ctx
-			.user_globals
-			.insert(TRAP_POSITION_GLOBAL.to_string(), (index, Kind::Int));
-		index
-	}
-
-	/// The index of the exported global `trap_detail`, declared on first use
-	pub(super) fn trap_detail_global(&mut self) -> u32 {
-		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_DETAIL_GLOBAL) {
-			return *index;
-		}
-		let index = self.declare_mutable_global(Kind::Empty);
-		self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
-		self.ctx
-			.user_globals
-			.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
-		index
 	}
 
 	/// `global x = value` as a number (for emit_numeric_value)

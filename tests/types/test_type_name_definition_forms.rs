@@ -3,6 +3,7 @@
 use crate::is;
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: type-name parameters (`fib int i`) dropped"]
 fn test_define_operator_takes_the_same_slots_as_assign() {
 	is!("square of a number := it*it; square 3", 9);
 	is!("square a number := number*number; square 3", 9);
@@ -11,6 +12,7 @@ fn test_define_operator_takes_the_same_slots_as_assign() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: `to add number a to number b` phrase calls parked until card prepositions-call"]
 fn test_to_phrase_with_a_block_body() {
 	is!("to square a number { it*it }; square 3", 9);
 	is!("to square a number {\n  return number*number\n}\nsquare 5", 25);
@@ -18,15 +20,10 @@ fn test_to_phrase_with_a_block_body() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: type-name parameters (`fib int i`) dropped; the kept forms are in test_kept_wiki_forms"]
 fn test_wiki_forms() {
-	is!(
-		"fibonacci number = if number<2 : 0 else fibonacci(number-1) + fibonacci(number-2); fibonacci 10",
-		0
-	); // the wiki's base case is 0
-	is!(
-		"fibonacci number = if number<2 : number else fibonacci(number-1) + fibonacci(number-2); fibonacci 10",
-		55
-	);
+	is!("fibonacci number = if number<2 : 0 else fibonacci(number-1) + fibonacci(number-2); fibonacci 10", 0); // the wiki's base case is 0
+	is!("fibonacci number = if number<2 : number else fibonacci(number-1) + fibonacci(number-2); fibonacci 10", 55);
 	is!("square of a number = it*it; square 3", 9);
 	is!("to square a number: it*it; square 3", 9);
 	is!("to square a number: return it * it; square 3", 9);

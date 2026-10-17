@@ -11,10 +11,7 @@ fn test_float_local_assignment_keeps_its_float_value() {
 
 #[test]
 fn test_float_assignment_in_exact_context_is_refused_loudly() {
-	common::fails_with(
-		"f(x:float) := {y=x; [1,2,3][y=x]}; f(1.0)",
-		"assigns a float where an exact Int is expected",
-	);
+	common::fails_with("f(x:float) := {y=x; [1,2,3][y=x]}; f(1.0)", "assigns a float where an exact Int is expected");
 }
 
 #[test]

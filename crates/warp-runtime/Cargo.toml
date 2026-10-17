@@ -3,7 +3,7 @@
 # code to. Built on its own (`cargo build --release -p warp-runtime`) it is wasmtime without Cranelift, about 1 MB.
 [package]
 name = "warp-runtime"
-version = "1.2.6"
+version = "1.3.0"
 edition = "2021"
 description = "Runs compiled Warp programs without the compiler: the stub of Warp's standalone executables"
 repository = "https://github.com/pannous/warp"
@@ -35,7 +35,7 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 [dependencies]
 miniz_oxide = { version = "0.9", optional = true } # the carried machine code is deflated (standalone.rs)
 serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"], optional = true } # foreign calls speak JSON lines (foreign.rs)
-wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "gc", "gc-copying", "runtime", "std"], optional = true }
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "call-hook", "gc", "gc-copying", "runtime", "std"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 wry = { version = "0.57", optional = true, default-features = false }

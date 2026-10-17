@@ -12,8 +12,5 @@ fn test_runtime_stub_is_this_checkouts() {
 	let run = std::process::Command::new(stub).output().unwrap();
 	let said = String::from_utf8_lossy(&run.stderr);
 	let checkout = concat!(env!("CARGO_MANIFEST_DIR"), "/crates/warp-runtime");
-	assert!(
-		said.contains(&format!("({} from {checkout})", env!("CARGO_PKG_VERSION"))),
-		"{said}"
-	);
+	assert!(said.contains(&format!("({} from {checkout})", env!("CARGO_PKG_VERSION"))), "{said}");
 }

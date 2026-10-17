@@ -1,57 +1,56 @@
 use crate::is;
 use std::fs;
-use std::path::Path;
 use warp::warp_parser::WarpParser;
 use warp::Node;
 
 #[test]
 fn test_fibonacci() {
-	is!("samples/fibonacci.warp", 55);
+	is!("samples/functions/fibonacci.warp", 55);
 }
 
 #[test]
 fn test_factorial() {
-	is!("samples/factorial.warp", 120);
+	is!("samples/numbers/factorial.warp", 120);
 }
 
 #[test]
 fn test_primes() {
-	is!("samples/primes.warp", 1);
+	is!("samples/lists/primes.warp", 1);
 }
 
 #[test]
 fn test_gcd() {
-	is!("samples/gcd.warp", 6);
+	is!("samples/numbers/gcd.warp", 6);
 }
 
 #[test]
 fn test_sum() {
-	is!("samples/sum.warp", 55);
+	is!("samples/numbers/sum.warp", 55);
 }
 
 #[test]
 fn test_power() {
-	is!("samples/power.warp", 1024);
+	is!("samples/numbers/power.warp", 1024);
 }
 
 #[test]
 fn test_collatz() {
-	is!("samples/collatz.warp", 111);
+	is!("samples/numbers/collatz.warp", 111);
 }
 
 #[test]
 fn test_ackermann() {
-	is!("samples/ackermann.warp", 61);
+	is!("samples/functions/ackermann.warp", 61);
 }
 
 #[test]
 fn test_quadratic() {
-	is!("samples/quadratic.warp", 6);
+	is!("samples/numbers/quadratic.warp", 6);
 }
 
 #[test]
 fn test_fizzbuzz() {
-	is!("samples/fizzbuzz.warp", "FizzBuzz");
+	is!("samples/conditions/fizzbuzz.warp", "FizzBuzz");
 }
 
 /// Test that all sample .warp files can be parsed without errors
@@ -61,24 +60,13 @@ fn test_parse_all_samples() {
 	// if 1 > 0 {
 	//     todo!("currently STALLS after parsing 4 files!?");
 	// }
-	let samples_dir = Path::new("samples");
-	assert!(samples_dir.exists(), "samples/ directory not found");
+	let sample_files = crate::common::sample_files();
+	assert!(!sample_files.is_empty(), "no samples/<chapter>/*.warp found");
 
 	let mut parsed_count = 0;
 	let mut failed_files = Vec::new();
 
-	// Read all .warp files in samples directory
-	let entries = fs::read_dir(samples_dir).expect("Failed to read samples directory");
-
-	for entry in entries {
-		let entry = entry.expect("Failed to read directory entry");
-		let path = entry.path();
-
-		// Only process .warp files
-		if path.extension().and_then(|s| s.to_str()) != Some("warp") {
-			continue;
-		}
-
+	for path in sample_files {
 		let filename = path.file_name().unwrap().to_str().unwrap();
 		print!("  Parsing {}... ", filename);
 
@@ -121,10 +109,7 @@ fn test_parse_all_samples() {
 
 		// Known problematic files that can fail
 		let known_issues = ["lib.warp", "errors.warp", "webgpu.warp"];
-		let unexpected_failures: Vec<_> = failed_files
-			.iter()
-			.filter(|f| !known_issues.contains(&f.as_str()))
-			.collect();
+		let unexpected_failures: Vec<_> = failed_files.iter().filter(|f| !known_issues.contains(&f.as_str())).collect();
 
 		if !unexpected_failures.is_empty() {
 			println!("\n⚠ Unexpected failures (not in known issues list):");
@@ -141,81 +126,83 @@ fn test_parse_all_samples() {
 
 #[test] // first row of the solution: 5 3 4
 fn test_sudoku() {
-	is!("samples/sudoku.warp", 534);
+	is!("samples/functions/sudoku.warp", 534);
 }
 
 #[test] // the self-playing snake eats four foods in 60 turns
 fn test_snake() {
-	is!("samples/snake.warp", 40);
+	is!("samples/advanced/snake.warp", 40);
 }
 
 #[test] // both quicksorts agree
 fn test_quicksort() {
-	is!("samples/quicksort.warp", true);
+	is!("samples/lists/quicksort.warp", true);
 }
 
 #[test] // the glider moved by (4, 4) in 16 generations on 16×16
 fn test_game_of_life() {
-	is!("samples/game_of_life.warp", 3736);
+	is!("samples/loops/game_of_life.warp", 3736);
 }
 
 #[test] // three spheres on a floor, as shades of " .:-=+*#%@"
 fn test_raytracer() {
-	is!("samples/raytracer.warp", 8230);
+	is!("samples/advanced/raytracer.warp", 8230);
 }
 
 #[test] // height 4, nine values
 fn test_binary_tree() {
-	is!("samples/binary_tree.warp", 409);
+	is!("samples/objects/binary_tree.warp", 409);
 }
 
 #[test] // nested block comments, doc comments, factorial(5)
 fn test_comments() {
-	is!("samples/comments.warp", 120);
+	is!("samples/hello/comments.warp", 120);
 }
 
 #[test] // fdlibm's sine kernel: sin(1) to six digits
 fn test_sin() {
-	is!("samples/sin.warp", 841471);
+	is!("samples/numbers/sin.warp", 841471);
 }
 
 #[test] // the Taylor kernel at π/2
 fn test_sine() {
-	assert!(warp::wasm_emitter::eval("samples/sine.warp")
-		.serialize()
-		.starts_with("1.0000000"));
+	assert!(warp::wasm_emitter::eval("samples/numbers/sine.warp").serialize().starts_with("1.0000000"));
 }
 
 #[test] // 14 + 20 + 5
 fn test_calculator() {
-	is!("samples/calculator.warp", 39);
+	is!("samples/text/calculator.warp", 39);
 }
 
 #[test] // age 30 + first score 95
 fn test_json_parser() {
-	is!("samples/json_parser.warp", 125.0);
+	is!("samples/objects/json_parser.warp", 125.0);
 }
 
 #[test] // the iteration counts of a 40x30 grid
 fn test_mandelbrot() {
-	is!("samples/mandelbrot.warp", 17748);
+	is!("samples/loops/mandelbrot.warp", 17748);
 }
 
 #[test] // the third employee, 9 squares + 2 evens, a tuple field
 fn test_data_structures() {
-	is!("samples/data_structures.warp", "Dave 11 20");
+	is!("samples/objects/data_structures.warp", "Dave 11 20");
 }
 
 #[test] // every feature in one program (card g-_c-A): each part checks itself, a new check needs no change here
 fn test_kitchensink() {
-	let value = warp::pipeline::for_tests(|| warp::wasm_emitter::eval("samples/kitchensink.warp")).serialize();
-	assert!(
-		value.starts_with("\"✓ ") && value.ends_with(" tests passed\""),
-		"{value}"
-	);
+	let value = warp::pipeline::for_tests(|| warp::wasm_emitter::eval("samples/laws/kitchensink.warp")).serialize();
+	assert!(value.starts_with("\"✓ ") && value.ends_with(" tests passed\""), "{value}");
 }
 
 #[test] // fact(10) and fib(20) through the Z combinator (card y-combinator)
 fn test_y_combinator() {
-	is!("samples/y_combinator.warp", 6765);
+	is!("samples/functions/y_combinator.warp", 6765);
+}
+
+#[test] // one-noun phrase calls and `as`-picked definitions stay after park-phrases (card samples-phrases)
+#[cfg(feature = "native")]
+fn test_phrases() {
+	let printed = crate::common::printed("samples/hello/phrases.warp");
+	assert_eq!(printed, "class full-name\nhello Ann Lee\n%PDF hello\n<w:t>hello MS</w:t>\n");
 }

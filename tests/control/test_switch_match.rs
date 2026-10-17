@@ -50,17 +50,8 @@ fn a_user_function_named_switch_wins() {
 // card xs-add (found by the kitchen sink): a switch compared, or in a call's arguments, is one value
 #[test]
 fn a_switch_inside_an_expression_or_an_argument() {
-	is!(
-		"switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"",
-		true
-	);
-	is!(
-		"y = (switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"); y",
-		true
-	);
-	is!(
-		"xs = []; xs.add(switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"); xs#1",
-		true
-	);
+	is!("switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"", true);
+	is!("y = (switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"); y", true);
+	is!("xs = []; xs.add(switch 3 {1: \"one\" 3: \"three\" default: \"many\"} == \"three\"); xs#1", true);
 	is!("f(x) := x; f(switch 2 {1: 10 2: 20})", 20);
 }

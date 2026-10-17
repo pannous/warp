@@ -1,4 +1,4 @@
-//! card dir-function, found editing samples/reflection.warp: the reflection words take a function itself, never call it
+//! card dir-function, found editing samples/types/reflection.warp: the reflection words take a function itself, never call it
 //! (P83, supervisor 2026-10-09). `dir(area)` was "undefined function: dir", and with a class in the program it called
 //! the bare area, failing "area needs 2 arguments" at an earlier line
 use crate::is;
@@ -16,14 +16,12 @@ fn dir_of_a_function_lists_what_reflection_knows() {
 
 #[test]
 fn a_later_dir_leaves_an_earlier_line_alone() {
-	is!(
-		&format!("{WITH_A_CLASS}\nx = \"\\(area.params)\"\ndir(area)\nx"),
-		"[\"width\" \"height\"]"
-	);
+	is!(&format!("{WITH_A_CLASS}\nx = \"\\(area.params)\"\ndir(area)\nx"), "[\"width\" \"height\"]");
 }
 
 #[test]
 fn the_type_of_a_function_is_function() {
-	is!(&format!("{AREA}\ntype(area)"), "function");
-	is!(&format!("{AREA}\ntype(&area)"), "function");
+	// the kind and the signature (user decision on card module-methods)
+	is!(&format!("{AREA}\ntype(area)"), "function: (width: int, height: int) -> int");
+	is!(&format!("{AREA}\ntype(&area)"), "function: (width: int, height: int) -> int");
 }

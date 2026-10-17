@@ -1,0 +1,28 @@
+#!/usr/bin/env warp
+# paint(f, width, height) of a function: f(column, row) inks each pixel; on the GPU as a fragment shader where there
+# is one (WARP_GPU=off paints on the CPU). mandelbrot_canvas.warp loops over the pixels itself
+width = 960
+height = 540
+max_iter = 60
+
+def escape_time(cx, cy) {
+	x = 0.0 as float
+	y = 0.0 as float
+	iter = 0
+	while x * x + y * y <= 4 and iter < max_iter {
+		xtemp = x * x - y * y + cx
+		y = 2 * x * y + cy
+		x = xtemp
+		iter = iter + 1
+	}
+	return iter
+}
+
+def ink(column, row) {
+	steps = escape_time(-2.2 + column * 3.2 / width, -1.1 + row * 2.2 / height)
+	steps == max_iter or steps % 2 == 1
+}
+
+started = clock()
+paint(ink, width, height)
+print "painted in ${clock() - started} ms"

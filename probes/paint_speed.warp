@@ -1,0 +1,36 @@
+#!/usr/bin/env warp
+// card abysmally-slow: samples/graphics/finger_paint's loop with a scripted pointer, a stroke, show() and sleep 2ms per pass,
+// timed per frame by probes/paint_speed.mjs (node, the playground's worker scripts)
+use draw
+width = 1280
+height = 800
+brush = 8
+spacing = 3
+degrees_per_dab = 0.5
+
+canvas(width, height)
+clear(white)
+show()
+global turn = 0.0
+
+def stroke(x1, y1, x2, y2) {
+	dabs = max(cell(max(abs(x2 - x1), abs(y2 - y1)) / spacing), 1)
+	for i in 1 to dabs {
+		circle(x1 + (x2 - x1) * i / dabs, y1 + (y2 - y1) * i / dabs, brush, hsv(turn, 0.8, 0.9))
+		turn += degrees_per_dab
+	}
+}
+
+// a finger moving ~10 pixels a frame, as a quick stroke at 60 fps
+last_x = 100.0
+last_y = 400.0
+for t in 1..60 {
+	x = 100.0 + t * 10
+	y = 400.0 + 250 * sin(t / 12.0)
+	stroke(last_x, last_y, x, y)
+	last_x = x
+	last_y = y
+	show()
+	sleep 2ms
+}
+"done"

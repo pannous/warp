@@ -5,14 +5,18 @@
 //! macOS asks `pmset` and `defaults`, Linux /sys and `gsettings`; `online` is whether a route to the internet exists
 //! (a UDP connect sends nothing). A value the platform cannot give is a loud error, never a made-up reading.
 //! `mouse_x`, `mouse_y`, `mouse_down`: natively the pointer over the paint window (window_input), read each time;
-//! `key_down` whether a key is held over it, `key code held` which (lowering/system_values.rs names it `held_key`);
+//! `key_down` whether a key is held over it, `key code held` which (lowering/signals/system_values.rs names it `held_key`);
 //! `window_open` whether that window shows; read before any paint, it opens the window (blank) where one can show.
+//! `window_width`, `window_height` (window.width, card make-width): the paint window's inner size in points as it reports
+//! it, else as last written, else the view's; writing one resizes the window through the warp binary's resizer.
+//! `display_width`, `display_height`: the main screen's size in points, read only; `display_dpi` its device pixels
+//! per inch (CoreGraphics' physical size, xrandr's millimetres), read only.
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
-	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, GPU_DRAWING, KEY_CODE_HELD,
-	KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH,
-	WINDOW_OPEN,
+	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_DPI, DISPLAY_HEIGHT,
+	DISPLAY_WIDTH, ESCAPE_KEPT, GPU_DRAWING, GPU_PAINTS, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X,
+	MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -66,9 +70,71 @@ pub fn native_view() -> (i64, i64) {
 	NATIVE_VIEW
 }
 
+/// The paint window's inner size in points: as it reported it, or as the program wrote it since; none before either
+static WINDOW_SIZE: Mutex<Option<(i64, i64)>> = Mutex::new(None);
+/// Resizes the paint window, opened or not yet: the warp binary's (src/graphics/paint.rs allow_windows), none headless
+static WINDOW_RESIZER: OnceLock<fn(i64, i64)> = OnceLock::new();
+const DISPLAY_READ_ONLY: &str = "a program cannot resize the display: set window.width or canvas.width instead";
+
+pub fn tell_window_resizer(resize: fn(i64, i64)) {
+	let _ = WINDOW_RESIZER.set(resize);
+}
+
+/// The window's size as it reports it (src/graphics/paint_window.rs follow_input)
+pub fn tell_window_size(width: i64, height: i64) {
+	*WINDOW_SIZE.lock().unwrap() = Some((width, height));
+}
+
+/// window.width, window.height: before any window, the size one opens at for the view
+fn window_size() -> (i64, i64) {
+	WINDOW_SIZE.lock().unwrap().unwrap_or(NATIVE_VIEW)
+}
+
+/// display.dpi: the dots per inch where the screen tells none (96, one CSS pixel per CSS inch)
+const DEFAULT_DPI: i64 = 96;
+/// `display.dpi = 300 dpi`: the dpi the program set, in place of the screen's
+static DPI_SET: Mutex<Option<i64>> = Mutex::new(None);
+
+fn set_display_dpi(dpi: i64) -> Result<(), String> {
+	if dpi <= 0 {
+		return Err(format!("display.dpi = {dpi} dpi: a display has a positive number of dots per inch"));
+	}
+	*DPI_SET.lock().unwrap() = Some(dpi);
+	READINGS.with(|readings| readings.borrow_mut().remove(DISPLAY_DPI));
+	Ok(())
+}
+
+/// `set_system_value(name, value)`: window.width = 800 resizes the window, display.dpi = 300 dpi sets the dots per inch
+/// px count in; the others are read only
+pub fn write(name: &str, value: i64) -> Result<(), String> {
+	let (width, height) = match name {
+		WINDOW_WIDTH => (value, window_size().1),
+		WINDOW_HEIGHT => (window_size().0, value),
+		DISPLAY_DPI => return set_display_dpi(value),
+		DISPLAY_WIDTH | DISPLAY_HEIGHT => return Err(DISPLAY_READ_ONLY.to_string()),
+		other => {
+			return Err(format!("{other} cannot be set; settable: {WINDOW_WIDTH}, {WINDOW_HEIGHT}, {DISPLAY_DPI}"))
+		}
+	};
+	if width <= 0 || height <= 0 {
+		return Err(format!("a window of {width}×{height} points cannot show: its sides must be positive"));
+	}
+	tell_window_size(width, height);
+	if let Some(resize) = WINDOW_RESIZER.get() {
+		resize(width, height);
+	}
+	Ok(())
+}
+
 /// The keys pressed over the paint window not read yet (KEY_PRESSED), oldest first; a program that never reads them
 /// keeps the last KEYS_KEPT
 static KEY_PRESSES: Mutex<VecDeque<i64>> = Mutex::new(VecDeque::new());
+/// The program names the Escape key (ESCAPE_KEPT): Escape over the paint window is its key, not the run's end
+static ESCAPE_KEPT_BY_PROGRAM: AtomicBool = AtomicBool::new(false);
+
+pub fn escape_kept() -> bool {
+	ESCAPE_KEPT_BY_PROGRAM.load(Ordering::Relaxed)
+}
 const KEYS_KEPT: usize = 64;
 const KEY_INPUT: usize = 3;
 const BUTTON_INPUT: usize = 2;
@@ -79,15 +145,19 @@ static CLICK_READ: Mutex<(f32, f32)> = Mutex::new((0.0, 0.0));
 
 /// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/graphics/paint.rs allow_windows)
 static DRAWING_ON_GPU: AtomicBool = AtomicBool::new(false);
+/// Whether a shader can paint (GPU_PAINTS): the warp library's answer; none without it
+static GPU_PAINTER: OnceLock<fn() -> bool> = OnceLock::new();
+
+pub fn tell_gpu_painter(paints: fn() -> bool) {
+	let _ = GPU_PAINTER.set(paints);
+}
 
 pub fn tell_gpu_drawing(on_gpu: bool) {
 	DRAWING_ON_GPU.store(on_gpu, Ordering::Relaxed);
 }
 
 pub fn window_input() -> [f32; 4] {
-	WINDOW_INPUT
-		.each_ref()
-		.map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
+	WINDOW_INPUT.each_ref().map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
 }
 
 pub fn tell_window_input(input: [f32; 4]) {
@@ -107,6 +177,26 @@ fn kept_push<T>(presses: &mut VecDeque<T>, press: T) {
 		presses.pop_front();
 	}
 	presses.push_back(press);
+}
+
+/// Every key held over the paint window, in the order they went down (card allow-diagonals): the last is KEY_INPUT
+static KEYS_HELD: Mutex<Vec<i64>> = Mutex::new(Vec::new());
+
+pub fn tell_keys_held(codes: &[i64]) {
+	*KEYS_HELD.lock().unwrap() = codes.to_vec();
+}
+
+/// Whether the key of that code is held now, among others (KEY_HELD); code 0: whether none is
+pub fn key_held(code: i64) -> bool {
+	held_among(code, window_input()[KEY_INPUT] as i64, &KEYS_HELD.lock().unwrap())
+}
+
+/// Whether the key of that code is the key held or among the keys held; code 0: whether none is
+pub fn held_among(code: i64, key: i64, held: &[i64]) -> bool {
+	match code {
+		0 => key == 0 && held.is_empty(),
+		_ => key == code || held.contains(&code),
+	}
 }
 
 /// The key held over the paint window alone, the pointer left as it is
@@ -148,24 +238,28 @@ pub fn read(name: &str) -> Result<i64, String> {
 		let (x, y) = *CLICK_READ.lock().unwrap();
 		return Ok(if name == CLICK_X { x } else { y } as i64);
 	}
+	if name == ESCAPE_KEPT {
+		ESCAPE_KEPT_BY_PROGRAM.store(true, Ordering::Relaxed);
+		return Ok(1);
+	}
+	if name == GPU_PAINTS {
+		return Ok(GPU_PAINTER.get().is_some_and(|paints| paints()) as i64);
+	}
 	if name == KEY_PRESSED {
 		return Ok(KEY_PRESSES.lock().unwrap().pop_front().unwrap_or(0));
+	}
+	if name == WINDOW_WIDTH || name == WINDOW_HEIGHT {
+		let (width, height) = window_size();
+		return Ok(if name == WINDOW_WIDTH { width } else { height });
 	}
 	if name == GPU_DRAWING {
 		return Ok(DRAWING_ON_GPU.load(Ordering::Relaxed) as i64);
 	}
-	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN]
-		.iter()
-		.position(|pointer| *pointer == name)
-	{
+	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN].iter().position(|pointer| *pointer == name) {
 		return Ok(window_input()[at] as i64);
 	}
 	let kept = READINGS.with(|readings| {
-		readings
-			.borrow()
-			.get(name)
-			.filter(|(when, _)| when.elapsed() < READING_LIFETIME)
-			.map(|(_, value)| *value)
+		readings.borrow().get(name).filter(|(when, _)| when.elapsed() < READING_LIFETIME).map(|(_, value)| *value)
 	});
 	if let Some(value) = kept {
 		return Ok(value);
@@ -184,17 +278,97 @@ fn read_now(name: &str) -> Result<i64, String> {
 		CLIPBOARD_COUNT => clipboard_count(),
 		VIEW_WIDTH => Ok(NATIVE_VIEW.0),
 		VIEW_HEIGHT => Ok(NATIVE_VIEW.1),
-		other => Err(format!(
-			"{other} is no system value; known: {}",
-			SYSTEM_VALUES.map(|(name, _)| name).join(", ")
-		)),
+		DISPLAY_WIDTH => display_size().map(|(width, _)| width),
+		DISPLAY_HEIGHT => display_size().map(|(_, height)| height),
+		DISPLAY_DPI => Ok(DPI_SET.lock().unwrap().unwrap_or_else(|| display_dpi().unwrap_or(DEFAULT_DPI))),
+		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
+	}
+}
+
+/// The main screen's size in points (CoreGraphics: a Retina screen's scaled mode, as windows measure)
+#[cfg(target_os = "macos")]
+fn display_size() -> Result<(i64, i64), String> {
+	#[link(name = "CoreGraphics", kind = "framework")]
+	unsafe extern "C" {
+		fn CGMainDisplayID() -> u32;
+		fn CGDisplayPixelsWide(display: u32) -> usize;
+		fn CGDisplayPixelsHigh(display: u32) -> usize;
+	}
+	// SAFETY: plain queries of the main display, which always exists (a headless Mac reports 0)
+	let (width, height) = unsafe {
+		let display = CGMainDisplayID();
+		(CGDisplayPixelsWide(display) as i64, CGDisplayPixelsHigh(display) as i64)
+	};
+	match width {
+		0 => Err("display.width: this Mac has no display".to_string()),
+		_ => Ok((width, height)),
+	}
+}
+
+/// The screen's size as `xrandr` tells it: "Screen 0: minimum 8 x 8, current 1920 x 1080, maximum …"
+#[cfg(not(target_os = "macos"))]
+fn display_size() -> Result<(i64, i64), String> {
+	let report = output("xrandr", &["--current"])?;
+	let current = report.split("current ").nth(1).ok_or("display.width: no display (xrandr tells no screen)")?;
+	let mut sides = current.split(',').next().unwrap_or_default().split(" x ").map(|side| side.trim().parse::<i64>());
+	match (sides.next(), sides.next()) {
+		(Some(Ok(width)), Some(Ok(height))) => Ok((width, height)),
+		_ => Err(format!("display.width: xrandr's screen is unreadable: {current}")),
+	}
+}
+
+/// The main screen's device pixels per inch: its mode's pixel width over its physical width (CoreGraphics, in mm)
+#[cfg(target_os = "macos")]
+fn display_dpi() -> Result<i64, String> {
+	#[repr(C)]
+	struct Size {
+		width: f64,
+		height: f64,
+	}
+	#[link(name = "CoreGraphics", kind = "framework")]
+	unsafe extern "C" {
+		fn CGMainDisplayID() -> u32;
+		fn CGDisplayScreenSize(display: u32) -> Size;
+		fn CGDisplayCopyDisplayMode(display: u32) -> *mut std::ffi::c_void;
+		fn CGDisplayModeGetPixelWidth(mode: *mut std::ffi::c_void) -> usize;
+		fn CGDisplayModeRelease(mode: *mut std::ffi::c_void);
+	}
+	// SAFETY: plain queries of the main display; the mode copied is released once read
+	let (pixels, millimetres) = unsafe {
+		let display = CGMainDisplayID();
+		let mode = CGDisplayCopyDisplayMode(display);
+		let pixels = if mode.is_null() { 0 } else { CGDisplayModeGetPixelWidth(mode) };
+		if !mode.is_null() {
+			CGDisplayModeRelease(mode);
+		}
+		(pixels as f64, CGDisplayScreenSize(display).width)
+	};
+	dots_per_inch(pixels, millimetres)
+}
+
+/// The connected screen's device pixels per inch as `xrandr` tells it: "eDP-1 connected 1920x1080+0+0 … 344mm x 194mm"
+#[cfg(not(target_os = "macos"))]
+fn display_dpi() -> Result<i64, String> {
+	let report = output("xrandr", &["--current"])?;
+	let screen = report.lines().find(|line| line.contains(" connected") && line.contains("mm x ")).unwrap_or_default();
+	let words: Vec<&str> = screen.split_whitespace().collect();
+	let pixels =
+		words.iter().find_map(|word| word.split_once('x').filter(|(_, rest)| rest.contains('+'))?.0.parse().ok());
+	let millimetres = words.iter().find_map(|word| word.strip_suffix("mm")?.parse().ok());
+	dots_per_inch(pixels.unwrap_or(0.0), millimetres.unwrap_or(0.0))
+}
+
+const MILLIMETRES_PER_INCH: f64 = 25.4;
+
+fn dots_per_inch(pixels: f64, millimetres: f64) -> Result<i64, String> {
+	match pixels > 0.0 && millimetres > 0.0 {
+		true => Ok((pixels * MILLIMETRES_PER_INCH / millimetres).round() as i64),
+		false => Err("display.dpi: the screen tells no physical size".to_string()),
 	}
 }
 
 fn online() -> bool {
-	std::net::UdpSocket::bind("0.0.0.0:0")
-		.and_then(|socket| socket.connect(INTERNET_ADDRESS))
-		.is_ok()
+	std::net::UdpSocket::bind("0.0.0.0:0").and_then(|socket| socket.connect(INTERNET_ADDRESS)).is_ok()
 }
 
 fn output(program: &str, arguments: &[&str]) -> Result<String, String> {
@@ -210,20 +384,14 @@ fn output(program: &str, arguments: &[&str]) -> Result<String, String> {
 fn battery() -> Result<(i64, bool), String> {
 	// "-InternalBattery-0 (id=…)	87%; charging; 1:02 remaining present: true"
 	let report = output("pmset", &["-g", "batt"])?;
-	let line = report
-		.lines()
-		.find(|line| line.contains('%'))
-		.ok_or("battery: this Mac has no battery")?;
+	let line = report.lines().find(|line| line.contains('%')).ok_or("battery: this Mac has no battery")?;
 	let percent = line
 		.split('%')
 		.next()
 		.and_then(|before| before.rsplit(|letter: char| !letter.is_ascii_digit()).next())
 		.and_then(|digits| digits.parse().ok());
 	let charging = line.contains("; charging") || line.contains("; charged") || report.contains("'AC Power'");
-	Ok((
-		percent.ok_or_else(|| format!("battery: cannot read {line:?}"))?,
-		charging,
-	))
+	Ok((percent.ok_or_else(|| format!("battery: cannot read {line:?}"))?, charging))
 }
 
 #[cfg(target_os = "linux")]
@@ -239,9 +407,7 @@ fn battery() -> Result<(i64, bool), String> {
 			.map(|text| text.trim().to_string())
 			.map_err(|problem| format!("battery: {problem}"))
 	};
-	let percent = read("capacity")?
-		.parse()
-		.map_err(|_| "battery: cannot read its capacity".to_string())?;
+	let percent = read("capacity")?.parse().map_err(|_| "battery: cannot read its capacity".to_string())?;
 	Ok((percent, matches!(read("status")?.as_str(), "Charging" | "Full")))
 }
 
@@ -321,9 +487,7 @@ pub fn notify(text: &str) -> Result<(), String> {
 		])
 		.output();
 	#[cfg(not(target_os = "macos"))]
-	let shown = std::process::Command::new("notify-send")
-		.args([NOTIFICATION_TITLE, text])
-		.output();
+	let shown = std::process::Command::new("notify-send").args([NOTIFICATION_TITLE, text]).output();
 	match shown {
 		Ok(output) if output.status.success() => Ok(()),
 		Ok(output) => Err(format!("notify: {}", String::from_utf8_lossy(&output.stderr).trim())),
@@ -356,10 +520,7 @@ fn input(program: &str, arguments: &[&str], text: &str) -> Result<(), String> {
 		.write_all(text.as_bytes())
 		.map_err(|problem| format!("{program}: {problem}"))?;
 	let status = child.wait().map_err(|problem| format!("{program}: {problem}"))?;
-	status
-		.success()
-		.then_some(())
-		.ok_or_else(|| format!("{program} failed: {status}"))
+	status.success().then_some(()).ok_or_else(|| format!("{program} failed: {status}"))
 }
 
 /// The clipboard's text: macOS `pbpaste`, Linux `wl-paste` or `xclip`

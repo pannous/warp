@@ -9,6 +9,7 @@ fn an_emitted_value_is_the_handlers_number() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn an_emit_is_an_operand() {
 	is!("on ask { 42 }; x = 1 + (emit ask); x", 43);
 	is!("on ask { 42 }; x = 1 + emit ask; x", 43);
@@ -18,11 +19,9 @@ fn an_emit_is_an_operand() {
 
 // Card price-net: `ask` asks a handler for a value, as emit; the other emit words work in an operand too
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn ask_is_an_emit_operand() {
-	is!(
-		"price(net) := net * (1 + ask tax_rate); on tax_rate { 0.2 } in { price(100) }",
-		120
-	);
+	is!("price(net) := net * (1 + ask tax_rate); on tax_rate { 0.2 } in { price(100) }", 120);
 	is!("on rate { 2 } in { 3 * fire rate }", 6);
 	is!("ask(x) := x * 2; 1 + ask 3", 7);
 }

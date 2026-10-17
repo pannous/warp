@@ -1,7 +1,7 @@
 use crate::is;
 
 // A libm function called on a run-time value without `import … from 'm'` links libm by itself; it compiled to its
-// argument before: `def f(x:float) := exp(x); f(0.0)` was 0, sin(0.5) in a function 0.5 (samples/neural_net.warp sigmoid)
+// argument before: `def f(x:float) := exp(x); f(0.0)` was 0, sin(0.5) in a function 0.5 (samples/advanced/neural_net.warp sigmoid)
 
 #[test]
 fn test_libm_in_a_function_without_import() {
@@ -19,6 +19,6 @@ fn test_libm_on_a_runtime_value_without_import() {
 }
 
 #[test]
-fn test_user_function_named_like_libm_wins() {
-	is!("def sin(x) := 42; sin(1.0)", 42);
+fn test_sin_keeps_its_types() {
+	is!("def sin(x) := 42; sin(1.0)", 0.8414709848078965);
 }

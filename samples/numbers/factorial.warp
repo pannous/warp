@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+# Factorial - recursive
+def factorial(n) = if n <= 1 then 1 else n * factorial(n - 1)
+
+test factorial(10000) > 10 ^ 1000
+
+factorial(5)

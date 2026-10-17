@@ -1,5 +1,5 @@
 pan = -1.0
-play C4 for 0.1s
+play(C4, 0.1s)
 pan = 0.5
-play [C4 E4] for 0.2s
+play([C4 E4], 0.2s)
 print(render_sound("scratch/pan.wav"))

@@ -18,12 +18,7 @@ const UNARY: [Unary; 11] = [
 	("log", f64::ln),
 	("log10", f64::log10),
 ];
-const BINARY: [Binary; 4] = [
-	("fmin", f64::min),
-	("fmax", f64::max),
-	("fmod", fmod),
-	("pow", f64::powf),
-];
+const BINARY: [Binary; 4] = [("fmin", f64::min), ("fmax", f64::max), ("fmod", fmod), ("pow", f64::powf)];
 
 /// C's fmod: the remainder with the sign of the dividend, which is Rust's %
 fn fmod(dividend: f64, divisor: f64) -> f64 {
@@ -42,8 +37,5 @@ pub fn link_libm<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
 
 /// The names link_libm provides
 pub fn libm_names() -> impl Iterator<Item = &'static str> {
-	UNARY
-		.iter()
-		.map(|(name, _)| *name)
-		.chain(BINARY.iter().map(|(name, _)| *name))
+	UNARY.iter().map(|(name, _)| *name).chain(BINARY.iter().map(|(name, _)| *name))
 }

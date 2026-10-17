@@ -1,9 +1,12 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
+pub(super) use crate::filled_lists::is_list_literal;
 pub(super) use crate::lowering::nodes::parameter_word;
 use crate::lowering::{function_head, DefinitionForm, FunctionHead};
+pub(super) use crate::text::injection::literal_text;
+use crate::words::{ON_WORD, RETURN_WORD};
 
-pub(super) fn unsupported(node: &Node) -> Lean {
+pub(super) fn outside_w0(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
 }
 
@@ -19,7 +22,7 @@ pub(super) fn quoted(text: &str) -> String {
 /// `int`, `texts`, `list`, `int16` (the range of ints it holds): the W0 type a warp type word names
 pub(super) fn type_of_word(word: &str) -> Option<String> {
 	let scalar = |word: &str| -> Option<String> {
-		if let Some(width) = crate::fixed_width::fixed_width(word) {
+		if let Some(width) = crate::numbers::fixed_width::fixed_width(word) {
 			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
 		}
 		let word = word.to_lowercase();
@@ -43,10 +46,7 @@ pub(super) fn type_of_word(word: &str) -> Option<String> {
 	}
 	match scalar(word) {
 		Some(lean) => Some(lean),
-		None => word
-			.strip_suffix('s')
-			.and_then(scalar)
-			.map(|element| format!(".list ({element})")),
+		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list ({element})")),
 	}
 }
 
@@ -68,74 +68,20 @@ pub(super) fn admitted(declared: &str, value: String) -> String {
 
 /// `on`/`emit` forms; an event is named by one or more words (`on stop the machine {…}`)
 pub(super) enum Effect<'a> {
-	On {
-		event: String,
-		handler: &'a Node,
-		body: Option<&'a Node>,
-	},
-	Emit {
-		event: String,
-		payload: Vec<(String, &'a Node)>,
-	},
-}
-
-pub(super) fn event_name(words: &[Node]) -> Option<String> {
-	let words: Option<Vec<String>> = words
-		.iter()
-		.map(|word| match word.drop_meta() {
-			Node::Symbol(word) => Some(word.clone()),
-			_ => None,
-		})
-		.collect();
-	words.filter(|words| !words.is_empty()).map(|words| words.join(" "))
+	On { event: String, handler: &'a Node },
+	Emit { event: String, payload: Vec<(String, &'a Node)> },
 }
 
 pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 	let Node::List(items, _, _) = node.drop_meta() else {
 		return None;
 	};
-	// `on ev {h} in {body}` as a value parses as `(on ev {h}) in {body}`
-	if let [handled, keyword, body] = items.as_slice() {
-		if keyword.is_symbol(IN_KEYWORD) {
-			if let Some(Effect::On {
-				event,
-				handler,
-				body: None,
-			}) = effect(handled)
-			{
-				return Some(Effect::On {
-					event,
-					handler,
-					body: Some(body),
-				});
-			}
-		}
-	}
 	let (first, rest) = items.split_first()?;
-	if first.is_symbol(ON_KEYWORD) {
-		// `a = on ask {2} in {…}` groups the words after `on`: `on (ask {2})`
-		let rest = match rest {
-			[grouped] => match grouped.drop_meta() {
-				Node::List(words, Bracket::None, Separator::Space) => words.as_slice(),
-				_ => rest,
-			},
-			_ => rest,
-		};
+	if first.is_symbol(ON_WORD) {
 		let (last, words) = rest.split_last()?;
-		let event = event_name(words)?;
-		return match last.drop_meta() {
-			Node::List(_, Bracket::Curly, _) => Some(Effect::On {
-				event,
-				handler: last,
-				body: None,
-			}),
-			Node::List(parts, _, _) if parts.len() == 3 && parts[1].is_symbol(IN_KEYWORD) => Some(Effect::On {
-				event,
-				handler: &parts[0],
-				body: Some(&parts[2]),
-			}),
-			_ => None,
-		};
+		let event = crate::event_signals::event_name(words.iter())?;
+		return matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))
+			.then_some(Effect::On { event, handler: last });
 	}
 	if !first.is_symbol(EMIT_KEYWORD) {
 		return None;
@@ -155,16 +101,10 @@ pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 				.collect();
 			let mut words = words.to_vec();
 			words.push((**word).clone());
-			return Some(Effect::Emit {
-				event: event_name(&words)?,
-				payload: payload?,
-			});
+			return Some(Effect::Emit { event: crate::event_signals::event_name(words.iter())?, payload: payload? });
 		}
 	}
-	Some(Effect::Emit {
-		event: event_name(rest)?,
-		payload: vec![],
-	})
+	Some(Effect::Emit { event: crate::event_signals::event_name(rest.iter())?, payload: vec![] })
 }
 
 /// `global n`, `global n = 0` or `global float y = 2` (parsed `global: n`, `global: (n = 0)`, `global: (y: float = 2)`):
@@ -173,7 +113,7 @@ pub(super) fn global_declaration(node: &Node) -> Option<(&str, Option<(&Node, &N
 	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else {
 		return None;
 	};
-	if !keyword.is_symbol(GLOBAL_KEYWORD) {
+	if !keyword.is_symbol(crate::words::GLOBAL_WORD) {
 		return None;
 	}
 	match declared.drop_meta() {
@@ -218,15 +158,6 @@ pub(super) fn bracket_index(index: &Node) -> Option<&Node> {
 	}
 }
 
-/// the text of a text literal (a one-letter one parses as a codepoint)
-pub(super) fn literal_text(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Text(text) => Some(text.clone()),
-		Node::Char(letter) => Some(letter.to_string()),
-		_ => None,
-	}
-}
-
 /// every key a map literal, a field write `x.key = v` or a write `x["key"] = v` names, when the program has a map
 /// literal
 pub(super) fn map_keys(program: &Node) -> Option<Vec<String>> {
@@ -257,7 +188,7 @@ pub(super) fn map_keys(program: &Node) -> Option<Vec<String>> {
 /// the value of `return v`, ø of a bare `return`
 pub(super) fn returned(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.first().is_some_and(|first| first.is_symbol(RETURN_KEYWORD)) => {
+		Node::List(items, _, _) if items.first().is_some_and(|first| first.is_symbol(RETURN_WORD)) => {
 			Some(match &items[1..] {
 				[] => Node::Empty,
 				[value] => value.clone(),
@@ -288,10 +219,6 @@ pub(super) fn without_tail_return(body: &Node) -> Node {
 	}
 }
 
-pub(super) fn is_list_literal(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Square, _))
-}
-
 /// The statements of a program or block: an unbracketed `;`/newline list, else the one node
 pub(super) fn statements(node: &Node) -> Vec<&Node> {
 	node.drop_meta().sequence_statements().iter().collect()
@@ -310,7 +237,7 @@ pub(super) fn type_definitions(statement: &Node) -> Vec<&Node> {
 }
 
 /// The definitions the export reads, with their declared result type (warp converts the result to it,
-/// lowering/declarations.rs): `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`,
+/// lowering/definitions/declarations.rs): `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`,
 /// `def f(x) { body }`, `def f(x) -> int { body }`, `fun f(x): Int { body }`, `def f(x) -> int: body`,
 /// `def f(x) as int = body`
 pub(super) fn function_definition(statement: &Node) -> Option<FunctionHead<'_>> {
@@ -322,10 +249,7 @@ pub(super) fn function_definition(statement: &Node) -> Option<FunctionHead<'_>> 
 					definition.result.is_none()
 						&& (definition.form == DefinitionForm::Operator(Op::Assign) || is_exported(definition))
 				})?;
-				return Some(FunctionHead {
-					result: Some(result),
-					..definition
-				});
+				return Some(FunctionHead { result: Some(result), ..definition });
 			}
 		}
 	}
@@ -344,10 +268,8 @@ fn is_exported(definition: &FunctionHead) -> bool {
 }
 
 /// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
-pub(super) fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
-	let assignment = items
-		.iter()
-		.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+pub(super) fn destructuring_assignment(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
 	let Node::Key(target, Op::Assign, value) = items[assignment].drop_meta() else {
 		return None;
 	};
@@ -360,26 +282,19 @@ pub(super) fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)>
 			_ => None,
 		})
 		.collect();
-	Some((
-		names?,
-		std::iter::once(&**value).chain(&items[assignment + 1..]).collect(),
-	))
+	Some((names?, std::iter::once(&**value).chain(&items[assignment + 1..]).collect()))
 }
 
 /// A function or lambda bound at main level: its name, parameters and body
 pub(super) fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>, &Node)> {
 	if let Some(definition) = function_definition(statement) {
-		let parameters = definition
-			.parameters()
-			.iter()
-			.map(|parameter| parameter_word(parameter))
-			.collect();
+		let parameters = definition.parameters().iter().map(|parameter| parameter_word(parameter)).collect();
 		return Some((definition.name, parameters, definition.body));
 	}
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 		return None;
 	};
-	let (Node::Symbol(name), Node::Key(parameter, Op::FatArrow, body)) =
+	let (Node::Symbol(name), Node::Key(parameter, Op::Arrow, body)) =
 		(target.drop_meta(), unwrapped(value).drop_meta())
 	else {
 		return None;
@@ -397,18 +312,14 @@ pub(super) fn unwrapped(node: &Node) -> &Node {
 
 /// `global x; x = 7`: the first statement naming x assigns it (or none names it), so that is the global's binding
 pub(super) fn assigned_before_read(statements: &[&Node], name: &str) -> bool {
-	match statements
-		.iter()
-		.find(|statement| statement.mentions(name))
-		.map(|statement| statement.drop_meta())
-	{
+	match statements.iter().find(|statement| statement.mentions(name)).map(|statement| statement.drop_meta()) {
 		Some(Node::Key(target, Op::Assign, value)) => target.is_symbol(name) && !value.mentions(name),
 		Some(_) => false,
 		None => true,
 	}
 }
 
-/// Warp's late binding (src/lowering/late_binding.rs): a function or lambda reading a main-level name the program
+/// Warp's late binding (src/lowering/definitions/late_binding.rs): a function or lambda reading a main-level name the program
 /// changes after its definition, with a call after that change, needs `global x`. W0 reads at call time, which gives
 /// what warp gives for every program warp accepts, so such programs are outside W0 rather than rejected by it
 pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<String> {
@@ -425,11 +336,11 @@ pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<S
 			};
 			let read = body.mentions(changed) && !parameters.contains(changed) && !globals.contains(changed);
 			if (*op == Op::Assign || op.is_compound_assign())
-				&& read && statements[position + offset + 2..]
-				.iter()
-				.any(|call| call.mentions(name))
+				&& read && statements[position + offset + 2..].iter().any(|call| call.mentions(name))
 			{
-				return Some(format!("not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"));
+				return Some(format!(
+					"not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"
+				));
 			}
 		}
 	}
@@ -479,7 +390,7 @@ pub(super) fn first_value_is_list(body: &Node, local: &str) -> bool {
 		Node::Key(target, Op::Assign, value)
 			if first.is_none() && matches!(target.drop_meta(), Node::Symbol(name) if name == local) =>
 		{
-			first = Some(is_list_literal(value) || matches!(value.drop_meta(), Node::Empty));
+			first = Some(is_list_literal(value) || value.is_empty_node());
 		}
 		_ => {}
 	});
@@ -506,17 +417,16 @@ pub(super) fn place_literal(declared: Option<&str>, value: &Node) -> Option<Stri
 	match value.drop_meta() {
 		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
 		Node::Number(Number::Float(decimal)) if declared == Some(EXACT_TYPE) && decimal.is_finite() => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*decimal);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*decimal);
 			Some(exact_number(numerator, denominator))
 		}
 		_ => None,
 	}
 }
 
-/// A value whose type is evidently bool: `true`, `1 < 2`
 /// One `unit` as a W0 quantity: its number of smallest steps of its base dimension
 pub(super) fn quantity_literal(unit: &str) -> String {
-	let (dimension, factor) = crate::units::dimension_and_factor(unit).expect("a unit");
+	let (dimension, factor) = crate::numbers::units::dimension_and_factor(unit).expect("a unit");
 	format!(".qty {factor} [({}, 1)]", quoted(&dimension))
 }
 
@@ -528,8 +438,5 @@ pub(super) fn is_evident_bool(value: &Node) -> bool {
 }
 
 pub(super) fn lean_strings(words: &[String]) -> String {
-	format!(
-		"[{}]",
-		words.iter().map(|word| quoted(word)).collect::<Vec<_>>().join(", ")
-	)
+	format!("[{}]", words.iter().map(|word| quoted(word)).collect::<Vec<_>>().join(", "))
 }

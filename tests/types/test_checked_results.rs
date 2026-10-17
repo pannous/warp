@@ -5,10 +5,7 @@ use crate::is;
 
 #[test]
 fn a_fraction_reaching_an_int_result_is_an_error() {
-	fails_with(
-		"def f() as int { 2.5 }; f()",
-		"the result is declared int, cannot assign float 2.5",
-	); // known statically
+	fails_with("def f() as int { 2.5 }; f()", "the result is declared int, cannot assign float 2.5"); // known statically
 	fails_with("def half(x) as int { x / 2 }; half(3)", "an int must be a whole number");
 	is!("def half(x) as int { x / 2 }; half(4)", 2);
 	is!("def half(x) as int { (x / 2) as int }; half(3)", 1);

@@ -1,5 +1,0 @@
-#!/usr/bin/env warp
-// Tags computed at run time (card web-a11y-runtime): a heading's level comes from the data, and the markup the run
-// hands back is checked like markup as written. Make Apples level 3 and warp warns: h3 after h1 skips a heading level.
-outline = [{level: 1, title: "Fruit"}, {level: 2, title: "Apples"}, {level: 2, title: "Pears"}]
-div{ for section in outline { ("h" + section.level): section.title } }

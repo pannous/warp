@@ -21,12 +21,9 @@ fn routes_and_pages_lower_without_use_statements() {
 #[cfg(feature = "native")] // the page's path is a native host's
 #[test]
 fn routes_bring_router_and_regex_implicitly() {
-	use warp::{host::with_page_path, markup::to_html, wasm_emitter::eval};
+	use warp::{host::with_page_path, wasm_emitter::eval, web::markup::to_html};
 	assert_eq!(with_page_path("/users/7", || to_html(&eval(ROUTED))), "<p>user 7</p>");
-	assert_eq!(
-		with_page_path("/users/bo", || to_html(&eval(ROUTED))),
-		"<p>not found</p>"
-	);
+	assert_eq!(with_page_path("/users/bo", || to_html(&eval(ROUTED))), "<p>not found</p>");
 }
 
 #[test]

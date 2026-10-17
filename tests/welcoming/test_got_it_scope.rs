@@ -1,6 +1,6 @@
 // "got it" per expression (user, 2026-10-05): the prompt offers [y this / a all of this kind / n]; "this" remembers one
 // expression by its written text, "all" the whole topic; a `// got it` comment on its line silences a warning there
-use warp::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledger, GotIt};
+use warp::errors::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledger, GotIt};
 use warp::wasm_emitter::eval;
 
 const UPTO_A: &str = "x=0; for i in 1 upto 4 {x+=i}; x";
@@ -30,10 +30,7 @@ fn with_file(name: &str, answer: GotIt, body: impl FnOnce()) {
 fn upto_warnings(code: &str) -> usize {
 	take_warnings();
 	eval(code);
-	take_warnings()
-		.iter()
-		.filter(|warning| warning.message.contains("upto"))
-		.count()
+	take_warnings().iter().filter(|warning| warning.message.contains("upto")).count()
 }
 
 #[test]
@@ -65,10 +62,6 @@ fn no_keeps_reminding() {
 fn a_got_it_comment_silences_its_line() {
 	with_acknowledger(Answering(GotIt::No), || {
 		assert_eq!(upto_warnings("x=0; for i in 1 upto 4 {x+=i}; x // got it"), 0);
-		assert_eq!(
-			upto_warnings("// got it\nx=0; for i in 1 upto 4 {x+=i}; x"),
-			1,
-			"only its own line"
-		);
+		assert_eq!(upto_warnings("// got it\nx=0; for i in 1 upto 4 {x+=i}; x"), 1, "only its own line");
 	});
 }

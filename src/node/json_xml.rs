@@ -52,9 +52,9 @@ impl Node {
 			False => Value::Bool(false),
 			Empty => Value::Null,
 			Node::Number(Number::Int(n)) => Value::Number((*n).into()),
-			Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f)
-				.map(Value::Number)
-				.unwrap_or(Value::Null),
+			Node::Number(Number::Float(f)) => {
+				serde_json::Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null)
+			}
 			Node::Number(n) => Value::String(n.to_string()),
 			Text(s) | Symbol(s) => Value::String(s.clone()),
 			Char(c) => Value::String(c.to_string()),
@@ -63,7 +63,7 @@ impl Node {
 				let mut map = Map::new();
 				for item in items {
 					match item {
-						Key(..) => insert_json_entry(&mut map, item),
+						Key(_, op, _) if is_entry_operator(op) => insert_json_entry(&mut map, item),
 						List(nested, Bracket::Curly, _) => {
 							nested.iter().for_each(|entry| insert_json_entry(&mut map, entry))
 						}
@@ -74,7 +74,14 @@ impl Node {
 				}
 				Value::Object(map)
 			}
+			// a group of one, `(b + 1)`, is its item
+			List(items, Bracket::Round, _) if items.len() == 1 => items[0].to_json_value(),
 			List(items, _, _) => Value::Array(items.iter().map(Node::to_json_value).collect()),
+			// code: `1+1` is `{"+": [1, 1]}` (the JsonLogic shape), a prefix operation without its empty left side
+			Key(left, op, right) if !is_entry_operator(op) => {
+				let operands = [left, right].into_iter().filter(|side| !side.is_nothing());
+				json_object([(op.as_str(), Value::Array(operands.map(|side| side.to_json_value()).collect()))])
+			}
 			Key(..) => {
 				let mut map = Map::new();
 				insert_json_entry(&mut map, self);
@@ -186,20 +193,56 @@ fn xml_attribute(item: &Node) -> Option<String> {
 	})
 }
 
-/// The entry `key: value` with a text or symbol key into the object; any other node adds nothing
+/// `a: 1`, `a = 1`, `a := 1` are entries of an object; other keys are operations (host.js ENTRY_OPERATORS)
+fn is_entry_operator(op: &Op) -> bool {
+	matches!(op, Op::None | Op::Colon | Op::Assign | Op::Define)
+}
+
+/// The entry `key: value` into the object, its key as json_key writes it; any other node adds nothing
 fn insert_json_entry(map: &mut Map<String, Value>, entry: &Node) {
 	if let Key(key, _, value) = entry {
-		if let Symbol(key) | Text(key) = key.drop_meta() {
-			map.insert(key.clone(), value.to_json_value());
-		}
+		map.insert(json_key(key), value.to_json_value());
 	}
 }
 
+/// The JSON key of an entry: a name or text as itself, any other key as written (`{1: "a"}` is `{"1": "a"}`, the head
+/// of `f(x) := …` is "(f x)"), so no entry is lost
+pub fn json_key(key: &Node) -> String {
+	match key.drop_meta() {
+		Symbol(name) | Text(name) => name.clone(),
+		other => other.serialize().trim().to_string(),
+	}
+}
+
+/// The first part JSON cannot express (user 2026-10-15: never a silent loss): ∞, NaN, a complex number
+pub fn inexpressible_in_json(node: &Node) -> Option<Node> {
+	first_number_part(node, |number| match number {
+		Number::Float(x) => !x.is_finite(),
+		Number::Nan | Number::Inf | Number::NegInf | Number::Complex(..) => true,
+		_ => false,
+	})
+}
+
+/// The first number JSON writes only approximately, as its float: a fraction without decimal digits, 1/3, an exact
+/// real such as π/2 (decision json-exactness); a JSON number is decimal, so 0.1 and 19.99 are written exactly
+pub fn inexact_in_json(node: &Node) -> Option<Node> {
+	first_number_part(node, |number| match number {
+		Number::Quotient(..) | Number::BigQuotient(_) => number.exact_decimal().is_none(),
+		Number::Real(_) => true,
+		_ => false,
+	})
+}
+
+fn first_number_part(node: &Node, is_wanted: impl Fn(&Number) -> bool) -> Option<Node> {
+	let mut found = None;
+	node.visit(&mut |part| {
+		if found.is_none() && matches!(part.drop_meta(), Node::Number(number) if is_wanted(number)) {
+			found = Some(part.clone());
+		}
+	});
+	found
+}
+
 fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value {
-	Value::Object(
-		entries
-			.into_iter()
-			.map(|(key, value)| (key.to_string(), value))
-			.collect(),
-	)
+	Value::Object(entries.into_iter().map(|(key, value)| (key.to_string(), value)).collect())
 }

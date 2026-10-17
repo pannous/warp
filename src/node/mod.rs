@@ -1,13 +1,12 @@
 // type string = str; NO! ugly for a reason!
+use crate::compiler::meta::{DataType, DataValue, LineInfo};
 use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{DataType, DataValue, LineInfo};
 use crate::node::Node::*;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
-#[cfg(feature = "native")]
-use crate::wasm_reader::GcObject;
+use crate::words::GLOBAL_WORD;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt;
@@ -16,7 +15,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 mod serialization;
 pub use serialization::{NO, YES};
 mod json_xml;
-pub use json_xml::json_of_json5;
+pub use json_xml::{inexact_in_json, inexpressible_in_json, json_key, json_of_json5};
 mod comparison;
 mod indexing;
 #[cfg(feature = "native")]
@@ -40,26 +39,28 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
-/// `global x` parses as the pair `global: x`: a block may declare several, no duplicate key
-pub const GLOBAL_DECLARATION: &str = "global";
+
+/// The key of the Meta layer holding a comment (with_comment)
+pub const COMMENT_KEY: &str = "comment";
+/// The meta key of a type value read back from a run (card type-values): `int` shown as `class int` (decision type-print)
+pub const TYPE_VALUE_KEY: &str = "type value";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
-	// closed cannot be extended so anticipate all cases here
+	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
+	// Kind(i64), enum NodeKind in serialization
+
+	// closed, cannot be extended so anticipate all cases here
 	True,
 	False, // alternative would be pub const FALSE: Node = Node::Number(Number::Int(0));
 	Empty, // Null, Nill, None, Ø, ø null nill none nil
-	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
-	// Kind(i64), enum NodeKind in serialization
 	Number(Number),
-	// Number(Float|Int),
-	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
+	Char(char), // Single Unicode codepoint/character like 'a', '🍏'
 	Text(String),
 	Symbol(String),
 	Error(Box<Node>),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
-
-	// emit with dot .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
+	// emit key with dot ".name" for special semantics .meta:{} .data={type=T, b64=[] id} .type=T … TODO I saw @meta ??
 	// key can be any node (Symbol, Number, Text, etc.)
 	Key(Box<Node>, Op, Box<Node>),
 	List(Vec<Node>, Bracket, Separator),
@@ -78,14 +79,33 @@ impl Node {
 		}
 	}
 
-	pub fn meta(node: Node, meta: Node) -> Node {
-		Meta {
-			node: Box::new(node),
-			data: Box::new(meta),
+	/// The statements of a body: `{a;b}`, `{a⏎b}`, `(a; b)` and an unbracketed `a; b` hold several; `{x}` and
+	/// `{for i in xs {…}}` (words in braces) one
+	pub fn body_statements(&self) -> Vec<Node> {
+		match self.drop_meta() {
+			List(items, Bracket::Round, separator) if separator.separates_statements() => items.clone(),
+			List(items, Bracket::Curly, separator) if items.len() > 1 && !separator.separates_statements() => {
+				vec![List(items.clone(), Bracket::None, separator.clone())]
+			}
+			List(items, Bracket::Curly, _) if items.len() == 1 => items[0].sequence_statements().to_vec(),
+			List(items, Bracket::Curly, _) => items.clone(),
+			_ => self.sequence_statements().to_vec(),
 		}
+	}
+
+	pub fn meta(node: Node, meta: Node) -> Node {
+		Meta { node: Box::new(node), data: Box::new(meta) }
 	}
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
+	}
+	/// ø itself, under any metadata: unlike `is_nil`, an empty text, list or zero is not
+	pub fn is_empty_node(&self) -> bool {
+		matches!(self.drop_meta(), Empty)
+	}
+	/// A text or character literal, under any metadata
+	pub fn is_text_literal(&self) -> bool {
+		matches!(self.drop_meta(), Text(_) | Char(_))
 	}
 	/// ø or a block without statements: `{}` evaluates to nothing
 	pub fn is_nothing(&self) -> bool {
@@ -100,11 +120,7 @@ impl Node {
 		// let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
 		match self.drop_meta() {
 			Data(dada) => dada.clone(),
-			_ => DataValue {
-				data: Box::new(()),
-				type_name: "ø".to_string(),
-				data_type: DataType::None,
-			},
+			_ => DataValue { data: Box::new(()), type_name: "ø".to_string(), data_type: DataType::None },
 		}
 	}
 	/// Remove the children `from..=to` in place: `[a b c d].remove(1,2) == [a d]`.
@@ -120,9 +136,6 @@ impl Node {
 			}
 			other => panic!("can't remove without children: {other:?}"),
 		}
-	}
-	pub fn strings(p0: Vec<&str>) -> Node {
-		List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
 	}
 	pub fn first(&self) -> Node {
 		match self.drop_meta() {
@@ -263,6 +276,11 @@ impl Node {
 		}
 	}
 
+	/// Whether this is a call or phrase headed by the word `name`: `f(x)`, `f x`
+	pub fn is_call_of(&self, name: &str) -> bool {
+		self.call_parts().is_some_and(|(head, _)| head == name)
+	}
+
 	/// The name of a symbol, through its metadata
 	pub fn symbol_name(&self) -> Option<&str> {
 		match self.drop_meta() {
@@ -302,12 +320,6 @@ impl Node {
 		}
 	}
 
-	/// Convert compact 3-field WASM GC object to Node
-	#[cfg(feature = "native")]
-	pub fn from_gc_object(obj: &GcObject) -> Node {
-		obj.to_node()
-	}
-
 	/// Placeholder for a missing feature: an error value, never a fake result
 	pub fn todo(missing_feature: String) -> Node {
 		error(&format!("not implemented yet: {missing_feature}"))
@@ -334,11 +346,7 @@ impl Node {
 		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
 	}
 	pub fn keys(s: &str, v: &str) -> Self {
-		Key(
-			Box::new(Symbol(s.to_string())),
-			Op::Colon,
-			Box::new(Text(v.to_string())),
-		)
+		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(Text(v.to_string())))
 	}
 	pub fn text(s: &str) -> Self {
 		Text(s.to_string())
@@ -352,9 +360,6 @@ impl Node {
 	pub fn data<T: 'static + Clone + PartialEq>(value: T) -> Self {
 		Data(DataValue::new(value))
 	}
-	pub fn number(n: Number) -> Self {
-		Node::Number(n)
-	}
 	pub fn int(n: i64) -> Self {
 		Node::Number(Number::Int(n))
 	}
@@ -365,28 +370,18 @@ impl Node {
 		List(xs, Bracket::Square, Separator::None)
 	}
 	pub fn ints(xs: Vec<i32>) -> Self {
-		List(
-			map(xs, |x| Node::Number(Number::Int(x as i64))),
-			Bracket::Square,
-			Separator::None,
-		)
+		List(map(xs, |x| Node::Number(Number::Int(x as i64))), Bracket::Square, Separator::None)
 	}
 
 	pub fn with_meta_data<T: 'static + Clone + PartialEq>(self, data: T) -> Self {
 		// Store arbitrary MetaData as a Data node
 		let data_node = Node::data(data);
-		Meta {
-			node: Box::new(self),
-			data: Box::new(data_node),
-		}
+		Meta { node: Box::new(self), data: Box::new(data_node) }
 	}
 
 	/// Keep the source text of a literal whose value would print differently (`01234`, `1.10`)
 	pub fn with_source_literal(self, literal: &str) -> Self {
-		Meta {
-			node: Box::new(self),
-			data: Box::new(Node::key(SOURCE_LITERAL, Node::text(literal))),
-		}
+		Meta { node: Box::new(self), data: Box::new(Node::key(SOURCE_LITERAL, Node::text(literal))) }
 	}
 
 	pub fn source_literal(&self) -> Option<&str> {
@@ -400,19 +395,29 @@ impl Node {
 	}
 
 	pub fn with_comment(self, comment: String) -> Self {
-		let comment = Node::key("comment", Node::text(&comment));
-		Meta {
-			node: Box::new(self),
-			data: Box::new(comment),
+		let comment = Node::key(COMMENT_KEY, Node::text(&comment));
+		Meta { node: Box::new(self), data: Box::new(comment) }
+	}
+
+	/// The type value of the type named `name`: its symbol, shown as `class name` (TYPE_VALUE_KEY)
+	pub fn type_value(name: &str) -> Self {
+		Meta { node: Box::new(Symbol(name.to_string())), data: Box::new(Node::key(TYPE_VALUE_KEY, Node::True)) }
+	}
+
+	/// The name of a type value (type_value), None for anything else
+	pub fn type_value_name(&self) -> Option<&str> {
+		match self {
+			Meta { node, data } if matches!(data.as_ref(), Key(key, _, _) if key.name() == TYPE_VALUE_KEY) => {
+				node.symbol_name()
+			}
+			Meta { node, .. } => node.type_value_name(),
+			_ => None,
 		}
 	}
 
 	/// Annotate with `@name(value)`; the attribute key keeps its `@` so it never mixes with comments or line info
 	pub fn with_attribute(self, name: &str, value: Node) -> Self {
-		Meta {
-			node: Box::new(self),
-			data: Box::new(Node::key(&format!("{ATTRIBUTE_MARK}{name}"), value)),
-		}
+		Meta { node: Box::new(self), data: Box::new(Node::key(&format!("{ATTRIBUTE_MARK}{name}"), value)) }
 	}
 
 	/// The annotation this very Meta layer carries, if it is one
@@ -433,16 +438,9 @@ impl Node {
 
 	/// The value of the attribute `@name`: an annotation `@name(value) x`, else the meta entry `@name:value` of the literal
 	pub fn attribute(&self, name: &str) -> Option<&Node> {
-		let annotation = self
-			.attributes()
-			.into_iter()
-			.find(|(attribute_name, _)| *attribute_name == name)
-			.map(|(_, value)| value);
-		annotation.or_else(|| {
-			self.meta_entries()
-				.find(|(entry_name, _)| *entry_name == name)
-				.map(|(_, value)| value)
-		})
+		let annotation =
+			self.attributes().into_iter().find(|(attribute_name, _)| *attribute_name == name).map(|(_, value)| value);
+		annotation.or_else(|| self.meta_entries().find(|(entry_name, _)| *entry_name == name).map(|(_, value)| value))
 	}
 
 	/// The meta entries `@name:value` written inside this literal (`point{x:1 @source:"gps"}`), never fields
@@ -492,15 +490,6 @@ impl Node {
 	/// a key, the node under metadata; any other node as it is. A lowering pass's recursion over the rest of the tree
 	pub fn map_children(self, mut rewrite: impl FnMut(Node) -> Node) -> Node {
 		match self {
-			List(items, bracket, separator) => List(items.into_iter().map(&mut rewrite).collect(), bracket, separator),
-			Key(left, op, right) => {
-				let left = rewrite(*left);
-				Key(Box::new(left), op, Box::new(rewrite(*right)))
-			}
-			Meta { node, data } => Meta {
-				node: Box::new(rewrite(*node)),
-				data,
-			},
 			// a class body: its methods are lowered as functions are, its field declarations stay (card method-bodies)
 			Type { name, body } => {
 				let mut rewrite_code = |item: Node| if is_class_code(&item) { rewrite(item) } else { item };
@@ -510,22 +499,24 @@ impl Node {
 					}
 					single => rewrite_code(single),
 				};
-				Type {
-					name,
-					body: Box::new(body),
-				}
+				Type { name, body: Box::new(body) }
 			}
-			other => other,
+			other => children_rewritten(other, rewrite),
+		}
+	}
+
+	/// `rewrite` applied to the node under the Meta layers (comments, positions), which stay around its result
+	pub fn under_meta(self, rewrite: impl FnOnce(Node) -> Node) -> Node {
+		match self {
+			Meta { node, data } => Meta { node: Box::new(node.under_meta(rewrite)), data },
+			other => rewrite(other),
 		}
 	}
 
 	/// This node under the Meta layers (comments, positions) of `original`, which it replaces
 	pub fn with_meta_of(self, original: &Node) -> Node {
 		match original {
-			Meta { node, data } => Meta {
-				node: Box::new(self.with_meta_of(node)),
-				data: data.clone(),
-			},
+			Meta { node, data } => Meta { node: Box::new(self.with_meta_of(node)), data: data.clone() },
 			_ => self,
 		}
 	}
@@ -568,6 +559,54 @@ impl Node {
 		names.into_iter().collect()
 	}
 
+	/// The name `x = …`, `f(x) := …`, `f := …it…`, `def f(x){…}` or `def ((init ø) {1})` defines
+	pub fn defined_name(&self) -> Option<String> {
+		fn leading_symbol(node: &Node) -> Option<String> {
+			match node.drop_meta() {
+				Symbol(name) => Some(name.clone()),
+				List(items, _, _) => leading_symbol(items.first()?),
+				_ => None,
+			}
+		}
+		match self.drop_meta() {
+			Key(target, Op::Define | Op::Assign, _) => leading_symbol(target),
+			List(words, _, _) if words.len() > 1 && words[0].symbol_name().is_some_and(is_function_keyword) => {
+				Some(leading_name(&words[1])).filter(|name| !name.is_empty())
+			}
+			_ => None,
+		}
+	}
+
+	/// Every symbol anywhere in this node, once each, in reading order
+	pub fn symbols_read(&self) -> Vec<String> {
+		let mut symbols: Vec<String> = vec![];
+		self.visit(&mut |part| {
+			if let Symbol(name) = part {
+				if !symbols.contains(name) {
+					symbols.push(name.clone());
+				}
+			}
+		});
+		symbols
+	}
+
+	/// The names `global x` and `global x = v` declare anywhere in this node
+	pub fn declared_globals<Names: FromIterator<String>>(&self) -> Names {
+		let mut names = vec![];
+		self.visit(&mut |node| {
+			if let Key(keyword, Op::Colon, declared) = node {
+				if keyword.is_symbol(crate::words::GLOBAL_WORD) {
+					let target = match declared.drop_meta() {
+						Key(target, Op::Assign | Op::Define, _) => target,
+						name => name,
+					};
+					names.extend(target.symbol_name().map(String::from));
+				}
+			}
+		});
+		names.into_iter().collect()
+	}
+
 	/// Call `action` on this node and every descendant (pre-order, Meta dropped)
 	pub fn visit<'a>(&'a self, action: &mut dyn FnMut(&'a Node)) {
 		let node = self.drop_meta();
@@ -579,10 +618,9 @@ impl Node {
 			}
 			List(items, _, _) => items.iter().for_each(|item| item.visit(action)),
 			Type { body, .. } => match body.drop_meta() {
-				List(items, _, _) => items
-					.iter()
-					.filter(|item| is_class_code(item))
-					.for_each(|item| item.visit(action)),
+				List(items, _, _) => {
+					items.iter().filter(|item| is_class_code(item)).for_each(|item| item.visit(action))
+				}
 				single => {
 					if is_class_code(single) {
 						single.visit(action)
@@ -590,14 +628,6 @@ impl Node {
 				}
 			},
 			_ => {}
-		}
-	}
-
-	// get_meta data directly or Empty
-	pub fn get_meta(&self) -> &Node {
-		match self {
-			Meta { data, .. } => data.as_ref(),
-			_ => &Empty,
 		}
 	}
 
@@ -693,6 +723,11 @@ impl Node {
 		}
 	}
 
+	/// The text or the name a node holds: a one-character text (a Char) too
+	pub fn text_or_name(&self) -> String {
+		self.text_value().unwrap_or_else(|| self.name())
+	}
+
 	/// The first Error node in the tree, e.g. a parse diagnostic
 	pub fn first_error(&self) -> Option<&Node> {
 		match self.drop_meta() {
@@ -716,7 +751,7 @@ impl Node {
 				// repeated tags `div{…} div{…}` are children, as repeated elements in XML/HTML, not duplicate keys
 				Key(_, Op::Colon, value) if matches!(value.drop_meta(), List(_, Bracket::Curly, _)) => None,
 				Key(key, Op::Colon, _) => match key.drop_meta() {
-					Symbol(name) if name == GLOBAL_DECLARATION => None,
+					Symbol(name) if name == GLOBAL_WORD => None,
 					Symbol(name) | Text(name) => Some(name.clone()),
 					_ => None,
 				},
@@ -837,7 +872,7 @@ impl fmt::Display for Bracket {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
 	Space,     // ' ' - tightest binding
-	Colon,     // ',' Comma
+	Comma,     // ','
 	Semicolon, // ';'
 	Newline,   // '\n'
 	Tab,       // '\t'
@@ -850,10 +885,20 @@ impl Separator {
 		matches!(self, Separator::Semicolon | Separator::Newline)
 	}
 
+	/// The text between two items of a written list: `, ` `; ` or a whitespace separator as is (one space for none)
+	pub fn joint(&self) -> String {
+		let separator = self.to_string();
+		if separator.ends_with(char::is_whitespace) {
+			separator
+		} else {
+			separator + " "
+		}
+	}
+
 	pub fn to_char(&self) -> Option<char> {
 		match self {
 			Separator::Space => Some(' '),
-			Separator::Colon => Some(','),
+			Separator::Comma => Some(','),
 			Separator::Semicolon => Some(';'),
 			Separator::Newline => Some('\n'),
 			Separator::Tab => Some('\t'),
@@ -867,7 +912,7 @@ impl Separator {
 			Separator::Space => 0,
 			// Separator::Tab => 1, //  "a,b,c d,e,f"  == "a b (c d) e f " in csv!
 			// todo Tab depends on context!, also indent vs dedent !!
-			Separator::Colon => 2,
+			Separator::Comma => 2,
 			Separator::Semicolon => 3,
 			Separator::Tab => 4, //  "a;b;c d;e;f"  == "((a b c) (d e f))" in tsv!
 			Separator::Newline => 5,
@@ -881,7 +926,7 @@ impl fmt::Display for Separator {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Separator::Space => write!(f, " "),
-			Separator::Colon => write!(f, ","),
+			Separator::Comma => write!(f, ","),
 			Separator::Semicolon => write!(f, ";"),
 			Separator::Newline => writeln!(f),
 			Separator::Tab => write!(f, "\t"),
@@ -909,7 +954,7 @@ impl fmt::Display for Node {
 				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
-			Data(data) => match crate::units::describe(data) {
+			Data(data) => match crate::numbers::units::describe(data) {
 				Some(text) => write!(f, "{}", text),
 				None => write!(f, "{:?}", self),
 			},
@@ -920,10 +965,6 @@ impl fmt::Display for Node {
 
 pub fn print(p0: String) {
 	println!("{}", p0);
-}
-
-pub fn node(p0: &str) -> Node {
-	Text(p0.s())
 }
 
 // ============ Free Convenience Constructors ============
@@ -984,11 +1025,13 @@ pub fn parens(xs: Vec<Node>) -> Node {
 
 /// `function(arguments…)`
 pub fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List(
-		[vec![symbol(function)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
+	Node::List([vec![symbol(function)], arguments].concat(), Bracket::Round, Separator::None)
+}
+
+/// A call of a prelude word as library_words writes it, `prelude·word(arguments…)`: a program's own word of that name
+/// never meets it
+pub fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
+	call(&crate::modules::prelude_name(word).unwrap_or_else(|| word.to_string()), arguments)
 }
 
 /// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
@@ -1002,10 +1045,7 @@ pub fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> 
 		Node::List(items, bracket, separator) => {
 			Node::List(items.into_iter().map(rewrite).collect(), bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(rewrite(*node)),
-			data,
-		},
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
 		other => other,
 	}
 }
@@ -1020,11 +1060,7 @@ pub fn leading_name(member: &Node) -> String {
 }
 
 pub fn ints(xs: Vec<i32>) -> Node {
-	List(
-		xs.into_iter().map(|x| int(x as i64)).collect(),
-		Bracket::Square,
-		Separator::None,
-	)
+	List(xs.into_iter().map(|x| int(x as i64)).collect(), Bracket::Square, Separator::None)
 }
 
 pub fn floats(xs: Vec<f64>) -> Node {
@@ -1051,27 +1087,16 @@ fn writes_as_prefix(op: &Op) -> bool {
 /// An item of a class body that is code, a method in any of its forms (`f() := …`, `fn f() {…}`, `f = x => …`), not a
 /// field declaration (`name: text`, `age: int = 0`): the lowering passes reach it as they reach a function
 fn is_class_code(item: &Node) -> bool {
-	let is_name = |node: &Node| matches!(node.drop_meta(), Symbol(_));
+	let is_name = |node: &Node| node.symbol_name().is_some();
 	match item.drop_meta() {
 		Key(name, Op::Colon, _) if is_name(name) => return false,
 		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => {
-			return false
+			return false;
 		}
-		List(words, _, _)
-			if words.first().is_some_and(
-				|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word)),
-			) =>
-		{
-			return true
-		}
+		List(words, _, _) if words.first().and_then(Node::symbol_name).is_some_and(is_function_keyword) => return true,
 		_ => {}
 	}
 	let mut code = false;
-	item.visit(&mut |part| {
-		code |= matches!(
-			part,
-			Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) | List(_, Bracket::Curly, _)
-		)
-	});
+	item.visit(&mut |part| code |= matches!(part, Key(_, Op::Define | Op::Arrow, _) | List(_, Bracket::Curly, _)));
 	code
 }

@@ -7,11 +7,7 @@ use crate::is;
 #[cfg(feature = "native")]
 fn printed(code: &str) -> String {
 	let output = crate::common::printed(code);
-	output
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(|line| format!("{line}\n"))
-		.collect()
+	output.lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
 }
 
 #[test]
@@ -27,10 +23,7 @@ fn the_listener_runs_while_the_program_sleeps() {
 
 #[test]
 fn on_change_of_a_shared_value_sees_the_new_value() {
-	is!(
-		"shared n = 0; seen = 0; on change n { seen = value }; go { n = 5 }; sleep(300 ms); seen",
-		5
-	);
+	is!("shared n = 0; seen = 0; on change n { seen = value }; go { n = 5 }; sleep(300 ms); seen", 5);
 }
 
 #[test]
@@ -40,16 +33,10 @@ fn once_on_a_shared_value_runs_once() {
 
 #[test]
 fn a_write_of_the_program_itself_is_seen_at_its_next_check_point() {
-	is!(
-		"shared n = 0; seen = 0; on change n { seen = value }; n = 7; for i in 1 to 2 { i }; seen",
-		7
-	);
+	is!("shared n = 0; seen = 0; on change n { seen = value }; n = 7; for i in 1 to 2 { i }; seen", 7);
 }
 
 #[test]
 fn changes_before_the_listener_are_not_seen() {
-	is!(
-		"shared n = 0; n = 3; hits = 0; on change n { hits += 1 }; for i in 1 to 2 { i }; hits",
-		0
-	);
+	is!("shared n = 0; n = 3; hits = 0; on change n { hits += 1 }; for i in 1 to 2 { i }; hits", 0);
 }

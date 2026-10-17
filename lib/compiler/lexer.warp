@@ -1,9 +1,12 @@
 // The lexer written in warp (card self-lexer, notes/self_hosting.md step 5), each word next to its Rust twin
-// (tests/parser/test_self_lexer.rs)
+// (tests/parser/test_self_lexer.rs); positions count code points, as the Rust parser does
+use "lib/compiler/positions.warp"
 
-// Where the comments and texts of a source start and end, in characters: [[start, end], …]
+// Where the comments and texts of a source start and end, in code points: [[start, end], …]
 // Rust twin: warp_parser comment_and_text_spans
-def spans(source) {
+def spans(text) := if one_point_each(text) then spans_in(text) else spans_in(code_points(text))
+
+def spans_in(source) {
 	found = []
 	at = 0
 	n = source.length
@@ -56,11 +59,13 @@ def starts_at(source, part, at) {
 
 // Where the numbers of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the number atoms the parser reads
-def numbers(source) := positions(source, "number")
+def numbers(text) := atoms(text, "number")
 
 // Where the texts of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the text atoms the parser reads
-def texts(source) := positions(source, "text")
+def texts(text) := atoms(text, "text")
+
+def atoms(text, kind) := if one_point_each(text) then positions(text, kind) else positions(code_points(text), kind)
 
 // Where the atoms of `kind` ("number" or "text") start
 def positions(source, kind) {
@@ -93,16 +98,23 @@ def positions(source, kind) {
 	found
 }
 
-def is_name_char(c) := is_alphanumeric(c) or c == '_' or c == '♯' or c == '♭'
+// A raised letter continues a name as in Rust (`xⁿ`), a raised digit ends it (`x²` squares x)
+def is_name_char(c) := is_alphanumeric(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
+
+// The superscript digits in digit order, the raised letters in the order of the letters they raise (no raised q)
+// Rust twin: warp_parser/mod.rs SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS
+SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+SUPERSCRIPT_LETTERS = "ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ"
+RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
 
 def is_blank(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 
 // The end of what the parser skips at `at`, a comment as it reads one or a text, else `at`
-// Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_floor_division, at_hash_comment
+// Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_line_comment, at_hash_comment
 def skipped_end(source, at, n) {
 	c = source[at]
 	next = peek(source, at + 1, n)
-	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') and not floor_division(source, at, n) {
+	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') {
 		return index_of(source, "\n", at, n)
 	}
 	if c == '#' and (at == 0 or is_blank(source[at - 1])) and hash_comment(source, at, n) {
@@ -124,7 +136,7 @@ def text_starts(source, at, n) {
 }
 
 // `shader {` or `wgsl {` at `at`: the index of its brace, else `at`
-// Rust twin: warp_parser/literals.rs parse_shader_block
+// Rust twin: warp_parser/literals.rs parse_shader_block (SHADER_WORDS)
 def shader_brace(source, at, n) {
 	if at > 0 and is_name_char(source[at - 1]) { return at }
 	for word in ["shader", "wgsl"] {
@@ -219,22 +231,18 @@ def possessive(source, at, n) {
 
 def is_name_start(c) := is_alpha(c) or c == '_'
 
-// `a//b`: a divisor glued to `//` after an operand on its line
-def floor_division(source, at, n) := at + 2 < n and not is_blank(source[at + 2]) and follows_operand(source, at)
-
-// Code that could be divided ends before `at` on its line: a name, a number, `)` or `]`
-def follows_operand(source, at) {
-	i = at - 1
-	while i >= 0 and source[i] != '\n' and is_blank(source[i]) { i = i - 1 }
-	i >= 0 and source[i] != '\n' and (is_name_char(source[i]) or source[i] == ')' or source[i] == ']')
-}
-
 // `# note`, `#!`, `##`, `#use lib`: a comment; `#s`, `#a-1`, `#f(x)` count
 def hash_comment(source, at, n) {
 	next = peek(source, at + 1, n)
 	if is_blank(next) or next == '!' or next == '#' { return true }
-	word = source[at + 1 .. name_end(source, at + 1, n)]
-	word == "use" or word == "require" or word == "import" or word == "include"
+	width = name_end(source, at + 1, n) - at - 1
+	any_word_at(source, at + 1, width, ["use", "require", "import", "include"])
+}
+
+// Whether one of `words` is exactly the `width` items at `at` (the source a text or its code points)
+def any_word_at(source, at, width, words) {
+	for word in words { if word.length == width and starts_at(source, word, at) { return true } }
+	false
 }
 
 // After the name from `from` on; `$1` is a parameter, no number

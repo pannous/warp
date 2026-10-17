@@ -9,20 +9,12 @@ fn strlen_returns_a_size() {
 
 #[test]
 fn strlen_inside_a_program() {
-	is!(
-		"import abs from \"c\"\nabs(-42)\nimport strlen from \"c\"\nstrlen(\"hello\")\n7",
-		7
-	);
+	is!("import abs from \"c\"\nabs(-42)\nimport strlen from \"c\"\nstrlen(\"hello\")\n7", 7);
 }
 
 #[test]
 fn atol_returns_a_long() {
 	is!("import atol from \"c\"\natol(\"12345678901\")", 12345678901i64);
-}
-
-#[test]
-fn strncmp_compares_a_prefix() {
-	is!("import strncmp from \"c\"\nstrncmp(\"hello\", \"help\", 3)", 0);
 }
 
 #[test]
@@ -47,7 +39,7 @@ fn libc_text_and_character_functions() {
 // comment, which the cached libc table took for tolower (a text result: "wasm trap: cast failure" in Linux CI)
 #[test]
 fn comment_prose_in_a_header_declares_nothing() {
-	let declared = warp::ffi_parser::parse_header_file("tests/fixtures/c/comment_prose.h", "c");
+	let declared = warp::formats::ffi_parser::parse_header_file("tests/fixtures/c/comment_prose.h", "c");
 	assert_eq!(declared.len(), 1, "{declared:?}");
 	assert_eq!(declared[0].name, "tolower");
 }

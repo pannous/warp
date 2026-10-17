@@ -1,0 +1,9 @@
+// a user function taking a function, called 10M times in a tight loop: specialised (before) vs closure call (after)
+apply(f, x) := f(x)
+total = 0
+k = 0
+while k < 10000000 {
+	total += apply(y => y * 2 + 1, k)
+	k += 1
+}
+total

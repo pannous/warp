@@ -5,6 +5,7 @@ mod test_agent_types; // card int-let
 mod test_checkout_std_lib; // card local-lib
 mod test_dir;
 mod test_dir_any_value;
+mod test_dir_builtin_members; // card dir-lists
 mod test_dir_value_methods; // card list-methods: dir([1 2]) lists its methods
 mod test_folder_scope;
 mod test_from_import; // card std-import
@@ -18,14 +19,22 @@ mod test_module_cache;
 mod test_module_classes;
 mod test_module_error_file; // card module-error-file
 mod test_module_function_dir; // card use-math
+mod test_module_map_keys;
 mod test_module_meta; // card reflection-foreign-meta
 mod test_module_signals;
 mod test_netbase_package;
+mod test_node_json; // card node-json
+mod test_package_forms; // card packages
 mod test_package_hints; // card hints-fire
 mod test_package_pin;
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_package_shadow; // card sample-local
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
 mod test_packages;
+mod test_prelude_own_names; // card lib-math
+mod test_prelude_shadowing; // card program-own
+mod test_replaced_module_function; // card use-sound-def
 mod test_std_aliases;
 mod test_std_args; // card std-args
 mod test_std_collections;
@@ -53,12 +62,14 @@ mod test_std_net;
 mod test_std_prelude;
 mod test_std_qualified;
 mod test_std_random;
+mod test_std_reflection_hints; // card function-repeat
 mod test_std_regex;
 mod test_std_shadowed_names; // card libm-function
 mod test_std_time;
 mod test_std_words; // card std-word
 mod test_use_modules;
 mod test_use_several; // card std-use
+mod test_used_module_bare_words; // card one-dispatch
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
-mod test_wasm_modules; // card read-chron
+mod test_wasm_modules; // card read-chron // card map-key

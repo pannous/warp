@@ -35,7 +35,7 @@ A comment is a note for people. The computer skips it.
 3 // a note
 ```
 
-Examples: hello; samples: comments, sample
+Examples: hello; samples: comments, sample, natural, phrases
 
 ## Numbers
 
@@ -94,7 +94,7 @@ Numbers can have units.
 2h + 30min
 ```
 
-Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine
+Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits
 
 ## Text
 
@@ -122,7 +122,7 @@ Text is anything in quotes: a word, a name, a sentence.
 "1 + 1 = $(1 + 1)"
 ```
 
-Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator
+Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator, regexes, uniscript_text
 
 ## Variables
 
@@ -191,7 +191,7 @@ x = 3
 big
 ```
 
-Examples: "derived values", signals, listeners, "signals in lists"
+Examples: "derived values", signals, listeners, "signals in lists"; samples: signal_fields
 
 
 Examples: constants
@@ -250,10 +250,10 @@ x = 5
 if x > 9 : "big" else if x > 3 : "medium" else "small"
 ```
 
-`time` is the time of day, so the answer depends on when you run it.
+`now` compared with a duration is the time of day, so the answer depends on when you run it.
 
 ```warp
-if time < 12h : "morning" else "later"
+if now < 12h : "morning" else "later"
 ```
 
 Braces hold several lines.
@@ -269,7 +269,9 @@ yes
 sure
 ```
 
-### Matching
+Examples: conditions; samples: control_flow, fizzbuzz
+
+## Matching
 
 `match` picks the first case that fits the value. `other` takes the rest.
 
@@ -291,7 +293,14 @@ A case can also describe the shape of a list or a map, and name its parts.
 match [1, 2] { [a, b] => a + b; other => 0 }
 ```
 
-Examples: conditions; samples: control_flow, fizzbuzz, matching
+Patterns reach into data nested at any depth: `find` collects every match, here the `src` of each image.
+
+```warp => ["logo.png" "cat.jpg"]
+page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+page find {type: "image", src}
+```
+
+Examples: matching; samples: matching, tree_patterns
 
 ## Lists
 
@@ -370,12 +379,9 @@ square [1 2 3]
 [1 2 3].map(x => x * 2)
 ```
 
-A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
-card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
-design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
-block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+Also see [[#Closures]] and [[#Acceleration]] below.
 
-Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic
+Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic, dot, typed_lists
 
 ## Objects
 
@@ -400,7 +406,7 @@ ada.age += 1
 ada.age
 ```
 
-Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, dijkstra_idiomatic
+Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, dijkstra_idiomatic, references
 
 ## Loops
 
@@ -435,7 +441,7 @@ while n < 3 { n += 1 }
 n
 ```
 
-Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot, game_of_life, life_idiomatic
+Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot, game_of_life, life_idiomatic, iterators
 
 ## Functions
 
@@ -485,7 +491,7 @@ def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data
 
 ## Closures
 
@@ -510,7 +516,7 @@ Examples: closures
 
 Every value has a type: a number, a text, a list...
 
-```warp => int
+```warp => class int
 type(3)
 ```
 
@@ -533,7 +539,7 @@ class Point { x: int y: int }
 Point{x: 1 y: 2}.x
 ```
 
-Examples: classes, properties; samples: types, polymorphism
+Examples: classes, properties; samples: types, polymorphism, dispatch, reflection, return_polymorphism, return_polymorphism2
 
 ## Data and storage
 
@@ -585,7 +591,7 @@ use json
 json('{"age": 36}').age
 ```
 
-Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser
+Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser, store
 
 ## Errors
 
@@ -622,7 +628,7 @@ When a line could mean two things, warp asks which one you meant.
 Some lines work but look like a slip. Then warp prints a warning and goes on. `use strict` at the top of a program
 makes warnings stop it, as errors do.
 
-Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions
+Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions, try_failed_json
 
 ## Modules
 
@@ -633,7 +639,7 @@ use math
 max(√2 arc_cosine(π/4))
 ```
 
-Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended
+Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended, modules, javascript, agent
 
 ## Events and timers
 
@@ -649,7 +655,7 @@ emit ping
 pong
 ```
 
-Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"
+Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"; samples: effects, arrow_keys
 
 ## Tasks and channels
 
@@ -664,7 +670,7 @@ print("first!")
 
 Channels pass messages between programs.
 
-Examples: tasks, channels; samples: async, threads
+Examples: tasks, channels; samples: async, threads, parallel_let
 
 ## Web pages
 
@@ -695,13 +701,84 @@ ul{ li all fruits }
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
 
-Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl
+An id makes an element a name: `who` is the element, `$who` what was typed into it.
+
+```warp
+greeting = "Type a name"
+div{
+	input{ id: "who" }
+	button{ on click { greeting = "Hello " + $who } "Greet" }
+	p{ greeting }
+}
+```
+
+Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_elements, page_custom_event, keyframes, leaving_list
+
+## Servers
+
+Routes answer requests. One line is all your first server needs:
+
+```warp
+route "/" { "hello" }
+```
+
+Instead of text, a route can also answer with HTML:
+
+```warp
+route "/" { b{"bold!"} }
+```
+
+The parts of the path arrive as arguments of the declared type, so `/square/7` answers 49:
+
+```warp
+route "/" {a{href='/square/3' 'try three squared'}}
+route "/square/:n:int" { n*n }
+```
+
+You can share such an app with one click by pressing <a onclick='()=>deploy("native")'>deploy</a>. 
+
+`warp app.warp` (or `warp serve app.warp`) runs a program with routes as a web server; `warp deploy` puts it on the web.
+
+Examples: forms; samples: server, route_headers, hosting, worker
+
+## Pictures
+
+`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card.
+
+Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
+
+## Acceleration
+
+Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an accelerator such as the graphics card (GPU).
+
+To tune the performance yourself, ask for the GPU explicitly with `@gpu`:
+
+```warp
+xs = [1.0, 2.0, 3.0]
+total = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
+```
+
+A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
+card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
+design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
+block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+
+[[#Pictures]] above shows how to draw directly on the GPU.
+
+Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader, cyber_fuji, singularity, wormhole
+
+## Sound and music
+
+`use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
+`play "mozart.mp3"` plays a music file; a relative name is the program file's neighbour.
+
+Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp
 
 ## WebAssembly
 
 warp turns warp into WebAssembly, which runs in every browser. Code from Rust or C can be called alike.
 
-Examples: "wasm components"; samples: wasm_interop
+Examples: "wasm components"; samples: wasm_interop, import_compiled, component_reflection
 
 ## Laws
 

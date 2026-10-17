@@ -9,10 +9,7 @@ const COUNTER: &str = "count = 0\ndiv{ button{ on click { count += 1 } \"Add\" }
 fn a_site_holds_the_rendered_page_the_module_and_its_scripts() {
 	let directory = scratch_directory("counter-site");
 	let site = warp::web::site::build(COUNTER, "counter", &directory).expect("the site is built");
-	assert_eq!(
-		site.files,
-		["index.html", "app.wasm", "reader.js", "host.js", "markup.js", "site.js"]
-	);
+	assert_eq!(site.files, ["index.html", "app.wasm", "reader.js", "host.js", "markup.js", "site.js"]);
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
 	assert!(
 		page.contains(
@@ -20,10 +17,7 @@ fn a_site_holds_the_rendered_page_the_module_and_its_scripts() {
 		),
 		"{page}"
 	);
-	assert!(
-		page.contains("<title>counter</title>") && page.contains(r#"<script src="site.js"></script>"#),
-		"{page}"
-	);
+	assert!(page.contains("<title>counter</title>") && page.contains(r#"<script src="site.js"></script>"#), "{page}");
 	let module = std::fs::read(directory.join("app.wasm")).unwrap();
 	let names = String::from_utf8_lossy(&module);
 	// the page's host reads values through the reflection getters, calls the button's handler and renders the page anew
@@ -34,9 +28,8 @@ fn a_site_holds_the_rendered_page_the_module_and_its_scripts() {
 #[test]
 fn a_program_failing_at_build_time_builds_no_site() {
 	let directory = scratch_directory("failing-site");
-	let failure = warp::web::site::build("div{ p{ 1 / undefined_name } }", "failing", &directory)
-		.err()
-		.expect("no site");
+	let failure =
+		warp::web::site::build("div{ p{ 1 / undefined_name } }", "failing", &directory).err().expect("no site");
 	assert!(failure.contains("undefined_name"), "{failure}");
 	assert!(!directory.join("index.html").exists());
 }
@@ -45,17 +38,10 @@ fn a_program_failing_at_build_time_builds_no_site() {
 #[test]
 fn a_static_page_is_its_last_line_rendered() {
 	let directory = scratch_directory("static-site");
-	warp::web::site::build(
-		"title = \"Docs\"\narticle{ h1{ title } p{ \"1 < 2\" } }",
-		"docs",
-		&directory,
-	)
-	.expect("the site is built");
+	warp::web::site::build("title = \"Docs\"\narticle{ h1{ title } p{ \"1 < 2\" } }", "docs", &directory)
+		.expect("the site is built");
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
-	assert!(
-		page.contains(r#"<div id="warp-root"><article><h1>Docs</h1><p>1 &lt; 2</p></article></div>"#),
-		"{page}"
-	);
+	assert!(page.contains(r#"<div id="warp-root"><article><h1>Docs</h1><p>1 &lt; 2</p></article></div>"#), "{page}");
 	std::fs::remove_dir_all(directory).unwrap();
 }
 
@@ -74,10 +60,7 @@ fn a_site_with_routes_is_one_page_for_every_path() {
 	);
 	let page = |file: &str| std::fs::read_to_string(directory.join(file)).unwrap();
 	assert!(page("index.html").contains("<h1>Home</h1>") && !page("index.html").contains("<base"));
-	assert_eq!(
-		page("404.html"),
-		page("index.html").replace("</title>\n", "</title>\n<base href=\"/\">\n")
-	);
+	assert_eq!(page("404.html"), page("index.html").replace("</title>\n", "</title>\n<base href=\"/\">\n"));
 	std::fs::remove_dir_all(directory).unwrap();
 	let unrouted = warp::web::site::files("p{ \"hi\" }", "plain", false).expect("the site is built");
 	assert!(!unrouted.iter().any(|(file, _)| file == "404.html"));
@@ -90,7 +73,7 @@ fn a_site_with_routes_is_one_page_for_every_path() {
 fn a_site_starting_tasks_runs_its_program_in_a_worker() {
 	let directory = scratch_directory("tasks-site");
 	let site = warp::web::site::build(
-		"nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\np{ \"naps: \" + await first }",
+		"nap(ms) := { sleep(ms / 1000); 1 }\nfirst = go nap(1)\np{ \"naps: \" + await first }",
 		"tasks",
 		&directory,
 	)
@@ -129,7 +112,7 @@ fn a_site_starting_tasks_runs_its_program_in_a_worker() {
 #[test]
 fn a_site_with_routes_starting_tasks_runs_its_program_in_a_worker() {
 	let directory = scratch_directory("routed-tasks-site");
-	let program = "nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\nnaps = await first\nroute \"/\" { p{ \"naps: \" + naps } }\nroute \"/other\" { p{ \"other\" } }";
+	let program = "nap(ms) := { sleep(ms / 1000); 1 }\nfirst = go nap(1)\nnaps = await first\nroute \"/\" { p{ \"naps: \" + naps } }\nroute \"/other\" { p{ \"other\" } }";
 	let site = warp::web::site::build(program, "routed", &directory).expect("the site is built");
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
 	assert!(
@@ -138,10 +121,7 @@ fn a_site_with_routes_starting_tasks_runs_its_program_in_a_worker() {
 			&& !page.contains(r#"<script src="host.js">"#),
 		"{page}"
 	);
-	assert!(
-		page.contains(r#"data-warp-worker="reader.js,host.js,host-tasks.js,host-routes.js""#),
-		"{page}"
-	);
+	assert!(page.contains(r#"data-warp-worker="reader.js,host.js,host-tasks.js,host-routes.js""#), "{page}");
 	assert!(
 		site.files.iter().any(|file| file == "site-worker.js") && site.files.iter().any(|file| file == "404.html"),
 		"{:?}",
@@ -157,26 +137,11 @@ fn a_painting_site_runs_in_a_worker_with_its_canvas() {
 	let directory = scratch_directory("painting-site");
 	let program = "use draw\ncanvas(4, 3)\nrect(1, 1, 2, 1, red)\nshow()\np{ \"mouse at {mouse_x}\" }";
 	let site = warp::web::site::build(program, "painting", &directory).expect("the site is built");
-	assert_eq!(
-		site.files[2..6],
-		["task-workers.js", "site-thread.js", "canvas.js", "markup.js"],
-		"{:?}",
-		site.files
-	);
-	assert!(
-		site.files.iter().any(|file| file == "site-worker.js"),
-		"{:?}",
-		site.files
-	);
+	assert_eq!(site.files[2..6], ["task-workers.js", "site-thread.js", "canvas.js", "markup.js"], "{:?}", site.files);
+	assert!(site.files.iter().any(|file| file == "site-worker.js"), "{:?}", site.files);
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
-	assert!(
-		page.contains("data-warp-worker=") && page.contains(r#"<script src="canvas.js"></script>"#),
-		"{page}"
-	);
-	assert!(!warp::web::site::build(COUNTER, "counter", &directory)
-		.unwrap()
-		.files
-		.contains(&"canvas.js".to_string()));
+	assert!(page.contains("data-warp-worker=") && page.contains(r#"<script src="canvas.js"></script>"#), "{page}");
+	assert!(!warp::web::site::build(COUNTER, "counter", &directory).unwrap().files.contains(&"canvas.js".to_string()));
 	std::fs::remove_dir_all(directory).unwrap();
 }
 
@@ -188,14 +153,10 @@ fn a_site_using_the_gpu_runs_in_a_worker_with_the_gpu_part() {
 	let shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1, 0, 0, 1); }";
 	// rendered on a click, not at build time, which needs no adapter
 	let program = format!("div{{ button{{ on click {{ gpu_render(\"{shader}\", 2, 2) }} \"render\" }} }}");
-	let files = warp::web::site::build(&program, "gpu", &directory)
-		.expect("the site is built")
-		.files;
+	let files = warp::web::site::build(&program, "gpu", &directory).expect("the site is built").files;
 	std::fs::remove_dir_all(directory).unwrap();
 	assert!(
-		["host-gpu.js", "host-tasks.js", "site-worker.js"]
-			.iter()
-			.all(|part| files.iter().any(|file| file == part)),
+		["host-gpu.js", "host-tasks.js", "site-worker.js"].iter().all(|part| files.iter().any(|file| file == part)),
 		"{files:?}"
 	);
 }

@@ -1,14 +1,10 @@
 // card hint-own-definition: `parse_json(t)` written by hand is noted as warp's `json.parse(t)`, but not where the
 // program defines its own parse_json (`def parse_json(text) {…}`), nor for a library's own calls (lib/extra/netbase.warp)
-use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::normalize::capture_hints;
 
 fn json_parse_notes(code: &str) -> usize {
-	capture_hints(|| warp::wasm_emitter::eval(code))
-		.1
-		.iter()
-		.filter(|hint| hint.canonical == "json.parse")
-		.count()
+	capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "json.parse").count()
 }
 
 #[test]

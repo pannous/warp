@@ -20,7 +20,7 @@
   `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/web/test_uniscript.rs 335 s → 24 s.
   A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
   identical GC rec groups); not there yet.
-- Package tools are prebuilt WebAssembly, never built from source into a shared target (src/package_tools.rs):
+- Package tools are prebuilt WebAssembly, never built from source into a shared target (src/modules/package_tools.rs):
   `run_package_tool(name, args)` / `warp tool <name> args…` runs `<name>.wasm`, a wasm32-wasip1 command, in-process
   under wasmtime-wasi with the package directory preopened as `.`. One artifact for every OS, no per-platform binaries.
   It comes from `<package>/<name>.wasm`, else the GitHub release asset `<name>.wasm` of the pinned tag (v1.2.3 or 1.2.3),
@@ -33,12 +33,21 @@
   `cargo run` would have built the package into warp's own target instead. Never run cargo inside a package directory.
   uniscript's v1.0.0 release ships uniscript.wasm (4.2 MB): the first run downloads it once per machine, no build.
   A package publishes its tool with `cargo build --release --target wasm32-wasip1 --bin <name>` as release asset <name>.wasm.
+- Libraries (card takes-three, 2026-10-15): `library: "uniscript_c"` in a pinned entry of packages.warp makes `use <name>`
+  load warp's binding lib/packages/<name>.warp (LIBRARY_BINDINGS, packages.rs) as if it lay beside the library, so its
+  `import uniscript_c` calls the core module uniscript_c.wasm with the header uniscript_c.h (texts through its malloc,
+  notes/wasm_modules.md). Both come from the package itself or the pinned tag's release assets, downloaded once into the
+  build directory (package_tools.rs library_directory), never built. A `use` requiring another version than the pin loads
+  that tag's module source instead. Browsers cannot fetch release assets (no CORS): web/playground/build.sh `libraries`
+  puts them in web/playground/packages/<name>/, which the browser loader reads as page:packages/<name>; a built site ships
+  every imported module as modules/<file> (web/site_modules.rs). Updating: raise the version in packages.warp; the
+  package's release needs the assets (uniscript: notes/publishing.md there, `make -C c/ffi wasm`).
 - A local checkout stands in for a fetch: `ln -s ~/dev/uniscript packages/uniscript`. Update: `git -C packages/uniscript pull`.
   For a pinned package, a clean clone of its repository in packages/<name> (what an unpinned fetch left) moves to
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.
 - First package: uniscript (github.com/pannous/uniscript): its uniscript.wasp and data replaced warp's lib/uniscript.warp
   and data/uniscript/. warp's tests/web/test_uniscript.rs still tests it (through `use uniscript`).
-- Versions (src/lowering/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
+- Versions (src/lowering/data/versions.rs): `use x version 1.2.3` exactly, `use x from 1.2.3` / `use x >= 1.2.3` that or later.
   The default branch's module declares its version with a top level `version 1.2.3`; if it does not satisfy the
   requirement, the best git tag (`v1.2.3` or `1.2.3`, via `git ls-remote --tags`) is cloned into packages/<name>@<version>.
   A local module named in a versioned `use` must declare a satisfying version.

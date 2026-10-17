@@ -28,10 +28,7 @@ fn a_match_on_enum_cases_tests_and_binds() {
 
 #[test]
 fn swift_case_lines_with_values() {
-	is!(
-		"enum Shape { case circle(radius: int)\n case square(side: int) }; s = Shape::square(4); s.side",
-		4
-	);
+	is!("enum Shape { case circle(radius: int)\n case square(side: int) }; s = Shape::square(4); s.side", 4);
 }
 
 #[test]

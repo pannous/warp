@@ -3,13 +3,14 @@ name: Playground
 
 # The browser playground (web/playground, notes/web_playground.md) on GitHub Pages, custom domain warp.pannous.com:
 # the warp compiler built for wasm32-unknown-unknown without the native feature (warp.wasm optimized, warp.debug.wasm
-# with names and line tables: ?debug), the page, samples/*.warp and the jco-transpiled components (components.js).
-# Deploys on a push to main that changes the compiler, the page or the samples, and by hand
-# (`gh workflow run Playground -R pannous/warp`).
+# with names and line tables: ?debug), the page, samples/<chapter>/*.warp and the jco-transpiled components (components.js).
+# Stage 2 of 2 (user 2026-10-15): the Integrator pushes main after the native gate (stage 1) and never waits for this.
+# Hourly, the latest main is built, checked in the browsers and deployed, if it changed the compiler, the page or the
+# samples since the last green run; by hand at once (`gh workflow run Playground -R pannous/warp`) for an urgent fix or
+# a branch check. A failure keeps the last good site up and is fixed forward.
 on:
-  push:
-    branches: [ main ]
-    paths: [ "src/**", "crates/**", "web/playground/**", "samples/**", "Cargo.toml", "Cargo.lock", ".github/workflows/pages.yml" ]
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       runner:
@@ -19,6 +20,8 @@ on:
 
 permissions:
   contents: read
+  # the hourly run reads the last green run's commit (job changed)
+  actions: read
   pages: write
   id-token: write
 
@@ -31,13 +34,34 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_OFFLINE: false
-  # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/webgpu logs
+  # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/graphics/webgpu logs
   # "No available adapters." and the tour refuses the deploy
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
-  SITE_FILES: index.html playground.css playground.js deploy.js assistant.js completion.js shortcuts.js entities.tsv guide.js guide.md guide-expert.md primer.md markup.js markup-transitions.js markup-forms.js canvas.js worker.js task-worker.js task-workers.js coi-serviceworker.js host.js host-*.js components.js components foreign_python.py reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js keywords.txt assistant.json version.js
 
 jobs:
+  # the hourly run builds only when main changed what the site is made of since the last green run; a dispatch always
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.since.outputs.run }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+    - id: since
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SITE_PATHS: src crates web/playground samples Cargo.toml Cargo.lock .github/workflows/pages.yml
+      run: |
+        if [ "${{ github.event_name }}" != schedule ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+        green=$(gh run list -R "$GITHUB_REPOSITORY" -w Playground -b main -s success -L 1 --json headSha -q '.[0].headSha')
+        echo "last green run: ${green:-none}, now: $GITHUB_SHA"
+        if [ -n "$green" ] && git cat-file -e "$green" 2>/dev/null && git diff --quiet "$green" HEAD -- $SITE_PATHS; then
+          echo "run=false"; else echo "run=true"; fi >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
@@ -61,21 +85,9 @@ jobs:
         tool: wasm-tools
     - name: Build the compiler, samples.js and the components
       run: web/playground/build.sh
+    # the same collection as scripts/browser-dry-run.sh's (build.sh collect_site)
     - name: Collect the site
-      run: |
-        mkdir _site
-        (cd web/playground && cp -r $SITE_FILES ../../_site/)
-        # the language primer for agents at the conventional path (llmstxt.org)
-        cp web/playground/primer.md _site/llms.txt
-        # every host part the worker imports (host.js HOST_PART_FILES) is shipped, else no deploy
-        for part in $(grep -o '"host-[a-z]*\.js"' web/playground/host.js | tr -d '"'); do test -f _site/$part || { echo "::error::$part missing from the site"; exit 1; }; done
-        # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
-        mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
-        # the warp-compiled module samples/import_compiled.warp imports by its bare name (samples/shapes.wasm links it)
-        mkdir -p _site/samples && cp tests/fixtures/compiled/shapes.wasm _site/samples/
-        echo "warp.pannous.com" > _site/CNAME
-        # the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
-        web/playground/build.sh served _site
+      run: web/playground/build.sh site _site
     - uses: actions/upload-pages-artifact@v5
       with:
         path: _site
@@ -89,6 +101,8 @@ jobs:
   # a branch check runs the browser suite only when the branch changes code or tests (docs-only branches skip it);
   # main always runs it
   scope:
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     outputs:
       suite: ${{ steps.changes.outputs.suite }}
@@ -140,20 +154,9 @@ jobs:
         tool: wasm-tools
     - name: Install agent-browser (headless Chrome)
       run: npm install -g agent-browser && agent-browser install --with-deps
-    # the browser cannot run git: each pinned package of packages.warp is fetched as the native fetch_package does
-    # (src/modules.rs): its version tag cloned once into the package cache, linked as packages/<name>
+    # the browser cannot run git: the pinned packages of packages.warp, cloned and linked as packages/<name>
     - name: Fetch the pinned packages
-      run: |
-        grep -oE '^[a-z_]+: \{repository: "[^"]+", version: [0-9.]+\}' packages.warp | while read -r pinned; do
-          name=${pinned%%:*}
-          url=$(grep -oE 'https://[^"]+' <<< "$pinned")
-          version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<< "$pinned")
-          tag=$(git ls-remote --tags --refs "$url" | grep -oE "refs/tags/v?$version\$" | sed 's|refs/tags/||' | head -1)
-          cached=~/.cache/warp/packages/$name@$version
-          git clone -q --depth 1 --branch "$tag" "$url" "$cached"
-          mkdir -p packages && ln -s "$cached" "packages/$name"
-        done
-        ls -l packages
+      run: web/playground/build.sh pinned
     - name: The test suite in headless Chrome
       run: cargo browser-test
 
@@ -172,7 +175,7 @@ jobs:
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The tour in headless Chrome
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (console_watch.mjs)
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/web/live_region (console_watch.mjs)
       run: python3 web/playground/test_in_browser.py --examples --site _site
 
   # the same in headless Firefox: the runner's own, driven by firefox_driver.mjs
@@ -185,22 +188,28 @@ jobs:
       with:
         name: site
         path: _site
+    - name: Software Vulkan for Firefox's WebGPU (lavapipe)
+      run: sudo apt-get update -q && sudo apt-get install -y -q mesa-vulkan-drivers
     - name: The tour in headless Firefox
       # a run takes about 3 minutes; a stuck one fails loudly instead of holding the deploy (card deploy-firefox-hang)
       # a failed first attempt runs again once, loudly (card tour-firefox-stall: an intermittent worker-start stall in
       # Firefox); a real bug fails both
       timeout-minutes: 25
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (firefox_driver.mjs)
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/web/live_region (firefox_driver.mjs)
+        # Linux Firefox keeps WebGPU off; on lavapipe it runs the GPU samples as the user's Firefox does (card shaders-firefox)
+        FIREFOX_PREFS: "{'dom.webgpu.enabled': true, 'gfx.webgpu.ignore-blocklist': true}"
       run: |
         set -o pipefail
         tour() { python3 web/playground/test_in_browser.py --examples --firefox --site _site 2>&1 | tee "$1"; }
         tour first-attempt.log && exit 0
-        stall=$(grep -o "gave no sign for [^:]*" first-attempt.log | head -1)
+        # `|| true`: under the step's bash -e and pipefail, a first attempt without a stall line (grep finds nothing)
+        # ended the step here, so the second attempt never ran (Playground run 38856999410)
+        stall=$(grep -o "gave no sign for [^:]*" first-attempt.log | head -1 || true)
         echo "::warning title=Firefox tour failed once, running it again::${stall:-the first attempt is in the log above} (card tour-firefox-stall)"
         tour second-attempt.log
 
-  # the painting checks in Safari on a macOS runner (card webgpu-safari: samples/webgpu ran Safari out of memory). The
+  # the painting checks in Safari on a macOS runner (card webgpu-safari: samples/graphics/webgpu ran Safari out of memory). The
   # runner's Safari has navigator.gpu but no adapter, so the GPU samples show their no-adapter error. Beside the deploy,
   # not before it: macOS runners queue longer
   tour-safari:
@@ -237,12 +246,18 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
+    # the built files: the check waits until the live site serves every one of them, not a CDN's mix of old and new
+    # (card playground-verify)
+    - uses: actions/download-artifact@v8
+      with:
+        name: site
+        path: _site
     - name: Install agent-browser
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The live playground shows the tour and its console stays clean
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/
+      run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/ --site _site
     # the page is deployed by now: a Firefox failure here (the intermittent worker-start hang, card firefox-hello) is a
     # warning annotation on the run, not a failed run mailing the user (user 2026-10-09: "conditionally skip the tests")
     - name: The same in headless Firefox (a warning, not a failure)
@@ -250,5 +265,5 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/ ||
+        python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/ --site _site ||
           echo "::warning title=Firefox check of the live playground failed::see this step's log (card firefox-hello)"

@@ -56,8 +56,20 @@ lambda's DNS moves to Cloudflare):
   HMAC `SESSION_SECRET`, 30 days). Opened directly, the page says "Logged in as <login>". The CLI and the test send
   `Authorization: Bearer <GitHub token>` instead (`gh auth token`), checked against api.github.com/user.
 - `GET /auth/cloudflare?origin=…` → Cloudflare OAuth client "warp hosting" (PKCE, callback …/callback/cloudflare) →
-  `{warpHosting: {cloudflareToken}}`. The client is private (our account's members) until the publisher TXT record
-  (in the main checkout's .env) goes on warp.pannous.com; until then others paste an API token (Workers Scripts: Edit).
+  `{warpHosting: {cloudflareToken}}`. The client is public and verified since 2026-10-15 (it was private until the publisher TXT record
+  on lambda.pannous.com); the API-token paste (Workers Scripts: Edit) stays as fallback.
+  Scopes (card cf-deploy-access): `workers-scripts.edit` is the role "Workers Editor", which updates existing Workers
+  but cannot create one, so a new program's upload failed "No access to the specified resource". The login asks for
+  `workers-scripts.admin` (Workers Admin) + `user-details.read` + `account-settings.read`. Each must be registered on
+  the client, else the authorize page refuses the whole login (invalid_scope). Which scopes the client has can be read
+  without a login: `/oauth2/auth?client_id=…&state=x&scope=<one>` redirects with error=invalid_scope for an
+  unregistered one (probes/hosting/oauth_scopes.sh over `GET /client/v4/oauth/scopes`). On 2026-10-15 it had:
+  account-settings.read user-details.read workers-scripts.edit workers-routes.write workers-ci.write containers.write
+  workers-kv-storage.write workers-observability(-telemetry).write workers-r2(-bucket-item).write r2-catalog.write.
+  Errors name the call (`Cloudflare PUT workers/scripts/x: …`); Cloudflare's 9109 "Invalid access token" is a 401
+  (the playground drops the login and asks for a click), any other 403 is a missing permission and stays a 403; the
+  playground drops a Cloudflare login on either (a token from before a scope was added), a GitHub one on 401 only. An
+  account without a workers.dev subdomain gets a 409 pointing to the dashboard.
 - `POST /deploy?name=<name>&scripts=<host scripts>` with the module as the body: the first GitHub user to deploy a
   name owns it (KV `NAMES`). worker.js = the named playground scripts + cloud-worker.js (warp-web's glue), uploaded
   as `warp-<name>` with app.wasm and app.bin, workers.dev route on: `{url: "https://warp-<name>.pannous.workers.dev"}`.
@@ -73,7 +85,8 @@ lambda's DNS moves to Cloudflare):
   at once at the same deploy window: only a click may open a window, so each deploy opens exactly one.
 - The deploy window (card user-click; user: "they should give one the link or a redirect to the link"):
   `GET /deploying?ticket=` shows the program's link as soon as the ticket holds it (`/deploy?…&ticket=` stores the
-  address before uploading; the playground posts it again, and native deploys only post it), and opens the program
+  address once uploaded, an error replaces it and stays shown with its reason; the playground posts it again, and
+  native deploys only post it), and opens the program
   once `GET /up?program=` says it answers: Cloudflare's "error code: 1042" means no Worker under that name yet, a new
   *.lambda.pannous.com name fails until its certificate is issued. After a minute without an answer the window says
   so and keeps the link. /up fetches Workers of our own account, which Cloudflare refuses (1042) unless the control
@@ -85,9 +98,25 @@ lambda's DNS moves to Cloudflare):
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
 - Clients: `warp deploy --hosted app.warp` (src/web/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
-  scripts, src/web/mod.rs worker_bundle → src/host_parts.rs).
+  scripts, src/web/mod.rs worker_bundle → src/host/host_parts.rs).
 - Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
   dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
+
+## Browser programs (card deploy-browser-site)
+A program that uses the browser (paint, use draw, the GPU, sound, text on a canvas, the clipboard, `on frame` and
+other page events: host_parts.rs uses_the_browser) has nothing to answer on a server: the Worker would fail at its
+first request ("host.signal_listen is not available"). Deploy makes it a site instead (host_parts.rs `deployable` →
+`Deployable::Site`): the module compiled for a page, the page's scripts, those of the program's Worker and the files
+shipped (src/host/page_parts.rs, the layout `warp build --site` uses, which builds on wasm32 too, so the playground's
+Deploy computes it). The Worker is `const SITE = {title, scripts, workerScripts, files}` + web/playground/cloud-site.js:
+it serves the page (empty markup, the program shows itself once it runs; no native prerender), the scripts and
+app.wasm (app.bin's bytes), all with COOP/COEP so the page and the program's Worker share memory. warp-hosting gets
+`?site=…&worker=…&files=…` instead of `?scripts=…` and composes the same Worker from its own copies (SITE_FILES).
+Page routes (`route "/x" {…}`) work in the page. Server parts (a top-level `get "/api" {…}`, `serve PORT {…}`, a
+`server def`; serve.rs has_server_parts) have no server in a site: Deploy refuses such a program, naming card
+program-server (CLI and playground alike), rather than dropping them silently. Serving both from one Worker is open:
+`warp serve` runs main on the server too (paint writes a png there), while a Worker's host has no browser words, so
+the server's module would need main without them, or the Worker host a decided meaning for them.
 
 ## Built: warp-lambda, native on pannous.com (card ferron-hosting)
 - Playground ⋯ menu "☁ Deploy to pannous.com" (same GitHub login as ☁ Deploy) sends the program's source to
@@ -99,7 +128,7 @@ lambda's DNS moves to Cloudflare):
   warp-lambda@*.service), install.sh (over ssh, optional Linux binary:
   `cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.39 --bin warp`).
 - Sandboxed (user, 2026-10-09): `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
-  runtimes: "capability denied" at deploy). The rule at run time (src/sandbox.rs, cards sandbox-exec and
+  runtimes: "capability denied" at deploy). The rule at run time (src/host/sandbox.rs, cards sandbox-exec and
   sandbox-hosted, 2026-10-13): no process (os.exec behind `exec sh"…"`, which std_io hid from the capability check;
   sound players, the MIDI sender), loud "capability denied … warp --sandbox"; files are written only inside the state
   folder (systemd's STATE_DIRECTORY, else the working directory): file.write/write_bytes/append, stored values,
@@ -139,6 +168,9 @@ State on 2026-10-12 (sent to the Interviewer as user steps):
 - Publishing the OAuth client needs the TXT record on the client URL's host. warp.pannous.com is a CNAME to GitHub
   Pages, so no TXT can go there: the client URL should be https://lambda.pannous.com (A record) with the TXT on
   `lambda`, then visibility Public in the dashboard. Our API token can't read or edit OAuth clients.
+- 2026-10-14: adding that TXT (zone serial 2026101301) left `lambda` and `*.lambda` without A records at orderbox:
+  lambda.pannous.com stopped resolving, while the server still answers on 81.169.181.160. Both A records have to be
+  added back next to the TXT (one name can have A and TXT together).
 
 ## Decisions (moved from notes/decisions.md, 2026-10-09)
 - Each program is its own Cloudflare Worker uploaded by the hosting Worker. Q1 GitHub OAuth App for "Log in with

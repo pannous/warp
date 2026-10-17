@@ -1,125 +1,12 @@
-//! Suffixes: superscripts, suffix operators, bang and test words, subscripts, slices, implicit application
+//! Suffixes: suffix operators, bang and test words, implicit application
 
 use super::*;
 
-/// The word between a condition and its branch: `if c then x`
-const THEN_WORD: &str = "then";
-/// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
-const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
 /// The operands a braceless call binds in: from the right side of `or` to the right side of `+`; a `*` operand keeps
 /// `h*w int` the typed array `(h*w) int`
 const OPERAND_APPLICATION_BPS: std::ops::RangeInclusive<u8> = Op::Or.binding_power().1..=Op::Add.binding_power().1;
 
 impl WarpParser {
-	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
-	/// ⁴ → (4, 1), ¹² → (12, 2), ⁻¹ → (-1, 2), ²⁺³ → (5, 3)
-	pub(super) fn superscript_exponent(&self) -> Option<(i64, usize, bool)> {
-		let (mut exponent, mut length, mut signed) = (0i64, 0usize, false);
-		loop {
-			let sign = match self.chars.get(self.pos + length).copied().and_then(superscript_sign) {
-				Some(sign) => sign,
-				None if length == 0 => 1,
-				None => break,
-			};
-			let sign_length = self
-				.chars
-				.get(self.pos + length)
-				.copied()
-				.and_then(superscript_sign)
-				.map_or(0, |_| 1);
-			let digits: Vec<i64> = self
-				.chars
-				.iter()
-				.skip(self.pos + length + sign_length)
-				.map_while(|ch| superscript_digit(*ch))
-				.collect();
-			if digits.is_empty() {
-				break;
-			}
-			let run = digits
-				.iter()
-				.fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit));
-			exponent = exponent.saturating_add(sign * run);
-			signed |= sign_length > 0;
-			length += sign_length + digits.len();
-		}
-		(length > 0).then_some((exponent, length, signed))
-	}
-
-	/// The exponent of superscript terms with a letter among them: `ⁿ` → n, `ⁿ⁺ᵐ` → n+m, `ⁿ⁺¹` → n+1; its length in
-	/// characters and whether it starts with ⁻
-	pub(super) fn superscript_variable_exponent(&self) -> Option<(Node, usize, bool)> {
-		let at = |offset: usize| self.chars.get(self.pos + offset).copied();
-		let (mut terms, mut length, mut has_letter) = (vec![], 0usize, false);
-		loop {
-			let sign = at(length).and_then(superscript_sign);
-			let start = length + usize::from(sign.is_some());
-			let letters: String = (start..)
-				.map_while(|offset| at(offset).and_then(superscript_letter))
-				.collect();
-			let digits: Vec<i64> = (start..)
-				.map_while(|offset| at(offset).and_then(superscript_digit))
-				.collect();
-			let term = if !letters.is_empty() {
-				has_letter = true;
-				length = start + letters.chars().count();
-				Node::Symbol(letters)
-			} else if !digits.is_empty() {
-				length = start + digits.len();
-				Node::int(
-					digits
-						.iter()
-						.fold(0i64, |run, digit| run.saturating_mul(10).saturating_add(*digit)),
-				)
-			} else {
-				break;
-			};
-			terms.push((sign.unwrap_or(1), term));
-		}
-		if !has_letter {
-			return None;
-		}
-		let negative = terms.first().is_some_and(|(sign, _)| *sign < 0);
-		let mut terms = terms.into_iter();
-		let (_, first) = terms.next()?;
-		let exponent = terms.fold(first, |sum, (sign, term)| {
-			Node::Key(Box::new(sum), if sign < 0 { Op::Sub } else { Op::Add }, Box::new(term))
-		});
-		Some((exponent, length, negative))
-	}
-
-	/// `x⁴` is x^4, `x⁻¹` is 1/x, `2ⁿ` is 2^n; the single digits ² and ³ keep their dedicated square and cube operators
-	pub(super) fn try_parse_superscript_power(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		if let Some((exponent, length, negative)) = self.superscript_variable_exponent() {
-			if Op::Pow.binding_power().0 < min_bp {
-				return None;
-			}
-			self.advance_by(length);
-			let power = Node::Key(Box::new(lhs.clone()), Op::Pow, Box::new(exponent));
-			return Some(if negative {
-				Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power))
-			} else {
-				power
-			});
-		}
-		let (exponent, length, signed) = self.superscript_exponent()?;
-		let (op, right) = match (exponent, length, signed) {
-			(2, 1, false) => (Op::Square, Empty),
-			(3, 1, false) => (Op::Cube, Empty),
-			_ => (Op::Pow, Node::int(exponent.abs())),
-		};
-		if op.binding_power().0 < min_bp {
-			return None;
-		}
-		self.advance_by(length);
-		let power = Node::Key(Box::new(lhs.clone()), op, Box::new(right));
-		Some(if exponent < 0 {
-			Node::Key(Box::new(Node::int(1)), Op::Div, Box::new(power))
-		} else {
-			power
-		})
-	}
-
 	pub(super) fn try_parse_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		if let Some(power) = self.try_parse_superscript_power(lhs, min_bp) {
 			return Some(power);
@@ -174,361 +61,6 @@ impl WarpParser {
 		})
 	}
 
-	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md); `x failed` is `is_error(x)`.
-	/// The word must end the condition: a block, colon, `then`/`else`/`and`/`or` or the end of the statement follows.
-	/// `x is empty` holds for ø, "", [] and {} alike (wiki/null.md: empty checks missing or empty): `count(x) == 0`, as a
-	/// number or a bool counts one.
-	pub(super) fn try_parse_test_word(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		if self.options.data_mode || min_bp > Op::Not.binding_power().1 || matches!(lhs.drop_meta(), Empty) {
-			return None;
-		}
-		let is_length = "is".len();
-		let after_is = self.matches_keyword("is");
-		let word_start = if after_is {
-			is_length
-				+ (is_length..)
-					.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-					.count()
-		} else {
-			0
-		};
-		let word = TEST_WORDS.iter().find(|word| {
-			word.chars()
-				.enumerate()
-				.all(|(index, letter)| self.peek_char(word_start + index) == letter)
-				&& !is_identifier_char(self.peek_char(word_start + word.len()))
-		})?;
-		let end = word_start + word.len();
-		let blanks = (end..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
-		let next = self.peek_char(end + blanks);
-		let word_ends_condition = !self.operand_follows(end)
-			|| matches!(next, '{' | ':')
-			|| CONDITION_FOLLOWERS.iter().any(|follower| {
-				follower
-					.chars()
-					.enumerate()
-					.all(|(index, letter)| self.peek_char(end + blanks + index) == letter)
-					&& !is_identifier_char(self.peek_char(end + blanks + follower.len()))
-			});
-		if !word_ends_condition {
-			return None;
-		}
-		self.advance_by(end);
-		if *word == FAILED_WORD {
-			return Some(call(IS_ERROR_CALL, vec![lhs.clone()]));
-		}
-		if after_is && *word == EMPTY_WORD {
-			let counted = call(COUNT_CALL, vec![lhs.clone()]);
-			return Some(Node::Key(Box::new(counted), Op::Eq, Box::new(Node::int(0))));
-		}
-		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
-	}
-
-	/// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`, `3 times {body}`
-	pub(super) fn try_parse_control_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) {
-			return None;
-		}
-		// `x = it times it`: with a value after it (no block) `times` binds like `*` anywhere
-		let value_follows = self.value_after_times();
-		if (min_bp <= TIMES_BP || self.times_fills_list() || (value_follows && min_bp <= Op::Mul.binding_power().0))
-			&& self.matches_keyword(TIMES_WORD)
-		{
-			self.advance_by(TIMES_WORD.len());
-			return Some(self.parse_times_loop(lhs.clone()));
-		}
-		let (word, guard, negated) = STATEMENT_MODIFIERS
-			.iter()
-			.copied()
-			.find(|(word, _, _)| self.matches_keyword(word))?;
-		if min_bp > 0 || (guard == Op::If && self.condition_has_branch(word.len())) {
-			return None;
-		}
-		self.advance_by(word.len());
-		self.skip_spaces();
-		let condition = self.parse_condition();
-		if guard == Op::While {
-			// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
-			let (statement, test) = (
-				crate::normalize::operand_text(lhs),
-				crate::normalize::operand_text(&condition),
-			);
-			crate::normalize::hint(
-				&format!("{statement} {word} {test}"),
-				&format!("{word} {test} {{ {statement} }}"),
-				"a trailing loop word tests before the first round, the statement may never run",
-			);
-		}
-		let condition = if negated {
-			Node::Key(Box::new(Empty), Op::Not, Box::new(condition))
-		} else {
-			condition
-		};
-		Some(match guard {
-			Op::While => while_do(condition, lhs.clone()),
-			_ => Node::Key(
-				Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))),
-				Op::Then,
-				Box::new(lhs.clone()),
-			),
-		})
-	}
-
-	/// `if b {y}` or `if b then y` after a statement (`if a {x} if b {y}`) starts the next statement: a trailing `if`
-	/// guards without a branch of its own. Scans the condition from `offset` to the end of the statement for a block
-	/// (a spaced `{` outside brackets: `point{x:1}` is data) or `then`
-	pub(super) fn condition_has_branch(&self, offset: usize) -> bool {
-		let mut depth = 0usize;
-		let mut quote = None;
-		for at in offset.. {
-			let character = self.peek_char(at);
-			match (quote, character) {
-				(_, '\0') => return false,
-				(Some(open), _) => quote = (character != open).then_some(open),
-				(None, '"' | '\'') => quote = Some(character),
-				(None, '(' | '[') => depth += 1,
-				(None, ')' | ']') if depth == 0 => return false,
-				(None, ')' | ']') => depth -= 1,
-				(None, '{') if depth == 0 && matches!(self.peek_char(at - 1), ' ' | '\t') => return true,
-				(None, '\n' | ';' | '}') if depth == 0 => return false,
-				(None, 't')
-					if depth == 0 && !is_identifier_char(self.peek_char(at - 1)) && self.word_at(at) == THEN_WORD =>
-				{
-					return true
-				}
-				_ => {}
-			}
-		}
-		false
-	}
-
-	/// `a nand b` and `a ¬& b` are `not (a and b)`
-	pub(super) fn try_parse_nand(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		let spelling = NAND_SPELLINGS
-			.iter()
-			.find(|spelling| self.matches_operator_word(spelling))?;
-		let (and_bp, right_bp) = Op::And.binding_power();
-		if and_bp < min_bp || matches!(lhs.drop_meta(), Empty) {
-			return None;
-		}
-		self.set_hint_pos();
-		norm::operator(spelling, false);
-		self.advance_by(spelling.chars().count());
-		self.skip_spaces();
-		let rhs = self.parse_expr(right_bp);
-		Some(Node::Key(
-			Box::new(Empty),
-			Op::Not,
-			Box::new(Node::Key(Box::new(lhs.clone()), Op::And, Box::new(rhs))),
-		))
-	}
-
-	/// The word or glyph pair `spelling` at the cursor; a word must not run into an identifier
-	pub(super) fn matches_operator_word(&self, spelling: &str) -> bool {
-		let matches = spelling
-			.chars()
-			.enumerate()
-			.all(|(index, letter)| self.peek_char(index) == letter);
-		matches
-			&& (!spelling.chars().all(char::is_alphabetic)
-				|| !is_identifier_char(self.peek_char(spelling.chars().count())))
-	}
-
-	/// `a ?: b` is `a ? a : b`; a left side that is not a plain name is evaluated once, into a hidden variable
-	pub(super) fn try_parse_elvis(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		let (question_bp, _) = Op::Question.binding_power();
-		if self.current_char() != '?' || self.peek_char(1) != ':' || question_bp < min_bp {
-			return None;
-		}
-		self.advance_by(2);
-		self.skip_whitespace();
-		let alternative = self.parse_expr(question_bp + 1); // left-assoc: `a ?: b ?: c` is `(a ?: b) ?: c`, the same value
-		let elvis = |value: Node| {
-			Node::Key(
-				Box::new(value.clone()),
-				Op::Question,
-				Box::new(Node::Key(Box::new(value), Op::Colon, Box::new(alternative))),
-			)
-		};
-		if matches!(lhs.drop_meta(), Node::Symbol(_)) {
-			return Some(elvis(lhs.clone()));
-		}
-		self.elvis_operands += 1;
-		let operand = Symbol(format!("{ELVIS_WORD}·{}", self.elvis_operands));
-		let store = Node::Key(Box::new(operand.clone()), Op::Assign, Box::new(lhs.clone()));
-		Some(Node::List(
-			vec![store, elvis(operand)],
-			Bracket::Round,
-			Separator::Semicolon,
-		))
-	}
-
-	/// `times [x]` fills a list, binding to the count right before it: `xs = 100 times [0]`
-	pub(super) fn times_fills_list(&self) -> bool {
-		let after_word = TIMES_WORD.len();
-		let blanks = (after_word..)
-			.take_while(|&offset| self.peek_char(offset) == ' ')
-			.count();
-		self.peek_char(after_word + blanks) == '['
-	}
-
-	/// `N times {body}` and `N times: body` count with a hidden variable of its own, so nested loops do not meet
-	/// `times` at the cursor followed by a value (a name, a number or a text), no block
-	fn value_after_times(&self) -> bool {
-		if !self.matches_keyword(TIMES_WORD) {
-			return false;
-		}
-		let after = (TIMES_WORD.len()..)
-			.find(|at| !matches!(self.peek_char(*at), ' ' | '\t'))
-			.unwrap_or(TIMES_WORD.len());
-		let next = self.peek_char(after);
-		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after)
-	}
-
-	/// `n times {body}`, `n times: body`, `n times [x]`, `n times "ab"`: the phrase [n times operand] as written, which
-	/// lowering/times_phrases.rs makes a loop, a filled list or a repeated text
-	pub(super) fn parse_times_loop(&mut self, count: Node) -> Node {
-		self.skip_spaces();
-		let operand = match self.current_char() {
-			'{' | '[' => self.parse_atom(),
-			':' => {
-				self.advance();
-				super::statements::as_block(self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
-			}
-			quote_or_letter
-				if matches!(quote_or_letter, '"' | '\'')
-					|| self.is_identifier_start(0)
-					|| quote_or_letter.is_ascii_digit() =>
-			{
-				self.parse_atom()
-			}
-			_ => return error("`times` needs a body: `3 times {…}`"),
-		};
-		Node::List(
-			vec![count, Symbol(TIMES_WORD.to_string()), operand],
-			Bracket::None,
-			Separator::Space,
-		)
-	}
-
-	pub(super) fn try_parse_subscript(&mut self, lhs: &Node, min_bp: u8, subscript_bp: u8) -> Option<Node> {
-		// a space before the bracket makes it a list, `f [1, 2]`; only `xs[1]` indexes
-		if self.current_char() != '['
-			|| min_bp > subscript_bp
-			|| self.prev_char().is_whitespace()
-			|| is_unindexable_keyword(lhs)
-		{
-			return None;
-		}
-		if let Some(list_type) = self.try_parse_array_type_suffix(lhs) {
-			return Some(list_type);
-		}
-		let before_bracket = self.mark();
-		self.advance(); // skip '['
-		self.skip_whitespace();
-
-		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, false); // `xs[i -1]` subtracts
-		let mut indices = vec![self.parse_slice_from_start().unwrap_or_else(|| self.parse_expr(0))];
-		self.skip_whitespace();
-
-		while self.current_char() == ',' {
-			self.advance(); // skip ','
-			self.skip_whitespace();
-			indices.push(self.parse_expr(0));
-			self.skip_whitespace();
-		}
-		self.in_spaced_list = outer_spaced_list;
-
-		if self.current_char() != ']' {
-			self.rewind(before_bracket); // `foo [1 2 3]`: a list argument, not an index
-			return None;
-		}
-		self.advance(); // skip ']'
-		if let Some(node) = self.try_attributed_body(lhs, &indices) {
-			return Some(node);
-		}
-		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
-		let names_a_type =
-			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::declaration_forms::zero_list(Empty, word).is_some());
-		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
-			crate::normalize::set_position_of(lhs);
-			norm::index_operator(
-				&crate::normalize::operand_text(lhs),
-				&crate::normalize::operand_text(&indices[0]),
-				true,
-			);
-		}
-
-		Some(indices.into_iter().fold(lhs.clone(), subscript))
-	}
-
-	/// `a[id=1]{…}` (wiki/reference.md): attributes in brackets before a body are its meta entries, `a{@id:1 …}`
-	fn try_attributed_body(&mut self, lhs: &Node, indices: &[Node]) -> Option<Node> {
-		let attributes: Vec<Node> = indices
-			.iter()
-			.flat_map(attribute_items)
-			.map(|item| match item.drop_meta() {
-				Node::Key(key, Op::Assign | Op::Colon, value) if matches!(key.drop_meta(), Symbol(_)) => {
-					Some(Node::Key(
-						Box::new(Symbol(format!("{ATTRIBUTE_MARK}{}", key.name()))),
-						Op::Colon,
-						value.clone(),
-					))
-				}
-				_ => None,
-			})
-			.collect::<Option<_>>()?;
-		let mut offset = 0;
-		while self.peek_char(offset) == ' ' {
-			offset += 1;
-		}
-		if !matches!(lhs.drop_meta(), Symbol(_)) || self.peek_char(offset) != '{' {
-			return None;
-		}
-		self.skip_spaces();
-		let Node::List(items, bracket, separator) = self.parse_bracketed('{') else {
-			return None;
-		};
-		let body = Node::List([attributes, items].concat(), bracket, separator);
-		Some(Node::Key(Box::new(lhs.clone()), Op::Colon, Box::new(body)))
-	}
-
-	/// `[:end]`, `[…last]`, `[..end]` and `[:]`, a slice from the start: `ø:end`
-	pub(super) fn parse_slice_from_start(&mut self) -> Option<Node> {
-		let (op, chars) = SLICE_FROM_START
-			.iter()
-			.copied()
-			.find(|(written, _)| {
-				written
-					.chars()
-					.enumerate()
-					.all(|(offset, ch)| self.peek_char(offset) == ch)
-			})
-			.map(|(written, op)| (op, written.chars().count()))?;
-		self.advance_by(chars);
-		self.skip_whitespace();
-		let end = if self.current_char() == ']' {
-			Empty
-		} else {
-			self.parse_expr(0)
-		};
-		Some(Node::Key(Box::new(Empty), op, Box::new(end)))
-	}
-
-	/// The Java/C array type `int[]` is the list type `[int]`
-	pub(super) fn try_parse_array_type_suffix(&mut self, lhs: &Node) -> Option<Node> {
-		let Node::Symbol(word) = lhs.drop_meta() else {
-			return None;
-		};
-		if !is_identifier_char(self.prev_char()) || self.peek_char(1) != ']' || !names_a_type(word) {
-			return None;
-		}
-		self.advance_by(2);
-		Some(Node::List(vec![lhs.clone()], Bracket::Square, Separator::Space))
-	}
-
 	/// The word at the cursor begins what follows the operand rather than being its argument: a loop clause
 	/// (`[x - y for x in xs]`), a block's `end` (`return a + b end`), a key (`inner  _: 0`) or an element (`n p{m}`)
 	fn word_begins_item(&self) -> bool {
@@ -543,6 +75,20 @@ impl WarpParser {
 		}
 	}
 
+	/// The word at the cursor is a loop header's last: the body follows it (`for i in 1 to count xs { … }`, `… do …`,
+	/// `…:` or an indented line), so it is the argument of the word before rather than that word's body; at the end of
+	/// the line it is the braceless body of `for i in 1 to n body`
+	fn word_ends_header(&mut self) -> bool {
+		let start = self.mark();
+		let ends = self.at_identifier_start() && self.parse_symbol().is_ok() && {
+			self.skip_spaces();
+			let indented_line_follows = self.current_char() == '\n' && matches!(self.peek_char(1), ' ' | '\t');
+			self.at_to_header_end() || self.matches_keyword(DO_WORD) || indented_line_follows
+		};
+		self.rewind(start);
+		ends
+	}
+
 	pub(super) fn try_parse_implicit_application(
 		&mut self,
 		lhs: &Node,
@@ -555,15 +101,15 @@ impl WarpParser {
 			Node::List(_, Bracket::None, _) => true, // Function call from implicit application
 			_ => false,
 		};
-		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
+		let lhs_is_defined_function = lhs.symbol_name().is_some_and(|name| self.functions.contains(name));
 		// application binds tighter than the logical, comparison and additive operators: `1 + count xs` is
 		// `1 + count(xs)` for any name (card count-xs); a `:` operand keeps `a: b c d` apart, and an argument takes no
-		// call of its own: `on change s` is one call with two arguments; a loop header's last word is no call of its body
-		// (`for i in 1 to n body`), and a word that begins the next item is no argument (word_begins_item)
+		// call of its own: `on change s` is one call with two arguments; in a loop header only its last word is an argument
+		// (`for i in 1 to count xs { … }`, never the body of `for i in 1 to n body`), elsewhere a word that begins the next
+		// item is no argument (word_begins_item)
 		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp)
 			&& min_bp != argument_bp
-			&& !self.in_for_header
-			&& !self.word_begins_item();
+			&& if self.in_for_header { self.word_ends_header() } else { !self.word_begins_item() };
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier =
@@ -588,23 +134,82 @@ impl WarpParser {
 		}
 
 		let start = self.pos;
-		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's
+		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's; so is a
+		// block after any call's argument in a condition, `if exists profile {…}`
 		let outer_header = self.in_for_header;
-		self.in_for_header = outer_header || !applies_otherwise;
-		let arg = self.parse_expr(argument_bp);
+		self.in_for_header = outer_header || !applies_otherwise || self.equals_compares;
+		let arg = self.labelled_argument(argument_bp).unwrap_or_else(|| self.parse_expr(argument_bp));
 		self.in_for_header = outer_header;
 		if arg == Empty && self.pos == start {
 			return None; // an ø or [] written there is the argument: `x = sum []`
 		}
-
-		Some(Node::List(vec![lhs.clone(), arg], Bracket::None, Separator::Space))
+		let arg = self.cast_argument(lhs, arg, argument_bp);
+		// `s + f 2 each: 3`: the labelled arguments after it are the call's too, as at statement level
+		let mut call = vec![lhs.clone(), arg];
+		while let Some(labelled) = self.labelled_argument(argument_bp) {
+			call.push(labelled);
+		}
+		Some(Node::List(call, Bracket::None, Separator::Space))
 	}
-}
 
-/// `id=1 kind="x"` in brackets: each attribute
-fn attribute_items(index: &Node) -> Vec<Node> {
-	match index.drop_meta() {
-		Node::List(items, Bracket::None, _) => items.clone(),
-		single => vec![single.clone()],
+	/// `r = move 1 from: 10 to: 3`: a preposition with a colon and a blank after it labels the next argument, also where
+	/// the call is an operand (decision labels-calls), as `move 1 from: 10` labels it as a statement
+	fn labelled_argument(&mut self, argument_bp: u8) -> Option<Node> {
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let word = self.word_at(blanks);
+		let width = blanks + word.chars().count();
+		let labels = self.peek_char(width) == ':' && matches!(self.peek_char(width + 1), ' ' | '\t');
+		if !labels || !crate::type_name_matching::is_label_word(&Node::Symbol(word.clone())) {
+			return None;
+		}
+		self.advance_by(width + 1);
+		self.skip_spaces();
+		let value = self.parse_expr(argument_bp);
+		Some(Node::Key(Box::new(Node::Symbol(word)), Op::Colon, Box::new(value)))
+	}
+
+	/// `o = f 2.2 as int`: the cast belongs to the argument, f(2.2 as int), as in the statement `f 2.2 as int` and as
+	/// `o = f 2 + 1` is f(2 + 1) (card parameter-named-number, user decision B); arithmetic after it stays in the argument
+	fn cast_argument(&mut self, function: &Node, argument: Node, argument_bp: u8) -> Node {
+		self.skip_spaces_and_inline_comments();
+		let Some((Op::As, width)) = self.peek_operator() else {
+			return argument;
+		};
+		let (line, column) = self.get_position();
+		self.advance_by(width);
+		self.skip_whitespace();
+		let target = self.parse_expr(Op::As.binding_power().1);
+		let cast = Node::Key(Box::new(argument), Op::As, Box::new(target));
+		match self.argument_cast_reading(function, &cast, line, column) {
+			Ok(()) => self.continue_expr(cast, argument_bp),
+			Err(unanswered) => unanswered,
+		}
+	}
+
+	/// `f x as T` of a function of the program, whose variants may differ by parameter or by result type: a warning
+	/// naming both explicit forms, f(x as T) taken
+	pub(super) fn argument_cast_reading(
+		&self,
+		function: &Node,
+		cast: &Node,
+		line: usize,
+		column: usize,
+	) -> Result<(), Node> {
+		let (Node::Symbol(name), Node::Key(argument, Op::As, target)) = (function.drop_meta(), cast.drop_meta()) else {
+			return Ok(());
+		};
+		if !self.functions.contains(name) {
+			return Ok(());
+		}
+		let (argument, target) = (crate::normalize::operand_text(argument), crate::normalize::operand_text(target));
+		let written = format!("{name} {argument} as {target}");
+		let question =
+			format!("does `as {target}` cast the argument or the result of {name}? (warp casts the argument)");
+		let readings = vec![
+			reading("the argument", &format!("{name}({argument} as {target})")),
+			reading("the result", &format!("({name} {argument}) as {target}")),
+		];
+		ask(&Ask::new(ARGUMENT_CAST, question, readings, Fallback::Warning).written(&written).at(line, column))
+			.map(|_| ())
 	}
 }

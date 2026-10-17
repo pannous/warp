@@ -7,8 +7,9 @@ const SCHEME_MARK = "://"; // a URL without its scheme: withPageProtocol
 const PAGE_PREFIX = "page:"; // src/web/mod.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
+const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
 
-// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
+// the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
@@ -106,6 +107,22 @@ function fileUrl(path) {
 	return FILE_ROOT + filePath(path);
 }
 
+const PROGRAM_FILE_SECTION = "warp.program_file"; // src/host.rs
+// the program's file: its module's section (compiled from a file), else the playground's chosen sample (programFile)
+function programFileOf(run) {
+	const [section] = run?.module ? WebAssembly.Module.customSections(run.module, PROGRAM_FILE_SECTION) : [];
+	return section ? new TextDecoder().decode(section) : self.programFile;
+}
+
+// a relative path of a run from a program file is that file's neighbour when it is there, else as given, as natively
+// (src/modules/program_file.rs beside_program_if_there; card play-beside-program)
+function besideProgram(path, file) {
+	const folder = file?.slice(0, file.lastIndexOf("/") + 1);
+	if (!folder || path.startsWith("/") || path.startsWith(PAGE_PREFIX) || /^https?:/.test(path) || path.includes(SCHEME_MARK)) return path;
+	const beside = folder + filePath(path);
+	return writtenFiles.has(beside) || servedFileExists(beside) ? beside : path;
+}
+
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
 	const written = writtenFiles.get(filePath(path));
@@ -135,13 +152,51 @@ function hostBytes(program, action, what) {
 	}
 }
 
-// `database[k]`: the store of any file ending so (src/lowering/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
+// `database[k]`: the store of any file ending so (src/lowering/data/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
 // Workers have too; its values are read before the program runs (loadKept: worker.js, site-worker.js, site.js) and
 // each change written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory)
 const DATABASE_STORE = "database.json";
 // the IndexedDB database, its object store of values and that of the files a program wrote (card files-written)
 const DATABASE = { name: "warp", version: 2, objects: "values", files: "files" };
 const databaseValues = {};
+// `glob("src/*.rs")` as natively (src/modules/std_adapters.rs globbed): the written and served files whose name matches,
+// the wildcards * and ? in its last part, a hidden file only for a name starting with `.`
+function glob(pattern) {
+	const folder = pattern.slice(0, pattern.lastIndexOf("/") + 1), name = pattern.slice(folder.length);
+	const names = pageFiles().filter(path => path.startsWith(filePath(folder))).map(path => path.slice(filePath(folder).length));
+	const shown = nameMatcher(name);
+	return [...new Set(names.filter(entry => !entry.includes("/") && shown(entry)))].sort().map(entry => folder + entry);
+}
+
+const pageFiles = () => [...writtenFiles.keys(), ...(typeof SERVED_FILES === "undefined" ? [] : SERVED_FILES)];
+
+// does a file's name match `name` with the wildcards * and ?; a hidden one only for a name starting with `.`
+function nameMatcher(name) {
+	const wildcards = new RegExp(`^${name.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*").replaceAll("?", "[^/]")}$`);
+	return entry => wildcards.test(entry) && (name.startsWith(".") || !entry.startsWith("."));
+}
+
+// `find_files(folder, "*.warp")` as natively (src/modules/shell_adapters.rs found_below): the paths below the folder
+// whose name matches, outside hidden folders
+function findFiles(folder, pattern) {
+	const prefix = filePath(folder) === "." ? "" : filePath(folder).replace(/\/?$/, "/"), shown = nameMatcher(pattern);
+	const below = pageFiles().filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length));
+	const outsideHidden = path => !path.split("/").slice(0, -1).some(part => part.startsWith("."));
+	return [...new Set(below.filter(path => outsideHidden(path) && shown(path.slice(path.lastIndexOf("/") + 1))))].sort().map(path => prefix + path);
+}
+
+// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them
+const isWrittenFolder = folder => [...writtenFiles.keys()].some(path => path.startsWith(filePath(folder).replace(/\/?$/, "/")));
+const intoFolder = (from, to) => isWrittenFolder(to) ? `${filePath(to).replace(/\/?$/, "/")}${from.slice(from.lastIndexOf("/") + 1)}` : to;
+const writtenOrRead = path => writtenFiles.get(filePath(path)) ?? readBytes(path);
+const sizeOf = path => { const content = writtenOrRead(path); return typeof content === "string" ? utf8.encode(content).length : content.length; };
+
+function forgetWritten(path) {
+	if (!writtenFiles.delete(filePath(path))) throw new Error(`${path}: no such file among the page's written files`);
+	if (self.keepStored) databaseObjects("readwrite", DATABASE.files).then(objects => requested(objects.delete(filePath(path))));
+	return null;
+}
+
 const isDatabase = file => file.endsWith(DATABASE_STORE);
 let databaseLoaded;
 
@@ -228,8 +283,8 @@ function takeDatabaseValue(name, value) {
 const byRowId = entries => entries.map(entry => [entry, Number(entry[0].match(ROW_KEY)?.[2] ?? 0)])
 	.sort((first, second) => first[1] - second[1]).map(([entry]) => entry);
 
-// `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept in the database
-// store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types under the
+// `stored people: [Person]` (src/lowering/data/database_tables.rs): a table of the browser, kept in the database
+// store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/host/database.rs): its column types under the
 // table's key, each row, an object with its id, under its own (`table people.database.json people #3`), so a change
 // writes only its row. In memory a table holds its rows. Filters stay list comprehensions over the rows (no SQL here).
 const TABLE_PREFIX = "table ";
@@ -238,7 +293,7 @@ const tableKey = (file, table) => `${TABLE_PREFIX}${file} ${table}`;
 const ROW_MARK = " #";
 const ROW_KEY = /^(table .*) #(\d+)$/;
 const rowKey = (file, table, id) => `${tableKey(file, table)}${ROW_MARK}${id}`;
-// field types by column (src/database.rs column_of), each holding every value of the ones before it
+// field types by column (src/host/database.rs column_of), each holding every value of the ones before it
 const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "str", "char"]];
 const REAL = 1;
 // `text?`, an optional field: a column of its type that may hold null
@@ -247,7 +302,7 @@ const widening = type => LOSSLESS_ORDER.findIndex(types => types.includes(plainT
 // texts as SQLite's CAST writes them: a real keeps its ".0"
 const textOfColumn = (value, from) => from === REAL && Number.isInteger(value) ? value.toFixed(1) : String(value);
 
-// a converter of rows retyping the column as src/database.rs converted does (conversion_factor), else the same loud
+// a converter of rows retyping the column as src/host/database.rs converted does (conversion_factor), else the same loud
 // error. A unit column (`distance: km`) holds SI amounts: another unit of its quantity keeps them, plain numbers given a
 // unit are read as it, loudly. Each column is [type, quantity, SI amount per unit], the last two for units only
 function convertColumn(table, name, [storedType, storedQuantity], [type, quantity, perUnit], warn) {
@@ -280,8 +335,8 @@ const keepRow = (file, table, row) => keep(rowKey(file, table, row[ID_COLUMN]), 
 
 // the table's rows [id, columns…], the table first created or migrated to the class's fields [name, type, default];
 // a removed field keeps its column (data is never dropped silently), loudly
-// the table migrated to the class's fields, then its rows; src/database.rs gives the two halves apart too: a table's
-// list migrates at registration and loads its rows at the first read (lowering/database_tables.rs)
+// the table migrated to the class's fields, then its rows; src/host/database.rs gives the two halves apart too: a table's
+// list migrates at registration and loads its rows at the first read (lowering/data/database_tables.rs)
 function openTable(table, schema, file) {
 	migrateTable.call(this, table, schema, file);
 	return tableRows(table, schema, file);
@@ -363,7 +418,7 @@ function updateRow(table, id, column, value, file) {
 	return null;
 }
 
-// `transaction { … }` (src/lowering/database_tables.rs): its file's tables as they were at the start, put back with every
+// `transaction { … }` (src/lowering/data/database_tables.rs): its file's tables as they were at the start, put back with every
 // row's kept value by a rollback; writes go on to IndexedDB meanwhile, as SQLite's would to its journal
 const tablesBefore = {};
 const tablesOf = file => Object.keys(databaseValues).filter(key => key.startsWith(tableKey(file, "")) && !ROW_KEY.test(key));
@@ -403,9 +458,21 @@ addHostPart({
 		};
 	},
 	adapters: {
-		// a page has no command line; its environment is what the page sets (the stand-in of the playground's key)
-		os: { env: name => self.pageEnvironment?.[name] ?? null, args: () => [] },
-		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/stored_values.rs, std_io): the page's values
+		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
+		// the playground's key), its folder the served root that relative paths start from
+		os: {
+			env: name => self.pageEnvironment?.[name] ?? null,
+			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
+			cwd: () => ".",
+			stdin: () => "",
+			input: () => null,
+			command: () => { throw new Error(NO_PROCESSES); },
+			cd: () => { throw new Error("not in the browser: a page has one folder, natively only"); },
+			which: () => null,
+			open: () => { throw new Error(NO_PROCESSES); },
+			exec: () => { throw new Error(NO_PROCESSES); },
+		},
+		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/data/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
 		// session's, else the program's)
 		store: {
@@ -422,7 +489,7 @@ addHostPart({
 		file: {
 			write: (path, content) => { keepWritten(path, contentText(content)); return null; },
 			append: (path, content) => { keepWritten(path, textOfFile(path) + contentText(content)); return null; },
-			// a list of ints 0 to 255, like src/std_adapters.rs bytes_of
+			// a list of ints 0 to 255, like src/modules/std_adapters.rs bytes_of
 			write_bytes: (path, bytes) => { keepWritten(path, Uint8Array.from(bytes, byteOf)); return null; },
 			read_bytes: path => Array.from(readBytes(path)),
 			exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
@@ -430,11 +497,21 @@ addHostPart({
 				const prefix = filePath(folder).replace(/\/?$/, "/");
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
+			glob,
+			mkdir: () => null,
+			copy: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return null; },
+			move: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return forgetWritten(from); },
+			touch: path => { if (!writtenFiles.has(filePath(path))) keepWritten(path, ""); return null; },
+			// a page has no Trash: rm forgets the written file
+			remove: forgetWritten,
+			find: findFiles,
+			size: sizeOf,
+			info: path => ({ size: sizeOf(path), modified: null, kind: "file" }),
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
-		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
+		// `clipboard.write(text)` (lowering/signals/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
 	},

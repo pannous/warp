@@ -35,15 +35,12 @@ fn a_name_the_shader_does_not_declare_fails_loudly() {
 	if without_adapter(&computed) {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
-	assert!(
-		computed.serialize().contains("declares no storage array zs"),
-		"{computed:?}"
-	);
+	assert!(computed.serialize().contains("declares no storage array zs"), "{computed:?}");
 }
 
 #[test]
 fn the_sample_reads_an_array_by_name() {
-	let computed = eval("samples/gpu_arrays.warp");
+	let computed = eval("samples/gpu/gpu_arrays.warp");
 	if without_adapter(&computed) {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}

@@ -24,8 +24,5 @@ fn a_nan_leaving_the_run_is_canonical() {
 	const CANONICAL_NAN: u64 = 0x7ff8_0000_0000_0000;
 	assert_eq!(shown_bits("x = -0.0 as float; x / 0.0"), CANONICAL_NAN);
 	assert_eq!(shown_bits("f(x:float) := -x / 0.0; await go f(0.0)"), CANONICAL_NAN);
-	assert_eq!(
-		shown_bits("shared xs = float[1]; xs#1 = -0.0 / 0.0; xs#1 * -1.0"),
-		CANONICAL_NAN
-	);
+	assert_eq!(shown_bits("shared xs = float[1]; xs#1 = -0.0 / 0.0; xs#1 * -1.0"), CANONICAL_NAN);
 }

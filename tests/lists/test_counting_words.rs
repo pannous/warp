@@ -16,10 +16,6 @@ fn test_every_counting_word_counts_a_list_of_quantities() {
 #[test]
 fn test_every_other_counting_word_finds_the_size_method_of_a_class() {
 	for word in ["count", "len", "length"] {
-		assert_eq!(
-			shown(&format!("class Bag {{ size() := 4 }}\nb = Bag()\n{word}(b)")),
-			"4",
-			"{word}"
-		);
+		assert_eq!(shown(&format!("class Bag {{ size() := 4 }}\nb = Bag()\n{word}(b)")), "4", "{word}");
 	}
 }

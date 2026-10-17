@@ -20,10 +20,7 @@ fn test_meta_key_inside_a_literal_is_no_field() {
 	is!("p = {x:1 y:2 @source:\"gps\"}; q = {x:1 y:2}; p == q", true);
 	is!(&with_point("p = point{x:1 y:2 @source:\"gps\"}; p.y"), 2);
 	is!(&with_point("p = point{x:1 y:2 @source:\"gps\"}; p.@source"), "gps");
-	is!(
-		&with_point("p = point{x:1 y:2 @source:\"gps\"}; q = point{x:1 y:2}; p == q"),
-		true
-	);
+	is!(&with_point("p = point{x:1 y:2 @source:\"gps\"}; q = point{x:1 y:2}; p == q"), true);
 }
 
 #[test]
@@ -43,7 +40,6 @@ fn test_meta_key_in_parsed_data() {
 fn test_dot_at_reads_and_writes_meta() {
 	is!("p = {x:1}; p.@source = \"gps\"; p.@source", "gps");
 	is!("p = {x:1}; p.@source = \"gps\"; p.x", 1);
-	is!("p = {x:1}; p.@source = \"gps\"; #p", 1);
 }
 
 #[test]

@@ -55,7 +55,7 @@ matches warp's value semantics (index assignment already copies, aliases never c
 
 ## Status
 - Step 1 done (2026-10-04, 487dd2f1): functions of up to four Ints that give an Int; declarations::lower_tasks marks,
-  declarations::resolve_tasks decides (inferred kinds), src/tasks.rs runs. `await` binds like a unary minus.
+  declarations::resolve_tasks decides (inferred kinds), src/host/tasks/mod.rs runs. `await` binds like a unary minus.
 - Step 2 done (2026-10-04): stop/cancel/pause/resume through epoch interruption (util::task_engine, only for modules
   importing the task words, checked by wasmparser before compiling). Awaiting a stopped task is the error
   `task f: task stopped`, catchable with `try` since "Catchable" below (a568a26a9; test_threads
@@ -82,8 +82,8 @@ matches warp's value semantics (index assignment already copies, aliases never c
   one-second tasks take 1.0 s in the playground. Pause/resume in the browser: each task Worker gets a control word (Int32Array on a SharedArrayBuffer); `task_poll`,
   called where every loop starts in a program that controls tasks, waits on it while paused (Atomics.wait).
 
-- Step 6 done (2026-10-04, P44): `shared xs = int[n]` (lowering/shared_arrays.rs): host words shared_new/get/set/add/
-  count (and shared_getf/setf/addf for `float[n]`, bits in the same cells) over arrays the host holds for the run (src/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
+- Step 6 done (2026-10-04, P44): `shared xs = int[n]` (lowering/collections/shared_arrays.rs): host words shared_new/get/set/add/
+  count (and shared_getf/setf/addf for `float[n]`, bits in the same cells) over arrays the host holds for the run (src/host/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
   SharedArrayBuffer handed to the task Workers). Not wasm shared memory: an imported memory would take index 0 ahead of
   the module's own, and every memory instruction assumes 0; the host call per access is the price.
 
@@ -113,7 +113,7 @@ matches warp's value semantics (index assignment already copies, aliases never c
   A list of tasks that run where they start (TaskPath::Inline) holds their values. `count(jobs)`, `#jobs`, `jobs.size`
   count without awaiting. The browser host runs job lists too (cargo browser-test test_job_lists: 3 one-second jobs ~1 s).
 - Shared values (P106, 2026-10-06): `shared done = false`, `shared n = 0`, `shared x = 0.5` (and `atomic …`) are
-  one-cell shared arrays (lowering/shared_arrays.rs): reads are `shared_get(n, 1)`, `n = v` / `n += v` the atomic set
+  one-cell shared arrays (lowering/collections/shared_arrays.rs): reads are `shared_get(n, 1)`, `n = v` / `n += v` the atomic set
   and add, true/false the Ints 1/0. A go block reading one gets it as a parameter, which shares it like a shared array
   parameter; only `shared` names cross between tasks, everything else is copied.
 - Browser task hangs (card task-hang, 2026-10-09): about half of the browser runs of the control:: tests hung one task
@@ -131,4 +131,4 @@ matches warp's value semantics (index assignment already copies, aliases never c
 ## Split float maps (card go-split-kernel)
 `go xs.map(x => kernel)` over a float array doesn't start tasks: the host word task_split_mapf splits the linear array
 into one slice per core, maps each slice in a fresh instance on a scoped thread, and writes the results into a new
-block of the caller's memory (src/tasks.rs split_map, notes/simd.md). Other `go xs.map(f)` still use map_in_tasks.
+block of the caller's memory (src/host/tasks/mod.rs split_map, notes/simd.md). Other `go xs.map(f)` still use map_in_tasks.

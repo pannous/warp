@@ -32,6 +32,7 @@ fn assert_reproducible(program: &str) {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-generators: its generator program no longer compiles"]
 fn test_generator_classes_compile_in_one_order() {
 	assert_reproducible(TWO_GENERATORS);
 }

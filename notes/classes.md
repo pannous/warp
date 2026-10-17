@@ -21,7 +21,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
    - Calls: `p.greet()`, `greet(p)`, and `p.area` for a method without parameters (`area := side*side`, a getter).
    - The class keeps only its fields, so construction counts fields as before.
    - A method that assigns a field of its receiver is a loud error until step 2.
-   - Pass: lowering/class_methods.rs, early in SOURCE_PHASES.
+   - Pass: lowering/types/class_methods.rs, early in SOURCE_PHASES.
 2. **Mutating methods** (P116): `inc() := n += 1`; `c.inc()` updates the variable c, like `xs.add(v)` does (objects
    are values, wiki/class.md).
 3. **Constructors and required fields** (wiki/constructor.md): `init{…}` / `init(name){…}` blocks (P162; `value` was the
@@ -39,7 +39,7 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
   Traits (`is shape`) stay as they are (step 5).
 
 ## Step 1 as built
-- lowering/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
+- lowering/types/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
   `name(self:class, params…) := body`, and the class keeps its fields. The parser keeps a `:=` body as code, not as a
   field type (lists.rs `transform_fields_to_types`).
 - A method name that two or more classes define is declared as the implicit trait `trait has·name{name}`. traits.rs
@@ -209,7 +209,7 @@ pair `[pop·value, self]`; `s.pop()` of a variable is `(pop·result = pop(s); s 
 (class_methods Change::GivingValue; a changing method ends in a value unless its last statement assigns or appends).
 A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `method·pop` like a type-word
 method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
-body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_forms
+body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (list_mutations
 popped_list takes any place, as add/insert did).
 
 Instances held as Nodes (classes-17): a field read by name of an instance that is no struct variable (`for p in ps
@@ -313,7 +313,7 @@ Interfaces (classes-32): class methods satisfy traits, trait-typed parameters, f
 `implements`/`: Shape` lists: notes/traits.md "Classes and foreign interfaces".
 
 Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a warp enum is the sum type of its cases,
-each case its own value (lowering/plain_enums.rs, below). Ported: Swift's `enum Direction { case north, south }` and
+each case its own value (lowering/types/plain_enums.rs, below). Ported: Swift's `enum Direction { case north, south }` and
 `switch d { case .north: 1 }` (plain_enums reads `.north` and the arm `case.north` as `north` when one enum has the
 case), Kotlin's `enum class` (a note), `when (c) { A -> 1; 1, 2 -> …; is T -> …;
 else -> … }` (welcome_forms when_chain: an if chain, `is T` the type test; also without a subject), Rust's
@@ -360,7 +360,7 @@ rest as a slice, `[.., last]` counts from the end.
 A class with a `render()` method (aliases `view`, `template`, `build` with a note) is a component: its construction
 as a child of an element (`div{ Greeting("Ann") }`) or as the program's value is `Greeting("Ann").render()`
 (class_methods rendered_components); anywhere else it stays an instance. Function components, props, the trailing
-block as children and per-instance state are web's (ruby_blocks.rs, component_state.rs). A method body's templates
+block as children and per-instance state are web's (blocks.rs lower_trailing_blocks, component_state.rs). A method body's templates
 (`"#\(n)"`) are lowered before receiver_reads, so a field in a hole is read from self.
 
 ## Field names that are words (classes-41, card classes-field, tests/types/test_class_field_names.rs)
@@ -375,11 +375,11 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
 - `type Color = red | rgb(int, int, int)` (parser parse_sum_type): Color is a class without fields carrying
   `@variants(red …)`, each variant with payload a class `@extends(Color)` with fields value / value1… or named
   `rgb(r, g, b)`. Positional fields `c#1` (1-based) or `c.0` (Rust) work on any class instance.
-- lowering/sum_variants.rs (SOURCE pass after soft_keywords): `x is Color` → `is_type(x, Color) or x == red …`,
+- lowering/types/sum_variants.rs (SOURCE pass after soft_keywords): `x is Color` → `is_type(x, Color) or x == red …`,
   `red is Color` is true; `Shape::Circle(2)` → `Circle(2)` for any variant, also in match patterns.
 - `enum Shape { Circle(r), Rect(w, h), Dot }` and Swift's `case circle(radius: Double)` lines: as soon as one case has
   values the enum IS that sum type (parser parse_enum_with_values, same sum_type builder). An enum without values
-  is the sum type of its cases too (user decision enum-case B, lowering/plain_enums.rs, test_plain_enum.rs):
+  is the sum type of its cases too (user decision enum-case B, lowering/types/plain_enums.rs, test_plain_enum.rs):
   `Coin.Dime` is `Dime`, `Dime is Coin`; `Coin.Dime as int` its index 2 (counting from 0, as C does; warp's
   positions `x in xs`, `c#1` are 1-based), `as index` the same, `as position` 3 (spec: wiki/enum.md); `2 as Coin` and `Coin(2)` the case, "9 is no Coin case" past the cases;
   `f(1)` for `f(c: Coin)` is a type error offering `f(1 as Coin)` (card coin-errors, test_fixits). Enums with

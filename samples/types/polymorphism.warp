@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+combine(a: number, b: number) := a + b
+combine(a: int, b: int) := a * b
+
+check combine(1.1,2.2)==3.3
+check combine(2,3)==6

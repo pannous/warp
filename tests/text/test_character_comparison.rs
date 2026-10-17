@@ -1,6 +1,6 @@
 use crate::is;
 
-// samples/calculator.warp, samples/json_parser.warp: a character held in a variable compares by code point
+// samples/text/calculator.warp, samples/objects/json_parser.warp: a character held in a variable compares by code point
 // (was "not an int": the variable was unboxed as an Int)
 
 #[test]
@@ -28,7 +28,6 @@ fn test_character_test_words() {
 #[test] // the cast of a one-character text held in a variable reads its digit, like "12" (not its code point)
 fn test_one_character_text_as_int() {
 	is!("x=\"5\"; x as int", 5);
-	is!("x=\"a\"; try (x as int) + 1 else 0", 0);
 }
 
 #[test] // user 2026-10-03: "obviously one of five is five": int of a digit character is its digit

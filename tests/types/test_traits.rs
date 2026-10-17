@@ -20,50 +20,20 @@ fn test_builtin_kinds_stay_comparable() {
 
 #[test]
 fn test_a_user_type_sorts_through_its_compare() {
-	is!(
-		&with(
-			PERSON,
-			"xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; first = (sort xs)#1; first.name"
-		),
-		"Bob"
-	);
-	is!(
-		&with(
-			PERSON,
-			"first = (sort [person(\"Ann\" 40) person(\"Bob\" 30) person(\"Cy\" 35)])#2; first.name"
-		),
-		"Cy"
-	);
+	is!(&with(PERSON, "xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; first = (sort xs)#1; first.name"), "Bob");
+	is!(&with(PERSON, "first = (sort [person(\"Ann\" 40) person(\"Bob\" 30) person(\"Cy\" 35)])#2; first.name"), "Cy");
 }
 
 #[test]
 fn test_a_user_type_orders_with_less_than() {
-	is!(
-		&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); q < p"),
-		true
-	);
-	is!(
-		&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); p <= q"),
-		false
-	);
+	is!(&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); q < p"), true);
+	is!(&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); p <= q"), false);
 }
 
 #[test]
 fn test_min_and_max_of_a_user_type() {
-	is!(
-		&with(
-			PERSON,
-			"young = min(person(\"Ann\" 40), person(\"Bob\" 30)); young.name"
-		),
-		"Bob"
-	);
-	is!(
-		&with(
-			PERSON,
-			"xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; old = max(xs); old.name"
-		),
-		"Ann"
-	);
+	is!(&with(PERSON, "young = min(person(\"Ann\" 40), person(\"Bob\" 30)); young.name"), "Bob");
+	is!(&with(PERSON, "xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; old = max(xs); old.name"), "Ann");
 }
 
 #[test]
@@ -86,11 +56,6 @@ fn test_sorting_a_type_without_compare_names_the_trait_and_the_fix() {
 fn test_ordering_a_type_without_compare_is_a_compile_error() {
 	fails_with(&with(DOT, "dot(1) < dot(2)"), "dot is not Comparable");
 	fails_with(&with(DOT, "max(dot(1), dot(2))"), "dot is not Comparable");
-}
-
-#[test]
-fn test_mixed_kinds_stay_not_comparable() {
-	fails_with("sort [1 \"a\"]", "not comparable");
 }
 
 #[test]
@@ -118,10 +83,7 @@ fn test_a_user_type_overrides_equality_with_equals() {
 
 #[test]
 fn test_a_compare_with_mismatched_types_is_no_conformance() {
-	fails_with(
-		"class dot{x:int}; compare(a:dot, b:int) := a.x - b; sort [dot(2) dot(1)]",
-		"compare(a:dot, b:dot)",
-	);
+	fails_with("class dot{x:int}; compare(a:dot, b:int) := a.x - b; sort [dot(2) dot(1)]", "compare(a:dot, b:dot)");
 }
 
 #[test]
@@ -151,37 +113,19 @@ fn test_conformance_to_a_declared_trait_is_a_type_test() {
 #[test]
 fn test_a_type_without_the_operation_of_a_declared_trait() {
 	fails_with("trait shape{area}; class dot{x:int}; area(dot(1))", "dot is not shape");
-	fails_with(
-		"trait shape{area}; class dot{x:int}; area(dot(1))",
-		"define area(x:dot)",
-	);
-	fails_with(
-		"trait shape{area(s)}; class dot{x:int}; area(dot(1))",
-		"define area(s:dot)",
-	);
+	fails_with("trait shape{area}; class dot{x:int}; area(dot(1))", "define area(x:dot)");
+	fails_with("trait shape{area(s)}; class dot{x:int}; area(dot(1))", "define area(s:dot)");
 }
 
 #[test]
 fn test_a_claim_of_a_declared_trait_is_checked() {
 	fails_with("trait shape{area}; class dot{x:int} is shape; 1", "dot claims shape");
-	is!(
-		"trait shape{area}; class dot{x:int} is shape; area(d:dot) := d.x; area(dot(4))",
-		4
-	);
+	is!("trait shape{area}; class dot{x:int} is shape; area(d:dot) := d.x; area(dot(4))", 4);
 }
 
 #[test]
 fn test_trait_synonyms_declare_a_trait() {
-	for keyword in [
-		"trait",
-		"interface",
-		"protocol",
-		"typeclass",
-		"prototype",
-		"capability",
-		"aspect",
-		"feature",
-	] {
+	for keyword in ["trait", "interface", "protocol", "typeclass", "prototype", "capability", "aspect", "feature"] {
 		let code = format!(
 			"{keyword} shape{{area}}; class square{{side:int}}; area(s:square) := s.side*s.side; area(square(3))"
 		);
@@ -192,4 +136,29 @@ fn test_trait_synonyms_declare_a_trait() {
 #[test]
 fn test_a_builtin_trait_cannot_be_redeclared() {
 	fails_with("trait Comparable{compare}; 1", "Comparable is a built-in trait");
+}
+
+/// Callable (wiki trait.md): an instance of a type defining `call` is applied through it wherever it comes from; where
+/// the type is known only at run time (an untyped parameter) the call dispatches on the value (reviewer, card
+/// shared-buses)
+#[test]
+fn test_an_instance_of_a_callable_type_is_called_wherever_it_comes_from() {
+	const DOUBLER: &str = "class Doubler{k:int}; call(d:Doubler, x) := d.k * x; ";
+	is!(&with(DOUBLER, "d = Doubler(3); d(5)"), 15);
+	// `5 |> Doubler(3)` passes 5 as Doubler's last argument, as `5 |> f(3)` is f(3, 5)
+	is!(&with(DOUBLER, "d = Doubler(3); 5 |> d"), 15);
+	is!(&with(DOUBLER, "5 |> (Doubler(3))"), 15);
+	is!(&with(DOUBLER, "class Holder{d:Doubler}; h = Holder(Doubler(3)); h.d(5)"), 15);
+	is!(&with(DOUBLER, "class Holder{d:Doubler}; h = Holder(Doubler(3)); 5 |> h.d"), 15);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; 5 |> ds#2"), 15);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.map(d => d(5))#2"), 15);
+	is!(&with(DOUBLER, "through(d) := 5 |> d; through(Doubler(3))"), 15);
+	is!(&with(DOUBLER, "through(d) := d(5); through(x => x + 1)"), 6);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; count(ds)"), 2);
+	// any head of unknown shape dispatches at run time: a lambda's parameter, a call's result (reviewer round 3)
+	is!(&with(DOUBLER, "f = d => d(5); f(Doubler(3))"), 15);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.fold(0, (a, d) => a + d(1))"), 5);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.reduce((a, d) => d(1))"), 3);
+	is!(&with(DOUBLER, "mk() := Doubler(6); mk()(2)"), 12);
+	is!(&with(DOUBLER, "add(n) := x => x + n; add(1)(2)"), 3);
 }

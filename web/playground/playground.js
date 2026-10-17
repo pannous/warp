@@ -6,8 +6,9 @@
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
 const SHOWN_FROM_KEY = "warp-playground-shown-from"; // the least diagnostic level shown, hint by default (card warning-levels)
 const HINTS_KEY = "warp-playground-hints"; // the former hints checkbox: "off" now means showing from weak
-const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostic.rs Level, least first
+const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostics/diagnostic.rs Level, least first
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
+const CSS_PIXELS_PER_INCH = 96; // CSS fixes 96 px to the inch; devicePixelRatio device pixels make one (display.dpi)
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
 // the most sounds sounding at once and how fast a stolen one fades out (src/sound/sound_engine.rs MAX_VOICES, STEAL_SECONDS)
@@ -16,6 +17,21 @@ const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
+// a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
+// playground-turn); a quick run never flickers
+const STOP_GRACE_MS = 500;
+const RUN_LABEL = "Run ▶";
+const STOP_LABEL = "Stop ■";
+const STOPPED = "stopped";
+// card playground-live: a rerun while live loops play hands them over. The old run's Worker retires instead of stopping:
+// its loops sound on until the new run's loop of the same name starts its first cycle, which they give way to; a loop the
+// new run's names lack, deleted from the source, fades out in LIVE_FADE_SECONDS as soon as the new run starts (decision
+// deleted-loop: the sound matches the visible code). A new run that names none in LIVE_RETIRE_SECONDS fades them all
+const LIVE_HANDED_OVER = "its live loops play on into the next run";
+const LIVE_FADE_SECONDS = 1;
+const LIVE_RETIRE_SECONDS = 4;
+// what a retired Worker still says: its loops' sounds and cycles, and the report of its run's end, which ends it
+const RETIRED_MESSAGES = new Set(["sound", "live cycle", "midi", "report"]);
 const LOADING_STALL_MS = 30000; // the compiler's download shows a note when it made no progress this long
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
@@ -24,14 +40,15 @@ const PENDING_VALUE = "…"; // the value shown from Run until the new one arriv
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
-// terminal codes in printed text (`print "\e[H"`, samples/game_of_life.warp): clearing the screen or moving the cursor
+// terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.warp): clearing the screen or moving the cursor
 // home starts the text anew, the other codes (colors, cursor moves) are dropped
 const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
 const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
-const WAV_TYPE = "audio/wav"; // render_sound's files (host-files.js wavOf)
+const WAV_TYPE = "audio/wav"; // save sound's files (host-files.js wavOf)
+const PNG_TYPE = "image/png"; // save canvas's pictures (savePicture)
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 // a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
 const STALLED_START_MS = 60_000;
@@ -48,7 +65,7 @@ const REPORT_KEY = "warp-playground-report";
 const REPORT_OFF = "off";
 const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
 const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
-// a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
+// a page event, or one element's (`on click·1`, src/lowering/web/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound/mod.rs SAMPLE_OFFSET)
@@ -80,6 +97,8 @@ let workerSettled = "starting"; // workerReady's outcome
 let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
+let liveHandover = {}; // the next run's live loops of the run before it: name → {start, period} (host-tasks.js liveCycleStarted)
+const retiredWorkers = new Set(); // the Workers whose live loops sound on into the next run (handOver)
 let runs = Promise.resolve(); // the evaluations, one after another
 let showing = false; // the page is evaluating its editor's code
 let queued; // the editor's code to show once the current run is shown
@@ -181,6 +200,7 @@ function startWorker(restarts = 0) {
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
 	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
+	worker.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
 	showLoading("starting the compiler's worker", false);
 	workerReady = new Promise((resolve, reject) => {
 		const starting = worker;
@@ -200,7 +220,10 @@ function startWorker(restarts = 0) {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
+			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
+			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
+			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -214,12 +237,18 @@ function startWorker(restarts = 0) {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
+			if (data.type === "sound decode") return decodeSoundInto(data.shared, data.url, data.bytes); // task-workers.js
+			if (data.type === "page call") return answerPageCall(data.shared, data.request, starting); // task-workers.js
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
-			if (data.type === "sound") return playSound(data);
+			if (data.type === "members") return answerMembers(data);
+			if (data.type === "sound") return playSound(data, starting);
+			if (data.type === "live cycle") return liveCycled(starting, data.name, data.at);
+			if (data.type === "live loops") return liveLoopsNamed(data.names);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
-			if (data.type === "midi") return sendMidi(data.port, data.message);
+			if (data.type === "picture") return savePicture(data);
+			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
 			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
@@ -232,7 +261,7 @@ function startWorker(restarts = 0) {
 				slept(pending, data.milliseconds);
 			}
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
-			if (data.type === "paint") painted(pending, data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data);
+			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
@@ -245,6 +274,22 @@ function startWorker(restarts = 0) {
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
 	tellEnvironment();
+}
+
+// the members to offer after the code and a dot (completion.js), from the compiler (src/lowering/data/members.rs)
+const memberRequests = new Map(); // request id → its promise's resolve
+let memberRequestCount = 0;
+function askMembers(code) {
+	const id = ++memberRequestCount;
+	return new Promise(resolve => {
+		memberRequests.set(id, resolve);
+		worker.postMessage({ members: code, id });
+	});
+}
+
+function answerMembers({ id, names }) {
+	memberRequests.get(id)?.(names);
+	memberRequests.delete(id);
 }
 
 // the compiler's download (worker.js downloaded), beside the status; without progress for LOADING_STALL_MS it says so,
@@ -279,26 +324,43 @@ function notification(text) {
 }
 
 // the system values a Worker cannot read itself (host.js system_value), sent again when they change. window_open: the
-// canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
-// `while window_open` drawing loop ends at once instead of waiting for input forever
+// canvas shows the pictures to someone while the page is visible, so a `while window_open` loop run on load keeps
+// drawing (card playground-means). A browser driven by a test (the CI tour, navigator.webdriver) shows them once the
+// page was clicked or typed in: before, such a loop ends at once instead of waiting for input forever. heard (host-sound.js
+// paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), ...viewSize() } });
+const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), heard: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, display_dpi: Math.round(CSS_PIXELS_PER_INCH * devicePixelRatio), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
+document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
+document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
 
 // view_width, view_height (use draw's default canvas, paint(shader) without a size): the room below the output pane's
 // text, in CSS pixels: the pane's width, down to the window's bottom; none while the pane is folded away, so host.js's
 // defaults stand. Never measured from the paintings: the pane grows with them, so a view-sized painting made the next
-// view taller each frame, until Safari ran out of memory (card webgpu-safari)
+// view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
+// page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
+// next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
+// resizing the pane, which is all the ResizeObserver sees. In full screen (⛶) the view is the screen, so a shader
+// painted at the view's size renders at the screen's (card full-screen)
 function viewSize() {
+	if (document.fullscreenElement === $("painted")) return { view_width: innerWidth, view_height: innerHeight };
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
-	const room = innerHeight - Math.max(painted.top, 0) - parseFloat(style.paddingBottom) - PAINTING_MARGIN - PAINTING_BORDERS;
+	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
 	return width > 0 ? { view_width: width, view_height: Math.floor(Math.max(room, MIN_VIEW_HEIGHT)) } : {};
 }
 
-// `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
+// the diagnostics, the pane's padding and border and the page's padding below the paintings, in CSS pixels
+function roomBelowPaintings(paneStyle) {
+	const diagnostics = $("diagnostics"), listStyle = getComputedStyle(diagnostics), pixels = parseFloat;
+	return diagnostics.offsetHeight + pixels(listStyle.marginTop) + pixels(listStyle.marginBottom)
+		+ pixels(paneStyle.paddingBottom) + pixels(paneStyle.borderBottomWidth) + pixels(getComputedStyle(document.body).paddingBottom);
+}
+
+// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints or prints in it
 // replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
 // drawing-frames, snake-frames)
 function startsFrame(run, output) {
@@ -324,7 +386,7 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
 const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate, channels, at, handle }) {
+function playSound({ samples, rate, channels, at, handle, loop }, from) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
 	audio.resume();
@@ -341,7 +403,7 @@ function playSound({ samples, rate, channels, at, handle }) {
 	source.endsAt = source.startsAt + buffer.duration;
 	stealFor(source.startsAt);
 	source.start(source.startsAt);
-	source.handle = handle;
+	Object.assign(source, { handle, loop, from });
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
 }
@@ -349,17 +411,26 @@ function playSound({ samples, rate, channels, at, handle }) {
 // midi_send / midi_on (card midi-out): Web MIDI, asked for once and kept; a browser without it, a refusal or a port that
 // is not there reaches the console, as sound failures do. The first output when the port is "". Before the page's first
 // click or key press (the run on load, the CI tour) a message goes nowhere, as a sound stays silent: asking for Web MIDI
-// then is refused, and the refusal would land as a console error during whatever runs next
+// then is refused, and the refusal would land as a console error during whatever runs next. Only a granted access is
+// kept: after a refusal the next message asks again (card webmidi-requires)
 let midiAccess;
-async function sendMidi(port, message) {
+// Firefox refuses without asking ("WebMIDI requires a site permission add-on to activate") when it saw no MIDI device
+// at its start; only then does it offer the add-on that grants the site access
+const MIDI_REFUSED = "the browser refused Web MIDI. Firefox does so without asking when no MIDI device was connected as it started: connect the device, restart Firefox, then accept its site permission add-on. Otherwise allow MIDI in the site settings";
+// `at`: when on the clock the page and the Workers share (host-tasks.js soundClock, seconds); Web MIDI's own timestamp
+// sends it then, a past one at once (card midi-clock)
+async function sendMidi(port, message, at) {
 	if (beforeUserActivation()) return;
 	try {
 		if (!navigator.requestMIDIAccess) throw new Error("this browser has no Web MIDI");
-		midiAccess ??= navigator.requestMIDIAccess();
+		midiAccess ??= navigator.requestMIDIAccess().catch(error => {
+			midiAccess = undefined;
+			throw error.name === "SecurityError" ? new Error(`${MIDI_REFUSED} (${error.message})`) : error;
+		});
 		const outputs = [...(await midiAccess).outputs.values()];
 		const output = port ? outputs.find(candidate => candidate.name === port) : outputs[0];
 		if (!output) throw new Error(port ? `no MIDI output named ${port} (there are: ${outputs.map(candidate => candidate.name).join(", ") || "none"})` : "no MIDI output device");
-		output.send(message);
+		output.send(message, at ? at * 1000 - performance.timeOrigin : undefined);
 	} catch (error) {
 		console.error(`midi: ${error.message}`);
 	}
@@ -396,11 +467,15 @@ function stealFor(time) {
 	if (playing.length < MAX_VOICES) return;
 	const oldest = playing.reduce((first, source) => source.startsAt < first.startsAt ? source : first);
 	oldest.stolen = true;
-	const level = oldest.gainNode.gain;
-	const from = Math.max(audio.currentTime, time);
+	fadeOut(oldest, Math.max(audio.currentTime, time), STEAL_SECONDS);
+}
+
+// the sound ramps down to silence from `from` (audio clock) and stops there
+function fadeOut(source, from, seconds) {
+	const level = source.gainNode.gain;
 	level.setValueAtTime(level.value, from);
-	level.linearRampToValueAtTime(0, from + STEAL_SECONDS);
-	oldest.stop(from + STEAL_SECONDS);
+	level.linearRampToValueAtTime(0, from + seconds);
+	source.stop(from + seconds);
 }
 
 // fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
@@ -413,10 +488,78 @@ function faded(handle, gain, seconds) {
 	}
 }
 
-function silence() {
-	sounding.forEach(source => source.stop());
-	sounding = [];
+// the sounds stopped and the music files, but those of live loops handed over to the next run (stopPressed: all)
+function silence(all = true) {
+	const handedOver = source => !all && source.from?.retired?.waiting.has(source.loop);
+	sounding.filter(source => !handedOver(source)).forEach(source => source.stop());
+	sounding = sounding.filter(handedOver);
 	stopSoundFiles();
+}
+
+// ---- live loops handed over (card playground-live) -------------------------------------------------------------
+
+// a named loop's cycle starts at `at` (shared clock) in that Worker's run: the run's own loop gives the retired run's loop
+// of its name way there; a retired loop past its time ends at a cycle's start
+function liveCycled(from, name, at) {
+	const known = from.liveLoops.get(name);
+	from.liveLoops.set(name, { start: at, period: known ? at - known.start : undefined });
+	if (from.retired) {
+		if (soundClock() - from.retired.at > LIVE_RETIRE_SECONDS) endHandedOver(from, name, at);
+	} else if (!known) retiredWorkers.forEach(retired => endHandedOver(retired, name, at));
+}
+
+const playsLive = run => run && worker.liveLoops?.size > 0 && worker.runId === run.id;
+
+// the retired Worker's loop of that name sounds until `at`, the Worker goes once none of its loops is left
+function endHandedOver(retired, name, at) {
+	if (!retired.retired.waiting.delete(name)) return;
+	const end = at + clockOffset;
+	sounding.filter(source => source.from === retired && source.loop === name && source.endsAt > end).forEach(source => source.stop(Math.max(end, audio.currentTime)));
+	if (retired.retired.waiting.size === 0) retire(retired);
+}
+
+// the new run's live loops, named as it starts (host-tasks.js liveLoopNames): a retired loop it lacks is deleted from the
+// source and fades out at once, the others give way at their cycle
+function liveLoopsNamed(names) {
+	retiredWorkers.forEach(retired => {
+		clearTimeout(retired.retired.unnamed);
+		fadeDeleted(retired, [...retired.retired.waiting].filter(name => !names.includes(name)));
+	});
+}
+
+// the retired Worker's loops of those names fade out, the Worker goes once none of its loops is left
+function fadeDeleted(retired, names) {
+	const deleted = source => source.from === retired && names.includes(source.loop);
+	sounding.filter(deleted).forEach(source => fadeOut(source, audio.currentTime, LIVE_FADE_SECONDS));
+	names.forEach(name => retired.retired.waiting.delete(name));
+	if (retired.retired.waiting.size === 0) retire(retired);
+}
+
+// the safety net: a new run that never named its loops (it failed before it started) leaves none of the old ones playing
+function unnamedLoopsFade(retired) {
+	console.warn(`the rerun named no live loops in ${LIVE_RETIRE_SECONDS} s: the loops of the run before fade out`);
+	fadeDeleted(retired, [...retired.retired.waiting]);
+}
+
+function retire(retired) {
+	clearTimeout(retired.retired?.unnamed);
+	retired.terminate();
+	retiredWorkers.delete(retired);
+}
+
+// the run's loops go on while the next run starts in a fresh Worker: their last cycle's start and period (a loop of one
+// cycle so far: the end of its queued sounds) for the next run, whose loops of their names start on that grid
+function handOver(run) {
+	const retiring = worker;
+	const queuedEnd = name => Math.max(...sounding.filter(source => source.from === retiring && source.loop === name).map(source => source.endsAt - clockOffset));
+	liveHandover = Object.fromEntries([...retiring.liveLoops].map(([name, { start, period }]) =>
+		[name, period > 0 ? { start, period } : { start: queuedEnd(name), period: 0 }]));
+	const unnamed = setTimeout(() => unnamedLoopsFade(retiring), LIVE_RETIRE_SECONDS * 1000);
+	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()), unnamed };
+	retiredWorkers.add(retiring);
+	sounding.filter(source => source.from === retiring && !source.loop).forEach(source => source.stop());
+	startWorker();
+	finish(run, stoppedReport(run, LIVE_HANDED_OVER, false));
 }
 
 // each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
@@ -449,16 +592,39 @@ function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
-function stopRun(run, message) {
+function stopRun(run, message, failed = !run.animating) {
 	worker.terminate();
 	startWorker();
-	finish(run, { value: message, error: !run.animating, printed: run.printed, paintings: run.paintings,
-		warnings: [], runtime_warnings: [], hints: [], notes: [] });
+	finish(run, stoppedReport(run, message, failed));
+}
+
+const stoppedReport = (run, message, failed) => ({ value: message, error: failed, printed: run.printed, paintings: run.paintings,
+	warnings: [], runtime_warnings: [], hints: [], notes: [] });
+
+// the Run button while a program runs: Stop (card playground-turn)
+function showStop(stoppable) {
+	$("run").textContent = stoppable ? STOP_LABEL : RUN_LABEL;
+	$("run").title = stoppable ? "stop the program" : "Ctrl/Cmd-Enter";
+	$("run").classList.toggle("stop", stoppable);
+}
+const showsStop = () => $("run").classList.contains("stop");
+
+// Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
+function stopPressed() {
+	retiredWorkers.forEach(retire);
+	silence();
+	if (pending) return stopRun(pending, STOPPED, false);
+	worker.terminate();
+	startWorker();
+	listenTo([]);
+	setStatus(STOPPED);
 }
 
 function finish(run, report) {
 	clearTimeout(run.timer);
+	clearTimeout(run.stopTimer);
 	if (pending === run) pending = undefined;
+	showStop(false); // the shown report's timers turn it back to Stop (listenTo)
 	run.resolve(report);
 }
 
@@ -475,9 +641,14 @@ async function runInWorker(code) {
 	return new Promise(resolve => {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
 		stopAfterTimeout(run);
+		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 		pending = run;
-		silence();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
+		silence(false);
+		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
+		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
+		tellSystemValues();
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile(), arguments: programArguments(), liveHandover });
+		liveHandover = {};
 	});
 }
 
@@ -626,6 +797,8 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
+self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `who`, `$who`
+
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
 	const root = host.attachShadow({ mode: "open" });
@@ -638,7 +811,7 @@ function renderedRoot(host) {
 }
 
 // a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
-// route (lowering/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
+// route (lowering/web/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
 // GET (src/web/web_server.rs request_node), not a request leaving here
 function submitForm(submitted) {
 	submitted.preventDefault();
@@ -669,15 +842,18 @@ function showFrame(paintings) {
 }
 
 // the canvases paint of a shader draws into, by id (host-gpu.js gpuPainted): the page makes one and sends its
-// OffscreenCanvas through the port to the task Worker holding the GPU device
+// OffscreenCanvas straight to the task Worker holding the GPU device (task-workers.js). Not through a port the program's
+// Worker made: Firefox lost a canvas posted into a port still on its way to the task Worker (card shaders-firefox)
 const paintCanvases = new Map();
-function sendPaintCanvas({ id, width, height, port, replaces }) {
-	const canvas = paintingElement({ width, height });
+// a paint message as shown: a GPU-drawn one names its canvas by id, the others change the painting before (canvas.js)
+const paintingOf = data => data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : wholePainting(data);
+function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
+	const canvas = paintingElement({ width, height, shaded: true });
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
 	const offscreen = canvas.transferControlToOffscreen();
-	port.postMessage({ canvas: offscreen }, [offscreen]);
+	worker.postToTaskWorker(taskWorkerId, { paintCanvas: { id, canvas: offscreen } }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click
@@ -700,6 +876,8 @@ function listenTo(labels) {
 	$("listening").hidden = labels.length === 0;
 	const hint = listening.has("key") ? "; click here, then type" : listening.size ? "; click here" : "";
 	$("listening").textContent = `listening: ${labels.join(", ")}${hint}`;
+	// timers and channels go on by themselves: the program still runs (page events wait for the user)
+	showStop(labels.some(label => !PAGE_EVENT.test(label)));
 }
 
 // a click on the output (on a canvas: its pixel), a key typed while the output has the focus
@@ -713,7 +891,7 @@ function sendElementEvent(event, happened, detail) {
 	if (found) sendPageEvent(found.event, found.detail);
 }
 
-// a click on a link inside the shown markup goes to that page of the program (lowering/routes.rs), not away from here
+// a click on a link inside the shown markup goes to that page of the program (lowering/web/routes.rs), not away from here
 function followLink(click) {
 	const link = click.composedPath().find(element => element.matches?.("a[href]"));
 	if (!link || click.metaKey || click.ctrlKey || click.shiftKey) return false;
@@ -757,7 +935,9 @@ function showEventOutput(data) {
 		$("printed").textContent = terminalText($("printed").textContent + data.text);
 		$("printed").hidden = false;
 	}
-	if (data.type === "paint") showPaintings([data]);
+	// a frame of `on frame` (cards https-pannous, very-fast: its GPU canvas showed as its id, and a pixel frame made a
+	// new canvas each time)
+	if (data.type === "paint") showFrame([paintingOf(data)]);
 	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) showValue(data.value, data.error, data.html);
@@ -769,6 +949,7 @@ async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
 		if (pending?.animating) stopRun(pending, "animation stopped");
+		else if (playsLive(pending)) handOver(pending);
 		return;
 	}
 	showing = true;
@@ -831,16 +1012,25 @@ function showVersion() {
 		title: `committed ${date}`, hidden: false });
 }
 
-// a file the program rendered (render_sound's WAV): a download link beside the wasm's, one per path, the latest bytes
+// a file the program rendered (save sound's WAV): a download link beside the wasm's, one per path, the latest bytes
 const offeredFiles = new Map();
-function offerFile(path, bytes) {
+function offerFile(path, bytes, type = WAV_TYPE) {
 	if (offeredFiles.has(path)) URL.revokeObjectURL(offeredFiles.get(path).href);
 	const name = path.split("/").pop();
-	const link = element("a", { href: URL.createObjectURL(new Blob([bytes], { type: WAV_TYPE })), download: name, textContent: `⤓ ${name}` });
+	const link = element("a", { href: URL.createObjectURL(new Blob([bytes], { type })), download: name, textContent: `⤓ ${name}` });
 	const offered = offeredFiles.get(path);
 	if (offered) offered.replaceWith(link); else $("written-files").append(link, " ");
 	offeredFiles.set(path, link);
 	$("written-files").hidden = false;
+	return link;
+}
+
+// `save canvas as "painting.png"` (host-media.js save_picture, card save-painting): the picture's words as a PNG,
+// downloaded at once and offered beside the wasm's link
+function savePicture({ path, words, width, height }) {
+	const canvas = Object.assign(document.createElement("canvas"), { width, height });
+	canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(words.buffer), width, height), 0, 0);
+	canvas.toBlob(async png => png && offerFile(path, new Uint8Array(await png.arrayBuffer()), PNG_TYPE).click(), PNG_TYPE);
 }
 
 function downloadModule() {
@@ -866,7 +1056,9 @@ function runChanged() {
 
 // Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
 // underlines and printed text go, so none is taken for the new run's (card g_oc54)
-function runPressed() {
+// Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
+function runPressed(fromKeys = false) {
+	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
 	showValue(PENDING_VALUE);
 	$("value").classList.remove("located");
 	$("value").onclick = null;
@@ -877,6 +1069,13 @@ function runPressed() {
 }
 
 const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
+// the file of the chosen sample, whose neighbours its runs name relatively (host-files.js besideProgram)
+function programFile() {
+	const name = $("examples").value;
+	return EXAMPLES[name] === undefined ? SAMPLE_FILES[name] : undefined;
+}
+// the chosen sample's arguments, from its <name>.args (build.sh SAMPLE_ARGUMENTS): `use os; args` gives them
+const programArguments = () => (programFile() && SAMPLE_ARGUMENTS[$("examples").value]) || [];
 
 // puts the code in the editor and runs it once; resolves once its report is shown
 function runCode(source) {
@@ -955,7 +1154,7 @@ function initialize() {
 	showReportButton();
 	fillExamples();
 	startWorker();
-	startAssistant(editor, tellEnvironment, startCompletion(editor));
+	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
 	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
@@ -964,5 +1163,12 @@ function initialize() {
 window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
+
+reportBareErrors(self, "page"); // task-workers.js
+addEventListener("unhandledrejection", event => {
+	if (event.reason !== undefined) return;
+	event.preventDefault();
+	console.error("warp page: a promise failed without a reason", event.promise, new Error("seen here").stack);
+});
 
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation

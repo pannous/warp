@@ -1,47 +1,120 @@
 //! Packages of the registry: fetched once per pinned version as shallow clones, local checkouts winning, and module versions
 use super::*;
 
+/// name: "git url" for every package, compiled in so warp finds it from any directory
+pub const PACKAGE_REGISTRY: &str = include_str!("../../packages.warp");
+/// where packages are fetched to, below the working directory
+pub const PACKAGES_DIRECTORY: &str = "packages";
+/// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
+pub(crate) const PACKAGE_CACHE: &str = ".cache/warp/packages";
+/// where an unpinned clone in packages/ goes when a pin takes its place
+pub(crate) const REPLACED_DIRECTORY: &str = ".replaced";
+/// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
+pub(crate) static FETCHING: Mutex<()> = Mutex::new(());
+
+/// The owner of a package written as a bare name (card packages, user: `uniscript` just works)
+pub(crate) const DEFAULT_PACKAGE_OWNER: &str = "pannous";
+const GITHUB_PREFIX: &str = "github:";
+/// `version: latest` follows the default branch, as no version does
+const LATEST_VERSION: &str = "latest";
+
 /// A package of the registry: `name: "git url"` follows the default branch,
-/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version
-pub(super) struct Registered {
-	pub(super) url: String,
-	pub(super) pinned: Option<Version>,
+/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version.
+/// Short forms (card packages): `name`, `name: owner/repo`, `name: "github:owner/repo"`, `version: latest`.
+/// `library: "x"` there: warp calls the package's prebuilt core module x.wasm (its release asset, header x.h beside it)
+/// through warp's binding lib/packages/<name>.warp instead of compiling the package's module
+pub struct Registered {
+	pub url: String,
+	pub pinned: Option<Version>,
+	pub library: Option<String>,
 }
 
-pub(super) fn registered(name: &str) -> Option<Registered> {
-	statements(WarpParser::parse(PACKAGE_REGISTRY))
+pub(super) fn registered(name: &str) -> Option<Result<Registered, String>> {
+	package_in(PACKAGE_REGISTRY, name)
+}
+
+/// The package `name` of a registry text written like packages.warp; an error for an entry that names no repository
+/// or no version warp can read
+pub fn package_in(registry: &str, name: &str) -> Option<Result<Registered, String>> {
+	registry_entries(registry).into_iter().find(|(key, _)| key == name).map(|(_, package)| package)
+}
+
+/// Every entry of a registry text, by name
+pub fn registry_entries(registry: &str) -> Vec<(String, Result<Registered, String>)> {
+	statements(WarpParser::parse(registry))
 		.iter()
-		.find_map(|entry| {
-			let Node::Key(key, _, value) = entry.drop_meta() else {
-				return None;
-			};
-			if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
-				return None;
+		.filter_map(|entry| match entry.drop_meta() {
+			Node::Symbol(name) => {
+				Some((name.clone(), Ok(Registered { url: repository_url(name), pinned: None, library: None })))
 			}
-			match value.drop_meta() {
-				Node::Text(url) => Some(Registered {
-					url: url.clone(),
-					pinned: None,
-				}),
-				pinned => match pinned["repository"].drop_meta() {
-					Node::Text(url) => Some(Registered {
-						url: url.clone(),
-						pinned: Some(version_of(&pinned["version"])?),
-					}),
-					_ => None,
-				},
-			}
+			Node::Key(key, _, value) => match key.drop_meta() {
+				Node::Symbol(name) => Some((name.clone(), registry_entry(name, value))),
+				_ => None,
+			},
+			_ => None,
 		})
+		.collect()
+}
+
+fn registry_entry(name: &str, value: &Node) -> Result<Registered, String> {
+	let (repository, version) = match value.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => (&value["repository"], &value["version"]),
+		_ => (value, &Node::Empty),
+	};
+	let url = repository_url(&path_of(repository).ok_or(format!(
+		"package {name}: no repository in {}: quote it, \"owner/repository\"",
+		repository.serialize().trim()
+	))?);
+	let pinned = match version.drop_meta() {
+		Node::Empty => None,
+		Node::Symbol(word) if word == LATEST_VERSION => None,
+		written => Some(version_of(written).ok_or(format!(
+			"package {name}: version {} is no version: write 1.2.3 or {LATEST_VERSION}",
+			written.serialize().trim()
+		))?),
+	};
+	let library = match value.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => match value["library"].drop_meta() {
+			Node::Text(library) => Some(library.clone()),
+			_ => None,
+		},
+		_ => None,
+	};
+	Ok(Registered { url, pinned, library })
+}
+
+/// The git url of a written repository: a url, ssh address or path stays; `github:owner/repo`, `owner/repo` and a
+/// bare `repo` (of DEFAULT_PACKAGE_OWNER) are GitHub repositories
+fn repository_url(written: &str) -> String {
+	let is_url = written.contains("://") || written.starts_with("git@") || written.starts_with(['/', '.', '~']);
+	if is_url {
+		return written.to_string();
+	}
+	let path = written.strip_prefix(GITHUB_PREFIX).unwrap_or(written).trim_start_matches('/').trim_end_matches(".git");
+	let path = if path.contains('/') { path.to_string() } else { format!("{DEFAULT_PACKAGE_OWNER}/{path}") };
+	format!("https://github.com/{path}.git")
 }
 
 /// The git url of a package in the registry
 pub fn package_repository(name: &str) -> Option<String> {
-	registered(name).map(|package| package.url)
+	registered(name)?.ok().map(|package| package.url)
 }
 
 /// The version a package is pinned to in the registry, None for one that follows its default branch
 pub fn pinned_version(name: &str) -> Option<Version> {
-	registered(name).and_then(|package| package.pinned)
+	registered(name)?.ok().and_then(|package| package.pinned)
+}
+
+/// warp's side of a package's library: lib/packages/<name>.warp, which imports it
+const LIBRARY_BINDINGS: [(&str, &str); 1] = [("uniscript", include_str!("../../lib/packages/uniscript.warp"))];
+
+pub(super) fn library_binding(name: &str) -> Option<&'static str> {
+	LIBRARY_BINDINGS.iter().find(|(package, _)| *package == name).map(|(_, source)| *source)
+}
+
+/// The prebuilt core module a package is called through, packages.warp's `library`
+pub fn package_library(name: &str) -> Option<String> {
+	registered(name)?.ok().and_then(|package| package.library)
 }
 
 /// Where the pinned version of a package is cloned once per machine: ~/.cache/warp/packages/<name>@<version>
@@ -69,24 +142,13 @@ pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String
 pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<PathBuf, String> {
 	let url = registered_package(name)?.url;
 	let tags = package_version_tags(name, &url)?;
-	let Some((_, version)) = tags
-		.iter()
-		.filter(|(_, version)| requirement.allows(version))
-		.max_by(|a, b| a.1.cmp(&b.1))
+	let Some((_, version)) =
+		tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1))
 	else {
 		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
-		return Err(format!(
-			"package {name} has no {requirement} (tagged: {})",
-			versions.join(", ")
-		));
+		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
 	};
-	fetch_tagged(
-		Path::new(PACKAGES_DIRECTORY),
-		name,
-		&url,
-		version,
-		&format!("{name}@{version}"),
-	)
+	fetch_tagged(Path::new(PACKAGES_DIRECTORY), name, &url, version, &format!("{name}@{version}"))
 }
 
 /// packages/<link_name>, a link to the version's shallow clone in the machine's package cache: fetched once per machine,
@@ -129,10 +191,7 @@ pub(super) fn fetch_tagged(
 	}
 	make_package_directory(name, packages)?;
 	#[cfg(not(unix))]
-	return Err(format!(
-		"package {name}: not linked to {}: no symbolic links on this platform",
-		cached.display()
-	));
+	return Err(format!("package {name}: not linked to {}: no symbolic links on this platform", cached.display()));
 	#[cfg(unix)]
 	match std::os::unix::fs::symlink(&cached, &link) {
 		Err(failure) if !link.exists() => Err(format!("package {name}: not linked to {}: {failure}", cached.display())),
@@ -166,9 +225,8 @@ pub(super) fn is_real_directory(path: &Path) -> bool {
 pub(super) fn set_aside(packages: &Path, name: &str, version: &Version, clone: &Path) -> Result<(), String> {
 	let replaced = packages.join(REPLACED_DIRECTORY);
 	make_package_directory(name, &replaced)?;
-	let seconds = std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.map_or(0, |elapsed| elapsed.as_secs());
+	let seconds =
+		std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_secs());
 	let destination = replaced.join(format!(
 		"{}.{seconds}.{}",
 		clone.file_name().unwrap_or_default().to_string_lossy(),
@@ -182,10 +240,7 @@ pub(super) fn set_aside(packages: &Path, name: &str, version: &Version, clone: &
 		),
 		Err(_) if !is_real_directory(clone) => {} // another process moved it first
 		Err(failure) => {
-			return Err(format!(
-				"package {name}: {} not moved out of the pin's way: {failure}",
-				clone.display()
-			))
+			return Err(format!("package {name}: {} not moved out of the pin's way: {failure}", clone.display()));
 		}
 	}
 	Ok(())
@@ -197,13 +252,15 @@ pub(super) fn warn_overridden(name: &str, version: &Version, directory: &Path) {
 	let mut warned = WARNED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	let key = directory.display().to_string();
 	if !warned.contains(&key) {
-		eprintln!("warning: package {name}: {key} (a local checkout or a clone with changes) overrides the pinned version {version}");
+		eprintln!(
+			"warning: package {name}: {key} (a local checkout or a clone with changes) overrides the pinned version {version}"
+		);
 		warned.push(key);
 	}
 }
 
 pub(super) fn registered_package(name: &str) -> Result<Registered, String> {
-	registered(name).ok_or(format!("unknown package: {name}"))
+	registered(name).ok_or(format!("unknown package: {name}"))?
 }
 
 pub(super) fn package_version_tags(name: &str, url: &str) -> Result<Vec<(String, Version)>, String> {
@@ -285,13 +342,9 @@ pub(super) fn package_directory(name: &str) -> Result<PathBuf, String> {
 	#[cfg(not(feature = "native"))]
 	{
 		let package = registered_package(name)?;
-		let repository = package
-			.url
-			.trim_end_matches(".git")
-			.replace("https://github.com/", "https://raw.githubusercontent.com/");
-		let reference = package
-			.pinned
-			.map_or("HEAD".to_string(), |version| format!("v{version}"));
+		let repository =
+			package.url.trim_end_matches(".git").replace("https://github.com/", "https://raw.githubusercontent.com/");
+		let reference = package.pinned.map_or("HEAD".to_string(), |version| format!("v{version}"));
 		Ok(PathBuf::from(format!("{repository}/{reference}")))
 	}
 }
@@ -307,11 +360,7 @@ pub(super) fn module_version(path: &Path) -> Option<Version> {
 pub(super) fn check_version(name: &str, path: &Path, requirement: &Requirement) -> Result<(), Node> {
 	match module_version(path) {
 		Some(version) if requirement.allows(&version) => Ok(()),
-		Some(version) => Err(error(&format!(
-			"module {name} is version {version}, {requirement} required"
-		))),
-		None => Err(error(&format!(
-			"module {name} declares no version, {requirement} required"
-		))),
+		Some(version) => Err(error(&format!("module {name} is version {version}, {requirement} required"))),
+		None => Err(error(&format!("module {name} declares no version, {requirement} required"))),
 	}
 }

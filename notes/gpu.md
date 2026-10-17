@@ -115,7 +115,7 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
 3. Dropped (gpu-threshold): Ints automatically never pay against the fused CPU loop (step 2 finding).
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.
 5. Floats per the Interviewer's answer; `map(f)` of a pure numeric f.
-   Done for linear float arrays (src/lowering/gpu_maps.rs): `ys = xs.map(x => …) @gpu` (or `@gpu xs.map(…)`) of a
+   Done for linear float arrays (src/lowering/foreign/gpu_maps.rs): `ys = xs.map(x => …) @gpu` (or `@gpu xs.map(…)`) of a
    lambda of + - * / ^ √ ‖‖ and the math words sin … atan2, min, max of the item and number literals becomes a WGSL
    kernel (whole powers up to 8 multiplied out: WGSL's pow of a negative base is NaN); shared_arrays.rs lowers it to
    `ys = linear_new(count(xs)); if gpu_map_linear(kernel, xs, ys, workgroups) == 0 { CPU loop }`. The host word gives
@@ -194,11 +194,11 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
    No GPU dot: a multiply-add is ~1 ns an item in lanes, so uploading the two arrays (16 MB at 10^6) already costs
    more than the CPU's whole dot. It pays only for data already on the GPU (a dot of two @gpu maps: kept buffers).
    `float[n]` of a variable count was no list to broadcasting (`xs .* ys` was a float * list error): fixed.
-   Sample: samples/dot.warp.
+   Sample: samples/lists/dot.warp.
    Browser (done, host-gpu.js gpu_kernel): the block's cells go to the task Worker as a transferred Float32Array and
    come back as raw f32 bytes in the shared buffer (writeSharedFloats, state FLOATS_STATE), only from the first cell
    needed (the partials of a reduction). Before, 10^6 floats went as a JS array and came back as JSON: 160–350 ms, slower
-   than the CPU. Measured with samples/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
+   than the CPU. Measured with samples/gpu/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
    10^6, ms): sum GPU 8–17 / CPU 80–160, the mapped list back 12–16; the first run 86 (device + shader). Raw WebGPU for
    that kernel is ~3 ms. SwiftShader (CI): correct, sum 464 ms, sin less precise (2e-5 relative). Chrome's Tint
    refuses the f32 literal 3.4028235e38 (it rounds above the largest f32): LARGEST_F32 is a bitcast. Careful when
@@ -213,9 +213,9 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
    kept block replaces an earlier run's buffer for the same address (addresses recur across runs in one process).
    Browser (card gpu-kept): GPU jobs go to the task Worker of the last GPU job (host-gpu.js gpuTaskWorker), which keeps
    the buffers (keptBuffers, by block and count); busy or missing → another worker / an upload (KEPT_MISSING, retried).
-   Headless Chrome, samples/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
+   Headless Chrome, samples/gpu/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
 
-## Painting a shader every frame (samples/gpu_visualizer.warp, 2026-10-10)
+## Painting a shader every frame (samples/gpu/gpu_visualizer.warp, 2026-10-10)
 - src/graphics/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js
   MOST_COMPILED): before, every paint compiled the pipeline anew, 10–20 ms for the raymarching sample on Metal plus
   driver work, now only the uniform's bind group is made per frame. Test: test_webgpu a_kept_shader_reads_each_frames_values.
@@ -243,7 +243,7 @@ Costs nothing for a shader that doesn't mention them.
 ## $previous: a shader's own last frame (card shader-read, user wish 2026-10-12)
 `$previous(at)` is the color the shader left at pixel `at` (vec2f, clamped to the image) in its previous render of
 the same size, black before the first (another paper: `select(paper, $previous(at), $frame > 0)`): painting with
-memory (samples/shader_trails.warp). $last, $feedback, $before are not taken from programs; a value missing under
+memory (samples/graphics/shader_trails.warp). $last, $feedback, $before are not taken from programs; a value missing under
 them hints at $previous (shader_holes.rs PREVIOUS_WORDS, user's Interviewer: canonical word plus hints). Not a value but a
 function: BUILTIN_HOLES has "previous" so no values entry is made; the host rewrites `values.previous(` to
 `warp_previous(` and appends PREVIOUS_FRAME (texture_2d at @group(0) @binding(1), textureLoad). Each render draws
@@ -260,6 +260,14 @@ same dedent as the block's text: lines dropped around it, characters dropped bef
 block has that place, says `<word>: why at line:column` in the program, which the CLI and the playground underline.
 Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
 GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
+
+## GLSL from twigl.app: removed (user 2026-10-16)
+twigl and shadertoy shaders (`twigl { … }`, `paint(twigl(code))`, shadertoy(code), lib/draw.warp glsl_shader) are gone
+from the compiler, to keep Rust lean: naga's GLSL front end (crates/warp-glsl, in the browser a 705 KB glsl.wasm loaded
+on first use), the parser's dialect block, the draw.glsl_wgsl adapter, samples/twigl.warp, tests/programs/test_twigl*.rs
+and probes/twigl. The last state with all of it is commit b04da3e2c (`git show b04da3e2c:notes/gpu.md` has this
+section in full): a `use twigl` module can come back from there (card twigl-module). Translating GLSL to WGSL helps no
+WebGL-only browser: its WGSL still needs WebGPU.
 
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
 - src/graphics/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
@@ -318,7 +326,7 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   2. Calls of user functions, with a callee closure and a recursion check.
   3. Map kernels calling user functions.
   4. paint(f, …) of a warp function.
-  5. Acceptance: samples/gpu_visualizer.warp's tunnel shader written in warp gives the same frame as the WGSL one.
+  5. Acceptance: samples/gpu/gpu_visualizer.warp's tunnel shader written in warp gives the same frame as the WGSL one.
 - **Progress.** Done 2026-10-13: steps 1–3 (gpu_maps.rs `Translation::function`, tests/web/test_gpu_functions.rs; 1M items of
   a function with a loop of cos: 324 ms @cpu → 29 ms on the GPU). Step 4: `paint(f, width, height)` lowers to a
   fragment shader of f (gpu_maps.rs `painted_functions`, tests/programs/test_paint_function.rs), the program's
@@ -326,5 +334,24 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   (probes/gpu/paint_mandelbrot.warp, full HD, debug build: 18.4 s on the CPU → 1.6 s, mostly the PNG). Open: no
   adapter falls back to the CPU only for maps, a painted function fails like a shader text (card paint-function).
   Next, after the Rust cleanup (user decision cleanup-only, 2026-10-13): step 5, the tunnel shader of
-  samples/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
+  samples/gpu/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
   values (`levels`).
+
+## Shaders in the browsers' playground (cards shaders-firefox, https-pannous, very-fast, 2026-10-14)
+- CI's browsers had no real canvas path: Linux Firefox keeps WebGPU off (every GPU example skipped as "no adapter"),
+  Chrome's SwiftShader drops the page canvas, so shaders came back as pixels. The Firefox tour now turns WebGPU on
+  (FIREFOX_PREFS `dom.webgpu.enabled`, `gfx.webgpu.ignore-blocklist`, lavapipe from mesa-vulkan-drivers): the only
+  CI browser drawing a shader into the page's canvas, as users' browsers with a GPU do.
+- Firefox lost an OffscreenCanvas posted into a MessagePort whose other end was itself still on its way to the task
+  Worker (the program's Worker made the channel); only a Firefox-internal "uncaught exception: undefined" said so, and
+  the program hung in Atomics.wait. The page now posts the canvas straight to the task Worker it made
+  (task-workers.js postToTaskWorker, by `taskWorkerId`).
+- An `on frame` painting arrives after the run's report (playground.js showEventOutput), where the GPU canvas's id
+  was never mapped to its canvas: the page showed "1" instead of the brush, so on any real GPU the `on frame` shader
+  samples vanished after their first frame. paintingOf maps it in both places; a pixel frame is redrawn in place.
+- Probes: probes/firefox_webgpu/check.sh (WebGPU steps on the page and in a Worker), variants.sh (programs run one by
+  one with the console after each); firefox_driver.mjs takes FIREFOX_PREFS and names an error's line and realm.
+- Firefox's "uncaught exception: undefined" during 400 GPU jobs (card firefox-gpu-jobs-uncaught) is no WebGPU fault: on
+  lavapipe 400 jobs take over 10 s, the playground stops the run, and terminating a Worker inside WebAssembly.promising
+  logs it (Firefox's bug, card firefox-logs). gpu_jobs.sh (run 38683768383): 1 and 50 jobs clean, every 400 stopped and
+  logged. The tour's check accepts a stop ("or says why not"), so it stays green there.

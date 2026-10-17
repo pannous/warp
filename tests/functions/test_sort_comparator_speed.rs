@@ -18,12 +18,9 @@ fn a_comparator_sorts_many_items_quickly() {
 fn a_comparator_sort_is_stable() {
 	assert_eq!(
 		eval("ps = [[2, \"a\"], [1, \"b\"], [2, \"c\"], [1, \"d\"], [3, \"e\"]]; ps.sort_by((p q) => p#1 < q#1).map(p => p#2)").serialize(),
-		"[\"b\" \"d\" \"a\" \"c\" \"e\"]"
+		"['b' 'd' 'a' 'c' 'e']"
 	);
-	assert_eq!(
-		eval("xs = [5, 3, 9, 1, 7, 2]; sorted(xs, (a,b) => a-b)").serialize(),
-		"[1 2 3 5 7 9]"
-	);
+	assert_eq!(eval("xs = [5, 3, 9, 1, 7, 2]; sorted(xs, (a,b) => a-b)").serialize(), "[1 2 3 5 7 9]");
 	assert_eq!(eval("xs = []; sorted(xs, (a,b) => a-b)"), eval("[]"));
 	assert_eq!(eval("sorted([4], (a,b) => a-b)").serialize(), "[4]");
 }

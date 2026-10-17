@@ -1,4 +1,4 @@
-# `use cargo <crate>`: crates.io crates as generated components (card use-cargo, src/cargo_crates.rs)
+# `use cargo <crate>`: crates.io crates as generated components (src/modules/cargo_crates/)
 
 `use cargo regex`, `use crate "regex"`, `use cargo regex as re`: foreign_modules::crate_module rewrites the statement
 into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is the components path
@@ -24,7 +24,7 @@ into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is 
    error's line names the item to drop. Up to 12 rounds. Nothing left is the loud "no public function warp can call"
    (sha2: its API is the Digest trait).
 7. The component and its WIT are copied to `~/.cache/warp/crates/components-v4/<crate>@<version>.{wasm,wit}`. Raise
-   COMPONENTS when the generated wrappers change, so old builds are never reused. A failed wrapper moves to
+   GENERATION (src/modules/cargo_crates/mod.rs) when the generated wrappers change, so old builds are never reused. A failed wrapper moves to
    `failed/<crate>`, because one unresolvable dependency would break every other member of the workspace.
 
 ## Calling
@@ -39,14 +39,14 @@ into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is 
   version that wasmtime serves (std imports wasi:random/insecure-seed@0.2.6, wasmtime-wasi serves 0.2.12). Now a
   component that links gets no stubs (components::serve_host_imports).
 
-## Prebuilt downloads (card use-cargo-downloads)
+## Prebuilt downloads
 - Order: the newest cached component, else the newest hosted one, else the local build. Hosted = the assets
-  `<crate>.<version>.wasm` of the prerelease `crates-v4` (generation = GENERATION in src/cargo_crates.rs), listed by the
+  `<crate>.<version>.wasm` of the prerelease `crates-v4` (generation = GENERATION in src/modules/cargo_crates/mod.rs), listed by the
   release API (`api.github.com/repos/pannous/warp/releases/tags/crates-v4`); a download must match the asset's
   `digest` (SHA-256 GitHub computes) and lands in the cache as `<crate>@<version>.wasm` (no .wit: the interface is in
   the component, `wasm-tools component wit` prints it). Any failure says why and falls back to the local build.
 - `WARP_BUILD_CRATES=1` never downloads (the workflow itself).
-- Names (card use-cargo-debug-names): the release profile strips only DWARF (`strip = "debuginfo"`), so the core
+- Names: the release profile strips only DWARF (`strip = "debuginfo"`), so the core
   module keeps its name section and a trap's backtrace names the Rust functions, demangled (wasmtime features demangle,
   addr2line): about 20% more bytes (strsim 79→95 KB, regex 1.1→1.4 MB). Inlined callees (regex-automata inside
   `Regex::shortest_match_at`) don't show up as frames there.
@@ -55,7 +55,7 @@ into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is 
   file:line (`regex-automata/src/util/search.rs:426`). 10 to 45 times the size (strsim 3.7 MB, regex 13.5 MB), so it's
   opt-in, not the default of debug warps.
 - .github/workflows/crates.yml builds the crates of its CRATES list and uploads them (`gh release upload --clobber`):
-  on pushes to main that touch it or src/cargo_crates.rs, weekly, by dispatch. Add a crate there.
+  on pushes to main that touch it or src/modules/cargo_crates/, weekly, by dispatch. Add a crate there.
 - Release assets, not ghcr: a new ghcr package starts private and only the web UI makes it public (no API).
 - A hosted version may trail crates.io until the weekly run; a raised GENERATION needs one workflow run before
   downloads work again (until then everyone builds locally).

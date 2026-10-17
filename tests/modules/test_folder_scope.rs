@@ -16,10 +16,7 @@ fn the_file_itself_wins_over_its_siblings() {
 
 #[test]
 fn a_name_defined_in_two_siblings_is_ambiguous() {
-	fails_with(
-		"tests/warp/folder_ambiguous/main.warp",
-		"pick is defined in more than one file of the scope",
-	);
+	fails_with("tests/warp/folder_ambiguous/main.warp", "pick is defined in more than one file of the scope");
 	fails_with("tests/warp/folder_ambiguous/main.warp", "a.warp");
 	fails_with("tests/warp/folder_ambiguous/main.warp", "b.warp");
 }

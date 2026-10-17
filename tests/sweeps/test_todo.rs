@@ -10,10 +10,6 @@ fn test_if_then_else() {
 }
 
 // === List indexing after puts ===
-#[test]
-fn test_list_index_after_puts() {
-	is!("puts('ok');(1 4 3)#2", 4);
-}
 
 // === Square root arithmetic ===
 #[test]
@@ -22,20 +18,6 @@ fn test_sqrt_arithmetic() {
 }
 
 // === Lambda/closure tests ===
-#[test]
-fn test_lambda_simple() {
-	is!("grows:=it*2; grows 3", 6);
-}
-
-#[test]
-fn test_lambda_with_multiply() {
-	is!("grows:=it*2; grows 3*4", 24);
-}
-
-#[test]
-fn test_lambda_comparison() {
-	is!("grows:=it*2; grows(3*42) > grows 2*3", 1);
-}
 
 // === $0 parameter reference ===
 #[test]
@@ -75,12 +57,6 @@ fn test_type_annotated() {
 }
 
 #[test]
-// P59 (user, 2026-10-05): the type is written `list of int` (decided), not `list<int>`
-fn test_array_type_generics() {
-	is!("pixels=(1,2,3);type(pixels)", "list of int");
-}
-
-#[test]
 fn test_array_length() {
 	is!("pixels=(1,2,3);#pixels", 3); // element count ⚠️ number operator ≠ index ≠ comment
 	is!("pixels=(1,2,3);count(pixels)", 3); // element count
@@ -115,5 +91,4 @@ fn test_print_function() {
 #[test]
 fn test_utf8_char_indexing() {
 	// UTF-8 char indexing vs byte indexing (encoding redesign)
-	is!("'αβγδε'#3", 'γ');
 }

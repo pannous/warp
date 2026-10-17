@@ -11,8 +11,5 @@ fn download_fetches_like_fetch() {
 
 #[test]
 fn a_failed_download_is_an_error_value() {
-	fails_with(
-		&format!("download \"{}\"", serve("404 Not Found", "")),
-		"HTTP status 404",
-	);
+	fails_with(&format!("download \"{}\"", serve("404 Not Found", "")), "HTTP status 404");
 }

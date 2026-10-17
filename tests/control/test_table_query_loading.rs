@@ -6,32 +6,22 @@ use warp::wasm_emitter::eval;
 const PERSON: &str = "class Person{name: text; age: int}";
 
 fn program(table: &str, rest: &str) -> String {
-	format!("{PERSON}\npeople: [Person] = database.{table}\n{rest}")
+	format!("{PERSON}\nstored people: [Person] in \"{table}\"\n{rest}")
 }
 
 #[cfg(feature = "native")]
 #[test]
 fn a_filter_reads_only_the_rows_it_keeps() {
-	eval(&program(
-		"people_filtered_rows",
-		"for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }",
-	));
-	let before = warp::database::rows_read();
+	eval(&program("people_filtered_rows", "for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }"));
+	let before = warp::host::database::rows_read();
 	is!(&program("people_filtered_rows", "count(people where it.age > 45)"), 5);
-	assert_eq!(
-		warp::database::rows_read(),
-		before + 5,
-		"the filter read other rows than its five"
-	);
+	assert_eq!(warp::host::database::rows_read(), before + 5, "the filter read other rows than its five");
 }
 
 // the row a filter gives is the instance people#i and the loaded list hold
 #[test]
 fn a_filtered_row_is_the_one_instance_of_its_row() {
-	eval(&program(
-		"people_filtered_identity",
-		"people.add(Person(\"Al\", 40))\npeople.add(Person(\"Bo\", 30))",
-	));
+	eval(&program("people_filtered_identity", "people.add(Person(\"Al\", 40))\npeople.add(Person(\"Bo\", 30))"));
 	is!(
 		&program(
 			"people_filtered_identity",
@@ -39,19 +29,7 @@ fn a_filtered_row_is_the_one_instance_of_its_row() {
 		),
 		"Bob"
 	);
-	is!(
-		&program(
-			"people_filtered_identity",
-			"bo = people#2\nbo.age = 31\n(people where it.age == 31)#1.name"
-		),
-		"Bob"
-	);
+	is!(&program("people_filtered_identity", "bo = people#2\nbo.age = 31\n(people where it.age == 31)#1.name"), "Bob");
 	is!(&program("people_filtered_identity", "total = 0\nfor p in people { total += p.age }\nbo = (people where it.age > 30)#2\nbo.age = 32\ntotal = 0\nfor p in people { total += p.age }\ntotal"), 72);
-	is!(
-		&program(
-			"people_filtered_identity",
-			"count(people where it.age > 0) + count(people)"
-		),
-		4
-	);
+	is!(&program("people_filtered_identity", "count(people where it.age > 0) + count(people)"), 4);
 }

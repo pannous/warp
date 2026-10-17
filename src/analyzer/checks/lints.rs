@@ -47,8 +47,13 @@ pub(super) fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 		Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
 		other => other.clone(),
 	};
-	let substituted =
-		|word: &str| crate::library_words::substitute(statement.clone(), "it", &Node::Symbol(word.to_string()));
+	let substituted = |word: &str| {
+		crate::library_words::substitute(
+			statement.clone(),
+			crate::words::IMPLICIT_PARAMETER,
+			&Node::Symbol(word.to_string()),
+		)
+	};
 	let written = format!("{name}({parameter}) := {}", body.serialize().trim());
 	let as_parameter = format!("{name}({parameter}) := {}", substituted(parameter).serialize().trim());
 	let as_lambda = format!("{name}({parameter}) := x => {}", substituted("x").serialize().trim());
@@ -65,7 +70,6 @@ pub(super) fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 	)
 }
 
-/// `for 1..4 {…}`: a loop that binds the implicit `it`
 /// `for 1..4 {…}` and `for i in xs {…}`: loops that bind the implicit `it` (to the item); their iterable and body
 pub(in crate::analyzer) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
 	let (keyword, iterable, body) = match items {
@@ -80,7 +84,7 @@ pub(in crate::analyzer) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
 /// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?
 pub(in crate::analyzer) fn uses_it_outside_loops(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(word) => word == "it",
+		Node::Symbol(word) => word == crate::words::IMPLICIT_PARAMETER,
 		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
 		Node::List(items, _, _) if let Some((iterable, _)) = it_loop(items) => uses_it_outside_loops(iterable),
 		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
@@ -96,8 +100,11 @@ pub(in crate::analyzer) fn hidden_function_it(body: &Node, warnings: &mut Vec<Di
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if it_loop(items).is_some_and(|(_, body)| uses_it(body)) {
-				let renamed =
-					crate::library_words::substitute(node.clone(), "it", &Node::Symbol(FUNCTION_IT.to_string()));
+				let renamed = crate::library_words::substitute(
+					node.clone(),
+					crate::words::IMPLICIT_PARAMETER,
+					&Node::Symbol(FUNCTION_IT.to_string()),
+				);
 				let explicit = format!("{FUNCTION_IT}=it; {}", renamed.serialize().trim());
 				warnings.push(
 					Diagnostic::at(node, "the loop's `it` hides the function's `it` inside the loop")
@@ -118,10 +125,7 @@ pub(super) const NEGATIVE_MODULO_TOPIC: &str = "negative-modulo";
 
 /// `"done"`, `7`: a value written out that is never falsy
 pub(super) fn is_truthy_literal(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True
-	) && !node.is_falsy()
+	matches!(node.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True) && !node.is_falsy()
 }
 
 /// `x and y or z` yields z when y is falsy; none when y is written out and never falsy: `done and "done" or "open"`
@@ -147,15 +151,15 @@ pub(in crate::analyzer) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>
 			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
 				warnings.extend(and_or_warning(node, condition, then, right));
 			}
-			if *op == Op::As && is_arithmetic(left) {
+			if *op == Op::As && is_ungrouped_arithmetic(left) {
 				let diagnostic = Diagnostic::at(node, conversion_of_arithmetic_warning(left, right));
 				let written = format!("{} as {}", left.serialize(), right.serialize());
 				let readings = conversion_readings(left, right);
 				let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 				let diagnostic = diagnostic.fix(forms.join(" or "));
-				let diagnostic = readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
-					diagnostic.offer(meaning, &written, form)
-				});
+				let diagnostic = readings
+					.iter()
+					.fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form));
 				warnings.push(diagnostic.about(ARITHMETIC_CONVERSION_TOPIC, &written));
 			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {
@@ -209,7 +213,7 @@ pub(super) fn is_float_literal_value(node: &Node) -> bool {
 	!matches!(node.drop_meta(), Node::Symbol(_)) && infer_type(node, &Scope::new()) == Kind::Float
 }
 
-/// `0.1 + 0.2 == 0.3` is no: decimals are floats, which `==` compares bit for bit (decision exact-default)
+/// `0.1f + 0.2 == 0.3` is false: decimals are floats, which `==` compares bit for bit (decision exact-default)
 pub(super) fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic {
 	let (a, b) = (left.serialize(), right.serialize());
 	let (a, b) = (a.trim(), b.trim());
@@ -219,9 +223,9 @@ pub(super) fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &N
 	};
 	Diagnostic::at(
 		node,
-		format!("`{written}` compares floats exactly: rounding makes 0.1 + 0.2 == 0.3 no"),
+		format!("`{written}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"),
 	)
-	.fix("use ≈")
+	.fix("use ≈ or exact numbers")
 	.offer("equal within rounding", written, similar)
 }
 
@@ -257,19 +261,19 @@ pub(in crate::analyzer) fn kebab_fixes(
 	let mut reads = vec![];
 	bare_reads(program, name, &mut reads);
 	let quoted = format!("\"{name}\"");
-	let at_reads = |fix: crate::fixits::Fix, replacement: &str| {
+	let at_reads = |fix: crate::errors::fixits::Fix, replacement: &str| {
 		reads.iter().fold(fix, |fix, read| fix.and(name, replacement, *read))
 	};
 	let renamed = name.replace('-', "_");
 	let warning = match reads.is_empty() {
 		true => warning.offer(format!("the data key {name}"), name, quoted),
 		false => warning.offering(at_reads(
-			crate::fixits::fix(format!("the subtraction {subtraction}"), name, quoted),
+			crate::errors::fixits::fix(format!("the subtraction {subtraction}"), name, quoted),
 			subtraction,
 		)),
 	};
 	warning.offering(at_reads(
-		crate::fixits::fix(format!("the data key, renamed {renamed}"), name, &renamed),
+		crate::errors::fixits::fix(format!("the data key, renamed {renamed}"), name, &renamed),
 		&renamed,
 	))
 }
@@ -277,7 +281,9 @@ pub(in crate::analyzer) fn kebab_fixes(
 /// Where `name` is read bare: not as a data key (`a-b:2`) or a member (`x.a-b`), which already mean the key
 pub(in crate::analyzer) fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(usize, usize)>) {
 	match node {
-		Node::Meta { node: inner, .. } if inner.is_symbol(name) => reads.extend(crate::diagnostic::position(node)),
+		Node::Meta { node: inner, .. } if inner.is_symbol(name) => {
+			reads.extend(crate::errors::diagnostic::position(node))
+		}
 		Node::Meta { node, .. } => bare_reads(node, name, reads),
 		Node::Key(_, Op::Colon, value) if data_binding(node).is_some() => bare_reads(value, name, reads),
 		Node::Key(left, Op::Dot, _) => bare_reads(left, name, reads),
@@ -291,8 +297,8 @@ pub(in crate::analyzer) fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(
 }
 
 /// An ungrouped binary arithmetic expression: `2 * 1.5`, not `(2 * 1.5)`
-pub(in crate::analyzer) fn is_arithmetic(node: &Node) -> bool {
-	matches!(node, Node::Key(_, op, _) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow))
+pub(in crate::analyzer) fn is_ungrouped_arithmetic(node: &Node) -> bool {
+	matches!(node, Node::Key(_, op, _) if op.is_arithmetic())
 }
 
 pub(in crate::analyzer) fn conversion_of_arithmetic_warning(left: &Node, right: &Node) -> String {
@@ -322,14 +328,14 @@ pub(in crate::analyzer) fn conversion_readings(left: &Node, right: &Node) -> Vec
 }
 
 /// A negative literal or a negation: `-7`, `-x`, `(-7)`
-pub(in crate::analyzer) fn is_negative(node: &Node) -> bool {
+pub(crate) fn is_negative(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(Number::Int(n)) => *n < 0,
 		Node::Number(Number::Float(f)) => *f < 0.0,
 		Node::Number(Number::Quotient(numerator, _)) => *numerator < 0,
 		Node::Number(Number::BigQuotient(q)) => q.is_negative(),
 		Node::Number(Number::BigInt(big)) => big.sign() == num_bigint::Sign::Minus,
-		Node::Key(left, Op::Neg | Op::Sub, _) => matches!(left.drop_meta(), Node::Empty),
+		Node::Key(left, Op::Neg | Op::Sub, _) => left.is_empty_node(),
 		Node::List(items, _, _) if items.len() == 1 => is_negative(&items[0]),
 		_ => false,
 	}
@@ -351,4 +357,39 @@ pub(in crate::analyzer) fn negative_modulo_warning(left: &Node, right: &Node) ->
 			"`{a} % {b}`: % is Euclidean as in mathematics (never negative), unlike C/Java/JS; use `rem` for the truncated remainder"
 		),
 	}
+}
+
+/// `"3"+3`: a text spelling a number added to a number (card print-oldest: "a"+3 joins silently, "3"+3 warns); the
+/// spelling text, quoted
+pub(crate) fn number_text_plus_number(left: &Node, right: &Node) -> Option<String> {
+	let spelled = |text: &Node, number: &Node| match (text.drop_meta(), number.drop_meta()) {
+		(Node::Text(digits), Node::Number(_)) if digits.trim().parse::<f64>().is_ok() => {
+			Some(text.serialize().trim().to_string())
+		}
+		(Node::Char(digit), Node::Number(_)) if digit.is_ascii_digit() => Some(format!("\"{digit}\"")),
+		_ => None,
+	};
+	spelled(left, right).or_else(|| spelled(right, left))
+}
+
+pub(crate) fn number_text_plus_number_warning(node: &Node, left: &Node, right: &Node, spelled: &str) -> Diagnostic {
+	let is_number = |side: &Node| matches!(side.drop_meta(), Node::Number(_));
+	let written_with = |number_form: &dyn Fn(String) -> String, text_form: &dyn Fn(&str) -> String| {
+		let operand = |side: &Node| {
+			if is_number(side) {
+				number_form(side.serialize().trim().to_string())
+			} else {
+				text_form(spelled)
+			}
+		};
+		format!("{} + {}", operand(left), operand(right))
+	};
+	let written = written_with(&|number| number, &|text| text.to_string());
+	let conversion = if spelled.contains('.') { "float" } else { "int" };
+	let as_sum = written_with(&|number| number, &|text| format!("{conversion}({text})"));
+	let as_text = written_with(&|number| format!("str({number})"), &|text| text.to_string());
+	Diagnostic::at(node, format!("{written} joins the texts; {spelled} spells a number"))
+		.fix(format!("{as_sum} or {as_text}"))
+		.offer("the sum of the numbers", &written, as_sum)
+		.offer("the joined text", &written, as_text)
 }

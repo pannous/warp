@@ -5,4 +5,4 @@ print(note_name(Eb4))
 print(transpose(C4, 12) == C5)
 print(chord(C4, major7))
 print(scale(D4, dorian) == [D4, E4, F4, G4, A4, B4, C5, D5])
-play chord(C4, minor) for 5ms
+play(chord(C4, minor), 5ms)

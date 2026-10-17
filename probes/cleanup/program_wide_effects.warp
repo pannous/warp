@@ -1,0 +1,5 @@
+price(net) := net * (1 + emit tax_rate)
+on tax_rate { 0.2 }
+print "price: \(price(100))"
+print "price asks for \(price.effects)"
+3 * emit tax_rate

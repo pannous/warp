@@ -6,8 +6,8 @@ use crate::is;
 
 #[test]
 fn the_tuning_tunes_every_note() {
-	is!("tuning = 442\nplay A4 for 5ms\nA4", 442);
-	is!("tuning = 432\nplay 440Hz for 5ms\nA3", 216);
+	is!("tuning = 442\nplay(A4, 5ms)\nA4", 442);
+	is!("tuning = 432\nplay(440Hz, 5ms)\nA3", 216);
 	is!("use sound\nmidi_hertz(60)", 261.63); // the word a note name lowers to
 }
 
@@ -32,8 +32,5 @@ fn chords_and_scales_are_lists_of_notes() {
 	is!("use sound\nchord(C4, major7) == [C4, E4, G4, B4]", true);
 	is!("use sound\nchord(A3, \"minor\") == [A3, C4, E4]", true);
 	is!("use sound\nscale(D4, dorian) == [D4, E4, F4, G4, A4, B4, C5, D5]", true);
-	is!(
-		"use sound\nplay chord(C4, minor) for 5ms\nmelody scale(C4, major) each 5ms\ncount(scale(A2, pentatonic))",
-		6
-	);
+	is!("use sound\nplay(chord(C4, minor), 5ms)\nmelody(scale(C4, major), 5ms)\ncount(scale(A2, pentatonic))", 6);
 }

@@ -46,7 +46,7 @@ An operation called on a value whose type is unknown at compile time calls the o
 types define it, a generated dispatcher `area·dispatch(x) := if instance_of(x, "rect") then area·rect(x) else
 area·square(x)` picks the witness at run time (traits::with_dispatchers; `instance_of` reads the instance's type name).
 
-## Lowering (src/lowering/traits.rs)
+## Lowering (src/lowering/types/traits.rs)
 - `lower_declarations` (before type_tests): `trait shape{…}` becomes ø carrying the `Trait` (Meta data), which later
   passes collect (`Traits::of`); `x is shape` becomes the type test `is_type(x, "shape")`.
 - `lower_conformances` (after type_constructor): a definition of a trait operation whose first parameter (every
@@ -70,6 +70,11 @@ area·square(x)` picks the witness at run time (traits::with_dispatchers; `insta
   it, `ref.func` is declared in an element segment). The dispatcher is compiled after the user functions because it
   needs their indices, while node_order is compiled before them; the global bridges the two. A type without a witness
   traps `not comparable`.
+  Printable the same way (card list-printable-items): `text·witness` holds `text·dispatch`, which gives an instance of a
+  type with text() its text (any other node itself); list_text joins each item through it (`[N(1), N(2)]` prints
+  `[n1 n2]`, `print x` of an instance known only at run time too), and main's value passes through `text·shown`, which
+  turns each printable instance at any depth of lists and entries into the symbol of its text. Dispatched witnesses
+  take Nodes, no struct or array convention (list_abi.rs directly_called_functions).
 
 ## Default methods (2026-10-04)
 `trait shape{area; describe(s) := area(s) * 2}`: a requirement written as a definition is an operation with a default
@@ -84,14 +89,15 @@ the other operations (`area(s:square)`) but not this one; lower_conformances the
 `smallest(xs: Comparable list) := (sort xs)#1`: the annotation `xs: T list` (analyzer::with_list_annotation; the parser
 leaves `list` as the next signature item) is `list of T`, T a type word, a declared type or a trait. A list of a trait
 holds Nodes; where the function is called with a list of instances of a known type, each operation of the trait must
-have its witness (traits::unmet_constraint): `dot is not Comparable: smallest([dot{x:3}]) needs compare(a:dot, b:dot)`.
+have its witness (Dispatch::admit, the check every declared parameter type gets; instance_signatures keeps `list of
+<trait>` annotations): `dot is not Comparable: [dot{x:3}] needs compare(a:dot, b:dot)`.
 Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` reads the same.
 
 ## Fixed on the way
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
 `(sort xs)`, elements of a list of instances were held as Ints, `lower(a) == lower(b)` compared numbers.
 
-## Printable and Iterable (2026-10-04, lowering/printable.rs)
+## Printable and Iterable (2026-10-04, lowering/data/printable.rs)
 `text(p:person)` (P31) and `iterate(b:bag)` become the witnesses `text·person`, `iterate·bag`; where an instance's type
 is known, `as text` / str / print / interpolation call the first, `for x in b` and `x in b` walk what the second gives.
 The pass runs right after type_constructor: later passes would read `for x in b` of an instance as a walk of its keys.
