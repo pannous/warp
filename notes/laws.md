@@ -20,8 +20,8 @@ proved; otherwise it prints `SOME PROOFS FAIL` and exits 1.
 
 ## Project law file and quantified alias
 
-`LAWS.warp` at a project root is the human-owned contract: AI agents may read and verify it but must not edit it.
-After changing code covered by those claims, `warp verify LAWS.warp` is the gate. Warp needs no separate generated
+samples/laws/project_laws.warp (formerly the root LAWS.warp) is the human-owned contract: AI agents may read and verify it but must not edit it.
+After changing code covered by those claims, `warp verify samples/laws/project_laws.warp` is the gate. Warp needs no separate generated
 `PROOF.warp`: `warp verify` generates Lean obligations and checks them with Lean itself.
 
 A law can use the compact original form or the named Bend-style alias; both become the same `Law` before assertion,
