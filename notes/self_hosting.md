@@ -136,3 +136,31 @@ bench_find_builtin.warp vs bench_find_warp.warp (20 000 finds in a 2 KB text), `
 find is 1.7x the builtin (0.50 s vs 0.29 s); module size equal. Left: the matches_at call per offset and fuel (card
 fuel-metering). Rerun once that lands, then decide whether find moves to warp; TEXT_FIND's second caller, `in` /
 contains (fields_and_keys.rs), then needs a late_call.
+
+## Library sweep: Rust that becomes lib warp (card library-sweep, 2026-10-17)
+Survey of src/wasm_emitter runtime functions and src/lowering source expansions that are plain logic. Of ~33k
+emitter lines ~5k are movable; the rest is CORE (GC layout, hash tables, list cells and cursors, big-int limbs, host
+imports, inline instruction selection). Every move is a card in topic self-hosted; features they wait on are cards too.
+Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words are card-3):
+
+| # | Card | Rust lines | Waits on |
+|---|------|-----------|----------|
+| 1 | uncertain-warp + uncertain-text-warp (numbers/uncertain.rs) | ~760 | ± literals build the class |
+| 2 | time-arithmetic, time-zones, time-text, time-fields, duration, civil-days-dup (time/) | ~990 | time-primitives |
+| 3 | exact-text, exact-rounding, ratio-gcd, exact-pow (numbers/exact.rs) | ~670 | lib-from-runtime (print path), speed |
+| 4 | list-text-warp (list_join's loop) | ~380 | kind-reflection |
+| 5 | float-text-warp + float-as-exact-warp | ~365 | float-only-ops |
+| 6 | shared-array-class (lowering/collections/shared_arrays.rs) | ~350 | index operators, Iterable |
+| 7 | number-parsing-warp (text_as_float/int/number) | ~335 | correctly rounded scaling |
+| 8 | sort-warp (merge sort + node_order) | ~225 | mutable-array |
+| 9 | library-word-tables (library_words.rs tables) | ~170 | word alias declaration |
+| 10 | case-table-warp, min-max-lib, type-name-warp | ~150 each | lib-constant-tables, lib-inlining, kind-reflection |
+| 11 | range-type, deep-copy, paired-lists, channel-class, map-entries, slice, graphemes | 90-120 each | various (cards name them) |
+| 12 | split, live-loop, try-assert, swizzle, text-set-char, contains, tree-walk-lib, parallel-map, signals | 60-80 each | |
+| 13 | text-quoted, insert-at, element-children, node-codes, reverse, log-root, zero-fill, pop-clear, codepoint-count, builtin-signatures, small-dispatch | 15-55 each | |
+
+Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
+lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
+arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
+Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
+text search words above).
