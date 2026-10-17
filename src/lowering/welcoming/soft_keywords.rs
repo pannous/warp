@@ -16,6 +16,9 @@ pub const HARD_KEYWORDS: [&str; 27] = [
 	"use", "import", "include", // modules
 	"data",    // quoted code (user, card data-reserved)
 ];
+/// The hard keywords refused also as a parameter or loop variable; the others head arms and lambdas there
+/// (`else -> 20`, PHP's `fn($x) => …`)
+const UNBOUND_KEYWORDS: [&str; 1] = ["data"];
 /// emit's aliases fire, trigger and signal stay out: a program may define them (P163, test_event_footguns; asked)
 pub const SOFT_KEYWORDS: [&str; 12] =
 	["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners", "stored", "undo", "redo"];
@@ -123,7 +126,7 @@ pub fn names_given_with_kinds(program: &Node) -> Vec<(String, &'static str)> {
 
 /// A hard keyword assigned anywhere, a soft one defined at the top level: the loud error
 fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
-	if let Some(name) = bound_names(node).into_iter().find(|name| HARD_KEYWORDS.contains(&name.as_str())) {
+	if let Some(name) = bound_names(node).into_iter().find(|name| UNBOUND_KEYWORDS.contains(&name.as_str())) {
 		return Some(Diagnostic::at(node, format!("{name} is a keyword: give it another name")).into_error());
 	}
 	if let Some(name) = node.defined_name() {
