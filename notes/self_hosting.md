@@ -198,3 +198,5 @@ shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard p
 (copies or handles, notes/ffi_handles.md), macOS windows on the main thread.
 wasmtime stays bundled in every executable: even with the program precompiled (.cwasm) it is the GC, the loader and
 the trap handling. Replacing it (WAMR's wamrc AOT with its own GC; wasm2c lacks GC) is not on the table.
+Shared runtime library (`warp build --shared`, libwarp-runtime.dylib): only an option, card exe-shared-runtime (Later):
+no total saving, loses self-contained files, and a .cwasm only runs on the exact wasmtime that compiled it.
