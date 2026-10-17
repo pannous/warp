@@ -352,6 +352,15 @@ impl PageNames {
 			self.hint_bind(&id);
 			return self.value_of(&id, member);
 		}
+		// `x = 3; $x`, `$document`: a name that is a value already
+		if let Some(plain) = browser_name(&name).filter(|plain| self.is_value_already(plain, enclosing)) {
+			let at = self.last_name.clone().unwrap_or_else(|| Node::Symbol(name.clone()));
+			warn_superfluous(&at, &name, plain);
+			if PLAIN_GLOBALS.contains(&plain) && !self.defined.contains(plain) {
+				self.globals.insert(plain.to_string());
+			}
+			return Node::Symbol(plain.to_string());
+		}
 		if self.elements.contains_key(&name) {
 			if is_word(&name) {
 				let at = self.last_name.clone().unwrap_or_else(|| Node::Symbol(name.clone()));
@@ -400,6 +409,14 @@ impl PageNames {
 		self.elements.get(id).map(|element| (id.to_string(), element.value_member()))
 	}
 
+	/// A variable, parameter or function of the program, or a global of JavaScript or the browser, that no page id
+	/// or enclosing data node of that name shadows: `$` of it reads nothing more
+	fn is_value_already(&self, name: &str, enclosing: &[String]) -> bool {
+		!self.elements.contains_key(name)
+			&& !enclosing.iter().any(|node| node == name)
+			&& (self.defined.contains(name) || is_global(name))
+	}
+
 	/// `document.getElementById("who").value`, the member the element's kind keeps its value in
 	fn value_of(&mut self, id: &str, member: &str) -> Node {
 		self.globals.insert(DOCUMENT.to_string());
@@ -419,7 +436,7 @@ impl PageNames {
 		let name = browser_name(written).filter(|name| !enclosing.iter().any(|node| node == name))?;
 		crate::normalize::set_position_of(receiver);
 		if is_global(name) {
-			crate::normalize::hint(written, name, OLD_FORM_REASON);
+			warn_superfluous(receiver, written, name);
 			self.globals.insert(name.to_string());
 			return Some(Node::Symbol(name.to_string()));
 		}
@@ -437,6 +454,13 @@ impl PageNames {
 		self.globals.insert(DOCUMENT.to_string());
 		Some(element_of_id(name))
 	}
+}
+
+/// `$document.location`, `$x` of a variable: `$` reads a page id's value; of a name that is a value already it is
+/// superfluous and dropped, with a warning offering the plain name (card js-binding)
+fn warn_superfluous(at: &Node, written: &str, name: &str) {
+	let message = format!("{written} is superfluous: {name} is a value already, `$` reads the value of a page id");
+	crate::errors::diagnostic::say(Diagnostic::at(at, message).offer("the plain name", written, name));
 }
 
 /// `input{ … }`
