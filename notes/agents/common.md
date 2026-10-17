@@ -26,7 +26,7 @@ instead of bending the code.
   by role (`warp-integrator`, `warp-types`) and write role names, not session hashes like warp-3f, in messages,
   cards and reports to the user. Older sessions are renamed with `/rename warp-<role>` while idle
   (~/dev/bin/rename-when-idle; typed into a busy session it is lost).
-- Session swaps are never reported to the user ("I don't care", repeated 2026-10-17): no line about a session
+- Session swaps are never reported to the user: no line about a session
   being replaced, renamed or resumed, not even "no action needed". A received swap notice ("Swap: … was replaced by
   me") gets an EMPTY reply: no text at all, no acknowledgement, no summary. Peers still get the swap message; the
   user hears only about work.
