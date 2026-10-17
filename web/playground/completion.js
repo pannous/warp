@@ -8,7 +8,7 @@
 // - after `receiver.` the receiver's members: `xs = [1 2]; xs.` lists count, sum, map … (card member-completion), as
 //   the compiler finds them (src/lowering/data/members.rs, asked through playground.js askMembers), as the console's
 //   Tab does.
-// Tab and Enter take the chosen one (the first, or another chosen with Up/Down), Esc closes; Enter is a new line when
+// Tab and Enter take the chosen one (the first, or another chosen with Up/Down), Esc or moving the cursor closes; Enter is a new line when
 // nothing was chosen and the word typed is a whole word already (`print`, a name of the code). Tab after a word with
 // no list open lists its completions from the first letter on, or takes the only one (cards code-completion-must,
 // completion-must, code-completion-should).
@@ -201,8 +201,13 @@ function startCompletion(editor, askMembers = async () => []) {
 	});
 	editor.on("keyHandled", (_, name) => name === "Backspace" && open && update());
 	editor.on("blur", close);
+	// the cursor moved without typing (arrow keys, a click, Home/End): the list belongs to the old place and closes
+	// (card moving-cursor); a typed or deleted character changes the text in the same operation and updates it instead
+	let edited = false;
+	editor.on("change", () => edited = true);
 	editor.on("cursorActivity", () => {
-		if (open && editor.getCursor().line !== open.from.line) close();
+		if (open && (!edited || editor.getCursor().line !== open.from.line)) close();
+		edited = false;
 	});
 	return { update, close };
 }
