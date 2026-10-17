@@ -49,6 +49,7 @@ mod test_rust_paths;
 mod test_scheme_relative_url;
 #[cfg(feature = "native")]
 mod test_self_differential; // card self-differential
+#[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
 #[cfg(feature = "native")]
 mod test_self_lexer; // card self-lexer
