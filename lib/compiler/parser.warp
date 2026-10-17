@@ -523,6 +523,8 @@ def prefixed(p) {
 	if keyword_at(p, "for") { return looped(p) }
 	declared = type_declaration(p)
 	if declared != ø { return declared }
+	declared = global_declaration(p)
+	if declared != ø { return declared }
 	if keyword_at(p, "loop") {
 		endless = endless_loop(p)
 		if endless != ø { return endless }
@@ -900,6 +902,45 @@ def spread(arguments) {
 	if arguments == ø { return [] }
 	if arguments is list and arguments#1 == "list" { return arguments[3 .. arguments.length] }
 	[arguments]
+}
+
+// The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type
+// word types it, `global int n = 0` is `n:int = 0`
+// Rust twin: mod.rs DECLARATION_MODIFIERS, words.rs CONSTANT_KEYWORDS, analyzer type_word_kind
+DECLARATION_MODIFIERS = ["export", "mutable", "mut", "const", "constant", "final", "val"]
+DECLARED_TYPE_WORDS = ["int", "float", "number", "text", "string", "bool", "char", "byte"]
+
+// `global x = 1`, `global n`, `export api: clock` as `global: x = 1`, a module-level variable; `global a, b` declares
+// each; `export` without a name after it stays a word
+// Rust twin: definitions/variables.rs try_parse_global_declaration, skip_declaration_modifiers, typed_global
+def global_declaration(p) {
+	keyword = if keyword_at(p, "global") then "global" else if keyword_at(p, "export") then "export" else ""
+	if keyword == "" { return ø }
+	at = blank_end(p, p.at + keyword.length)
+	if at == p.at + keyword.length or not is_name_start(peek(p.code, at, p.n)) { return ø }
+	p.at = at
+	type_word = ø
+	while true {
+		end = name_end(p.code, p.at, p.n)
+		word = p.code[p.at .. end]
+		after = blank_end(p, end)
+		if not (DECLARATION_MODIFIERS contains word or DECLARED_TYPE_WORDS contains word) or not is_name_start(peek(p.code, after, p.n)) { break }
+		if DECLARED_TYPE_WORDS contains word { type_word = word }
+		p.at = after
+	}
+	declaration = expression(p, 0)
+	if type_word != ø and declaration is list and declaration#1 == "key" and declaration#2 == "=" and is_symbol(declaration#3) {
+		declaration = ["key", "=", ["key", ":", declaration#3, ["symbol", type_word]], declaration#4]
+	}
+	names = [declaration]
+	while keyword == "global" and is_symbol(names#(names.length)) and is_at(p.code, p.at, ',', p.n) {
+		p.at = p.at + 1
+		skip_spaces(p)
+		names = names + [atom(p)]
+	}
+	declared = [["key", ":", ["symbol", "global"], name] for name in names]
+	if declared.length == 1 { return declared#1 }
+	listed("", ";", declared)
 }
 
 // The words that declare a type: `class V {…}`, `struct P {…}`, `type Point {…}`

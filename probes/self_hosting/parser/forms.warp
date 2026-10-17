@@ -104,3 +104,10 @@ class Empty {}
 type Point { x: int }
 class Dog extends Animal { name: text }
 class Marker
+global pos = 0
+global out; out += [i]
+global int n = 3
+global a, b
+export api: clock
+global direction = (1, 0)
+export = 3
