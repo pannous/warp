@@ -98,3 +98,8 @@ its text moves into tests/fixtures/parser_corpus/<folder>.warp (snippets concate
   test_tree_find, test_parameter_patterns, test_plain_enum. Kept: definition_cases (its diagnostic is cut,
   cleanup-cuts-2), gap_feeding (phrase calls parked), tree_patterns (design examples), inventory.sh (spec inventory),
   enum_int_fix, parameter_patterns, variant_equality (executable: user-touched, never deleted).
+- semantics (consolidate-semantics): probes/{semantics,json5,class_forms_ruby}/ deleted, and of self_gaps/, key_names/,
+  values_keys/ all but text_costs (fuel), esc_exits (window), class_map (10000 instances), character_text and
+  list_text_quotes (shebang scripts: user-touched, never deleted). The 12 in the self-parser
+  corpus move into tests/fixtures/parser_corpus/semantics.warp. generators/ kept (cut: cleanup-drop-generators),
+  laws/ kept (Lean).

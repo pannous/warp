@@ -1,8 +1,0 @@
-class Point
-  attr_reader :x
-  def initialize(x)
-    @x = x
-  end
-  def twice = @x * 2
-end
-Point.new(5).twice + Point.new(1).x
