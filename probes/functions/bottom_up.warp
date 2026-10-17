@@ -1,0 +1,8 @@
+# the shared walk of self-hosted passes (lib/compiler/walk.warp planned): f handed down through a lambda
+# y
+# [y z]
+children(n, f) := if type(n) is key then key(f(n.key), n.op, f(n.value)) else if n is list then n.map(f) else n
+bottom_up(n, f) := f(children(n, x => bottom_up(x, f)))
+drop_zero(n) := if type(n) is key and n.op == "+" and n.value == 0 then n.key else n
+print(bottom_up(key(symbol("y"), "+", 0), drop_zero))
+print(bottom_up([key(symbol("y"), "+", 0), symbol("z")], drop_zero))
