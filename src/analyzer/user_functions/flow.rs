@@ -1,0 +1,148 @@
+//! The kinds of user function parameters and results as one flow inference (card src-analyzer, the Rust side of
+//! lib/compiler/analyzer.warp): each undeclared parameter holds the join of the kinds that flow into it (the arguments
+//! of every call, the values a closure captures, the literals its body assigns it), else the kind its body's use
+//! suggests, else what the closure calls pass; results follow from the bodies. Every round recomputes the flows from
+//! the kinds of the last one, until nothing changes.
+
+use super::*;
+
+/// The kinds that flow into each parameter, by function and index
+type Flows = HashMap<(String, usize), Vec<Kind>>;
+
+/// The flows of the program: those of its calls, closures and assignments, and the weak ones of the closure calls,
+/// which may call any function value of their arity and so tell a parameter's kind only when all agree and nothing
+/// else tells
+#[derive(Default)]
+struct ProgramFlows {
+	strong: Flows,
+	weak: Flows,
+}
+
+/// Parameters, results and the globals functions widen, settled together
+pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<String, Local>) {
+	let usages: HashMap<(String, usize), Option<Kind>> = ctx
+		.user_functions
+		.iter()
+		.flat_map(|(name, function)| {
+			function.params.iter().enumerate().map(move |(index, param)| ((name.clone(), index), param.used_as))
+		})
+		.collect();
+	let judge = ArgumentJudge::of(ctx, program);
+	let slots: usize = ctx.user_functions.values().map(|function| function.params.len() + 1).sum();
+	for _ in 0..=slots {
+		refine_return_kinds(ctx, globals);
+		let kinds = FunctionKinds::new(known_function_kinds(ctx));
+		let flows = flows(ctx, program, &kinds, globals, &judge);
+		let widened =
+			widen_globals_by_functions(globals, ctx.user_functions.values(), &kinds, &ctx.closure_variable_targets);
+		if !(given_flows(ctx, &flows, &usages) | widened) {
+			return;
+		}
+	}
+}
+
+/// Each undeclared parameter its flows joined, else its usage kind, else what the closure calls agree on; whether one
+/// changed
+fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &HashMap<(String, usize), Option<Kind>>) -> bool {
+	let mut changed = false;
+	// a closure call's helper takes Nodes, or the numbers type_closure_calls gives both it and its entries
+	let functions =
+		ctx.user_functions.iter_mut().filter(|(name, _)| crate::closures::closure_call_arity(name).is_none());
+	for (name, function) in functions {
+		for (index, param) in function.params.iter_mut().enumerate() {
+			let key = (name.clone(), index);
+			let passed = flows.strong.get(&key).and_then(|kinds| joined(kinds));
+			// `number sine(number x)` called with `π / 2`: a number parameter given a float holds floats
+			if passed == Some(Kind::Float)
+				&& param.annotation.as_ref().is_some_and(|declared| declared.name() == NUMBER_WORD)
+			{
+				param.annotation = Some(Node::Symbol(FLOAT_WORD.to_string()));
+				changed = true;
+			}
+			if !takes_passed_kind(param) {
+				continue;
+			}
+			let agreed = || flows.weak.get(&key).and_then(|kinds| joined(kinds)).filter(|kind| *kind != Kind::Empty);
+			// given only ints, it keeps what its use suggests (a list for `xs#1`)
+			let kind = match passed {
+				Some(Kind::Int) | None => usages[&key].or_else(agreed),
+				passed => passed,
+			};
+			if param.used_as != kind {
+				param.used_as = kind;
+				changed = true;
+			}
+		}
+	}
+	changed
+}
+
+/// The kind all of `kinds` fit: one kind, a float for ints and floats, a text for texts and characters, a number decided
+/// at run time for it and numbers, else any value (a Node)
+fn joined(kinds: &[Kind]) -> Option<Kind> {
+	kinds.iter().map(|kind| if *kind == Kind::Codepoint { Kind::Text } else { *kind }).reduce(|a, b| match (a, b) {
+		_ if a == b => a,
+		(Kind::Int, Kind::Float) | (Kind::Float, Kind::Int) => Kind::Float,
+		(Kind::Data, Kind::Int | Kind::Float) | (Kind::Int | Kind::Float, Kind::Data) => Kind::Data,
+		_ => Kind::Empty,
+	})
+}
+
+/// The kinds every call, closure and assignment of the program passes the parameters, in the scopes of the last round
+fn flows(
+	ctx: &Context,
+	program: &Node,
+	kinds: &FunctionKinds,
+	globals: &HashMap<String, Local>,
+	judge: &ArgumentJudge,
+) -> ProgramFlows {
+	let mut flows = ProgramFlows::default();
+	let mut main = Scope::with_function_kinds(kinds.clone()).with_closure_targets(ctx.closure_variable_targets.clone());
+	collect_variables(program, &mut main);
+	let bodies = ctx.user_functions.values().map(|function| {
+		let scope =
+			function_body_scope(&function.params, &function.body, kinds, globals, &ctx.closure_variable_targets);
+		(function.body.as_ref(), scope)
+	});
+	for (body, scope) in std::iter::once((program, main)).chain(bodies) {
+		// an Int is what a value of unknown kind reads as: only a literal one, or a literal variable's, tells; a name
+		// this scope doesn't bind reads as a symbol and tells nothing either
+		let told = |value: &Node| {
+			let kind = infer_type(value, &scope);
+			let unbound = kind == Kind::Symbol && matches!(value.drop_meta(), Node::Symbol(_));
+			(!unbound && (kind != Kind::Int || judge.kind(value) == Some(Kind::Int))).then_some(kind)
+		};
+		visit_arguments(body, ctx, &mut |name, index, argument| {
+			flows.strong.entry((name.to_string(), index)).or_default().extend(told(argument));
+		});
+		body.visit(&mut |node| closure_flows(ctx, node, &told, &mut flows));
+	}
+	for (name, function) in &ctx.user_functions {
+		for (index, param) in function.params.iter().enumerate() {
+			let assigned = assigned_literal_kinds(&function.body, &param.name);
+			flows.strong.entry((name.clone(), index)).or_default().extend(assigned);
+		}
+	}
+	flows
+}
+
+/// `closure_new(target, captured…)` passes the captured values to the target's first parameters; a closure call
+/// `closure_call_2(f, a, b)` passes its arguments weakly to every function value of its arity
+fn closure_flows(ctx: &Context, node: &Node, told: &dyn Fn(&Node) -> Option<Kind>, flows: &mut ProgramFlows) {
+	if let Some((target, captured)) = crate::closures::as_closure_new(node) {
+		for (index, value) in captured.iter().enumerate() {
+			flows.strong.entry((target.to_string(), index)).or_default().extend(told(value));
+		}
+	}
+	let Node::List(items, _, _) = node else { return };
+	let Some(arity) = items.first().and_then(Node::symbol_name).and_then(crate::closures::closure_call_arity) else {
+		return;
+	};
+	for (target, captured) in &ctx.closure_targets {
+		if ctx.user_functions.get(target).is_some_and(|function| function.params.len() == captured + arity) {
+			for (index, argument) in items.iter().skip(2).enumerate() {
+				flows.weak.entry((target.clone(), captured + index)).or_default().extend(told(argument));
+			}
+		}
+	}
+}
