@@ -50,7 +50,7 @@ pub(in crate::wasm_emitter) const ELEMENT_CHILDREN: &str = "element_children";
 pub(in crate::wasm_emitter) const TEXT_SLICE: &str = "text_slice";
 pub(in crate::wasm_emitter) const ELEMENT_BODY: &str = "element_body";
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
-const TEXT_UNIT_USERS: [&str; 9] = [
+const TEXT_UNIT_USERS: [&str; 10] = [
 	crate::library_words::TEXT_GRAPHEMES,
 	// grapheme_end walks the characters it reverses
 	"text_reverse",
