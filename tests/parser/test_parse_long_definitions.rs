@@ -1,4 +1,5 @@
-use std::time::{Duration, Instant};
+use super::test_big_literals::thread_cpu_time;
+use std::time::Duration;
 use warp::warp_parser::WarpParser;
 
 const FEW: usize = 500;
@@ -6,9 +7,9 @@ const GROWTH: usize = 4;
 /// Linear parsing grows as the plain assignments do, GROWTH times for GROWTH times the lines, quadratic GROWTH times
 /// more; the margin absorbs noise. While quadratic, 2000 one-line definitions took 9.5 s in a debug build, 500 took 0.6 s
 const GROWTH_MARGIN: f64 = 2.0;
-/// Each size parses this often and counts its fastest run: a busy machine (the full suite's parallel tests) only slows
-/// some runs, so the fastest is the parse's own time; the four sources take turns in each round, so a slow stretch of
-/// the machine slows all of them alike instead of one size of one form (card linear-time)
+/// Each size parses this often and counts its fastest run, timed in the CPU time of the parsing thread: the gate's load
+/// stretched wall-clock time unevenly (10.3 and 10.8 times for 4 times the definitions, assignments 4.0), even with
+/// the four sources taking turns in each round (card linear-time)
 const RUNS: usize = 9;
 
 /// The source line number `index`
@@ -24,9 +25,9 @@ fn source_of(line: Line, count: usize, tail: &str) -> String {
 }
 
 fn time_parse(source: &str) -> Duration {
-	let started = Instant::now();
+	let started = thread_cpu_time();
 	WarpParser::parse(source);
-	started.elapsed()
+	thread_cpu_time() - started
 }
 
 /// How many times as long GROWTH times the lines take, for the definitions and for the assignments
