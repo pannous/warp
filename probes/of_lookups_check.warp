@@ -1,0 +1,13 @@
+# quick check of the of_lookups twin on single sources (card sugar-twins)
+use "../lib/compiler/parser.warp"
+use "../lib/compiler/of_lookups.warp"
+check(source: text) := view_of(of_lookups(node_of(plain(tree(source)))))
+print check("a of b")
+print check("z: list of int = [1]")
+print check("first 2 of xs")
+print check("name of p + 1")
+print check("print type of xs")
+print check("square of a number = it * it")
+print check("length of characters in text")
+print check("x in xs")
+print check("words = 3; n = words in t")

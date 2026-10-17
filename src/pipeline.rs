@@ -86,7 +86,7 @@ const SOURCE_PHASES: [&[Pass]; 5] = [SUGAR_PASSES, DECLARATION_PASSES, MODULE_PA
 const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 
 /// The written forms as the parser keeps them: sugar, markup and web words, blocks, before any pass reads a declaration
-const SUGAR_PASSES: &[Pass] = &[
+pub const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
 	// `if let Some(v) = o`, a match of `Some(v) =>` and `None =>` arms (rust_options.rs), before the arms below
