@@ -313,3 +313,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 =========
 =======
 - 2026-10-16 unit-amount (reviewer on decisions-md): a unit after any amount not written as a number (a field, a call, a sum) is refused like after a variable; one helper with_unit_written writes the advice (tests/numbers/test_unit_after_expression.rs)
+- 2026-10-17 union-result bounce: a declared builtin union checks the variable after the store (x: T = v; check x; x) instead of hoisting v into a temporary, so the compiler still sees and refuses a known misfit (x: int|text = sqrt(2), = [1, 2]); literals stay unchecked at run time
