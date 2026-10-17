@@ -25,14 +25,16 @@ pattern; Wasp (C++) has its own tap pannous/homebrew-wasp).
     to the release as warp-lang_<v>_amd64.deb / warp-lang-<v>-1.x86_64.rpm (and arm64/aarch64).
   - AUR warp-lang-bin: packaging/aur/PKGBUILD (source of truth), `packaging/aur/update_aur.sh <version> [--push]`
     writes pkgver, sha256sums and .SRCINFO (no makepkg needed; the aur job diffs it against `makepkg --printsrcinfo`,
-    builds, installs and runs it in archlinux:base-devel) and pushes when the secret AUR_SSH_KEY is set.
+    builds, installs and runs it in archlinux:base-devel) and pushes when the variable AUR_PUBLISH=true and the secret AUR_SSH_KEY is set.
   - Linux needs glibc >= 2.39 (Ubuntu 24.04, Debian 13, Fedora 40; not Ubuntu 22.04 or RHEL 9): the binaries are
     built on ubuntu-24.04 runners (card linux-glibc-floor).
   - One-time setup (user): PyPI account → pypi.org/manage/account/publishing "Add a new pending publisher": project
     warp-language, owner pannous, repository warp, workflow release.yml, environment pypi; then
     `gh variable set PYPI_PUBLISH -R pannous/warp -b true`. AUR: account on aur.archlinux.org with an ssh public key
     (`ssh-keygen -t ed25519 -f ~/.ssh/aur -N ''`, paste ~/.ssh/aur.pub in My Account), then
-    `gh secret set AUR_SSH_KEY -R pannous/warp < ~/.ssh/aur`. The next tag (or a repackage run) publishes both. Then the README's Install gets `pip install warp-language` and
+    `gh secret set AUR_SSH_KEY -R pannous/warp < ~/.ssh/aur` (set; aur.archlinux.org has registration paused, card
+    register-lang), then `gh variable set AUR_PUBLISH -R pannous/warp -b true`. PyPI is live since v1.3.0
+    (2026-10-17). Once the AUR is too, the README's Install gets
     `yay -S warp-lang-bin` (the .deb/.rpm line is there).
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
 - crates.io, prepared, not uploaded: packages `warp-lang` (`warp` is the web framework; the library is
