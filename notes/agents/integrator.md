@@ -25,6 +25,10 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
   self-hosting-minimal). A twin difference goes through with --flaky "<test> (twin difference accepted, owner records
   the drop)" and the owner records the dropped form or loosens the comparison afterwards.
+- Rust cleanup phase (notes/rust_cleanup.md, user 2026-10-17): a self-hosting worker's cleanup branch may break up
+  to 10% of the tests when they are edge cases. It lists them in notes/known_failures.md (test, card, reason);
+  push_tested.sh accepts listed failures at the tested tip. Hold the branch when a listed test looks like core
+  behaviour or it breaks tests it didn't list. On demand turn the lines into cards for the stage's worker.
 - Scripts: `integrator_tools/batch_build.sh [--worktree "$P"] [--base <ref>] [--cloud]
   [<card>…]` assembles a batch from the Ready cards (express cards left to express.sh, ≤8 tips, held tips in ../integrate_held.txt
   skipped), merges them with merge_batch.sh (`<branch>@<tip>`), runs keywords.py, native + wasm32 cargo check and fmt,
