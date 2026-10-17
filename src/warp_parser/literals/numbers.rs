@@ -3,7 +3,6 @@ use super::*;
 
 /// The litre's symbols, glued to a number only with `use units` (refused_glued_litre)
 const LITRE_SYMBOLS: [char; 2] = ['L', 'l'];
-const UNITS_MODULE: &str = "units";
 
 /// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an
 /// overline, or with a plain digit after an overlined one
@@ -124,7 +123,7 @@ impl WarpParser {
 	/// Is `unit` the litre, which this program may not glue to a number (no `use units`)
 	pub(crate) fn glued_litre_refused(&self, unit: &str) -> bool {
 		let is_litre = LITRE_SYMBOLS.iter().any(|symbol| unit == symbol.to_string());
-		is_litre && !self.options.data_mode && !self.source_uses(UNITS_MODULE)
+		is_litre && !self.options.data_mode && !self.source_uses(crate::modules::UNITS_MODULE)
 	}
 
 	/// Does a line of the source say `use units` (or `import`, `require`)

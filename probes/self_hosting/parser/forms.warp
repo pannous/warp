@@ -83,3 +83,6 @@ x = twice "ab"
 once [0]
 twice {a: 1}
 s.once
+once = [5]; once [0]
+twice(x) := x * 2; twice [3]
+f(once) := once [0]; f([4])
