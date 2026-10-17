@@ -3848,6 +3848,10 @@ PASSED:
   ✓ programs::test_midi::midi_notes_follow_one_another
   ✓ programs::test_midi::notes_survive_a_midi_file
   ✓ programs::test_midi::warp_opens_a_virtual_source_other_programs_can_listen_to
+  ✓ programs::test_mouse_wheel::a_shader_reads_the_wheel
+  ✓ programs::test_mouse_wheel::compute_toys_zoom_follows_the_wheel
+  ✓ programs::test_mouse_wheel::the_wheel_over_the_paint_window_is_mouse_wheel
+  ✓ programs::test_mouse_wheel::wheel_is_an_alias_of_mouse_wheel_with_a_hint
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
   ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
   ✓ programs::test_music_values::the_tuning_tunes_every_note
@@ -6265,4 +6269,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6260 passed, 0 failed, 6260 total tested
+13 ignored, 6264 passed, 0 failed, 6264 total tested

@@ -141,7 +141,7 @@ function keepBuffer(block, buffer) {
 // the holes every shader has (src/graphics/shader_holes.rs BUILTIN_HOLES), filled here when the shader reads them and the
 // program gave none: the image's size, seconds since the first render, the renders before, the pointer and key over
 // the canvas (canvas.js, self.pagePointer)
-const BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key"];
+const BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"];
 let firstRender, renders = 0;
 function builtinValues(shader, width, height) {
 	const shared = name => {
@@ -150,7 +150,7 @@ function builtinValues(shader, width, height) {
 	};
 	firstRender ??= performance.now();
 	const value = { width, height, size: [width, height], time: (performance.now() - firstRender) / 1000, frame: renders++,
-		mouse: [shared("mouse_x"), shared("mouse_y")], mouse_down: shared("mouse_down"), key: shared("key") };
+		mouse: [shared("mouse_x"), shared("mouse_y")], mouse_down: shared("mouse_down"), mouse_wheel: shared("mouse_wheel"), key: shared("key") };
 	return Object.fromEntries(BUILTIN_HOLES.filter(name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`).test(shader)).map(name => [name, value[name]]));
 }
 

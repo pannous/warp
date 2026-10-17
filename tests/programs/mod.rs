@@ -22,6 +22,7 @@ mod test_json_parser_fixes;
 mod test_kitchensink;
 mod test_live_redefine; // card live-redefine
 mod test_midi;
+mod test_mouse_wheel; // card shader-wheel
 mod test_music_values; // card music-values
 mod test_note_values; // card note-value
 mod test_paint;

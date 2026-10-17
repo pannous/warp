@@ -83,10 +83,15 @@ fn no_sample_or_library_is_a_third_party_shader() {
 	assert!(ports.is_empty(), "third-party shaders belong in github.com/pannous/shaders: {ports:?}");
 }
 
-// our own compute.toys kernels, the samples lava_lamp and northern_lights, compile and paint every pixel
+// our own shader samples (compute.toys kernels and a paint shader) compile and paint every pixel
 #[test]
 fn the_own_compute_toy_samples_render() {
-	for (sample, shader) in [("lava_lamp", "lamp"), ("northern_lights", "lights")] {
+	for (sample, shader) in [
+		("lava_lamp", "lamp"),
+		("northern_lights", "lights"),
+		("ringed_planet", "planet"),
+		("kaleidoscope", "kaleidoscope"),
+	] {
 		let code = std::fs::read_to_string(crate::common::sample_path(sample)).unwrap();
 		let kernel = code.split("# ten seconds").next().unwrap();
 		let said =

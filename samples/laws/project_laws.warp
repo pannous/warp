@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 # The human-owned laws of this project. AI agents must not edit this file.
 # Run `warp verify LAWS.warp` after changing code that these claims describe.
 

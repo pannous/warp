@@ -580,6 +580,7 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 	let frame = RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f32;
 	let size = [width as f32, height as f32];
 	let [mouse_x, mouse_y, mouse_down, key] = warp_runtime::system_values::window_input();
+	let wheel = warp_runtime::system_values::wheel() as f32;
 	let filled = crate::graphics::shader_holes::BUILTIN_HOLES
 		.into_iter()
 		.filter(|name| *name != crate::graphics::shader_holes::PREVIOUS_HOLE)
@@ -594,6 +595,7 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 			"frame" => vec![frame],
 			"mouse" => vec![mouse_x, mouse_y],
 			"mouse_down" => vec![mouse_down],
+			"mouse_wheel" => vec![wheel],
 			"key" => vec![key],
 			other => unreachable!("{other} is no built-in hole"),
 		},

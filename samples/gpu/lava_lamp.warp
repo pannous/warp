@@ -2,7 +2,8 @@
 # a compute.toys shader runs as it is: `compute_toy(shader { … })` of `use compute_toys` takes a single-pass
 # compute.toys kernel, main_image writing textureStore(screen, id.xy, color), and makes it a WGSL shader for paint.
 # This one is a lava lamp: seven blobs of wax rise and sink on slow loops of their own, melting into each other where
-# their fields add up; a press puts one more blob under the pointer. More compute.toys shaders that run with warp:
+# their fields add up; a press puts one more blob under the pointer, the wheel adds wax or takes it away
+# (compute.toys' mouse.zoom). More compute.toys shaders that run with warp:
 # https://github.com/pannous/shaders (folder warp/compute_toys)
 use compute_toys
 lamp = compute_toy(shader {
@@ -13,7 +14,7 @@ lamp = compute_toy(shader {
 		let pace = 0.11 + 0.05 * index;
 		let x = 0.45 * sin(t * pace * 1.3 + index * 2.4);
 		let y = 0.75 * sin(t * pace + index * 1.7);
-		return float3(x, y, 0.13 + 0.06 * fract(index * 0.618));
+		return float3(x, y, (0.13 + 0.06 * fract(index * 0.618)) * clamp(mouse.zoom, 0.5, 2.0));
 	}
 
 	// how much wax covers the point: each blob adds r² / distance², so blobs close together merge

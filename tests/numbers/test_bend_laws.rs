@@ -1,4 +1,4 @@
-//! Bend-style named quantifiers and the project-level LAWS.warp verification gate (card bend-style).
+//! Bend-style named quantifiers and the project laws sample samples/laws/project_laws.warp as a verification gate (card bend-style).
 #![cfg(feature = "native")]
 
 use warp::law::{extract_laws, Assurance};
@@ -23,7 +23,7 @@ fn verify(arguments: &[&str]) -> std::process::Output {
 
 #[test]
 fn the_project_laws_file_is_a_green_verification_gate() {
-	let run = verify(&["verify", "LAWS.warp"]);
+	let run = verify(&["verify", "samples/laws/project_laws.warp"]);
 	let output = String::from_utf8_lossy(&run.stdout);
 	assert!(run.status.success(), "{output} {}", String::from_utf8_lossy(&run.stderr));
 	assert!(output.contains("Proved  law square_symmetry"), "{output}");
