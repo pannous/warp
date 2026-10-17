@@ -29,7 +29,6 @@ const MAX_INT_BYTES: i32 = 20;
 const DECIMAL_BASE: i64 = 10;
 const ZERO_DIGIT: i32 = b'0' as i32;
 const MINUS_SIGN: i32 = b'-' as i32;
-const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 /// The text of a ø item in the text of a list (`str([1, ø])` is "[1 ø]")
 const EMPTY_TEXT: &str = "ø";
 

@@ -834,7 +834,14 @@ impl WasmGcEmitter {
 		let at_start = [I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(end)];
 		Self::emit_list(f, &at_start);
 		self.call(f, "grapheme_end");
-		f.instruction(&I::LocalSet(stop));
+		// a grapheme of one byte is an ASCII character, its byte the code point (card text-costs)
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::LocalTee(stop), I::LocalGet(start), I::I32Sub, I32Const(1), I::I32Eq, I::If(BlockType::Result(node_ref)),
+				I::LocalGet(bytes), I::LocalGet(start), I::ArrayGetU(self.type_manager.text_type),
+		]);
+		self.call(f, "new_codepoint");
+		f.instruction(&I::Else);
 		Self::emit_list(f, &at_start);
 		self.call(f, "utf8_next");
 		Self::emit_list(f, &[I::LocalGet(stop), I::I32Eq, I::If(BlockType::Result(node_ref))]);
@@ -843,7 +850,7 @@ impl WasmGcEmitter {
 		self.call(f, "new_codepoint");
 		f.instruction(&I::Else);
 		self.emit_text_piece(f, (bytes, start, stop));
-		f.instruction(&I::End);
+		Self::emit_list(f, &[I::End, I::End]);
 	}
 }
 

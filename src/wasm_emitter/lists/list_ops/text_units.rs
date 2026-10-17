@@ -373,8 +373,10 @@ impl WasmGcEmitter {
 		(bytes, pointer, end): (u32, u32, u32),
 		byte: u32,
 	) {
+		// an empty text has no first byte to read
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
+			I::LocalGet(end), I::LocalGet(pointer), I::I32GtU, I::If(BlockType::Result(ValType::I32)),
 			I::LocalGet(end), I::LocalGet(pointer), I::I32Sub,
 			I::I32Const(1),
 			I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(self.type_manager.text_type), I::LocalTee(byte), I::I32Const(utf8::TWO_BYTE_LEAD), I::I32GeU,
@@ -382,6 +384,7 @@ impl WasmGcEmitter {
 			I::LocalGet(byte), I::I32Const(utf8::THREE_BYTE_LEAD), I::I32GeU, I::I32Add,
 			I::LocalGet(byte), I::I32Const(utf8::FOUR_BYTE_LEAD), I::I32GeU, I::I32Add,
 			I::I32Eq,
+			I::Else, I::I32Const(0), I::End,
 		]);
 	}
 
@@ -607,10 +610,20 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// Push the $Text of the Text or Symbol node in local `node`
+	/// Push the $Text of the Text or Symbol node in local `node`: its data, unless it is a rope (text_flat)
 	pub(in crate::wasm_emitter) fn emit_text_bytes(&self, func: &mut Function, node: u32) {
-		Self::emit_list(func, &[I::LocalGet(node), I::RefAsNonNull]);
+		let (node_type, text_type) = (self.type_manager.node_type, self.type_manager.text_type);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(node), I::StructGet { struct_type_index: node_type, field_index: 2 }, I::RefIsNull,
+			I::If(BlockType::Result(self.text_ref())),
+				I::LocalGet(node), I::StructGet { struct_type_index: node_type, field_index: 1 },
+				I::RefCastNonNull(HeapType::Concrete(text_type)),
+			I::Else,
+				I::LocalGet(node), I::RefAsNonNull,
+		]);
 		self.call(func, TEXT_FLAT);
+		func.instruction(&I::End);
 	}
 
 	/// text_address(text): a copy of the text's bytes in the heap, for a host or C function reading by address; after

@@ -287,6 +287,8 @@ impl WasmGcEmitter {
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
 		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
+		let (text, text_type) = (self.text_ref_nullable(), self.type_manager.text_type);
+		locals.extend([text, text]);
 		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		let radix_texts = self.radix_text_calls();
 		let text_witness = self.text_witness_table();
@@ -295,6 +297,7 @@ impl WasmGcEmitter {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind) =
 				(4, 5, 6, 7, 8, 9, 10, 11);
+			let (joined, piece) = (12, 13);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -542,14 +545,19 @@ impl WasmGcEmitter {
 				s.emit_field(f, cell, 2);
 				Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 			};
-			// append the bytes of a text node: memory.copy(position, ptr, len); position += len
+			// append the $Text on the stack to joined at position; position += its length
+			let append_bytes = |f: &mut Function| {
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalSet(piece),
+					I::LocalGet(joined), I::LocalGet(position), I::LocalGet(piece), I32Const(0), I::LocalGet(piece),
+					I::ArrayLen, I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+					I::LocalGet(position), I::LocalGet(piece), I::ArrayLen, I::I32Add, I::LocalSet(position),
+				]);
+			};
 			let append_text = |f: &mut Function, text: u32| {
-				f.instruction(&I::LocalGet(position));
-				s.emit_text_field(f, text, 0);
-				s.emit_text_field(f, text, 1);
-				Self::emit_list(f, &[COPY_BYTES, I::LocalGet(position)]);
-				s.emit_text_field(f, text, 1);
-				Self::emit_list(f, &[I::I32Add, I::LocalSet(position)]);
+				s.emit_text_bytes(f, text);
+				append_bytes(f);
 			};
 			s.emit_empty_as_null(f, 0);
 			s.emit_require_list(f);
@@ -569,8 +577,14 @@ impl WasmGcEmitter {
 			s.emit_text_field(f, 1, 1);
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(bound)]);
 			end_loop(f);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(bound), I::ArrayNewDefault(text_type), I::LocalSet(joined),
+				I32Const(0), I::LocalSet(position), I32Const(1), I::LocalSet(is_first),
+				// the decimal digits of an Int go through memory: int_to_decimal writes there
+				I32Const(MAX_INT_BYTES), I::LocalSet(bound),
+			]);
 			s.emit_text_allocation(f, bound, address);
-			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position), I32Const(1), I::LocalSet(is_first)]);
 			// pass 2: write
 			loop_over_cells(f);
 			Self::emit_list(f, &[I::LocalGet(is_first), I::I32Eqz, I::If(BlockType::Empty)]);
@@ -579,11 +593,14 @@ impl WasmGcEmitter {
 			is_kind(f, Kind::Text);
 			f.instruction(&I::If(BlockType::Empty));
 			append_text(f, element);
-			Self::emit_list(f, &[I::Else, I::LocalGet(position), I::LocalGet(position)]);
+			Self::emit_list(f, &[I::Else, I::LocalGet(address), I::LocalGet(address)]);
 			s.emit_int_value_of(f, element);
-			Self::emit_list(f, &[I::Call(s.func_index("int_to_decimal")), I::I32Add, I::LocalSet(position), I::End]);
+			Self::emit_list(f, &[I::Call(s.func_index("int_to_decimal")), I::Call(s.func_index(crate::wasm_emitter::TEXT_FROM_MEMORY))]);
+			append_bytes(f);
+			f.instruction(&I::End);
 			end_loop(f);
-			s.emit_new_text_to(f, address, position);
+			Self::emit_list(f, &[I32Const(0), I::LocalSet(is_first)]);
+			s.emit_text_piece(f, (joined, is_first, position));
 		});
 	}
 }
