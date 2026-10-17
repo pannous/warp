@@ -229,6 +229,8 @@ pub struct WasmGcEmitter {
 	text_witness: Option<reflection::witness::WitnessTable>,    // runtime dispatch of Printable to user types (witness.rs)
 	shown: Option<u32>, // the function giving main's value with printable instances as their texts (witness.rs)
 	late_calls: Vec<functions::late_calls::LateCall>, // runtime calls of warp-written functions (late_calls.rs)
+	/// prelude words the emitted code calls that the program did not load (late_calls.rs compiler_word)
+	missing_compiler_words: Vec<String>,
 	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
@@ -1009,6 +1011,12 @@ fn emit_module_with(node: &Node, ratio_division: bool) -> Result<(CompiledModule
 	let mut emitter = WasmGcEmitter::new();
 	emitter.ratio_division = ratio_division;
 	emitter.emit_for_node(node);
+	if !emitter.missing_compiler_words.is_empty() {
+		let missing = std::mem::take(&mut emitter.missing_compiler_words);
+		let message = format!("internal error: {} called but not loaded", missing.join(", "));
+		crate::compiler::compile_context::change(|context| context.missing_compiler_words = missing);
+		return Err(crate::node::error(&message));
+	}
 	if let Some(type_error) = emitter.type_error() {
 		return Err(type_error);
 	}

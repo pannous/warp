@@ -1181,18 +1181,11 @@ impl Broadcast {
 	}
 }
 
-/// The prelude words this pass may call where the program writes none: element_wise_any, of any element-wise operator
-/// (the parser wrote it as a map whose lambda parameter no module scan counts) or `dot` (`sum(a .* b)`)
-pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
-	fn has_element_wise(node: &Node) -> bool {
-		element_wise_parts(node).is_some()
-			|| node.is_symbol(DOT_WORD)
-			|| node.drop_meta().parts().into_iter().any(has_element_wise)
-	}
-	match statements.iter().any(has_element_wise) {
-		true => vec![ELEMENT_WISE_ANY.to_string()],
-		false => vec![],
-	}
+/// The prelude word this pass may call where the program writes none (modules IMPLIED_WORDS): element_wise_any, of
+/// any element-wise operator (the parser wrote it as a map whose lambda parameter no module scan counts) or `dot`
+/// (`sum(a .* b)`)
+pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
+	(element_wise_parts(node).is_some() || node.is_symbol(DOT_WORD)).then_some(ELEMENT_WISE_ANY)
 }
 
 /// P166 (user): an element-wise operator on a plain number is the plain operator, `6 ./ 2` is 3. The parser wrote
