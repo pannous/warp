@@ -48,7 +48,7 @@ change the proposition.
 - Results are cached by the hash of the Lean source in `~/.cache/warp/lean/law_<hash>.{lean,result}` (shared by all checkouts). The export unfolds only the functions a law reaches (an unused simp argument is a Lean warning), and only `: error` lines fail a proof. This is the "proof result recorded" step until the semantic artifact exists.
 - Not exported, so the law stays at the Tested level: Float parameters, `/`, and anything outside the term subset.
 
-## Recursive functions (card recursive-laws)
+## Recursive functions
 
 - Exported with `termination_by a.toNat + b.toNat` (the sum of the parameters' sizes) and `decreasing_by all_goals
   omega`: each recursive call must lower the sum, as `n - 1` under `¬ n ≤ 0` does. Lean refuses other recursions
@@ -74,10 +74,6 @@ change the proposition.
 - `Tested (reason)`: every generated instance held, but Lean could not prove it or export it.
 
 Counterexamples come from property tests evaluated in wasm. Lean either proves the universal integer statement or returns `Unknown`.
-
-## Found by laws
-
-- Laws caught a real bug: in `:=` functions, `x:float` parameters are compiled as Int, so `half(x:float) := x/2; half(1.0)` returns 0. See the ignored test `test_law_float_parameters_are_tested`. The cause is that `UserFunctionDef.params` keeps only defaults, not types, and `infer_function_return_kind` assumes Int.
 
 ## Next
 
