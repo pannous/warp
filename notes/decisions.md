@@ -20,6 +20,11 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   bloat and inelegant passes, cleanest minimal implementation first. Failing fringe/edge forms are fine if each dropped
   form is recorded with how to bring it back (notes/self_hosting_dropped.md); twins measure the kept forms via an
   exclusion list. Sizeable syntax drops go to the user as questions.
+- self-parser-drops (2026-10-17, user): lib/compiler/parser.warp leaves out foreign syntax (Rust macros, Python
+  generators/yield from, Ruby blocks), music `go {…}`, phrase definitions (`to get price of item := …`), CSS in style;
+  silently also WGSL shader holes, `$a` pattern names, error nodes. Code is data: music and CSS need no parser syntax and
+  must still work as library data DSLs (`tune d:data := play d` → `tune { c4 e4 g4 }`, note names are sound-library
+  constants; `style {…}` reads its block as data).
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
@@ -260,6 +265,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
 - curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø` (Interviewer's decision).
 - empty-group-node (leave as is, user 2026-10-17): an empty group in code is ø (`parse("{}") == ø`, `bracketed([], "{")` is ø); self-hosting twins compare with ø ≈ {} or the bridge maps ø back to the Rust bracket.
+- node-part-clash (user 2026-10-17): part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
