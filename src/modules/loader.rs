@@ -566,9 +566,8 @@ impl<'a> Loader<'a> {
 		if !prelude.iter().any(|word| mentioned.contains(word)) {
 			return Ok(());
 		}
-		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
 		// a program's own `first(xs) := …` takes its calls from the prelude's: a hint, as a used module's is a warning
-		let declarations: Vec<Node> = statements(parsed_prelude(source)).into_iter().filter(is_declaration).collect();
+		let declarations: Vec<Node> = std_module_statements(PRELUDE_MODULE).into_iter().filter(is_declaration).collect();
 		warn_replaced(&declarations, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
 		let reached =
 			reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat(), declarations);
@@ -904,26 +903,6 @@ fn imported_statements(node: &Node) -> Option<Vec<Node>> {
 		Node::Meta { node, data } if data.is_symbol(IMPORTED_STATEMENTS) => Some(statements(*node.clone())),
 		_ => None,
 	}
-}
-
-thread_local! {
-	/// lib/prelude.warp as parsed, with the source it was parsed from: most programs load a few of its words, and a
-	/// process compiling many (the tests, `warp dev`) parses it once
-	static PARSED_PRELUDE: std::cell::RefCell<Option<(String, Node)>> = const { std::cell::RefCell::new(None) };
-}
-
-fn parsed_prelude(source: &str) -> Node {
-	PARSED_PRELUDE.with(|parsed| {
-		if let Some((_, module)) = parsed.borrow().as_ref().filter(|(parsed_source, _)| parsed_source == source) {
-			return module.clone();
-		}
-		let shown = shown_path(&std_path(PRELUDE_MODULE));
-		let module = crate::normalize::without_hints(|| {
-			crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source))
-		});
-		*parsed.borrow_mut() = Some((source.to_string(), module.clone()));
-		module
-	})
 }
 
 /// The prelude's definitions the program's statements reach, and those their bodies reach once lowered (a pass may
