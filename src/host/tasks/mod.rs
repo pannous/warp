@@ -21,9 +21,7 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use wasmtime::{
-	AsContextMut, Caller, Engine, Func, Global, Linker, Memory, Module, StoreContextMut, Val, ValType,
-};
+use wasmtime::{AsContextMut, Caller, Engine, Func, Global, Linker, Memory, Module, StoreContextMut, Val, ValType};
 
 mod channels;
 use channels::*;
