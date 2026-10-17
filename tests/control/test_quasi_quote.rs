@@ -67,3 +67,11 @@ fn a_template_in_a_lambda_splices_its_parameter() {
 		true
 	);
 }
+
+#[test]
+fn a_quoted_literal_is_the_literal() {
+	is!("n = data(3)\nn", 3);
+	is!("data(3) + 1", 4);
+	is!("t = data(\"s\")\nt", "s");
+	is!("f(x) := x\nf(data(3))", 3);
+}
