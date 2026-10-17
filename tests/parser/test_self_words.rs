@@ -71,7 +71,10 @@ fn call_kinds_are_rusts() {
 		.iter()
 		.filter_map(|entry| {
 			let Node::Key(word, _, kind) = entry.drop_meta() else { panic!("no `word: kind` {}", entry.serialize()) };
-			let (word, kind) = (word.text_value().expect("a word text").to_string(), kind.text_value().expect("a kind text").to_string());
+			let (word, kind) = (
+				word.text_value().expect("a word text").to_string(),
+				kind.text_value().expect("a kind text").to_string(),
+			);
 			let rust = rust_call_kinds(&word);
 			(!rust.contains(&kind)).then(|| format!("{word}: warp {kind}, rust {rust:?}"))
 		})
