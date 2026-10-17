@@ -1,12 +1,16 @@
 // The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as node_view writes it
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
+use "lib/compiler/sugar.warp"
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool; branch: bool; grouped: bool; resumes: list; breaks: list }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
-def tree(source) {
+def tree(source) := sugared(written_tree(source))
+
+// The tree as the source writes it, before the sugar pass (lib/compiler/sugar.warp)
+def written_tree(source) {
 	found = gaps(source, source.length)
 	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false, branch: false, grouped: false, resumes: found.resumes, breaks: found.breaks}
 	items(p, ' ', "")
@@ -281,7 +285,7 @@ def continued(p, left, min_power) {
 			if index == ø { index = expression(p, 0) }
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
-			left = subscript(left, index)
+			left = ["key", "[]", left, index]
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)
@@ -293,15 +297,13 @@ def continued(p, left, min_power) {
 			if powers#1 < min_power { break }
 			p.at = p.at + written.length
 			skip_blanks(p)
-			quotient = listed("(", "", [["symbol", "floor_quotient"], left, expression(p, powers#2)])
-			if written == "/!=" { quotient = ["key", "=", left, quotient] }
-			left = quotient
+			left = ["key", written, left, expression(p, powers#2)]
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			word = membership_at(p)
 			if 115 < min_power { break }
 			p.at = p.at + word.length
 			skip_blanks(p)
-			left = listed("", " ", [left, ["symbol", word.replace("is in", "in")], expression(p, 116)])
+			left = listed("", " ", [left, ["symbol", word], expression(p, 116)])
 		} else {
 			op = operator_at(p)
 			if op.length == 0 {
@@ -577,25 +579,6 @@ OPERAND_POWERS = [91, 141]
 // A braceless argument takes arithmetic and ranges, stops at comparisons: `f 3-1 > 5`, `y = sum 1..4`
 ARGUMENT_POWER = 130
 
-// `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
-// Rust twin: warp_parser subscript
-def subscript(target, index) {
-	bounds = slice_bounds(index)
-	if bounds != ø { return listed("(", "", [["symbol", "slice"], target] + bounds) }
-	["key", "#", target, one_based(index)]
-}
-
-// The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
-// Rust twin: subscripts.rs slice_bounds
-def slice_bounds(index) {
-	if not (index is list) or index.length != 4 or index#1 != "key" { return ø }
-	op = index#2
-	if op == ":" or op == ".." { return [index#3, index#4] }
-	if op != "to" { return ø }
-	if index#4 == ø { return [index#3, ø] }
-	[index#3, ["key", "+", index#4, 1]]
-}
-
 // The marks of a slice from the start, `xs[:3]`, `xs[...3]`, each with its operator
 // Rust twin: subscripts.rs SLICE_FROM_START
 SLICE_FROM_START = [[":", ":"], ["…", "to"], ["...", "to"], ["..", ".."]]
@@ -612,13 +595,6 @@ def slice_from_start(p) {
 		}
 	}
 	ø
-}
-
-// `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
-// Rust twin: warp_parser subscript
-def one_based(index) {
-	if index is number { return index + 1 }
-	["key", "+", index, 1]
 }
 
 // Below member access and indexing: `xs#1++`
@@ -800,14 +776,13 @@ ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "
 // Binds a condition until `then`, `do` or the colon of `if c: x`
 CONDITION_POWER = 81
 
-// Rust's `loop { … }` is `while true { … }`; ø when no block follows the word
+// `loop { … }` as written, ø when no block follows the word
 // Rust twin: atoms.rs keyword_form (LOOP_WORD)
 def endless_loop(p) {
-	at = p.at + 4
-	while at < p.n and (p.code[at] == ' ' or p.code[at] == '\t') { at = at + 1 }
+	at = blank_end(p, p.at + 4)
 	if not is_at(p.code, at, '{', p.n) { return ø }
 	p.at = at + 1
-	return ["key", "do", ["key", "while", ø, true], items(p, '}', "{")]
+	["key", "loop", ø, items(p, '}', "{")]
 }
 
 // `if c {…} else {…}` and `while c {…}`: the block after the condition is its branch or body
