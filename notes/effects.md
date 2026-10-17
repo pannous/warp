@@ -38,7 +38,7 @@ with `new_int`, `read_bytes_with_wasi` returns a Node (shared `val_to_node` in w
 
 ## Known gaps / next
 - `puts x` / `puti x` where `x` is a *function parameter* panics "Undefined variable" (WASI emitter looks up
-  main's scope). Pre-existing, now reachable more often.
+  main's scope).
 - WASI output written with no trailing newline glues onto libtest's `test … ok` line, so test.sh can miss
   such tests (e.g. test_list_index_after_puts passes but isn't counted).
 - Once `src/semantic/` exists: store `EffectSet` on `Expr`/`FunctionDecl`, spans from the IR, and let the

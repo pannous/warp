@@ -35,9 +35,8 @@ into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is 
   arguments (components::takes_no_arguments). Records stay plain values (`s.words`).
 - A result<own<r>, …> or option<own<r>> counts as a handle for compile-time tracking (components::resource_inside).
 - A text where list<u8> is wanted passes its UTF-8 (`hex.encode("hi")`).
-- WASI: stubbing unknown imports as traps defined each import under its exact name, which shadowed the newer WASI
-  version that wasmtime serves (std imports wasi:random/insecure-seed@0.2.6, wasmtime-wasi serves 0.2.12). Now a
-  component that links gets no stubs (components::serve_host_imports).
+- WASI: a component that links gets no trap stubs for unknown imports (components::serve_host_imports): a stub under
+  the import's exact name would shadow the newer WASI version wasmtime serves (std imports 0.2.6, wasmtime-wasi 0.2.12).
 
 ## Prebuilt downloads
 - Order: the newest cached component, else the newest hosted one, else the local build. Hosted = the assets

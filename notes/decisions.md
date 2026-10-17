@@ -9,11 +9,11 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Process
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
 - ready-queue: the board's Ready column is the merge queue (`todo ready <card>`, refuses only a branch that doesn't merge cleanly into origin/main); batches of ≤ ~8 cards, wide refactors and carrier branches alone and first; the Integrator resolves only trivial conflicts, others go back to the owner (card to Now + note with the hunk); a reviewer veto moves the card back to Now.
-- urgent-direct (2026-10-17, user, agreed with warp-urgent): warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
+- urgent-direct (2026-10-17, user): warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
 - fix-forward: the Integrator may ignore up to 10 failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the owner (notes/roles.md "Fix forward").
 - crash-fixes-first: crash fixes merge with the highest priority. small-changes-on-main: small or non-conflicting changes may go on main without a worktree. session-names: a session is named for its current task.
-- matching-first: the matching roadmap comes before further self-hosting. self-hosting: parser first, each warp part a twin of its Rust part with a differential test over every sample; gaps are fixed in the language. self-hosting-postponed (lifted 2026-10-17): no new steps until topic parser-features and the cleanup are done;
-  existing twins stay. self-hosting-resumed (2026-10-17, user): self-hosting is the fleet's next big task; workers
+- self-hosting: parser first, each warp part a twin of its Rust part with a differential test over the samples' kept forms (exclusion list, self-hosting-minimal); gaps are fixed in the language.
+  self-hosting-resumed (2026-10-17, user): self-hosting is the fleet's next big task; workers
   finish their current work, then switch to it, starting with a readiness survey (warp-self-survey: are all the
   language parts there, or should macros or a cheaper feature come first so the warp compiler doesn't bloat).
 - self-hosting-minimal (2026-10-17, user): the warp compiler is no blind copy of the Rust one; it drops experimental
@@ -38,10 +38,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cargo-fmt: the gate enforces `cargo fmt --check` (`use_small_heuristics = "Max"`). emit-rows: emitter instruction lists one logical step per row like WAT, kept by `#[rustfmt::skip]`. rust-style-lint: of the Rust lint rules only doc-moved is enforced.
 - git-hook restore: agents may restore only Cargo.toml/Cargo.lock (the build tweak); the hook backs up the diff first.
 - #1 avoid panics, errors as values. #14 not-implemented errors unless easy.
-- P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license (2026-10-17, confirmed by the user, replacing the night's "unlicensed"): the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
+- P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license (2026-10-17, user): the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
 - package-reexport (2026-10-17, user; card module-own): a package's own `use` lines reach the programs that use it.
   `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
-- laws-file (2026-10-17, user): the human-owned laws move from root LAWS.warp to samples/laws/project_laws.warp
+- laws-file (2026-10-17, user): the human-owned laws live in samples/laws/project_laws.warp
   (samples/laws/laws.warp already exists), keeping the "AI agents must not edit this file" header; test_bend_laws runs
   `warp verify samples/laws/project_laws.warp`.
 - Language name: warp everywhere; `.wasp` files still read; URLs/domains and wisp unchanged.
@@ -100,7 +100,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - unicode-symbols: warp parses Unicode symbol characters (arrows, math) as free operator names; an undefined use is "operator ⇔ is not defined". Arrow spellings of existing operators are alias lines in lib/math.warp with a "prefer ->" hint.
 - operator-alias: math spellings of operators are alias lines in lib/math.warp keeping the precedence (`operator × := *`, `prefix operator √ := sqrt`).
 - implicit-words-reserved: `it`, `self`, `this` are reserved: binding one warns (error under use strict); as the explicit parameter (`f(it) := …`) it is allowed.
-- data-reserved (2026-10-17, user, told to warp-self-splice): `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
+- data-reserved (2026-10-17, user): `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
 - exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.

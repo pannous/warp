@@ -52,11 +52,11 @@ Node implementation is never removed: it is the fallback for any list the analys
 
 ## How a host-native or GPU backend plugs in
 
-1. Keep the whole-list operation visible until emission. Today `sum`, `map`, element-wise arithmetic and `sort` are
+1. Keep the whole-list operation visible until emission. `sum`, `map`, element-wise arithmetic and `sort` are
    lowered to loops early. For a backend to take over a whole operation, lower `sum xs` to a pseudo-call such as
    `list_sum(xs)` (like `zero_fill` and `ran_without_error`), and `map` with a known body to `list_map(xs, body)`, then add
    `ListOp::{Sum, Map(body), ElementWise(op), Sort}`. The typed backend emits the loop over `$IntArray` (what the lowered
-   loop does today); the Node backend keeps today's lowering.
+   loop does); the Node backend keeps the current lowering.
 2. `list_backend` returns `Backend::Host` for those ops when the element type is supported. The emitted code tests the
    length at run time: `if length >= HOST_BACKEND_MIN_LENGTH { call host.list_sum(list) } else { typed loop }`, so a short
    list never pays the transfer and the program cannot tell which ran.
@@ -156,7 +156,7 @@ checked like a declared scalar:
 appends_while_aliased) an append copies only if it can run after an assignment between its own
 variable and another (`ys = xs`, `xs = ys`) in program order, or in a loop around one. map / filter of 10^6 ints: 7–9
 ms (release); a variable given a second map result (`d = d.map(…)`) stays linear. Tests: tests/lists/test_map_typed.rs.
-In a loop around both (a map in a `for round` body) the alias at the end of one round no longer counts for the next round's appends when the round first gives the variable
+In a loop around both (a map in a `for round` body) the alias at the end of one round does not count for the next round's appends when the round first gives the variable
 a fresh list (`out = ø`, a literal, a call's result), unconditionally, in that loop and before the append (ListEvent
 Fresh). Tests: tests/lists/test_map_inside_loop.rs, probes/map_inside_loop.warp. A result variable
 declared before the loop (`d = []; for … { d = xs.map(…) }`, card map-predeclared) has the kind ø, as `[]` does; it

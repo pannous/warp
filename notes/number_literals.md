@@ -22,8 +22,7 @@ type([0.0, 0.0])   # list of int
 A variable's type is the join of its literal and every write the analyzer can see, so a read anywhere sees the final
 type: `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes `shown` a list of float from the start, and an int variable
 later given a float holds floats throughout. `collect_variables` collects again with the widened types until nothing
-widens (`Scope::widened_bindings`). Without it, a read typed before the widening write (`max` lowers to
-`(a = …; b = shown#i; …)`) got an i64 local fed an f64: "WASM validation failed: expected i64, found f64".
+widens (`Scope::widened_bindings`).
 Not covered: writes the analyzer cannot see (a list passed to a function that writes floats into it), which would need
 widening at run time, a check on every store.
 
