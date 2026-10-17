@@ -1,4 +1,0 @@
-// card matches-infix: `use regex` makes matches an infix word; prints yes, no
-use regex
-print "abc" matches "a.c"
-print "abd" matches "a.c$"

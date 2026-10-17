@@ -7,6 +7,7 @@ mod test_big_int_bits; // card big-int
 mod test_big_int_text; // card out-fuel
 mod test_big_ratio;
 mod test_compound_accumulator; // card compound-accumulator
+mod test_conversion_unit_not_dispatched; // card print-km
 mod test_counting_units;
 mod test_data_number_words; // card hint-data-word
 mod test_decimal_units;
@@ -19,6 +20,7 @@ mod test_duration_text;
 mod test_dynamic_units; // card units-dynamic
 mod test_exact_parameters;
 mod test_exponent_texts; // card int-text
+mod test_fast_int; // card fast-int
 mod test_fast_math; // card switch-rebinds
 mod test_fast_scope; // card fast-scope
 mod test_fixed_width_ints;
@@ -91,6 +93,7 @@ mod test_rounding_in_functions;
 mod test_run_time_power;
 mod test_run_time_remainder;
 mod test_shift_operators;
+mod test_sqrt_quantity_unit; // card sqrt-quantity-unit
 mod test_static_units;
 mod test_static_units_compiled;
 mod test_static_units_data;
@@ -105,6 +108,8 @@ mod test_text_then_conversion; // card print-km
 mod test_time_of_day;
 mod test_trailing_symbol; // card trailing-symbol
 mod test_unbounded_int;
+mod test_unit_after_expression; // reviewer on card decisions-md
+mod test_unit_after_variable_hint; // card diagonal-holds
 mod test_unit_columns; // card units-stress
 mod test_unit_composites;
 mod test_unit_conversion;

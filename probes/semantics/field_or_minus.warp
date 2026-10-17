@@ -1,4 +1,0 @@
-// decision field-or-minus: a missing kebab field is an error with the fix "p.phone - number"
-p = {phone: 7}
-number = 2
-p.phone-number

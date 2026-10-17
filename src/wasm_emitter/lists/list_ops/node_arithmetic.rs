@@ -1,5 +1,7 @@
 //! Arithmetic on Nodes whose kind only the run time knows, and texts as numbers
 use super::*;
+use crate::wasm_emitter::runtime_dependencies::{any, Dependency};
+use crate::wasm_emitter::INT_RUNTIME;
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
 pub const TEXT_AS_INT: &str = "text_as_int";
@@ -16,6 +18,15 @@ pub const NODE_ARITHMETIC: [(&str, Op, &str); 7] = [
 	("node_rem", Op::Rem, "exact_rem"),
 	(NODE_POW, Op::Pow, "exact_pow"),
 ];
+
+/// The node arithmetic reads texts as numbers and falls back to exact Ints; each function needs its exact one
+pub(in crate::wasm_emitter) fn node_arithmetic_dependencies() -> Vec<Dependency> {
+	let functions: Vec<&'static str> = NODE_ARITHMETIC.iter().map(|(name, _, _)| *name).collect();
+	let shared =
+		any(&functions, &[TEXT_AS_FLOAT, INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);
+	let exact = NODE_ARITHMETIC.iter().map(|(name, _, exact)| any(&[*name], &[*exact]));
+	[shared, any(&[NODE_POW], &["is_ratio", "invalid_number"])].into_iter().chain(exact).collect()
+}
 
 /// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
 pub const TEXT_AS_FLOAT: &str = "text_as_float";

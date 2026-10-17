@@ -87,8 +87,8 @@ impl WarpParser {
 		next.is_alphabetic() || next == '_'
 	}
 
-	/// Modifier and type words between the keyword and the name (`global const int k=7`): the global holds the value, the words are dropped
-	/// Skips the modifiers before a global's name: the last type word among them, `float` of `global float y = 2`
+	/// Skips the modifier and type words between the keyword and a global's name (`global const int k=7`: the global
+	/// holds the value, the words are dropped); the last type word among them, `float` of `global float y = 2`
 	pub(crate) fn skip_declaration_modifiers(&mut self) -> Option<String> {
 		let mut type_word = None;
 		loop {

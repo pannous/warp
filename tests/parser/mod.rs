@@ -29,6 +29,7 @@ mod test_json;
 mod test_juxtaposition;
 mod test_meta;
 mod test_meta_attributes;
+mod test_named_argument_lambda; // card holder-says
 mod test_newline_precedence;
 mod test_number_glyphs;
 mod test_one_line_statements;

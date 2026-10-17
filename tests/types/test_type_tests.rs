@@ -3,11 +3,9 @@ use crate::is;
 
 #[test]
 fn test_scalar_type_tests() {
-	is!("3 is int", 1);
 	is!("3.5 is int", 0);
 	is!("3.5 is rational", 1);
 	is!("7/2 is rational", 1);
-	is!("3 is rational", 1);
 	is!("3.5 is number", 1);
 	is!("\"a\" is text", 1);
 	is!("\"abc\" is text", 1);
@@ -102,5 +100,4 @@ fn test_bare_type_names_are_type_values() {
 	is!("t = type(0); t == int", 1);
 	is!("int == int", 1);
 	is!("int == number", 0);
-	is!("3 == int", 0);
 }

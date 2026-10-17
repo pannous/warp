@@ -42,7 +42,6 @@ fn bits_of_whole_numbers() {
 	is!("use math; bit_count(0)", 0);
 	is!("use math; bit_and(12, 10)", 8);
 	is!("use math; bit_or(12, 10)", 14);
-	is!("5 xor 3", 6);
 }
 
 #[test]

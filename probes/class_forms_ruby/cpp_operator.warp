@@ -1,2 +1,0 @@
-class V { x:int; operator +(o:V) := V(x + o.x) }
-(V(3) + V(4)).x

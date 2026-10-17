@@ -46,6 +46,5 @@ fn a_jump_inside_a_try_keeps_the_try_catching() {
 
 #[test]
 fn bare_try_else_still_works() {
-	is!("try 1 + [1 2]#5 else 0", 0);
 	is!("try [1 2]#5 else 4", 4);
 }

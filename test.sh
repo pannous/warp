@@ -5,6 +5,9 @@
 # rustc building warp-lang at opt-level 2 (OPTIMIZED_COMPILER below) took 4.2–6.2 GB, over the queue's 4 GB default
 # cap; moot once tests/queue.sh caps only tests (branch queue-prebuild)
 export WARP_TEST_MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-8}"
+# the queue's time limit per test binary (600 s) is for hangs in targeted runs: the full run's tests binary takes
+# 415 s on a quiet machine and was killed at 602 s under load (one-dispatch gate, 2026-10-16: 22 failures, no panics)
+export WARP_TEST_TIME_LIMIT="${WARP_TEST_TIME_LIMIT:-1800}"
 [ -z "$WARP_TEST_LOCKED" ] && exec "$(dirname "$0")/tests/queue.sh" "$0" "$@"
 
 OUTPUT_FILE="${1:-test_results.txt}"
@@ -71,6 +74,27 @@ run_test_executables() {
 run_test_executables 2>&1 | tee "$TEMP_FILE"
 RUN_SECONDS=$((SECONDS - RUN_START))
 
+# a test binary that crashed or was killed prints neither its failures' panics nor which test brought it down: its
+# unfinished and failed tests run again, in JSON, whose `started` events name the tests running at a second crash and
+# whose `failed` events carry the panic at once (report: tests/crash_report.py)
+RERUN_FILE=$(mktemp)
+rerun_incomplete_executables() {
+	local source executable names
+	while IFS=$'\t' read -r source executable; do
+		awk -v header="($executable)" 'index($0, header) { inside = 1; next } /^ +Running / { inside = 0 } inside' \
+			"$TEMP_FILE" > "$TEMP_FILE.section"
+		grep -q '^test result:' "$TEMP_FILE.section" && continue
+		names=$("$RUNNER_PROGRAM" "$executable" --list --format terse 2>/dev/null | sed -n 's/: test$//p' |
+			grep -vxF -f <(grep -a -o -E '^test [A-Za-z0-9_:]+ \.\.\. (ok|ignored)' "$TEMP_FILE.section" | cut -d' ' -f2))
+		echo "RERUN of ${source#"$PWD/"}: $(echo "$names" | grep -c .) unfinished or failed tests"
+		[ -z "$names" ] && continue
+		# shellcheck disable=SC2086 # one argument per test name
+		RUSTC_BOOTSTRAP=1 CARGO="$(command -v cargo)" "$RUNNER_PROGRAM" "$executable" --exact --test-threads=$TEST_THREADS \
+			-Zunstable-options --format json --report-time $names 2>&1 | python3 -I tests/crash_report.py
+	done < "$TEST_EXECUTABLES"
+	rm -f "$TEMP_FILE.section"
+}
+
 # Strip ANSI color codes so the summary greps work on the raw log
 sed -i '' $'s/\033\[[0-9;]*m//g' "$TEMP_FILE"
 # output with a newline can push a result onto the next line (`test x ... ` or `test x ... 3`, then `ok <0.003s>`):
@@ -82,6 +106,7 @@ awk '
 	pending != "" && /<[0-9.]+s>$/ { print pending $0; pending = ""; next }
 	{ print }
 	END { if (pending != "") print pending }' "$TEMP_FILE" > "$TEMP_FILE.joined" && mv "$TEMP_FILE.joined" "$TEMP_FILE"
+rerun_incomplete_executables | tee "$RERUN_FILE"
 
 # Count test results
 # a test's own output (a wasm program writing to stdout) can glue onto its "test … ok" line: match the test anywhere
@@ -115,6 +140,7 @@ TOTAL_TESTED=$((TOTAL_PASSED + TOTAL_FAILED))
 	echo "FAILED:"
 	results FAILED | sed 's/test /  ✗ /' | sed 's/ \.\.\. FAILED$//' | sort
 	[ "$INCOMPLETE" -gt 0 ] && echo "  ✗ INCOMPLETE: $INCOMPLETE test binaries ended without a result (crashed or killed)"
+	sed 's/^/    /' "$RERUN_FILE"
 
 	echo ""
 	echo "SUMMARY:"
@@ -127,7 +153,7 @@ TEST_SECONDS=$(awk '{total += $1} END {printf "%.0f", total}' "$TIMES_FILE")
 # the run's wall clock against the tests' summed time per thread: close means the threads were busy to the end
 echo "TIMING: compile ${COMPILE_SECONDS} s, run ${RUN_SECONDS} s; tests summed ${TEST_SECONDS} s ($((TEST_SECONDS / TEST_THREADS)) s per thread, all in $TIMES_FILE); slowest tests (seconds):"
 slowest | sed 's/^/  /'
-rm "$TEMP_FILE"
+rm "$TEMP_FILE" "$RERUN_FILE"
 
 echo ""
 echo "Clean summary saved to: $OUTPUT_FILE"

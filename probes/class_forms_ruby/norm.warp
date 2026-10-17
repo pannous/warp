@@ -1,2 +1,0 @@
-class V { x:int; y:int; norm() := x*x + y*y }
-V(3,4).norm()
