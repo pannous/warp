@@ -193,12 +193,12 @@ fn xml_attribute(item: &Node) -> Option<String> {
 	})
 }
 
-/// The entry `key: value` with a text or symbol key into the object; any other node adds nothing
 /// `a: 1`, `a = 1`, `a := 1` are entries of an object; other keys are operations (host.js ENTRY_OPERATORS)
 fn is_entry_operator(op: &Op) -> bool {
 	matches!(op, Op::None | Op::Colon | Op::Assign | Op::Define)
 }
 
+/// The entry `key: value` into the object, its key as json_key writes it; any other node adds nothing
 fn insert_json_entry(map: &mut Map<String, Value>, entry: &Node) {
 	if let Key(key, _, value) = entry {
 		map.insert(json_key(key), value.to_json_value());

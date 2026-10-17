@@ -419,8 +419,8 @@ impl WarpParser {
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
 	}
 
-	/// Hint when the operator written at the cursor is not the canonical one; call once when the operator is consumed
-	/// The operator as written, after hinting at its preferred spelling
+	/// The operator as written at the cursor, after hinting at its preferred spelling when it is not the canonical one;
+	/// called once, when the operator is consumed
 	pub(crate) fn hint_operator(&self, chars: usize, is_prefix: bool) -> String {
 		let written: String = (0..chars).map(|offset| self.peek_char(offset)).collect();
 		self.set_hint_pos();

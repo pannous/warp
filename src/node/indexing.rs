@@ -47,27 +47,18 @@ impl Index<&str> for Node {
 					_ => false,
 				}) {
 					// If we found a Key, return its value instead of the whole Key
-					match found.drop_meta() {
+					return match found.drop_meta() {
 						Key(_, _, v) => v.as_ref(),
 						other => other,
-					}
-				} else {
-					// For tag structures like ((name params...) body), search in params
-					// Pattern: first element is a list containing [symbol, params...]
-					if let Some(first) = nodes.first() {
-						let first = first.drop_meta();
-						if let List(inner, _, _) = first {
-							// Skip the first element (tag name) and search in params
-							for param in inner.iter().skip(1) {
-								let result = &param[i];
-								if result != &Empty {
-									return result;
-								}
-							}
-						}
-					}
-					&Empty
+					};
 				}
+				// For tag structures like ((name params...) body), search in params
+				// Pattern: first element is a list containing [symbol, params...]
+				let Some(List(inner, _, _)) = nodes.first().map(Node::drop_meta) else {
+					return &Empty;
+				};
+				// Skip the first element (tag name) and search in params
+				inner.iter().skip(1).map(|param| &param[i]).find(|result| *result != &Empty).unwrap_or(&Empty)
 			}
 			Key(k, _, v) => match k.drop_meta() {
 				Symbol(key) | Text(key) if key == i => v.as_ref(),

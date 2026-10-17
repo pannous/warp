@@ -572,3 +572,18 @@ Left on purpose:
 - needed_definitions `with_statements_first` / `with_statements_in_front` differ in Meta handling and separator
 - main.rs's long if/else command dispatch: not touched
 - gc_traits ObjFieldValue / obj! and the GcObject reading API: the documented rasm pattern
+## Final pass (final-analyzer)
+Done on branch final-analyzer (behaviour-preserving): unused Node helpers out, definitions/imports/return-kind helpers,
+one Pratt try_parse chain, BOOL_TYPES / NONE_WORDS read from the type registry, stray doc lines back on their
+functions (probes/cleanup/stacked_docs.py finds them), `\:name` entity escape and `Index<&str>` flattened.
+Found, not done:
+- warp_parser/mod.rs holds ~200 keyword constants for every submodule: each belongs in its one user file
+  (left: conflicts with every open parser branch).
+- `matches!(x.drop_meta(), Node::List(_, Bracket::Curly, _))` is hand-written ~67× repo-wide while
+  lowering::nodes::is_block exists; `Node::is_block` in node/ is its home.
+- USE_WORD "use" is re-declared in 5 lowering files beside modules::USE_KEYWORD.
+- warp_parser::mentions (enters template holes) and Node::mentions differ only by the holes: name them precisely.
+- lookahead.rs group_holds_comma and comparison_follows_and repeat a quote/depth scan; a shared scanner needs the
+  two-glyph operator skip, so it was left.
+- analyzer/imports.rs extract_declared_ffi_imports: the nested `(use X from Y) …` arm also adds X as a library
+  (kept). The `import: from lib` arm that declared a function named "import" went (import-lib, Interviewer).
