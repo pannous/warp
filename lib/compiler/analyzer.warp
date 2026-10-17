@@ -4,6 +4,7 @@
 # `f(int, float) -> float`, `x: text`, `= int`, definitions sorted, the value last. Kinds are Rust's Kind names; a
 # variable holding a list also has a type word naming its elements (`list of int`, `map of text`, `list of node`).
 use "walk.warp"
+use "words.warp"
 
 # name → the function's definition `(f a b) := body`, its result kind, and the scope of its body ("" for main)
 definitions = {}
