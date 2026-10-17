@@ -1034,8 +1034,11 @@ function startBugButton() {
 	};
 }
 
+// unticked "include source" sends the comment alone: no program, no output (the version and page still go along)
 function bugReport() {
-	return { ...reportedRun(), comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
+	const run = reportedRun();
+	const source = $("bug-source").checked ? { code: run.code, output: run.output } : { code: "", output: "" };
+	return { ...run, ...source, comment: $("bug-comment").value, express: $("bug-express").checked, page: location.href,
 		token: stored(BUG_TOKEN_KEY) ?? ($("bug-token").value.trim() || BUG_TOKEN) };
 }
 
