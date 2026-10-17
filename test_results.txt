@@ -975,6 +975,7 @@ PASSED:
   ✓ control::test_while_value::test_while_value_of_untouched_loop_is_empty
   ✓ control::test_window_clicks::on_click_hears_the_paint_windows_clicks
   ✓ control::test_window_opens::reading_window_open_opens_the_window_once
+  ✓ control::test_word_named_variables::a_bound_name_shadows_the_library_word
   ✓ control::test_word_statements::a_glued_go_block_is_a_task
   ✓ control::test_word_statements::a_word_statement_in_a_block_is_no_call_of_the_next_lines
   ✓ extensions::strings::tests::test_char_str_eq
@@ -4312,6 +4313,7 @@ PASSED:
   ✓ text::test_quoted_container_texts::string_and_interpolation_quote_texts_in_containers
   ✓ text::test_repeat_typed::repeated_text_does_not_fit_int
   ✓ text::test_repeat_typed::repeated_text_fits_text
+  ✓ text::test_reverse_characters::reverse_keeps_each_character_whole
   ✓ text::test_runtime_kind_texts::two_texts_of_run_time_kind_concatenate
   ✓ text::test_runtime_text_as_int::a_text_beyond_i64_parses_unbounded
   ✓ text::test_runtime_text_as_int::a_text_variable_converts_to_int
@@ -6238,4 +6240,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6233 passed, 0 failed, 6233 total tested
+13 ignored, 6235 passed, 0 failed, 6235 total tested
