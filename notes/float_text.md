@@ -1,4 +1,4 @@
-# Float text at run time (card floats-print, user decision float-text)
+# Float text at run time
 
 Floats print their shortest digits that read back (Python/JS repr), in pure wasm: src/wasm_emitter/numbers/float_text.rs.
 
