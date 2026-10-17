@@ -1,7 +1,8 @@
-# Symbolic reals at run time: design sketch (2026-10-14, card follow-up of decision real-runtime)
+# Symbolic reals at run time: design sketch (parked)
 
-Decision real-runtime (2026-10-13): real.rs (compile-time symbolic reals, 830 lines) stays until symbolic reals are a
-run-time number type next to the exact ratios; then it goes. This is a sketch only: nothing is built yet.
+Decision real-runtime: real.rs (compile-time symbolic reals, 830 lines) stays until symbolic reals are a run-time
+number type next to the exact ratios; then it goes. Parked for later (card cleanup-real-answer, Later): nothing is
+built.
 
 ## Goal
 `f(x) := x*x; f(√2)` is 2, not 2.0000000000000004. Today real.rs answers only constant programs; any function, loop or
@@ -72,12 +73,7 @@ Risks:
 - Compare cost: needs the fixed-point series in wasm.
 - Browser parity: everything is emitted wasm, so no host imports are needed.
 
-## Parked (user 2026-10-14: "park a generalized exact mechanism for later")
-
-Not built for now: real.rs stays as it is, card cleanup-real-answer is in Later. The open questions below are parked
-with it (3 was for later anyway).
-
-## Open questions (parked)
+## Open questions
 1. Is a sum in a denominator, `1/(1+√2)`, an f64 with a warning, or should it be rationalized (conjugates) at run time?
 2. An undecidable comparison at run time: a trap with a message, or an Error value?
 3. Should ⅈ be allowed at run time (complex reals) in step 1, or only real generators first?

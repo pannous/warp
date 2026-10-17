@@ -116,7 +116,8 @@ jobs:
     # trusted publishing: no token, PyPI trusts this workflow (one-time setup in notes/packaging.md, then the repository
     # variable PYPI_PUBLISH=true turns this job on)
     needs: packages
-    if: vars.PYPI_PUBLISH == 'true'
+    # !cancelled(): a repackage run skips binaries, and a skipped ancestor would skip this job too
+    if: ${{ !cancelled() && needs.packages.result == 'success' && vars.PYPI_PUBLISH == 'true' }}
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -160,11 +161,11 @@ jobs:
     - name: push to the AUR
       if: env.AUR_SSH_KEY != ''
       run: |
-        mkdir -p ~/.ssh
-        echo "$AUR_SSH_KEY" > ~/.ssh/aur
-        chmod 600 ~/.ssh/aur
-        ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
-        printf 'Host aur.archlinux.org\n  User aur\n  IdentityFile ~/.ssh/aur\n' > ~/.ssh/config
+        # in the container $HOME (/github/home) is not the home ssh reads (/root), so the key and host are named here
+        echo "$AUR_SSH_KEY" > "$RUNNER_TEMP/aur"
+        chmod 600 "$RUNNER_TEMP/aur"
+        ssh-keyscan aur.archlinux.org > "$RUNNER_TEMP/known_hosts"
+        export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/aur -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o IdentitiesOnly=yes"
         git config --global user.name pannous
         git config --global user.email info@pannous.com
         packaging/aur/update_aur.sh "${TAG#v}" --push
