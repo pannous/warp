@@ -218,15 +218,13 @@ impl Monomial {
 			}
 			*imaginary = imaginary.rem_euclid(2);
 		}
-		let (outside, inside) = extract_power(&square, 2);
-		coefficient = coefficient.mul(&Rational::integer(outside));
-		if !inside.is_one() {
-			powers.insert(Generator::SquareRoot(inside), 1);
-		}
-		let (outside, inside) = extract_power(&cube, 3);
-		coefficient = coefficient.mul(&Rational::integer(outside));
-		if !inside.is_one() {
-			powers.insert(Generator::CubeRoot(inside), 1);
+		let roots = [(square, 2, Generator::SquareRoot as fn(BigInt) -> Generator), (cube, 3, Generator::CubeRoot)];
+		for (radicand, index, root) in roots {
+			let (outside, inside) = extract_power(&radicand, index);
+			coefficient = coefficient.mul(&Rational::integer(outside));
+			if !inside.is_one() {
+				powers.insert(root(inside), 1);
+			}
 		}
 		(coefficient, Monomial(powers.into_iter().filter(|(_, e)| *e != 0).collect()))
 	}
@@ -422,14 +420,6 @@ impl Exact {
 	/// The lowest power of ε among the terms: negative for an infinite number, positive for an infinitesimal
 	fn lowest_epsilon_power(&self) -> Option<i64> {
 		self.0.keys().map(|monomial| monomial.exponent(&Generator::Epsilon)).min()
-	}
-
-	/// The standard part st(x): the real nearest to a finite hyperreal; an error for an infinite one
-	pub fn standard_part(&self) -> Result<Exact, String> {
-		match self.lowest_epsilon_power() {
-			Some(power) if power < 0 => Err(format!("st({self}): {self} is infinite, it has no standard part")),
-			_ => Ok(self.epsilon_part(0)),
-		}
 	}
 
 	pub fn add(&self, other: &Exact) -> Exact {
@@ -685,6 +675,11 @@ impl Interval {
 		Interval { lo: value.clone(), hi: value }
 	}
 
+	/// The interval of a value truncated to `whole`
+	fn truncated(whole: BigInt) -> Interval {
+		Interval { lo: whole.clone(), hi: whole + 1 }
+	}
+
 	/// Product of two positive intervals
 	fn times(&self, other: &Interval, precision: usize) -> Interval {
 		Interval { lo: (&self.lo * &other.lo) >> precision, hi: ((&self.hi * &other.hi) >> precision) + 1 }
@@ -733,14 +728,8 @@ fn generator_interval(generator: &Generator, precision: usize) -> Interval {
 		// Machin: π = 16·atan(1/5) - 4·atan(1/239)
 		Generator::Pi => widen(arctan_inverse(5, precision + GUARD) * 16 - arctan_inverse(239, precision + GUARD) * 4),
 		Generator::Euler => widen(euler(precision + GUARD)),
-		Generator::SquareRoot(r) => {
-			let root = (r << (2 * precision)).sqrt();
-			Interval { lo: root.clone(), hi: root + 1 }
-		}
-		Generator::CubeRoot(r) => {
-			let root = (r << (3 * precision)).cbrt();
-			Interval { lo: root.clone(), hi: root + 1 }
-		}
+		Generator::SquareRoot(r) => Interval::truncated((r << (2 * precision)).sqrt()),
+		Generator::CubeRoot(r) => Interval::truncated((r << (3 * precision)).cbrt()),
 		Generator::Imaginary => unreachable!("complex values are rejected before interval evaluation"),
 		Generator::Epsilon => unreachable!("hyperreals are signed by their ε powers before interval evaluation"),
 	}

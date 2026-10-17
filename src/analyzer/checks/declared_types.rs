@@ -99,8 +99,10 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 /// An inline union type joins its parts with it: `x: int | text` and `x: int or text` declare x "int or text", the
 /// anonymous form of P179's sum types (card inline-union)
 pub(crate) const UNION_JOINER: &str = " or ";
-/// The empty part of a union, `int | ø`, makes it optional: `int?`
-pub(super) const NONE_WORDS: [&str; 3] = ["none", "nil", "null"];
+/// The empty part of a union, `int | ø` (or any other name of the empty type), makes it optional: `int?`
+fn is_empty_type(word: &str) -> bool {
+	crate::type_tests::builtin_type_name(word) == Some(crate::type_tests::EMPTY_TYPE)
+}
 
 /// The parts of an inline union type name: "int or text" → int, text; None for a single type and a list of a union
 /// ("list of int or text")
@@ -130,7 +132,7 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 				Some(())
 			}
 			Node::Empty => {
-				parts.push(NONE_WORDS[0].to_string());
+				parts.push(crate::type_tests::EMPTY_TYPE.to_string());
 				Some(())
 			}
 			_ => None,
@@ -144,8 +146,8 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 	if !parts.iter().any(|part| builtin_type_kind(part).is_some() || is_declared(part)) {
 		return None;
 	}
-	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
-	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
+	let optional = parts.iter().any(|part| is_empty_type(part));
+	parts.retain(|part| !is_empty_type(part));
 	parts.dedup();
 	// only a builtin type covers another: `Point | text` keeps both, `int | zork` keeps zork to be refused
 	let admits_part = |wide: &String, narrow: &String| {
@@ -419,13 +421,13 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 	}
 }
 
-/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
-/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
 /// Is the type `word` (an alias too: `double`, `exact`) the type `within` or one it covers (BUILTIN_TYPES)
 pub(super) fn is_type_within(word: &str, within: &str) -> bool {
 	crate::type_tests::type_matches(crate::type_tests::canonical_spec_word(word), within)
 }
 
+/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
+/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
 pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else {
 		return true;
@@ -550,7 +552,7 @@ pub(super) fn bool_misfit(value: &Node) -> Option<Kind> {
 
 /// `bool`, `boolean`: a bool, held as an Int (builtin_type_kind)
 pub(crate) fn is_bool_type(type_name: &str) -> bool {
-	BOOL_TYPES.contains(&type_name.trim_end_matches('?').to_lowercase().as_str())
+	crate::type_tests::builtin_type_name(&type_name.trim_end_matches('?').to_lowercase()) == Some(BOOL_TYPE)
 }
 
 /// P199 (user): 1 and 0 are yes and no wherever a bool is expected

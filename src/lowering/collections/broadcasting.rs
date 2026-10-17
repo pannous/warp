@@ -6,7 +6,9 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{call, called_name, children_rewritten, is_colon_pair, key, parameter_name, Counter};
+use super::nodes::{
+	any_part, call, called_name, children_rewritten, is_colon_pair, key, parameter_name, word_headed, Counter,
+};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -158,7 +160,7 @@ fn all_calls(node: Node) -> Node {
 }
 
 /// `all xs` as an argument: xs
-fn all_marked(argument: &Node) -> Option<&Node> {
+pub(crate) fn all_marked(argument: &Node) -> Option<&Node> {
 	match argument.drop_meta() {
 		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(ALL_WORD) => {
 			Some(&words[1])
@@ -699,24 +701,18 @@ fn scalar_library_words() -> impl Iterator<Item = &'static str> {
 
 /// `cos(x)`, `floor x`: name is the one argument of a scalar library word in body
 fn is_scalar_word_argument(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| {
-		if let Node::List(items, _, _) = node.drop_meta() {
-			found |= matches!(items.as_slice(), [word, argument] if argument.is_symbol(name) && scalar_library_words().any(|scalar| word.is_symbol(scalar)));
-		}
-	});
-	found
+	any_part(
+		body,
+		|node| matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, argument] if argument.is_symbol(name) && scalar_library_words().any(|scalar| word.is_symbol(scalar)))),
+	)
 }
 
 /// `x is number` (`is_type x "number"`): a function testing its parameter's kind takes every kind itself
 fn tests_kind_of(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| {
-		if let Node::List(items, _, _) = node.drop_meta() {
-			found |= matches!(items.as_slice(), [test, tested, _] if test.is_symbol(crate::words::IS_TYPE) && tested.is_symbol(name));
-		}
-	});
-	found
+	any_part(
+		body,
+		|node| matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [test, tested, _] if test.is_symbol(crate::words::IS_TYPE) && tested.is_symbol(name))),
+	)
 }
 
 fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
@@ -754,10 +750,8 @@ fn broadcasting_call<'a>(
 		(Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)
 	); // also `(f [1 2])`
 	let [head, argument] = items else { return None };
-	let Node::Symbol(name) = head.drop_meta() else {
-		return None;
-	};
-	(is_call && functions.contains(name)).then_some((name.as_str(), argument))
+	let name = head.symbol_name()?;
+	(is_call && functions.contains(name)).then_some((name, argument))
 }
 
 /// Variable → whether every value assigned to it is a list literal that is no object; a broadcast over the variable itself
@@ -780,14 +774,20 @@ fn collect_list_variables(
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::list_mutations::appends(method, items.len() - 1)) {
+				if items
+					.first()
+					.and_then(Node::symbol_name)
+					.is_some_and(|method| crate::list_mutations::appends(method, items.len() - 1))
+				{
 					appended.insert(name.clone());
 				}
 			}
 		}
 		Node::Key(target, Op::Assign, value) => {
 			if let (Node::Symbol(name), Node::Key(left, Op::Add, right)) = (target.drop_meta(), value.drop_meta()) {
-				if matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)) {
+				if matches!(left.drop_meta(), Node::Symbol(same) if same == name)
+					&& matches!(right.drop_meta(), Node::List(_, Bracket::Square, _))
+				{
 					appended.insert(name.clone());
 				}
 			}
@@ -929,7 +929,10 @@ impl Broadcast {
 				}
 				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it; a
 				// parenthesized argument is a value of its own, `(square xs) |> filter(…)` is `filter (square xs) …`
-				let iterates = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::function_values::ITERATION_WORDS.contains(&word.as_str()));
+				let iterates = items
+					.first()
+					.and_then(Node::symbol_name)
+					.is_some_and(|word| crate::function_values::ITERATION_WORDS.contains(&word));
 				let items: Vec<Node> = items
 					.into_iter()
 					.map(|item| match item.drop_meta() {
@@ -1041,10 +1044,7 @@ impl Broadcast {
 			(bracket, separator),
 			(Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)
 		);
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = word_headed(items)?;
 		if !is_call || arguments.is_empty() {
 			return None;
 		}
@@ -1296,7 +1296,7 @@ pub const EACH_ELEMENT: &str = "each_element";
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
 	let lambda = Node::Key(element(), Op::Arrow, Box::new(Node::Key(element(), op, Box::new(operand))));
-	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
+	key(list, Op::Dot, call("map", vec![lambda]))
 }
 
 /// `xs .* 2` as the parser keeps it, the phrase [xs .* 2]: the operator applied to each element (element_wise)

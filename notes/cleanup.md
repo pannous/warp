@@ -4,7 +4,7 @@ Repo-wide leftovers: oversized files (cleanup-big-files), never-called functions
 fmt/clippy drift (cargo-fmt, clippy-reports), probe-script proliferation (cleanup-probe-scripts), stale notes
 (cleanup-stale-notes).
 
-Dead scan (cleanup-dead-scan, 2026-10-13, probes/dead_scan.py): 15 never-used pub functions removed, unused in the default,
+Dead scan (cleanup-dead-scan, 2026-10-13, probes/cleanup/dead_scan.py): 15 never-used pub functions removed, unused in the default,
 all-features and wasm32 builds alike. Removed: TypeManager len/is_empty/next_type_idx/user_type_indices_mut,
 StringTable next_offset/table, ImportManager is_empty, Scope child, Real is_exact, Signature merge, Node get_op/from_json,
 text_node/error_node/key_op. Kept: function.rs builders, set_hint_file and create_host_linker (in-file unit tests or
@@ -525,3 +525,95 @@ card's −700: reflection's fields/methods/dir code is feature code, not `of` ha
 `params of f`, `a of xs` (a field of every element), `name of p + "b"`.
 Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
 way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.
+
+## Final pass (final-repo, 2026-10-16): dead scan, probes, notes, playground JS, lib/
+- Dead scan (probes/cleanup/dead_scan.py, now keeping glob re-exports and those naming items used outside, which made
+  97 false hits under src/law and the CLI's users): across default, all-features and wasm32 only the kept items of
+  the first pass are left (gc_traits reading API, last_item, set_hint_file) plus `Exact::standard_part`
+  (src/extensions/reals.rs; removed on branch final-media). Two re-exports nothing read went.
+- Probes: the code-cleanup tools live in probes/cleanup/ (dead_scan, similar_names, duplicate_constants,
+  drop_function, call_to_method, move_module_joins); the shared-checkout hunk selector and the early Lean probes
+  went; the reusable checks nobody listed are in notes/probes_layout.md. Still unreferenced by notes, tests, probes
+  or board try lines: 132 one-off .warp inputs (list: data/cleanup/unref_probes2.txt); kept, they cost nothing.
+- Notes: `probes/cleanup/dead_note_paths.py --fix` follows git's renames (and x.rs → x/mod.rs) to rewrite stale
+  paths, leaving lines that name the old path on purpose ("was", "gone", "removed"). 98 dead paths remain, nearly
+  all of deleted files in history notes (done.md, code_quality.md's audit table, cloud_tasks.md).
+- Playground JS (jscpd: 0.2% exact duplication): gpu_compute's two routes share one compute pass and the buffer
+  helpers; worker.js reuses host-compiler's passedBytes.
+- lib/: `round_to` is defined in lib/prelude.warp and lib/math.warp alike; dropping math's would take it out of
+  `dir(math)`, so it stays (card). lib/compiler's lexer `is_blank` is prelude's `is_space`, kept as the Rust twin's name.
+## Final pass (final-emitter, 2026-10-16): src/wasm_emitter/, src/run/, src/type_kinds.rs
+Behaviour-preserving, +352 −587 lines. Byte check: every probe and sample compiles to the same wasm as before
+(probes/cleanup/same_wasm.sh), except the intended superset below and embedded doc text naming moved sample paths.
+- Runtime function dependencies (src/wasm_emitter/runtime_dependencies.rs): each module declares `dependencies()`
+  (`Dependency`, `any`/`all`), `require_dependencies()` closes them to a fixed point. The old ordered if chain missed
+  `function_text` when `list_join` was required late; vector_shader, zero_argument_shader, math_signatures and
+  warp_compiled_wgsl_shader now also emit it. A new runtime function = one line in its module's table.
+- `Kind::of_field` / `Kind::ALL` replace tag comparisons in wasm_reader; RawFieldValue conversions by one macro;
+  unused `AstKind` gone.
+- WasmGcEmitter, TypeManager, ImportManager derive Default (−120 lines of initializers); one `emit_struct_types`.
+- Emitter words via `words::GLOBAL_WORD` / `RETURN_WORD` / `host::FETCH_WORD`; BUILTIN_CALLS no longer repeats
+  NODE_ARGUMENT_CALLS.
+Left for later (cards): emit_kind_globals' hand-written name table (derive from Kind::ALL); module_cache and
+program_cache each hash to hex (one shared hex_digest, also modules/cargo_crates); host/native.rs and
+host/tasks/values.rs could match Kind::of_field (host area); list_emitter KNOWN_WORDS as a mechanism.
+
+## Final pass (final-host, 2026-10-16)
+Area: src/host/, src/ffi/, src/gc_traits/, src/modules/, top-level src/*.rs (not extensions.rs). Net −410 lines.
+- ffi: one `NativeCall` wrapper for every C function; aliases interned once (resolve_library_alias leaked a string
+  per call); header signatures in one collect; header.rs comments match the code
+- host: `exported_memory` (one lookup of a caller's memory for host words, gpu, tasks, foreign calls, module linking),
+  `answer_for_text`, one `HostNode` type; database.rs's SQLite API as one `sqlite_api!` table
+- gc_traits/wasm_name_resolver.rs matches on wasmparser's own types (the Parsed* mirrors gone, −245)
+- modules: one program_loader, `qualified_call`, `instance_memory`; rustdoc's `Conversion::list_of/option_of/borrowed`
+  and its `kebab` = components' `kebab_case` + validity check
+- pipeline `without_located_errors`, law `add_free_variables`
+Left on purpose:
+- needed_definitions `with_statements_first` / `with_statements_in_front` differ in Meta handling and separator
+- main.rs's long if/else command dispatch: not touched
+- gc_traits ObjFieldValue / obj! and the GcObject reading API: the documented rasm pattern
+## Final pass (final-analyzer)
+Done on branch final-analyzer (behaviour-preserving): unused Node helpers out, definitions/imports/return-kind helpers,
+one Pratt try_parse chain, BOOL_TYPES / NONE_WORDS read from the type registry, stray doc lines back on their
+functions (probes/cleanup/stacked_docs.py finds them), `\:name` entity escape and `Index<&str>` flattened.
+Found, not done:
+- warp_parser/mod.rs holds ~200 keyword constants for every submodule: each belongs in its one user file
+  (left: conflicts with every open parser branch).
+- `matches!(x.drop_meta(), Node::List(_, Bracket::Curly, _))` is hand-written ~67× repo-wide while
+  lowering::nodes::is_block exists; `Node::is_block` in node/ is its home.
+- USE_WORD "use" is re-declared in 5 lowering files beside modules::USE_KEYWORD.
+- warp_parser::mentions (enters template holes) and Node::mentions differ only by the holes: name them precisely.
+- lookahead.rs group_holds_comma and comparison_follows_and repeat a quote/depth scan; a shared scanner needs the
+  two-glyph operator skip, so it was left.
+- analyzer/imports.rs extract_declared_ffi_imports: the nested `(use X from Y) …` arm also adds X as a library
+  (kept). The `import: from lib` arm that declared a function named "import" went (import-lib, Interviewer).
+## Final pass (final-media): src/sound/, src/graphics/, numbers and units (2026-10-16)
+Done (behaviour-preserving, no test edits):
+- sound: one `Chain::process_changing` runs a chain whose effects change at sample indices, for save sound
+  (effects::processed) and the live buses (sound_engine Bus::process) alike; `Comb::gap`; one per-channel maker in
+  Stage::new; the non-macOS engine stubs are one `mod output`; `paced_when_heard` (rest and sounded); `added_into` for
+  render's two mix additions; one FORMATS list (players, probes, the "not a sound file" message); `signal_pcm` shared
+  with audio_files (its `scaled` was the same); adapters' `whole_of`; midi receive flattened.
+- `extensions::utils::numbered_temporary_file`: sound's WAVs and paint's PNGs (`<stem>.<ext>`, then `<stem>-N.<ext>`
+  in the temporary folder) share one writer.
+- paint: `shown()` holds the window attempt of paint, paint_rgba and paint_shader; `rgba_pixels`.
+- gpu: `validated()` pops a validation scope for checked_values, render_texture and read_backs; `readback_of` and
+  `image_texture` make every readback buffer and image texture; shader_holes::mentions (a name not continued by a
+  name character) serves the alias hints and gpu's reads_value.
+- numbers: the overflow trap names and the ± run-time function names are derived from the type or word by
+  `width!` / `interval_word!` (concat!, so they stay &'static str for the emitter) instead of spelled twice; one
+  generic `deserialize_leaked`; Div's ratio arm by is_rational; Monomial::times extracts square and cube roots in one
+  loop; Interval::truncated; Exact::standard_part removed (st(x) is gone, user 2026-10-14).
+Left, because open branches change these files (2026-10-16): src/numbers/units.rs, units/static_units*,
+units/definitions.rs and lib/units.warp (fix-field-unit, fix-live-loops, fix-unit-hint, program-units,
+runtime-quantities, display-names); src/graphics/gpu_canvas.rs and paint_window.rs (draw-shader-warp, paper-shape);
+src/numbers/real.rs (why-sqrt). A later pass should look at them once those land.
+Seen, not worth it or not mine:
+- gpu.rs with_builtin_values matches the built-in hole names a second time beside shader_holes::BUILTIN_HOLES; a
+  table of (name, value) needs the frame's locals, so the match stays.
+- audio_files CONVERTERS and sound/mod.rs Command (players, probes) are two "first command the system has that knows
+  the format" lookups with different shapes (arguments around the input and output paths vs before the file).
+- extensions/lists.rs: `find2` has one caller (node/indexing.rs), `Filter` for Vec/Node none found in src; the file
+  is the user's extension style, left for the user.
+- Number's Display and exact_decimal each call terminating_decimal; uncertain.rs unsaid_ordering and overlap_warning
+  spell the three readings each (a shared helper came out longer after rustfmt, so it was dropped).

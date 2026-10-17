@@ -14,15 +14,16 @@ const EVAL_WORD: &str = "eval";
 const INTERPRET_WORD: &str = "interpret";
 
 pub fn lower(program: Node) -> Node {
-	let defined = crate::library_words::defined_names(&program);
-	let program = match mentions(&program, EVAL_WORD) && !defined.contains(EVAL_WORD) {
-		true => evaluated(program),
+	let program = where_free(program, EVAL_WORD, evaluated);
+	where_free(program, PARSE_WORD, parsed)
+}
+
+/// The rewrite of `word` where the program leaves it free (notes/dispatch.md: shadowing is scoped)
+fn where_free(program: Node, word: &str, rewrite: fn(Node) -> Node) -> Node {
+	match mentions(&program, word) {
+		true => crate::program_names::rewritten_where_free(program, word, &rewrite),
 		false => program,
-	};
-	if !mentions(&program, PARSE_WORD) || defined.contains(PARSE_WORD) {
-		return program;
 	}
-	parsed(program)
 }
 
 fn mentions(program: &Node, word: &str) -> bool {

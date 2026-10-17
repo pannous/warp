@@ -129,7 +129,7 @@ fn stored_statement(statement: &Node, file: &str) -> Option<Vec<Node>> {
 /// the dev store (the page's sessionStorage), so the page shows the same state after a reload
 fn dev_kept(statement: &Node, changed: &HashSet<String>, kept_names: &mut HashSet<String>) -> Option<Vec<Node>> {
 	let (name, default) = main_level_assignment(statement)?;
-	(changed.contains(name) && kept_names.insert(name.clone())).then(|| kept(name, default, DEV_STORE))
+	(changed.contains(name) && kept_names.insert(name.to_string())).then(|| kept(name, default, DEV_STORE))
 }
 
 /// `x = std_io("store", "declare", ["x", v, file])` (v kept when x isn't yet) and the listener saving each change of x
@@ -144,13 +144,11 @@ fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
 	vec![load, save]
 }
 
-fn main_level_assignment(statement: &Node) -> Option<(&String, &Node)> {
+fn main_level_assignment(statement: &Node) -> Option<(&str, &Node)> {
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
+	let name = target.symbol_name()?;
 	Some((name, value))
 }
 
@@ -169,7 +167,7 @@ fn changed_names(statements: &[Node]) -> HashSet<String> {
 	};
 	for statement in statements {
 		match main_level_assignment(statement) {
-			Some((name, value)) if assigned.insert(name.clone()) => collect(value),
+			Some((name, value)) if assigned.insert(name) => collect(value),
 			_ => collect(statement),
 		}
 	}

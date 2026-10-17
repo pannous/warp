@@ -123,7 +123,7 @@ impl TaskTable {
 		linker.func_wrap(
 			HOST_LIBRARY,
 			CHANNEL_PUT,
-			move |mut caller: Caller<'_, HostState>, id: i64, value: Option<Rooted<AnyRef>>| -> wasmtime::Result<()> {
+			move |mut caller: Caller<'_, HostState>, id: i64, value: HostNode| -> wasmtime::Result<()> {
 				let value = read_in(&mut caller, value).map_err(host_error)?;
 				let alone = sender.alone_in(&caller);
 				sender.channels.put(id, value, &alone).map_err(task_failure)
@@ -133,7 +133,7 @@ impl TaskTable {
 		linker.func_wrap(
 			HOST_LIBRARY,
 			CHANNEL_TAKE,
-			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<HostNode> {
 				let alone = receiver.alone_in(&caller);
 				let value = receiver.channels.take(id, &alone).map_err(task_failure)?.unwrap_or(TaskValue::Empty);
 				build_in(&mut caller, &value)

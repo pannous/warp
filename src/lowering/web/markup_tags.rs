@@ -76,9 +76,7 @@ fn tag<'a>(node: &'a Node, defined: &HashSet<String>) -> Option<&'a [Node]> {
 	let Node::Key(name, Op::Colon, body) = node.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, _) if !defined.contains(name) => Some(items),
 		_ => None,
@@ -175,12 +173,10 @@ fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Nod
 		},
 		_ => pairs,
 	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	let all_pairs =
 		!pairs.is_empty() && pairs.iter().all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _)));
-	(all_pairs && !defined.contains(name)).then(|| (name.clone(), pairs.to_vec()))
+	(all_pairs && !defined.contains(name)).then(|| (name.to_string(), pairs.to_vec()))
 }
 
 /// `form post "/todos" { body }` → `form{ method:"post" action:"/todos" body }`, unless the program defines form
@@ -272,7 +268,7 @@ fn html_attribute(item: Node) -> Node {
 /// (`[…]` around it) when it is lowered to statements, which in a block would run instead of being an item
 fn is_computed_children(item: &Node) -> bool {
 	match item.drop_meta() {
-		Node::List(items, Bracket::Square, _) => items.iter().any(|part| matches!(part.drop_meta(), Node::List(words, _, _) if matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD))),
+		Node::List(items, Bracket::Square, _) => items.iter().any(|part| matches!(part.drop_meta(), Node::List(words, _, _) if words.first().and_then(Node::symbol_name).is_some_and(|word| word == FOR_WORD))),
 		Node::Key(_, Op::Dot, _) => true,
 		// `(if shown then Fruit() else [])`, also without parentheses: a condition, which in a block would run as a statement
 		Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [single] if is_condition(single)),

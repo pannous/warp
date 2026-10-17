@@ -151,14 +151,12 @@ fn followed_paths(node: Node, literals: &HashMap<String, Node>) -> Node {
 fn dot_chain(node: &Node) -> Option<(String, Vec<String>)> {
 	match node.drop_meta() {
 		Node::Key(reader, Op::Dot, field) => {
-			let Node::Symbol(field) = field.drop_meta() else {
-				return None;
-			};
+			let field = field.symbol_name()?;
 			let (variable, mut fields) = match reader.drop_meta() {
 				Node::Symbol(variable) => (variable.clone(), Vec::new()),
 				other => dot_chain(other)?,
 			};
-			fields.push(field.clone());
+			fields.push(field.to_string());
 			Some((variable, fields))
 		}
 		_ => None,

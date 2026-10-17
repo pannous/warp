@@ -42,3 +42,11 @@ fn as_spells_a_union_result_with_or_without_a_block() {
 	is!("def f(x:int) as int { x }; f(2)", 2);
 	is!("def f(x:int) -> int or text { \"a\" }; f(2)", "a"); // works, with the hint "prefer `def f(x) as int or text`"
 }
+
+#[test]
+fn a_union_place_checks_a_value_known_only_at_run_time() {
+	fails_with("f(x): int or text := x; f(2.5)", "is declared int or text");
+	fails_with("g(v) := v; x: int or text = g(2.5); x", "is declared int or text");
+	is!("f(x): int or text := x; f(\"a\")", "a");
+	is!("g(v) := v; x: int or text = g(3); x", 3);
+}

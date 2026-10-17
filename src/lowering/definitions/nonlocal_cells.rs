@@ -1,6 +1,6 @@
 //! `nonlocal y` written by a nested function (cards nonlocal-inner, nonlocal-cells): y lives in a cell outer and its
 //! nested functions share, so inner's change is outer's, and a closure that escapes outer keeps that cell (each call
-//! of outer makes its own). A cell holds any value (wasm_emitter/cells.rs): `y = e` → `cell_set(y·cell, e)`,
+//! of outer makes its own). A cell holds any value (wasm_emitter/functions/cells.rs): `y = e` → `cell_set(y·cell, e)`,
 //! `y += e` → `cell_set(y·cell, cell_get(y·cell) + e)`, a read of y → `cell_get(y·cell)`. Variables only read keep the
 //! captures of wasm_emitter `refresh_enclosing_captures`.
 

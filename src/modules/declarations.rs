@@ -123,7 +123,6 @@ pub(crate) fn same_definitions(first: &[Node], second: &[Node]) -> bool {
 	first.len() == second.len() && first.iter().zip(second).all(|(a, b)| a.serialize() == b.serialize())
 }
 
-/// Every word the statements mention
 /// The methods called in statements: `f` of `x.f(…)` and of `x.f`
 pub(crate) fn method_names(statements: &[Node]) -> Vec<String> {
 	let mut names = Vec::new();
@@ -168,6 +167,7 @@ pub(crate) fn template_holes(statements: &[Node]) -> Vec<Node> {
 	holes
 }
 
+/// Every word the statements mention
 pub(crate) fn mentioned_names(statements: &[Node]) -> Vec<String> {
 	// a function's parameters and variables are its own: `f(x, melody) := x + melody` mentions no module word melody,
 	// prelude's `dict(pairs) := { out = {}; … }` no sound word out

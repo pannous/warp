@@ -86,18 +86,13 @@ impl Bus {
 	fn process(&mut self, from: u64, channels: usize) {
 		let frames = (self.mix.len() / channels) as u64;
 		let due = self.changes.iter().take_while(|(frame, _)| *frame < from + frames).count();
-		let ringing = self.fed || !self.chain.rung_out();
-		let mut done = 0;
-		for (frame, effects) in self.changes.drain(..due) {
-			let until = (frame.saturating_sub(from) as usize * channels).max(done);
-			if ringing {
-				self.chain.process(&mut self.mix[done..until]);
-			}
-			self.chain.retune(&effects);
-			done = until;
-		}
-		if ringing {
-			self.chain.process(&mut self.mix[done..]);
+		let due: Vec<_> = self.changes.drain(..due).collect();
+		if self.fed || !self.chain.rung_out() {
+			let at = |frame: u64| frame.saturating_sub(from) as usize * channels;
+			self.chain
+				.process_changing(&mut self.mix, due.iter().map(|(frame, effects)| (at(*frame), effects.as_slice())));
+		} else {
+			due.iter().for_each(|(_, effects)| self.chain.retune(effects));
 		}
 	}
 }
@@ -325,8 +320,8 @@ mod output {
 		engine().is_some()
 	}
 
-	/// The sound queued on the device at its start, false without an output stream
-	/// The sound through the bus (0: none), whose effects the mixer learns with its first sound
+	/// The sound queued on the device at its start through the bus (0: none), whose effects the mixer learns with its
+	/// first sound; false without an output stream
 	pub fn play(
 		handle: usize,
 		bus: (usize, &[Effect]),
@@ -381,35 +376,33 @@ mod output {
 	}
 }
 
-#[cfg(target_os = "macos")]
 pub use output::{available, busy, change_bus, fade, play, set_bus, stop};
 
 /// Without our own output here: the players play every sound
 #[cfg(not(target_os = "macos"))]
-pub fn available() -> bool {
-	false
-}
+mod output {
+	use super::Effect;
+	use std::time::Instant;
 
-#[cfg(not(target_os = "macos"))]
-pub fn play(_: usize, _: (usize, &[Effect]), _: Instant, _: &[i16], _: u32, _: u16) -> bool {
-	false
-}
+	pub fn available() -> bool {
+		false
+	}
 
-#[cfg(not(target_os = "macos"))]
-pub fn set_bus(_: usize, _: &[Effect]) {}
+	pub fn play(_: usize, _: (usize, &[Effect]), _: Instant, _: &[i16], _: u32, _: u16) -> bool {
+		false
+	}
 
-#[cfg(not(target_os = "macos"))]
-pub fn change_bus(_: usize, _: Instant, _: &[Effect]) {}
+	pub fn set_bus(_: usize, _: &[Effect]) {}
 
-#[cfg(not(target_os = "macos"))]
-pub fn stop(_: usize) {}
+	pub fn change_bus(_: usize, _: Instant, _: &[Effect]) {}
 
-#[cfg(not(target_os = "macos"))]
-pub fn busy() -> bool {
-	false
-}
+	pub fn stop(_: usize) {}
 
-#[cfg(not(target_os = "macos"))]
-pub fn fade(_: usize, _: f32, _: f64) -> bool {
-	false
+	pub fn busy() -> bool {
+		false
+	}
+
+	pub fn fade(_: usize, _: f32, _: f64) -> bool {
+		false
+	}
 }

@@ -70,7 +70,6 @@ pub(super) fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 	)
 }
 
-/// `for 1..4 {…}`: a loop that binds the implicit `it`
 /// `for 1..4 {…}` and `for i in xs {…}`: loops that bind the implicit `it` (to the item); their iterable and body
 pub(in crate::analyzer) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
 	let (keyword, iterable, body) = match items {

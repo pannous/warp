@@ -17,10 +17,13 @@ fn a_cast_cannot_name_a_function() {
 	fails_with("def int(x): x+1\nint(5)", "int is a type");
 }
 
+// decision library-words-typed: a library word stays the library's for its own types, the program's untyped one
+// takes the other values (square without `use math` is no library word here)
 #[test]
 fn library_words_stay_redefinable() {
 	is!("add(a, b) := a*b; add(2, 3)", 6);
-	is!("count(x) := 7; count([1,2])", 7);
+	is!("count(x) := 7; count([1,2])", 2);
+	is!("count(x) := 7; count(3)", 7);
 	is!("square(x) := 777; square(4)", 777);
 }
 
@@ -32,11 +35,13 @@ fn a_function_keyword_names_an_infix_word() {
 	is!("fun rem(a, b) = a * b; rem(2, 3)", 6);
 }
 
-// card user-defined: a rounding word a program defines is its own, as count or map
+// card user-defined: a rounding word a program defines is its own, as count or map; decision library-words-typed:
+// for numbers, the library's own type, it stays the library's
 #[test]
 fn a_defined_rounding_word_is_the_programs() {
-	is!("def floor(x) := x+10; floor(2.5)", 12.5);
-	is!("def ceil(x) := x+10; ceil 2.5", 12.5);
-	is!("round(x) := x+10; round(2.5) * 2", 25.0);
-	is!("def floor(x) := x+10; floor(2)", 12);
+	is!("def floor(x) := x+10; floor(2.5)", 2);
+	is!("def ceil(x) := x+10; ceil 2.5", 3);
+	is!("round(x) := x+10; round(2.4) * 2", 4);
+	is!("def floor(x) := x+10; floor(2)", 2);
+	is!("def floor(x) := x+10; floor(\"a\")", "a10");
 }

@@ -195,7 +195,6 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 	})
 }
 
-/// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
 /// The `ack:` lines of the answers file earlier versions wrote, appended to the acknowledgements file when it lacks
 /// them, so acknowledged notes stay quiet after the rename
 pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>) {
@@ -222,6 +221,7 @@ pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>)
 	}
 }
 
+/// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
 pub fn use_acknowledgements_file(path: impl Into<std::path::PathBuf>) {
 	ACKNOWLEDGEMENTS_FILE.with(|file| *file.borrow_mut() = Some(path.into()));
 	load_acknowledgements();

@@ -2,7 +2,7 @@
 
 use crate::analyzer::{extract_user_functions_inner, is_type_call_word};
 use crate::compiler::context::{Context, UserFunctionDef};
-use crate::lowering::nodes::children_rewritten;
+use crate::lowering::nodes::{children_rewritten, key};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -63,8 +63,7 @@ fn negate_calls(
 			if is_function(&function, op) && !(op == Op::Sub && is_spaced_minus(&function)) =>
 		{
 			let prefix = if op == Op::Sub { Op::Neg } else { Op::Hash };
-			let argument =
-				Node::Key(Box::new(Node::Empty), prefix, Box::new(negate_calls(*argument, functions, bound, locals)));
+			let argument = key(Node::Empty, prefix, negate_calls(*argument, functions, bound, locals));
 			parens(vec![*function, argument])
 		}
 		// `-sin 0` negates the call `sin 0`, not the word sin (card braceless-calls)
@@ -74,7 +73,7 @@ fn negate_calls(
 			let mut items = items;
 			items[0] = negated_word(&items[0]).expect("guarded").clone();
 			let call = negate_calls(Node::List(items, bracket, separator), functions, bound, locals);
-			Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(call))
+			key(Node::Empty, Op::Neg, call)
 		}
 		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),
 	}

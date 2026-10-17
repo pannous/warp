@@ -3,7 +3,6 @@ use super::*;
 
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
 pub(crate) const MODULE_DIRECTORY: &str = "module_directory";
-/// Statements a module contributes; everything else in a module (expressions, calls) is its own business
 /// `use folder`, `use package`, `use project`: every definition of that scope is visible, looked up by name (D15)
 pub(crate) const SCOPE_WORDS: [(&str, Scope); 3] =
 	[("folder", Scope::Folder), ("package", Scope::Package), ("project", Scope::Project)];
@@ -70,13 +69,17 @@ pub(super) fn collect_module_files(directory: &Path, below: bool, paths: &mut Ve
 
 /// Hidden folders, fetched packages, build output and nested repositories belong to no scope
 pub(super) fn is_scoped_directory(directory: &Path) -> bool {
-	let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+	let name = directory_name(directory);
 	!name.starts_with('.') && !UNSCOPED_DIRECTORIES.contains(&name.as_str()) && !directory.join(PROJECT_MARKER).exists()
+}
+
+fn directory_name(directory: &Path) -> String {
+	directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default()
 }
 
 pub(super) fn package_root(folder: &Path) -> Result<PathBuf, Node> {
 	let holds_its_module = |directory: &Path| {
-		let name = directory.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
+		let name = directory_name(directory);
 		MODULE_EXTENSIONS.iter().any(|extension| directory.join(format!("{name}.{extension}")).is_file())
 	};
 	enclosing_root(
@@ -140,6 +143,7 @@ pub(super) fn with_module_directory(module: Node, directory: &Path) -> Node {
 	crate::library_words::substitute(module, MODULE_DIRECTORY, &Node::Text(directory.display().to_string()))
 }
 
+#[derive(Default)]
 pub(super) struct Loader<'a> {
 	pub(super) directories: &'a [&'a str],
 	/// files whose declarations a `use` brought in, and files an `include` spliced in: each is loaded once
@@ -174,23 +178,7 @@ pub(super) struct Loader<'a> {
 
 impl<'a> Loader<'a> {
 	pub(super) fn new(directories: &'a [&'a str], including_directory: Option<PathBuf>) -> Self {
-		Loader {
-			directories,
-			loaded: HashSet::new(),
-			included: HashSet::new(),
-			packages: HashMap::new(),
-			including_directory,
-			scope: None,
-			wasm_modules: vec![],
-			std_definitions: vec![],
-			program_words: ProgramWords::default(),
-			std_module_depth: 0,
-			loading_implicitly: false,
-			program_std_modules: HashSet::new(),
-			std_modules_of_std_modules: HashSet::new(),
-			fast_functions: false,
-			fast_module: false,
-		}
+		Loader { directories, including_directory, ..Default::default() }
 	}
 
 	/// The standard definitions with the words of a module only other standard modules use renamed apart
@@ -213,12 +201,12 @@ impl<'a> Loader<'a> {
 				names.insert(format!("{SHADOWED_WORD_PREFIX}{word}"));
 			});
 		});
-		self.std_definitions
-			.iter()
+		crate::lowering::word_operators::lower_call_forms_in(self.std_definitions.clone())
+			.into_iter()
 			.map(|definition| {
-				hidden.iter().fold(definition.clone(), |node, word| {
-					renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}"))
-				})
+				hidden
+					.iter()
+					.fold(definition, |node, word| renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}")))
 			})
 			.collect()
 	}
@@ -260,8 +248,7 @@ impl<'a> Loader<'a> {
 		let Some((name, body)) = fast_definition(&statement, self.fast_module) else {
 			return statement;
 		};
-		let words = std_module_definitions(FAST_MODULE).unwrap_or_default();
-		let body = words.iter().fold(float_division(body), |body, word| renamed_word(body, word, &fast_name(word)));
+		let body = with_fast_names(float_division(body), std_module_definitions(FAST_MODULE).unwrap_or_default());
 		self.fast_functions = true;
 		if let Some(function) = leftmost_symbol(&name) {
 			crate::compiler::compile_context::change(|context| context.fast_functions.insert(function));
@@ -277,11 +264,9 @@ impl<'a> Loader<'a> {
 		}
 		let source = std_module(FAST_MODULE).expect("lib/fast_math.warp is embedded");
 		let path = std_path(&fast_name(FAST_MODULE));
-		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, path, source))?;
+		let definitions = self.load_unhinted(path, source)?;
 		let words = std_module_definitions(FAST_MODULE).unwrap_or_default();
-		let qualified =
-			|definition: Node| words.iter().fold(definition, |node, word| renamed_word(node, word, &fast_name(word)));
-		self.std_definitions.extend(definitions.into_iter().map(qualified));
+		self.std_definitions.extend(definitions.into_iter().map(|definition| with_fast_names(definition, words)));
 		crate::compiler::compile_context::change(|context| {
 			context.module_definitions.extend(words.iter().map(|word| fast_name(word)));
 		});
@@ -455,8 +440,7 @@ impl<'a> Loader<'a> {
 				words.iter().copied().filter(|word| mentioned.contains(*word) && !own.contains(*word)).collect();
 			if !words.is_empty() {
 				let source = std_module(module).expect("a prelude module is embedded");
-				let definitions =
-					crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(module), source))?;
+				let definitions = self.load_unhinted(std_path(module), source)?;
 				self.std_definitions.extend(definitions.into_iter().filter(|definition| {
 					name_declared_by(definition).is_some_and(|name| words.contains(&name.as_str()))
 				}));
@@ -481,8 +465,7 @@ impl<'a> Loader<'a> {
 			.filter(is_declaration)
 			.collect();
 		warn_replaced(&declarations, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
-		let definitions =
-			crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
+		let definitions = self.load_unhinted(std_path(PRELUDE_MODULE), source)?;
 		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
 		// n: int)` overloads it by parameter type (card easy-add)
 		let qualified_words: Vec<&String> =
@@ -519,10 +502,15 @@ impl<'a> Loader<'a> {
 			_ => self.std_modules_of_std_modules.insert(name.to_string()),
 		};
 		self.std_module_depth += 1;
-		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source));
+		let definitions = self.load_unhinted(std_path(name), source);
 		self.std_module_depth -= 1;
 		self.std_definitions.extend(definitions?);
 		Ok(vec![])
+	}
+
+	/// A module the program's writer does not write (a standard module, a package's binding): its source shows no style hints
+	fn load_unhinted(&mut self, path: PathBuf, source: &str) -> Result<Vec<Node>, Node> {
+		crate::normalize::without_hints(|| self.load_source(Import::Use, path, source))
 	}
 
 	pub(super) fn load(&mut self, import: Import, name: &str, path: PathBuf) -> Result<Vec<Node>, Node> {

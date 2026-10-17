@@ -1,0 +1,2 @@
+// a module with a class of plain fields, for tests/modules/test_module_classes.rs
+class Bus{id:int; effects:list}

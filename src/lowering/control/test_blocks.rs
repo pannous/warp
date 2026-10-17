@@ -5,6 +5,7 @@
 //! in page_tests.rs. `expect 30 10+20` is the soft check `test 10+20 == 30` (card expect-make).
 
 use crate::lowering::library_words::substitute;
+use crate::lowering::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
@@ -62,7 +63,7 @@ fn test_of<'a>(statement: &'a Node, words: &[&str]) -> Option<Test<'a>> {
 	}
 	if head.is_symbol(EXPECT_WORD) {
 		let (expected, actual) = rest.split_first()?;
-		return Some(Test::Soft(Node::Key(Box::new(phrase(actual)?), Op::Eq, Box::new(expected.clone()))));
+		return Some(Test::Soft(key(phrase(actual)?, Op::Eq, expected.clone())));
 	}
 	if let [name, body] = rest {
 		if let (Node::Text(name), Node::List(_, Bracket::Curly, _)) = (name.drop_meta(), body.drop_meta()) {

@@ -39,7 +39,7 @@ fn a_sum_of_an_element_wise_expression_is_fused() {
 	is!("sum(ø .* 2)", 0);
 	is!("xs=[1 2 3]; ys=[4 5 6]; dot(xs, ys)", 32);
 	assert!(warp::pipeline::lower("xs=[1 2 3]; sum(xs .* 2)").expect("lowered").serialize().contains("fused_sum"));
-	is!("sum(xs) := 7; xs=[1 2]; sum(xs .* 2)", 7);
+	is!("total(xs) := 7; xs=[1 2]; total(xs .* 2)", 7);
 }
 
 // card float-typed: an exact decimal stored in a float list keeps it a float list, its items floats in arithmetic

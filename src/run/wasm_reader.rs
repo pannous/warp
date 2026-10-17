@@ -1,7 +1,6 @@
 use crate::extensions::numbers::Number;
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use num_bigint::{BigInt, Sign};
 use std::cell::RefCell;
@@ -15,9 +14,9 @@ use wasmtime_wasi::p1;
 pub const FIELD_KIND: usize = 0;
 pub const FIELD_DATA: usize = 1;
 pub const FIELD_VALUE: usize = 2;
-/// Exported functions a module may start with, in the order they are looked for
 /// How many result values of `main` are read: a Node, or a plain number
 const MAX_MAIN_RESULTS: usize = 1;
+/// Exported functions a module may start with, in the order they are looked for
 const ENTRY_POINTS: [&str; 4] = ["main", "wasp_main", "warp_main", "_start"];
 
 /// Int payload: `$i64box(value)`, `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32,
@@ -66,12 +65,23 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 	}
 }
 
-/// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is the task engine: a
-/// program that starts tasks needs its epoch interruption
+/// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is a task engine: a
+/// program that starts tasks ticks an engine of its own. It counts fuel when the run asks for it (`requested_fuel`,
+/// the program's `use fuel`), else its runs stop at the time limit.
 pub fn engine_for(bytes: &[u8]) -> (wasmtime::Engine, bool) {
-	let starts_tasks =
-		crate::host::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
-	(if starts_tasks { crate::util::task_engine() } else { gc_engine() }, starts_tasks)
+	use crate::run::module_cache::{is_precompiled, precompiled_engine};
+	let (fuel, starts_tasks) = match is_precompiled(bytes) {
+		true => precompiled_engine(bytes),
+		false => (
+			crate::util::requested_fuel().is_some()
+				|| crate::host::host_parts::has_section(bytes, crate::host::FUEL_SECTION),
+			crate::host::tasks::imports_tasks_in(bytes),
+		),
+	};
+	match starts_tasks {
+		true => (crate::util::metered_task_engine(fuel), true),
+		false => (crate::util::shared_engine(fuel), false),
+	}
 }
 
 /// Instantiates `bytes` with the imports `link` adds and calls its `main` (or `_start`): the result, the store and the instance
@@ -81,11 +91,8 @@ fn run_main<S: 'static>(
 	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
 ) -> Result<(Val, Store<S>, Instance)> {
 	crate::sound::start_run();
-	let (engine, starts_tasks) = engine_for(bytes);
-	let mut store = crate::util::fueled_store(&engine, state);
-	if starts_tasks {
-		store.set_epoch_deadline(crate::host::tasks::MAIN_EPOCH_DEADLINE);
-	}
+	let (engine, _) = engine_for(bytes);
+	let mut store = crate::util::limited_store(&engine, state);
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
@@ -299,7 +306,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX, TRAP_POSITION};
+pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_POSITION};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
@@ -385,56 +392,56 @@ fn struct_node<T>(
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
 ) -> Node {
 	use crate::node::Bracket;
-	let mut field = |index: usize| structref.field(&mut *store, index);
-	let (Ok(kind), Ok(data), Ok(child)) = (field(FIELD_KIND), field(FIELD_DATA), field(FIELD_VALUE)) else {
+	let Some((kind, data, child)) = node_fields(structref, store) else {
 		return Node::Empty;
 	};
 	let kind = kind.unwrap_i64();
-	let tag = (kind & KIND_MASK) as u8;
 	let high_byte = (kind >> 8) & 0xFF;
+	let separator = crate::wasm_emitter::separator_of_kind(kind);
 	let mut node = |val: &Val| node_along(val, store, memory, path);
-	match tag {
-		t if t == Kind::Empty as u8 => Node::Empty,
-		t if t == Kind::Int as u8 => int_node(store, &data, high_byte),
-		t if t == Kind::Float as u8 => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
-		t if t == Kind::Codepoint as u8 => char_node(store, &data),
-		t if t == Kind::Text as u8 => Node::Text(text_of(store, &data, memory)),
-		t if t == Kind::Symbol as u8 && kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
+	match Kind::of_field(kind) {
+		Some(Kind::Empty) => Node::Empty,
+		Some(Kind::Int) => int_node(store, &data, high_byte),
+		Some(Kind::Float) => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
+		Some(Kind::Codepoint) => char_node(store, &data),
+		Some(Kind::Text) => Node::Text(text_of(store, &data, memory)),
+		Some(Kind::Symbol) if kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
 			Node::type_value(&text_of(store, &data, memory))
 		}
-		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
-		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
-		t if t == Kind::Key as u8 => {
+		Some(Kind::Symbol) => Node::Symbol(text_of(store, &data, memory)),
+		Some(Kind::Error) => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
+		Some(Kind::Key) => {
 			Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child)))
 		}
-		t if t == Kind::Block as u8 => {
-			list_in(data, child, Bracket::Curly, crate::wasm_emitter::separator_of_kind(kind), store, memory, path)
+		Some(Kind::Block) => list_in(data, child, Bracket::Curly, separator, store, memory, path),
+		Some(Kind::List) => {
+			list_in(data, child, crate::wasm_emitter::bracket_of_info(high_byte), separator, store, memory, path)
 		}
-		t if t == Kind::List as u8 => list_in(
-			data,
-			child,
-			crate::wasm_emitter::bracket_of_info(high_byte),
-			crate::wasm_emitter::separator_of_kind(kind),
-			store,
-			memory,
-			path,
-		),
-		t if t == Kind::Data as u8 => data_node(text_of(store, &data, memory)),
+		Some(Kind::Data) => data_node(text_of(store, &data, memory)),
 		// a closure reads as the name of its function
-		t if t == Kind::Function as u8 => match child.unwrap_anyref() {
+		Some(Kind::Function) => match child.unwrap_anyref() {
 			Some(_) => match node(&child) {
 				Node::Symbol(name) => Node::Symbol(crate::closures::builtin_word(&name).unwrap_or(&name).to_string()),
 				other => other,
 			},
 			None => Node::Symbol("function".to_string()),
 		},
-		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
-		t if t == Kind::Uncertain as u8 => crate::numbers::uncertain::Uncertain::read_node(float_array(store, &data)),
-		t if t == Kind::Time as u8 => {
+		Some(Kind::TypeDef) => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
+		Some(Kind::Uncertain) => crate::numbers::uncertain::Uncertain::read_node(float_array(store, &data)),
+		Some(Kind::Time) => {
 			crate::time::time_node(kind >> crate::type_kinds::KIND_BITS, read_payload(store, &data).ok())
 		}
-		_ => Node::Text(format!("Unknown Kind: {tag}")),
+		_ => Node::Text(format!("Unknown Kind: {}", kind & KIND_MASK)),
 	}
+}
+
+/// The kind, data and value fields of a `$Node` struct
+fn node_fields<T>(
+	structref: &wasmtime::Rooted<wasmtime::StructRef>,
+	store: &mut StoreContextMut<'_, T>,
+) -> Option<(Val, Val, Val)> {
+	let mut field = |index: usize| structref.field(&mut *store, index).ok();
+	Some((field(FIELD_KIND)?, field(FIELD_DATA)?, field(FIELD_VALUE)?))
 }
 
 /// An Int: a bool marked BOOL_INFO, one written in a radix (`0xff`) keeps its spelling
@@ -491,15 +498,10 @@ fn list_in<T>(
 		let Some(cell) = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else {
 			break;
 		};
-		let (Ok(kind), Ok(data), Ok(child)) = (
-			cell.field(&mut *store, FIELD_KIND),
-			cell.field(&mut *store, FIELD_DATA),
-			cell.field(&mut *store, FIELD_VALUE),
-		) else {
+		let Some((kind, data, child)) = node_fields(&cell, store) else {
 			break;
 		};
-		let tag = (kind.unwrap_i64() & KIND_MASK) as u8;
-		if tag != Kind::List as u8 && tag != Kind::Block as u8 {
+		if !matches!(Kind::of_field(kind.unwrap_i64()), Some(Kind::List | Kind::Block)) {
 			match node_along(&rest, store, memory, path) {
 				Node::Empty => {}
 				last => items.push(last),

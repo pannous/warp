@@ -215,9 +215,7 @@ pub(crate) fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn
 	match node {
 		Node::Symbol(word) if names.contains(&word) => Node::Symbol(rename(&word)),
 		// a key `{x: x}` and a field `p.x` keep their names
-		Node::Key(left, op @ (Op::Colon | Op::Dot), right) if op == Op::Colon => {
-			Node::Key(left, op, Box::new(renamed_names(*right, names, rename)))
-		}
+		Node::Key(left, Op::Colon, right) => Node::Key(left, Op::Colon, Box::new(renamed_names(*right, names, rename))),
 		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(renamed_names(*left, names, rename)), Op::Dot, right),
 		other => children_rewritten(other, |child| renamed_names(child, names, rename)),
 	}

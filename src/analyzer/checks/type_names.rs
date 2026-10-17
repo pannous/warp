@@ -224,8 +224,6 @@ pub fn is_compiler_temporary(name: &str) -> bool {
 	name.contains(TEMPORARY_SEPARATOR)
 }
 pub(crate) const LIST_OF_PREFIX: &str = "list of ";
-/// The type words of a bool, held as an Int (builtin_type_kind)
-pub(super) const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
 pub(in crate::analyzer) fn map_word(call: &Node) -> Option<&'static str> {

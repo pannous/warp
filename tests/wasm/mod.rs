@@ -33,6 +33,7 @@ mod test_runtime_stub_note; // card runtime-stub-note
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_standalone_executable;
 mod test_standalone_needs_runtime;
+mod test_start_function_name; // card traps-task (reviewer)
 mod test_wasm;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_wasm_emitter;

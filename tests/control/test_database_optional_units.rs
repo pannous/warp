@@ -11,7 +11,6 @@ fn value(code: &str) -> String {
 }
 
 #[test]
-#[ignore = "fixnow: fixnow-database-unit-fields: (runs·at N).distance: the unit of Run.distance is known of an instance declared so"]
 fn an_optional_unit_field_holds_a_distance_or_nothing() {
 	eval(&runs("runs.add(Run(\"park\", 5 km))\nruns.add(Run(\"rest\", ø))"));
 	assert_eq!(value(&runs("runs#1.distance")), "5km");

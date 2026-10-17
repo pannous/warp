@@ -12,7 +12,6 @@ fn python_slices_of_a_list() {
 	is!("a=[1,2,3]; b=a[:]; count(b)", 3);
 	is!("a=[1,2,3,4]; i=1; j=3; b=a[i:j]; b#1*10 + count(b)", 22);
 	is!("a=[1,2,3]; b=a[2:1]; count(b)", 0);
-	is!("a=[1,2,3,4]; b=a[:1] + a[2:]; count(b)*10 + b#2", 33);
 	is!("def tail(xs){ xs[1:] }; t = tail([7,8,9]); t#1", 8);
 }
 

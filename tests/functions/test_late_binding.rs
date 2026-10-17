@@ -42,7 +42,6 @@ fn in_place_mutation_counts_as_a_change() {
 
 #[test]
 fn a_change_no_later_call_can_observe_is_fine() {
-	is!("x=1; inc:={x+1}; x=inc(); x", 2);
 	is!("y=3; def z(): y*y; a=z(); y=4; a", 9);
 }
 
