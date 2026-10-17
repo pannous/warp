@@ -29,17 +29,11 @@ impl WasmGcEmitter {
 		}
 		let located = node;
 		let node = node.drop_meta();
-		// Handle global declaration: global:Key(name, =, value)
-		if let Node::Key(left, Op::Colon, right) = node {
-			if let Node::Symbol(kw) = left.drop_meta() {
-				if kw == "global" {
-					// Emit global and return value on stack
-					self.emit_global_numeric(func, right);
-					return;
-				}
-			}
-		}
 		match node {
+			// `global x = value`: the global declared, its value on the stack
+			Node::Key(left, Op::Colon, right) if left.is_symbol(crate::words::GLOBAL_WORD) => {
+				self.emit_global_numeric(func, right)
+			}
 			Node::Number(num) => {
 				match num {
 					Number::Int(_) | Number::BigInt(_) => {
@@ -136,8 +130,7 @@ impl WasmGcEmitter {
 				self.emit_numeric_prefix(func, located, op, right)
 			}
 			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
-			Node::Key(counted, Op::Dot, property) if self.counting_getter(property).is_some() => {
-				let counter = self.counting_getter(property).expect("guarded");
+			Node::Key(counted, Op::Dot, property) if let Some(counter) = self.counting_getter(property) => {
 				self.emit_list_count(func, counted, counter);
 			}
 			// Prefix # means count/length: #list returns element count
@@ -165,11 +158,7 @@ impl WasmGcEmitter {
 				self.emit_if_then_else_numeric(func, if_then, Some(else_expr));
 			}
 			// If-then (no else): if condition then then_expr
-			Node::Key(if_cond, Op::Then, then_expr) => {
-				// Construct node for emit_if_then_else_numeric
-				let full_node = Node::Key(if_cond.clone(), Op::Then, then_expr.clone());
-				self.emit_if_then_else_numeric(func, &full_node, None);
-			}
+			Node::Key(_, Op::Then, _) => self.emit_if_then_else_numeric(func, node, None),
 			// Variable lookup (local or global)
 			Node::Symbol(name) => self.emit_numeric_symbol(func, name),
 			// Statement sequence or function call
@@ -270,7 +259,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// `return x` in a branch: the numeric path returns it (as the function's kind); the value after is never reached
-		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return"))
+		if matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD))
 		{
 			self.emit_numeric_value(func, node);
 			func.instruction(&I::F64ConvertI64S);

@@ -9,10 +9,10 @@ use crate::node::Node;
 use crate::operators::OP_CODES;
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
 use crate::wasm_emitter::layout::BYTE;
-use crate::wasm_emitter::text::text_builtins::{TEXT_CONCAT, TEXT_OF};
+use crate::wasm_emitter::runtime_dependencies::{any, Dependency};
+use crate::wasm_emitter::text::text_builtins::{ERROR_OF, TEXT_CONCAT, TEXT_OF};
 use crate::wasm_emitter::WasmGcEmitter;
 use crate::words::SYMBOL_WORD;
-use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
@@ -66,22 +66,14 @@ pub fn is_pair_part(part: i32) -> bool {
 }
 
 /// Runtime functions the node words call
-pub fn add_dependencies(required: &mut HashSet<&'static str>) {
-	if required.contains(NODE_PART) {
-		required.insert("new_text");
-	}
-	if [NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED].iter().any(|name| required.contains(name)) {
-		required.extend([
-			OPERATOR_CODE,
-			BRACKET_CODE,
-			SEPARATOR_CODE,
-			TEXT_OF,
-			TEXT_CONCAT,
-			super::super::text::text_builtins::ERROR_OF,
-			"new_key",
-			"new_text",
-		]);
-	}
+pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
+	vec![
+		any(&[NODE_PART], &["new_text"]),
+		any(
+			&[NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED],
+			&[OPERATOR_CODE, BRACKET_CODE, SEPARATOR_CODE, TEXT_OF, TEXT_CONCAT, ERROR_OF, "new_key", "new_text"],
+		),
+	]
 }
 
 impl WasmGcEmitter {

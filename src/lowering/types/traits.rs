@@ -588,11 +588,19 @@ fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generic
 				Node::List(items, _, _) => items[1..].to_vec(),
 				_ => vec![],
 			};
-			let name = Node::Symbol(crate::node::leading_name(&member));
-			let arguments = std::iter::once(*receiver)
-				.chain(arguments)
-				.map(|argument| operation_calls(argument, registry, traits, generics));
-			parens(std::iter::once(name).chain(arguments).collect())
+			let word = crate::node::leading_name(&member);
+			let name = Node::Symbol(word.clone());
+			let reads_entry_first = matches!(member.drop_meta(), Node::Symbol(_))
+				&& crate::lowering::library_words::reads_entry_first(&word, &word);
+			let receiver = operation_calls(*receiver, registry, traits, generics);
+			let arguments = std::iter::once(receiver.clone())
+				.chain(arguments.into_iter().map(|argument| operation_calls(argument, registry, traits, generics)));
+			let operation_call = parens(std::iter::once(name).chain(arguments).collect());
+			// `info.size` of shell's size(file: Path): a map read at run time with an entry size reads it (card map-read)
+			match reads_entry_first {
+				true => crate::lowering::library_words::map_field_or(&receiver, &word, &member, operation_call),
+				false => operation_call,
+			}
 		}
 		// `room.reverb = 0.6`: `room = reverb(room, 0.6)` (library_words::functional_setter)
 		Node::Key(ref target, Op::Assign, ref value)

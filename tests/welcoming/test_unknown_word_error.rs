@@ -37,3 +37,10 @@ fn test_an_unknown_function_passed_to_an_iteration_word_is_named_when_compiled()
 	assert_eq!(shown("odd(x) := x % 2; [1 2 3].filter(odd)"), "[1 3]");
 	assert_eq!(shown("f = x => x * 2; [1 2].map(f)"), "[2 4]");
 }
+
+#[test]
+fn test_an_unknown_word_in_a_condition_is_an_error() {
+	fails_with("x=3; if odd x then 1 else 2", "undefined: odd");
+	fails_with("x=3; while odd x do x=1; x", "undefined: odd");
+	fails_with("[1 2].filter(x => odd x)", "undefined: odd");
+}

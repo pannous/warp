@@ -1,8 +1,8 @@
 //! The Fail effect (card fail-effect, wiki/effects.md): a function that can raise an error says so in `effects of f`;
 //! `try` handles it, `! Pure` refuses it, and a failing function still folds like a pure one. The rule: it raises
 //! (raise, throw, fail, panic, error "…"), divides by what may be 0 (/ // div % rem), or calls a library word or crate
-//! that answers with an Error. Not tracked yet, though `try` catches them: an index out of range, a missing field, a
-//! failed cast (card fail-effect-indexing)
+//! that answers with an Error, indexes (an index out of range, a missing key) or casts to a number (card
+//! fail-effect-indexing)
 use crate::common::fails_with;
 use crate::is;
 use warp::analyzer::effects::{effects_of, Effect::*, EffectSet};
@@ -52,4 +52,24 @@ fn pure_refuses_fail_but_folding_does_not() {
 	is!("f(x) := (try 10/x else 0) ! Pure\nf(0)", 0);
 	is!("f(x) := 10/x\nk(x) := (try f(x) else 0) ! Pure\nk(0)", 0);
 	is!("f(x) := 10/x\nf(2)", 5);
+}
+
+#[test] // card fail-effect-indexing: an index out of range, a missing key, a failed cast
+fn indexing_a_key_and_a_number_cast_fail() {
+	assert!(fails("f(xs) := xs#5", "f"));
+	assert!(fails("f(xs, i) := xs[i]", "f"));
+	let field = warp::wasm_emitter::eval("f(q) := q.k\neffects of f").serialize();
+	assert!(field.contains("Fail"), "{field}"); // q.k of a map is q#("k"+1) once lowered
+	assert!(fails("f(x) := x as int", "f"));
+	assert!(!fails("first(x) := [x, x]#1", "first"));
+	assert!(!fails("f(xs) := count xs", "f"));
+	assert!(!fails("f(x) := x as text", "f"));
+	assert!(!fails("f(xs) := try xs#5 else 0", "f"));
+}
+
+#[test] // cards print-effects, print-effects-walked: the effects print as one value, not one letter per line
+#[cfg(feature = "native")]
+fn print_effects_of_prints_the_effects() {
+	assert_eq!(crate::common::printed("f(x) := 10/x\nprint effects of f").trim(), "Fail");
+	assert_eq!(crate::common::printed("g(x) := { puts x; raise \"no\" }\nprint effects of g").trim(), "(IO Fail)");
 }

@@ -120,8 +120,10 @@ machinery. Every chunk goes on its own branch to the Integrator, stating its net
 Interviewer. Prompt: notes/agents/refactorer.md.
 
 ## Workers
-- One task, one branch, one worktree: `cowtree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
-  origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
+- One task, one branch, one worktree: `cowtree add -b <name> /Volumes/Worktrees/<name> origin/main`, on the Worktrees
+  volume (user 2026-10-16, notes/churn_volume.md: Spotlight off, no fseventsd log, cowtree clones the donor
+  /Volumes/Worktrees/warp, which nobody removes). Outside the repo, so grep/IDE/cargo of the main checkout never see it.
+  Older worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay there until they retire.
   Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Small changes on main (user, 2026-10-12, "new very important rule": "Agents can work on the main branch without
   work tree if their changes are small or not conflicting with other work"; narrowed the same day after "maybe my new
@@ -148,6 +150,14 @@ Interviewer. Prompt: notes/agents/refactorer.md.
   half-done edits.
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
+- Cloud test lane (card cloud-test-lane, 2026-10-16; notes/cloud_development.md section 5): a pushed tip's targeted
+  tests can run on a cloud VM of their own instead of the Mac's queue:
+  `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>`, in the background (~6 min,
+  ~$0.30 of the Cloud session credit; exit 0 = green, the result goes on the card). Use it when more than a few runs
+  wait in the queue (`ls ~/.cargo/warp-tests.lock.queue | wc -l`) and the change is committed and pushed. Keep
+  tests/queue.sh for uncommitted edits, quick re-runs of one test, and tests that need the Mac (sound devices, GPU,
+  windows, Lean, SDL: scripts/cloud-test-environmental.txt). A green cloud run counts as the targeted run before
+  `todo ready`; the Integrator's gate stays the check. At most 3 cloud runs at once (the script waits for a free one).
 - Done = commit on the branch, targeted tests, merge origin/main (conflicts are the worker's to resolve), push the
   branch, `todo ready <card>` (notes/agents/common.md "Done"). The Integrator's full-suite result is the check; a
   bounced card comes back to Now with a note, the worker fixes it and readies it again.
@@ -160,7 +170,7 @@ Interviewer. Prompt: notes/agents/refactorer.md.
 A worktree is a second checkout of the same repository: same .git object store, its own branch, `git status` and
 commits work as usual, no clone or archive needed. The earlier "copies" (git archive exports, probes/*_work) were
 plain directories without git: committing from them needed private index tricks and they piled up inside the repo.
-So branches are official, and every branch lives in a worktree under warp.worktrees.noindex/. The main checkout
+So branches are official, and every branch lives in a worktree under /Volumes/Worktrees/. The main checkout
 /Users/me/dev/angles/warp stays the user's own and agents do not edit it.
 
 ## Enforcement

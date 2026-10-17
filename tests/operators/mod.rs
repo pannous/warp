@@ -26,6 +26,7 @@ mod test_logical_block_operand;
 mod test_logical_calls;
 mod test_logical_values_in_functions;
 mod test_minus_after_callable;
+mod test_module_operator_call_form; // card matches-call
 mod test_mutating_bang;
 mod test_nand_spellings;
 mod test_natural_phrases;

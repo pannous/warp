@@ -37,12 +37,14 @@ instead of bending the code.
   asks the user and relays the answer verbatim; that relayed answer is the user's confirmation.
 - Small or non-conflicting changes may go straight onto main in the main checkout, no worktree (user, 2026-10-12,
   "new very important rule"; how: notes/roles.md "Small changes on main"). Everything else:
-- Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
+- Work in a git worktree outside the repo, on the Worktrees volume: `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
+  (never touch /Volumes/Worktrees/warp, cowtree's donor; old worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay),
   with the uncommitted build tweak: append `-<branch>` to the current `version = "…"` of both Cargo.toml and
   crates/warp-runtime/Cargo.toml, and to the `version = "…"` of the warp-runtime path dependency in Cargo.toml (a
   pre-release version doesn't satisfy the plain requirement; otherwise its stale warp-runtime replaces other branches'
   build in the shared target dir). Check with `grep -n version Cargo.toml crates/warp-runtime/Cargo.toml`: a sed
-  written for an old version number silently changes nothing. The Integrator's version_tweak.sh does the same.
+  written for an old version number silently changes nothing. `scripts/version-tweak.sh <suffix>` does all of it in
+  the current worktree (`restore` puts the committed manifests back); the Integrator's version_tweak.sh does the same.
   In /Users/me/dev/angles/warp itself (the user's checkout) only small changes on main, and never the user's
   uncommitted files.
 - The user's uncommitted edits are the Integrator's to adopt (user 2026-10-12, "I told the agents ten times"): whoever
@@ -91,7 +93,9 @@ instead of bending the code.
      refuses a branch that is not pushed, differs from origin, or does not merge cleanly into origin/main (naming the
      conflicting files); `--force` only for a branch carrying other branches. Several cards on one branch: ready each.
      What a merge request message used to say (new tests, filters, "docs: <page>", the sample) goes into a
-     `todo note <card>` first. Express (the user or the Supervisor asked for your result fast, a crash fix):
+     `todo note <card>` first, as one line in this fixed form (Integrator, 2026-10-16):
+     `card | branch | tip (full sha) | filters | passed/failed (queue or cloud) | clippy+wasm32 ok`, then prose if needed.
+     Never message warp-integrator with FYIs or swap notices: the card is the merge request. Express (the user or the Supervisor asked for your result fast, a crash fix):
      `todo ready <card> --express` (or a note saying "express"): the Integrator runs it alone and next (notes/roles.md).
   4. Optional: one line to warp-reviewer by SendMessage ("<card> ready"); it reads `todo list Ready` anyway. Report
      one line to the Supervisor.
@@ -143,7 +147,7 @@ instead of bending the code.
   (notes/agents/common.md "Wiki" for pushing). Say "docs: <page>" or "docs: none (internal)" in a `todo note` before `todo ready`.
   warp-docs sweeps for what slipped through.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
-  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
+  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound/sound_features.warp"`: always that full path
   (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed
   batch by the Integrator's refresh_main_binary.sh; plain `warp` is the older brew release). Agents who want main's
   debug build (assertions, backtraces) run /Users/me/dev/bin/warp-debug, installed right at the push. Time
@@ -188,7 +192,7 @@ instead of bending the code.
   topic's column unless you name one, and `todo move <topic> <column> --all` moves the topic's waiting cards along.
   Roadmaps holds the topics nobody prioritized yet. A misfiled card: `todo sub <right topic> <card>`.
 - Crash cards (user, 2026-10-12: "on a crash a new agent is spawned. I will paste him the trace log"): a panic of a
-  warp built from a checkout files a card in Now (src/diagnostics/crash_card.rs) naming its fingerprint and the branch it was
+  warp built from a checkout files a card in Now (src/errors/crash_card.rs) naming its fingerprint and the branch it was
   built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a
   worktree build to the session on that branch (the Agent of the card keyed like the branch, else tmux warp-<branch>),
   and spawns a new worker warp-<card key> for a crash of a main build; the user pastes the trace there. Crash fixes

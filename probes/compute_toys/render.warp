@@ -4,7 +4,8 @@
 use compute_toys
 use file
 use graphics
-folder = "/Users/me/dev/angles/warp/data/shaders/compute_toys/"
+# run from the main checkout, whose data/ holds the research (data/ is not in worktrees)
+folder = "data/shaders/compute_toys/"
 width = 480
 height = 270
 for name in list_files(folder) {

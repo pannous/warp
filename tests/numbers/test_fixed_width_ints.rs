@@ -43,7 +43,8 @@ fn test_fixed_width_arithmetic_traps_on_overflow() {
 	fails_with("int8 x = 127; x+1", "int8 overflow");
 	fails_with("int8 x = -128; x-1", "int8 overflow");
 	fails_with("int32 x = 2147483647; x*2", "int32 overflow");
-	fails_with("int64 x = 9223372036854775807; x+1", "int64 overflow");
+	// decision i64-wraps (user, 2026-10-16): int64 wraps at 2^63 and traps only under `use strict`
+	fails_with("use strict\nint64 x = 9223372036854775807; x+1", "int64 overflow");
 	fails_with("byte b = 250; b += 10; b", "byte overflow");
 	fails_with("byte b = 255; b++; b", "byte overflow");
 }

@@ -312,7 +312,7 @@ impl Loaded {
 }
 
 /// `RegexSet` → `regex-set`, `stats_of` → `stats-of`: a name as WIT writes it
-fn kebab_case(name: &str) -> String {
+pub(crate) fn kebab_case(name: &str) -> String {
 	let mut kebab = String::new();
 	let mut after_lower = false;
 	for c in name.chars() {

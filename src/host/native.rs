@@ -8,17 +8,16 @@ use gpu::*;
 mod sound_words; // the sound module's host words, kept in src/sound (a child here for the linker's helpers)
 use sound_words::*;
 
+/// A program value as a host word gets and gives it: a reference to a Node of the instance
+pub(crate) type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
+
 const PAGE_BITS: u32 = 16;
 const I64_BYTES: usize = 8;
 
 /// guarded_call(name, arguments): the node wrapper `name` called with the argument list in the caller's own instance;
 /// a stack overflow inside is the Error "call stack exhausted" (what the aborted call wrote to globals and memory stays),
 /// any other failure, running out of fuel included, ends the run as before
-fn guarded_call(
-	mut caller: Caller<'_, HostState>,
-	name: i32,
-	arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
-) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+fn guarded_call(mut caller: Caller<'_, HostState>, name: i32, arguments: HostNode) -> wasmtime::Result<HostNode> {
 	let message = |failure: anyhow::Error| wasmtime::Error::msg(failure.to_string());
 	let name = crate::host::tasks::c_string(&mut caller, name).map_err(message)?;
 	let function = caller
@@ -44,9 +43,7 @@ fn guarded_call(
 		}
 		Err(failure) => return Err(failure),
 	};
-	let builders = crate::host::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(message)?;
-	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(message)?;
-	Ok(built.unwrap_anyref().copied())
+	build_in_program(&mut caller, &value, &wasmtime::Error::msg)
 }
 
 /// The Error of `reason`, built with the module's own error_of: a failure the program's `try` catches
@@ -157,20 +154,38 @@ pub fn write_bytes(
 
 pub use warp_runtime::gc_values::{write_at, write_to_heap};
 
+/// The calling module's linear memory, if it exports one (host words, tasks and foreign calls read texts out of it)
+pub(crate) fn exported_memory<T>(caller: &mut Caller<'_, T>) -> Option<Memory> {
+	caller.get_export(crate::wasm_emitter::MEMORY_ENTITY)?.into_memory()
+}
+
 /// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
 fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len: i32) -> (i32, i32) {
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
-		trace!("host.read: no memory export");
+	answer_for_text(caller, (path_ptr, path_len), "read", "path", |path| {
+		std::fs::read(crate::util::home_expanded(path)).map_err(|reason| format!("read {path} failed: {reason}"))
+	})
+}
+
+/// The answer to the text at (ptr, len) in WASM memory (a path, a URL: `argument`), written back into memory as
+/// answer_in_memory writes it; an unreadable text is the failure "`word` failed: unreadable `argument`"
+fn answer_for_text(
+	caller: &mut Caller<'_, HostState>,
+	(ptr, len): (i32, i32),
+	word: &str,
+	argument: &str,
+	answer: impl FnOnce(&str) -> Result<Vec<u8>, String>,
+) -> (i32, i32) {
+	let Some(memory) = exported_memory(caller) else {
+		trace!("host.{word}: no memory export");
 		return (0, 0);
 	};
-	let (bytes, failed) = match read_string_from_memory(&memory, &*caller, path_ptr as u32, path_len as u32) {
-		Ok(path) => match std::fs::read(crate::util::home_expanded(&path)) {
-			Ok(bytes) => (bytes, false),
-			Err(reason) => (format!("read {path} failed: {reason}").into_bytes(), true),
-		},
-		Err(e) => (format!("read failed: unreadable path: {e}").into_bytes(), true),
-	};
-	answer_in_memory(&memory, caller, &bytes, failed, "read")
+	let answered = read_string_from_memory(&memory, &*caller, ptr as u32, len as u32)
+		.map_err(|e| format!("{word} failed: unreadable {argument}: {e}"))
+		.and_then(|text| answer(&text));
+	match answered {
+		Ok(bytes) => answer_in_memory(&memory, caller, &bytes, false, word),
+		Err(reason) => answer_in_memory(&memory, caller, reason.as_bytes(), true, word),
+	}
 }
 
 /// The answer written into the module's memory: (ptr, len), or (ptr, -len) of a failure's reason; (0, 0) if it could
@@ -214,21 +229,10 @@ fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 
 /// Fetch the URL in WASM memory and write the result back: (ptr, len) of the body, (ptr, -len) of the failure reason
 fn fetch_into_memory(caller: &mut Caller<'_, HostState>, url_ptr: i32, url_len: i32, timeout: Duration) -> (i32, i32) {
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
-		trace!("host.fetch: no memory export");
-		return (0, 0);
-	};
-	let (text, failed) = match read_string_from_memory(&memory, &*caller, url_ptr as u32, url_len as u32) {
-		Ok(url) => {
-			trace!("host.fetch: fetching {} (timeout {:?})", url, timeout);
-			match fetch(&url, timeout) {
-				Ok(body) => (body, false),
-				Err(reason) => (reason, true),
-			}
-		}
-		Err(e) => (format!("fetch failed: unreadable URL: {e}"), true),
-	};
-	answer_in_memory(&memory, caller, text.as_bytes(), failed, "fetch")
+	answer_for_text(caller, (url_ptr, url_len), "fetch", "URL", |url| {
+		trace!("host.fetch: fetching {} (timeout {:?})", url, timeout);
+		fetch(url, timeout).map(String::into_bytes)
+	})
 }
 
 /// Link host functions into a wasmtime Linker
@@ -308,13 +312,21 @@ fn link_library_words(linker: &mut Linker<HostState>) -> Result<()> {
 		crate::graphics::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32)
 	})?;
 	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
+	linker.func_wrap(HOST_LIBRARY, DRAW_SHADER, |mut caller: Caller<'_, HostState>, code: HostNode| {
+		let code = given_node(&mut caller, code)?;
+		let shader = code
+			.text_value()
+			.ok_or_else(|| task_failure(format!("{DRAW_SHADER} takes a text, got {}", code.serialize())))?;
+		crate::graphics::gpu_canvas::use_shader(shader);
+		Ok(())
+	})?;
 	linker.func_wrap(HOST_LIBRARY, SAVE_PICTURE, save_picture)?;
 	linker.func_wrap(HOST_LIBRARY, SOUND, sound)?;
 	Ok(())
 }
 
 fn warn(mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32) {
-	if let Some(Extern::Memory(memory)) = caller.get_export("memory") {
+	if let Some(memory) = exported_memory(&mut caller) {
 		match read_string_from_memory(&memory, &caller, message_ptr as u32, message_len as u32) {
 			Ok(message) => crate::errors::diagnostic::report_runtime_warning(&message),
 			Err(e) => trace!("host.warn: unreadable message: {e}"),
@@ -322,10 +334,9 @@ fn warn(mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32) {
 	}
 }
 
-/// Runs WASM bytes and returns result as an i64 (simplified for now)
-/// Full GC object return requires more complex setup
+/// host.run: the wasm bytes in memory run as a module of their own, its main's i64 (-1 when it fails)
 fn run_wasm_bytes(mut caller: Caller<'_, HostState>, wasm_ptr: i32, wasm_len: i32) -> i64 {
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+	let Some(memory) = exported_memory(&mut caller) else {
 		trace!("host.run: no memory export");
 		return -1;
 	};
@@ -358,14 +369,25 @@ fn paint(
 	height: i64,
 	shader_values: HostNode,
 ) -> wasmtime::Result<()> {
+	let result = paint_or_failure(&mut caller, pixels, width, height, shader_values);
+	raised(&mut caller, result)
+}
+
+fn paint_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	pixels: HostNode,
+	width: i64,
+	height: i64,
+	shader_values: HostNode,
+) -> wasmtime::Result<()> {
 	warp_runtime::system_signals::end_at_first_frame()?;
-	let memory = module_memory(&mut caller, "paint")?;
+	let memory = module_memory(caller, "paint")?;
 	let size = (width.max(0) as usize, height.max(0) as usize);
-	let values = match list_values(&mut caller, memory, pixels, size.0 * size.1)? {
+	let values = match list_values(caller, memory, pixels, size.0 * size.1)? {
 		Ok(values) => values,
 		Err(crate::node::Node::Text(shader)) => {
 			let failure = gpu_failure(PAINT);
-			let (width, height, values) = shader_request(&mut caller, width, height, shader_values, &failure)?;
+			let (width, height, values) = shader_request(caller, width, height, shader_values, &failure)?;
 			return crate::graphics::paint::paint_shader(&shader, width, height, &values).map(|_| ()).map_err(failure);
 		}
 		Err(other) => {
@@ -387,14 +409,25 @@ fn save_picture(
 	height: i64,
 	file: HostNode,
 ) -> wasmtime::Result<()> {
-	let path = match given_node(&mut caller, file)? {
+	let result = save_picture_or_failure(&mut caller, pixels, width, height, file);
+	raised(&mut caller, result)
+}
+
+fn save_picture_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	pixels: HostNode,
+	width: i64,
+	height: i64,
+	file: HostNode,
+) -> wasmtime::Result<()> {
+	let path = match given_node(caller, file)? {
 		Node::Text(path) => path,
 		other => return Err(task_failure(format!("save: the file is a text, got {}", other.serialize()))),
 	};
-	let memory = module_memory(&mut caller, SAVE_PICTURE)?;
+	let memory = module_memory(caller, SAVE_PICTURE)?;
 	let size = (width.max(0) as usize, height.max(0) as usize);
 	let on_gpu = warp_runtime::system_values::read(warp_runtime::host_words::GPU_DRAWING) == Ok(1);
-	let saved = match list_values(&mut caller, memory, pixels, size.0 * size.1)? {
+	let saved = match list_values(caller, memory, pixels, size.0 * size.1)? {
 		_ if on_gpu => crate::graphics::gpu_canvas::snapshot(size.0, size.1)
 			.and_then(|rgba| crate::graphics::paint::save_rgba_png(&rgba, size.0, size.1, &path)),
 		Ok(values) => crate::graphics::paint::save_png(&values, size.0, size.1, &path),
@@ -486,13 +519,24 @@ fn pixel_value(pixel: &crate::node::Node) -> u64 {
 /// The host side of run_block: the block and the values it sees come in as Nodes, the block's value goes back as one
 fn run_block(
 	mut caller: Caller<'_, HostState>,
+	block: HostNode,
+	names: HostNode,
+	values: HostNode,
+	definitions: HostNode,
+) -> wasmtime::Result<HostNode> {
+	let result = run_block_or_failure(&mut caller, block, names, values, definitions);
+	raised(&mut caller, result)
+}
+
+fn run_block_or_failure(
+	caller: &mut Caller<'_, HostState>,
 	block: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	names: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	values: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	definitions: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
 	use crate::host::tasks::TaskValue;
-	let memory = module_memory(&mut caller, "run_block")?;
+	let memory = module_memory(caller, "run_block")?;
 	let mut store = caller.as_context_mut();
 	let [block, names, values, definitions] = [block, names, values, definitions]
 		.map(|value| crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
@@ -500,7 +544,7 @@ fn run_block(
 		crate::compiler::run_time_blocks::eval_block(block, &names, &values, &definitions).map_err(task_failure)?;
 	let value = TaskValue::of(&result)
 		.map_err(|_| task_failure(crate::compiler::run_time_blocks::cannot_hand_back(&result)))?;
-	build_in_program(&mut caller, &value, &task_failure)
+	build_in_program(caller, &value, &task_failure)
 }
 
 /// The host side of parse_code: the code of a text, or the parse failure the program's `try` catches
@@ -529,10 +573,7 @@ pub fn with_block_values<R>(values: Vec<crate::host::tasks::TaskValue>, body: im
 }
 
 /// The host side of block·value: the value at `index`, built in the block's module
-fn block_value(
-	mut caller: Caller<'_, HostState>,
-	index: i64,
-) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
+fn block_value(mut caller: Caller<'_, HostState>, index: i64) -> wasmtime::Result<HostNode> {
 	let failure = |message: String| wasmtime::Error::msg(message);
 	let value = BLOCK_VALUES
 		.with(|stack| stack.borrow().last().and_then(|values| values.get(index as usize).cloned()))
@@ -544,6 +585,18 @@ fn block_value(
 /// answer goes back as one (src/modules/foreign.rs)
 fn foreign_call(
 	mut caller: Caller<'_, HostState>,
+	runtime: HostNode,
+	module: HostNode,
+	member: HostNode,
+	call: HostNode,
+	arguments: HostNode,
+) -> wasmtime::Result<HostNode> {
+	let result = foreign_call_or_failure(&mut caller, runtime, module, member, call, arguments);
+	raised(&mut caller, result)
+}
+
+fn foreign_call_or_failure(
+	caller: &mut Caller<'_, HostState>,
 	runtime: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	module: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 	member: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
@@ -551,7 +604,7 @@ fn foreign_call(
 	arguments: Option<wasmtime::Rooted<wasmtime::AnyRef>>,
 ) -> wasmtime::Result<Option<wasmtime::Rooted<wasmtime::AnyRef>>> {
 	use crate::host::tasks::{Builders, TaskValue};
-	let memory = module_memory(&mut caller, "foreign_call")?;
+	let memory = module_memory(caller, "foreign_call")?;
 	let mut store = caller.as_context_mut();
 	let functions = function_arguments(&mut store, arguments)?;
 	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments]
@@ -569,40 +622,38 @@ fn foreign_call(
 			.map_err(|problem| problem.to_string())?;
 		let mut result = [Val::AnyRef(None)];
 		apply
-			.call(&mut caller, &[Val::AnyRef(Some(function)), values], &mut result)
-			.map_err(|trap| raised_message(&mut caller).unwrap_or_else(|| trap.root_cause().to_string()))?;
-		given_node(&mut caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
+			.call(&mut *caller, &[Val::AnyRef(Some(function)), values], &mut result)
+			.map_err(|trap| raised_message(caller).unwrap_or_else(|| trap.root_cause().to_string()))?;
+		given_node(caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
 	};
 	let answer =
 		crate::modules::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments, &mut callback);
 	let answer = match answer {
 		Ok(answer) => answer,
 		// raised in the program (emit_ffi_result), as a failed std word's: `try` catches a crate's Err too
-		Err(problem) => return error_in_program(&mut caller, &problem),
+		Err(problem) => return error_in_program(caller, &problem),
 	};
 	let value = TaskValue::of(&answer).map_err(|problem| task_failure(problem.to_string()))?;
-	let built =
-		builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| task_failure(problem.to_string()))?;
-	Ok(built.unwrap_anyref().copied())
+	build_in_program(caller, &value, &task_failure)
 }
 
 /// A foreign call's arguments, the list's items or the one argument, each a closure or None
 fn function_arguments(
 	store: &mut wasmtime::StoreContextMut<'_, HostState>,
 	arguments: HostNode,
-) -> wasmtime::Result<Vec<Option<wasmtime::Rooted<wasmtime::AnyRef>>>> {
+) -> wasmtime::Result<Vec<HostNode>> {
 	use crate::run::wasm_reader::{FIELD_DATA, FIELD_KIND, FIELD_VALUE};
-	use crate::type_kinds::{Kind, KIND_MASK};
+	use crate::type_kinds::Kind;
 	let node_of = |value: &Val, store: &wasmtime::StoreContextMut<'_, HostState>| {
 		value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(store).ok())
 	};
 	let kind_of = |node: &wasmtime::StructRef, store: &mut wasmtime::StoreContextMut<'_, HostState>| {
-		node.field(&mut *store, FIELD_KIND).map(|kind| (kind.unwrap_i64() & KIND_MASK) as u8)
+		node.field(&mut *store, FIELD_KIND).map(|kind| Kind::of_field(kind.unwrap_i64()))
 	};
 	let mut items = vec![];
 	let mut cell = node_of(&Val::AnyRef(arguments), store);
 	match &cell {
-		Some(node) if kind_of(node, store)? == Kind::List as u8 => {}
+		Some(node) if kind_of(node, store)? == Some(Kind::List) => {}
 		_ => cell = None,
 	}
 	if cell.is_none() {
@@ -619,7 +670,7 @@ fn function_arguments(
 		.iter()
 		.map(|item| {
 			Ok(match node_of(item, store) {
-				Some(node) if kind_of(&node, store)? == Kind::Function as u8 => item.unwrap_anyref().copied(),
+				Some(node) if kind_of(&node, store)? == Some(Kind::Function) => item.unwrap_anyref().copied(),
 				_ => None,
 			})
 		})
@@ -627,7 +678,7 @@ fn function_arguments(
 }
 
 /// The arguments with each closure `{$warp_function: index}`, its index among the closures (crate::modules::foreign)
-fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<wasmtime::AnyRef>>]) -> Node {
+fn with_function_markers(arguments: Node, functions: &[HostNode]) -> Node {
 	if functions.iter().all(Option::is_none) {
 		return arguments;
 	}
@@ -653,8 +704,6 @@ fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<w
 	}
 }
 
-type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
-
 /// serve_routes(port, routes): HTTP on the port, each request answered by its route's function (src/web/web_server.rs)
 fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) -> wasmtime::Result<HostNode> {
 	use crate::web::web_server::{routes_of, serve};
@@ -677,10 +726,7 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 /// `header "name" "value"` in a route's body: kept for the route's HTTP answer (serve_routes)
 fn response_header(mut caller: Caller<'_, HostState>, name: HostNode, value: HostNode) -> wasmtime::Result<()> {
 	let name = given_node(&mut caller, name)?.name();
-	let value = match given_node(&mut caller, value)? {
-		Node::Text(text) => text,
-		other => other.serialize(),
-	};
+	let value = text_or_written(given_node(&mut caller, value)?);
 	caller.data_mut().answer_headers.push((name, value));
 	Ok(())
 }
@@ -710,15 +756,19 @@ pub(super) fn raised<T>(caller: &mut Caller<'_, HostState>, result: wasmtime::Re
 /// The message of the Error a trapped call raised (left in trap_detail), read once: a warp function called back from
 /// another runtime fails with its own words, not the engine's `unreachable`
 fn raised_message(caller: &mut Caller<'_, HostState>) -> Option<String> {
-	let detail = caller.get_export(crate::run::wasm_reader::TRAP_DETAIL).and_then(Extern::into_global)?;
-	let Val::AnyRef(Some(value)) = detail.get(&mut *caller) else {
-		return None;
-	};
-	let _ = detail.set(&mut *caller, Val::AnyRef(None));
-	match given_node(caller, Some(value)).ok()? {
+	let detail = taken_trap_detail(caller)?;
+	match given_node(caller, Some(detail)).ok()? {
 		Node::Error(reason) => Some(reason.drop_meta().name()),
 		_ => None,
 	}
+}
+
+/// The Error value a trapped call left in trap_detail, taken: the next failure must not show this one's detail
+fn taken_trap_detail(caller: &mut Caller<'_, HostState>) -> Option<wasmtime::Rooted<wasmtime::AnyRef>> {
+	let detail = caller.get_export(crate::run::wasm_reader::TRAP_DETAIL).and_then(Extern::into_global)?;
+	let left = detail.get(&mut *caller);
+	let _ = detail.set(&mut *caller, Val::AnyRef(None));
+	left.unwrap_anyref().copied()
 }
 
 /// What a failed route says to the client: the program's error message, read with the values the program left in
@@ -728,12 +778,7 @@ fn route_failure(
 	path: &str,
 	failure: wasmtime::Error,
 ) -> crate::web::web_server::RouteFailure {
-	let detail = caller.get_export(crate::run::wasm_reader::TRAP_DETAIL).and_then(Extern::into_global);
-	let left = detail.map(|global| global.get(&mut *caller));
-	// read once: the next failure must not show this one's detail
-	if let Some(global) = detail {
-		let _ = global.set(&mut *caller, Val::AnyRef(None));
-	}
+	let left = taken_trap_detail(caller);
 	let failure = anyhow::Error::from(failure);
 	let raised = format!("{failure:?}").contains(crate::wasm_emitter::lists::list_ops::RETURNED_ERROR);
 	// a runtime error names its statement; what the program raised is its own words to the client
@@ -748,7 +793,7 @@ fn route_failure(
 		}
 	};
 	let failure = match left {
-		Some(Val::AnyRef(Some(value))) => match given_node(caller, Some(value)) {
+		Some(value) => match given_node(caller, Some(value)) {
 			Ok(node) => failure.context(crate::run::wasm_reader::trap_detail_line(&node)),
 			Err(_) => failure,
 		},
@@ -804,19 +849,29 @@ fn std_call(
 	member: HostNode,
 	arguments: HostNode,
 ) -> wasmtime::Result<HostNode> {
-	let [module, member, arguments] = [module, member, arguments].map(|value| given_node(&mut caller, value));
+	let result = std_call_or_failure(&mut caller, module, member, arguments);
+	raised(&mut caller, result)
+}
+
+fn std_call_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	module: HostNode,
+	member: HostNode,
+	arguments: HostNode,
+) -> wasmtime::Result<HostNode> {
+	let [module, member, arguments] = [module, member, arguments].map(|value| given_node(caller, value));
 	let (module, member) = (module?.name(), member?.name());
 	let answer = match (module.as_str(), member.as_str()) {
-		("table", "select") => queried_rows(&mut caller, &arguments?)?,
-		("sound", "signal") => played_signal(&mut caller, &arguments?)?,
-		("sound", "blocks") => played_blocks(&mut caller, &arguments?)?,
+		("table", "select") => queried_rows(caller, &arguments?)?,
+		("sound", "signal") => played_signal(caller, &arguments?)?,
+		("sound", "blocks") => played_blocks(caller, &arguments?)?,
 		_ => match crate::modules::std_adapters::call(&module, &member, &arguments?) {
 			Ok(answer) => answer,
 			// the program raises it (emit_ffi_result): `try` catches it, uncaught it ends the run with this reason
-			Err(problem) => return error_in_program(&mut caller, &problem),
+			Err(problem) => return error_in_program(caller, &problem),
 		},
 	};
-	built_in_program(&mut caller, &answer, &format!("{module}.{member}"))
+	built_in_program(caller, &answer, &format!("{module}.{member}"))
 }
 
 /// The ids a filter's query keeps (database.rs select), its warp_call calling the program's functions back; a function
@@ -850,9 +905,7 @@ fn calling_back<T>(
 
 /// The node a host word was given, read out of the caller's instance
 fn given_node(caller: &mut Caller<'_, HostState>, value: HostNode) -> wasmtime::Result<Node> {
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
-		return Err(wasmtime::Error::msg("the module exports no memory"));
-	};
+	let memory = exported_memory(caller).ok_or_else(|| wasmtime::Error::msg("the module exports no memory"))?;
 	Ok(crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut caller.as_context_mut(), memory))
 }
 
@@ -896,8 +949,13 @@ fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<
 
 /// `clipboard`: the clipboard's text, read now (warp-runtime system_values.rs)
 fn clipboard_text(mut caller: Caller<'_, HostState>) -> wasmtime::Result<HostNode> {
+	let result = clipboard_text_or_failure(&mut caller);
+	raised(&mut caller, result)
+}
+
+fn clipboard_text_or_failure(caller: &mut Caller<'_, HostState>) -> wasmtime::Result<HostNode> {
 	let text = warp_runtime::system_values::clipboard_text().map_err(task_failure)?;
-	built_in_program(&mut caller, &Node::Text(text), "clipboard")
+	built_in_program(caller, &Node::Text(text), "clipboard")
 }
 
 /// The path of the page natively: "/", or the one a render for a request is made for (with_page_path)
@@ -938,8 +996,17 @@ fn built_in_program(caller: &mut Caller<'_, HostState>, value: &Node, word: &str
 
 /// `broadcast value on "chat"`: the value as warp text to every listener of the channel
 fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: HostNode) -> wasmtime::Result<()> {
-	let channel = given_node(&mut caller, channel)?;
-	let message = given_node(&mut caller, message)?;
+	let result = channel_send_or_failure(&mut caller, channel, message);
+	raised(&mut caller, result)
+}
+
+fn channel_send_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	channel: HostNode,
+	message: HostNode,
+) -> wasmtime::Result<()> {
+	let channel = given_node(caller, channel)?;
+	let message = given_node(caller, message)?;
 	if crate::web::web_sockets::is_socket_address(&channel.name()) {
 		return crate::web::web_sockets::send(&channel.name(), &message).map_err(task_failure);
 	}
@@ -956,10 +1023,12 @@ fn dispatch_event(mut caller: Caller<'_, HostState>, name: HostNode, detail: Hos
 
 /// `notify "text"`: a desktop notification of the text (a value other than a text as warp writes it)
 fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result<()> {
-	let text = match given_node(&mut caller, text)? {
-		Node::Text(text) => text,
-		other => other.serialize(),
-	};
+	let result = notify_or_failure(&mut caller, text);
+	raised(&mut caller, result)
+}
+
+fn notify_or_failure(caller: &mut Caller<'_, HostState>, text: HostNode) -> wasmtime::Result<()> {
+	let text = text_or_written(given_node(caller, text)?);
 	warp_runtime::system_values::notify(&text).map_err(task_failure)
 }
 
@@ -978,6 +1047,6 @@ mod tests {
 	fn test_host_state() {
 		let mut state = HostState::new();
 		assert_eq!(state.alloc(10), 65536);
-		assert_eq!(state.alloc(5), 65552); // 65536 + 10, aligned to 8 = 65544? No, 65536+10=65546, aligned = 65552
+		assert_eq!(state.alloc(5), 65552); // 65536 + 10 = 65546, aligned to 8
 	}
 }

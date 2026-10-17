@@ -8,7 +8,7 @@ use super::nodes::{
 };
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::words::{IMPLICIT_PARAMETER, ON_WORD, RETURN_WORD, SELF_WORD};
+use crate::words::{IMPLICIT_PARAMETER, ON_WORD, RETURN_WORD, SELF_WORD, THIS_WORD};
 
 mod tasks;
 pub use tasks::*;
@@ -16,7 +16,6 @@ mod function_heads;
 pub(crate) use function_heads::*;
 
 /// The receiver of an extension method, as Kotlin (`this`) and Swift (`self`) name it
-const THIS_WORD: &str = "this";
 /// `map data = {…}`: the collection words a typed declaration takes, as the annotation they mean (type() answers map,
 /// list, tuple); dict and array are other languages' words for map and list (card declaration-type)
 const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] =
@@ -368,7 +367,10 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 				format!("`{written}: …` visits only the items that pass its filter"),
 				vec![crate::errors::diagnostic::reading(
 					"filter the items",
-					&format!("for it in … {{ if it {op} {} {{ … }} }}", crate::normalize::operand_text(value)),
+					&crate::for_loop::headers::filter_loop_block(&format!(
+						"it {op} {}",
+						crate::normalize::operand_text(value)
+					)),
 				)],
 				crate::errors::diagnostic::Fallback::Warning,
 			)

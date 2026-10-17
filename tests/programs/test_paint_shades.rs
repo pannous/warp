@@ -25,3 +25,24 @@ fn the_hosts_shade_pixels_as_pixels_rs_says() {
 	assert_eq!(number_after(HOST_MEDIA, "const PAINT_COLOR_FROM = "), COLOR_FROM);
 	assert_eq!(number_after(DRAW, "paper = "), 0xFF000000 | (PAPER as u64 * 0x010101));
 }
+
+#[cfg(feature = "native")]
+const HOST: &str = include_str!("../../web/playground/host.js");
+
+/// The number after `name: ` in a line of `source`: `view_width: 640,` → 640
+#[cfg(feature = "native")]
+fn entry_after(source: &str, name: &str) -> i64 {
+	let prefix = format!("{name}: ");
+	let at = source.find(&prefix).unwrap_or_else(|| panic!("no {prefix}")) + prefix.len();
+	source[at..].chars().take_while(char::is_ascii_digit).collect::<String>().parse().unwrap()
+}
+
+// card paper-shape: the default view (system_values.rs NATIVE_VIEW, host.js VIEW_DEFAULTS) and draw_shape's clear
+// kind (gpu_canvas.rs CLEAR, lib/draw.warp clear_shape) are written twice, and must say the same
+#[cfg(feature = "native")]
+#[test]
+fn the_view_and_the_clear_shape_agree_everywhere() {
+	let (width, height) = warp_runtime::system_values::native_view();
+	assert_eq!((entry_after(HOST, "view_width"), entry_after(HOST, "view_height")), (width, height));
+	assert_eq!(number_after(DRAW, "clear_shape = "), warp::graphics::gpu_canvas::CLEAR as u64);
+}
