@@ -1,0 +1,99 @@
+// The sugar pass (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): parser.warp writes what the
+// source says, `xs[i]`, `a /! b`, `a div b`, `x is in xs`, `loop {…}`; each row here rewrites one written form into
+// the tree the passes read, and a class body's fields get their types (card parser-typed-fields). Count words
+// (`twice {…}`) wait for the scope pass, which knows a program's own `twice`.
+use "lib/compiler/shapes.warp"
+
+// The written operators of keys and their rewrites, row by row (two lists: card function-values-in-rows)
+KEY_SUGAR = ["[]", "/!", "div", "/!=", "loop"]
+KEY_REWRITES = [subscript, quotient_call, quotient_call, quotient_assignment, endless_loop_of]
+// The written words and the words they stand for: `x is in xs` is `x in xs`
+WORD_SUGAR = [["is in", "in"]]
+
+// The tree with every written form rewritten, deepest first
+sugared(node: any) := {
+	if node === ø or not (node is list) { return node }
+	node = node.map(sugared)
+	if node#1 == "key" and KEY_SUGAR contains node#2 {
+		key_rewrite = KEY_REWRITES#(position_of(KEY_SUGAR, node#2))
+		return key_rewrite(node#3, node#4)
+	}
+	if node#1 == "type" and node#3 !== ø { return ["type", node#2, typed_fields(node#3)] }
+	if node#1 == "symbol" {
+		for word in WORD_SUGAR {
+			if word#1 == node#2 { return ["symbol", word#2] }
+		}
+	}
+	node
+}
+
+position_of(values: list, value: any) := {
+	for at in 1 .. values.length + 1 {
+		if values#at == value { return at }
+	}
+	ø
+}
+
+// `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
+// Rust twin: warp_parser subscript
+subscript(target: any, index: any) := {
+	bounds = slice_bounds(index)
+	if bounds != ø { return ["list", "(", "", ["symbol", "slice"], target] + bounds }
+	["key", "#", target, one_based(index)]
+}
+
+// The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
+// Rust twin: subscripts.rs slice_bounds
+def slice_bounds(index) {
+	if not (index is list) or index.length != 4 or index#1 != "key" { return ø }
+	op = index#2
+	if op == ":" or op == ".." { return [index#3, index#4] }
+	if op != "to" { return ø }
+	if index#4 == ø { return [index#3, ø] }
+	[index#3, ["key", "+", index#4, 1]]
+}
+
+// `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
+// Rust twin: warp_parser subscript
+def one_based(index) {
+	if index is number { return index + 1 }
+	["key", "+", index, 1]
+}
+
+// `a /! b` and `a div b` are the call `floor_quotient(a, b)`, `a /!= b` the assignment `a = floor_quotient(a, b)`
+quotient_call(left: any, right: any) := ["list", "(", "", ["symbol", "floor_quotient"], left, right]
+quotient_assignment(left: any, right: any) := ["key", "=", left, quotient_call(left, right)]
+
+// Rust's `loop { … }` is `while true { … }`
+// Rust twin: atoms.rs keyword_form (LOOP_WORD)
+endless_loop_of(nothing: any, body: any) := ["key", "do", ["key", "while", ø, true], body]
+
+// The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
+// Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
+CODE_MEMBER_WORDS = FUNCTION_KEYWORDS + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]
+
+// A class body's fields with their types, `x: int` holding the type int; a method keeps its code
+// Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type
+def typed_fields(node) {
+	if not (node is list) { return node }
+	if node#1 == "key" {
+		if node#2 == ":=" { return node }
+		value = node#4
+		if is_symbol(value) { value = ["type", value, ø] }
+		return ["key", node#2, node#3, value]
+	}
+	if node#1 != "list" or node.length < 4 or starts_code(node#4) { return node }
+	members = [typed_fields(member) for member in node[3 .. node.length]]
+	// the line `left: Node` is the one field
+	if node#2 == "" and members.length == 1 and members#1 is list and members#1#1 == "key" and members#1#2 == ":" {
+		return members#1
+	}
+	listed(node#2, node#3, members)
+}
+
+// `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
+// Rust twin: lookahead.rs starts_code
+def starts_code(first) {
+	if is_symbol(first) { return CODE_MEMBER_WORDS contains first#2 }
+	is_call_head(first) and is_symbol(first#4)
+}
