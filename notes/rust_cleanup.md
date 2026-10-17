@@ -7,7 +7,10 @@ it gives the port a clean basis, so the warp stages don't meet the same historic
 How: an intermediate phase. Every self-hosting worker finishes its current card, then does the Rust side of the
 structural decisions in its own stage (one stage per worker keeps conflicts low), then self-hosting resumes and
 ports the cleaned design. The scope is the decided restructurings below, not an open-ended refactor. The measure is
-the full Rust suite staying green while src/ shrinks; each step states its net src/ delta.
+src/ shrinking (each step states its net src/ delta) while the suite stays mostly green: a cleanup branch may break
+up to 10% of the tests when they are edge cases (rare forms, historic detours), never core behaviour. The branch
+lists the tests it breaks with a one-line reason each; the Integrator accepts it, records them as known failures so
+other branches aren't blamed, and on demand turns them into cards for the stage's worker.
 
 | stage | worker | steps (cards) |
 |---|---|---|
