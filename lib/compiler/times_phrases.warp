@@ -20,8 +20,8 @@ rounds(count: any, body: any) := {
 }
 
 meaning(count: any, operand: any) := {
-	if operand == ø or operand.bracket == "{" { return rounds(count, operand) }
-	if operand.bracket == "[" {
+	if operand == ø or bracket_of(operand) == "{" { return rounds(count, operand) }
+	if bracket_of(operand) == "[" {
 		if #operand != 1 { return error("`n times [x]` repeats one element: `3 times [0]`") }
 		return call_of("zero_fill", [count, operand#1])
 	}
@@ -29,7 +29,7 @@ meaning(count: any, operand: any) := {
 }
 
 phrase(n: any) := {
-	if n.bracket == "" and n.separator == " " and #n == 3 and n#2 == symbol(times_word) {
+	if bracket_of(n) == "" and separator_of(n) == " " and #n == 3 and n#2 == symbol(times_word) {
 		return meaning(n#1, n#3)
 	}
 	n

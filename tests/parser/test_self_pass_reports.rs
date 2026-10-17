@@ -1,7 +1,7 @@
 //! card carries-line (notes/self_hosting.md step 12): a pass twin gets the program with the line:column of its nodes
 //! where the Rust pass reports, and its hints are compared with the Rust pass's, position included
-//! (tests/common/twins.rs pass_differential, lib/compiler/walk.warp report)
-use crate::common::twins::{positioned_bridge_differential, pass_differential};
+//! (tests/common/twins.rs pass_differential, lib/compiler/walk.warp report; first twin: number_words, in test_self_passes)
+use crate::common::twins::positioned_bridge_differential;
 use warp::pipeline::around_source_pass_reporting;
 
 #[test]
@@ -16,9 +16,4 @@ fn a_source_pass_is_seen_with_its_hints() {
 #[test]
 fn every_positioned_source_is_a_node_and_back() {
 	positioned_bridge_differential();
-}
-
-#[test]
-fn number_words_match_their_rust_twin_with_their_hints() {
-	pass_differential(warp::lowering::number_words::lower, "number_words", "number_words");
 }

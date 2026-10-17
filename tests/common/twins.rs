@@ -11,6 +11,8 @@ use warp::{Bracket, Node, Number, Separator};
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
 const COMPILER_FOLDER: &str = "lib/compiler";
+/// The fringe forms a pass twin leaves out, with how to bring each back
+const DROPPED_NOTES: &str = "notes/self_hosting_dropped.md";
 /// Characters shown on each side of the first difference
 const CONTEXT: usize = 40;
 /// Sources per evaluated program: each program's store is freed before the next, which keeps the test under 1 GB
@@ -230,8 +232,10 @@ fn differences_of(cases: impl Iterator<Item = Case>, part: &str) -> Vec<(String,
 /// [line, column, message, preferred]. Literal and attribute layers are left out on both sides (a warp node has none);
 /// the nodes carry their positions where the Rust pass reports or makes an error (card carries-line). A source the
 /// pipeline refuses before the passes, or whose passes fail, is no case.
-pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str) {
-	let cases = checked_share(&sources()).into_iter().filter_map(|path| {
+/// `dropped`: the sources of the fringe forms the twin leaves out, each named in DROPPED_NOTES with how to bring it
+/// back (user 2026-10-17: the port keeps the clean core, not every Rust case)
+pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped: &[&str]) {
+	let cases = twin_sources(dropped).into_iter().filter_map(|path| {
 		let text = std::fs::read_to_string(&path).ok()?;
 		let reporting = || warp::pipeline::around_source_pass_reporting(&text, pass);
 		let (before, after, diagnostics) = std::panic::catch_unwind(reporting).ok()??;
@@ -272,7 +276,7 @@ pub fn positioned_bridge_differential() {
 }
 
 fn bridge_differential_of(given: fn(&Node) -> Node) {
-	let cases = checked_share(&sources()).into_iter().map(|path| {
+	let cases = twin_sources(&[]).into_iter().map(|path| {
 		let parsed = parse(&std::fs::read_to_string(&path).unwrap());
 		let call = format!("view_of(node_of({}))", json_argument(&given(&parsed)));
 		Case { path: path.display().to_string(), call, expected: plain_view(&parsed) }
@@ -280,8 +284,22 @@ fn bridge_differential_of(given: fn(&Node) -> Node) {
 	report("view_of", &differences_of(cases, "walk"));
 }
 
+/// The checked share of the sources without the dropped ones, which DROPPED_NOTES must name; TWIN_ONLY=<path suffix>
+/// checks only the sources ending so (one source while fixing a twin)
+fn twin_sources(dropped: &[&str]) -> Vec<PathBuf> {
+	let notes = std::fs::read_to_string(DROPPED_NOTES).unwrap_or_default();
+	let unexplained: Vec<&&str> = dropped.iter().filter(|source| !notes.contains(**source)).collect();
+	assert!(unexplained.is_empty(), "dropped sources not named in {DROPPED_NOTES}: {unexplained:?}");
+	let kept = |path: &PathBuf| !dropped.iter().any(|source| path.ends_with(source));
+	match std::env::var("TWIN_ONLY") {
+		Ok(only) => sources().into_iter().filter(|path| path.ends_with(&only)).collect(),
+		Err(_) => checked_share(&sources()).into_iter().filter(kept).collect(),
+	}
+}
+
 /// A node's view as a warp node gives it back: no literal and attribute layers, a character as a text (warp holds a
-/// one-character text as the character, card character-text)
+/// one-character text as the character, card character-text), an empty group as ø (warp's empty `{}` / `()` is ø,
+/// decision empty-group-node)
 fn plain_view(node: &Node) -> Node {
 	plain(node_view(node))
 }
@@ -295,6 +313,7 @@ fn plain(view: Node) -> Node {
 	match view {
 		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
 			Some("literal" | "attribute") => plain(items.pop().unwrap_or(Node::Empty)),
+			Some("list") if items.len() == 3 => Node::Empty,
 			Some("char") => {
 				items[0] = Node::text("text");
 				Node::List(items, bracket, separator)
