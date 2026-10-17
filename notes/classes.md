@@ -2,41 +2,21 @@
 
 Roadmap card: class-system (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 
-## What works today (2026-10-06)
-- `class`/`struct`/`type`/`record` declare a type: fields, typed fields (`age:int`), optional fields (`left?`).
-  Construction: positional `person("Ann" 40)` or named `person{name:"Ann"}`. Field access `p.age`.
-  Trees as values: the issue's `Tree`/`insert` example runs.
-- Methods as free functions over the type: `greet(p:person) := "hi " + p.name`, called as `greet(p)` or `p.greet()`
-  (uniform call syntax, library_words). Methods are functions dispatching on their first argument's class: a method
-  adds to the function of that name, the most specific wins, at run time when needed (notes/dispatch.md "Methods").
-- Traits (wiki/trait.md): Comparable, Equatable, declared traits; conformance is structural, by free functions.
-- Missing: methods written **inside** the class body. `class person{name; greet() := "hi " + name}` counts `greet` as
-  a field ("person takes 2 fields, got 1").
-
-## Plan
-1. **Methods in the class body** (this branch). Each definition in a class body becomes a type-dispatched function
-   whose first parameter is the receiver: `greet() := "hi " + name` in class person is
-   `greet(self:person) := "hi " + self.name`.
-   - In the body, a bare field name reads the receiver's field; `self` and `this` name the receiver.
-   - Calls: `p.greet()`, `greet(p)`, and `p.area` for a method without parameters (`area := side*side`, a getter).
-   - The class keeps only its fields, so construction counts fields as before.
-   - A method that assigns a field of its receiver is a loud error until step 2.
-   - Pass: lowering/types/class_methods.rs, early in SOURCE_PHASES.
-2. **Mutating methods** (P116): `inc() := n += 1`; `c.inc()` updates the variable c, like `xs.add(v)` does (objects
-   are values, wiki/class.md).
-3. **Constructors and required fields** (wiki/constructor.md): `init{…}` / `init(name){…}` blocks (P162; `value` was the
-   first name), `name!` required.
-4. **Traits in the class body.** `class dot{x:int; compare(other) := x - other.x} is Comparable`: methods already
-   are the free functions traits look for. Mostly free once step 1 lands.
-5. **Inheritance** (P117): `class b extends a` copies a's fields and methods into b, b's own definitions override.
-6. Observable fields (`on set p.age`) with warp-54 (signals), when fields become signal targets.
-
-## Decisions (user, 2026-10-06, via the Interviewer)
-- P115 receiver: bare field names read the receiver's fields; `self` (alias `this`) names it.
-- P116 a method assigning its own fields: `c.inc()` updates the variable c, like `xs.add(v)` (step 2).
+## Overview
+- `class`/`struct`/`type`/`record` declare a type: fields, typed fields (`age:int`), optional fields (`left?`),
+  defaults, required fields (`name!`: "P needs field name"). Construction: positional `person("Ann" 40)` or named
+  `person{name:"Ann"}`; `init{…}` / `init(name){…}` blocks are the constructor (P162). Field access `p.age`.
+- Methods are functions dispatching on their first argument's class: a method adds to the function of that name, the
+  most specific wins, at run time when needed (notes/dispatch.md "Methods"). Written as free functions over the type
+  (`greet(p:person) := "hi " + p.name`, called `greet(p)` or `p.greet()`) or inside the class body (step 1).
+- P115 receiver: in a class body bare field names read the receiver's fields; `self` (alias `this`) names it.
 - P117 `area := side*side` in a class body is a getter, computed at each `s.area`.
-- P117 inheritance: yes. `class b extends a` copies a's fields and methods into b; b's own definitions override a's.
-  Traits (`is shape`) stay as they are (step 5).
+- P116 a method assigning its own fields: `c.inc()` updates the variable c, like `xs.add(v)` (step 2; objects are
+  values, wiki/class.md).
+- P117 inheritance: `class b extends a` copies a's fields and methods into b; b's own definitions override a's (step 3).
+- Traits (wiki/trait.md): Comparable, Equatable, declared traits; conformance is structural, by the class's methods
+  (`class dot{x:int; compare(other) := x - other.x} is Comparable`), a claimed one checked (P177, below).
+- Fields are signal targets: `on change p.age {…}` hears `p.age = 3` (notes/signals.md).
 
 ## Step 1 as built
 - lowering/types/class_methods.rs (early in SOURCE_PHASES): each `:=` definition in a class body becomes
@@ -73,34 +53,31 @@ Roadmap card: class-system (board topic; its sub-cards are the steps and leftove
   `sum([1, 2])` stays the library's.
 
 ## Ported cases (tests/types/test_class_cases_ported.rs, probe probes/class_cases.sh)
-Cases from Python, Java, Kotlin, Swift, C# and Ruby. Batch 1 (branch classes-1) added:
+Cases from Python, Java, Kotlin, Swift, C# and Ruby.
 - Implicit receiver (Java/Kotlin/C#): inside a method, `area()` calls the class's own (or inherited) method on self,
   a bare getter name `area` reads it from self; a parameter of the same name shadows both.
 - `super.speak(…)` in dog's method: inherit gives dog the speak it would have inherited as its own method
   `speak·super·dog` and the call is `self.speak·super·dog(…)`. Static dispatch, nothing at run time; chains work
   (puppy's super is dog's speak, whose super is animal's). super of a method the parent lacks is an error.
 - `dog(…) is animal` is true when dog extends animal (traits.rs IS_TYPE through the likeness); `animal(…) is dog` false.
-Already worked: field defaults `x:int=0`, `self.w`, getters, methods with arguments, overriding per subclass, value
+Also covered: field defaults `x:int=0`, `self.w`, getters, methods with arguments, overriding per subclass, value
 equality `==`, mutating methods, field assignment, a method giving a changed copy, nested objects, named construction.
-Batch 2 (branch classes-2):
-- Static members (P122, user: the explicit keyword): the parser keeps `static` in front of a statement as the
-  annotation `@static` (no "no meaning" note any more; before a top-level function it still changes nothing).
+- Static members (P122, the explicit keyword): the parser keeps `static` in front of a statement as the
+  annotation `@static` (before a top-level function it changes nothing).
   In a class body `static k = 3` is the main-level `global c·k = 3` plus the getter `k(self:c) := c·k`, so `C.k`,
   `c.k` and a bare `k` in methods read the one value and methods may change it (`clicks += 1`); it takes no
   field slot. `static make(x) := …` is the function `c·make`, called `C.make(…)`. A plain `k = 3` stays a field with
   a default.
-- A field with a default (`x:int=1`, `k = 3`) is read from self in methods too (it gave the bare symbol before).
+- A field with a default (`x:int=1`, `k = 3`) is read from self in methods too.
 - `p.items.add(v)` / `.insert(…)` of a field path update the field like `xs.add(v)` updates a variable
   (declaration_forms is_place); a method doing it changes its object, so a Stack's `push` works.
 - Convention (P123 follow-up): new tests name classes with a capital, `Point{x:1 y:2}`.
-Batch 3 (branch classes-3), P123 one text form `Point{x:1 y:2}`:
-- key_emitter emit_default_key: an instance keeps its curly bracket info (it was turned into a `[…]` list, so the
-  result read `P[x:1 y:2]`); its fields are still emitted as data.
+P123 one text form `Point{x:1 y:2}`:
+- key_emitter emit_default_key: an instance keeps its curly bracket info; its fields are emitted as data.
 - library_ops list_text (print, interpolation): a key without operator (an instance) joins name and fields without
-  the `:` it puts in an entry `a:1` (print wrote `P:[x:1 y:2]`).
-- casts: `string(p)`, `"\(p)"`, `p as text` of an instance known only at run time go through list_text too (it was
-  "has no runtime text yet").
-- P126 (user): a text inside a container prints quoted (`P{x:1 name:"a"}`, `["a" "b"]`, `{a:"x"}`) in print,
+  the `:` it puts in an entry `a:1`.
+- casts: `string(p)`, `"\(p)"`, `p as text` of an instance known only at run time go through list_text too.
+- P126: a text inside a container prints quoted (`P{x:1 name:"a"}`, `["a" "b"]`, `{a:"x"}`) in print,
   interpolation and string(); a text on its own still prints bare. list_text quotes text and character items;
   emit_dynamic_text passes a lone text or character through unquoted; `string([...])` of a literal list of numbers and
   texts takes the same runtime text. A `"` or `\\` inside such a text is escaped, including in computed texts,
@@ -131,10 +108,8 @@ replaces that where the static type is known, modelled on map_backend.rs (typed 
   only while the functions it is assigned from give structs).
 - probes/bench_class_instances.sh, 10^6 iterations, debug build: construct_and_read 248 → 5 ms, read_only
   (`p.x * p.y`) 141 → ~0 ms, method_call (`p.sum()`) 170 → ~0 ms, field_write (`p.x += i`) 16 ms, changing_method (`c.inc()`) 32 ms; plain ints 2 ms.
-- Decisions (Interviewer warp-33, user, 2026-10-06): P127 int fields stay fast i64, a value that does not fit a loud
-  run-time error. Found in step 3: nothing overflows, an i64 field carries warp's exact-int encoding like an int local
-  (fixnum or a handle to the big number), so `b.n = 2^70` keeps 2^70 (an_int_field_holds_any_int). Card
-  int-declaration (done): 0.5 is an exact number of kind Int; a declared int variable or a struct int field now traps
+- P127 int fields stay fast i64, a value that does not fit a loud run-time error. Nothing overflows: an i64 field carries warp's exact-int encoding like an int local
+  (fixnum or a handle to the big number), so `b.n = 2^70` keeps 2^70 (an_int_field_holds_any_int). 0.5 is an exact number of kind Int; a declared int variable or a struct int field traps
   at run time with "an int must be a whole number" when given a fraction (`x += 0.5`, `p.x = y`), as wiki/Footguns.md
   refuses `x:int=5; x=2.5` (big_int.rs emit_fits_declared, struct_backend.rs emit_field_value); `/=` still keeps an int
   an int. Open: a Node instance `P(0.5)` (card int-field). P126 texts inside containers print quoted everywhere (print, interpolation, string()): `P{x:1 name:"a"}`,
@@ -251,7 +226,7 @@ is a method of the generic function `sum` (card dispatch, notes/dispatch.md; for
   `new Point { X = 3 }`; Python class attributes (a field with a value read as `Counter.count` is static).
   Every class body is normalized to its members (with_members), not only those with methods. The declared-type
   pre-scan takes the name right after `class`/`record`/`type` (`record = find(…)` declares nothing).
-Also (card class-forms-ruby, reviewed 2026-10-12): Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`, endless
+Also: Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`, endless
 `def twice = @x * 2`), Go (`type P struct {…}`, `func (p P) M()`), operators (`__add__`, `operator +`, class_operators.md),
 a method named `norm` (tests/functions/test_operator_word_methods.rs).
 
@@ -271,11 +246,11 @@ with an "I meant: <warp word>" fix, `diagnostic::note_alias(written, warp_word)`
 OPERATOR_METHODS), `data class`/`open class`… → `class`, `mutating func` → `func`, `val x`/`var count` → the field
 (`async` stays silent: it may mean something in warp), `new Point(1, 2)` → `Point(1, 2)` ("new is superfluous").
 Tests: tests/types/test_class_aliases.rs.
-P162 (user, 2026-10-06, classes-26): `init` is the constructor. Aliases with the note "warp says init": `value` (the
+P162 (classes-26): `init` is the constructor. Aliases with the note "warp says init": `value` (the
 first warp name), `constructor`, `__init__`, `initialize`, `__construct`, `New`, `Create`, `new`, and a method named
 like its class (class_methods with_init_constructors, CONSTRUCTOR_ALIASES). An alias the program also calls as a
 method (`p.new(2)`, Rust's `Point::new(1, 2)`: method_calls_named) stays a method. The constructor function is
-`P·init` (it was `P·value`).
+`P·init`.
 
 Run-time dispatch (classes-27, card class-method): a library-word method (`sum`, the counting words `count`/`size`/…,
 type words) called on a variable of no known class outside the class bodies, `total(x) := x.sum()`, is
@@ -286,8 +261,8 @@ class bodies receivers are fields of declared types. An operator on a variable o
 (`for q in [V(1), W(9)] { q + q }`, card class-operators) is `if q is V then q.plus(q) else … else q + q` per class
 defining the operator's method (operators.rs dispatched_operator); variables assigned a number or a text, looping over
 a range or a list of them, and fields of a type word (`x:int`) keep the plain operator (plain_variables). A choice
-between an instance (or a map) and a number is a Node of its run-time kind (inference.rs branches_kind; it was Text,
-so `print(if c then V(7) else 5)` failed with "not a joinable item").
+between an instance (or a map) and a number is a Node of its run-time kind (inference.rs branches_kind, so
+`print(if c then V(7) else 5)` joins).
 
 Go (classes-28, tests/types/test_class_forms_ported.rs a_go_struct_with_methods): `type Point struct { X int; Y int }`
 (the parser skips `struct` after the name), fields `X int` (typed_field takes both orders, `X, Y int` gives an
@@ -379,11 +354,11 @@ block as children and per-instance state are web's (blocks.rs lower_trailing_blo
   `red is Color` is true; `Shape::Circle(2)` → `Circle(2)` for any variant, also in match patterns.
 - `enum Shape { Circle(r), Rect(w, h), Dot }` and Swift's `case circle(radius: Double)` lines: as soon as one case has
   values the enum IS that sum type (parser parse_enum_with_values, same sum_type builder). An enum without values
-  is the sum type of its cases too (user decision enum-case B, lowering/types/plain_enums.rs, test_plain_enum.rs):
+  is the sum type of its cases too (decision enum-case B, lowering/types/plain_enums.rs, test_plain_enum.rs):
   `Coin.Dime` is `Dime`, `Dime is Coin`; `Coin.Dime as int` its index 2 (counting from 0, as C does; warp's
   positions `x in xs`, `c#1` are 1-based), `as index` the same, `as position` 3 (spec: wiki/enum.md); `2 as Coin` and `Coin(2)` the case, "9 is no Coin case" past the cases;
   `f(1)` for `f(c: Coin)` is a type error offering `f(1 as Coin)` (card coin-errors, test_fixits). Enums with
-  written values (`Penny = 1`) are on hold (user: WIT enums carry no values, FFI can work around it; branch enum-coin). A match on a declared enum or sum type that misses
+  written values (`Penny = 1`) are on hold (WIT enums carry no values, FFI can work around it; branch enum-coin). A match on a declared enum or sum type that misses
   a case does not compile (match_exhaustive.rs).
 - Open: a match on a subject statically known as a bare variant (`s = Dot; match s {Circle(r) => r*r …}`) types the
   dead arm and fails (card match-static); inside a function it works.
