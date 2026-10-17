@@ -16,6 +16,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   existing twins stay. self-hosting-resumed (2026-10-17, user): self-hosting is the fleet's next big task; workers
   finish their current work, then switch to it, starting with a readiness survey (warp-self-survey: are all the
   language parts there, or should macros or a cheaper feature come first so the warp compiler doesn't bloat).
+- self-hosting-minimal (2026-10-17, user): the warp compiler is no blind copy of the Rust one; it drops experimental
+  bloat and inelegant passes, cleanest minimal implementation first. Failing fringe/edge forms are fine if each dropped
+  form is recorded with how to bring it back (notes/self_hosting_dropped.md); twins measure the kept forms via an
+  exclusion list. Sizeable syntax drops go to the user as questions.
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
@@ -254,6 +258,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
 - `pixels size` works like `size of pixels`.
 - swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
+- curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø` (Interviewer's decision).
+- empty-group-node (leave as is, user 2026-10-17): an empty group in code is ø (`parse("{}") == ø`, `bracketed([], "{")` is ø); self-hosting twins compare with ø ≈ {} or the bridge maps ø back to the Rust bracket.
 
 ## Control flow, matching and errors
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.

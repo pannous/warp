@@ -86,3 +86,14 @@ s.once
 once = [5]; once [0]
 twice(x) := x * 2; twice [3]
 f(once) := once [0]; f([4])
+c = o-b
+a = {aria-label: "close"}
+y = x-1
+z = full-name + 1
+b = a[1:]
+b = a[:2]
+b = a[1:3]
+b = a[1..3]
+b = a[1...3]
+b = a[...3]
+b = a[i]
