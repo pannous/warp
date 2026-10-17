@@ -1045,7 +1045,7 @@ async function sendBugReport() {
 	showBugStatus("sending…");
 	try {
 		const answer = await fetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
-		const { card, queued, error } = await answer.json();
+		const { card, board, queued, error } = await answer.json();
 		if (answer.status === FORBIDDEN) {
 			store(BUG_TOKEN_KEY, null);
 			$("bug-token").hidden = false;
@@ -1054,17 +1054,20 @@ async function sendBugReport() {
 		if (report.token !== BUG_TOKEN) store(BUG_TOKEN_KEY, report.token);
 		$("bug-comment").value = "";
 		$("bug-express").checked = false;
-		if (card) showBugStatus("card made: ", false, card);
+		if (card) showBugStatus("card made: ", false, card, board);
 		else showBugStatus(`sent (${queued}): a card within minutes`);
 	} catch (failure) {
 		showBugStatus(`not sent: ${failure.message}`, true);
 	}
 }
 
-// `card`: the issue the report became, a link named #1755 after the text (card card-made)
-function showBugStatus(text, failed = false, card = null) {
+// `card`: the issue the report became, a link named #1755 after the text (card card-made), then `(board)` linking its
+// card on the board (`board` of scripts/bug_report.py, card card-made-we)
+function showBugStatus(text, failed = false, card = null, board = null) {
 	const status = Object.assign($("bug-status"), { textContent: text, className: failed ? "failed" : "" });
-	if (card) status.append(Object.assign(document.createElement("a"), { href: card, target: "_blank", rel: "noopener", textContent: cardName(card) }));
+	const link = (href, name) => Object.assign(document.createElement("a"), { href, target: "_blank", rel: "noopener", textContent: name });
+	if (card) status.append(link(card, cardName(card)));
+	if (board) status.append(" (", link(board, "board"), ")");
 }
 
 // https://github.com/pannous/warp/issues/1755 → #1755, any other address as it is
