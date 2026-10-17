@@ -26,6 +26,7 @@ TEST_GROUPS=(
 REPORTS=/Users/me/dev/angles/warp/data/self-hosted
 CLOUD_RESULTS=/Users/me/dev/angles/warp/data/cloud
 SHOWN_CAUSES=40
+FAMILY_LEAST=10                  # a family of fewer failures is only listed by its causes
 CAUSE_WIDTH=110
 
 fail() { echo "self-hosted-suite: $*" >&2; exit 1; }
@@ -36,7 +37,7 @@ rank() {
 	local log
 	for log in "$@"; do
 		if [[ "$log" == *.gz ]]; then gunzip -c "$log"; else cat "$log"; fi
-	done | awk -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH '
+	done | LC_ALL=C awk -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH -v family_least=$FAMILY_LEAST '
 		/^test [^ ]+ \.\.\. ok$/ { passed++ }
 		/^test [^ ]+ \.\.\. FAILED$/ { failed++ }
 		/^cloud-test: KILLED/ { killed++ }
@@ -44,18 +45,28 @@ rank() {
 		state == 1 && / panicked at / { state = 2; next }
 		state == 2 { message = $0; state = (message ~ /^assertion/) ? 3 : 0; if (!state) count_cause(message); next }
 		state == 3 { sub(/^ *left: */, ""); count_cause($0); state = 0 }
+		# the message itself: an error value or a text of one unwrapped, its quotes unescaped
 		function count_cause(cause) {
+			gsub(/\\"/, "\"", cause)
+			sub(/^"/, "", cause); sub(/"$/, "", cause)
+			sub(/^Error\("/, "", cause); sub(/"\)$/, "", cause)
 			gsub(/[0-9]+/, "#", cause)
 			cause = substr(cause, 1, width)
 			if (!(cause in causes)) example[cause] = current
 			causes[cause]++
+			family = cause
+			gsub(/\x27[^\x27]*\x27|`[^`]*`|: [^ ]+$/, " …", family)
+			families[family]++
 		}
 		END {
 			all = passed + failed
 			printf "self-hosted: %d passed / %d (%.1f%%)\n", passed, all, all ? 100 * passed / all : 0
 			if (killed) printf "%d killed runs: their unfinished tests are not counted, their failures have no cause\n", killed
+			sorter = "LC_ALL=C sort -rn | head -" shown
+			printf "failure families (quoted parts as …):\n"
+			for (family in families) if (families[family] >= family_least) printf "%6d  %s\n", families[family], family | sorter
+			close(sorter)
 			printf "failures by cause (count, cause, one test):\n"
-			sorter = "sort -rn | head -" shown
 			for (cause in causes) printf "%6d  %s  [%s]\n", causes[cause], cause, example[cause] | sorter
 		}'
 }

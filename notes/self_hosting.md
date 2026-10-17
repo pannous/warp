@@ -346,4 +346,5 @@ frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank
 - The stage program compiles once per worker thread (its compile has thread-local state the outer compile keeps);
   the twin tests parser::test_self_* are skipped (they compare warp with Rust themselves).
 - The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
-  warp-lang at opt-level 2, as test.sh), branch self-hosted/<tip>, deleted after the run.
+  warp-lang at opt-level 2, as test.sh), in three jobs at once (TEST_GROUPS: self-hosted, the whole suite outlasts the
+  lane's 2400 s limit), branches self-hosted/<tip>-<n>, deleted after the run.
