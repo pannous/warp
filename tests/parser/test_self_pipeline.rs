@@ -13,6 +13,7 @@ fn the_warp_pipeline_lowers_as_rust() {
 		warp::text::interpolation::lower_program,
 		warp::lowering::welcome_forms::lower_match_arms,
 		warp::lowering::welcome_forms::lower_arrow_result_types,
+		warp::lowering::of_lookups::lower,
 		warp::lowering::times_phrases::lower,
 		warp::lowering::number_words::lower,
 	];
