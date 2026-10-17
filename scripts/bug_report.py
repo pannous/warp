@@ -171,7 +171,7 @@ class ReportHandler(BaseHTTPRequestHandler):
         return forwarded or self.client_address[0]
 
     def reply(self, status, body):
-        data = json.dumps(body).encode()
+        data = json.dumps(body).encode() if status != 204 else b""  # a 204 carries no body
         self.send_response(status)
         self.send_header("Access-Control-Allow-Origin", "*")  # the token, not the origin, is the check
         self.send_header("Access-Control-Allow-Methods", "POST")
