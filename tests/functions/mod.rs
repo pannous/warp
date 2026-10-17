@@ -61,6 +61,7 @@ mod test_deterministic_inference;
 mod test_dollar_body;
 mod test_dot_lambda; // card dot-lambda
 mod test_each_spellings;
+mod test_early_return_kind;
 mod test_effect_block_operand;
 mod test_effects;
 mod test_effects_symbols;
@@ -215,4 +216,4 @@ mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
 mod test_whole_float_to_int_parameter;
-mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow
+mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow // card is-early-return
