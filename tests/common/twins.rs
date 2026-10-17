@@ -383,7 +383,10 @@ fn kind_slots(lines: &[String]) -> std::collections::BTreeMap<String, String> {
 
 /// The same slots, each of warp's kinds Rust's or a more general one: a node (empty) holds any value, a number of
 /// run-time kind (data) any number; a narrower kind would hold a value Rust's may not fit
-fn covers(warp: &std::collections::BTreeMap<String, String>, rust: &std::collections::BTreeMap<String, String>) -> bool {
+fn covers(
+	warp: &std::collections::BTreeMap<String, String>,
+	rust: &std::collections::BTreeMap<String, String>,
+) -> bool {
 	let general = |warp: &str, rust: &str| {
 		warp == rust || warp == "empty" || (warp == "data" && (rust == "int" || rust == "float"))
 	};
