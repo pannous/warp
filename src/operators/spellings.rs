@@ -304,8 +304,6 @@ impl Op {
 			// Suffix
 			Op::Inc => "++",
 			Op::Dec => "--",
-			Op::Square => "²",
-			Op::Cube => "³",
 
 			// Ternary/Index/Range
 			Op::Question => "?",

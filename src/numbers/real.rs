@@ -301,10 +301,6 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 		}
 		// To do why does to have the special logic over here?
 		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if left.is_empty_node() => unary(op, evaluate(right, scope)?),
-		Op::Square | Op::Cube if right.is_empty_node() => {
-			let exponent = if op == Op::Square { 2 } else { 3 };
-			arithmetic(evaluate(left, scope)?, Op::Pow, Value::Real(Real::Exact(Exact::integer(exponent))))
-		}
 		Op::As => {
 			let value = evaluate(left, scope)?;
 			match right.drop_meta() {

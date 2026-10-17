@@ -30,7 +30,7 @@ pub(super) use crate::operators::OPERATOR_FUNCTION_PREFIX;
 pub(super) const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] =
 	[("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
 /// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`
-pub(super) const USER_SUFFIX_BP: u8 = Op::Square.binding_power().0;
+pub(super) const USER_SUFFIX_BP: u8 = Op::Inc.binding_power().0;
 pub(super) const USER_PREFIX_RIGHT_BP: u8 = Op::Neg.binding_power().1;
 pub(super) const USER_INFIX_BP: (u8, u8) = Op::Add.binding_power();
 /// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart

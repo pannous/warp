@@ -70,7 +70,6 @@ fn operation_required(ctx: &mut Context, key: &Node, op: &Op, value: &Node) {
 			Op::Pow => {
 				ctx.required_functions.insert("i64_pow");
 			}
-			Op::Square | Op::Cube => return analyze_required_functions(ctx, key),
 			_ if op.is_prefix() && key.is_empty_node() => return analyze_required_functions(ctx, value),
 			Op::Hash => subscript_required(ctx, key, value),
 			Op::Dot if method_counter_required(ctx, key, value) => return,
@@ -224,7 +223,7 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::Eq | Op::Ne => &[VALUES_EQUAL],
 		Op::Identical | Op::NotIdentical => &[VALUES_EQUAL, SAME_NODE],
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
-		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
+		Op::Inc | Op::Dec | Op::Neg | Op::Abs => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		Op::Xor => &[INT_RUNTIME],
 		Op::BitAnd | Op::BitOr => &[INT_RUNTIME, IS_TRUTHY],
 		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::numbers::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
