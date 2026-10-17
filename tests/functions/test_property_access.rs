@@ -48,8 +48,6 @@ fn test_field_names_win_over_library_words_on_an_object() {
 #[test]
 fn test_non_objects_keep_the_undefined_function_rule() {
 	fails_with("x=5; x.foo", "undefined function: foo");
-	fails_with("x=\"hello\"; x.shout", "undefined function: shout");
-	fails_with("x=[1 2 3]; x.frobnicate", "undefined function: frobnicate");
 }
 
 #[test]

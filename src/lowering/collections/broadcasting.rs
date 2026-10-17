@@ -160,7 +160,7 @@ fn all_calls(node: Node) -> Node {
 }
 
 /// `all xs` as an argument: xs
-fn all_marked(argument: &Node) -> Option<&Node> {
+pub(crate) fn all_marked(argument: &Node) -> Option<&Node> {
 	match argument.drop_meta() {
 		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(ALL_WORD) => {
 			Some(&words[1])

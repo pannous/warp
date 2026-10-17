@@ -1,0 +1,17 @@
+use draw
+canvas(640, 480)
+clear(red)
+table = int[256]
+for n in 0..256 {
+	c = n
+	for k in 0..8 { c = if c % 2 == 1 then 0xEDB88320 xor (c /! 2) else c /! 2 }
+	table[n] = c
+}
+crc = 0xFFFFFFFF
+for pixel in canvas_pixels {
+	for shift in [16, 8, 0] {
+		byte = (pixel /! (1 << shift)) % 256
+		crc = table[(crc xor byte) % 256] xor (crc /! 256)
+	}
+}
+print crc xor 0xFFFFFFFF

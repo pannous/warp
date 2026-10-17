@@ -98,7 +98,6 @@ pub fn worker_count() -> usize {
 	std::thread::available_parallelism().map_or(1, |cores| cores.get() * TASK_WORKERS_PER_CORE)
 }
 
-/// The epoch advances while the table lives, so tasks reach their checks (stop, pause)
 /// The machine's cores: a parallel let forks while fewer tasks run (task_forks)
 pub(crate) fn cores() -> i64 {
 	worker_count() as i64

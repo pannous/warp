@@ -2,7 +2,8 @@
 //! to, so the next run of the same program skips the compile (1.2 s for samples/sound/gpu_visualizer_warp.warp, whose paint
 //! functions become a shader). The key covers everything the compile reads: warp itself (the binary's size and time),
 //! the source, the program's path, the working directory, the WARP_ settings, `warp fast`, and the files of the folders where its
-//! `use`s look (modules::SEARCH_DIRECTORIES below the program's folder and the working directory: names, sizes, times).
+//! `use`s look (modules::SEARCH_DIRECTORIES below the program's folder and the working directory: names, sizes, times
+//! of the module files there, so a file the program writes beside it, `save "x.png"`, leaves the key as it was).
 //! A compile that reads beyond them (packages, `use project`, a path, a C library) or says anything (a hint, a warning)
 //! is not kept: its next run compiles and says it again. Kept next to the compiled machine code (module_cache.rs),
 //! `WARP_MODULE_CACHE=off` turns both off.
@@ -10,7 +11,7 @@ use crate::pipeline::CompiledModule;
 use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 
 /// The extension of a kept program in the module cache
 pub const PROGRAM_EXTENSION: &str = "program";
@@ -21,8 +22,10 @@ const NEEDS_HOST: u8 = 1;
 const NEEDS_WASI: u8 = 2;
 const NEEDS_FFI: u8 = 4;
 
-/// Only the warp CLI running a program file keeps programs: tests and hosts compile what they are given
-static ENABLED: AtomicBool = AtomicBool::new(false);
+/// The running warp binary's path and stamp, taken once at start: only the warp CLI running a program file keeps
+/// programs (tests and hosts compile what they are given). A rebuild replacing the binary while this run compiles must
+/// not key the old compiler's module as the new one's: its first runs printed the old output (card probes-printed)
+static BINARY: OnceLock<String> = OnceLock::new();
 
 thread_local! {
 	/// Why the compile running on this thread may not be kept, when it read beyond the key
@@ -31,7 +34,9 @@ thread_local! {
 
 /// The program file `warp` runs from now on keeps its compiled module (main.rs)
 pub fn enable() {
-	ENABLED.store(true, Ordering::Relaxed);
+	if let Ok(binary) = std::env::current_exe() {
+		BINARY.get_or_init(|| format!("{}\n{:?}\n", binary.display(), stamp(&binary)));
+	}
 }
 
 /// The compile running now read `what`, which the key does not cover: its module is not kept
@@ -54,10 +59,11 @@ pub fn kept(code: &str) -> Option<CompiledModule> {
 /// The compile of `code` by `compile`, kept when it read nothing beyond the key and said nothing
 pub fn keeping<E>(code: &str, compile: impl FnOnce() -> Result<CompiledModule, E>) -> Result<CompiledModule, E> {
 	NOT_KEPT.with(|reason| reason.set(None));
+	let key = key(code); // before the compile: what it read is keyed as it was then
 	let said_before = crate::errors::diagnostic::said();
 	let compiled = compile()?;
 	let quiet = crate::errors::diagnostic::said() == said_before;
-	if let Some(key) = key(code).filter(|_| quiet && NOT_KEPT.with(Cell::get).is_none()) {
+	if let Some(key) = key.filter(|_| quiet && NOT_KEPT.with(Cell::get).is_none()) {
 		let needs =
 			[(compiled.needs_host, NEEDS_HOST), (compiled.needs_wasi, NEEDS_WASI), (compiled.needs_ffi, NEEDS_FFI)]
 				.iter()
@@ -71,17 +77,14 @@ pub fn keeping<E>(code: &str, compile: impl FnOnce() -> Result<CompiledModule, E
 
 /// The cache key of `code` as a program file run from here; none when warp keeps no programs
 fn key(code: &str) -> Option<String> {
-	if !ENABLED.load(Ordering::Relaxed) {
-		return None;
-	}
-	let binary = std::env::current_exe().ok()?;
+	let binary = BINARY.get()?;
 	let program = crate::modules::program_file()?.canonicalize().ok()?;
 	let working = std::env::current_dir().ok()?;
 	let mut settings: Vec<(String, String)> =
 		std::env::vars().filter(|(name, _)| name.starts_with(SETTINGS_PREFIX)).collect();
 	settings.sort();
 	let mut hasher = Sha256::new();
-	hasher.update(format!("{}\n{:?}\n", binary.display(), stamp(&binary)));
+	hasher.update(binary);
 	let fast_math = crate::pipeline::fast_math();
 	hasher.update(format!("{}\n{}\n{settings:?}\n{fast_math}\n", program.display(), working.display()));
 	for folder in searched_folders(&program, &working) {
@@ -121,15 +124,19 @@ fn searched_folders(program: &Path, working: &Path) -> Vec<PathBuf> {
 		.collect()
 }
 
-/// A folder's files with their size and time, sorted; empty when there is no such folder. Subfolders are left out:
-/// their times change with whatever they hold (the cache itself may lie below), and a `use` naming a subfolder file is
-/// not kept (modules::reads_beyond_folders)
+/// A folder's module files (.warp, .wasp, .wasm, .wat: what a `use` loads) with their size and time, sorted; empty when
+/// there is no such folder. Subfolders are left out: their times change with whatever they hold (the cache itself may lie
+/// below), and a `use` naming a subfolder file is not kept (modules::reads_beyond_folders)
 fn listing(folder: &Path) -> Vec<(String, Option<(u64, std::time::SystemTime)>)> {
+	let modules = crate::modules::MODULE_EXTENSIONS.iter().chain(&crate::modules::wasm_modules::MODULE_EXTENSIONS);
+	let extensions: Vec<&str> = modules.copied().collect();
+	let is_module =
+		|path: &Path| path.extension().is_some_and(|extension| extensions.iter().any(|known| extension == *known));
 	let mut files: Vec<_> = std::fs::read_dir(folder)
 		.into_iter()
 		.flatten()
 		.flatten()
-		.filter(|entry| !entry.path().is_dir())
+		.filter(|entry| !entry.path().is_dir() && is_module(&entry.path()))
 		.map(|entry| (entry.file_name().to_string_lossy().into_owned(), stamp(&entry.path())))
 		.collect();
 	files.sort();

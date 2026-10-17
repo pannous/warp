@@ -128,6 +128,15 @@ impl WarpParser {
 				Separator::Space,
 			));
 		};
+		// `for pi in xs` binds no name, as `pi = 4` assigns none (P130, card library-word)
+		if let Symbol(name) = variable.drop_meta() {
+			if check_constants(name, self.options.data_mode).is_some() {
+				let message = format!("{name} is a constant");
+				return Some(
+					crate::errors::diagnostic::Diagnostic::at(&variable, message).fix("another name").into_error(),
+				);
+			}
+		}
 		let key_variable = match variable.drop_meta() {
 			Symbol(name) if iterates_keys(&iterable) => Some(name.clone()),
 			_ => None,
@@ -410,7 +419,6 @@ pub(crate) fn iterates_keys(iterable: &Node) -> bool {
 	}
 }
 
-/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
 /// `for variable in iterable body`, the loop for_loop.rs lowers
 pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
 	Node::List(
@@ -420,6 +428,7 @@ pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
 	)
 }
 
+/// `while condition body`: the loop head `ø while condition` applied `do` to its body
 pub(crate) fn while_do(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
 	Node::Key(Box::new(head), Op::Do, Box::new(body))

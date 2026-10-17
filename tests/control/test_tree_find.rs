@@ -26,6 +26,13 @@ fn find_matches_list_patterns_in_nested_lists() {
 }
 
 #[test]
+fn find_with_two_names_gives_the_maps_that_have_both() {
+	let page = "page = {top: {logo: {type: \"image\", src: \"logo.png\"}}, body: [{type: \"image\", src: \"cat.jpg\", alt: \"a cat\"}]}\n";
+	is!(&format!("{page}count(page find {{src, alt}})"), 1);
+	is!(&format!("{page}described = page find {{src, alt}}\ndescribed#1.alt"), "a cat");
+}
+
+#[test]
 fn two_finds_walk_apart() {
 	is!(&format!("{PAGE}count(page find {{type: \"text\"}}) + count(page find {{src}})"), 3);
 }

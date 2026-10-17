@@ -98,6 +98,7 @@ mod test_handler_globals;
 mod test_handler_unwinding; // card on-error-abort
 mod test_held_key; // card held-key
 mod test_help_word;
+mod test_host_word_failures; // card host-word
 mod test_if_call_condition;
 mod test_if_empty_branch;
 mod test_if_instance_branches; // card if-instance-branch
@@ -111,6 +112,7 @@ mod test_key_down; // card keyboard-state
 mod test_key_name_case; // key names in any case
 mod test_key_names; // card key-if
 mod test_library_signatures; // card reflect-library-signatures
+mod test_lifted_loop_literals; // card loop-literal-list
 mod test_list_without; // people without team (card people-where)
 mod test_listener_removal;
 mod test_listener_removal_in_functions;
@@ -171,6 +173,7 @@ mod test_run_tests; // card run-tests
 mod test_run_time_block_cache;
 mod test_run_time_blocks;
 mod test_rust_inclusive_range;
+mod test_rust_option; // card rust-option
 mod test_schema_cast; // card loaded-config
 mod test_schemas; // card schemas
 mod test_scoped_handlers;
@@ -266,4 +269,5 @@ mod test_while_value;
 mod test_window_clicks; // card native-window
 #[cfg(feature = "native")] // the warp binary's window opener
 mod test_window_opens; // card window-loop
+mod test_word_named_variables; // card codepoint-loop-variable
 mod test_word_statements; // card error-beep // card rest-patterns // card member-completion // card rust-inclusive-range

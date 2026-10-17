@@ -2,12 +2,12 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def tree(source) {
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: []}
 	items(p, ' ', "")
 }
 
@@ -196,11 +196,44 @@ def continued(p, left, min_power) {
 			if powers#1 < min_power { break }
 			p.at = p.at + op#1.length
 			skip_blanks(p)
-			left = ["key", op#2, left, expression(p, powers#2)]
+			left = bound_key(p, op#2, left, powers#2)
 		}
 	}
 	left
 }
+
+// `left op right`; `x = …` and `f(a) := …` bind x and f for the rest of the source, a only inside the definition
+// Rust twin: variables.rs note_variable, functions.rs parameters_in_scope
+def bound_key(p, op, left, right_power) {
+	binding = op == "=" or op == ":="
+	outer = p.bound
+	if binding { p.bound = p.bound + parameter_names(left) }
+	right = expression(p, right_power)
+	p.bound = outer
+	if binding and bound_name(left) != ø { p.bound = p.bound + [bound_name(left)] }
+	["key", op, left, right]
+}
+
+// The name `x = …` or `f(a) := …` binds, else ø
+def bound_name(left) {
+	if is_symbol(left) { return left#2 }
+	if is_call_head(left) and is_symbol(left#4) { return left#4#2 }
+	ø
+}
+
+// The parameters of `f(a, b:int) := …`: a and b
+def parameter_names(left) {
+	names = []
+	if not is_call_head(left) { return names }
+	for parameter in left[4:] {
+		if parameter is list and parameter#1 == "key" { parameter = parameter#3 }
+		if is_symbol(parameter) { names = names + [parameter#2] }
+	}
+	names
+}
+
+def is_symbol(node) := node is list and node.length == 2 and node#1 == "symbol"
+def is_call_head(node) := node is list and node.length > 3 and node#1 == "list" and node#2 == "("
 
 // `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
 // Rust twin: suffixes.rs try_parse_control_suffix
@@ -231,13 +264,13 @@ COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
 FUNCTION_KEYWORDS = ["fun", "fn", "def", "define", "function", "func"]
 
 // `thrice {…}`, `twice "ab"`: the count word and what follows, as `3 times {…}`, else ø; `twice {a: 1}` stays the call,
-// `def twice {…}` the definition. Not mirrored yet: a program's own `once` wins (card parser-warp-scope)
+// `def twice {…}` the definition; a program's own `once`, bound before, stays its own (card parser-warp-scope)
 // Rust twin: control/loops.rs try_parse_count_word
 def count_worded(p) {
 	if p.at > 0 and p.code[p.at - 1] == '.' { return ø }
 	if FUNCTION_KEYWORDS contains word_before(p) { return ø }
 	for word in COUNT_WORDS {
-		if keyword_at(p, word#1) {
+		if keyword_at(p, word#1) and not (p.bound contains word#1) {
 			at = p.at + word#1.length
 			while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
 			c = peek(p.code, at, p.n)
@@ -450,6 +483,10 @@ def prefixed(p) {
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
+	if keyword_at(p, "loop") {
+		endless = endless_loop(p)
+		if endless != ø { return endless }
+	}
 	counted = count_worded(p)
 	if counted != ø { return counted }
 	for word in PREFIX_WORDS {
@@ -536,6 +573,16 @@ ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "
 
 // Binds a condition until `then` or `do`
 CONDITION_POWER = 78
+
+// Rust's `loop { … }` is `while true { … }`; ø when no block follows the word
+// Rust twin: atoms.rs keyword_form (LOOP_WORD)
+def endless_loop(p) {
+	at = p.at + 4
+	while at < p.n and (p.code[at] == ' ' or p.code[at] == '\t') { at = at + 1 }
+	if not is_at(p.code, at, '{', p.n) { return ø }
+	p.at = at + 1
+	return ["key", "do", ["key", "while", ø, true], items(p, '}', "{")]
+}
 
 // `if c {…} else {…}` and `while c {…}`: the block after the condition is its branch or body
 // Rust twin: expressions.rs finish_if_prefix, finish_while_prefix
@@ -678,7 +725,7 @@ def atom(p) {
 			p.at = p.at + 2
 			return radix_value(p, 2)
 		}
-		written = decimal(p)
+		written = decimal_number(p)
 		amount = if written.contains(".") or written.contains("e-") or written.contains("E-") then float(written) else int(written)
 		return with_glued_factor(p, amount)
 	}
@@ -843,7 +890,7 @@ def digit_value(c) {
 // A decimal number as written, read: digits (`_` between them dropped), a fraction unless `..` or a name follows the
 // point, an exponent
 // Rust twin: literals.rs push_digits, read_number_value, parse_exponent
-def decimal(p) {
+def decimal_number(p) {
 	written = digits_read(p)
 	after_point = peek(p.code, p.at + 1, p.n)
 	if is_at(p.code, p.at, '.', p.n) and after_point != '.' and not is_name_start(after_point) {

@@ -10,7 +10,7 @@ use super::nodes::{call, children_rewritten, is_call_head, key, or_operands, par
 use super::switch::is_pattern;
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
-use crate::node::{text, Bracket, Node, Separator};
+use crate::node::{parens, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{
 	ERROR_WORD, FLOAT_WORD, IS_TYPE, LIST_WORD, MAP_WORD, NUMBER_WORD, OF_WORD, OPERATION_WORD, PAIR_WORD, REAL_WORD,
@@ -580,8 +580,28 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			}
 		}
 		Node::Key(left, Op::Ne, right) => comparison(*left, Op::Ne, *right, shadowed),
+		Node::Key(..) if let Some((subject, types)) = union_after_is(&node, shadowed) => {
+			let union = types.into_iter().reduce(|all, part| key(all, Op::Or, part)).expect("two types");
+			expand(key(subject, Op::Eq, parens(vec![union])), shadowed)
+		}
 		other => children_rewritten(other, |child| expand(child, shadowed)),
 	}
+}
+
+/// `v is int or text` parses as `(v is int) or text`: after `is` the union is the type, `or` spells a union in every
+/// type position (decision union-return, card int-text); a non-type operand (`v is int or ok`) keeps the parse
+fn union_after_is(node: &Node, names: &Names) -> Option<(Node, Vec<Node>)> {
+	let Node::Key(left, Op::Or, rest) = node.drop_meta() else {
+		return None;
+	};
+	let (subject, mut types) = match left.drop_meta() {
+		Node::Key(subject, Op::Eq, first) if !is_equality_operand(first) => {
+			(subject.as_ref().clone(), vec![first.as_ref().clone()])
+		}
+		chain => union_after_is(chain, names)?,
+	};
+	types.extend(or_operands(rest));
+	types.iter().all(|word| type_test(&subject, word, names).is_some()).then_some((subject, types))
 }
 
 /// `type(int)`, `type(Circle)`: the type of a type is type, unless a variable takes the name

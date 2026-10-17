@@ -17,6 +17,7 @@
 
 use super::memoization::definition_parts;
 use super::nodes::{call, key};
+use super::program_names::ProgramNames;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{AT_WORD, FLOAT_WORD, FOR_WORD};
@@ -105,11 +106,13 @@ pub fn lower_live_loops(program: Node) -> Node {
 	if !crate::modules::uses_sound(&program) {
 		return program;
 	}
-	let defined = defined_names(&program);
-	expand_live_loops(program, &defined)
+	let names = ProgramNames::of(&program);
+	expand_live_loops(program, &names)
 }
 
-fn expand_live_loops(node: Node, defined: &HashSet<String>) -> Node {
+fn expand_live_loops(node: Node, names: &ProgramNames) -> Node {
+	let inner = names.inside(&node);
+	let defined = inner.as_ref().unwrap_or(names);
 	let inside = |node: Node| node.map_children(|child| expand_live_loops(child, defined));
 	match node {
 		meta @ Node::Meta { .. } => meta.under_meta(|plain| expand_live_loops(plain, defined)),
@@ -129,7 +132,7 @@ fn expand_live_loops(node: Node, defined: &HashSet<String>) -> Node {
 
 /// A block's statements with their live loops as voices; a named loop defined again there sets the moment its
 /// redefinition starts (LIVE_SINCE_SET), its first definition a voice choosing among all the blocks
-fn with_live_loops(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+fn with_live_loops(statements: Vec<Node>, defined: &ProgramNames) -> Vec<Node> {
 	let loops: Vec<Option<LiveLoop>> = statements.iter().map(|statement| live_loop_of(statement, defined)).collect();
 	let blocks_of = |name: &str| -> Vec<Node> {
 		loops
@@ -179,7 +182,7 @@ pub fn lower(program: Node) -> Node {
 	if !crate::modules::uses_sound(&program) {
 		return program;
 	}
-	let defined = defined_names(&program);
+	let defined = ProgramNames::of(&program);
 	let counts = parameter_counts(&program);
 	let program = with_block_signals(with_float_signals(with_played_functions(program, &counts)), &counts);
 	match with_music_words(program, &defined) {
@@ -352,7 +355,9 @@ fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {
 	}
 }
 
-fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
+fn with_music_words(node: Node, names: &ProgramNames) -> Node {
+	let inner = names.inside(&node);
+	let defined = inner.as_ref().unwrap_or(names);
 	if let Some(midi) = note_midi(&node, defined) {
 		return call(MIDI_HERTZ_CALL, vec![Node::Number(crate::Number::Int(midi))]).with_meta_of(&node);
 	}
@@ -382,7 +387,7 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 
 /// A unit word glued to its number: `2beats` (read as `2 * beats`) and `-6dB` (read as `-(6 * dB)`, whose minus
 /// belongs to the amount: -6 dB, not the negated gain of 6 dB)
-fn glued_unit(node: &Node, defined: &HashSet<String>) -> Option<(&'static str, Node)> {
+fn glued_unit(node: &Node, defined: &ProgramNames) -> Option<(&'static str, Node)> {
 	match node.drop_meta() {
 		Node::Key(amount, Op::Mul, unit) => unit_amount_word(unit, defined).map(|word| (word, *amount.clone())),
 		Node::Key(nothing, op @ (Op::Sub | Op::Neg), product) if nothing.is_empty_node() => {
@@ -393,7 +398,7 @@ fn glued_unit(node: &Node, defined: &HashSet<String>) -> Option<(&'static str, N
 	}
 }
 
-fn with_scheduled(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+fn with_scheduled(statements: Vec<Node>, defined: &ProgramNames) -> Vec<Node> {
 	statements
 		.into_iter()
 		.flat_map(|statement| scheduled(&statement, defined).unwrap_or_else(|| vec![statement]))
@@ -401,14 +406,14 @@ fn with_scheduled(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node>
 }
 
 /// `at 2 beats play C4` → `sound_at(beat_seconds(2))`, `play C4`, `sound_at_end()`; a block's statements in place
-fn scheduled(statement: &Node, defined: &HashSet<String>) -> Option<Vec<Node>> {
+fn scheduled(statement: &Node, defined: &ProgramNames) -> Option<Vec<Node>> {
 	let Node::List(items, _, separator) = statement.drop_meta() else {
 		return None;
 	};
 	let [at, time, action @ ..] = items.as_slice() else {
 		return None;
 	};
-	if separator.separates_statements() || action.is_empty() || defined.contains(AT_WORD) || !at.is_symbol(AT_WORD) {
+	if separator.separates_statements() || action.is_empty() || defined.takes(AT_WORD) || !at.is_symbol(AT_WORD) {
 		return None;
 	}
 	let actions = match action {
@@ -439,15 +444,15 @@ struct LiveLoop {
 
 /// `live_loop 4 { body }`, `live_loop drums 4 { body }`, `live_loop drums { body }` (endless), after an `at` too; a
 /// symbol before the block is the count when the program defines it (`live_loop n { … }`), else the voice's name
-fn live_loop_of(statement: &Node, defined: &HashSet<String>) -> Option<LiveLoop> {
+fn live_loop_of(statement: &Node, defined: &ProgramNames) -> Option<LiveLoop> {
 	let Node::List(items, _, separator) = statement.drop_meta() else {
 		return None;
 	};
-	if separator.separates_statements() || defined.contains(LIVE_LOOP_WORD) {
+	if separator.separates_statements() || defined.takes(LIVE_LOOP_WORD) {
 		return None;
 	}
 	let start = items.iter().position(|item| item.is_symbol(LIVE_LOOP_WORD))?;
-	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if !defined.contains(name));
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if !defined.takes(name));
 	let unnamed = || Node::Symbol(LIVE_VOICE.into());
 	let (voice, cycles, block) = match &items[start + 1..] {
 		[name, block] if is_name(name) => (name.clone(), None, block),
@@ -554,8 +559,8 @@ fn substituted(node: Node, replacements: &[(&str, Node)]) -> Node {
 }
 
 /// `chord(C4, major7)` → `chord(C4, "major7")`
-fn with_kind_text(mut items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
-	let undefined_word = |node: &Node, words: &[&str]| matches!(node.drop_meta(), Node::Symbol(name) if !defined.contains(name) && (words.is_empty() || words.contains(&name.as_str())));
+fn with_kind_text(mut items: Vec<Node>, defined: &ProgramNames) -> Vec<Node> {
+	let undefined_word = |node: &Node, words: &[&str]| matches!(node.drop_meta(), Node::Symbol(name) if !defined.takes(name) && (words.is_empty() || words.contains(&name.as_str())));
 	if let [taker, _, kind] = items.as_mut_slice() {
 		if undefined_word(taker, &KIND_TAKERS) && undefined_word(kind, &[]) {
 			if let Node::Symbol(name) = kind.drop_meta() {
@@ -568,7 +573,7 @@ fn with_kind_text(mut items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> 
 
 /// `[1/4, beat]` → `[beat_seconds(1/4)]`; `[x = 2, bars]` → `[x = bar_seconds(2)]`, `[for: 2, beats]` → `[for:
 /// beat_seconds(2)]`
-fn with_unit_words(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+fn with_unit_words(items: Vec<Node>, defined: &ProgramNames) -> Vec<Node> {
 	let mut written: Vec<Node> = vec![];
 	for item in items {
 		match (unit_amount_word(&item, defined), written.pop()) {
@@ -584,9 +589,9 @@ fn with_unit_words(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 	written
 }
 
-fn unit_amount_word(node: &Node, defined: &HashSet<String>) -> Option<&'static str> {
+fn unit_amount_word(node: &Node, defined: &ProgramNames) -> Option<&'static str> {
 	match node.drop_meta() {
-		Node::Symbol(name) if !defined.contains(name) => {
+		Node::Symbol(name) if !defined.takes(name) => {
 			UNIT_WORDS.iter().find(|(word, _)| word == name).map(|(_, seconds)| *seconds)
 		}
 		_ => None,
@@ -594,7 +599,7 @@ fn unit_amount_word(node: &Node, defined: &HashSet<String>) -> Option<&'static s
 }
 
 /// The MIDI note of a note name the program does not define: `Eb4` (a symbol), `F#4` (read as `F # 4`)
-fn note_midi(node: &Node, defined: &HashSet<String>) -> Option<i64> {
+fn note_midi(node: &Node, defined: &ProgramNames) -> Option<i64> {
 	let (written, name) = match node.drop_meta() {
 		Node::Symbol(name) => (name.clone(), name.clone()),
 		Node::Key(letter, Op::Hash, octave) => match (letter.drop_meta(), octave.drop_meta()) {
@@ -605,7 +610,7 @@ fn note_midi(node: &Node, defined: &HashSet<String>) -> Option<i64> {
 		},
 		_ => return None,
 	};
-	if defined.contains(&written) {
+	if defined.takes(&written) {
 		return None;
 	}
 	midi_of(&name)
@@ -634,7 +639,8 @@ fn midi_of(name: &str) -> Option<i64> {
 /// The names the program assigns or defines anywhere: `A4 = 3`, `B3(x) := …` (B3 and its parameter x), `def f(k) {…}`,
 /// `for kind in …`
 pub(crate) fn defined_names(program: &Node) -> HashSet<String> {
-	let mut names: HashSet<String> = super::for_loop::loop_variables(program).into_iter().collect();
+	let mut names = crate::library_words::defined_names(program);
+	names.extend(super::for_loop::loop_variables(program));
 	program.visit(&mut |node| match node {
 		Node::Key(target, Op::Assign | Op::Define, _) => names.extend(definition_names(target)),
 		Node::List(items, _, _) if items.first().is_some_and(|keyword| keyword.is_symbol(DEF_WORD)) => {

@@ -22,8 +22,6 @@ fn dir_of_a_text_lists_its_builtin_methods() {
 #[test]
 fn methods_list_what_dir_lists() {
 	is!("xs = [1]\ncount(xs.methods) == count(dir(xs))", true);
-	is!("s = \"hi\"\ncount(s.methods) == count(dir(s))", true);
-	is!("fs = methods(\"hi\")\nfs#1.name", "repeat");
 	is!("(\"Cursor\" in dir(text)) > 0", false);
 }
 

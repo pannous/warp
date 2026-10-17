@@ -1,7 +1,6 @@
 use crate::extensions::numbers::Number;
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use num_bigint::{BigInt, Sign};
 use std::cell::RefCell;
@@ -66,12 +65,23 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 	}
 }
 
-/// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is the task engine: a
-/// program that starts tasks needs its epoch interruption
+/// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is a task engine: a
+/// program that starts tasks ticks an engine of its own. It counts fuel when the run asks for it (`requested_fuel`,
+/// the program's `use fuel`), else its runs stop at the time limit.
 pub fn engine_for(bytes: &[u8]) -> (wasmtime::Engine, bool) {
-	let starts_tasks =
-		crate::host::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
-	(if starts_tasks { crate::util::task_engine() } else { gc_engine() }, starts_tasks)
+	use crate::run::module_cache::{is_precompiled, precompiled_engine};
+	let (fuel, starts_tasks) = match is_precompiled(bytes) {
+		true => precompiled_engine(bytes),
+		false => (
+			crate::util::requested_fuel().is_some()
+				|| crate::host::host_parts::has_section(bytes, crate::host::FUEL_SECTION),
+			crate::host::tasks::imports_tasks_in(bytes),
+		),
+	};
+	match starts_tasks {
+		true => (crate::util::metered_task_engine(fuel), true),
+		false => (crate::util::shared_engine(fuel), false),
+	}
 }
 
 /// Instantiates `bytes` with the imports `link` adds and calls its `main` (or `_start`): the result, the store and the instance
@@ -81,11 +91,8 @@ fn run_main<S: 'static>(
 	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
 ) -> Result<(Val, Store<S>, Instance)> {
 	crate::sound::start_run();
-	let (engine, starts_tasks) = engine_for(bytes);
-	let mut store = crate::util::fueled_store(&engine, state);
-	if starts_tasks {
-		store.set_epoch_deadline(crate::host::tasks::MAIN_EPOCH_DEADLINE);
-	}
+	let (engine, _) = engine_for(bytes);
+	let mut store = crate::util::limited_store(&engine, state);
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;

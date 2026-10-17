@@ -3,7 +3,7 @@
 //! (`def fib(n): …; fib(10)` compiles to 55), also inside a function body or a loop (an invariant part hoisted to
 //! compile time). Only `compile` folds: `eval` would do the same work twice.
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
-//! program computes; a call that fails or runs out of fuel stays a call.
+//! program computes; a call that fails or computes past FOLDING_FUEL stays a call.
 
 use super::nodes::{any_part, branches, call, children_rewritten, key, round_call, word_headed};
 use crate::analyzer::effects::EffectReport;
@@ -20,6 +20,10 @@ use std::collections::{HashMap, HashSet};
 const MAX_VARIANTS: usize = 32;
 /// Between a function's name and the constant arguments of its variant: `power·n3`
 const VARIANT_SEPARATOR: &str = "·";
+/// The steps a compile spends on its constant calls, counted as fuel so the compiled program doesn't depend on the
+/// machine's load (decision fuel-metering); a call taking more is computed when the program runs. About 0.5 to 2 s:
+/// a tight loop burns ~1.5e10 steps a second, calls ~4 times fewer (probes/fast_int/fuel_cost.sh)
+const FOLDING_FUEL: u64 = 10_000_000_000;
 
 /// The function a variant was made of, as its messages name it: `f` of `f·a1`
 pub fn unspecialised_name(name: &str) -> &str {
@@ -185,7 +189,7 @@ pub fn fold_constant_calls(program: Node) -> Node {
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return program;
 	};
-	let values = match crate::pipeline::run_module(module).drop_meta() {
+	let values = match computed_at_compile_time(module).drop_meta() {
 		Node::List(values, _, _) if values.len() == calls.len() => values.clone(),
 		_ => return program,
 	};
@@ -227,7 +231,7 @@ pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return Ok(program);
 	};
-	let Node::List(values, _, _) = crate::pipeline::run_module(module).drop_meta().clone() else {
+	let Node::List(values, _, _) = computed_at_compile_time(module).drop_meta().clone() else {
 		return Ok(program);
 	};
 	for ((called, name, arguments), value) in calls.iter().zip(values) {
@@ -559,4 +563,9 @@ fn calls(node: &Node, name: &str) -> bool {
 		node,
 		|part| matches!(part, Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|called| called == name)),
 	)
+}
+
+/// The values of the constant calls `module` computes, within FOLDING_FUEL
+fn computed_at_compile_time(module: crate::pipeline::CompiledModule) -> Node {
+	crate::util::with_fuel(FOLDING_FUEL, || crate::pipeline::run_module(module))
 }

@@ -65,9 +65,7 @@ pub(crate) fn call_c(
 	results: &mut [wasmtime::Val],
 ) -> wasmtime::Result<()> {
 	let name = export.signature.name;
-	let program_memory = caller
-		.get_export("memory")
-		.and_then(|memory| memory.into_memory())
+	let program_memory = crate::host::exported_memory(caller)
 		.ok_or_else(|| wasmtime::format_err!("{name}: the program has no memory for its text"))?;
 	let memory = instance
 		.get_memory(&mut *caller, "memory")
@@ -284,12 +282,7 @@ pub(crate) fn write_back(
 	let (wasmtime::Val::AnyRef(Some(target)), wasmtime::Val::AnyRef(Some(_))) = (argument, module_argument) else {
 		return Ok(());
 	};
-	let memory = |caller: &mut wasmtime::Caller<'_, crate::host::HostState>, from| {
-		export_of(caller, from, "memory")
-			.and_then(wasmtime::Extern::into_memory)
-			.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))
-	};
-	let (program_memory, module_memory) = (memory(caller, None)?, memory(caller, Some(instance))?);
+	let (program_memory, module_memory) = (instance_memory(caller, None)?, instance_memory(caller, Some(instance))?);
 	let changed = crate::run::wasm_reader::node_in(module_argument, &mut caller.as_context_mut(), module_memory)
 		!= crate::run::wasm_reader::node_in(argument, &mut caller.as_context_mut(), program_memory);
 	if !changed {
@@ -320,14 +313,23 @@ pub(crate) fn copied(
 	if !matches!(value, wasmtime::Val::AnyRef(_)) {
 		return Ok(*value);
 	}
-	let memory = export_of(caller, from, "memory")
-		.and_then(wasmtime::Extern::into_memory)
-		.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))?;
+	let memory = instance_memory(caller, from)?;
 	let node = crate::run::wasm_reader::node_in(value, &mut caller.as_context_mut(), memory);
 	let value = crate::host::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
 	let builders = crate::host::tasks::Builders::of(&mut |name| export_of(caller, into, name))
 		.map_err(|failure| wasmtime::format_err!("{failure}"))?;
 	builders.build(&value, &mut caller.as_context_mut()).map_err(|failure| wasmtime::format_err!("{failure}"))
+}
+
+/// The linear memory of the instance (None: the program's), where its values' texts live
+#[cfg(feature = "native")]
+fn instance_memory(
+	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+	instance: Option<wasmtime::Instance>,
+) -> wasmtime::Result<wasmtime::Memory> {
+	export_of(caller, instance, crate::wasm_emitter::MEMORY_ENTITY)
+		.and_then(wasmtime::Extern::into_memory)
+		.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))
 }
 
 /// The export `name` of the instance (None: the program's)

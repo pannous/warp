@@ -2,6 +2,7 @@ mod test_add_to_text;
 mod test_ascii_index_costs;
 mod test_backtick_templates;
 mod test_brace_hole; // card brace-hole
+mod test_byte_loop_inline; // card loop-calls
 mod test_case_table;
 mod test_cast_to_string;
 mod test_char_parameter_type; // chars-codepoints follow-up
@@ -42,6 +43,7 @@ mod test_quote_output;
 mod test_quoted_computed_container_text;
 mod test_quoted_container_texts;
 mod test_repeat_typed; // card repeat-int
+mod test_reverse_characters; // card reverse-characters
 mod test_runtime_kind_texts;
 mod test_runtime_text_as_int;
 mod test_scan_by_index; // card self-text-index
@@ -71,6 +73,7 @@ mod test_text_plus_printable; // card print-oldest
 mod test_text_repeat;
 mod test_text_runtime;
 mod test_text_search;
+mod test_text_slices; // cards text-slice, long-text
 mod test_text_type_words; // card cleanup-closed-lists
 mod test_text_variable_assignment;
 mod test_trim;

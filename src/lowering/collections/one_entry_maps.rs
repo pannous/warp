@@ -80,15 +80,13 @@ fn map_arguments<'a>(node: &'a Node, functions: &Functions) -> Option<Vec<(&'a N
 	}
 }
 
-/// `m.pop(k)`, `m.add(x)`: the receiver of a changing map method
+/// `m.pop(k)`, `m.add(x)`: the receiver of a changing map method. Each takes an argument, so a bare `q.pop` reads the
+/// field pop (card entry-map-field)
 fn changing_receiver(node: &Node) -> Option<&str> {
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot, member) => {
-			let method = match member.drop_meta() {
-				Node::List(items, _, _) => items.first().and_then(Node::symbol_name),
-				other => other.symbol_name(),
-			};
-			method.filter(|method| CHANGING_METHODS.contains(method)).and(receiver.symbol_name())
+			let (method, _) = member.call_parts()?;
+			CHANGING_METHODS.contains(&method).then_some(receiver.symbol_name()).flatten()
 		}
 		Node::Key(receiver, Op::AddAssign, _) => receiver.symbol_name(),
 		_ => None,

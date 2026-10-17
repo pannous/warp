@@ -3,6 +3,7 @@
 
 use super::nodes::{call, children_rewritten, is_binding, key};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
+use crate::lowering::typed_library_words::library_word_of;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -205,16 +206,26 @@ fn function_position(items: &[Node], words: &SuffixWords) -> usize {
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
 /// program assigns is its variable, never a suffix word (`solved = solve(x); return solved`)
 fn suffix_words(node: &Node) -> SuffixWords {
-	let mut variables = HashSet::new();
+	// loop variables and parameters too: `for ord in xs { x = ord }` reads the item (card codepoint-loop-variable)
+	let mut variables: HashSet<String> = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
 	crate::library_words::collect_assigned_names(node, &mut variables);
-	let functions = crate::analyzer::applicable_function_names(node);
+	variables.extend(crate::analyzer::function_definitions(node).parameter_names());
+	let mut functions = crate::analyzer::applicable_function_names(node);
+	// `trim(x) := x-1` is the program's trim·any beside the library's trim: `4 trimmed` chooses between them
+	let own_library_words: Vec<String> =
+		functions.iter().filter_map(|function| library_word_of(function)).map(String::from).collect();
 	// the library's words of one value apply too (`x sined`, `x floored`), unless the program names them
 	let library_words = crate::lowering::library_signatures::one_value_words()
-		.filter(|word| !variables.contains(*word) && !functions.contains(*word))
+		.filter(|word| {
+			!variables.contains(*word) && !functions.contains(*word) && !own_library_words.contains(&word.to_string())
+		})
 		.map(String::from);
 	let applicable: Vec<String> = functions.iter().cloned().chain(library_words).collect();
-	let words =
-		applicable.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
+	functions.extend(own_library_words);
+	let spelled = |function: &str| library_word_of(function).unwrap_or(function).to_string();
+	let words = applicable
+		.iter()
+		.flat_map(|function| past_forms(&spelled(function)).into_iter().map(|word| (word, function.clone())));
 	let mut words: HashMap<String, String> =
 		words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
@@ -262,7 +273,7 @@ const POWER_MARK: char = '^';
 struct SuffixWords {
 	/// suffix word → function
 	words: HashMap<String, String>,
-	/// the names the program assigns
+	/// the names the program gives: variables, parameters, loop variables
 	variables: HashSet<String>,
 	/// the program's own functions
 	functions: HashSet<String>,
@@ -480,7 +491,10 @@ fn suffix_call(suffix: &Suffix, argument: Node) -> Node {
 			let exponent = if power == "square" { 2 } else { 3 };
 			key(argument, Op::Pow, Node::int(exponent))
 		}
-		None => call(function, vec![argument]),
+		None => match library_word_of(function) {
+			Some(library_word) => crate::lowering::typed_library_words::dispatched(library_word, vec![argument]),
+			None => call(function, vec![argument]),
+		},
 	}
 }
 

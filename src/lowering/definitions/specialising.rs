@@ -67,7 +67,8 @@ impl Definition {
 }
 
 fn copy_name(function: &str, passed: &str) -> String {
-	format!("{function}{NAME_SEPARATOR}{passed}")
+	// the program's `each·any` beside the library's each copies to `each·ink`, the name as written
+	format!("{}{NAME_SEPARATOR}{passed}", crate::lowering::typed_library_words::written(function))
 }
 
 enum Use {

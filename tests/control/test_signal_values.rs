@@ -26,7 +26,7 @@ fn on_change_skips_writes_of_the_same_value() {
 #[cfg(feature = "native")]
 fn on_set_runs_after_each_write() {
 	assert_eq!(
-		printed("def log(s) { on set s { print \"set \" + value } }\nx = 1\nlog(x)\nx = 1\nx = 4"),
+		printed("def watch(s) { on set s { print \"set \" + value } }\nx = 1\nwatch(x)\nx = 1\nx = 4"),
 		"set 1\nset 4\n"
 	);
 }

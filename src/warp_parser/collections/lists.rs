@@ -2,6 +2,9 @@
 use super::*;
 use crate::lowering::nodes::is_block;
 
+/// A statement of these Rust items ends at its closing `}`: `impl P {…} P { x: 1 }.f()` is two statements
+const ITEM_WORDS: [&str; 4] = ["struct", "enum", "impl", "trait"];
+
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
 /// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
 pub(crate) fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
@@ -237,7 +240,10 @@ impl WarpParser {
 			};
 
 			// Determine separator after this item
-			let sep = self.parse_separator(close, had_newline, in_command || is_command(&item));
+			let in_item = items_with_seps.get(statement_start).is_some_and(
+				|(first, _)| matches!(first.drop_meta(), Symbol(word) if ITEM_WORDS.contains(&word.as_str())),
+			);
+			let sep = self.parse_separator(close, had_newline, in_command || is_command(&item), in_item);
 
 			let item = match items_with_seps.last() {
 				Some((previous, Separator::Space)) if assigned_method_call(previous) && is_block(&item) => {
@@ -269,7 +275,13 @@ impl WarpParser {
 	}
 
 	/// The separator after a list item, consumed: `,` `;` a newline, a blank, or an `and` starting the next command
-	fn parse_separator(&mut self, close: Option<char>, had_newline: bool, in_command: bool) -> Separator {
+	fn parse_separator(
+		&mut self,
+		close: Option<char>,
+		had_newline: bool,
+		in_command: bool,
+		in_item: bool,
+	) -> Separator {
 		match self.current_char() {
 			_ if self.at_group_end(close) => Separator::None,
 			',' => {
@@ -285,6 +297,7 @@ impl WarpParser {
 				}
 			}
 			_ if had_newline => Separator::Newline,
+			_ if self.ends_statement_after_brace(in_item) => Separator::Semicolon,
 			_ if in_command && self.and_starts_statement() => {
 				self.advance_by(AND_KEYWORD.len());
 				Separator::Semicolon

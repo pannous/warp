@@ -62,6 +62,9 @@ impl WarpParser {
 		let Some(unit) = self.spaced_word().filter(|word| word != crate::numbers::uncertain::SIGMA) else {
 			return;
 		};
+		if self.glued_litre_refused(&unit) {
+			return;
+		}
 		let amount = number.serialize();
 		let (line, column) = self.get_position();
 		set_hint_position(line, column);

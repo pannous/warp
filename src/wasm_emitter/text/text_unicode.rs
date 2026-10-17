@@ -8,7 +8,7 @@
 //! Āā) to itself plus delta; a mapping to several code points (`ß` is `SS`) is a range of one with the others after it.
 
 use crate::type_kinds::{Kind, KIND_MASK, SQUARE_LIST_KIND};
-use crate::wasm_emitter::layout::{utf8, BYTE, WORD};
+use crate::wasm_emitter::layout::WORD;
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
@@ -223,7 +223,8 @@ impl WasmGcEmitter {
 		self.emit_text_bounds(func, pointer, end);
 	}
 
-	/// text_reverse(text): a fresh text with the code points in the opposite order
+	/// text_reverse(text): a fresh text with the characters in the opposite order, each grapheme cluster kept whole
+	/// (`reverse "👍🏽ab"` is "ba👍🏽", card reverse-characters): a cluster at bytes [at, past) lands at end - past
 	pub(in crate::wasm_emitter) fn emit_text_reverse(&mut self) {
 		// list_reverse, which text_split also uses, hands a text on to it
 		if !["list_reverse", "text_reverse", "text_split"].iter().any(|name| self.should_emit_function(name)) {
@@ -231,63 +232,34 @@ impl WasmGcEmitter {
 		}
 		self.emit_text_heap_global();
 		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function("text_reverse", vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
-			let (pointer, end, destination, out, scan, start) = (1, 2, 3, 4, 5, 6);
+		self.runtime_function("text_reverse", vec![node_ref], vec![node_ref], vec![ValType::I32; 5], |s, f| {
+			let (pointer, end, destination, at, past) = (1, 2, 3, 4, 5);
 			s.emit_text_argument_bounds(f, pointer, end);
-			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(scan)]);
-			s.emit_text_allocation(f, scan, destination);
+			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(at)]);
+			s.emit_text_allocation(f, at, destination);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(destination), I::LocalSet(out),
-				I::LocalGet(end), I::LocalSet(scan),
+				I::LocalGet(pointer), I::LocalSet(at),
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-						I::LocalGet(scan), I::LocalGet(pointer), I::I32LeU, I::BrIf(1),
+						I::LocalGet(at), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+						I::LocalGet(at), I::LocalGet(end),
 			]);
-			// the code point ending at `scan` starts at the last byte that is no continuation byte
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(scan),
-					I32Const(1),
-					I::I32Sub,
-					I::LocalSet(start),
-					I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-					I::LocalGet(start),
-					I::I32Load8U(BYTE),
-					I32Const(utf8::CONTINUATION_MASK),
-					I::I32And,
-					I32Const(utf8::CONTINUATION_MARK),
-					I::I32Ne,
-					I::BrIf(1),
-					I::LocalGet(start),
-					I32Const(1),
-					I::I32Sub,
-					I::LocalSet(start),
-					I::Br(0),
+			s.call(f, "grapheme_end");
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+						I::LocalSet(past),
+						I::LocalGet(destination), I::LocalGet(end), I::LocalGet(past), I::I32Sub, I::I32Add,
+						I::LocalGet(at),
+						I::LocalGet(past), I::LocalGet(at), I::I32Sub,
+						COPY_BYTES,
+						I::LocalGet(past), I::LocalSet(at),
+						I::Br(0),
 					I::End,
-					I::End,
-					I::LocalGet(out),
-					I::LocalGet(start),
-					I::LocalGet(scan),
-					I::LocalGet(start),
-					I::I32Sub,
-					COPY_BYTES,
-					I::LocalGet(out),
-					I::LocalGet(scan),
-					I::LocalGet(start),
-					I::I32Sub,
-					I::I32Add,
-					I::LocalSet(out),
-					I::LocalGet(start),
-					I::LocalSet(scan),
-					I::Br(0),
-					I::End,
-					I::End,
-				],
-			);
-			s.emit_new_text_to(f, destination, out);
+				I::End,
+				I::LocalGet(destination), I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::I32Add, I::LocalSet(past),
+			]);
+			s.emit_new_text_to(f, destination, past);
 		});
 	}
 

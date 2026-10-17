@@ -31,7 +31,6 @@ pub(crate) fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 }
 
 impl WarpParser {
-	/// `🌍`, `🇩🇪`, `👍🏽` in code, one user-perceived character: one code point is a codepoint, several a text
 	/// `⊤`, `✅`, `❌` …: the truth value a glyph at the position spells, and its length in chars
 	pub(crate) fn truth_glyph_at(&self) -> Option<(Node, usize)> {
 		super::TRUTH_GLYPHS.iter().find_map(|(glyph, _)| {

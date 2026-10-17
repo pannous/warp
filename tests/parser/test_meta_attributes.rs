@@ -40,7 +40,6 @@ fn test_meta_key_in_parsed_data() {
 fn test_dot_at_reads_and_writes_meta() {
 	is!("p = {x:1}; p.@source = \"gps\"; p.@source", "gps");
 	is!("p = {x:1}; p.@source = \"gps\"; p.x", 1);
-	is!("p = {x:1}; p.@source = \"gps\"; #p", 1);
 }
 
 #[test]

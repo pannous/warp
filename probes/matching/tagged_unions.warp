@@ -1,4 +1,0 @@
-// card tagged-unions: variants carry data, colon or arrow arms bind it
-enum Shape { Circle(r: float), Square(side: float), Dot }
-area(s) := match s { Circle(r): 3*r*r; Square(a): a*a; Dot: 0.0 }
-area(Circle(2.0)) + area(Square(3.0)) + area(Dot)

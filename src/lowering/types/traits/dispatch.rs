@@ -76,7 +76,7 @@ pub(super) fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[Dispat
 	let parameters: Vec<Node> = (0..arity).map(|index| Node::Symbol(format!("dispatched_{index}"))).collect();
 	let method = |variant: &str| witness_call(operation, variant, parameters.clone());
 	let (checked, otherwise) = match fallback {
-		true => (cases, call(operation, parameters.clone())),
+		true => (cases, crate::lowering::typed_library_words::library_call(operation, parameters.clone())),
 		false => {
 			let (last, checked) = cases.split_last().expect("two or more methods");
 			(checked, method(&last.1))

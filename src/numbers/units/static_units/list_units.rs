@@ -4,7 +4,7 @@
 use super::*;
 
 /// The element of a list a computation maps: `map(xs, quantity_item1 => quantity_item1 * 0.01)`, one name per depth
-const ITEM: &str = "quantity_item";
+pub(super) const ITEM: &str = "quantity_item";
 /// Where the list goes in a mapped list and in the text of a whole list, and the body in a mapped one
 const LIST_PLACEHOLDER: &str = "quantity_list";
 const BODY_PLACEHOLDER: &str = "quantity_body";
@@ -26,19 +26,23 @@ impl Inference {
 		match value.drop_meta() {
 			Node::Symbol(name) => self.plain_lists.get(name).copied().unwrap_or(0),
 			Node::List(items, Bracket::Square, _) => 1 + items.iter().map(depth_of).max().unwrap_or(0),
-			Node::List(items, Bracket::Round, _) if calls_left > 0 && self.called_definition(items).is_some() => {
-				let body = &self.called_definition(items).expect("guarded").body;
-				returned_value(body).map_or(0, |last| self.plain_list_depth_within(last, calls_left - 1))
-			}
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => depth_of(&items[0]),
+			Node::List(items, Bracket::Round, _) => match self.returned_by_call(items, calls_left) {
+				Some(last) => self.plain_list_depth_within(last, calls_left - 1),
+				None if items.len() == 1 => depth_of(&items[0]),
+				None => 0,
+			},
 			_ => 0,
 		}
 	}
 
-	/// The user function a call `(f a b)` calls
-	pub(super) fn called_definition(&self, call: &[Node]) -> Option<&Definition> {
+	/// What a call `(f a b)` of a user function gives, while `calls_left` allows following one more call
+	pub(super) fn returned_by_call(&self, call: &[Node], calls_left: usize) -> Option<&Node> {
+		if calls_left == 0 {
+			return None;
+		}
 		let (head, arguments) = call.split_first()?;
-		self.definitions.get(&(head.drop_meta().symbol_name()?.to_string(), arguments.len()))
+		let definition = self.definitions.get(&(head.drop_meta().symbol_name()?.to_string(), arguments.len()))?;
+		returned_value(&definition.body)
 	}
 
 	/// `cm`, `km/h`: a unit or an expression of units, as written after a value
@@ -71,7 +75,12 @@ pub(super) fn each_in_unit(amount: &Node, op: Op, unit: &Node) -> Node {
 			Bracket::Square,
 			separator.clone(),
 		),
-		_ => Node::Key(Box::new(amount.clone()), op, Box::new(unit.clone())),
+		Node::Number(_) => Node::Key(Box::new(amount.clone()), op, Box::new(unit.clone())),
+		// `[n, 4] cm`: an element named n is in the unit as `n * 1 cm`, which a written `n cm` is not (decisions.md)
+		_ => {
+			let one_unit = Node::Key(Box::new(Node::Number(Number::Int(1))), Op::Mul, Box::new(unit.clone()));
+			Node::Key(Box::new(amount.clone()), op, Box::new(one_unit))
+		}
 	}
 }
 

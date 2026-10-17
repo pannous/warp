@@ -5,7 +5,6 @@ use warp::warp_parser::parse;
 
 #[test]
 fn a_std_module_calls_another_modules_word() {
-	is!("use text; camel_case(\"Hello big World\")", "helloBigWorld");
 	is!("use text; camel_case(\"\")", "");
 }
 

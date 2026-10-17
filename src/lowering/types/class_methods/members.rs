@@ -161,6 +161,19 @@ pub(super) fn renamed_symbol(node: Node, name: &str, replacement: &Node) -> Node
 /// `p.age = v` of a property with a setter: `p = age·set(p, v)`
 pub(super) fn setter_calls(node: Node, setters: &[String]) -> Node {
 	let recurse = |child: Node| setter_calls(child, setters);
+	// inside the setter `age·set(self, v)` writing age stores the field, as `p.age` inside `age(p)` reads it: a call
+	// would set it again forever
+	if let Node::Key(head, op @ (Op::Define | Op::Assign), body) = &node {
+		let property = match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().and_then(Node::symbol_name),
+			_ => None,
+		}
+		.and_then(|name| name.strip_suffix(SETTER_SUFFIX));
+		if let Some(property) = property {
+			let others: Vec<String> = setters.iter().filter(|setter| *setter != property).cloned().collect();
+			return Node::Key(head.clone(), *op, Box::new(setter_calls(body.as_ref().clone(), &others)));
+		}
+	}
 	match node {
 		Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 			Node::Key(receiver, Op::Dot, property)

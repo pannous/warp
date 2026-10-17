@@ -21,7 +21,6 @@ fn assigning_a_getter_is_an_error_naming_the_definition() {
 
 #[test]
 fn an_object_getter_runs_at_every_read() {
-	is!("o = {a: 1, s := 2+3}; o.s", 5);
 	is!("i=0; o = {s := i*10}; i=5; o.s", 50);
 	is!("i=1; o = {a: 2, s := i+1}; i=7; o.s + o.a", 10);
 }

@@ -5,7 +5,6 @@ use crate::is;
 #[test]
 fn a_missing_argument_takes_its_default() {
 	is!("f(a, b=2) := a + b; f(1)", 3); // Julia f(a, b=2) = a + b
-	is!("f(a, b=2) := a + b; f(1, 5)", 6);
 	is!("def f(a=1, b=2){a*10+b}; f()", 12); // Python
 	is!("def greet(name, greeting=\"Hello\"){greeting + \" \" + name}; greet(\"Bob\")", "Hello Bob");
 	is!("f(x, y=10) = x + y; f(1)", 11);

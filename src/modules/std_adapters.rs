@@ -5,10 +5,10 @@
 
 use crate::node::Node;
 #[path = "shell_adapters.rs"]
-mod shell_adapters;
+mod shell_adapters; // lib/shell.warp's words of the modules file and os
 #[cfg(feature = "native")]
 #[path = "../sound/adapters.rs"]
-mod sound_adapters; // the sound module's words, kept in src/sound (a child here for this file's helpers) // lib/shell.warp's words of the modules file and os
+mod sound_adapters; // the sound module's words, kept in src/sound (a child here for this file's helpers)
 #[cfg(feature = "native")]
 use sound_adapters::{midi, sound};
 
@@ -46,20 +46,20 @@ fn no_such_word(arguments: &[Node]) -> Result<Node, String> {
 }
 
 fn text_of(node: &Node) -> Result<String, String> {
-	node.text_value().ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
+	node.text_value().ok_or_else(|| format!("needs a text, got {}", spelled(node)))
 }
 
 #[cfg(feature = "native")]
 fn number_of(node: &Node) -> Result<f64, String> {
 	match node.drop_meta() {
 		Node::Number(number) => Ok(f64::from(*number)),
-		other => Err(format!("needs a number, got {}", other.serialize().trim())),
+		other => Err(format!("needs a number, got {}", spelled(other))),
 	}
 }
 
 /// What write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 fn content_of(node: &Node) -> String {
-	text_of(node).unwrap_or_else(|_| node.serialize().trim().to_string())
+	text_of(node).unwrap_or_else(|_| spelled(node))
 }
 
 fn said(problem: impl std::fmt::Display) -> String {
@@ -103,6 +103,7 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 /// json's word for `to_json` under `use strict`: a number JSON writes only approximately is an error
 const EXACT_JSON: &str = "exact_json";
 
+/// A value as warp writes it, for messages
 fn spelled(node: &Node) -> String {
 	node.serialize().trim().to_string()
 }
@@ -405,7 +406,7 @@ fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 		.iter()
 		.map(|item| match item.drop_meta() {
 			Node::Number(crate::extensions::numbers::Number::Int(value)) => Ok(*value),
-			other => Err(format!("needs whole numbers, got {}", other.serialize().trim())),
+			other => Err(format!("needs whole numbers, got {}", spelled(other))),
 		})
 		.collect()
 }
@@ -428,7 +429,7 @@ fn bytes_of(list: &Node) -> Result<Vec<u8>, String> {
 				Node::Number(crate::extensions::numbers::Number::Int(value)) => u8::try_from(*value).ok(),
 				_ => None,
 			}
-			.ok_or_else(|| format!("{} is no byte (0 to 255)", item.serialize().trim()))
+			.ok_or_else(|| format!("{} is no byte (0 to 255)", spelled(item)))
 		})
 		.collect()
 }
@@ -457,7 +458,7 @@ fn unshared_feature(pattern: &str) -> Option<&'static str> {
 /// A map of texts `{"x-api-key": key}` as (name, value) pairs
 fn header_pairs(headers: &Node) -> Result<Vec<(String, String)>, String> {
 	let serde_json::Value::Object(pairs) = crate::modules::foreign::json_of(headers) else {
-		return Err(format!("headers are a map of texts, got {}", headers.serialize().trim()));
+		return Err(format!("headers are a map of texts, got {}", spelled(headers)));
 	};
 	pairs
 		.into_iter()

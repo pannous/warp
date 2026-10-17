@@ -7,7 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{assign, block, call, children_rewritten, is_kinded_type_word, key};
+use super::nodes::{assign, block, call, children_rewritten, is_call_head, is_kinded_type_word, key};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -192,18 +192,13 @@ pub fn lower_arrow_result_types(node: Node) -> Node {
 	match node {
 		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
 			let target = match *target {
-				Node::Key(head, Op::Arrow, result) if is_named_head(&head) => key(*head, Op::Colon, *result),
+				Node::Key(head, Op::Arrow, result) if is_call_head(&head) => key(*head, Op::Colon, *result),
 				other => lower_arrow_result_types(other),
 			};
 			key(target, op, lower_arrow_result_types(*body))
 		}
 		other => other.map_children(lower_arrow_result_types),
 	}
-}
-
-/// `x(p:P)`: a function's name and parameters in round brackets
-fn is_named_head(head: &Node) -> bool {
-	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|name| matches!(name.drop_meta(), Node::Symbol(_))))
 }
 
 /// The names assigned a lambda: `f = x => …`, `f = { |x| … }`
@@ -816,7 +811,8 @@ fn unaliased_uses(node: Node, aliases: &mut Vec<String>) -> Node {
 	node.map_children(|child| unaliased_uses(child, aliases))
 }
 
-fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
+/// `use list as l`: the module and the program's name for it
+pub(crate) fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
 	let Node::Key(module, Op::As, alias) = used.drop_meta() else {
 		return None;
 	};

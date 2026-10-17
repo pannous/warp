@@ -42,3 +42,11 @@ fn is_tests_a_type_union() {
 fn a_variable_named_like_a_type_stays_a_value() {
 	is!("text = 3; match 3 { text => \"three\"; _ => \"other\" }", "three");
 }
+
+#[test]
+fn is_reads_an_unparenthesized_union_as_the_type() {
+	is!("x = 2.5; x is int or text", false);
+	is!("x = \"a\"; x is int or text", true);
+	is!("x = 2.5; x is int or text or number", true);
+	is!("ok = yes; x = 2.5; x is int or ok", true);
+}

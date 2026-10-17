@@ -1,4 +1,0 @@
-// card match-exhaustive: a match on a declared sum type that misses a case does not compile
-enum Shape { Circle(r: float), Square(side: float), Dot }
-area(s: Shape) := match s { Circle(r): 3*r*r; Square(a): a*a }
-area(Dot)
