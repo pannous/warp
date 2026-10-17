@@ -1,5 +1,0 @@
-class Person{name:text}
-Person as text := "Person " + it.name
-p = Person{name:"Ann"}
-print(p as text)
-print(3 as text)

@@ -1,4 +1,0 @@
-def half(x) as int or error { if x % 2 == 1 then error "odd" else x / 2 }
-print half 4
-r = half 3
-r failed
