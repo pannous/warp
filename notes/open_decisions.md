@@ -23,8 +23,6 @@ the wiki).
   the count 2 (recommended, norm via `norm`) or become the norm 5? Parked 2026-10-09.
 - P226c: subscript log base `₁₀⌟100` → 2 (recommended yes), next to the decided `100⌟10` → 2. Parked 2026-10-09;
   skip! in test_logarithm2.
-- P150 license: none yet, so nobody may legally reuse the code and crates.io refuses the upload (P151). MIT
-  (recommended) / Apache-2.0 / MIT OR Apache-2.0. Parked 2026-10-06.
 - P69a: may a run-time block assign the `!` site's local variables? Default (wiki/charged.md): no, it reads them as
   they are at `!` and assigns only declared globals. Parked 2026-10-05 until run-time `!` is built.
 - P76: grant syntax for run-time blocks (pure by default): `def f(b:block) ! IO` (recommended) / an argument on the
