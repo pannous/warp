@@ -11,10 +11,22 @@ use crate::warp_parser::{print_arguments_of, print_call, starts_print};
 const RESULT_WORD: &str = "result";
 
 pub fn lower(node: Node) -> Node {
-	if !node.mentions(RESULT_WORD) || assigns_result(&node) {
+	if !reads_result(&node) || assigns_result(&node) {
 		return node;
 	}
 	with_results(node)
+}
+
+/// Whether the word `result` stands on its own somewhere: a field `x.result` or the field name of `result: int` is not it
+fn reads_result(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => word == RESULT_WORD,
+		Node::Key(object, Op::Dot, _) => reads_result(object),
+		Node::Key(_, Op::Colon, value) => reads_result(value),
+		Node::Key(left, _, right) => reads_result(left) || reads_result(right),
+		Node::List(items, _, _) => items.iter().any(reads_result),
+		_ => false,
+	}
 }
 
 fn assigns_result(node: &Node) -> bool {
@@ -38,7 +50,7 @@ fn with_results(node: Node) -> Node {
 			let items: Vec<Node> = items.into_iter().map(with_results).collect();
 			let mut out: Vec<Node> = Vec::with_capacity(items.len());
 			for item in items {
-				if item.mentions(RESULT_WORD) {
+				if reads_result(&item) {
 					if let Some(previous) = out.pop() {
 						out.extend(remembered(previous));
 					}

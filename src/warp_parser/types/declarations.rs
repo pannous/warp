@@ -552,8 +552,8 @@ impl WarpParser {
 				}
 				Node::List(transformed, bracket, sep)
 			}
-			// a method in a class body (`greet() := …`): its body is code, no field type
-			Node::Key(name, Op::Define, value) => Node::Key(name, Op::Define, value),
+			// a method in a class body (`greet() := …`) or a field's default (`tag: text = mark`): code, no field type
+			Node::Key(name, op @ (Op::Define | Op::Assign), value) => Node::Key(name, op, value),
 			Node::Key(name, op, value) => {
 				let type_node = Self::symbol_to_type(*value);
 				Node::Key(name, op, Box::new(type_node))

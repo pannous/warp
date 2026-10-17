@@ -1,5 +1,6 @@
 mod test_array_types;
 mod test_bare_class; // card bare-class
+mod test_field_default_variable; // card field-default-constant
 mod test_inline_unions;
 // card union-types
 mod test_class_unions;
