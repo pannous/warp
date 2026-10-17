@@ -4,6 +4,8 @@ use crate::words::LIST_WORD;
 
 /// Two words naming one built-in type (user 2026-10-16, card fast-scope): `x: fast int` is i64, `fast float` f64
 const COMPOUND_TYPES: [(&str, &str, &str); 2] = [("fast", "int", "i64"), ("fast", "float", "f64")];
+/// The heads of an optional type `option<int>`, `Option<i32>`
+const OPTION_HEADS: [&str; 2] = ["option", "Option"];
 
 /// A word that can take type arguments: a capitalised type, a built-in type word, a plural type word, `list`, `map` …
 pub(crate) fn names_a_type(word: &str) -> bool {
@@ -15,6 +17,10 @@ pub(crate) fn names_a_type(word: &str) -> bool {
 
 /// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
 pub(crate) fn type_application_name(name: &str, arguments: &str) -> String {
+	// Rust's `Option<i32>`, warp's `option<int>`: the optional type `i32?` (card rust-option)
+	if OPTION_HEADS.contains(&name) && !arguments.contains([',', '<']) {
+		return format!("{}?", arguments.trim());
+	}
 	let arguments = arguments.replace('<', " of ").replace('>', "");
 	format!("{} of {}", noted_list_type_head(name), arguments.split_whitespace().collect::<Vec<_>>().join(" "))
 }

@@ -450,6 +450,10 @@ def prefixed(p) {
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
+	if keyword_at(p, "loop") {
+		endless = endless_loop(p)
+		if endless != ø { return endless }
+	}
 	counted = count_worded(p)
 	if counted != ø { return counted }
 	for word in PREFIX_WORDS {
@@ -536,6 +540,16 @@ ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "
 
 // Binds a condition until `then` or `do`
 CONDITION_POWER = 78
+
+// Rust's `loop { … }` is `while true { … }`; ø when no block follows the word
+// Rust twin: atoms.rs keyword_form (LOOP_WORD)
+def endless_loop(p) {
+	at = p.at + 4
+	while at < p.n and (p.code[at] == ' ' or p.code[at] == '\t') { at = at + 1 }
+	if not is_at(p.code, at, '{', p.n) { return ø }
+	p.at = at + 1
+	return ["key", "do", ["key", "while", ø, true], items(p, '}', "{")]
+}
 
 // `if c {…} else {…}` and `while c {…}`: the block after the condition is its branch or body
 // Rust twin: expressions.rs finish_if_prefix, finish_while_prefix
