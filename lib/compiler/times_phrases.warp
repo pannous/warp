@@ -1,0 +1,42 @@
+# `n times …` (card times-phrases; Rust twin: src/lowering/words/times_phrases.rs). The parser keeps the phrase
+# [n times operand] as written; a block is a loop with a hidden counter of its own, so nested loops do not meet;
+# `n times [x]` is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4`).
+use "walk.warp"
+
+times_word = "times"
+loops = 0
+
+call_of(name: text, arguments: any) := bracketed([symbol(name)] + arguments, "(")
+for_loop(counter: any, range: any, body: any) := separated(bracketed([symbol("for"), counter, symbol("in"), range, body], ""), " ")
+
+# `for times·N in 0..count body`; the count is evaluated once, before the first round
+rounds(count: any, body: any) := {
+	global loops
+	loops += 1
+	counter = symbol(times_word + "·" + loops)
+	if count is number { return for_loop(counter, key(0, "..", count), body) }
+	held = symbol(times_word + "·count·" + loops)
+	separated(bracketed([key(held, "=", count), for_loop(counter, key(0, "..", held), body)], "("), ";")
+}
+
+meaning(count: any, operand: any) := {
+	if operand == ø or bracket_of(operand) == "{" { return rounds(count, operand) }
+	if bracket_of(operand) == "[" {
+		if #operand != 1 { return error("`n times [x]` repeats one element: `3 times [0]`") }
+		return call_of("zero_fill", [count, operand#1])
+	}
+	call_of("times·text", [count, operand])
+}
+
+phrase(n: any) := {
+	if bracket_of(n) == "" and separator_of(n) == " " and #n == 3 and n#2 == symbol(times_word) {
+		return meaning(n#1, n#3)
+	}
+	n
+}
+
+times_phrases(program: any) := {
+	global loops
+	loops = 0
+	bottom_up(program, phrase)
+}
