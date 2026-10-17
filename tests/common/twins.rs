@@ -4,6 +4,7 @@
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
+use warp::host::with_captured_stdout;
 use warp::warp_parser::parse;
 use warp::{Bracket, Node, Number, Separator};
 
@@ -371,10 +372,11 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 				continue;
 			}
 			inside.push(path.clone());
-			let warp_value = module_value(&module);
-			let rust_value = warp::wasm_emitter::eval(text).drop_meta().clone();
-			if !same_value(&warp_value, &rust_value) {
-				differing.push((path.clone(), warp_value.serialize(), rust_value.serialize()));
+			let (warp_value, warp_output) = with_captured_stdout(|| module_value(&module));
+			let (rust_value, rust_output) = with_captured_stdout(|| warp::wasm_emitter::eval(text).drop_meta().clone());
+			if !same_value(&warp_value, &rust_value) || warp_output != rust_output {
+				let shown = |value: &Node, output: &str| format!("{} printing {output:?}", value.serialize());
+				differing.push((path.clone(), shown(&warp_value, &warp_output), shown(&rust_value, &rust_output)));
 			}
 		}
 	}
@@ -398,7 +400,7 @@ const OUTSIDE_THE_CORE: &str = "outside the core";
 /// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
 const REFUSALS_REPORT: &str = "EMITTER_REFUSALS";
 
-/// The value main of a module given as a list of bytes returns, or the failure as a text
+/// The value main of a module given as a list of bytes returns (its prints through WASI), or the failure as a text
 fn module_value(module: &Node) -> Node {
 	let Node::List(items, ..) = module.drop_meta() else {
 		return Node::text(&format!("no module: {}", module.serialize()));
@@ -408,7 +410,8 @@ fn module_value(module: &Node) -> Node {
 		_ => None,
 	};
 	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
-	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes(&bytes)) {
+	let wasi = warp::run::wasm_reader::Imports { wasi: true, ..Default::default() };
+	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes_with_imports(&bytes, wasi)) {
 		Some(Ok(value)) => value,
 		Some(Err(failure)) => Node::text(&format!("{MODULE_FAILED}{failure}")),
 		None => Node::text("a module byte beyond 0..255"),

@@ -188,8 +188,8 @@ Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a
 Boxing (`boxed` in emitter.warp) makes a `$Node(kind i64, data anyref, value ref null $Node)` (CLAUDE.md
 "Serialization"): an int or yes/no in an `$i64box`, a float in an `$f64box`, a character as an i31, a text with data =
 its `$text`, a list with data = its `$list`. A value is boxed only where its kind is not known statically: a list item,
-a value of branches of different kinds, an `any` parameter, and main's result unless it is a number. No linear memory:
-texts are GC arrays, so no allocator and no (ptr, len) `$String`.
+a value of branches of different kinds, an `any` parameter, and main's result unless it is a number. No linear memory
+but WASI's: texts are GC arrays, so no allocator and no (ptr, len) `$String`.
 Readers of the layout (each place a module's result or a value crossing the boundary is read):
 - src/run/wasm_reader.rs (native runs, the twins): reads a Text whose data is an `(array i8)`, a List whose data is a
   `$list` (told from a cons cell by its first field: the i32 length, where a cons cell's first item is a $Node), and
@@ -198,11 +198,16 @@ Readers of the layout (each place a module's result or a value crossing the boun
 - web/playground/reader.js reads through the reflection exports each Rust-emitted module carries
   (src/wasm_emitter/reflection/exports.rs). emitter.warp modules do not run in the browser yet; when they do, they
   carry the same exports, with tags for a byte-array text and a vector list.
-- Host imports, FFI and WIT (src/host, src/ffi): take $String (ptr, len) texts in linear memory. emitter.warp has no
-  imports yet; WASI output (fd_write) will copy a text's bytes into memory in one helper at that edge only.
+- Host imports, FFI and WIT (src/host, src/ffi): take $String (ptr, len) texts in linear memory. emitter.warp imports
+  only WASI's fd_write, and only for a program that says `print` (imports shift function indices, so it is decided
+  before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
+  a chunk at a time (iovec at 0, written count at 8, bytes from 16). That is the one edge helper; nothing else
+  touches memory. Done (card emitter-prints); the emitter twin compares stdout too (host::with_captured_stdout).
 Runtime words are warp: `runtime = data { … }` in emitter.warp, written over a handful of intrinsics (new_text,
-copy_text, byte_count, byte_at; one or two instructions each, usable only inside the runtime) and compiled on their
-first call like the program's own functions: text_join (`+` on texts), text_count (`#` on a text: code points).
+copy_text, byte_count, byte_at, set_byte, int_quotient, int_remainder (truncating), code_of, output_byte, write_output; one or
+two instructions each, usable only inside the runtime) and compiled on their first call like the program's own
+functions: text_join (`+` on texts), text_count (`#` on a text: code points), print_line, int_text, char_text (print of
+an int, a character; a yes/no prints yes or no, a float is not printed yet).
 
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word
