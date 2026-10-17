@@ -139,3 +139,12 @@ y = "cost $5 and \(n) items"
 z = "plain $name here"
 w = "say \"hi\""
 v = "\$(x)"
+x = xs .* 2 + 1
+y = 1 + xs .* 2
+xs .* 2 == ys
+f(xs .* 2)
+a.*b
+[1 2 3] .* 2
+x = xs .^ 2
+x = 1.5 + .5
+y = [.25, 2]
