@@ -26,6 +26,9 @@ Decision self-hosting:
   stage hands its result to a Rust stage, because the Rust side needs a compatible shape, and dropped as soon as the
   stages on both sides are warp. No new intermediate twin is written where the suite can already judge.
 - Language gaps are fixed in the language as cards of this topic, never worked around in the warp code.
+- No hand-lowering (notes/agents/common.md "Never degrade the input"): the compiler is written with warp's full
+  features, aiming to be more elegant than the Rust one. Runtime words are ordinary lib/*.warp code through the
+  normal pipeline, so a warp stage only ever sees lowered forms; a form it can't handle yet goes to its Rust twin.
 - Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
   result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
   warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
