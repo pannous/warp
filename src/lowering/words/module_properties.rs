@@ -107,7 +107,11 @@ fn standard_objects() -> &'static HashSet<String> {
 	static OBJECTS: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
 	OBJECTS.get_or_init(|| {
 		let lines = crate::modules::STD_MODULES.iter().flat_map(|(_, source)| source.lines());
-		lines.filter(|line| defines_property(line)).filter_map(|line| line.split('.').next()).map(String::from).collect()
+		lines
+			.filter(|line| defines_property(line))
+			.filter_map(|line| line.split('.').next())
+			.map(String::from)
+			.collect()
 	})
 }
 
@@ -274,7 +278,9 @@ fn refused_definition(program: &Node, values: &HashSet<String>) -> Option<Node> 
 	});
 	definitions.iter().find_map(|statement| {
 		let (object, property, _, _) = definition(statement).filter(|(object, ..)| values.contains(object))?;
-		let reason = format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field");
+		let reason = format!(
+			"{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field"
+		);
 		Some(Diagnostic::at(statement, reason).into_error())
 	})
 }

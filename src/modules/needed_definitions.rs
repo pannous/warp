@@ -38,7 +38,7 @@ pub(crate) struct ProgramWords {
 }
 
 impl ProgramWords {
-	fn contains(&self, name: &str) -> bool {
+	pub(super) fn contains(&self, name: &str) -> bool {
 		self.variables.contains(name) || self.functions.contains_key(name)
 	}
 
