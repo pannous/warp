@@ -1,8 +1,7 @@
 # Run-time `!`
 
 `x!` on a quote whose value is known only at run time (wiki/charged.md §5): data read at run time, a `block`
-parameter called with different blocks, `xs#2!`. The feasibility study (options interpreter / run-time compile /
-hybrid, the shared-store design, optimisation invariants, effort table): notes/OLD/runtime_eval_study.md.
+parameter called with different blocks, `xs#2!`.
 
 ## As built: copying through the host
 - Step 0: `x : a+b` over names defined nowhere warns that `x!` can never run it
@@ -31,7 +30,7 @@ or the definitions mention; natively each number among them becomes `block·valu
 reading this run's values (host.rs with_block_values), so the same block with other numbers is the same program:
 compiled once per thread (BLOCK_MODULES, by its text; `pipeline::compiled_blocks()` counts the misses), machine code
 kept by run/module_cache.rs. Each thread keeps one linker per engine and import families and clones it.
-probes/bang_cache/loop.warp (100 × `xs#1!`, debug): 0.24 s cold, 0.09 s warm (was 1.68 s / 0.24 s).
+probes/bang_cache/loop.warp (100 × `xs#1!`, debug): 0.24 s cold, 0.09 s warm.
 tests/control/test_run_time_block_cache.rs pins it.
 
 ## Not yet

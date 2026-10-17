@@ -1,7 +1,6 @@
 # Sound
 
 Roadmap card: sound (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
-The step-by-step build log with measurements: notes/OLD/sound_log.md.
 
 `lib/sound.warp` (sample: samples/sound/music.warp) is loaded without `use` when a program calls play, beep,
 stop_sound or wait_sound (src/modules.rs SOUND_SETUP_FREE_WORDS). Every other sound word (melody, tone, pattern,

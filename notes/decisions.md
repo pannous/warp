@@ -9,22 +9,25 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Process
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
 - ready-queue: the board's Ready column is the merge queue (`todo ready <card>`, refuses only a branch that doesn't merge cleanly into origin/main); batches of ≤ ~8 cards, wide refactors and carrier branches alone and first; the Integrator resolves only trivial conflicts, others go back to the owner (card to Now + note with the hunk); a reviewer veto moves the card back to Now.
-- urgent-direct (2026-10-17, user, agreed with warp-urgent): warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
+- urgent-direct: warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
 - fix-forward: the Integrator may ignore up to 10 failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the owner (notes/roles.md "Fix forward").
 - crash-fixes-first: crash fixes merge with the highest priority. small-changes-on-main: small or non-conflicting changes may go on main without a worktree. session-names: a session is named for its current task.
-- matching-first: the matching roadmap comes before further self-hosting. self-hosting: parser first, each warp part a twin of its Rust part with a differential test over every sample; gaps are fixed in the language. self-hosting-postponed (lifted 2026-10-17): no new steps until topic parser-features and the cleanup are done;
-  existing twins stay. self-hosting-resumed (2026-10-17, user): self-hosting is the fleet's next big task; workers
+- self-hosting: parser first, each warp part a twin of its Rust part with a differential test over the samples' kept forms (exclusion list, self-hosting-minimal); gaps are fixed in the language.
+  self-hosting-resumed: self-hosting is the fleet's next big task; workers
   finish their current work, then switch to it, starting with a readiness survey (warp-self-survey: are all the
   language parts there, or should macros or a cheaper feature come first so the warp compiler doesn't bloat).
-- self-hosting-minimal (2026-10-17, user): the warp compiler is no blind copy of the Rust one; it drops experimental
+- self-hosting-minimal: the warp compiler is no blind copy of the Rust one; it drops experimental
   bloat and inelegant passes, cleanest minimal implementation first. Failing fringe/edge forms are fine if each dropped
   form is recorded with how to bring it back (notes/self_hosting_dropped.md); twins measure the kept forms via an
   exclusion list. Sizeable syntax drops go to the user as questions.
-- self-parser-drops (2026-10-17, user): lib/compiler/parser.warp leaves out foreign syntax (Rust macros, Python
+- self-parser-drops: lib/compiler/parser.warp leaves out foreign syntax (Rust macros, Python
   generators/yield from, Ruby blocks), music `go {…}`, phrase definitions (`to get price of item := …`), CSS in style;
   silently also WGSL shader holes, `$a` pattern names, error nodes. Code is data: music and CSS need no parser syntax and
   must still work as library data DSLs (`tune d:data := play d` → `tune { c4 e4 g4 }`, note names are sound-library
   constants; `style {…}` reads its block as data).
+- sugar-twins-drops: lib/compiler/passes.warp leaves out Rust Option forms (`if let Some`, `match o {Some/None}`,
+  `unwrap_or`, `expect`, `is_some`; warp has `o != ø`, `o ?? d`, `o ?? raise(m)`) and the `set x to y` pass;
+  setter-calls stands, `set x of y to z` comes back as a library code template.
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
@@ -38,10 +41,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - cargo-fmt: the gate enforces `cargo fmt --check` (`use_small_heuristics = "Max"`). emit-rows: emitter instruction lists one logical step per row like WAT, kept by `#[rustfmt::skip]`. rust-style-lint: of the Rust lint rules only doc-moved is enforced.
 - git-hook restore: agents may restore only Cargo.toml/Cargo.lock (the build tweak); the hook backs up the diff first.
 - #1 avoid panics, errors as values. #14 not-implemented errors unless easy.
-- P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license (2026-10-17, confirmed by the user, replacing the night's "unlicensed"): the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
-- package-reexport (2026-10-17, user; card module-own): a package's own `use` lines reach the programs that use it.
+- P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license: the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
+- package-reexport (card module-own): a package's own `use` lines reach the programs that use it.
   `use webgl` (which says `use draw`) alone gives draw's words too: `canvas(200, 100)`, `star(…)`, `save "x.png"`.
-- laws-file (2026-10-17, user): the human-owned laws move from root LAWS.warp to samples/laws/project_laws.warp
+- laws-file: the human-owned laws live in samples/laws/project_laws.warp
   (samples/laws/laws.warp already exists), keeping the "AI agents must not edit this file" header; test_bend_laws runs
   `warp verify samples/laws/project_laws.warp`.
 - Language name: warp everywhere; `.wasp` files still read; URLs/domains and wisp unchanged.
@@ -100,7 +103,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - unicode-symbols: warp parses Unicode symbol characters (arrows, math) as free operator names; an undefined use is "operator ⇔ is not defined". Arrow spellings of existing operators are alias lines in lib/math.warp with a "prefer ->" hint.
 - operator-alias: math spellings of operators are alias lines in lib/math.warp keeping the precedence (`operator × := *`, `prefix operator √ := sqrt`).
 - implicit-words-reserved: `it`, `self`, `this` are reserved: binding one warns (error under use strict); as the explicit parameter (`f(it) := …`) it is allowed.
-- data-reserved (2026-10-17, user, told to warp-self-splice): `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
+- data-reserved: `data` is a keyword (the `data …` quoting prefix); a variable named data is an error. test_data_quoting::a_variable_named_data_is_no_prefix changes accordingly.
 
 ## Numbers
 - exact-decimals: decimal literals are exact (`0.1 + 0.2 == 0.3`), division gives exact ratios; floats come only from float sources (transcendentals, sqrt of a non-square, host values, `as float`, float-typed places, e-notation) and are contagious; `==` warns only with a float involved.
@@ -263,9 +266,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
 - `pixels size` works like `size of pixels`.
 - swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
-- curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø` (Interviewer's decision).
-- empty-group-node (leave as is, user 2026-10-17): an empty group in code is ø (`parse("{}") == ø`, `bracketed([], "{")` is ø); self-hosting twins compare with ø ≈ {} or the bridge maps ø back to the Rust bracket.
-- node-part-clash (user 2026-10-17): part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
+- curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø`.
+- empty-group-node (leave as is): an empty group in code is ø (`parse("{}") == ø`, `bracketed([], "{")` is ø); self-hosting twins compare with ø ≈ {} or the bridge maps ø back to the Rust bracket.
+- node-part-clash: part readers `key_of(n)`, `value_of(n)`, `op_of(n)`, `name_of(n)`, `bracket_of(n)`, `separator_of(n)` always read the node part at any depth; `.key` etc. keep field → meta → reflection for data.
 
 ## Control flow, matching and errors
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.

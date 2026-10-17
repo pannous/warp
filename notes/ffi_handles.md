@@ -20,7 +20,7 @@ How a C type crosses (`ffi::pointer_kind`):
 - a pointer to a struct: a handle. A struct is `struct X *` or a type a header of the library declares as one
   (`typedef struct sqlite3 sqlite3;`, `typedef struct __sFILE {…} FILE;`). All headers of a library are read before
   its signatures are classified, since stdio.h uses the FILE that _stdio.h declares.
-- any other single pointer (`void *`, `int *`, zlib's `Bytef *`): linear memory as before; as a result a handle.
+- any other single pointer (`void *`, `int *`, zlib's `Bytef *`): linear memory; as a result a handle.
 - `T **` is an out-pointer: left out of the warp call. The first one becomes the result (a handle); NULL there is a
   loud error naming the C status (`sqlite3_prepare_v2 gave no sqlite3_stmt (C status 1)`). Further out-pointers
   (`const char **pzTail`) receive NULL.

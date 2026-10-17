@@ -51,7 +51,7 @@ warp's value semantics, so it costs no language rule.
   core in fresh instances on scoped threads (src/host/tasks/mod.rs split_map, notes/simd.md). Other `go xs.map(f)`
   use map_in_tasks.
 
-## Browser (step 5)
+## Browser
 - host.js runs tasks on a pool of Workers (task-worker.js) made while the program's worker is idle (a Worker starts
   only once its creator returns to the event loop); results as JSON in a growable SharedArrayBuffer awaited with
   Atomics.wait. That needs cross-origin isolation: the test server sends COOP/COEP, the playground gets them from
