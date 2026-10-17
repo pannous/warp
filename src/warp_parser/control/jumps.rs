@@ -74,18 +74,18 @@ impl WarpParser {
 		let names_a_variable = self
 			.peek_operator()
 			.is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
-		// a bare `return` at the end of a statement returns ø: `if t == ø { return }`
-		let value = if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
-			Node::Empty
-		} else if !self.at_body_start() || names_a_variable {
+		// a bare `return` at the end of a statement is the word alone: `if t == ø { return }` (lower_bare_returns)
+		if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
+			return Some(Symbol(RETURN_WORD.to_string()));
+		}
+		if !self.at_body_start() || names_a_variable {
 			self.rewind(before_keyword); // `return := …` as a name
 			return None;
-		} else {
-			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`; then
-			// what binds looser, Python's `return a if c else b`
-			let value = self.parse_expr(Op::Assign.binding_power().1);
-			self.continue_expr(value, 0)
-		};
+		}
+		// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`; then what
+		// binds looser, Python's `return a if c else b`
+		let value = self.parse_expr(Op::Assign.binding_power().1);
+		let value = self.continue_expr(value, 0);
 		Some(Node::List(vec![Symbol(RETURN_WORD.to_string()), value], Bracket::None, Separator::Space))
 	}
 

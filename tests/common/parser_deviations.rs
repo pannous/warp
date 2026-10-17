@@ -13,10 +13,7 @@ pub fn clean_rust_tree(node: &Node) -> Node {
 		Node::Error(inner) => Node::Error(Box::new(clean_rust_tree(inner))),
 		other => other.clone(),
 	};
-	definition_head_spread(&cleaned)
-		.or_else(|| bare_return_alone(&cleaned))
-		.or_else(|| colon_body_unwrapped(&cleaned))
-		.unwrap_or(cleaned)
+	definition_head_spread(&cleaned).or_else(|| colon_body_unwrapped(&cleaned)).unwrap_or(cleaned)
 }
 
 /// `f(x, y) { body }` has the head `f(x, y)` of a call, its parameters spread (deviation definition-head)
@@ -38,13 +35,6 @@ fn definition_head_spread(node: &Node) -> Option<Node> {
 	};
 	let head = Node::List(std::iter::once(name.clone()).chain(spread).collect(), Bracket::Round, Separator::None);
 	Some(Node::List(vec![head, body.clone()], Bracket::Round, Separator::None))
-}
-
-/// `return` alone is the word return, no phrase holding ø (deviation bare-return)
-fn bare_return_alone(node: &Node) -> Option<Node> {
-	let Node::List(parts, Bracket::None, Separator::Space) = node else { return None };
-	let [word, value] = parts.as_slice() else { return None };
-	(word.drop_meta().is_symbol("return") && matches!(value.drop_meta(), Node::Empty)).then(|| word.clone())
 }
 
 /// `for 1..3: print it` keeps its colon body bare, as `for i in xs: x` does (deviation colon-body); `3 times: x` keeps its
