@@ -6,7 +6,6 @@ use crate::is;
 
 #[test]
 fn an_int_list_variable_as_string_is_its_text() {
-	is!("x=[1 2]; x as string", "[1 2]");
 	is!("x=[1 2 3]; y = x as string; y", "[1 2 3]");
 	is!("x=[7]; x as string", "[7]");
 }

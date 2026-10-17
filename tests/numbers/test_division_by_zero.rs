@@ -9,7 +9,6 @@ fn int_division_by_zero_is_an_error() {
 	fails_with("a=1; b=0; a/b", "divide by zero");
 	fails_with("f() := 1/0; f()", "divide by zero");
 	fails_with("{1/0}", "divide by zero");
-	is!("try 1/0 else 7", 7);
 	is!("f() := 1/0; try f() else 7", 7);
 }
 

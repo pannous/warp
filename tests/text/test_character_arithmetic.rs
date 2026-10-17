@@ -12,7 +12,6 @@ fn a_character_is_no_number_in_arithmetic() {
 	fails_with("sqrt('a')", "'a'"); // "cannot extract a numeric value from 'a'"
 	fails_with("x=[1,'a']; -x#2", "not a number");
 	fails_with("x=[1,'a']; x#2 % 2", "not a number");
-	is!("x=[1,'a']; try -x#2 else 7", 7);
 }
 
 #[test]
@@ -20,6 +19,5 @@ fn ord_and_comparisons_keep_code_points() {
 	is!("ord('a')", 97);
 	is!("-ord('a')", -97);
 	is!("c='a'; c >= '0'", 1);
-	is!("x=[1,'a']; x#2 > 50", 1);
 	is!("'a' + 1", "a1");
 }

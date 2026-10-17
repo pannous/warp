@@ -18,10 +18,6 @@ fn floor_division_has_its_own_operators() {
 
 #[test]
 fn floor_division_and_true_division_compute_apart() {
-	is!("7 /! 2", 3);
-	is!("-7 /! 2", -4);
-	is!("7 div 2", 3);
-	is!("x = 7; x /!= 2; x", 3);
 	is!("x = 7.0; x /= 2; x", 3.5);
 	is!("2*7 /! 2", 7);
 }

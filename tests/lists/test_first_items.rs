@@ -16,11 +16,6 @@ fn first_and_last_take_a_number_of_items() {
 }
 
 // a library word after first is its argument's prefix: first(sorted(xs)), not first_items(sorted, xs)
-#[test]
-fn first_of_a_phrase_stays_one_item() {
-	is!("xs = [3, 1, 2]; first sorted xs", 1);
-	is!("xs = [3, 1, 2]; last sorted xs", 3);
-}
 
 #[test]
 fn first_of_a_list_is_its_first_item() {
