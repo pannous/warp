@@ -55,10 +55,7 @@ pub fn lower(program: Node) -> Node {
 	if !mentions_rust_path(&program) {
 		return program;
 	}
-	let own: HashSet<String> = crate::library_words::defined_names(&program)
-		.into_iter()
-		.chain(crate::soft_keywords::names_given(&program))
-		.collect();
+	let own = crate::program_names::Bindings::of(&program).given();
 	rewritten(program, &own)
 }
 

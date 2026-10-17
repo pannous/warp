@@ -58,16 +58,24 @@ pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 	body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
 			variables.extend(for_in_variable(items));
-			for step in items.iter().filter(|item| is_step(item)) {
-				if let Node::Key(counter, Op::Inc, _) = step.drop_meta() {
-					let counter = counter.name();
-					variables
-						.extend(counter.strip_suffix(INDEX_SUFFIX).unwrap_or(&counter).split('·').map(str::to_string));
-				}
-			}
+			variables.extend(step_variables(items));
 		}
 	});
 	variables
+}
+
+/// The variables of a lowered loop's marked steps among these items: `x++`, `x·index++`, `k·v·index++`
+pub(crate) fn step_variables(items: &[Node]) -> Vec<String> {
+	let counter_of = |step: &Node| match step.drop_meta() {
+		Node::Key(counter, Op::Inc, _) if is_step(step) => Some(counter.name()),
+		_ => None,
+	};
+	let counters = items.iter().filter_map(counter_of);
+	counters
+		.flat_map(|counter| {
+			counter.strip_suffix(INDEX_SUFFIX).unwrap_or(&counter).split('·').map(str::to_string).collect::<Vec<_>>()
+		})
+		.collect()
 }
 
 /// `for(init;test;step){body}`, parsed as `((for (init;test;step)) {body})`

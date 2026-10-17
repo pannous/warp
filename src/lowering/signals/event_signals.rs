@@ -760,7 +760,7 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 
 /// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
 pub(crate) fn emit_verbs(program: &Node) -> Vec<String> {
-	let names = crate::soft_keywords::names_given(program);
+	let names = crate::program_names::Bindings::of(program).given();
 	EMIT_WORDS
 		.iter()
 		.chain(EMIT_ALIASES.iter())
