@@ -116,6 +116,11 @@ Landed on branch one-dispatch: slices 1, 3, 4, 5 and Q2.
   the setter (stored tables restore rows that way); a let/const receiver of unknown kind takes the program's word over
   a list-changing library word (route path parameters, `add(a, b)`); the null check narrows after
   `if x == ø { return … }` (the raytracer). std_aliases asks modules::says_use (main's json-parse-literal).
+- Gate round 3: slice 7 had a class's own `pop` (which changes its object, pair protocol) also take `items.pop()` on
+  its list field; class_methods::method_calls now leaves a library word's method on a field of no declared class to
+  the library word (`items = []` parses to ø, so only a class-typed field `top: Node` may hold an instance). An
+  untyped field holding an instance calls the library word, as before slice 7. gpu_visualizer_warp and the wgsl
+  shader fail without a GPU on main too (WARP_GPU=off; card filed), environmental in the cloud.
 Next: 9 (units, type words), rest of 3 (lambdas lower_infix_iterations, soft_keywords `program_names` users,
 type_tests, needed_definitions, modules.rs).
 
