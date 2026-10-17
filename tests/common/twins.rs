@@ -5,12 +5,13 @@
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
 use warp::warp_parser::parse;
-use warp::wasm_emitter::eval;
 use warp::{Bracket, Node, Number, Separator};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
 const COMPILER_FOLDER: &str = "lib/compiler";
+/// The input files of the twin programs, the arguments of their calls (scratch/: temporary, ignored)
+const INPUT_FOLDER: &str = "scratch/twins";
 /// The fringe forms a pass twin leaves out, with how to bring each back
 const DROPPED_NOTES: &str = "notes/self_hosting_dropped.md";
 /// Characters shown on each side of the first difference
@@ -156,9 +157,10 @@ fn todays_offset() -> usize {
 /// `word(view)` of lib/compiler/<part>.warp for the node view of every parsed source, against the Rust parse of the
 /// source serialized: the serializer twin
 pub fn view_differential(part: &str, word: &str) {
-	let view_of_source = |_: &Path, text: &str| json_argument(&node_view(&parse(text)));
+	let view_of_source = |_: &Path, text: &str| view_json(&node_view(&parse(text)));
 	let serialized = |text: &str| Node::text(&parse(text).serialize());
-	report(word, &differences_with(&checked_share(&sources()), part, word, view_of_source, serialized));
+	let call = format!("{word}(json(argument))");
+	report(word, &differences_with(&checked_share(&sources()), part, &call, view_of_source, serialized));
 }
 
 /// Fails with the first difference and the names of the next sources that differ
@@ -183,40 +185,43 @@ pub fn differences(
 	word: &str,
 	rust_twin: impl Fn(&str) -> Node,
 ) -> Vec<(String, String, String)> {
-	let read_source = |path: &Path, _: &str| format!("read(\"{}\")", path.display());
-	differences_with(paths, part, word, read_source, rust_twin)
+	let source_path = |path: &Path, _: &str| path.display().to_string();
+	differences_with(paths, part, &format!("{word}(read(argument))"), source_path, rust_twin)
 }
 
-/// The sources where `word(argument)` differs from the Rust twin, the argument written from the source's path and text
+/// The sources where `call` differs from the Rust twin, its `argument` written from the source's path and text
 fn differences_with(
 	paths: &[PathBuf],
 	part: &str,
-	word: &str,
+	call: &str,
 	argument: impl Fn(&Path, &str) -> String,
 	rust_twin: impl Fn(&str) -> Node,
 ) -> Vec<(String, String, String)> {
 	let cases = paths.iter().map(|path| {
 		let text = std::fs::read_to_string(path).unwrap();
-		let call = format!("{word}({})", argument(path, &text));
-		Case { path: path.display().to_string(), call, expected: rust_twin(&text) }
+		Case { path: path.display().to_string(), argument: argument(path, &text), expected: rust_twin(&text) }
 	});
-	differences_of(cases, part)
+	differences_of(cases, part, call)
 }
 
-/// One source of a differential: the call of the warp twin and the value the Rust twin gave
+/// One source of a differential: the text the warp twin's call gets as `argument` (a path, a view as JSON) and the
+/// value the Rust twin gave
 struct Case {
 	path: String,
-	call: String,
+	argument: String,
 	expected: Node,
 }
 
-/// The cases where the warp call's value differs from the expected value: path, warp's and Rust's text
-fn differences_of(cases: impl Iterator<Item = Case>, part: &str) -> Vec<(String, String, String)> {
+/// The cases where `call`, a warp expression of `argument`, differs from the expected value: path, warp's and Rust's
+/// text. One program serves every case: it reads the arguments at run time, so it compiles once (program_cache) for
+/// all chunks and for the halves of a chunk that fails (card pass-twins)
+fn differences_of(cases: impl Iterator<Item = Case>, part: &str, call: &str) -> Vec<(String, String, String)> {
 	let cases: Vec<Case> = cases.collect();
+	let twin = TwinProgram::new(part, call);
 	let mut differing = vec![];
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
-		let calls: Vec<String> = cases.iter().map(|case| case.call.clone()).collect();
-		for (case, value) in cases.iter().zip(warp_values(part, &calls)) {
+		let arguments: Vec<&str> = cases.iter().map(|case| case.argument.as_str()).collect();
+		for (case, value) in cases.iter().zip(twin.values(&arguments)) {
 			let (warp_text, rust_text) =
 				(as_compared(value).serialize(), as_compared(case.expected.clone()).serialize());
 			if warp_text != rust_text {
@@ -244,10 +249,10 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 		let after = plain_view(&after);
 		let given = if reports != Node::Empty || mentions_error(&after) { positioned_plain_view } else { plain_view };
 		let given = given(&before);
-		let call = format!("reported(view_of({word}(node_of({}))))", json_argument(&given));
-		Some(Case { path: path.display().to_string(), call, expected: warp_list([after, reports].into_iter()) })
+		let expected = warp_list([after, reports].into_iter());
+		Some(Case { path: path.display().to_string(), argument: view_json(&given), expected })
 	});
-	report(word, &differences_of(cases, part));
+	report(word, &differences_of(cases, part, &format!("reported(view_of({word}(node_of(json(argument)))))")));
 }
 
 /// A hint or warning as a twin reports it: [line, column, message, preferred form or ø]
@@ -280,10 +285,9 @@ pub fn positioned_bridge_differential() {
 fn bridge_differential_of(given: fn(&Node) -> Node) {
 	let cases = twin_sources(&[]).into_iter().map(|path| {
 		let parsed = parse(&std::fs::read_to_string(&path).unwrap());
-		let call = format!("view_of(node_of({}))", json_argument(&given(&parsed)));
-		Case { path: path.display().to_string(), call, expected: plain_view(&parsed) }
+		Case { path: path.display().to_string(), argument: view_json(&given(&parsed)), expected: plain_view(&parsed) }
 	});
-	report("view_of", &differences_of(cases, "walk"));
+	report("view_of", &differences_of(cases, "walk", "view_of(node_of(json(argument)))"));
 }
 
 /// The checked share of the sources without the dropped ones, which DROPPED_NOTES must name; TWIN_ONLY=<path suffix>
@@ -326,11 +330,6 @@ fn plain(view: Node) -> Node {
 	}
 }
 
-/// A view as the warp code reading it: JSON text given to `json(…)`
-fn json_argument(view: &Node) -> String {
-	format!("json({})", warp_text_literal(&view_json(view)))
-}
-
 /// A value with each one-character text as its character: warp compares `"a" == 'a'`, holds a literal `"a"` as the
 /// character and a one-character text passed on or cut at run time as a text (card character-text)
 fn as_compared(value: Node) -> Node {
@@ -344,27 +343,59 @@ fn as_compared(value: Node) -> Node {
 	}
 }
 
-/// The calls' values, in one program; when it fails, each half alone, down to a single call that gives the warp error
-/// as its value (so it differs from the Rust twin instead of hiding the other sources)
-fn warp_values(part: &str, calls: &[String]) -> Vec<Node> {
-	match warp_values_at_once(part, calls) {
-		Ok(values) => values,
-		Err(failure) if calls.len() == 1 => vec![Node::text(&format!("warp failed: {failure}"))],
-		Err(_) => {
-			let (first, second) = calls.split_at(calls.len() / 2);
-			let mut values = warp_values(part, first);
-			values.extend(warp_values(part, second));
-			values
+/// The program of a differential: `call` of each argument of the input file, one per line (JSON and paths have no
+/// newline), compiled once and run for each chunk of arguments and each half of a failing one
+struct TwinProgram {
+	module: Result<warp::pipeline::CompiledModule, Node>,
+	input: PathBuf,
+}
+
+impl TwinProgram {
+	fn new(part: &str, call: &str) -> Self {
+		static DIFFERENTIALS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+		let number = DIFFERENTIALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		std::fs::create_dir_all(INPUT_FOLDER).unwrap();
+		let input = Path::new(INPUT_FOLDER).join(format!("{part}-{}-{number}.txt", std::process::id()));
+		let program = format!(
+			"use \"{COMPILER_FOLDER}/{part}.warp\"\ntwin_case(argument: text) := {call}\ntwin_values = []\n\
+			 for argument in read(\"{}\").split(\"\\n\") {{ twin_values += [twin_case(argument)] }}\ntwin_values",
+			input.display()
+		);
+		TwinProgram { module: warp::pipeline::compile(&program), input }
+	}
+
+	/// The call's value for each argument; when the program fails, each half alone, down to a single argument that
+	/// gives the warp error as its value (so it differs from the Rust twin instead of hiding the other sources)
+	fn values(&self, arguments: &[&str]) -> Vec<Node> {
+		match self.values_at_once(arguments) {
+			Ok(values) => values,
+			Err(failure) if arguments.len() == 1 => vec![Node::text(&format!("warp failed: {failure}"))],
+			Err(_) => {
+				let (first, second) = arguments.split_at(arguments.len() / 2);
+				let mut values = self.values(first);
+				values.extend(self.values(second));
+				values
+			}
+		}
+	}
+
+	fn values_at_once(&self, arguments: &[&str]) -> Result<Vec<Node>, String> {
+		assert!(arguments.iter().all(|argument| !argument.contains('\n')), "an argument is one line");
+		std::fs::write(&self.input, arguments.join("\n")).unwrap();
+		let value = match &self.module {
+			Ok(module) => warp::pipeline::run_module(module.clone()),
+			Err(failure) => failure.clone(),
+		};
+		match value.drop_meta() {
+			Node::List(values, ..) if values.len() == arguments.len() => Ok(values.clone()),
+			other => Err(other.serialize()),
 		}
 	}
 }
 
-fn warp_values_at_once(part: &str, calls: &[String]) -> Result<Vec<Node>, String> {
-	let program = format!("use \"{COMPILER_FOLDER}/{part}.warp\"\n[{}]", calls.join(",\n"));
-	let result = eval(&program);
-	match result.drop_meta() {
-		Node::List(values, ..) if values.len() == calls.len() => Ok(values.clone()),
-		other => Err(other.serialize()),
+impl Drop for TwinProgram {
+	fn drop(&mut self) {
+		let _ = std::fs::remove_file(&self.input);
 	}
 }
 
@@ -384,11 +415,6 @@ pub fn view_json(view: &Node) -> String {
 
 fn json_text(text: &str) -> String {
 	quoted(text, |character| character.is_control().then(|| format!("\\u{:04x}", character as u32)))
-}
-
-/// A text as a warp text literal: `${…}` would be a hole
-fn warp_text_literal(text: &str) -> String {
-	quoted(text, |character| (character == '$').then(|| "\\$".into()))
 }
 
 /// The text in double quotes, its quotes, backslashes, newlines, tabs and returns escaped, other characters by `extra`
