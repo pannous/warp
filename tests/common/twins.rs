@@ -23,6 +23,11 @@ const LISTED: usize = 12;
 /// Outside the nightly run the twins check every GATE_SHARE-th source: they were 1100 s of the suite's test time
 const GATE_SHARE: usize = 4;
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+/// Threads computing the Rust side of a pass differential: the passes before the pass lower every `use`d module again
+/// for each source, 95 s for 352 sources in one thread (card pass-twins)
+const RUST_SIDE_THREADS: usize = 4;
+/// Stack of each of those threads: the passes recurse as deeply as a test thread's
+const RUST_SIDE_STACK: usize = 64 << 20;
 
 /// Every sample and probe source, sorted; a file that is not UTF-8 text is no source
 pub fn sources() -> Vec<PathBuf> {
@@ -199,17 +204,23 @@ fn differences_with(
 ) -> Vec<(String, String, String)> {
 	let cases = paths.iter().map(|path| {
 		let text = std::fs::read_to_string(path).unwrap();
-		Case { path: path.display().to_string(), argument: argument(path, &text), expected: rust_twin(&text) }
+		Case::new(path, argument(path, &text), rust_twin(&text))
 	});
 	differences_of(cases, part, call)
 }
 
 /// One source of a differential: the text the warp twin's call gets as `argument` (a path, a view as JSON) and the
-/// value the Rust twin gave
+/// value the Rust twin gave, as compared (text: a case is made in one thread and checked in another)
 struct Case {
 	path: String,
 	argument: String,
-	expected: Node,
+	expected: String,
+}
+
+impl Case {
+	fn new(path: &Path, argument: String, expected: Node) -> Self {
+		Case { path: path.display().to_string(), argument, expected: as_compared(expected).serialize() }
+	}
 }
 
 /// The cases where `call`, a warp expression of `argument`, differs from the expected value: path, warp's and Rust's
@@ -222,10 +233,9 @@ fn differences_of(cases: impl Iterator<Item = Case>, part: &str, call: &str) -> 
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
 		let arguments: Vec<&str> = cases.iter().map(|case| case.argument.as_str()).collect();
 		for (case, value) in cases.iter().zip(twin.values(&arguments)) {
-			let (warp_text, rust_text) =
-				(as_compared(value).serialize(), as_compared(case.expected.clone()).serialize());
-			if warp_text != rust_text {
-				differing.push((case.path.clone(), warp_text, rust_text));
+			let warp_text = as_compared(value).serialize();
+			if warp_text != case.expected {
+				differing.push((case.path.clone(), warp_text, case.expected.clone()));
 			}
 		}
 	}
@@ -241,8 +251,8 @@ fn differences_of(cases: impl Iterator<Item = Case>, part: &str, call: &str) -> 
 /// `dropped`: the sources of the fringe forms the twin leaves out, each named in DROPPED_NOTES with how to bring it
 /// back (user 2026-10-17: the port keeps the clean core, not every Rust case)
 pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped: &[&str]) {
-	let cases = twin_sources(dropped).into_iter().filter_map(|path| {
-		let text = std::fs::read_to_string(&path).ok()?;
+	let cases = in_parallel(twin_sources(dropped), |path| {
+		let text = std::fs::read_to_string(path).ok()?;
 		let reporting = || warp::pipeline::around_source_pass_reporting(&text, pass);
 		let (before, after, diagnostics) = std::panic::catch_unwind(reporting).ok()??;
 		let reports = warp_list(diagnostics.iter().map(report_view));
@@ -250,9 +260,29 @@ pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped
 		let given = if reports != Node::Empty || mentions_error(&after) { positioned_plain_view } else { plain_view };
 		let given = given(&before);
 		let expected = warp_list([after, reports].into_iter());
-		Some(Case { path: path.display().to_string(), argument: view_json(&given), expected })
+		Some(Case::new(&path, view_json(&given), expected))
 	});
-	report(word, &differences_of(cases, part, &format!("reported(view_of({word}(node_of(json(argument)))))")));
+	report(word, &differences_of(cases.into_iter(), part, &format!("reported(view_of({word}(node_of(json(argument)))))")));
+}
+
+/// `case` of each path, in the paths' order, computed in RUST_SIDE_THREADS threads; each thread takes every
+/// RUST_SIDE_THREADS-th path, so the slow sources of one folder spread over all of them
+fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> + Sync) -> Vec<T> {
+	let (paths, case) = (&paths, &case);
+	let mut numbered: Vec<(usize, T)> = std::thread::scope(|scope| {
+		let threads: Vec<_> = (0..RUST_SIDE_THREADS)
+			.map(|first| {
+				let share = move || {
+					let mine = (first..paths.len()).step_by(RUST_SIDE_THREADS);
+					mine.filter_map(|index| Some((index, case(&paths[index])?))).collect::<Vec<_>>()
+				};
+				std::thread::Builder::new().stack_size(RUST_SIDE_STACK).spawn_scoped(scope, share).unwrap()
+			})
+			.collect();
+		threads.into_iter().flat_map(|thread| thread.join().unwrap()).collect()
+	});
+	numbered.sort_by_key(|(index, _)| *index);
+	numbered.into_iter().map(|(_, case)| case).collect()
 }
 
 /// A hint or warning as a twin reports it: [line, column, message, preferred form or ø]
@@ -285,7 +315,7 @@ pub fn positioned_bridge_differential() {
 fn bridge_differential_of(given: fn(&Node) -> Node) {
 	let cases = twin_sources(&[]).into_iter().map(|path| {
 		let parsed = parse(&std::fs::read_to_string(&path).unwrap());
-		Case { path: path.display().to_string(), argument: view_json(&given(&parsed)), expected: plain_view(&parsed) }
+		Case::new(&path, view_json(&given(&parsed)), plain_view(&parsed))
 	});
 	report("view_of", &differences_of(cases, "walk", "view_of(node_of(json(argument)))"));
 }
