@@ -292,3 +292,13 @@ around a shader (spectrum(), a map's helper functions) runs there too.
 - Firefox's "uncaught exception: undefined" during 400 GPU jobs is no WebGPU fault: on lavapipe 400 jobs take over
   10 s, the playground stops the run, and terminating a Worker inside WebAssembly.promising logs it (Firefox's bug,
   card firefox-logs; probes gpu_jobs.sh). The tour's check accepts a stop ("or says why not").
+
+## Third-party shaders stay out (license P150)
+
+warp is AGPL-3.0 with commercial dual licensing, so it ships only shaders written for it. compute.toys shaders carry
+no default license (all rights with their authors) and Shadertoy's default is CC BY-NC-SA 3.0, neither compatible. The
+compute.toys ports (balatro, cyber_fuji, dandelion, fiddling_rings, kuko175_pumpkins, singularity, solar, wormhole)
+and the bundled WebGL obj demo moved to github.com/pannous/shaders (warp/compute_toys, webgl/), each headed with title,
+author, source and license; they run there with `warp <file>`. Our own compute.toys kernels: samples/gpu/lava_lamp,
+northern_lights. test_compute_toys::no_sample_or_library_is_a_third_party_shader keeps ports (a compute.toys or
+Shadertoy view URL) out of samples/ and lib/. The old files remain in git history.
