@@ -194,7 +194,8 @@ pub fn seal_quoted(node: Node) -> Node {
 	}
 }
 
-/// The code of `data e`, `data(e)` and `data(a of b)`, whose words the parser keeps as the items after data
+/// The code of `data e`, `data(e)` and `data(a of b)`, whose words the parser keeps as the items after data; a
+/// variable named data is no prefix: `data where it == 2`
 fn written_quote(node: &Node) -> Option<Node> {
 	let grouped = prefixed_group(node);
 	let Node::List(items, Bracket::None, Separator::Space) = grouped.as_ref().unwrap_or(node).drop_meta() else {
@@ -202,7 +203,7 @@ fn written_quote(node: &Node) -> Option<Node> {
 	};
 	match items.as_slice() {
 		[prefix, code] if prefix.is_symbol(DATA_WORD) => Some(code.clone()),
-		[prefix, words @ ..] if prefix.is_symbol(DATA_WORD) && words.len() > 1 => {
+		[prefix, words @ ..] if prefix.is_symbol(DATA_WORD) && grouped.is_some() => {
 			Some(Node::List(words.to_vec(), Bracket::None, Separator::Space))
 		}
 		_ => None,

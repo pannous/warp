@@ -380,7 +380,10 @@ impl WarpParser {
 		let after =
 			(TIMES_WORD.len()..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(TIMES_WORD.len());
 		let next = self.peek_char(after);
-		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after) || self.is_hole_start(after)
+		next.is_ascii_digit()
+			|| matches!(next, '"' | '\'')
+			|| self.is_identifier_start(after)
+			|| self.is_hole_start(after)
 	}
 
 	/// `n times {body}`, `n times: body`, `n times [x]`, `n times "ab"`: the phrase [n times operand] as written, which

@@ -395,43 +395,47 @@ impl<'a> Matched<'a> {
 		self.bindings.push(bind(name.drop_meta().clone(), path));
 	}
 
-	/// `[a, b]` by count and position; `[first, ...middle, last]`: the items before the rest count from the start,
-	/// those after it from the end
+	/// `[a, b]` by count and position; `[first, ...middle, last]` a slice for the rest
 	fn items(&mut self, items: &[Node], path: Node) {
-		self.tests.push(call(crate::words::IS_TYPE, vec![path.clone(), text(LIST_WORD)]));
-		let count = call(COUNT_WORD, vec![path.clone()]);
-		let Some(rest_index) = items.iter().position(is_rest) else {
-			self.tests.push(key(count, Op::Eq, Node::int(items.len() as i64)));
-			for (index, part) in items.iter().enumerate() {
-				self.pattern(part, item(&path, index + 1));
-			}
-			return;
-		};
-		let fixed = items.len() - 1;
-		let after = fixed - rest_index;
-		self.tests.push(key(count.clone(), Op::Ge, Node::int(fixed as i64)));
-		let from_end = |distance: usize| match distance {
-			0 => count.clone(),
-			_ => key(count.clone(), Op::Sub, Node::int(distance as i64)),
-		};
-		for (index, part) in items.iter().enumerate() {
-			match index.cmp(&rest_index) {
-				std::cmp::Ordering::Less => self.pattern(part, item(&path, index + 1)),
-				std::cmp::Ordering::Greater => {
-					self.pattern(part, key(path.clone(), Op::Hash, from_end(items.len() - 1 - index)))
+		for (part, part_path) in items.iter().zip(item_paths(items, &path, is_rest, &mut self.tests)) {
+			if let Some(each) = item_pattern(part) {
+				let test = every_item_test(each, part_path, &mut self.bindings, self.names);
+				self.tests.push(test);
+			} else if let Some(rest) = rest_pattern(part) {
+				if let Some(name) = rest {
+					self.bind(&Node::Symbol(name), part_path);
 				}
-				std::cmp::Ordering::Equal => {
-					let rest = call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(after)]);
-					if let Some(each) = item_pattern(part) {
-						let test = every_item_test(each, rest, &mut self.bindings, self.names);
-						self.tests.push(test);
-					} else if let Some(Some(name)) = rest_pattern(part) {
-						self.bind(&Node::Symbol(name), rest);
-					}
-				}
+			} else {
+				self.pattern(part, part_path);
 			}
 		}
 	}
+}
+
+/// The count tests of a list of `items` at `path`, and the path of each item: before a rest from the start, after it
+/// from the end, the rest its slice
+fn item_paths(items: &[Node], path: &Node, is_rest: impl Fn(&Node) -> bool, tests: &mut Vec<Node>) -> Vec<Node> {
+	tests.push(type_named(path, LIST_WORD));
+	let count = call(COUNT_WORD, vec![path.clone()]);
+	let Some(rest_index) = items.iter().position(is_rest) else {
+		tests.push(key(count, Op::Eq, Node::int(items.len() as i64)));
+		return (1..=items.len()).map(|position| item(path, position)).collect();
+	};
+	let fixed = items.len() - 1;
+	tests.push(key(count.clone(), Op::Ge, Node::int(fixed as i64)));
+	let from_end = |distance: usize| match distance {
+		0 => count.clone(),
+		_ => key(count.clone(), Op::Sub, Node::int(distance as i64)),
+	};
+	(0..items.len())
+		.map(|index| match index.cmp(&rest_index) {
+			std::cmp::Ordering::Less => item(path, index + 1),
+			std::cmp::Ordering::Greater => key(path.clone(), Op::Hash, from_end(fixed - index)),
+			std::cmp::Ordering::Equal => {
+				call(SLICE, vec![path.clone(), Node::int(rest_index as i64), from_end(fixed - rest_index)])
+			}
+		})
+		.collect()
 }
 
 /// A test of the value at `path` that binds nothing: a comparison `>= 18`, a type word (`int`, `Circle`), a range
@@ -491,12 +495,7 @@ fn has_hole(code: &Node) -> bool {
 /// subtree, a key has the same operator and a list the same length, parts without holes are equal as data
 fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	if let Some(name) = hole_name(code) {
-		let name = Node::Symbol(name.to_string());
-		match bindings.iter().filter_map(bound).find(|(bound_name, _)| **bound_name == name) {
-			Some((_, earlier)) => tests.push(key(path, Op::Eq, earlier.clone())),
-			None => bindings.push(bind(name, path)),
-		}
-		return;
+		return bind_hole(name, path, tests, bindings);
 	}
 	match code.drop_meta() {
 		Node::Key(left, op, right) if has_hole(code) => {
@@ -508,24 +507,48 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 		}
 		Node::List(items, _, _) if has_hole(code) => {
 			let items = called_hole_items(items);
-			tests.push(type_named(&path, LIST_WORD));
-			tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
-			for (index, part) in items.iter().enumerate() {
-				code_tests(part, item(&path, index + 1), tests, bindings);
+			let is_rest = |part: &Node| rest_hole(part).is_some();
+			for (part, part_path) in items.iter().zip(item_paths(&items, &path, is_rest, tests)) {
+				match rest_hole(part) {
+					Some(name) => bind_hole(name, part_path, tests, bindings),
+					None => code_tests(part, part_path, tests, bindings),
+				}
 			}
 		}
 		_ => tests.push(key(path, Op::Eq, as_data(code.clone()))),
 	}
 }
 
+/// A hole binds the subtree at `path`; a repeated hole must be the same subtree
+fn bind_hole(name: &str, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
+	let name = Node::Symbol(name.to_string());
+	match bindings.iter().filter_map(bound).find(|(bound_name, _)| **bound_name == name) {
+		Some((_, earlier)) => tests.push(key(path, Op::Eq, earlier.clone())),
+		None => bindings.push(bind(name, path)),
+	}
+}
+
+/// `$xs...` in quoted code: the hole xs for the items from there on
+pub(crate) fn rest_hole(part: &Node) -> Option<&str> {
+	match part.drop_meta() {
+		Node::Key(start, Op::Range | Op::To, end) if end.is_empty_node() => hole_name(start),
+		_ => None,
+	}
+}
+
 /// `$f($x, $y)` reads as the hole `$f` and the group `($x, $y)`, where a call `g(x, y)` of a name quotes as `g x y`
 fn called_hole_items(items: &[Node]) -> Vec<Node> {
+	hole_call(items).unwrap_or_else(|| items.to_vec())
+}
+
+/// `$f($x, $y)`: the call's items `$f $x $y`
+pub(crate) fn hole_call(items: &[Node]) -> Option<Vec<Node>> {
 	match items {
 		[head, arguments] if hole_name(head).is_some() => match arguments.drop_meta() {
-			Node::List(arguments, Bracket::Round, _) => [vec![head.clone()], arguments.clone()].concat(),
-			_ => items.to_vec(),
+			Node::List(arguments, Bracket::Round, _) => Some([vec![head.clone()], arguments.clone()].concat()),
+			_ => None,
 		},
-		_ => items.to_vec(),
+		_ => None,
 	}
 }
 

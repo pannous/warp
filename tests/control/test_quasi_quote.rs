@@ -40,10 +40,12 @@ fn a_template_splices_an_expression() {
 #[test]
 fn a_replacement_template_splices_the_holes() {
 	is!("(data(y * 2 * 1 + 2) replace data($a * 1) with data($a + 10)) == data(y * 2 + 10 + 2)", true);
-	is!(
-		"(data(3 times {print 1}) replace data($n times $b) with data(for i in 0..$n $b)) == data(for i in 0..3 {print 1})",
-		true
-	);
+}
+
+#[test]
+fn a_times_phrase_becomes_its_loop() {
+	let rounds = "rounds(c) := match c {\n\tdata($n times $b) => data(for i in 0..$n $b)\n\t_ => c\n}\n";
+	is!(&format!("{rounds}rounds(data(3 times {{print 1}})) == data(for i in 0..3 {{print 1}})"), true);
 }
 
 #[test]
@@ -56,4 +58,12 @@ fn a_rest_hole_binds_and_splices_the_remaining_items() {
 	let rest = "tail(c) := match c {\n\tdata($f($first, $rest...)) => data($f($rest...))\n\t_ => c\n}\n";
 	is!(&format!("{rest}tail(data(g(1, 2, 3))) == data(g(2, 3))"), true);
 	is!(&format!("{rest}tail(data(g(1))) == data(g())"), true);
+}
+
+#[test]
+fn a_template_in_a_lambda_splices_its_parameter() {
+	is!(
+		"wrap(xs, f) := xs.map(x => data($f($x)))\nwrap([data(a), data(b)], data(g)) == [data(g(a)), data(g(b))]",
+		true
+	);
 }
