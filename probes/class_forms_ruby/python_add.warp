@@ -1,6 +1,0 @@
-class V:
-    def __init__(self, x):
-        self.x = x
-    def __add__(self, other):
-        return V(self.x + other.x)
-(V(3) + V(4)).x

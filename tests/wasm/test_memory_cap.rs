@@ -1,6 +1,6 @@
 //! Every run's store refuses to grow a memory or the GC heap past the memory cap (WARP_MEMORY_CAP_MB), loudly: a
 //! runaway program stops with an error instead of taking the machine down (154 GB, 2026-10-09)
-use warp::util::{fueled_store, gc_engine};
+use warp::util::{gc_engine, limited_store};
 use wasmtime::{Instance, Module};
 
 const GROWN_PAST_THE_CAP: &str = "(module
@@ -12,7 +12,7 @@ const GROWN_PAST_THE_CAP: &str = "(module
 fn run(function: &str) -> String {
 	let engine = gc_engine();
 	let module = Module::new(&engine, wat::parse_str(GROWN_PAST_THE_CAP).unwrap()).unwrap();
-	let mut store = fueled_store(&engine, ());
+	let mut store = limited_store(&engine, ());
 	let instance = Instance::new(&mut store, &module, &[]).unwrap();
 	let call = instance.get_typed_func::<(), i32>(&mut store, function).unwrap().call(&mut store, ());
 	format!("{:#}", call.expect_err("grown past the cap"))

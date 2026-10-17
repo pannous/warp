@@ -142,7 +142,9 @@ pub fn declared_version(statements: &[Node]) -> Option<Version> {
 /// `version 1.2.3` and a version literal (`v2` stays a name)
 fn is_version_value(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(text) => literal_len(&text.chars().collect::<Vec<_>>()) == text.chars().count(),
+		Node::Symbol(text) => {
+			!text.is_empty() && literal_len(&text.chars().collect::<Vec<_>>()) == text.chars().count()
+		}
 		Node::List(items, _, _) => items.len() == 2 && is_version_keyword(&items[0]) && version_of(node).is_some(),
 		_ => false,
 	}

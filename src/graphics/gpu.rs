@@ -261,7 +261,8 @@ fn compute_buffers(shader: &str, buffers: &[(u32, &[u8])], workgroups: u32) -> R
 			})
 		})
 		.collect();
-	let readbacks: Vec<wgpu::Buffer> = storages.iter().map(|storage| readback_of(device, storage.size())).collect();
+	let readbacks: Vec<wgpu::Buffer> =
+		storages.iter().map(|storage| readback_of(device, "gpu_compute readback", storage.size())).collect();
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let pipeline = compute_pipeline(device, shader)?;
 	let entries: Vec<wgpu::BindGroupEntry> = buffers
@@ -286,9 +287,10 @@ fn compute_buffers(shader: &str, buffers: &[(u32, &[u8])], workgroups: u32) -> R
 	read_backs(device, &readbacks, validation)
 }
 
-fn readback_of(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
+/// A buffer the CPU reads the GPU's work back from
+fn readback_of(device: &wgpu::Device, label: &str, size: u64) -> wgpu::Buffer {
 	device.create_buffer(&wgpu::BufferDescriptor {
-		label: Some("gpu_compute readback"),
+		label: Some(label),
 		size,
 		usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
 		mapped_at_creation: false,
@@ -348,7 +350,7 @@ fn compute_bytes(
 	if !bytes.is_empty() {
 		queue.write_buffer(&storage, (items * WORD_BYTES) as u64, bytes);
 	}
-	let readback = readback_of(device, size);
+	let readback = readback_of(device, "gpu_compute readback", size);
 
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let pipeline = compute_pipeline(device, shader)?;
@@ -412,9 +414,7 @@ pub fn checked_values(
 	let Gpu { device, .. } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let prepared = prepared(device, shader, &values);
-	if let Some(invalid) = pollster::block_on(validation.pop()) {
-		return Err(essence(&invalid.to_string()));
-	}
+	validated(validation)?;
 	prepared.map(|_| values)
 }
 
@@ -432,10 +432,7 @@ pub fn render_texture(
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let (image, encoder) = drawn_image(device, shader, width, height, values, view_format)?;
 	queue.submit([encoder.finish()]);
-	match pollster::block_on(validation.pop()) {
-		Some(invalid) => Err(essence(&invalid.to_string())),
-		None => Ok(image),
-	}
+	validated(validation).map(|_| image)
 }
 
 /// The shader with its values compiled into its painter, and the values' bytes
@@ -471,16 +468,7 @@ fn drawn_image(
 	let usage =
 		wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING;
 	let view_formats: Vec<_> = view_format.into_iter().filter(|format| *format != IMAGE_FORMAT).collect();
-	let image = device.create_texture(&wgpu::TextureDescriptor {
-		label: Some("gpu_render image"),
-		size,
-		mip_level_count: 1,
-		sample_count: 1,
-		dimension: wgpu::TextureDimension::D2,
-		format: IMAGE_FORMAT,
-		usage,
-		view_formats: &view_formats,
-	});
+	let image = image_texture(device, "gpu_render image", size, usage, &view_formats);
 	if reads_previous {
 		keep_previous_frame(shader, image.clone());
 	}
@@ -528,12 +516,7 @@ fn checked_image_rgba(
 	let (width, height) = (size.width, size.height);
 	// a copied row is padded to 256 bytes
 	let row_bytes = (width * PIXEL_BYTES).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
-	let readback = device.create_buffer(&wgpu::BufferDescriptor {
-		label: Some("image readback"),
-		size: u64::from(row_bytes * height),
-		usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-		mapped_at_creation: false,
-	});
+	let readback = readback_of(device, "image readback", u64::from(row_bytes * height));
 	let layout =
 		wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row_bytes), rows_per_image: Some(height) };
 	encoder.copy_texture_to_buffer(
@@ -557,18 +540,29 @@ static PREVIOUS_FRAMES: LazyLock<Mutex<HashMap<String, wgpu::Texture>>> = LazyLo
 fn previous_frame(device: &wgpu::Device, shader: &str, size: wgpu::Extent3d) -> wgpu::TextureView {
 	let kept = PREVIOUS_FRAMES.lock().unwrap().get(shader).filter(|frame| frame.size() == size).cloned();
 	let frame = kept.unwrap_or_else(|| {
-		device.create_texture(&wgpu::TextureDescriptor {
-			label: Some("gpu_render previous frame"),
-			size,
-			mip_level_count: 1,
-			sample_count: 1,
-			dimension: wgpu::TextureDimension::D2,
-			format: IMAGE_FORMAT,
-			usage: wgpu::TextureUsages::TEXTURE_BINDING,
-			view_formats: &[],
-		})
+		image_texture(device, "gpu_render previous frame", size, wgpu::TextureUsages::TEXTURE_BINDING, &[])
 	});
 	frame.create_view(&wgpu::TextureViewDescriptor::default())
+}
+
+/// A 2D texture of IMAGE_FORMAT, viewed as it is or as one of `view_formats`
+fn image_texture(
+	device: &wgpu::Device,
+	label: &str,
+	size: wgpu::Extent3d,
+	usage: wgpu::TextureUsages,
+	view_formats: &[wgpu::TextureFormat],
+) -> wgpu::Texture {
+	device.create_texture(&wgpu::TextureDescriptor {
+		label: Some(label),
+		size,
+		mip_level_count: 1,
+		sample_count: 1,
+		dimension: wgpu::TextureDimension::D2,
+		format: IMAGE_FORMAT,
+		usage,
+		view_formats,
+	})
 }
 
 fn keep_previous_frame(shader: &str, frame: wgpu::Texture) {
@@ -610,10 +604,7 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 
 /// Whether the shader reads `values.name`
 fn reads_value(shader: &str, name: &str) -> bool {
-	let read = format!("{}.{name}", crate::graphics::shader_holes::VALUES);
-	shader
-		.match_indices(&read)
-		.any(|(at, _)| !shader[at + read.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'))
+	crate::graphics::shader_holes::mentions(shader, &format!("{}.{name}", crate::graphics::shader_holes::VALUES))
 }
 
 /// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the
@@ -729,7 +720,6 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_prev
 	Ok(painter)
 }
 
-/// This frame's values bound to the painter's layout
 /// The values' bytes (none: the shader takes none) and the previous frame, bound as `layout` says
 fn bindings(
 	device: &wgpu::Device,
@@ -784,9 +774,7 @@ fn read_backs(
 	readbacks: &[wgpu::Buffer],
 	validation: wgpu::ErrorScopeGuard,
 ) -> Result<Vec<Vec<u8>>, String> {
-	if let Some(invalid) = pollster::block_on(validation.pop()) {
-		return Err(essence(&invalid.to_string()));
-	}
+	validated(validation)?;
 	for readback in readbacks {
 		readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
 	}
@@ -797,6 +785,11 @@ fn read_backs(
 			readback.slice(..).get_mapped_range().map(|view| view.to_vec()).map_err(|problem| problem.to_string())
 		})
 		.collect()
+}
+
+/// The validation error the work in the scope raised, if any
+fn validated(validation: wgpu::ErrorScopeGuard) -> Result<(), String> {
+	pollster::block_on(validation.pop()).map_or(Ok(()), |invalid| Err(essence(&invalid.to_string())))
 }
 
 /// `1:10: expected identifier, found "{"`: where and why the shader does not compile, as the browser says it

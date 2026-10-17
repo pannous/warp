@@ -243,7 +243,17 @@ pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
 }
 
 pub(super) fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
-	pub(super) static PARAMETERS: std::sync::OnceLock<Vec<(String, usize, usize)>> = std::sync::OnceLock::new();
+	prelude_heads()?.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
+}
+
+/// The prelude word `word` names, spelled as the prelude defines it; None for no prelude word
+pub fn prelude_word(word: &str) -> Option<&'static str> {
+	prelude_heads()?.iter().find(|(name, _, _)| name == word).map(|(name, _, _)| name.as_str())
+}
+
+/// Each prelude word with its number of parameters and of those with a default; None while the prelude is being read
+fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
+	static PARAMETERS: std::sync::OnceLock<Vec<(String, usize, usize)>> = std::sync::OnceLock::new();
 	thread_local!(static READING_PRELUDE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
 	// parsing the prelude asks for its own words (the parser's operand words, library_words::is_operand_word): none
 	// known yet; waiting for them would wait for itself
@@ -271,7 +281,7 @@ pub(super) fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 		READING_PRELUDE.set(false);
 		parameters
 	});
-	parameters.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
+	Some(parameters)
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or

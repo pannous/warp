@@ -116,6 +116,8 @@ const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
 const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
 /// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/definitions/late_binding.rs)
 const NONLOCAL_WORD: &str = "nonlocal";
+/// Rust's endless `loop { … }`
+const LOOP_WORD: &str = "loop";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";
@@ -349,6 +351,7 @@ pub const FLOOR_QUOTIENT: &str = "floor_quotient";
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
 
+/// Read and parse a WARP file
 pub fn parse_file(path: &str) -> Node {
 	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
 	match read_to_string(path) {

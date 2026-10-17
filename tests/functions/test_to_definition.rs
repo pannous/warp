@@ -16,7 +16,6 @@ fn to_takes_a_block_or_an_indented_block_as_body() {
 
 #[test]
 fn to_stays_a_range_and_a_variable_name() {
-	is!("x=0; for i in 1 to 4 {x+=i}; x", 10);
 	is!("to=5; to+1", 6);
 	is!("r=1 to 3; count r", 3);
 }

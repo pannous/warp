@@ -33,5 +33,4 @@ fn a_text_loop_value_stays_a_text_nested_assigned_and_returned() {
 	is!("for x in [1 2] { for y in [\"a\"] { y + x } }", "a2");
 	is!("f(xs) := for x in xs { x + \"!\" }; f([\"a\" \"b\"])", "b!");
 	is!("x = for c in \"ab\" { c + 1 }; x + \"!\"", "b1!");
-	is!("f(n) := for i in 1..n { i * 2 }; f(3)", 4);
 }

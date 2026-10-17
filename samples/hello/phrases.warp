@@ -8,7 +8,7 @@ to greet a full name:
 	"hello " + full name.given + " " + full name.family
 
 ann = full name{given: "Ann", family: "Lee"}
-print type of ann          # full-name
+print type of ann          # class full-name
 print greet ann            # hello Ann Lee
 
 class pdf { body: text }

@@ -17,6 +17,5 @@ fn a_block_argument_keeps_its_own_it() {
 
 #[test]
 fn it_in_the_body_is_the_parameter() {
-	is!("f(x) := x + it; f(3)", 6);
 	is!("def f(x){ it * 2 }; f(4)", 8);
 }

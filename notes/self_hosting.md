@@ -172,5 +172,10 @@ bench_find_warp.wasm'` (-i: the exit code is the result mod 256).
 - Why (WAT of matches_at): every `+` and `<` still tests the 2^62 range and branches to exact_add / exact_cmp, also
   under fast (card fast-int), and each byte_at is a call that re-resolves the text (text_argument) instead of one
   i32.load8_u on an address held outside the loop (card loop-calls). A prelude call is also never inlined (sum-list).
-- So the builtins stay until both cards land; then rerun the two bench files. TEXT_FIND has a second caller, `in` /
+- fast-int landed (whole fast expressions on machine i64s): find unchanged at 6.4x. What is left is ~9 calls per
+  offset at ~5 ns each, and those 5 ns are mostly fuel (card fuel-metering, notes/performance.md "Still slow").
+- loop-calls: `byte_at(t, i)` and `t.bytes` of a text are inline (a kind test; another value still goes through
+  text_argument / node_bytes): find 6.4x → 1.7x (0.50 s against 0.29 s). Left: the matches_at call per offset and
+  fuel (card fuel-metering, decided: epochs by default). Rerun the two bench files once that lands, then decide
+  whether find moves to warp. TEXT_FIND has a second caller, `in` /
   contains (fields_and_keys.rs), which needs a late_call (above) once find moves.

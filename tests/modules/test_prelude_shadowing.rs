@@ -19,7 +19,7 @@ fn hints_of(code: &str) -> (warp::Node, Vec<String>) {
 fn the_program_word_takes_its_own_calls_with_a_hint() {
 	for (code, expected, hint) in [
 		("round_to(x, d) := 99; round_to(1, 2)", 99, "round_to replaces prelude's round_to(x, places)"),
-		("first(x) := 99; first([5, 6])", 99, "first replaces prelude's first(xs)"),
+		("first(x) := 99; first([5, 6])", 5, "first of a list or text stays the library word"),
 	] {
 		let (value, hints) = hints_of(code);
 		assert_eq!(value, warp::Node::from(expected), "{code}");

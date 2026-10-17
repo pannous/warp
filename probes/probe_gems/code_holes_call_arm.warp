@@ -1,8 +1,0 @@
-// a call data (g(y, y)) in the program makes simplify leave n*1 unchanged: expected n, got n*1
-simplify(code) := match code {
-	data($a * 1) => a
-	data($f($x, $x)) => data twice
-	_ => code
-}
-print simplify(data (g(y, y)))
-simplify(data (n * 1))

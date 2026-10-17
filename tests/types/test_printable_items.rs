@@ -31,3 +31,10 @@ fn methods_of_the_text_type() {
 	is!("fs = methods(text)\nfs#1.name", "repeat");
 	is!("(\"Cursor\" in methods(text)) > 0", false);
 }
+
+/// card traps-task: a task runs in a fresh instance of the module, which never runs main: the start function installs
+/// the witness tables there too (a null witness trapped `go` blocks and live loops)
+#[test]
+fn an_instance_shows_its_text_in_a_task() {
+	is!(&format!("{NUMBERED}t = go {{ str([N(3)]) }}\nawait t"), "[n3]");
+}

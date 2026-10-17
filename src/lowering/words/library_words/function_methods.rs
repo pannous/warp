@@ -7,9 +7,8 @@ use crate::node::parens;
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
 	let context = crate::analyzer::function_definitions(&node);
-	let arities: HashMap<String, usize> =
-		context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
-	let mut defined: HashSet<String> = arities.keys().cloned().collect();
+	let program = crate::program_names::ProgramNames::of(&node);
+	let mut defined: HashSet<String> = context.user_functions.keys().cloned().collect();
 	crate::type_tests::collect_outer_assigned_names(&node, &mut defined);
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
 	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
@@ -21,12 +20,16 @@ pub fn lower_function_methods(node: Node) -> Node {
 			|| is_text_builtin
 			|| is_libm(name)
 	};
-	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
-	// are made (function_values.rs), which would otherwise see map(square)
-	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
+	// the uniform call: `x.f(args)` is `f(x, args)` when the program's f takes args + 1 values (method_call's rule
+	// too); `xs.map(square)` of a user function map(list, fn) before function values are made (function_values.rs),
+	// which would otherwise see map(square)
+	let takes_receiver = |name: &str, arguments: usize| program.function_takes(name, arguments + 1) == Some(true);
+	// `p.first()` of a value that may have a member first of its own: method_call's one lookup decides
+	let members = member_names(&node);
 	let node = list_constructor_calls(node, &defined);
-	function_methods_as_calls(node, &defined, &|name, arguments, defined| {
-		(is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments)
+	function_methods_as_calls(node, &defined, &members, &|name, arguments, defined| {
+		let may_be_member = arguments == 0 && members.contains(name);
+		!may_be_member && ((is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments))
 	})
 }
 
@@ -75,26 +78,33 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 fn function_methods_as_calls(
 	node: Node,
 	defined: &HashSet<String>,
+	members: &HashSet<String>,
 	is_function: &dyn Fn(&str, usize, &HashSet<String>) -> bool,
 ) -> Node {
 	if let Some(scoped) =
-		in_function_scope(&node, defined, |body, locals| function_methods_as_calls(body, locals, is_function))
+		in_function_scope(&node, defined, |body, locals| function_methods_as_calls(body, locals, members, is_function))
 	{
 		return scoped;
 	}
-	let lowered = |node: Node| function_methods_as_calls(node, defined, is_function);
+	let lowered = |node: Node| function_methods_as_calls(node, defined, members, is_function);
 	match node {
 		Node::Key(receiver, Op::Dot, method) => {
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
 				Node::List(items, Bracket::Round, _)
 					if let [word] = items.as_slice()
-						&& let Some(name) = word.symbol_name().filter(|name| !defined.contains(*name))
+						&& let Some(name) =
+							word.symbol_name().filter(|name| !defined.contains(*name) && !members.contains(*name))
 						&& let Some(operation) = prefix_operator_method(&receiver, name) =>
 				{
 					operation
 				}
-				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
+				Node::List(items, Bracket::Round, _)
+					if items
+						.first()
+						.and_then(Node::symbol_name)
+						.is_some_and(|name| is_function(name, items.len() - 1, defined)) =>
+				{
 					parens([vec![items[0].clone(), receiver], items[1..].to_vec()].concat())
 				}
 				_ => key(receiver, Op::Dot, method),

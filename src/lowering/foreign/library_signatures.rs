@@ -22,16 +22,16 @@ const NAMED_SIGNATURES: [(&str, &str); 9] = [
 /// value like the others (card dir-lists: methods(x) lists what dir(x) does)
 const MEMBER_SIGNATURES: [(&str, &str); 19] = [
 	("count", "(xs) -> int"),
-	("map", "(xs, f)"),
-	("filter", "(xs, f)"),
-	("reduce", "(xs, f)"),
-	("fold", "(xs, start, f)"),
-	("any", "(xs, f) -> bool"),
-	("all", "(xs, f) -> bool"),
-	("find", "(xs, f)"),
-	("each", "(xs, f)"),
+	("map", "(xs, f: function)"),
+	("filter", "(xs, f: function)"),
+	("reduce", "(xs, f: function)"),
+	("fold", "(xs, start, f: function)"),
+	("any", "(xs, f: function) -> bool"),
+	("all", "(xs, f: function) -> bool"),
+	("find", "(xs, f: function)"),
+	("each", "(xs, f: function)"),
 	("add", "(xs, x)"),
-	("insert", "(xs, x, at)"),
+	("insert", "(xs, x, at: int)"),
 	("remove", "(xs, x)"),
 	("pop", "(xs)"),
 	("clear", "(xs)"),
@@ -77,12 +77,52 @@ pub fn typed_first_arity(word: &str) -> Option<usize> {
 /// The fewest and most values a library word with a typed first parameter takes: `floor` (1, 1), `max` (2, unbounded)
 pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 	let (params, signature) = library_signature(word)?;
-	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
-	if !first.contains(':') {
-		return None;
-	}
+	first_parameter_type(&signature)?;
 	let is_variadic = params.last().is_some_and(|last| last.ends_with(REST_MARK));
 	Some(if is_variadic { (params.len() - 1, usize::MAX) } else { (params.len(), params.len()) })
+}
+
+/// The types a library word is defined for, by its typed first parameter, else by the builtin methods of each type
+/// (members.rs): `floor` number, `upper` text, `count` list, text and map; empty for a word of any value (`print`)
+/// or no library word. A library word is immutable for these types (decision library-words-typed)
+pub fn library_types(word: &str) -> Vec<String> {
+	let word = crate::library_words::canonical_spelling(word);
+	if let Some(typed) = library_signature(word).and_then(|(_, signature)| first_parameter_type(&signature)) {
+		return vec![typed];
+	}
+	crate::lowering::members::MEMBERS_BY_TYPE
+		.iter()
+		.filter(|(_, members)| members.contains(&word))
+		.map(|(type_name, _)| type_name.to_string())
+		.collect()
+}
+
+/// `text` of `(t:text, separator:text) -> …`
+fn first_parameter_type(signature: &str) -> Option<String> {
+	signature_parameter_types(signature).into_iter().next().flatten()
+}
+
+/// The type of each parameter of a library word, None where it takes any value: filter's `[None, function]`
+pub fn library_parameter_types(word: &str) -> Vec<Option<String>> {
+	library_signature(word).map(|(_, signature)| signature_parameter_types(&signature)).unwrap_or_default()
+}
+
+/// `(t:text, separator:text) -> …` → `[text, text]`; a float parameter (libm's) takes any number
+fn signature_parameter_types(signature: &str) -> Vec<Option<String>> {
+	let inside = signature.strip_prefix('(').and_then(|rest| rest.split(')').next()).unwrap_or_default();
+	let type_of = |parameter: &str| {
+		let type_name = parameter.split('=').next()?.split_once(':')?.1.trim();
+		Some(if type_name == LIBM_PARAMETER_TYPE { crate::words::NUMBER_WORD } else { type_name }.to_string())
+	};
+	inside.split(',').filter(|parameter| !parameter.trim().is_empty()).map(type_of).collect()
+}
+
+/// The number of values a library word takes, fewest and most, when its signature names them
+pub fn library_arity(word: &str) -> Option<(usize, usize)> {
+	let (params, signature) = library_signature(word)?;
+	let is_variadic = params.last().is_some_and(|last| last.ends_with(REST_MARK));
+	let defaulted = signature.matches('=').count();
+	Some(if is_variadic { (params.len() - 1, usize::MAX) } else { (params.len() - defaulted, params.len()) })
 }
 
 /// The library words of one typed value with a signature here or in libm: `floor`, `sin`, `upper`, `log10`

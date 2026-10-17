@@ -8,7 +8,7 @@
 //! `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: a percent compared with the battery is that number.
 //! The clipboard: `on clipboard change {…}` is `on change` of its change count (`clipboard count`), which reads no
 //! content; `clipboard` is its text, the host call `clipboard_text()` made where the program reads it, never polled.
-//! `now` is the clock's instant where the program reads it, `instant_at(clock())` (time.rs), never polled.
+//! `now` is the clock's instant where the program reads it, `instant_at(clock())` (time/mod.rs), never polled.
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 

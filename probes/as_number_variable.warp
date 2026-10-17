@@ -1,3 +1,0 @@
-class V{x:int}
-n = "4" as number
-V(n)

@@ -26,6 +26,11 @@ fn a_class_defines_an_operator_by_its_glyph() {
 }
 
 #[test]
+fn an_operator_with_a_typed_operand() {
+	is!("class V { x:int; operator +(o:V) := V(x + o.x) }; (V(3) + V(4)).x", 7);
+}
+
+#[test]
 fn an_operator_on_a_value_of_unknown_class_dispatches_at_run_time() {
 	let classes = "class V{x:int; plus(o) := V(x + o.x)}; class W{y:int; plus(o) := W(y - o.y)}; ";
 	is!(&format!("{classes}t = 0; for q in [V(1), W(9)] {{ r = q + q; t = t * 100 + (r is V ? r.x : r.y) }}; t"), 200);

@@ -601,14 +601,7 @@ probes/int_list_float_write.warp
 probes/introspection/dir_time.warp
 probes/js_native.warp
 probes/js_typo.warp
-probes/json5/block.warp
-probes/json5/literal.warp
-probes/json5/single_quotes.warp
-probes/key_names/bare_key.warp
 probes/key_names/esc_exits.warp
-probes/key_names/esc_word.warp
-probes/key_names/event_key.warp
-probes/key_names/unbound_word.warp
 probes/large_text_literal.warp
 probes/law_overflow.warp
 probes/laws/sum_to.warp
@@ -714,9 +707,6 @@ probes/self_hosting/parser/parse_forms.warp
 probes/self_hosting/scan_speed.warp
 probes/self_hosting/serializer_views.warp
 probes/self_hosting/text_memory.warp
-probes/semantics/binary_int.warp
-probes/semantics/in_bool.warp
-probes/semantics/index_position.warp
 probes/serve_error/failing_routes.warp
 probes/server_routes/one_source.warp
 probes/server_routes/rpc_stub.warp
@@ -756,8 +746,6 @@ probes/uniscript/p3.warp
 probes/unknown_tag.warp
 probes/unknown_type.warp
 probes/user_counting_word.warp
-probes/values_keys/hash_map.warp
-probes/values_keys/small.warp
 probes/variance/runtime_fitting_add.warp
 probes/variance/runtime_lax_alias.warp
 probes/variance/runtime_unannotated_param.warp
@@ -859,3 +847,4 @@ tests/fixtures/parser_corpus/listparams.warp
 tests/fixtures/parser_corpus/maps.warp
 tests/fixtures/parser_corpus/print.warp
 tests/fixtures/parser_corpus/slices.warp
+tests/fixtures/parser_corpus/semantics.warp

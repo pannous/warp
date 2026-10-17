@@ -1,4 +1,0 @@
-// type(x) prints int, yet a type never equals a text: no, with a hint toward type(x) == int (card type-text-compare)
-x = 3
-print(type(x) == "int")
-print(type(x) == int)

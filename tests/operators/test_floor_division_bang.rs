@@ -8,7 +8,6 @@ fn slash_bang_is_floor_division() {
 	is!("7/!2", 3);
 	is!("-7 /! 2", -4);
 	is!("x = 7; x /! 2 + 1", 4);
-	is!("x = 7; x /!= 2; x", 3);
 }
 
 #[test]

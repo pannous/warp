@@ -10,7 +10,7 @@
 //! a function stays the first item f accepts, `replace(text, a, b)` the text word.
 
 use super::blocks::DATA_WORD;
-use super::nodes::{call, template};
+use super::nodes::{call, key, template};
 use super::switch::{code_pattern, is_list_pattern, is_map_pattern, pattern_bindings};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{Bracket, Node, Separator};
@@ -195,7 +195,7 @@ fn found_result(pattern: &Node, node: &Node) -> Node {
 		[] => node.clone(),
 		[name] => name.clone(),
 		names => Node::List(
-			names.iter().map(|name| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(name.clone()))).collect(),
+			names.iter().map(|name| key(name.clone(), Op::Colon, name.clone())).collect(),
 			Bracket::Curly,
 			Separator::Comma,
 		),

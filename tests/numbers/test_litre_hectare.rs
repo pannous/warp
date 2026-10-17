@@ -21,3 +21,12 @@ fn a_glued_litre_needs_use_units() {
 	is!("use units\n2l is volume", true);
 	is!("0.1f + 0.2f == 0.3", false);
 }
+
+// a module alias the program binds wins over a unit of the same name (batch 11: `use list as l`)
+#[test]
+fn a_module_alias_wins_over_a_unit_name() {
+	is!("use list as l\ncount(l.unique([1 1 2]))", 2);
+	is!("use list as L\nL.unique([1 1 2]) == [1 2]", true);
+	is!("use math as ha\nha.floor(4.5)", 4);
+	is!("use math as N\nN.floor(4.5)", 4);
+}

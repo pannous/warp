@@ -77,9 +77,10 @@ fn defines(statement: &Node, name: &str) -> bool {
 fn is_shown(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Key(_, op, _) => !matches!(op, Op::Assign | Op::Define) && !op.is_compound_assign(),
-		Node::List(items, _, _) => {
-			!matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if STATEMENT_WORDS.contains(&word.as_str()) || crate::modules::is_import_keyword(word))
-		}
+		Node::List(items, _, _) => !items
+			.first()
+			.and_then(Node::symbol_name)
+			.is_some_and(|word| STATEMENT_WORDS.contains(&word) || crate::modules::is_import_keyword(word)),
 		_ => true,
 	}
 }

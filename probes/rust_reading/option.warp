@@ -1,0 +1,17 @@
+// card rust-option: Some/None, if let, match arms, unwrap_or, loop
+fn half(n: i32) {  // `-> Option<i32>`: card rust-generic-result
+    if n % 2 == 0 { Some(n / 2) } else { None }
+}
+let a = half(8);
+if let Some(v) = a { println!("half is {}", v); } // half is 4
+let label = match half(3) {
+    Some(v) => v,
+    None => -1,
+};
+println!("{}", label); // -1
+let mut i = 0;
+loop {
+    i += 1;
+    if i == 3 { break; }
+}
+half(5).unwrap_or(0) + i // 3

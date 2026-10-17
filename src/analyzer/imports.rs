@@ -1,7 +1,8 @@
 //! What a program needs: required runtime functions, FFI and host-word imports
 
 use super::*;
-use crate::words::{NUMBER_WORD, REAL_WORD};
+use crate::modules::{IMPORT_KEYWORD, USE_KEYWORD};
+use crate::words::{FROM_WORD, NUMBER_WORD, REAL_WORD};
 
 /// Analyze node tree for non-default required functions.
 /// Default functions (new_empty, new_int, new_float, new_text, new_symbol, new_codepoint, new_key, new_list)
@@ -409,76 +410,61 @@ pub(super) fn add_called_library_imports(
 pub(super) const LIBM_LN: &str = "ln";
 
 pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
-	let node = node.drop_meta();
-	match node {
+	match node.drop_meta() {
 		Node::List(items, _, _) => {
-			if !items.is_empty() {
-				match items[0].drop_meta() {
-					Node::Symbol(first_sym) => {
-						if first_sym == "import" && items.len() >= 2 {
-							if items.len() == 2 {
-								let lib = items[1].text_or_name();
-								add_ffi_lib(ctx, &lib);
-								return;
-							}
-							let func_names = imported_names(&items[1]);
-							if items.len() >= 3 {
-								if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
-									if key.name() == "from" {
-										let lib = value.text_or_name();
-										func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
-										return;
-									}
-								}
-							}
-							if items.len() >= 4 && items[2].name() == "from" {
-								let lib = items[3].text_or_name();
-								func_names.iter().for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
-								return;
-							}
-						} else if first_sym == "use" && items.len() >= 4 && items[2].name() == "from" {
-							let lib = items[3].text_or_name();
-							imported_names(&items[1]).iter().for_each(|name| add_named_import(ctx, name, &lib));
-							return;
-						} else if first_sym == "use" && items.len() >= 2 {
-							let lib = items[1].text_or_name();
-							add_ffi_lib(ctx, &lib);
-							return;
-						}
-					}
-					Node::List(inner_items, _, _) if inner_items.len() >= 2 => {
-						if let Node::Symbol(inner_first) = inner_items[0].drop_meta() {
-							if inner_first == "use" {
-								let lib = inner_items[1].name();
-								add_ffi_lib(ctx, &lib);
-							}
-						}
-					}
-					_ => {}
+			if declared_import(ctx, items) {
+				return;
+			}
+			// `(use lib) …`: a list headed by a `use` statement
+			if let Some(Node::List(inner, _, _)) = items.first().map(Node::drop_meta) {
+				if inner.len() >= 2 && inner[0].is_symbol(USE_KEYWORD) {
+					add_ffi_lib(ctx, &inner[1].name());
 				}
 			}
 			for item in items {
 				extract_declared_ffi_imports(ctx, item);
 			}
 		}
-		Node::Key(ref key, _, ref value) => {
-			if key.name() == "import" {
-				if let Node::Key(ref from_key, _, ref lib) = value.drop_meta() {
-					if from_key.name() == "from" {
-						let func_name = key.name();
-						let lib_name = lib.text_or_name();
-						add_ffi_import(ctx, &func_name, &lib_name);
-						return;
-					}
-				}
-			}
+		Node::Key(key, _, value) => {
 			extract_declared_ffi_imports(ctx, key);
 			extract_declared_ffi_imports(ctx, value);
 		}
-		Node::Meta { ref node, .. } => {
-			extract_declared_ffi_imports(ctx, node);
-		}
 		_ => {}
+	}
+}
+
+/// `import lib`, `import f from lib`, `import f g from lib`, `use lib`, `use f from lib`: the imports the statement
+/// declares, added; whether it is one
+fn declared_import(ctx: &mut Context, items: &[Node]) -> bool {
+	let Some(head) = items.first().and_then(Node::symbol_name) else {
+		return false;
+	};
+	let from_at = |at: usize| items.get(at).is_some_and(|item| item.name() == FROM_WORD);
+	match (head, items.len()) {
+		(IMPORT_KEYWORD, 2) => add_ffi_lib(ctx, &items[1].text_or_name()),
+		(IMPORT_KEYWORD, 3..) => {
+			let library = match from_library(&items[2]) {
+				Some(library) => library,
+				None if items.len() >= 4 && from_at(2) => items[3].text_or_name(),
+				None => return false,
+			};
+			imported_names(&items[1]).iter().for_each(|name| add_ffi_import(ctx, name, &library));
+		}
+		(USE_KEYWORD, 4..) if from_at(2) => {
+			let library = items[3].text_or_name();
+			imported_names(&items[1]).iter().for_each(|name| add_named_import(ctx, name, &library));
+		}
+		(USE_KEYWORD, 2..) => add_ffi_lib(ctx, &items[1].text_or_name()),
+		_ => return false,
+	}
+	true
+}
+
+/// The library of a `from lib` key
+fn from_library(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Key(key, _, library) if key.name() == FROM_WORD => Some(library.text_or_name()),
+		_ => None,
 	}
 }
 

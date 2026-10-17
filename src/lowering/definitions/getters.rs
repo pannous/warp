@@ -5,7 +5,7 @@
 //! definition. Not getters: `name := {…}` (a block or a list), `name := x => …` and `name := …it…` (functions), and a
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
-use super::nodes::{arguments_rewritten, call, children_rewritten, is_binding, key};
+use super::nodes::{any_part, arguments_rewritten, call, children_rewritten, is_binding, key};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -29,11 +29,9 @@ pub(crate) fn getter_name(statement: &Node) -> Option<&str> {
 	let Node::Key(left, Op::Define, body) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = left.drop_meta() else {
-		return None;
-	};
+	let name = left.symbol_name()?;
 	let function_like = matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow, _));
-	(!function_like && !crate::analyzer::takes_implicit_parameter(body)).then_some(name.as_str())
+	(!function_like && !crate::analyzer::takes_implicit_parameter(body)).then_some(name)
 }
 
 fn lower_in(node: Node, active: &[Getter]) -> Node {
@@ -74,7 +72,9 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 			};
 			key(lower_in(*left, active), Op::Dot, right)
 		}
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) => {
+		Node::List(items, Bracket::Round, separator)
+			if items.first().and_then(Node::symbol_name).is_some_and(|head| is_active(active, head)) =>
+		{
 			arguments_rewritten(items, Bracket::Round, separator, |item| lower_in(item, active))
 		}
 		other => children_rewritten(other, |child| lower_in(child, active)),
@@ -104,9 +104,7 @@ fn is_active(active: &[Getter], name: &str) -> bool {
 }
 
 fn mentions_define(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Key(_, Op::Define, _)));
-	found
+	any_part(node, |part| matches!(part, Node::Key(_, Op::Define, _)))
 }
 
 /// The names a lambda or a function definition binds itself: its parameters, the variables its body assigns and its loop
@@ -123,7 +121,9 @@ pub(crate) fn shadowed_names(node: &Node) -> Vec<String> {
 			names
 		}
 		Node::Key(_, Op::Define | Op::Assign, _) => locals_of(node),
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::operators::is_function_keyword(word)) => {
+		Node::List(items, _, _)
+			if items.first().and_then(Node::symbol_name).is_some_and(crate::operators::is_function_keyword) =>
+		{
 			locals_of(node)
 		}
 		_ => vec![],

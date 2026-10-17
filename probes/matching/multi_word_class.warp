@@ -1,9 +1,0 @@
-// card multi-word-class (D5 rule 4): a class named by several words is one name, full-name
-class full name { given:text; family:text }
-
-to greet a full name:
-	"hello " + full name.given + " " + full name.family
-
-ann = full name{given:"Ann", family:"Lee"}
-print type of ann
-print greet ann

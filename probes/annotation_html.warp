@@ -1,3 +1,0 @@
-class V{x:int}
-a:V = V(4)
-a.x

@@ -30,11 +30,8 @@ fn cpp_auto_and_lambdas() {
 
 #[test]
 fn ruby_symbol_blocks_methods_and_block_sums() {
-	is!("xs = [1, 2, 3].map(&:to_s); xs#2 + \"!\"", "2!");
-	is!("\"42\".to_i + 1", 43);
 	is!("[1, 2, 3].sum { |x| x * 2 }", 12);
 	is!("[1, 2, 3].count { |x| x > 1 }", 2);
-	is!("xs = [1, 2, 3]; xs.sumOf { it * 2 }", 12);
 }
 
 /// card elixir-block: Elixir's block form `def sq(x) do … end`

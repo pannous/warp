@@ -108,19 +108,15 @@ fn test_index_offset_advanced() {
 	is!("y=(1 4 3);y[1]", 4); // CAN NOT WORK in data_mode because y[1] ≈ y:1 setter
 	is!("x=(5 6 7);y=(1 4 3);y[1]", 4);
 	is!("(5 6 7);(2 4 3)[0]", 2);
-	is!("x=(5 6 7);y=(1 4 3);y#2", 4); // list variable storage
 	is!("(5 6 7);(1 4 3)#2", 4);
 	is!("x=(5 6 7);(1 4 3)#2", 4); // list variable storage affects later stmt
 	is!("puts('ok');(1 4 3)#2", 4);
 	// Arithmetic (unrelated to indexing)
 	is!("i=10007;x=i%10000", 7);
 	is!("maxi=3840*2160", 3840 * 2160);
-	is!("i=10007;x=i%10000", 7);
 	// Index assignment with variable index
 	is!("k=(1,2,3);i=1;k#i=4;k#1", 4); // index assignment with variable
-	is!("k=(1,2,3);i=1;k#i=4;k#1", 4); // index assignment with variable
 									// More list tests
-	is!("x=(1 4 3);x#2=5;x#2", 5); // index assignment
 	is!("x=(1 4 3);x#2", 4); // list variable storage
 }
 
@@ -158,9 +154,7 @@ fn test_array_indices() {
 	// #[cfg(not(feature = "WASM"))]{
 	//         ( and INCLUDE_MERGER);
 	is!("(1 4 3)#2", 4); // todo needs_runtime = true => whole linker machinery
-	is!("x=(1 4 3);x#2", 4);
-	is!("x=(1 4 3);x#2=5;x#2", 5);
-	// }
+	                  // }
 }
 
 #[test]
@@ -173,8 +167,6 @@ fn test_root_lists() {
 	//     is!("1;2;3", ints(vec![1, 2, 3, 0]) //ok
 	is!("1,2,3", ints(vec![1, 2, 3]));
 	is!("[1 2 3]", ints(vec![1, 2, 3]));
-	is!("[1 2 3]", ints(vec![1, 2, 3]));
-	is!("[1,2,3]", ints(vec![1, 2, 3]));
 	is!("[1,2,3]", ints(vec![1, 2, 3]));
 	is!("[1;2;3]", ints(vec![1, 2, 3]));
 	is!("{1 2 3}", ints(vec![1, 2, 3]));

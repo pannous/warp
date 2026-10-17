@@ -76,10 +76,7 @@ pub(super) fn function_definition_body(node: &Node) -> Option<&Node> {
 		Node::Key(left, Op::Assign | Op::Define, body) if matches!(left.drop_meta(), Node::List(items, _, _) if starts_with_symbol(items)) => {
 			Some(body)
 		}
-		Node::List(items, _, _)
-			if items.len() >= 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword)) =>
-		{
+		Node::List(items, _, _) if items.len() >= 2 && items[0].symbol_name().is_some_and(is_function_keyword) => {
 			items.last()
 		}
 		_ => None,
@@ -605,11 +602,11 @@ impl Scope {
 }
 
 pub(crate) fn is_constant_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
+	node.symbol_name().is_some_and(|word| CONSTANT_KEYWORDS.contains(&word))
 }
 
 pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
+	node.symbol_name().is_some_and(is_declaration_word)
 }
 
 /// `var`, `let`, `const`, `val` …: a word declaring the name after it

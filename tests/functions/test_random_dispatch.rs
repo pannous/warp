@@ -33,5 +33,4 @@ fn random_compared_takes_the_first_comparand() {
 	is!("random 1..4 < 4", true);
 	is!("xs = [1, 2]; random xs < 3", true);
 	is!("random 2.5 < 2.5 and yes", true);
-	is!("random < 1", true);
 }

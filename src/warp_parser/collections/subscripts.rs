@@ -131,7 +131,7 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 }
 
 pub(crate) fn is_unindexable_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if UNINDEXABLE_KEYWORDS.contains(&word.as_str()))
+	node.symbol_name().is_some_and(|word| UNINDEXABLE_KEYWORDS.contains(&word))
 }
 
 /// `id=1 kind="x"` in brackets: each attribute
@@ -185,8 +185,7 @@ impl WarpParser {
 			return Some(node);
 		}
 		// `int[n]` is n zeros of the type unless int is a variable (analyzer lower_declarations): no indexing hint
-		let names_a_type =
-			matches!(lhs.drop_meta(), Node::Symbol(word) if crate::filled_lists::zero_list(Empty, word).is_some());
+		let names_a_type = lhs.symbol_name().is_some_and(|word| crate::filled_lists::zero_list(Empty, word).is_some());
 		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(

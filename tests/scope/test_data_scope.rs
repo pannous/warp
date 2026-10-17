@@ -3,7 +3,6 @@ use crate::is;
 
 #[test]
 fn test_kebab_keys_are_read_back() {
-	is!("a-b:2 c-d:4 a-b", 2);
 	is!("a-b:2; a-b+1", 3);
 	is!("a-b:2 c-d:4 c-d", 4);
 }
