@@ -1434,40 +1434,27 @@ def template(written) {
 }
 
 // A text's escapes read: `\n` `\t` `\r` `\e` as their characters, `\"` `\\` and the like as the character itself;
-// holes `\(x)` and entities `\:alpha` stay as written in an interpolating text
+// entities `\:alpha` stay as written in an interpolating text (holes went to template)
 // Rust twin: literals/text.rs read_text
 def unescaped(content, interpolates) {
-	if not (content.contains("\\") or interpolates and content.contains("$")) { return content }
+	if not content.contains("\\") { return content }
 	read = ""
-	template = ""
-	holes = false
 	at = 0
 	while at < content.length {
 		c = content[at]
-		next = if at + 1 < content.length then content[at + 1] else ' '
-		if interpolates and (c == '\\' or c == '$') and (next == '(' or next == '{') {
-			end = hole_end(content, at + 2, next, closing_of(next), content.length)
-			template = template + '$' + '{' + content[at + 2 .. end - 1] + '}'
-			holes = true
-			at = end
-			continue
-		}
-		literal = c
+		escaped = if at + 1 < content.length then content[at + 1] else ' '
 		if c != '\\' or at + 1 >= content.length {
+			read = read + c
 			at = at + 1
-		} else if interpolates and next == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
-			literal = "\\:"
+		} else if interpolates and escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
+			read = read + c + escaped
 			at = at + 2
 		} else {
-			literal = escape_character(next)
-			holes = holes or (interpolates and next == '$')
+			read = read + escape_character(escaped)
 			at = at + 2
 		}
-		read = read + literal
-		bare_dollar_name = c == '$' and (is_alpha(next) or next == '_')
-		template = template + (if literal == '$' and not bare_dollar_name then "$$" else literal)
 	}
-	if holes then template else read
+	read
 }
 
 def escape_character(c) {
