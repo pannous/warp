@@ -103,6 +103,7 @@ probes/algo/levenshtein/d04_let_in_for.warp
 probes/algo/levenshtein/d06_let_ternary.warp
 probes/algo/levenshtein/d07_let_list_var.warp
 probes/algo/levenshtein/d08_let_min.warp
+probes/algo/levenshtein/d10_let_in_fun_length.warp
 probes/algo/levenshtein/e01_var_in_fun.warp
 probes/algo/levenshtein/e02_plain_in_fun.warp
 probes/algo/levenshtein/e03_let_in_if.warp
@@ -203,6 +204,7 @@ probes/algo/life/fun_indexed_newvar.warp
 probes/algo/life/fun_list_param.warp
 probes/algo/life/fun_literal_list.warp
 probes/algo/life/fun_typed_ints.warp
+probes/algo/life/fun_typed_nospace.warp
 probes/algo/life/global_in_fun.warp
 probes/algo/life/global_in_index.warp
 probes/algo/life/indented_elseif.warp
@@ -223,6 +225,8 @@ probes/algo/life/nested_index.warp
 probes/algo/life/nested_iter_var.warp
 probes/algo/life/nested_iter.warp
 probes/algo/life/notand.warp
+probes/algo/life/only_neighbors_b.warp
+probes/algo/life/only_neighbors.warp
 probes/algo/life/pairs_index.warp
 probes/algo/life/param_index_expr.warp
 probes/algo/life/param_index_simple.warp
@@ -258,8 +262,12 @@ probes/algo/life/range_var_swift.warp
 probes/algo/life/range_var.warp
 probes/algo/life/set_cells.warp
 probes/algo/life/set_list_param.warp
+probes/algo/life/step_once.warp
 probes/algo/life/top_elseif_noelse.warp
 probes/algo/life/top_index_expr.warp
+probes/algo/life/variant_a.warp
+probes/algo/life/variant_b.warp
+probes/algo/life/variant_c.warp
 probes/algo/queens/p10_typed_param.warp
 probes/algo/queens/p11_range_dotdot.warp
 probes/algo/queens/p12_range_upto.warp
@@ -270,6 +278,7 @@ probes/algo/queens/p16_def_index_param.warp
 probes/algo/queens/p17_hash_index_param.warp
 probes/algo/queens/p19_const_index_param.warp
 probes/algo/queens/p2_range_for.warp
+probes/algo/queens/p20_fn_style_idiomatic_body.warp
 probes/algo/queens/p3_or.warp
 probes/algo/queens/p4_index_assign.warp
 probes/algo/queens/p5_mutate_param.warp
@@ -289,6 +298,7 @@ probes/algo/recheck/lev17_same.warp
 probes/algo/recheck/lev18_two_calls.warp
 probes/algo/recheck/lev19_exclusive_single.warp
 probes/algo/recheck/lev2_inclusive.warp
+probes/algo/recheck/lev3_text_param.warp
 probes/algo/recheck/lev4_char_eq.warp
 probes/algo/recheck/lev5_total.warp
 probes/algo/recheck/lev6_ternary_var.warp
@@ -303,6 +313,7 @@ probes/algo/recheck/m5_pushed_noparam.warp
 probes/algo/recheck/m6_pushed_int_param.warp
 probes/algo/recheck/m7_plain_assign.warp
 probes/algo/recheck/m8_literal_ret.warp
+probes/algo/recheck/queens1_times.warp
 probes/algo/sieve/01_fun_return.warp
 probes/algo/sieve/02_fun_implicit.warp
 probes/algo/sieve/04_index_assign.warp
@@ -358,7 +369,10 @@ probes/algo/sieve/54_times_push_param.warp
 probes/algo/sieve/55_bool_push_assign.warp
 probes/algo/sieve/56_fun_return_list_len.warp
 probes/algo/sieve/58_bsearch_var.warp
+probes/algo/sieve/59_bsearch_sieve.warp
+probes/algo/sieve/60_bsearch_pushed_list.warp
 probes/algo/sieve/61_bsearch_miss.warp
+probes/algo/sieve/63_bsearch_pushed_items.warp
 probes/algo/sieve/64_param_index_var.warp
 probes/algo/sieve/65_param_length_var.warp
 probes/algo/sieve/66_param_index_literal.warp
@@ -419,6 +433,7 @@ probes/algo/sorting/14_neg_literal.warp
 probes/algo/sorting/15_recursion_list.warp
 probes/algo/sorting/16_plus_eq.warp
 probes/algo/sorting/17_if_else_value.warp
+probes/algo/sorting/18_list_param.warp
 probes/algo/sorting/19_len_method.warp
 probes/algo/sorting/20_push_in_fun.warp
 probes/algo/sorting/21_count.warp
@@ -443,6 +458,7 @@ probes/algo/sorting/39_upto_var.warp
 probes/algo/sorting/40_to_var.warp
 probes/algo/sorting/41_param_index_assign.warp
 probes/algo/sorting/42_param_index_assign_def.warp
+probes/algo/sorting/43_local_copy_mutate.warp
 probes/algo/sorting/44_dotdot_count.warp
 probes/algo/sorting/45_while_sublist.warp
 probes/algo/sorting/46_fun_join_result.warp
@@ -491,6 +507,9 @@ probes/algo/sorting/89_list_of_hash.warp
 probes/algo/sorting/90_default_list_param.warp
 probes/algo/sorting/91_define_param_counted.warp
 probes/algo/sorting/92_define_block_body.warp
+probes/algo/sorting/93_param_mutate_hash.warp
+probes/algo/sorting/94_idiomatic_insertion.warp
+probes/algo/sorting/95_idiomatic_merge.warp
 probes/algo/sorting/96_idiomatic_merge_only.warp
 probes/algo/sorting/97_ins_count.warp
 probes/algo/sorting/99_ins_index_assign_expr.warp
@@ -559,6 +578,7 @@ probes/headless_counter.warp
 probes/hints_dismissed/index_hint.warp
 probes/hosting/gc_check.warp
 probes/hosting/wagi_check.warp
+probes/hosting/wagi_json.warp
 probes/html_paren_tag.warp
 probes/if_call/if_call_repro.warp
 probes/if_call/minimal.warp
@@ -634,6 +654,8 @@ probes/parse/space_bracket_list.warp
 probes/people_where/without.warp
 probes/perf/decimal_hot_loop.warp
 probes/perf/exact_meets_float.warp
+probes/perf/float_loop_repeated.warp
+probes/perf/float_loop.warp
 probes/perf/ratio_compare.warp
 probes/perf/runtime_mix.warp
 probes/perf/shown_color_pass.warp
@@ -666,6 +688,10 @@ probes/samples/q.warp
 probes/samples/q2.warp
 probes/samples/q3.warp
 probes/samples/q4.warp
+probes/samples/q5.warp
+probes/samples/q6.warp
+probes/samples/q7.warp
+probes/samples/q8.warp
 probes/select_options.warp
 probes/self_gaps/character_text.warp
 probes/self_gaps/list_text_quotes.warp
@@ -702,6 +728,7 @@ probes/site/ticker.warp
 probes/sort_xs_try.warp
 probes/sound/exact_tempo_growth.warp
 probes/static_result.warp
+probes/std_modules/helpers.warp
 probes/std_modules/std_uses_std.warp
 probes/strict_warning.warp
 probes/style_rules.warp
@@ -727,7 +754,10 @@ probes/uniscript/p2.warp
 probes/uniscript/p3.warp
 probes/unknown_tag.warp
 probes/values_keys/class_map.warp
+probes/variance/runtime_fitting_add.warp
 probes/variance/runtime_lax_alias.warp
+probes/variance/runtime_unannotated_param.warp
+probes/variance/widening_const.warp
 probes/view_steady/view_steady.warp
 probes/warning_levels.warp
 probes/web/dash_element.warp
@@ -744,6 +774,8 @@ samples/errors/try_else.warp
 samples/events/effects.warp
 samples/functions/ackermann.warp
 samples/functions/fibonacci.warp
+samples/functions/queens_idiomatic.warp
+samples/functions/queens.warp
 samples/golf/99-bottles-of-beer.short.warp
 samples/golf/99-bottles-of-beer.warp
 samples/golf/diamonds.warp
@@ -771,6 +803,8 @@ samples/hello/hello.warp
 samples/laws/laws.warp
 samples/laws/project_laws.warp
 samples/lists/primes.warp
+samples/lists/sorting_idiomatic.warp
+samples/loops/life_idiomatic.warp
 samples/modules/lib.warp
 samples/modules/main.warp
 samples/modules/square.warp
@@ -793,6 +827,7 @@ samples/text/word_lengths.warp
 samples/types/polymorphism.warp
 samples/types/return_polymorphism.warp
 samples/types/return_polymorphism2.warp
+samples/wasm/wasm_interop.warp
 samples/web/form_submit.warp
 samples/web/html_dsl.warp
 samples/web/html.warp

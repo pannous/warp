@@ -398,8 +398,8 @@ mixes(a: text, b: text) := a == b or (a == "int" or a == "float") and (b == "int
 parameter_name(parameter: any) := if parameter is symbol then parameter.name else parameter_name(parameter.key)
 parameters_of(name: text) := definitions[name].key[1..]
 
-# a parameter's kind: as declared, else its default's, else what the body does with it, else int
-parameter_kind(parameter: any, body: any) := {
+# a parameter's kind: as declared, else its default's, else what the body does with it (`usages`), else int
+parameter_kind(parameter: any, used: any) := {
 	if is_key(parameter, ":") {
 		declared = declared_kind(parameter.value)
 		return if declared != ø then declared else "empty"
@@ -409,8 +409,8 @@ parameter_kind(parameter: any, body: any) := {
 		if kind == "float" or kind == "text" or kind == "list" { return kind }
 		if kind == "codepoint" { return "text" }
 	}
-	used = used_as(parameter_name(parameter), body)
-	if used != ø { used } else { "int" }
+	kind = used_as(parameter_name(parameter), used)
+	if kind != ø { kind } else { "int" }
 }
 
 set_parameter_kind(name: text, index: int, kind: text) := {
@@ -421,19 +421,72 @@ set_parameter_kind(name: text, index: int, kind: text) := {
 # an undeclared parameter, or one with an int default, takes the kind its calls pass
 takes_passed(parameter: any) := not is_key(parameter, ":") and (not is_key(parameter, "=") or literal_kind(parameter.value) == "int")
 
-# what a body does with a name: indexes or counts it (a list), calls it (a function)
-used_as(name: text, body: any) := {
-	if indexes(name, body) { return "list" }
+# what a body does with a name: calls it (a function), uses it as a sequence (a list, a text when also joined to a text)
+used_as(name: text, used: any) := {
+	if name in used.called { return "function" }
+	if name in used.sequences { return if name in used.texts then "text" else "list" }
 	ø
 }
 
-indexes(name: text, n: any) := {
-	if type(n) is key {
-		if n.op == "#" and (n.key == symbol(name) or is_empty(n.key) and n.value == symbol(name)) { return yes }
-		return indexes(name, n.key) or indexes(name, n.value)
+# the names a body calls, uses as sequences and joins to texts (Rust Usages)
+usages(body: any) := {
+	used = {called: {}, sequences: {}, texts: {}, aliases: []}
+	record_usages(body, used)
+	# `for x in xs` walks the copy `x·items = xs`: the source of a used sequence is one too
+	grown = yes
+	while grown {
+		grown = no
+		for alias in used.aliases {
+			if alias#1 in used.sequences and not (alias#2 in used.sequences) {
+				used.sequences[alias#2] = yes
+				grown = yes
+			}
+		}
 	}
-	if is_group(n) { return any_of(n, item => indexes(name, item)) }
-	no
+	used
+}
+
+record_usages(n: any, used: any) := {
+	called = called_closure(n)
+	if called != "" { used.called[called] = yes }
+	counted = used_sequence(n)
+	if counted is symbol { used.sequences[counted.name] = yes }
+	listed = joined_name(n, is_list_literal)
+	if listed != "" { used.sequences[listed] = yes }
+	if is_key(n, "+=") and n.key is symbol and is_list_literal(n.value) { used.sequences[n.key.name] = yes }
+	if is_key(n, "as") and n.key is symbol and n.value is symbol and n.value.name.lower() == "list" { used.sequences[n.key.name] = yes }
+	texted = joined_name(n, is_literal_text)
+	if texted != "" { used.texts[texted] = yes }
+	if (is_key(n, "=") or is_key(n, ":=")) and n.key is symbol and n.value is symbol { used.aliases += [[n.key.name, n.value.name]] }
+	if type(n) is key {
+		record_usages(n.key, used)
+		record_usages(n.value, used)
+	} else if is_group(n) { for item in n { record_usages(item, used) } }
+}
+
+# `closure_call_2(f, a, b)`: the function value called
+called_closure(n: any) := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then n#2.name else ""
+
+counting_words = {size: 1, count: 1, len: 1, length: 1}
+
+# the sequence a node uses: indexed `xs#2`, counted `#xs`, `count xs`, `xs.length`
+used_sequence(n: any) := {
+	if is_key(n, "#") { return if is_empty(n.key) then n.value else n.key }
+	if is_key(n, ".") and n.value is symbol and n.value.name in counting_words { return n.key }
+	if is_group(n) and #n == 2 and head_name(n) in counting_words { return n#2 }
+	ø
+}
+
+is_list_literal(n: any) := is_group(n) and n.bracket == "["
+is_literal_text(n: any) := n is text or head_name(n) == "times·text"
+
+# the name `+` joins to a value `joined` accepts: `xs + [x]`, `" " + t`, `t[0 ..< n] + "…"`
+joined_name(n: any, joined: any) := {
+	if not is_key(n, "+") or joined(n.key) == joined(n.value) { return "" }
+	other = if joined(n.key) then n.value else n.key
+	if other is symbol { return other.name }
+	if head_name(other) == "slice" and other#2 is symbol { return other#2.name }
+	""
 }
 
 # the kind an argument certainly has from the literal alone (Rust argument_literal_kind)
@@ -620,7 +673,8 @@ analyze(program: any) := {
 	}
 	for name in definitions.keys() {
 		definition = definitions[name]
-		parameter_kinds[name] = parameters_of(name).map(parameter => parameter_kind(parameter, definition.value))
+		used = usages(definition.value)
+		parameter_kinds[name] = parameters_of(name).map(parameter => parameter_kind(parameter, used))
 	}
 	parameters_from_calls(program)
 	forwarded_parameters()
