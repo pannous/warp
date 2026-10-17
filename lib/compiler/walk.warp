@@ -18,6 +18,7 @@ node_of(view: any) := {
 	if kind == "text" or kind == "char" { return view#2 }
 	if kind == "key" { return key(node_of(view#3), view#2, node_of(view#4)) }
 	if kind == "list" { return separated(bracketed(view[3..].map(node_of), view#2), view#3) }
+	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
 	if kind == "" { return view }
 	key(symbol(opaque_word), ":", view)
 }
@@ -46,3 +47,21 @@ bottom_up(n: any, f: any) := f(children(n, x => bottom_up(x, f)))
 
 # the node itself: the bridge's own twin, which every pass twin relies on
 unchanged(n: any) := n
+
+# What a pass twin reports, as its Rust twin's hints and warnings are compared (card carries-line): `report(n,
+# message, preferred)` says it at n's position and gives n; pass_differential's call is `reported(view)`, the view
+# with the reports said meanwhile, [line, column, message, preferred] each
+global said = []
+# where n was written, ø for a node without a position (one a pass made)
+line_of(n: any) := try n.line else ø
+column_of(n: any) := try n.column else ø
+is_positioned(n: any) := line_of(n) != ø
+report(n: any, message: any, preferred: any) := {
+	said += [[line_of(n), column_of(n), message, preferred]]
+	n
+}
+reported(view: any) := {
+	found = said
+	said = []
+	[view, found]
+}
