@@ -6,10 +6,7 @@ impl WarpParser {
 	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
 	pub(crate) fn try_parse_data(&mut self) -> Option<Node> {
 		// data is a keyword (card data-reserved): `data = …` is refused by soft_keywords.rs, never read as a variable
-		if self.options.data_mode
-			|| !self.matches_keyword(DATA_KEYWORD)
-			|| self.peek_char(DATA_KEYWORD.len()) != ' '
-		{
+		if self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
 			return None;
 		}
 		let before_keyword = self.mark();

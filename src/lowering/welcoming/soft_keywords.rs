@@ -14,7 +14,7 @@ pub const HARD_KEYWORDS: [&str; 27] = [
 	"def", "fun", "fn", "class", "var", "let", "const", "val", "global", // declarations
 	"true", "false", "ø", "null", "nil", // literal values
 	"use", "import", "include", // modules
-	"data", // quoted code (user, card data-reserved)
+	"data",    // quoted code (user, card data-reserved)
 ];
 /// emit's aliases fire, trigger and signal stay out: a program may define them (P163, test_event_footguns; asked)
 pub const SOFT_KEYWORDS: [&str; 12] =
