@@ -14,15 +14,11 @@ impl WasmGcEmitter {
 			return self.emit_key_node(func, left, &logical, right);
 		}
 		// `global x = value`, `fetch URL`
-		if let Node::Symbol(kw) = left.drop_meta() {
-			if kw == "global" {
-				self.emit_global_declaration(func, right);
-				return;
-			}
-			if kw == "fetch" && self.config.emit_host_imports {
-				self.emit_fetch_call(func, right, None);
-				return;
-			}
+		if left.is_symbol(crate::words::GLOBAL_WORD) {
+			return self.emit_global_declaration(func, right);
+		}
+		if left.is_symbol(crate::host::FETCH_WORD) && self.config.emit_host_imports {
+			return self.emit_fetch_call(func, right, None);
 		}
 
 		// `k.x = 3` (k = field_with(k, "x", 3)) of a k bound nowhere, like `k#1 = 3`

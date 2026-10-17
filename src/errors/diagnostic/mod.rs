@@ -229,9 +229,15 @@ pub fn show_from(level: Level) {
 	SHOWN_FROM.store(level as u8, std::sync::atomic::Ordering::Relaxed);
 }
 
+thread_local! {
+	/// every_hint_of silences printing on its own thread only: other threads' compiles keep showing and asking
+	static PRINTING_SILENCED: std::cell::RefCell<bool> = const { std::cell::RefCell::new(false) };
+}
+
 /// Whether diagnostics of `level` are printed
 pub fn is_shown(level: Level) -> bool {
-	level as u8 >= SHOWN_FROM.load(std::sync::atomic::Ordering::Relaxed)
+	!PRINTING_SILENCED.with(|silenced| *silenced.borrow())
+		&& level as u8 >= SHOWN_FROM.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Whether this process printed a hint or note
@@ -486,6 +492,13 @@ fn is_pragma(node: &Node, word: &str) -> bool {
 }
 
 /// A source line saying `use <word>` (or `use <word> mode`)
+/// `use strict` in the program or `--strict`, not any warnings-as-errors mode: what also makes an i64 overflow trap
+/// (decision i64-wraps)
+pub fn is_strict() -> bool {
+	matches!(warning_mode(), WarningMode::Strict(_))
+		|| compile_context::read(|context| context.source.lines().any(|line| says_pragma(line, STRICT_PRAGMA[1])))
+}
+
 fn says_pragma(line: &str, word: &str) -> bool {
 	let words: Vec<&str> = line.split_whitespace().collect();
 	words == [PRAGMA_WORD, word] || words == [PRAGMA_WORD, word, PRAGMA_SUFFIX]

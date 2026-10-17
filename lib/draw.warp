@@ -41,10 +41,42 @@ def hsv(h, s, v) {
 with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
 alpha_of(color) := color /! 16777216
 
-// what draw_shape's kind says (src/graphics/gpu_canvas.rs)
+// what draw_shape's kind says to shape_shader (clear_shape: gpu_canvas.rs CLEAR; test_paint_shades)
 clear_shape = 0
 rect_shape = 1
 circle_shape = 2
+// the shader drawing the shapes on the GPU (src/graphics/gpu_canvas.rs), one instance of a box of two triangles each: a
+// shape covers the pixels whose centers the CPU draw colors, so both give the same picture. show() and save give it
+shape_shader = shader {
+	struct Shape { @location(0) kind_color: vec2u, @location(1) place: vec4f }
+	struct Covered { @builtin(position) at: vec4f, @location(0) @interpolate(flat) kind_color: vec2u, @location(1) @interpolate(flat) place: vec4f }
+	@group(0) @binding(0) var<uniform> canvas: vec4f;
+	// the pixels a shape may color: rect from cell(x) to cell(x + width), a circle its square, clear all
+	fn box_of(kind: u32, place: vec4f) -> vec4f {
+		if kind == 0u { return vec4f(0.0, 0.0, canvas.xy); }
+		if kind == 1u { return vec4f(floor(place.xy), floor(place.xy + place.zw)); }
+		return vec4f(floor(place.xy - place.z), floor(place.xy + place.z) + 1.0);
+	}
+	@vertex fn vertex(@builtin(vertex_index) corner: u32, shape: Shape) -> Covered {
+		let box = box_of(shape.kind_color.x, shape.place);
+		let corners = array(vec2u(0u, 0u), vec2u(1u, 0u), vec2u(0u, 1u), vec2u(0u, 1u), vec2u(1u, 0u), vec2u(1u, 1u));
+		let pixel = mix(box.xy, box.zw, vec2f(corners[corner]));
+		let clip = vec2f(pixel.x / canvas.x * 2.0 - 1.0, 1.0 - pixel.y / canvas.y * 2.0);
+		return Covered(vec4f(clip, 0.0, 1.0), shape.kind_color, shape.place);
+	}
+	@fragment fn fragment(covered: Covered) -> @location(0) vec4f {
+		let kind = covered.kind_color.x;
+		let color = covered.kind_color.y;
+		let place = covered.place;
+		// the pixel's center, as CPU's circle tests col + 0.5, row + 0.5
+		let center = covered.at.xy;
+		if kind == 2u && dot(center - place.xy, center - place.xy) > place.z * place.z { discard; }
+		let rgb = vec3f(f32((color >> 16u) & 255u), f32((color >> 8u) & 255u), f32(color & 255u)) / 255.0;
+		// clear sets the color, as CPU's clear stores it unmixed
+		let alpha = select(f32(color >> 24u) / 255.0, 1.0, kind == 0u);
+		return vec4f(rgb, alpha);
+	}
+}
 
 // the pixels the canvas keeps here: none when they are on the GPU
 pixels_for(width, height) := if drawing_on_gpu then 0 else width * height
@@ -112,7 +144,10 @@ def line(x1, y1, x2, y2, color) {
 }
 
 def show() {
-	if drawing_on_gpu { draw_show(canvas_width, canvas_height) }
+	if drawing_on_gpu {
+		draw_shader(shape_shader)
+		draw_show(canvas_width, canvas_height)
+	}
 	else { paint(canvas_pixels, canvas_width, canvas_height) }
 }
 
@@ -123,7 +158,10 @@ class Picture {}
 // the canvas as drawn so far (decision saved-words): canvas() beside canvas(width, height), so the bare word canvas,
 // its call, is a Picture
 canvas() := Picture()
-save(made: Picture, as file) := save_picture(canvas_pixels, canvas_width, canvas_height, file)
+save(made: Picture, as file) := {
+	if drawing_on_gpu { draw_shader(shape_shader) }
+	save_picture(canvas_pixels, canvas_width, canvas_height, file)
+}
 save(file: text) := save(Picture(), file)
 
 // label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth

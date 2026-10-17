@@ -50,7 +50,14 @@ fn a_failing_run_time_block_names_the_block() {
 // Step 3 and 5: running a block at run time is the effect Eval, and the block itself is pure by default
 #[test]
 fn running_a_run_time_block_is_the_eval_effect() {
-	crate::is!("f(xs) := interpret(xs#1); effects of f", warp::Node::Symbol("Eval".into()));
+	// xs#1 of an empty list fails as well (card fail-effect-indexing)
+	let answer = warp::wasm_emitter::eval("f(xs) := interpret(xs#1); effects of f").serialize();
+	assert_eq!(answer, "(Eval Fail)");
+}
+
+#[test]
+fn running_a_whole_run_time_block_is_the_eval_effect_alone() {
+	crate::is!("f(xs) := interpret(xs); effects of f", warp::Node::Symbol("Eval".into()));
 }
 
 #[test]

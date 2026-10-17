@@ -37,6 +37,8 @@ const SHAPES_MARK: u32 = u32::MAX;
 const SHADER_MARK: u32 = u32::MAX - 1;
 /// In a frame's width: the window's size the program asks for follows
 const RESIZE_MARK: u32 = u32::MAX - 2;
+/// In a frame's width: the shader drawing use draw's shapes follows (gpu_canvas::use_shader), before the first shapes
+const SHAPE_SHADER_MARK: u32 = u32::MAX - 3;
 const WORD_BYTES: usize = 4;
 /// One triangle covering the window, sampling the frame as a texture, nearest pixel (no blur when scaled up)
 const SHADER: &str = "
@@ -199,6 +201,13 @@ pub fn shapes_message(width: usize, height: usize, shapes: &[u8]) -> Vec<u8> {
 	bytes
 }
 
+/// The shape shader of use draw (gpu_canvas.rs) as one message for the viewer's stdin
+pub fn shape_shader_message(shader: &str) -> Vec<u8> {
+	let mut bytes = words_bytes(&[SHAPE_SHADER_MARK, shader.len() as u32]);
+	bytes.extend(shader.as_bytes());
+	bytes
+}
+
 /// The shader and its values as one message for the viewer's stdin
 pub fn shader_message(width: u32, height: u32, shader: &str, values: &[crate::graphics::gpu::ShaderValue]) -> Vec<u8> {
 	let mut bytes = words_bytes(&[SHADER_MARK, width, height, shader.len() as u32, values.len() as u32]);
@@ -238,11 +247,16 @@ pub fn read_frame(reader: &mut impl Read) -> Option<Frame> {
 	}
 }
 
-/// The next frame or shapes, None at the end of the stream
+/// The next frame or shapes (a shape shader on the way kept), None at the end of the stream
 pub fn read_message(reader: &mut impl Read) -> Option<Message> {
 	let [first, second] = read_words(reader)?;
 	if first == SHADER_MARK {
 		return read_shader_frame(reader, second).map(Message::Shader);
+	}
+	// the shape shader is the canvas's to keep, no message to show: on to the next
+	if first == SHAPE_SHADER_MARK {
+		crate::graphics::gpu_canvas::use_shader(String::from_utf8(read_bytes(reader, second as usize)?).ok()?);
+		return read_message(reader);
 	}
 	if first == RESIZE_MARK {
 		let [height] = read_words(reader)?;
@@ -654,7 +668,13 @@ impl Screen {
 
 	/// The shapes drawn over the canvas on the GPU, which the window then shows
 	fn draw_shapes(&mut self, shapes: Shapes) {
-		let canvas = self.canvas.get_or_insert_with(|| crate::graphics::gpu_canvas::Canvas::new(&self.device));
+		if self.canvas.is_none() {
+			match crate::graphics::gpu_canvas::Canvas::new(&self.device) {
+				Ok(canvas) => self.canvas = Some(canvas),
+				Err(failure) => return eprintln!("{failure}"),
+			}
+		}
+		let canvas = self.canvas.as_mut().expect("made above");
 		let encoder = canvas.draw(&self.device, &self.queue, shapes.width, shapes.height, &shapes.shapes);
 		self.queue.submit([encoder.finish()]);
 		let view = canvas

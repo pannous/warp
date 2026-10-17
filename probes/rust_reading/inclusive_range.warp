@@ -1,0 +1,4 @@
+// card rust-inclusive-range: 1..=5 includes 5
+let mut s = 0;
+for i in 1..=5 { s += i; }
+s // 15

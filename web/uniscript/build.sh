@@ -14,14 +14,10 @@ repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
 warp="$(scripts/own-warp.sh)"
-"$warp" compile --wasm web/uniscript/uniscript.warp  # → uniscript.wasm (compile alone builds an executable), fetches the package's library
-# the modules it imports by path (`use uniscript`: the package's C library uniscript_c.wasm) beside the page as
-# modules/<file>, where uniscript.js looks for them
-mkdir -p "$page/modules" "$page/fonts"
-wasm-tools print web/uniscript/uniscript.wasm | grep -oE '\(import "/[^"]+\.wasm"' | cut -d'"' -f2 | sort -u | while read -r module; do
-	cp "$module" "$page/modules/"
-	echo "shipped $module as modules/$(basename "$module")"
-done
+# → uniscript.wasm (fetching the package's library) with the modules it imports by path (`use uniscript`: the package's
+# C library uniscript_c.wasm) beside the page as modules/<file>, named page:modules/<file>, where uniscript.js finds them
+"$warp" compile --page web/uniscript/uniscript.warp
+mkdir -p "$page/fonts"
 cp web/playground/imports.js "$page/"  # importDescriptors, shared with the playground
 
 # fonts/: fonts.css with unicode-range slices of the fonts, fonts.json for sequence_fonts.js (needs fonttools, wordfreq)

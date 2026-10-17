@@ -1,12 +1,13 @@
 //! Type management for WASM GC emitter
 
-use crate::type_kinds::{any_heap_type, FieldDef, TypeDef, TypeRegistry};
+use crate::type_kinds::{any_heap_type, FieldDef, TypeDef};
 use std::collections::HashMap;
 use wasm_encoder::*;
 use StorageType::Val;
 use ValType::Ref;
 
 /// Manages WASM type system: GC types, user-defined types, and type indices
+#[derive(Default)]
 pub struct TypeManager {
 	/// Type section for WASM module
 	types: TypeSection,
@@ -72,40 +73,7 @@ pub struct TypeManager {
 	user_type_indices: HashMap<String, u32>,
 }
 
-impl Default for TypeManager {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
 impl TypeManager {
-	/// Create a new type manager
-	pub fn new() -> Self {
-		Self {
-			types: TypeSection::new(),
-			string_type: 0,
-			i64_box_type: 0,
-			f64_box_type: 0,
-			node_type: 0,
-			meta_node_type: None,
-			limbs_type: 0,
-			big_int_type: 0,
-			big_heap_type: 0,
-			ratio_type: 0,
-			int_array_type: 0,
-			int_list_type: 0,
-			float_array_type: 0,
-			float_list_type: 0,
-			node_array_type: 0,
-			node_list_type: 0,
-			node_map_type: 0,
-			next_type_idx: 0,
-			function_types: HashMap::new(),
-			type_errors: Vec::new(),
-			user_type_indices: HashMap::new(),
-		}
-	}
-
 	/// Emit core GC types: String, Node, i64box, f64box, and $MetaNode for a program that quotes code (`with_meta`)
 	pub fn emit_gc_types(&mut self, with_meta: bool) {
 		// Type 0: $String = (struct (field $ptr i32) (field $len i32))
@@ -237,13 +205,6 @@ impl TypeManager {
 		]);
 		self.ratio_type = self.next_type_idx;
 		self.next_type_idx += 1;
-	}
-
-	/// Emit user-defined struct types from TypeRegistry
-	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
-		for type_def in registry.types() {
-			self.emit_single_user_type(type_def);
-		}
 	}
 
 	/// Emit a single user-defined struct type

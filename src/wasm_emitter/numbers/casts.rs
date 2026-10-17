@@ -70,12 +70,11 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_int");
 	}
 
-	/// `v as T` as a raw Int: `as float` has no exact value, `as exact` keeps it
 	/// A cast that makes no sense: a list as a number or character, a number as a list
 	pub(in crate::wasm_emitter) fn cast_refusal(&self, value: &Node, target: &Node) -> Option<String> {
 		let target_name = target.name().to_lowercase();
 		let kind = self.get_type(value);
-		let text_like = matches!(target_name.as_str(), "string" | "str" | "text");
+		let text_like = crate::type_tests::canonical_spec_word(&target_name) == crate::words::TEXT_WORD;
 		let refused = match kind {
 			Kind::List => target_name != "list" && !text_like,
 			Kind::Int | Kind::Float => target_name == "list",
@@ -84,6 +83,7 @@ impl WasmGcEmitter {
 		refused.then(|| format!("cannot cast {kind} to {target_name}: {} as {target_name}", value.serialize()))
 	}
 
+	/// `v as T` as a raw Int: `as float` has no exact value, `as exact` keeps it
 	pub(in crate::wasm_emitter) fn emit_numeric_cast(
 		&mut self,
 		func: &mut Function,
@@ -110,8 +110,11 @@ impl WasmGcEmitter {
 			exact if exact_value && crate::type_tests::is_exact_fraction_type(exact) => {
 				self.emit_numeric_value(func, value)
 			}
-			exact if crate::type_tests::spells_decimals_exactly(exact) && decimal_literal(value).is_some() => {
-				self.emit_decimal_literal(func, decimal_literal(value).expect("guarded"))
+			exact
+				if crate::type_tests::spells_decimals_exactly(exact)
+					&& let Some(decimal) = decimal_literal(value) =>
+			{
+				self.emit_decimal_literal(func, decimal)
 			}
 			// a character held unboxed is its code point
 			"codepoint" => {
@@ -119,8 +122,8 @@ impl WasmGcEmitter {
 				func.instruction(&I::I64ExtendI32U);
 			}
 			// `n = "4" as number`, `"4.5" as number`: held as an exact Int (card number-variable)
-			"number" if crate::analyzer::literal_number(value).is_some() => {
-				self.emit_numeric_value(func, &crate::analyzer::literal_number(value).expect("guarded"));
+			"number" if let Some(number) = crate::analyzer::literal_number(value) => {
+				self.emit_numeric_value(func, &number);
 			}
 			"number" => {
 				self.emit_cast(func, value, target);
@@ -168,7 +171,7 @@ impl WasmGcEmitter {
 			// a value of unknown static type (a parameter given lists and texts): a list as it is, a text's characters
 			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, "text_chars");
+				self.emit_call(func, crate::library_words::TEXT_GRAPHEMES);
 			}
 			_ => {
 				let kind = self.get_type(value);
@@ -271,7 +274,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
-	fn unknown_word_refusal(&self, value: &Node) -> Option<String> {
+	pub(in crate::wasm_emitter) fn unknown_word_refusal(&self, value: &Node) -> Option<String> {
 		match value.drop_meta() {
 			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
 			_ => None,
@@ -651,7 +654,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit the numeric value of a node onto the stack (as i64)
 	/// `print x`, `puti x`: an output builtin (not shadowed by a user function), whose value is the printed node
 	pub(in crate::wasm_emitter) fn is_output_call(&self, node: &Node) -> bool {
 		crate::analyzer::is_output_call(node)
