@@ -138,12 +138,22 @@ pub(super) fn gpu_compute_linear(
 	block: i64,
 	workgroups: i64,
 ) -> wasmtime::Result<i64> {
+	let result = gpu_compute_linear_or_failure(&mut caller, shader, block, workgroups);
+	raised(&mut caller, result)
+}
+
+fn gpu_compute_linear_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	shader: HostNode,
+	block: i64,
+	workgroups: i64,
+) -> wasmtime::Result<i64> {
 	let failure = gpu_failure(GPU_COMPUTE);
-	let shader = given_shader(&mut caller, shader, &failure)?;
-	let floats = linear_floats(&mut caller, block, &failure)?;
+	let shader = given_shader(caller, shader, &failure)?;
+	let floats = linear_floats(caller, block, &failure)?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
 	let left = crate::graphics::gpu::compute(&shader, &floats, workgroups).map_err(&failure)?;
-	write_linear_floats(&mut caller, block, &left, &failure)?;
+	write_linear_floats(caller, block, &left, &failure)?;
 	Ok(block)
 }
 
@@ -163,6 +173,20 @@ pub(super) fn gpu_kernel_linear<const REDUCES: bool>(
 	workgroups: i64,
 	keeping: i64,
 ) -> wasmtime::Result<i64> {
+	let result =
+		gpu_kernel_linear_or_failure::<REDUCES>(&mut caller, shader, source, values, target, workgroups, keeping);
+	raised(&mut caller, result)
+}
+
+fn gpu_kernel_linear_or_failure<const REDUCES: bool>(
+	caller: &mut Caller<'_, HostState>,
+	shader: HostNode,
+	source: i64,
+	values: HostNode,
+	target: i64,
+	workgroups: i64,
+	keeping: i64,
+) -> wasmtime::Result<i64> {
 	pub(super) static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 	let failure = gpu_failure(if REDUCES { GPU_REDUCE_LINEAR } else { GPU_MAP_LINEAR });
 	let automatic = keeping & crate::gpu_maps::AUTOMATIC != 0;
@@ -173,12 +197,12 @@ pub(super) fn gpu_kernel_linear<const REDUCES: bool>(
 		}
 		return Ok(0);
 	}
-	let shader = given_shader(&mut caller, shader, &failure)?;
+	let shader = given_shader(caller, shader, &failure)?;
 	let kept =
 		(keeping & crate::gpu_maps::SOURCE_KEPT != 0).then(|| crate::graphics::gpu::kept_count(source)).flatten();
-	let mut floats = if kept.is_some() { vec![] } else { linear_floats(&mut caller, source, &failure)? };
+	let mut floats = if kept.is_some() { vec![] } else { linear_floats(caller, source, &failure)? };
 	let items = kept.unwrap_or(floats.len());
-	for value in given_node(&mut caller, values)?.iter() {
+	for value in given_node(caller, values)?.iter() {
 		match value.drop_meta() {
 			Node::Number(number) => floats.push(f64::from(*number) as f32),
 			other => return Err(failure(format!("the lambda reads {}, not a number", other.serialize()))),
@@ -196,7 +220,7 @@ pub(super) fn gpu_kernel_linear<const REDUCES: bool>(
 	let left =
 		crate::graphics::gpu::compute_kept(&shader, &floats, workgroups, if REDUCES { partials } else { 0 }, keeping)
 			.map_err(&failure)?;
-	write_linear_floats(&mut caller, target, &left, &failure)?;
+	write_linear_floats(caller, target, &left, &failure)?;
 	if automatic {
 		crate::errors::diagnostic::report_runtime_warning_once(
 			crate::gpu_maps::AUTOMATIC_NOTICE,
@@ -289,13 +313,22 @@ pub(super) fn text_coverage(
 	words: HostNode,
 	size: i64,
 ) -> wasmtime::Result<HostNode> {
-	let words = match given_node(&mut caller, words)? {
+	let result = text_coverage_or_failure(&mut caller, words, size);
+	raised(&mut caller, result)
+}
+
+fn text_coverage_or_failure(
+	caller: &mut Caller<'_, HostState>,
+	words: HostNode,
+	size: i64,
+) -> wasmtime::Result<HostNode> {
+	let words = match given_node(caller, words)? {
 		Node::Text(text) => text,
 		other => other.serialize(),
 	};
 	let covered = crate::graphics::text_raster::coverage(&words, size as f32)
 		.map_err(|problem| task_failure(format!("{TEXT_COVERAGE}: {problem}")))?;
-	list_of_ints(&mut caller, &covered, TEXT_COVERAGE)
+	list_of_ints(caller, &covered, TEXT_COVERAGE)
 }
 
 /// The pixels the fragment shader colors through wgpu (src/graphics/gpu.rs), 0xFFRRGGBB row by row

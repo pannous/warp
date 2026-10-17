@@ -335,6 +335,8 @@ PASSED:
   ✓ control::test_help_word::help_of_a_class_and_of_its_instance
   ✓ control::test_help_word::help_of_a_function_is_its_signature
   ✓ control::test_help_word::help_of_a_subclass_names_its_parent
+  ✓ control::test_host_word_failures::a_failed_eval_is_caught
+  ✓ control::test_host_word_failures::a_failed_save_is_caught
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_empty_branch::a_branch_printing_a_number_gives_empty
@@ -377,6 +379,8 @@ PASSED:
   ✓ control::test_library_signatures::table_words_positional
   ✓ control::test_library_signatures::the_programs_own_definition_wins
   ✓ control::test_library_signatures::whole_number_math_words_show_int_parameters
+  ✓ control::test_lifted_loop_literals::a_walked_literal_is_built_once_before_the_outer_loop
+  ✓ control::test_lifted_loop_literals::lifted_literals_keep_each_loop_its_own
   ✓ control::test_list_without::without_a_condition_keeps_the_elements_failing_it
   ✓ control::test_list_without::without_a_field_keeps_the_elements_lacking_it
   ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_block
@@ -682,6 +686,7 @@ PASSED:
   ✓ control::test_signal_values::two_subscriptions_both_run_in_order
   ✓ control::test_signal_values::writes_before_the_subscription_are_not_seen
   ✓ control::test_signal_values::writes_in_loops_and_functions_notify
+  ✓ control::test_slow_handler::a_handler_slower_than_its_period_does_not_call_itself
   ✓ control::test_soft_tests::a_plain_run_skips_the_tests
   ✓ control::test_soft_tests::a_program_naming_test_keeps_its_word
   ✓ control::test_soft_tests::under_test_the_value_is_the_summary
@@ -2580,6 +2585,7 @@ PASSED:
   ✓ modules::test_use_several::a_use_with_commas_uses_each_module
   ✓ modules::test_use_several::a_use_with_spaces_uses_each_module
   ✓ modules::test_versions::a_package_used_twice_is_loaded_once
+  ✓ modules::test_versions::an_empty_symbol_is_no_version
   ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
   ✓ modules::test_versions::tagged_version_literals
   ✓ modules::test_versions::use_requires_a_version_of_a_package
@@ -2780,6 +2786,10 @@ PASSED:
   ✓ numbers::test_exact_parameters::float64_is_the_word_float
   ✓ numbers::test_exponent_texts::float_of_an_exponent_text
   ✓ numbers::test_exponent_texts::int_of_an_exponent_text
+  ✓ numbers::test_fast_int::a_fast_int_variable_wraps
+  ✓ numbers::test_fast_int::a_fast_loop_counts_as_the_exact_one
+  ✓ numbers::test_fast_int::int64_wraps_and_traps_only_when_strict
+  ✓ numbers::test_fast_int::nested_fast_operations_wrap
   ✓ numbers::test_fast_math::fast_words_are_close_to_the_c_library
   ✓ numbers::test_fast_math::fast_words_reach_the_math_module_and_stay_out_of_other_programs
   ✓ numbers::test_fast_math::warp_fast_uses_fast_math_also_for_a_kept_program_file
@@ -3537,6 +3547,7 @@ PASSED:
   ✓ parser::test_meta::test_meta_field
   ✓ parser::test_meta::test_parent
   ✓ parser::test_meta::test_parent_context
+  ✓ parser::test_named_argument_lambda::a_listed_entry_holds_the_lambda
   ✓ parser::test_named_argument_lambda::a_named_argument_holds_the_lambda
   ✓ parser::test_newline_precedence::a_method_call_starting_the_next_line_continues_the_expression
   ✓ parser::test_newline_precedence::test_fibonacci_auto_param_newline
@@ -3759,6 +3770,7 @@ PASSED:
   ✓ programs::test_gpu_draw::an_unknown_draw_choice_warns
   ✓ programs::test_gpu_draw::gpu_draws_what_cpu_draws
   ✓ programs::test_gpu_draw::shapes_cross_to_the_paint_window_whole
+  ✓ programs::test_gpu_draw::the_shape_shader_crosses_before_the_shapes
   ✓ programs::test_hints_toggle::a_plain_run_shows_its_hints_and_how_to_hide_them
   ✓ programs::test_hints_toggle::a_run_without_hints_has_no_tip
   ✓ programs::test_hints_toggle::hints_chosen_explicitly_need_no_tip
@@ -3837,6 +3849,7 @@ PASSED:
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_program_cache::a_changed_file_of_the_folder_compiles_again
+  ✓ programs::test_program_cache::a_file_the_program_writes_beside_it_keeps_its_cached_module
   ✓ programs::test_program_cache::a_module_looking_beyond_the_keyed_folders_is_not_kept
   ✓ programs::test_program_cache::a_program_runs_again_from_its_cached_module
   ✓ programs::test_property_definitions::a_class_defines_a_property_of_its_instances
@@ -6153,4 +6166,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6148 passed, 0 failed, 6148 total tested
+13 ignored, 6161 passed, 0 failed, 6161 total tested
