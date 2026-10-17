@@ -1,0 +1,14 @@
+// planned (does not run yet): times_phrases.rs with splicing in data templates (card data-splice), sealed patterns
+// (card data-pattern-sealed) and the walk (walk.warp)
+loops = 0
+times_phrase(n) := match n {
+	data($count times $body) if body is block => {
+		global loops; loops += 1; counter = symbol("times·" + loops)
+		if count is number then data(for $counter in 0..$count $body)
+		else { held = symbol("times·count·" + loops); data(($held = $count; for $counter in 0..$held $body)) }
+	}
+	data($count times [$x]) => data(filled_list($count, [$x]))
+	data($count times $x) => data(times·text($count, $x))
+	_ => n
+}
+times_phrases(program) := bottom_up(program, times_phrase)

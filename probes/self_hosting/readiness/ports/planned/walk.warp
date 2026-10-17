@@ -1,0 +1,4 @@
+// planned (does not run yet): the shared tree walk every pass would use, once a function parameter can be passed on
+// (card forward-function) and a parsed {…} is a list (card parsed-kinds). Written once in lib/compiler/walk.warp.
+children(n, f) := if n is key then key(f(n.key), n.op, f(n.value)) else if n is list then bracketed(n.map(f), n.bracket) else n
+bottom_up(n, f) := f(children(n, x => bottom_up(x, f)))

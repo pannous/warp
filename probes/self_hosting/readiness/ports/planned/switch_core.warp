@@ -1,0 +1,11 @@
+// planned (does not run yet): the switch core with splicing (card data-splice), a fold and the walk (walk.warp)
+switches = 0
+default_keys = {default: yes, other: yes, else: yes, "_": yes}
+switched(subject, cases) := {
+	global switches; switches += 1; value = symbol("switch_subject_" + switches)
+	miss = cases.find(c => c.key is symbol and c.key.name in default_keys)?.value ?? data(switch_no_case($(subject.string()): $value))
+	chain = cases.filter(c => not (c.key is symbol and c.key.name in default_keys)).reverse()
+		.fold(miss, (otherwise, c) => data(if $value == $(c.key) then $(c.value) else $otherwise))
+	data(($value = $subject; $chain))
+}
+switches_lowered(program) := program replace data(switch $subject {$cases...}) with switched(subject, cases)
