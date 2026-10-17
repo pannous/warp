@@ -1044,7 +1044,7 @@ async function sendBugReport() {
 	showBugStatus("sending…");
 	try {
 		const answer = await fetch(BUG_REPORT_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(report) });
-		const { queued, error } = await answer.json();
+		const { card, queued, error } = await answer.json();
 		if (answer.status === FORBIDDEN) {
 			store(BUG_TOKEN_KEY, null);
 			$("bug-token").hidden = false;
@@ -1053,7 +1053,7 @@ async function sendBugReport() {
 		store(BUG_TOKEN_KEY, report.token);
 		$("bug-comment").value = "";
 		$("bug-express").checked = false;
-		showBugStatus(`sent (${queued}): a card within minutes`);
+		showBugStatus(card ? `card made: ${card}` : `sent (${queued}): a card within minutes`);
 	} catch (failure) {
 		showBugStatus(`not sent: ${failure.message}`, true);
 	}

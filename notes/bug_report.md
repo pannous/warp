@@ -5,11 +5,13 @@ program, its output, the version and the page address, and becomes a card on the
 
     browser ──POST json──▶ https://pannous.com/warp-bug-report (Ferron location, ~/dev/pannous-lockdown ferron.kdl)
             ──▶ 127.0.0.1:5691, unit warp-bug-report: scripts/bug_report.py serve (DynamicUser, token via LoadCredential)
-            ──▶ /var/lib/warp-bug-report/<id>.json
-    Mac cron (every 2 min): scripts/bug_report.py pull ── ssh list ─▶ todo add (Next; express: --urgent → Now) ─▶ ssh ack (→ done/)
+            ──▶ /var/lib/warp-bug-report/<id>.json ──▶ at once: issue + board item in Next (express: Now), GitHub token
+                /etc/warp/github-token (LoadCredential github; needs Issues + Account→Projects write) ──▶ done/
+    fallback, Mac cron (every 2 min): scripts/bug_report.py pull ── ssh list ─▶ todo add (Next; express: --urgent → Now) ─▶ ssh ack
+    The card's key comes from the Mac's `todo keys` (urgent-card-watch, every 2 min).
 
-- Why two hops: the browser can't hold a GitHub secret, and gh on pannous.com is not logged in; the Mac already has
-  the board's token (~/.config/gh/cron-token). Cards wait on the server while the Mac sleeps.
+- Why the server: the browser can't hold a GitHub secret. A refused card (journalctl -u warp-bug-report says why)
+  leaves the report queued for the Mac's pull, which has the board's token (~/.config/gh/cron-token).
 - Token: one shared secret, made by `scripts/bug_report.py install` in ~/.config/warp/bug-report-token (Mac) and
   /etc/warp-bug-report.token (server). `scripts/bug_report.py token` prints the playground address
   `?bug_token=…` that stores it in a browser (localStorage) and strips it from the address bar. Without a stored
