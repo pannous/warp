@@ -1,1 +1,0 @@
-on key { if key == ESCAPEE { print 1 } }

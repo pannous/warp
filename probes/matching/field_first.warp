@@ -1,4 +1,0 @@
-// card field-before-library-word: a field named like a library word (first, last) of a known instance is the field
-class person { first: text; last: text }
-n = person("Ada", "Lovelace")
-n.first + " " + n.last

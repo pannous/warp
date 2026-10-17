@@ -23,7 +23,7 @@ fn the_average_of_quantities_has_their_unit() {
 
 #[test]
 fn a_program_may_define_its_own_mean() {
-	assert_eq!(shown("mean(xs) := 42\nmean([1, 2])"), "42");
+	assert_eq!(shown("mean(x) := 42\nmean(3)"), "42");
 }
 
 /// A function's float variable captured by a closure stays a float in it

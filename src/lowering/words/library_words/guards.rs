@@ -18,7 +18,7 @@ impl Lowering {
 
 	/// `try X else Y`: X, or Y when X fails. Errors are values: an Error result is replaced. An index out of range and a
 	/// division or modulo by zero directly under `try` are checked before they happen; a runtime error deeper inside X
-	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/try_guard.rs).
+	/// (an index in a sum, a called function) is caught as a wasm exception (`ran_without_error`, wasm_emitter/control/try_guard.rs).
 	pub(super) fn lower_try(&self, guarded: Node, fallback: Node) -> Node {
 		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
 		match guarded.drop_meta() {

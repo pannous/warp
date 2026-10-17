@@ -28,3 +28,8 @@ fn match_names_its_subject() {
 	is!("f(x) := [x, x+1]; match (alle=f(3)) { [a, b] => #alle; _ => 0 }", 2);
 	is!("f(x) := [x, x+1]; match alle=f(3) { _ => 0 }; alle[1]", 4);
 }
+
+#[test]
+fn an_arm_sees_the_subject_by_its_own_name() {
+	is!("xs = [7, 8, 9]; match xs { [first, ...rest] => #xs; _ => 0 }", 3);
+}

@@ -46,13 +46,16 @@ const RUN_TIME_TYPE_KINDS: [Kind; 12] = [
 /// An ASCII letter with this bit set is lowercase: `byte | ASCII_LOWERCASE_BIT == 'e'` takes e and E
 const ASCII_LOWERCASE_BIT: i32 = 0x20;
 pub(in crate::wasm_emitter) const ELEMENT_CHILDREN: &str = "element_children";
+/// text_slice(text, from, to): the graphemes from…to-1 (0-based) of a text as a text sharing its bytes
+pub(in crate::wasm_emitter) const TEXT_SLICE: &str = "text_slice";
 pub(in crate::wasm_emitter) const ELEMENT_BODY: &str = "element_body";
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
-const TEXT_UNIT_USERS: [&str; 8] = [
+const TEXT_UNIT_USERS: [&str; 9] = [
 	crate::library_words::TEXT_GRAPHEMES,
 	"node_count",
 	"node_bytes",
 	"string_char_at",
+	TEXT_SLICE,
 	"node_with_at",
 	"text_byte_count",
 	"text_codepoint_count",
@@ -96,8 +99,9 @@ const TEXT_CURSORS: u32 = 2;
 const BACK_REACH: i32 = 256;
 /// The globals of a text cursor: the text's address, a 1-based grapheme index in it and that grapheme's address
 const TEXT_CURSOR_PARTS: [(&str, ValType); 3] = [("text", ValType::I32), ("index", ValType::I64), ("at", ValType::I32)];
-/// The globals of the text counted last (text_grapheme_count): its start and end address and its count, so a loop's
-/// `i < #text` counts once
+/// Texts whose grapheme counts are kept at once (text_grapheme_count), so a loop's `i < #text` counts once
+const TEXT_COUNTS: u32 = 2;
+/// The globals of a counted text: its start and end address and its count
 const TEXT_COUNTED_PARTS: [(&str, ValType); 3] =
 	[("start", ValType::I32), ("end", ValType::I32), ("count", ValType::I64)];
 
@@ -190,19 +194,26 @@ impl WasmGcEmitter {
 		let names = (0..TEXT_CURSORS).flat_map(|slot| {
 			TEXT_CURSOR_PARTS.map(|(part, val_type)| (format!("text_cursor_{slot}_{part}"), val_type))
 		});
-		for (name, val_type) in
-			names.chain(TEXT_COUNTED_PARTS.map(|(part, val_type)| (format!("text_counted_{part}"), val_type)))
-		{
+		let counted = (0..TEXT_COUNTS).flat_map(|slot| {
+			TEXT_COUNTED_PARTS.map(|(part, val_type)| (format!("text_counted_{slot}_{part}"), val_type))
+		});
+		for (name, val_type) in names.chain(counted) {
 			// no text starts at address -1
 			let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::i32_const(-1) };
 			self.declare_named_global(val_type, initial, name);
 		}
 	}
 
-	/// The globals (start, end, count) of the text counted last
-	fn text_counted(&self) -> Option<(u32, u32, u32)> {
-		let start = self.text_cursor_global? + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32;
-		Some((start, start + 1, start + 2))
+	/// The globals (start, end, count) of each counted text
+	fn texts_counted(&self) -> Vec<(u32, u32, u32)> {
+		let Some(cursors) = self.text_cursor_global else {
+			return vec![];
+		};
+		let first = cursors + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32;
+		(0..TEXT_COUNTS)
+			.map(|slot| first + slot * TEXT_COUNTED_PARTS.len() as u32)
+			.map(|start| (start, start + 1, start + 2))
+			.collect()
 	}
 
 	/// The globals (text, index, at) of each text cursor, newest first
@@ -622,6 +633,9 @@ impl WasmGcEmitter {
 		if self.should_emit_function("string_char_at") {
 			self.emit_string_char_at();
 		}
+		if self.should_emit_function(TEXT_SLICE) {
+			self.emit_text_slice();
+		}
 
 		// node_index_at(node: ref $Node, index: i64) -> ref $Node
 		// Runtime dispatch: for Text/Symbol call string_char_at, for List/Block call list_node_at
@@ -791,6 +805,42 @@ impl WasmGcEmitter {
 }
 
 impl WasmGcEmitter {
+	/// TEXT_SLICE with `from` and `to` in 0…count: both ends found by text_grapheme_offset, whose cursors make a scan of
+	/// consecutive slices linear (`t[a:b]` used to turn the whole text into characters and join them back)
+	fn emit_text_slice(&mut self) {
+		let node_ref = Ref(self.node_ref(false));
+		let (int, long) = (ValType::I32, ValType::I64);
+		let params = vec![node_ref, long, long];
+		self.runtime_function(TEXT_SLICE, params, vec![node_ref], vec![int, int, int, long], |s, f| {
+			let (from, to, start, end, stop, count) = (1, 2, 3, 4, 5, 6);
+			s.emit_text_bounds(f, start, end);
+			f.instruction(&I::LocalGet(0));
+			s.call(f, "text_grapheme_count");
+			f.instruction(&I::LocalSet(count));
+			// the address of the grapheme at 0-based `index`, the end of the text past its last
+			let grapheme_address = |f: &mut Function, index: u32| {
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(index), I::LocalGet(count), I::I64LtS, I::If(BlockType::Result(int)),
+						I::LocalGet(0), I::LocalGet(index), I::I64Const(1), I::I64Add,
+				]);
+				s.call(f, "text_grapheme_offset");
+				Self::emit_list(f, &[I::Else, I::LocalGet(end), I::End]);
+			};
+			grapheme_address(f, from);
+			f.instruction(&I::LocalSet(start));
+			// an end before the start slices nothing
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(to), I::LocalGet(from), I::LocalGet(to), I::LocalGet(from), I::I64GtS, I::Select,
+				I::LocalSet(to),
+			]);
+			grapheme_address(f, to);
+			f.instruction(&I::LocalSet(stop));
+			s.emit_new_text_to(f, start, stop);
+		});
+	}
+
 	/// zero_fill(count, zero): a square list of `count` times the node `zero`, ø when count is not positive
 	fn emit_zero_fill(&mut self) {
 		if !self.should_emit_function(crate::filled_lists::ZERO_FILL_CALL) {

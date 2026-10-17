@@ -3,8 +3,8 @@
 //! Mach-O executable, its code signature: the machine code lies inside the __LINKEDIT segment, so the executable signs
 //! and verifies cleanly (`codesign --verify --strict`, macho.rs). At start the executable looks for the trailer where
 //! its program would end and runs what it carries.
-use crate::engine::{fueled_config, fueled_store};
-use crate::fuel::{fuel_from_environment, DEFAULT_FUEL};
+use crate::engine::{limited_store, metered_config, ticking};
+use crate::fuel::{time_limit_from_environment, DEFAULT_FUEL};
 use crate::host_words::{FOREIGN_CALL, HANDLER_PREFIX};
 use crate::macho;
 use crate::system_signals::{NEW_EMPTY, NEW_INT};
@@ -12,6 +12,7 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
 use std::path::Path;
+use std::time::Duration;
 use wasmtime::{Engine, Linker, Module, Result, Val};
 
 const TRAILER_MAGIC: &[u8; 8] = b"WRPCwasm";
@@ -43,9 +44,10 @@ pub fn stub_calls_export_with_foreign_calls(name: &str) -> bool {
 }
 
 /// The engine an executable's machine code is compiled for (warp build) and run with (the stub): no address map, the
-/// table from machine code to wasm offsets (an eighth of the machine code); a trap names the functions without them
+/// table from machine code to wasm offsets (an eighth of the machine code); a trap names the functions without them.
+/// An executable counts no fuel; it stops only at a time limit WARP_TIME_LIMIT sets.
 pub fn standalone_engine() -> Result<Engine> {
-	let mut config = fueled_config();
+	let mut config = metered_config(false);
 	config.generate_address_map(false);
 	Engine::new(&config)
 }
@@ -151,7 +153,12 @@ fn show_site(_: &Path, _: Vec<crate::site_files::SiteFile>) -> i32 {
 /// Run machine code compiled with warp's settings (`warp build`): its host words, libm and print are linked, its
 /// result is what it printed (build makes the program print its value)
 pub fn run(machine_code: &[u8]) -> Result<()> {
-	let engine = standalone_engine()?;
+	// an executable is the user's app (a game, a server): it runs without a time limit unless WARP_TIME_LIMIT sets one
+	let time_limit = time_limit_from_environment();
+	let engine = match time_limit {
+		Some(_) => ticking(standalone_engine()?),
+		None => standalone_engine()?,
+	};
 	// SAFETY: the machine code is warp's own output, appended to this executable by `warp build`
 	let module = unsafe { Module::deserialize(&engine, machine_code)? };
 	let mut linker = Linker::new(&engine);
@@ -165,7 +172,7 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 			crate::gc_values::foreign_call(&mut caller, [runtime, module, member, call, arguments])
 		},
 	)?;
-	let mut store = fueled_store(&engine, (), fuel_from_environment().unwrap_or(DEFAULT_FUEL));
+	let mut store = limited_store(&engine, (), DEFAULT_FUEL, time_limit.unwrap_or(Duration::MAX));
 	let instance = linker.instantiate(&mut store, &module)?;
 	let main = ENTRY_POINTS
 		.iter()

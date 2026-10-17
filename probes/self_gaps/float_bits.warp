@@ -1,5 +1,0 @@
-// card f64-const: the IEEE 754 bits of a float and back, what `f64.const` needs
-bits = float_bits(1.5)
-print bits              // prints 4609434218613702656
-print bits >> 52        // the exponent with its bias: 1023
-print bits_float(bits)  // back to 1.5

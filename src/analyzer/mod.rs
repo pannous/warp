@@ -62,12 +62,25 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 			true
 		}
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
-			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/definitions/nonlocal_cells.rs)
-			// `$destructure (h, o) value` is `h, o = value` lowered (tuples.rs)
-			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s) || ["return", crate::tuples::DESTRUCTURE, crate::host::TASK_CHECK, crate::wasm_emitter::functions::cells::CELL_SET, crate::wasm_emitter::functions::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
+			list_items[0].symbol_name().is_some_and(heads_statement)
 		}
 		_ => false,
 	}
+}
+
+/// Words other than the function and import keywords that head a statement: `return x`, `$destructure (h, o) value`
+/// (`h, o = value` lowered, tuples.rs), `cell_set(c, v)` (the assignment of a nonlocal variable,
+/// lowering/definitions/nonlocal_cells.rs), the task check and the signal listeners' update
+const STATEMENT_HEADS: [&str; 5] = [
+	"return",
+	crate::tuples::DESTRUCTURE,
+	crate::host::TASK_CHECK,
+	crate::wasm_emitter::functions::cells::CELL_SET,
+	crate::wasm_emitter::functions::cells::SIGNAL_LISTENERS_SET,
+];
+
+fn heads_statement(word: &str) -> bool {
+	is_function_keyword(word) || crate::modules::is_import_keyword(word) || STATEMENT_HEADS.contains(&word)
 }
 
 /// `{a;b;c}` as a definition body: a sequence of statements to run, unlike the value list `{1 2 3}`

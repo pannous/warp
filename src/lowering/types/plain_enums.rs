@@ -45,9 +45,7 @@ impl Enums {
 
 	/// The enum of a value: a case by name, or a name declared of the enum
 	fn type_of(&self, value: &Node) -> Option<&str> {
-		let Node::Symbol(name) = value.drop_meta() else {
-			return None;
-		};
+		let name = value.symbol_name()?;
 		self.owner(name).or_else(|| self.subjects.get(name)?.as_deref())
 	}
 }
@@ -69,14 +67,12 @@ pub fn lower(program: Node) -> Node {
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
 fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let [word, name, cases] = items else { return None };
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else {
 		return None;
 	};
 	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
-	word.is_symbol(ENUM_WORD).then_some((name.clone(), names?))
+	word.is_symbol(ENUM_WORD).then_some((name.to_string(), names?))
 }
 
 /// A case of an enum, `north` of Swift's `case north`

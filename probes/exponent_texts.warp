@@ -1,4 +1,0 @@
-// int and float read an exponent text like the literal (card int-text)
-// 250, 0.025
-print(int("2.5e2"))
-print(float("2.5e-2"))

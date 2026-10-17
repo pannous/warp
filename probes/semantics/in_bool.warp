@@ -1,6 +1,0 @@
-// decision in-bool: `x in xs` is yes/no; the position comes from index_of
-xs = [5 2 8]
-// gives yes
-print(2 in xs)
-// gives 3
-print(xs.index_of(8))

@@ -1,8 +1,0 @@
-# Named patterns (card patterns-values, user: the keyword pattern)
-pattern Pair = [_, _]
-pattern StartsAtOne = [1, ..]
-pattern Tagged = ["tag", label, ..]
-xs = [[1, 2], [1, 2, 3], [2, 3]]
-both = count(xs where it is Pair and StartsAtOne)
-label_of = match ["tag", "red", 1] { Tagged => label; _ => "none" }
-[[1, 2] is Pair, both, label_of]

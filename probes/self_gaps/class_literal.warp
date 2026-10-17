@@ -1,5 +1,0 @@
-// card class-literal: a class literal field named like an HTML element (source) is a field, no markup: no warning
-// prints: ab
-class Parser { source: text }
-p = Parser{source: "ab"}
-print p.source

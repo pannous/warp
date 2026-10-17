@@ -1,0 +1,10 @@
+// card timer-handler: a handler slower than its period skips the turns that come due while it runs; it used to call
+// itself again from its own loop's signal poll, nesting without end. Prints four turns, then exits.
+ticks = 0
+on every 0.01 seconds {
+	total = 0
+	for i in 1 to 300000 { total = total + i % 7 }
+	ticks = ticks + 1
+	print "turn \(ticks): \(total)"
+	if ticks == 4 { exit }
+}

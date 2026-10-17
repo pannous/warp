@@ -1,0 +1,13 @@
+// card long-text: a long text indexed in a loop that reads two short texts between its reads; with two grapheme
+// cursors the short texts used to evict the long text's, so each src#i walked from the start (quadratic)
+// (random() keeps the compiler from computing the whole program ahead)
+src = "trüe,fälse," * (1000 + round(random() * 0))
+first = "trüe" * (1 + round(random() * 0))
+separator = "," * (1 + round(random() * 0))
+hits = 0
+for i in 1 to count(src) {
+	letter = first#1
+	comma = separator#1
+	if src#i == letter or src#i == comma { hits += 1 }
+}
+hits

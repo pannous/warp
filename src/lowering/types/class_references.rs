@@ -4,7 +4,7 @@
 //! naming nothing and used nowhere is an unknown-type error naming the nearest type. C#'s `class Foo;` stays the
 //! file-scoped declaration (file_declarations.rs), but as a value (`x = class int; …`) it is the reference.
 
-use super::nodes::children_rewritten;
+use super::nodes::{any_part, children_rewritten};
 use crate::extensions::strings::near_miss;
 use crate::node::Node;
 use crate::warp_parser::{EXTENDS_KEYWORD, IMPLEMENTS_WORD};
@@ -111,9 +111,7 @@ fn is_file_class(node: &Node) -> bool {
 }
 
 fn has_bodyless_class(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= bodyless_class(part).is_some());
-	found
+	any_part(node, |part| bodyless_class(part).is_some())
 }
 
 fn declared_classes(node: &Node) -> HashSet<String> {

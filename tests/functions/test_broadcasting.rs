@@ -69,9 +69,9 @@ fn max_and_min_without_parentheses() {
 
 #[test]
 fn a_function_of_several_values_broadcasts_over_its_list_argument() {
-	assert_eq!(eval("add(a, b) := a + b; add [1, 2] 10").serialize(), "[11 12]");
-	assert_eq!(eval("add(a, b) := a + b; add(10, [1, 2])").serialize(), "[11 12]");
-	assert_eq!(eval("add(a, b) := a + b; add(all [1, 2], 10)").serialize(), "[11 12]");
+	assert_eq!(eval("plus(a, b) := a + b; plus [1, 2] 10").serialize(), "[11 12]");
+	assert_eq!(eval("plus(a, b) := a + b; plus(10, [1, 2])").serialize(), "[11 12]");
+	assert_eq!(eval("plus(a, b) := a + b; plus(all [1, 2], 10)").serialize(), "[11 12]");
 	assert_eq!(eval("square(x) := x*x; xs = [1, 2]; square(all xs)").serialize(), "[1 4]");
 }
 

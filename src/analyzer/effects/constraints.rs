@@ -30,7 +30,11 @@ impl fmt::Display for EffectViolation {
 			self.function,
 			effect_names(self.constraint.allowed, &self.constraint.events),
 			effect_names(self.excess, &self.excess_events),
-			self.chain.join(" → ")
+			self.chain
+				.iter()
+				.map(|name| crate::lowering::typed_library_words::written(name))
+				.collect::<Vec<_>>()
+				.join(" → ")
 		)?;
 		if self.excess.contains(Div) {
 			write!(f, " (Div: may not terminate: a while loop, or recursion without a parameter that shrinks toward a guarded base case)")?;
@@ -50,7 +54,7 @@ fn constraint_names(node: &Node) -> Option<Vec<String>> {
 }
 
 fn is_effect_name(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if EffectSet::named(&[name]).is_some())
+	node.symbol_name().is_some_and(|name| EffectSet::named(&[name]).is_some())
 }
 
 /// `definition ! Effects` → (definition, allowed effects)

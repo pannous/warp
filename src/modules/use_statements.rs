@@ -67,6 +67,11 @@ pub(super) fn fast_name(word: &str) -> String {
 	format!("{FAST_MODULE}{QUALIFIER}{word}")
 }
 
+/// The node with fast_math's `words` called by their qualified names (fast_name)
+pub(super) fn with_fast_names(node: Node, words: &[String]) -> Node {
+	words.iter().fold(node, |node, word| renamed_word(node, word, &fast_name(word)))
+}
+
 /// `a / b` of fast code as `(a as float) / b`: a float, never an exact ratio
 pub(crate) fn float_division(node: Node) -> Node {
 	match node {
@@ -211,6 +216,7 @@ pub(crate) fn is_version_list(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_version_keyword))
 }
 
+/// A path or a repository as written: a text, a word, or `folder/name`, `owner/repo.js` without quotes
 pub(crate) fn path_of(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),

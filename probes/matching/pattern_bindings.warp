@@ -1,3 +1,0 @@
-x = 3
-where(p) := match p { (x, 0) => x; _ => 0 }
-where((4, 0)) + x

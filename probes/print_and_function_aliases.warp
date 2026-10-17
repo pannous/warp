@@ -1,6 +1,0 @@
-// cards print-aliases and arctan-alias-library: println/writeln are print, a re-alias of a module function works
-use math
-println "hello"
-writeln 42
-arctan := arc_tangent
-print arctan(1)

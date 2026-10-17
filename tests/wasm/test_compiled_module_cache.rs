@@ -16,7 +16,7 @@ fn fresh_cache(name: &str) -> PathBuf {
 }
 
 fn main_result(engine: &wasmtime::Engine, module: &Module) -> i64 {
-	let mut store = warp::util::fueled_store(engine, ());
+	let mut store = warp::util::limited_store(engine, ());
 	let instance = Linker::new(engine).instantiate(&mut store, module).unwrap();
 	instance.get_typed_func::<(), i64>(&mut store, "main").unwrap().call(&mut store, ()).unwrap()
 }
@@ -31,9 +31,7 @@ fn test_compiled_module_cache_compiles_once_then_maps_the_compiled_module() {
 	assert_eq!(second, Origin::Cached);
 	assert_eq!(main_result(&engine, &compiled), 42);
 	// another engine with the same settings reuses the module compiled for the first one
-	let mut config = warp::util::deterministic_config();
-	config.consume_fuel(true);
-	let other_engine = wasmtime::Engine::new(&config).unwrap();
+	let other_engine = wasmtime::Engine::new(&warp::util::metered_config(false)).unwrap();
 	let (reused, origin) = compiled_module_in(&cache, &other_engine, ANSWER_MODULE.as_bytes()).unwrap();
 	assert_eq!(origin, Origin::Cached);
 	assert_eq!(main_result(&other_engine, &reused), 42);
@@ -44,8 +42,8 @@ fn test_compiled_module_cache_compiles_once_then_maps_the_compiled_module() {
 fn test_compiled_module_cache_keys_on_the_engine_settings() {
 	let cache = fresh_cache("engine_settings");
 	compiled_module_in(&cache, &gc_engine(), ANSWER_MODULE.as_bytes()).unwrap();
-	// the task engine adds epoch interruption: other machine code, so another cache entry
-	let (_, origin) = compiled_module_in(&cache, &warp::util::task_engine(), ANSWER_MODULE.as_bytes()).unwrap();
+	// the fuel engine counts steps: other machine code, so another cache entry
+	let (_, origin) = compiled_module_in(&cache, &warp::util::shared_engine(true), ANSWER_MODULE.as_bytes()).unwrap();
 	assert_eq!(origin, Origin::Compiled);
 }
 

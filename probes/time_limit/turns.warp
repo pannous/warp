@@ -1,0 +1,11 @@
+// card fuel-metering: the time limit counts per turn. Each timer turn computes a while; together the turns pass a
+// small limit and the program still finishes: WARP_TIME_LIMIT=0.3 warp probes/time_limit/turns.warp
+// (the period is longer than a turn: a slower handler re-enters itself, card timer-handler)
+ticks = 0
+on every 1 seconds {
+	total = 0
+	for i in 1 to 300000 { total = total + i % 7 }
+	ticks = ticks + 1
+	print "turn \(ticks): \(total)"
+	if ticks == 4 { exit }
+}

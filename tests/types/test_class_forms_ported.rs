@@ -93,3 +93,12 @@ fn ruby_endless_methods() {
 	is!("class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice", 10);
 	is!("class P{x:int; def twice = x*2}; P(3).twice", 6);
 }
+
+#[test]
+fn a_ruby_reader_and_a_go_struct_of_lowercase_fields() {
+	is!("class Point\n  attr_reader :x\n  def initialize(x)\n    @x = x\n  end\n  def twice = @x * 2\nend\nPoint.new(5).twice + Point.new(1).x", 11);
+	is!(
+		"type P struct {\n\tx int\n\ty int\n}\nfunc (p P) Sum() int { return p.x + p.y }\nq := P{x: 3, y: 4}\nq.Sum()",
+		7
+	);
+}

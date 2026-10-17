@@ -1,6 +1,6 @@
 //! Meta information on objects (user decision 2026-10-03, wiki/meta.md): an annotation `@unit("cm") {x:1}` becomes the
 //! meta entry `{x:1 @unit:"cm"}`, the form that survives emission: the runtime reads it like a field (`p.@unit`), but
-//! never counts it nor compares it (`is_meta_entry` in wasm_emitter/equality.rs).
+//! never counts it nor compares it (`is_meta_entry` in wasm_emitter/reflection/equality.rs).
 //! Also hints `p.source` when p has both the field `source` and the meta entry `@source`: the field wins.
 //! Under `use comments` (P114: off by default) a comment before a binding is its meta information (wiki/comments.md):
 //! `x.@comment` is the comment, `x.meta` the map `{comment: "…"}`, unless x is an object with a field `meta`. Without
