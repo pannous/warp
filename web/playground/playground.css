@@ -75,6 +75,8 @@ button, select {
 	cursor: pointer;
 }
 button:hover { border-color: var(--accent); }
+/* a button that does nothing looks so: no orange on hover (a fix whose text is not in the code, card clicking-meant) */
+button:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--line); }
 #run { background: var(--accent); border-color: var(--accent); color: #1d1d1f; font-weight: 600; }
 #run.stop { background: var(--error); border-color: var(--error); color: #fff; } /* a running program: Stop (card playground-turn) */
 

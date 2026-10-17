@@ -3065,9 +3065,11 @@ PASSED:
   ✓ numbers::test_plus_minus_units::a_plain_spread_counts_in_the_value_unit
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
+  ✓ numbers::test_plus_minus::a_parameter_shadows_an_outer_interval_name
   ✓ numbers::test_plus_minus::approximately_within_the_tolerance
   ✓ numbers::test_plus_minus::bounds_propagate_through_arithmetic
   ✓ numbers::test_plus_minus::intervals_are_not_correlated
+  ✓ numbers::test_plus_minus::uncertain_text_shows_the_parts_to_two_significant_digits
   ✓ numbers::test_plus_minus::untyped_functions_pass_an_interval_through
   ✓ numbers::test_printed_quantity::print_keeps_a_plain_fraction
   ✓ numbers::test_printed_quantity::print_rounds_a_quantity_to_two_decimals
@@ -3294,6 +3296,7 @@ PASSED:
   ✓ numbers::test_units_type_holes::a_text_repeats_a_plain_count_of_times
   ✓ numbers::test_units_type_holes::a_variable_keeps_its_dimension
   ✓ numbers::test_zero_fill::a_computed_size_is_a_runtime_count
+  ✓ numbers::test_zero_fill::a_filled_list_is_the_prelude_word_beside_a_program_fill
   ✓ numbers::test_zero_fill::a_large_zero_list_has_its_size
   ✓ numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros
   ✓ numbers::test_zero_fill::a_zero_list_of_nothing_is_empty
@@ -4797,6 +4800,8 @@ PASSED:
   ✓ types::test_extension_methods::a_swift_extension_block_adds_methods
   ✓ types::test_extension_methods::an_extension_method_extends_a_builtin_type
   ✓ types::test_extension_methods::an_extension_method_extends_a_class
+  ✓ types::test_field_default_variable::a_default_naming_a_variable_is_its_value
+  ✓ types::test_field_default_variable::a_field_named_result_is_a_field
   ✓ types::test_field_named_like_builtin::a_members_field_is_a_place
   ✓ types::test_field_named_like_builtin::a_size_field_of_an_element_of_a_declared_list
   ✓ types::test_field_named_like_library_word::a_known_instance_reads_its_field
@@ -5570,6 +5575,8 @@ PASSED:
   ✓ web::test_field_events::a_committed_value_reaches_on_change
   ✓ web::test_field_events::a_field_event_is_no_markup_mistake
   ✓ web::test_field_events::focus_and_blur_reach_their_handlers
+  ✓ web::test_fix_buttons_apply::a_fix_shown_serialized_edits_the_words_it_changes
+  ✓ web::test_fix_buttons_apply::the_samples_fix_buttons_find_their_text
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_field_is_validated_by_the_declared_type
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
@@ -6329,4 +6336,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 6324 passed, 0 failed, 6324 total tested
+14 ignored, 6331 passed, 0 failed, 6331 total tested

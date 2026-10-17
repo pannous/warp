@@ -76,18 +76,10 @@ pub fn shown_radix(type_name: &str) -> Option<&'static Radix> {
 	})
 }
 
-/// The prelude words that print the radixes the statements name (`as hex`, `byte b`), for modules::resolve: the printer
-/// calls them, the program does not
-pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
-	let mut words = Vec::new();
-	for statement in statements {
-		statement.visit(&mut |node| {
-			if let Some(radix) = node.symbol_name().and_then(shown_radix) {
-				words.push(radix.text_word.to_string());
-			}
-		});
-	}
-	words
+/// The prelude word that prints the radix a type names (`as hex`, `byte b`), for modules IMPLIED_WORDS: the printer
+/// calls it, the program does not
+pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
+	node.symbol_name().and_then(shown_radix).map(|radix| radix.text_word)
 }
 
 /// The radix of an Int's info bits, None for a plain Int

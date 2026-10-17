@@ -316,14 +316,33 @@ pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
 		|| name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX).is_some_and(|word| mentioned.contains(word))
 }
 
+/// The forms a later pass or the emitter turns into calls of prelude words the program never names, one row each: the
+/// prelude word a node needs, if any (card lib-from-runtime). A move of a runtime function into lib/prelude.warp adds
+/// its row; a form missing here still compiles, the second time (pipeline::loading_compiler_words)
+const IMPLIED_WORDS: [fn(&Node) -> Option<&'static str>; 5] = [
+	crate::lowering::broadcasting::implied_word,
+	crate::gpu_maps::implied_word,
+	crate::wasm_emitter::numbers::radix::implied_word,
+	crate::lowering::filled_lists::implied_word,
+	crate::wasm_emitter::numbers::uncertain::implied_word,
+];
+
+/// The prelude words IMPLIED_WORDS finds in the statements
+fn implied_words(statements: &[Node]) -> Vec<String> {
+	let mut words = Vec::new();
+	for statement in statements {
+		statement.visit(&mut |node| words.extend(IMPLIED_WORDS.iter().filter_map(|implied| implied(node))));
+	}
+	words.into_iter().map(str::to_string).collect()
+}
+
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
 	let implied = [
-		crate::lowering::broadcasting::implied_words(statements),
-		crate::gpu_maps::implied_words(statements),
+		implied_words(statements),
 		crate::lowering::library_words::implied_count_words(statements),
-		crate::wasm_emitter::numbers::radix::implied_words(statements),
+		crate::compiler::compile_context::read(|context| context.compiler_words.clone()),
 	]
 	.concat();
 	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).chain(implied).collect())
