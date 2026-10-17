@@ -23,7 +23,7 @@ unsafe extern "C" {
 }
 
 /// The CPU time this thread has used so far
-fn thread_cpu_time() -> Duration {
+pub(super) fn thread_cpu_time() -> Duration {
 	let mut time = Timespec { seconds: 0, nanoseconds: 0 };
 	assert_eq!(unsafe { clock_gettime(CLOCK_THREAD_CPUTIME_ID, &mut time) }, 0, "clock_gettime failed");
 	Duration::new(time.seconds as u64, time.nanoseconds as u32)

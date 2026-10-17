@@ -1,0 +1,3 @@
+# a module whose definition a source pass refuses: emit is a keyword (tests/modules/test_module_refused_definition.rs)
+emit(x: any) := x + 1
+ok(x: any) := x

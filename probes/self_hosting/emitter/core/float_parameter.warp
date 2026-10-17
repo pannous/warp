@@ -1,0 +1,4 @@
+# emitter core: a float parameter given an int
+# 1.5
+half(x: float) := x / 2
+half(3)

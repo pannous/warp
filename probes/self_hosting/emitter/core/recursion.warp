@@ -1,0 +1,4 @@
+# emitter core: recursion, its result kind from the other branch
+# 210
+sum_to(n) := if n == 0 then 0 else n + sum_to(n - 1)
+sum_to(20)

@@ -148,6 +148,11 @@ pub fn differential_on(paths: &[PathBuf], part: &str, word: &str, rust_twin: imp
 	report(word, &differences(&checked_share(paths), part, word, rust_twin));
 }
 
+/// The sources a gate run checks: all in the nightly run, every GATE_SHARE-th otherwise
+pub fn checked_sources() -> Vec<PathBuf> {
+	checked_share(&sources())
+}
+
 /// All sources in the nightly run, every GATE_SHARE-th otherwise, starting at the day's offset: the gates of four
 /// days sweep every source at the cost of one share
 fn checked_share(paths: &[PathBuf]) -> Vec<PathBuf> {
@@ -344,6 +349,70 @@ fn bridge_differential_of(given: fn(&Node) -> Node) {
 		Case::new(&path, view_json(&given(&parsed)), plain_view(&parsed))
 	});
 	report("view_of", &differences_of(cases, "walk", "view_of(node_of(json(argument)))"));
+}
+
+/// The emitter core's twin (card emits-wasm, notes/self_hosting.md step 15): every lowered program (pipeline::lower)
+/// goes to lib/compiler/emitter.warp `wasm_module` as a node, the module it gives runs, and its value is compared with
+/// the program's value run by Rust. A program outside the core (a text "outside the core: …") is no case; fails
+/// unless at least `least` programs are inside it. Returns the paths inside the core
+pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
+	let cases = in_parallel(paths.to_vec(), |path| {
+		let text = std::fs::read_to_string(path).ok()?;
+		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
+		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
+	});
+	let twin = TwinProgram::new("emitter", "wasm_module(node_of(json(argument)))");
+	let (mut inside, mut differing) = (vec![], vec![]);
+	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
+		for ((path, _, text), module) in cases.iter().zip(twin.values(&arguments)) {
+			if module.text_value().is_some_and(|text| text.starts_with(OUTSIDE_THE_CORE)) {
+				continue;
+			}
+			inside.push(path.clone());
+			let warp_value = module_value(&module);
+			let rust_value = warp::wasm_emitter::eval(text).drop_meta().clone();
+			if !same_value(&warp_value, &rust_value) {
+				differing.push((path.clone(), warp_value.serialize(), rust_value.serialize()));
+			}
+		}
+	}
+	report("wasm_module", &differing);
+	assert!(
+		inside.len() >= least,
+		"only {} programs inside the emitter core, {least} expected: {inside:?}",
+		inside.len()
+	);
+	inside
+}
+
+/// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
+const OUTSIDE_THE_CORE: &str = "outside the core";
+
+/// The value main of a module given as a list of bytes returns, or the failure as a text
+fn module_value(module: &Node) -> Node {
+	let Node::List(items, ..) = module.drop_meta() else {
+		return Node::text(&format!("no module: {}", module.serialize()));
+	};
+	let byte = |item: &Node| match item.drop_meta() {
+		Node::Number(Number::Int(byte)) => u8::try_from(*byte).ok(),
+		_ => None,
+	};
+	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
+	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes(&bytes)) {
+		Some(Ok(value)) => value,
+		Some(Err(failure)) => Node::text(&format!("module failed: {failure}")),
+		None => Node::text("a module byte beyond 0..255"),
+	}
+}
+
+/// Equal values; a float equals another number of exactly its value (the core's 3.5 * 2 is 7.0, Rust's 7)
+fn same_value(warp_value: &Node, rust_value: &Node) -> bool {
+	match (warp_value, rust_value) {
+		(Node::Number(a @ Number::Float(_)), Node::Number(b))
+		| (Node::Number(a), Node::Number(b @ Number::Float(_))) => f64::from(*a) == f64::from(*b),
+		_ => warp_value == rust_value,
+	}
 }
 
 /// The checked share of the sources without the dropped ones, which DROPPED_NOTES must name; TWIN_ONLY=<path suffix>

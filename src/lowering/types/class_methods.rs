@@ -853,7 +853,7 @@ fn gives_value(body: &Node) -> bool {
 }
 
 /// The names a method body reads from its receiver: fields and getters (`area`), and methods it calls (`area()`)
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Readable<'a> {
 	/// `self` in a class body, the first parameter of an outside method
 	receiver: &'a str,
@@ -880,7 +880,51 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 			}))
 		}
 		Node::Key(object, Op::Dot, member) => Node::Key(Box::new(receiver_reads(*object, readable)), Op::Dot, member),
+		Node::List(items, bracket, separator) if separator.separates_statements() => {
+			Node::List(statements_reads(items, readable), bracket, separator)
+		}
+		other if let_binding(&other).is_some() => other.map_children(|part| value_reads(part, readable)),
 		other => other.map_children(|child| receiver_reads(child, readable)),
+	}
+}
+
+/// `n = value` of `let n = value`: the value reads the receiver, n is the new local
+fn value_reads(binding: Node, readable: &Readable) -> Node {
+	match binding {
+		Node::Key(target, Op::Assign, value) => {
+			Node::Key(target, Op::Assign, Box::new(receiver_reads(*value, readable)))
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(value_reads(*node, readable)), data },
+		word => word,
+	}
+}
+
+/// Statements in order: from `let n = …` on, n is the method's local, no longer its receiver's field
+fn statements_reads(statements: Vec<Node>, readable: &Readable) -> Vec<Node> {
+	let mut readable = readable.clone();
+	statements
+		.into_iter()
+		.map(|statement| {
+			let read = receiver_reads(statement, &readable);
+			if let Some(local) = let_binding(&read) {
+				readable.fields.retain(|field| field.as_str() != local);
+			}
+			read
+		})
+		.collect()
+}
+
+/// The name `let name = …` binds
+fn let_binding(statement: &Node) -> Option<String> {
+	let Node::List(items, _, Separator::Space) = statement.drop_meta() else {
+		return None;
+	};
+	match items.as_slice() {
+		[keyword, binding] if keyword.is_symbol(crate::words::LET_WORD) => match binding.drop_meta() {
+			Node::Key(target, Op::Assign, _) => target.drop_meta().symbol_name().map(str::to_string),
+			_ => None,
+		},
+		_ => None,
 	}
 }
 
