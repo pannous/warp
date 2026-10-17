@@ -2449,6 +2449,7 @@ PASSED:
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
   ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
   ✓ modules::test_package_pin::header_signatures_are_parsed_once
+  ✓ modules::test_package_reexport::a_modules_own_use_reaches_its_users
   ✓ modules::test_package_registry::a_bare_name_or_version_is_the_default_registrys_folder
   ✓ modules::test_package_registry::a_folder_package_is_fetched_by_name
   ✓ modules::test_package_registry::a_folder_package_version_is_its_tag
@@ -3841,6 +3842,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_live_redefine::a_loop_defined_once_is_unchanged
   ✓ programs::test_live_redefine::a_named_loop_announcing_its_cycles_still_runs
+  ✓ programs::test_live_redefine::a_redefined_loop_plays_its_new_block_from_the_next_cycle
   ✓ programs::test_midi::a_broken_file_fails_loudly
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
   ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
@@ -6272,7 +6274,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ programs::test_live_redefine::a_redefined_loop_plays_its_new_block_from_the_next_cycle
 
 SUMMARY:
-13 ignored, 6269 passed, 1 failed, 6270 total tested
+13 ignored, 6271 passed, 0 failed, 6271 total tested

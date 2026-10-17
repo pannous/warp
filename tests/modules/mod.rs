@@ -28,6 +28,8 @@ mod test_node_json; // card node-json
 mod test_package_forms; // card packages
 mod test_package_hints; // card hints-fire
 mod test_package_pin;
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_package_reexport; // card module-own
 mod test_package_registry; // card build-sh: the default registry warp-packages
 #[cfg(feature = "native")] // files beside the program: not in the browser build
 mod test_package_shadow; // card sample-local

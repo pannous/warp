@@ -116,12 +116,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// The modules a program `use`s and the implicit ones it needs (`play` → sound): their classes go in front alike, the
 /// module itself stays a used module (its note names, its settings); units moves whole (with_implicit_class_modules)
 fn used_and_implicit_modules(program: &Node) -> Vec<String> {
-	let mut names: Vec<String> = statements_of(program)
-		.iter()
-		.filter_map(used_module)
-		.filter(|used| used.import == Import::Use)
-		.map(|used| used.name)
-		.collect();
+	let mut names = modules_used_by(statements_of(program));
 	for (module, needed) in IMPLICIT_MODULES {
 		if !names.iter().any(|name| name == module) && !MODULES_COMPILED_AS_PROGRAM.contains(&module) && needed(program)
 		{
@@ -129,6 +124,11 @@ fn used_and_implicit_modules(program: &Node) -> Vec<String> {
 		}
 	}
 	names
+}
+
+/// The modules these statements `use`
+fn modules_used_by(statements: &[Node]) -> Vec<String> {
+	statements.iter().filter_map(used_module).filter(|used| used.import == Import::Use).map(|used| used.name).collect()
 }
 
 /// The WebAssembly module a used name finds, when no warp source of that name exists
@@ -179,7 +179,12 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
 		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
-	for name in used_and_implicit_modules(&program) {
+
+	// what a used module itself uses reaches the program, its classes too (decision package-reexport)
+	let mut modules = used_and_implicit_modules(&program);
+	let mut index = 0;
+	while let Some(name) = modules.get(index).cloned() {
+		index += 1;
 		if let Some(module) = wasm_module_path(&loader, &name) {
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);
@@ -208,6 +213,13 @@ pub fn insert_module_classes(program: Node) -> Node {
 			continue; // the loader reports it
 		}
 		let definitions = statements(module);
+		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
+		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
+		for used in reexported {
+			if !modules.contains(&used) {
+				modules.push(used);
+			}
+		}
 		defined.extend(definitions.iter().filter_map(name_declared_by));
 		match is_std {
 			true => {
