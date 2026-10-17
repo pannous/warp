@@ -159,7 +159,9 @@ real measure is the suite through the warp compiler (notes/self_hosting.md). Dev
   join is the more precise answer.
 - `g := it#2`: Rust adds an extra `g: text` variable; warp reads `g` as a function of it, no variable.
 - closure_call_N helpers: Rust's text lists them, warp leaves them out (lowering artefacts, not program slots).
-- Unknown builtin calls default to int (unsound): back by a builtin kinds table, ported from builtin_word_kind in
-  src/analyzer/inference.rs.
-- Element types don't flow through function results (`sieve(100)` → plain list): back by carrying the element slot
-  of a result.
+- Builtin calls read their kind off `call_kinds` (lib/compiler/words.warp, checked against Rust's analyzer by
+  test_self_words call_kinds_are_rusts); a word nothing defines or tables (a function value, a host word) is any
+  value, where Rust says int.
+- Element types flow through function results (`r = f(); r#1` is int when f gives a list of ints), where Rust says
+  any value: sources probes/algo/dijkstra/12c_implicit_return_list.warp, probes/algo/sorting/69_return_list_noreturn.warp,
+  probes/module_scope/mytext.warp and four more left the pinned list for it.
