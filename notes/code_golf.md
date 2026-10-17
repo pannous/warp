@@ -1,4 +1,4 @@
-# Code golf (card code-golf, 2026-10-09)
+# Code golf
 
 19 holes of [code.golf](https://code.golf), each solved twice in samples/golf/: `<hole>.warp` readable, `<hole>.short.warp`
 golfed. `<hole>.txt` is the expected output, `<hole>.args` the arguments (arabic-to-roman, rot13); the quine has none.
@@ -57,13 +57,8 @@ value). It is close on catalan, collatz, niven and leap-years.
 ## What costs chars
 - The final-value echo: `warp run` prints a script's last value after its printed output, so a program must end with
   a print. `for …:{print a;a,b=b,a+b}` adds a line with b; ending with `ø` or `()` still echoes the loop's value; a
-  text echoes quoted. Workarounds: `print (…).filter(f).join("\n")` or a last `print`. Kept by decision P236
-  (card golf-echo).
+  text echoes quoted. Workarounds: `print (…).filter(f).join("\n")` or a last `print`. Kept by decision P236.
 - `&` and `|` combine the bits of whole numbers, logical on truth values (operator-shall); `xor` is bitwise; `bit_count` (`use math`).
 - Negative indexes don't wrap (by design: `last(xs)`).
 - `text` is a type name, so `for text in args` filters by type, with a warning.
 
-## Gaps filed (board column Next)
-none open.
-Fixed: golf-expression (`for (…).filter(f):`), golf-bits (bit_and, bit_or, bit_count), golf-count (the error names `use text`); golf-chr, golf-chars, golf-print, golf-inline; golf-text, golf-sum (text arithmetic is no number for `||`/`or`); golf-indented, golf-bare,
-golf-indented-while, golf-indented-swap (indented bodies without `:`); golf-open (`s[2…]`, `s[…2]`). Decided: golf-echo (P236, kept).

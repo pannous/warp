@@ -7,4 +7,4 @@
   operand inside it. Written by `WarpParser::try_parse_trailing_attribute`, from the expression loop.
 - **Inside a literal** `point{x:1 @source:"gps"}`: the meta entry `@source`, never a field.
 
-Read annotations with `node.attribute("parallel")`; `node["@name"]` sets them (open_decisions.md, P on metadata).
+Read annotations with `node.attribute("parallel")`; `node["@name"]` sets them.

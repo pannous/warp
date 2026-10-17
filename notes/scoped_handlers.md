@@ -1,8 +1,8 @@
 # Block-scoped handlers: dropped
 
 `on e {h} in {block}` answered `emit e` only while the block ran, also deep in the functions it called; `break v` in
-the handler ended the block with v. Dropped by the user's cleanup cuts (card cleanup-drop-scoped-handlers): the form
-is now an error naming the program-wide `on e {…}` (src/lowering/control/scoped_handlers.rs keeps only that check).
+the handler ended the block with v. Dropped (cleanup cuts): the form
+is an error naming the program-wide `on e {…}` (src/lowering/control/scoped_handlers.rs keeps only that check).
 
 Gone with it:
 - the lowering (handler functions `e·handler·i`, the globals `effect_handler_active_e`, enter/leave, unwinding of
@@ -18,5 +18,3 @@ Gone with it:
 Kept: the Lean model (lean/WarpTypes Syntax/Semantics/Soundness `handle`, `abort`) states the rules and proves them;
 the type model still uses `.handle`/`.abort` for an early `return`. Card under type-theory (Later): drop or keep the
 block-handler rules in Lean.
-
-The earlier plan to unify try/catch, `on error of f` and generators as block handlers is off.

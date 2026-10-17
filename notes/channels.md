@@ -1,6 +1,6 @@
-# Channels (P155, plan by warp-93, 2026-10-06)
+# Channels (P155)
 
-User decision P155: one concept. `ch = channel()` is a channel local to the run, `channel "chat"` the machine-wide one
+One concept: `ch = channel()` is a channel local to the run, `channel "chat"` the machine-wide one
 (src/host/channels.rs, sockets in /tmp/warp-channels-<user>); both have the same words, and `send v to "chat"` (P129) is the
 machine channel's send.
 
@@ -15,7 +15,7 @@ ch.receive()                   // one value, waits for it
 Semantics (Go's unbuffered channel): `send` waits until a receiver took the value; `receive` waits for a value;
 `for v in ch` receives until the channel is closed and empty; a send on a closed channel is an error.
 
-## Native (built)
+## Native
 - tasks.rs TaskTable (one per run, shared by every task thread) holds the channels; host words (host.rs CHANNEL_WORDS):
   channel_new() -> id, channel_put(id, node) waits until taken (rendezvous), channel_take(id) waits (ø once closed and
   empty), channel_more(id) waits until a value is offered (1) or the channel closed (0), channel_close(id). The program
@@ -31,7 +31,7 @@ Semantics (Go's unbuffered channel): `send` waits until a receiver took the valu
   channel_pending every 5 ms, then channel_next. A program hears its own sends.
 - Tests: tests/control/test_channels.rs.
 
-## Browser (built)
+## Browser
 host.js: one SharedArrayBuffer per run (channelTable, only when the module imports channel_new and the page is
 cross-origin isolated), handed to every task Worker with the shared arrays: a lock, a change counter the waiting sides
 Atomics.wait on (a condition variable), the next channel id, an ended flag, then per channel [full, closed, sent,

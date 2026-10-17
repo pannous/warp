@@ -1,15 +1,15 @@
-# Effect handlers (card effect-handlers, user: "yes, steps 1+2")
+# Effect handlers
 
-Roadmap card: effects (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
+Roadmap card: effects (notes/roadmaps.md).
 
 Events are warp's effects: `emit ask` performs the effect `ask`, an `on ask {…}` handler answers it. Handlers are
 tail-resumptive only: the handler's value is what `emit` gives, and the emitting code goes on (P163). No captured
 continuations, everything is plain calls.
 
 ## Step 1: block-scoped handlers (dropped)
-`on ask { 42 } in { compute() }` was dropped (user, cleanup-cuts; card cleanup-drop-scoped-handlers): the form is an
+`on ask { 42 } in { compute() }` was dropped: the form is an
 error naming the program-wide `on ask {…}`, which answers every emit. An emit nobody handles does nothing (P163) and
-gives a got-it warning "no handler for event X" (P202). Summary and history: notes/scoped_handlers.md.
+gives a got-it warning "no handler for event X" (P202). What it did: notes/scoped_handlers.md.
 
 ## Step 2: events as named effects (src/analyzer/effects/mod.rs)
 - a function's effects gain event names next to the closed set (FunctionEffects.events): `emit ask` in f adds `ask`, so `effects of f` is `(IO ask)`
@@ -28,5 +28,3 @@ gives a got-it warning "no handler for event X" (P202). Summary and history: not
 ## Step 3: aborting handlers (dropped with step 1)
 `break value` in a block handler ended its block; it went with block handlers, and with it the tag `warp_abort` and
 `ran_without_abort` / `abort_to` (try_guard.rs). `on error of f` (Error.md) keeps its own lowering.
-
-Why block handlers were dropped and what they did: notes/scoped_handlers.md

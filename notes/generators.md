@@ -1,7 +1,7 @@
-# Generators: dropped (decision cleanup-cuts, user 2026-10-13)
+# Generators: dropped
 
-Generators and `yield` (generators.rs, generator_objects.rs, generator_consumers.rs, generator_expressions.rs, about
-1200 lines) were removed on branch cleanup-drop-generators. The last version is in git history before that merge.
+Generators and `yield` (generators.rs, generator_objects.rs, generator_consumers.rs, generator_expressions.rs) were
+removed by merge cleanup-drop-generators; the code is in git history before it.
 Run-time closures and plain loops cover what they did; their tests are ignored with
 `cleanup-edge: cleanup-drop-generators`.
 
