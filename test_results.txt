@@ -573,7 +573,9 @@ PASSED:
   ✓ control::test_print_empty::print_empty_prints_it
   ✓ control::test_quasi_quote::a_hole_is_an_operand_of_a_phrase
   ✓ control::test_quasi_quote::a_hole_named_like_a_unit_is_the_bound_code
+  ✓ control::test_quasi_quote::a_quoted_literal_is_the_literal
   ✓ control::test_quasi_quote::a_replacement_template_splices_the_holes
+  ✓ control::test_quasi_quote::a_replacement_walks_into_quoted_blocks
   ✓ control::test_quasi_quote::a_rest_hole_binds_and_splices_the_remaining_items
   ✓ control::test_quasi_quote::a_template_in_a_lambda_splices_its_parameter
   ✓ control::test_quasi_quote::a_template_splices_a_variable
@@ -581,6 +583,7 @@ PASSED:
   ✓ control::test_quasi_quote::a_times_phrase_becomes_its_loop
   ✓ control::test_quasi_quote::an_arm_template_splices_the_holes
   ✓ control::test_quasi_quote::quoted_phrases_stay_as_written
+  ✓ control::test_quasi_quote::the_value_after_an_assignment_takes_the_whole_phrase
   ✓ control::test_quoted_data_untouched::a_member_read_stays_a_dot
   ✓ control::test_quoted_data_untouched::library_sugar_stays_as_written
   ✓ control::test_raise::raise_ends_the_run_with_its_message
@@ -6157,6 +6160,8 @@ PASSED:
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::warp_fix_writes_the_floor_division_bang
   ✓ welcoming::test_slash_comment_prose_operators::prose_with_operator_characters_gets_no_division_note
+  ✓ welcoming::test_sleep_fractions::a_fraction_of_a_millisecond_rounds_to_the_nearest
+  ✓ welcoming::test_sleep_fractions::a_fraction_of_a_second_sleeps_its_milliseconds
   ✓ welcoming::test_sleep_seconds::a_bare_sleep_number_counts_seconds
   ✓ welcoming::test_sleep_seconds::the_bare_sleep_warning_suggests_seconds
   ✓ welcoming::test_sleep_unit_shadow::a_unit_named_variable_keeps_other_durations
@@ -6296,4 +6301,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6291 passed, 0 failed, 6291 total tested
+13 ignored, 6296 passed, 0 failed, 6296 total tested
