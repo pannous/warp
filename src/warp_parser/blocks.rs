@@ -45,27 +45,11 @@ impl WarpParser {
 	}
 
 	pub(super) fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
-		let Some(last_end) = self.last_closing_end.filter(|last_end| *last_end >= start) else {
+		if self.names_end {
 			return false;
-		};
-		let mut open = 1;
-		for (word_start, word_end) in
-			code_words(&self.chars, start).take_while(|(word_start, _)| *word_start <= last_end)
-		{
-			if is_property(&self.chars, word_start) {
-				continue;
-			}
-			let word: String = self.chars[word_start..word_end].iter().collect();
-			match word.as_str() {
-				END_KEYWORD => open -= 1,
-				opener if openers.contains(&opener) && !is_endless_definition(&self.chars, word_end) => open += 1,
-				_ => {}
-			}
-			if open == 0 {
-				return true;
-			}
 		}
-		false
+		let mut indexes = self.closing_ends.borrow_mut();
+		indexes.entry(openers.join(" ")).or_insert_with(|| ClosingEnds::of(&self.chars, openers)).close_after(start)
 	}
 
 	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
@@ -211,32 +195,62 @@ fn is_property(chars: &[char], word_start: usize) -> bool {
 	word_start > 0 && chars[word_start - 1] == '.'
 }
 
-/// Where the last `end` keyword of the code starts, None when there is none or the source uses `end` as a name: a
-/// parameter or argument between separators (`f(a, end)`) or an assigned variable (`end = 3`). Then no `end` closes a
-/// block: `if a == 0 then 1 else end` hands back the variable
-pub(super) fn last_closing_end(chars: &[char]) -> Option<usize> {
+/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned
+/// variable (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
+pub(super) fn names_end(chars: &[char]) -> bool {
 	let next_visible =
 		|from: usize| chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
 	let previous_visible = |before: usize| chars[..before].iter().rposition(|ch| !ch.is_whitespace());
-	let mut last_end = None;
-	for (word_start, word_end) in code_words(chars, 0) {
+	code_words(chars, 0).any(|(word_start, word_end)| {
 		if chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
-			continue;
+			return false;
 		}
 		let before = previous_visible(word_start).map(|index| chars[index]);
 		let after = next_visible(word_end);
 		let assigned = after.is_some_and(|index| chars[index] == '=' && chars.get(index + 1) != Some(&'='));
 		// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
-		let argument =
-			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(chars[index], ',' | ')'));
-		if argument || assigned {
-			return None;
+		matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(chars[index], ',' | ')')) || assigned
+	})
+}
+
+/// The `end` keywords and openers (`do`, `then`, …) of a source in order, as running balances: an opener adds one, an
+/// `end` takes one away. A block opened before a word closes when the balance later falls below the one before that
+/// word, so the lowest balance from each word on answers every search with one lookup
+pub(super) struct ClosingEnds {
+	word_starts: Vec<usize>,
+	balances: Vec<i32>,
+	lowest_from: Vec<i32>,
+}
+
+impl ClosingEnds {
+	fn of(chars: &[char], openers: &[&str]) -> Self {
+		let (mut word_starts, mut balances, mut balance) = (vec![], vec![], 0);
+		for (word_start, word_end) in code_words(chars, 0) {
+			if is_property(chars, word_start) {
+				continue;
+			}
+			let word: String = chars[word_start..word_end].iter().collect();
+			balance += match word.as_str() {
+				END_KEYWORD => -1,
+				opener if openers.contains(&opener) && !is_endless_definition(chars, word_end) => 1,
+				_ => continue,
+			};
+			word_starts.push(word_start);
+			balances.push(balance);
 		}
-		if !is_property(chars, word_start) {
-			last_end = Some(word_start);
+		let mut lowest_from = balances.clone();
+		for at in (1..lowest_from.len()).rev() {
+			lowest_from[at - 1] = lowest_from[at - 1].min(lowest_from[at]);
 		}
+		ClosingEnds { word_starts, balances, lowest_from }
 	}
-	last_end
+
+	/// Whether an `end` from `start` on closes a block opened just before it, counting the openers in between
+	fn close_after(&self, start: usize) -> bool {
+		let first = self.word_starts.partition_point(|word_start| *word_start < start);
+		let before = first.checked_sub(1).map_or(0, |at| self.balances[at]);
+		self.lowest_from.get(first).is_some_and(|lowest| *lowest < before)
+	}
 }
 
 /// The spans of the words of the code from `start` on: an `end` in a text or a comment is no word of the code
