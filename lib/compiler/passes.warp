@@ -13,4 +13,4 @@ lowered_node(n: any) := {
 }
 
 # the source text as the passes leave it, as its view
-lowered(source: text) := view_of(lowered_node(node_of(without_layers(tree(source)))))
+lowered(source: text) := view_of(lowered_node(node_of(plain(tree(source)))))
