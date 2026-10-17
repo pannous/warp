@@ -10,37 +10,37 @@ number_words = {zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, sev
 numbers = {}
 
 # `x` of `x`, `x: int`, `x: int = 1`: the innermost left side
-parameter_head(n: any) := if type(n) is key then parameter_head(n.key) else n
+parameter_head(n: any) := if type(n) is key then parameter_head(key_of(n)) else n
 parameter_name(n: any) := {
 	head = parameter_head(n)
-	if head is symbol { return head.name }
+	if head is symbol { return name_of(head) }
 	ø
 }
 
 # every name the program gives: variables, functions, parameters, fields (soft_keywords.rs names_given)
 names_given(n: any, names: any) := {
-	if type(n) is key and (n.op == ":=" or n.op == "=") {
-		target = n.key
-		if target is symbol { names[target.name] = yes }
-		if target.bracket == "(" and #target > 0 {
-			if target#1 is symbol { names[target#1.name] = yes }
+	if type(n) is key and (op_of(n) == ":=" or op_of(n) == "=") {
+		target = key_of(n)
+		if target is symbol { names[name_of(target)] = yes }
+		if bracket_of(target) == "(" and #target > 0 {
+			if target#1 is symbol { names[name_of(target#1)] = yes }
 			for parameter in target[1..] { given(parameter_name(parameter), names) }
 		}
-		return names_given(n.value, names)
+		return names_given(value_of(n), names)
 	}
-	if type(n) is key and n.op == "=>" {
-		parameters = n.key
+	if type(n) is key and op_of(n) == "=>" {
+		parameters = key_of(n)
 		if is_group(parameters) { for parameter in parameters { given(parameter_name(parameter), names) } }
 		else { given(parameter_name(parameters), names) }
-		return names_given(n.value, names)
+		return names_given(value_of(n), names)
 	}
 	if type(n) is key {
-		names_given(n.key, names)
-		return names_given(n.value, names)
+		names_given(key_of(n), names)
+		return names_given(value_of(n), names)
 	}
 	if is_group(n) {
 		for item in n {
-			if n.bracket == "{" and type(item) is key and item.op == ":" and item.key is symbol { names[item.key.name] = yes }
+			if bracket_of(n) == "{" and type(item) is key and op_of(item) == ":" and key_of(item) is symbol { names[name_of(key_of(item))] = yes }
 			names_given(item, names)
 		}
 	}
@@ -49,13 +49,13 @@ names_given(n: any, names: any) := {
 given(name: any, names: any) := if name != ø then names[name] = yes
 
 # `data e`: e as written
-is_quoted(n: any) := n.bracket == "" and n.separator == " " and #n == 2 and n#1 == symbol("data")
+is_quoted(n: any) := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol("data")
 
 as_numbers(n: any) := {
 	if is_quoted(n) { return n }
-	if n is symbol and numbers.has(n.name) { return numbers[n.name] }
-	if type(n) is key and n.op == ":" { return key(n.key, ":", as_numbers(n.value)) }
-	if type(n) is key and n.op == "." { return key(as_numbers(n.key), ".", n.value) }
+	if n is symbol and numbers.has(name_of(n)) { return numbers[name_of(n)] }
+	if type(n) is key and op_of(n) == ":" { return key(key_of(n), ":", as_numbers(value_of(n))) }
+	if type(n) is key and op_of(n) == "." { return key(as_numbers(key_of(n)), ".", value_of(n)) }
 	children(n, as_numbers)
 }
 
