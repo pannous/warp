@@ -401,7 +401,7 @@ impl WasmGcEmitter {
 		self.wrapping_ints = outer_wrapping;
 
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
-		self.exports.export(name, ExportKind::Func, func_idx);
+		self.exports.export_program_function(name, func_idx);
 	}
 
 	/// The call of `fn_name` with its own result on the stack, and its definition; a type error when it is undefined
