@@ -2471,6 +2471,9 @@ PASSED:
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
   ✓ modules::test_replaced_module_function::a_program_function_replacing_a_module_function_warns
+  ✓ modules::test_selective_package::a_registry_package_passes_on_its_chosen_words
+  ✓ modules::test_selective_package::a_word_one_package_file_imports_from_another_stays_inside
+  ✓ modules::test_selective_package::the_main_file_passes_on_the_named_words
   ✓ modules::test_std_aliases::a_foreign_name_says_the_warp_word
   ✓ modules::test_std_aliases::a_program_naming_the_module_keeps_it
   ✓ modules::test_std_aliases::foreign_standard_names_are_warp_words
@@ -6276,4 +6279,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6271 passed, 0 failed, 6271 total tested
+13 ignored, 6274 passed, 0 failed, 6274 total tested
