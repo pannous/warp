@@ -13,10 +13,11 @@ use math
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
 type_bytes = {int: 126, float: 124, bool: 127, char: 127}
-section_ids = {custom: 0, type: 1, function: 3, export: 7, code: 10, data: 11, data_count: 12}
+section_ids = {custom: 0, type: 1, function: 3, globals: 6, export: 7, code: 10, data: 11, data_count: 12}
 function_type_byte = 96
 export_function_byte = 0
-names_subsections = {functions: 1, locals: 2, types: 4, fields: 10}
+names_subsections = {functions: 1, locals: 2, types: 4, globals: 7, fields: 10}
+mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
 # [storage type, mutable]. $text: the UTF-8 bytes; $list: a vector, its items boxed; $Node(kind i64, data anyref,
 # value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box
@@ -31,8 +32,8 @@ passive_segment = 1
 # block type of a block that leaves nothing
 no_value = 64
 # opcodes (WebAssembly core spec, section 5.4)
-op = {block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, call: 16, drop: 26, select: 27,
-	local_get: 32, local_set: 33, local_tee: 34, i32_const: 65, i64_const: 66, i32_sub: 107, i32_wrap_i64: 167, f64_const: 68, i32_eqz: 69, i64_eqz: 80,
+op = {block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
+	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_const: 65, i64_const: 66, i32_sub: 107, i32_wrap_i64: 167, f64_const: 68, i32_eqz: 69, i64_eqz: 80,
 	i64_rem_s: 129, i64_extend_i32_u: 173, f64_convert_i64_s: 185, f64_neg: 154, i32_and: 113, i32_or: 114}
 # GC instructions, after their prefix 251
 gc_prefix = 251
@@ -93,7 +94,8 @@ section(id: int, content: any) := [id] + uleb(#content) + content
 # a function as written; compiling it gives the rest
 class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = [] }
+# globals: [index, kind] of each `global` variable by name, global_order their names
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = [] }
 
 module = Module({}, [])
 
@@ -166,7 +168,8 @@ collect_functions(program: any, functions: any) := {
 
 ## one function's locals while its body is read
 # a runtime word's body may use the intrinsics
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool }
+# function: the one compiled, returned: the kinds its `return`s give
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any }
 
 local_index(body: Body, name: text, kind: text) := {
 	if name in body.names { return body.names[name] }
@@ -278,6 +281,10 @@ runtime_call(name: text, values: any) := call_values(module.runtime[name], value
 
 local_value(body: Body, n: any) := {
 	name = name_of(n)
+	if not (name in body.names) and name in module.globals {
+		entry = module.globals[name]
+		return [entry#2, [op.global_get] + uleb(entry#1)]
+	}
 	if not (name in body.names) { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -314,11 +321,33 @@ assignment(body: Body, target: any, value: any) := {
 	name = name_of(target)
 	kind = value#1
 	if kind == "bool" { return refuse("a yes/no variable") }
+	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		kind = body.kinds#(body.names[name] + 1)
 	}
 	index = uleb(local_index(body, name, kind))
 	[kind, converted(value, kind) + [op.local_tee] + index]
+}
+
+# `global name = value` declares the module's variable name, which every function reads and writes
+declare_global(name: text, value: any) := {
+	if not (name in module.globals) {
+		module.globals[name] = [#module.global_order, value#1]
+		module.global_order += [name]
+	}
+	global_assignment(name, value)
+}
+global_assignment(name: text, value: any) := {
+	entry = module.globals[name]
+	index = uleb(entry#1)
+	[entry#2, converted(value, entry#2) + [op.global_set] + index + [op.global_get] + index]
+}
+# `return x`: x ends the function; what follows it is unreachable, of any kind
+return_value(body: Body, value: any) := {
+	body.returned += [value#1]
+	result = body.function.result
+	code = if result == pending then value#2 else converted(value, result)
+	[pending, code + [op.return]]
 }
 
 call(body: Body, f: Function, arguments: any) := {
@@ -380,27 +409,31 @@ group_expression(body: Body, n: any) := {
 		return intrinsic(body, name_of(n#1), n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
+	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
 	if bracket_of(n) == "[" { return list_value(body, n.map(x => x)) }
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
 	sequence(body, n.map(x => x))
 }
 
 key_expression(body: Body, n: any) := {
-	symbol = op_of(n)
+	operator = op_of(n)
 	left = key_of(n)
 	right = value_of(n)
-	if symbol == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
-	if symbol == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
-	if symbol == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
-	if symbol == "=" { return assignment(body, left, expression(body, right)) }
-	if symbol in compound_ops { return assignment(body, left, operation(body, compound_ops[symbol], expression(body, left), expression(body, right))) }
-	if symbol in steps and right == ø { return assignment(body, left, operation(body, steps[symbol], expression(body, left), number_value(1))) }
-	if symbol == "-" and left == ø { return negation(expression(body, right)) }
-	if symbol == "and" or symbol == "or" { return logical(body, symbol, left, right) }
-	if symbol == "#" and left == ø { return length(expression(body, right)) }
-	if symbol == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
-	if left == ø or right == ø { return refuse("the operator " + symbol) }
-	operation(body, symbol, expression(body, left), expression(body, right))
+	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
+	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
+	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
+	if operator == "=" { return assignment(body, left, expression(body, right)) }
+	if operator == ":" and left is symbol and name_of(left) == "global" and type(right) is key and op_of(right) == "=" and key_of(right) is symbol {
+		return declare_global(name_of(key_of(right)), expression(body, value_of(right)))
+	}
+	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
+	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
+	if operator == "-" and left == ø { return negation(expression(body, right)) }
+	if operator == "and" or operator == "or" { return logical(body, operator, left, right) }
+	if operator == "#" and left == ø { return length(expression(body, right)) }
+	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
+	if left == ø or right == ø { return refuse("the operator " + operator) }
+	operation(body, operator, expression(body, left), expression(body, right))
 }
 right_of_if(n: any) := value_of(n)
 
@@ -421,7 +454,7 @@ logical(body: Body, symbol: text, left: any, right: any) := {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function) := {
-	scope = Body({}, [], [], 0, f.is_runtime)
+	scope = Body({}, [], [], 0, f.is_runtime, f, [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }
@@ -438,18 +471,27 @@ compile_function(f: Function, argument_kinds: any) := {
 	f.kinds = parameter_kinds
 	# the first reading finds the result kind, the second gives the code with every recursive call knowing it
 	f.result = pending
-	f.result = expression(new_scope(f), f.body)#1
+	first = new_scope(f)
+	result = expression(first, f.body)#1
+	for kind in first.returned { result = joint_kind(result, kind) }
+	if result == no_kind or result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
+	f.result = result
 	scope = new_scope(f)
-	compiled = expression(scope, f.body)
-	if compiled#1 == no_kind or compiled#1 == "mixed" or compiled#1 == pending { return refuse(f.name + " giving a " + compiled#1) }
-	f.result = compiled#1
-	f.code = compiled#2
+	f.code = converted(expression(scope, f.body), result)
 	f.locals = scope.kinds[(#f.parameters)..]
 	f.local_names = scope.order
 }
 
 ## the module
 value_type(kind: text) := if kind in references then references[kind] else [type_bytes[kind]]
+# a global's first value, before its declaration sets it
+zero_of(kind: text) := {
+	if kind == "int" { return [op.i64_const, 0] }
+	if kind == "float" { return [op.f64_const] + le64(0) }
+	if kind in references { return [ref_null] + (if kind == "node" then [110] else uleb(references[kind]#2)) }
+	[op.i32_const, 0]
+}
+global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
 function_type(f: Function) := [function_type_byte] + vector(f.kinds.map(value_type)) + [1] + value_type(f.result)
 function_body(f: Function) := {
 	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
@@ -470,7 +512,9 @@ names_section(functions: any) := {
 	types = name_map(gc_names.map(t => t#1))
 	fields = vector(range_list(#gc_names).map(i => uleb(i) + name_map(gc_names#(i + 1)#2)))
 	content = subsection(names_subsections.functions, function_names) + subsection(names_subsections.locals, locals)
-	content += subsection(names_subsections.types, types) + subsection(names_subsections.fields, fields)
+	globals = name_map(module.global_order)
+	content += subsection(names_subsections.types, types) + subsection(names_subsections.globals, globals)
+	content += subsection(names_subsections.fields, fields)
 	section(section_ids.custom, name_bytes("name") + content)
 }
 
@@ -482,7 +526,8 @@ module_bytes(functions: any) := {
 	segments = section(section_ids.data_count, uleb(1))
 	codes = section(section_ids.code, vector(functions.map(function_body)))
 	texts = section(section_ids.data, vector([[passive_segment] + uleb(#module.bytes) + module.bytes]))
-	parts = [types, declared, exported, segments, codes, texts]
+	globals = section(section_ids.globals, vector(module.global_order.map(global_entry)))
+	parts = [types, declared, globals, exported, segments, codes, texts]
 	wasm_header + joined(parts) + names_section(functions)
 }
 
@@ -491,6 +536,8 @@ wasm_module(program: any) := {
 	module.functions = {}
 	module.order = []
 	module.runtime = {}
+	module.globals = {}
+	module.global_order = []
 	module.texts = {}
 	module.bytes = []
 	collect_functions(runtime, module.runtime)
