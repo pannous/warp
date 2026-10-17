@@ -83,5 +83,3 @@ Left to merge, each into one home with `--home`: UNION_JOINER, MODULE_FILE ×3, 
 MISSING_TARGET_SIGN, WARP_CALL, FIRED_PREFIX, STYLE ×6, EXTREMA/EXTREMUM_WORDS, CHANGE_WORDS ×2
 (`probes/cleanup/duplicate_constants.py` shows which are still there).
 
-## Rounds
-The Refactorer adds one line per round: date, what moved or merged, net src/ delta.

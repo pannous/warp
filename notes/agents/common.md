@@ -49,11 +49,10 @@ instead of bending the code.
   the current worktree (`restore` puts the committed manifests back); the Integrator's version_tweak.sh does the same.
   In /Users/me/dev/angles/warp itself (the user's checkout) only small changes on main, and never the user's
   uncommitted files.
-- The user's uncommitted edits are the Integrator's to adopt: whoever
-  notices uncommitted user changes in the main checkout or wiki/ (`git status`), above all in files of their own task,
-  never leaves them lying and never reports them as "untouched": SendMessage warp-integrator the paths and what they
-  ask for (commented TODOs are wishes). The Integrator reviews, fixes and commits them on the user's behalf in their
-  own commit, and turns a TODO it cannot do at once into a card.
+- The user's uncommitted edits are integrated at once by whoever meets them in the main checkout or wiki/
+  (`git status`), never left lying or reported as "untouched": read the diff, complete it, run it and commit it in the
+  main checkout itself as the user's change (notes/roles.md "Workers"). Commented TODOs are wishes: one that can't be
+  done at once becomes a card.
 - Word choices need no question (the alias mechanism): when alternatives are only different words
   for the same thing, make the recommended word canonical and the others aliases that work with a got-it note and an
   "I meant: <word>" fix (diagnostic::note_alias; which hint call to use: notes/fixits.md "Hints, notes and

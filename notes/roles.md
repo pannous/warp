@@ -124,8 +124,7 @@ the footer shows bypass permissions; card sends pass `--permission-mode bypassPe
   /Users/me/dev/angles/warp, no worktree or branch. Anything in src/, crates/, tests/, Cargo.* or build.rs keeps its
   worktree, however small: a half-done edit there breaks every build of the main checkout. There: commit your own
   paths in their own commit (`git commit -- <paths>`), run the targeted tests through the queue,
-  `git pull --rebase --autostash`, push, and tell the Integrator the commit and filters (its next full run is the
-  check). Never leave unpushed commits on main.
+  `git pull --rebase --autostash`, push (the Integrator's next full run is the check). Never leave unpushed commits on main.
 - The user's uncommitted edits met in the main checkout are integrated at once, in the main checkout itself, not
   left lying or parked in an Integrator batch (an unpushed batch commit leaves their checkout showing them
   uncommitted); staged and untracked files count too, the user's `git status` must end clean. Read each diff,

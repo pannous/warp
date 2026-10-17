@@ -26,7 +26,7 @@ Each round should leave src/ smaller or better placed, and preferably both.
      merged since your last round shows where.
   3. Pick the worst area and do one chunk on its own branch.
   4. Send it to the Integrator.
-  5. Note it in notes/restructuring.md: the date, what moved or merged, and the net src/ delta.
+  5. Note it in data/restructuring/log.md: the date, what moved or merged, and the net src/ delta.
 - **Moves:** pure moves get their own commits, with no logic change in a move commit (scripts/move_fn.py,
   scripts/move_module.py). Update the `use` paths rather than leaving permanent `pub use` aliases: one path per item.
 - **Merges and generalisations** are measured in lines: each merge request states its net src/ delta (decision
