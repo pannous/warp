@@ -49,7 +49,11 @@ Worker.
 brew install pannous/tap/warp
 ```
 
-**Prebuilt binaries** (macOS arm64, Linux x86_64 and arm64): download the archive for your platform from the
+**Debian, Ubuntu, Fedora** (glibc 2.39 or newer: Ubuntu 24.04, Debian 13, Fedora 40): the `.deb` or `.rpm` of the
+[latest release](https://github.com/pannous/warp/releases/latest), e.g.
+`sudo apt install ./warp-lang_*_amd64.deb` or `sudo dnf install ./warp-lang-*.x86_64.rpm`.
+
+**Prebuilt binaries** (macOS arm64 and x86_64, Linux x86_64 and arm64): download the archive for your platform from the
 [latest release](https://github.com/pannous/warp/releases/latest) and put `warp` and `warp-runtime` together on your `PATH`.
 
 **Cargo** (any platform with [Rust](https://rustup.rs)):

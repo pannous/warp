@@ -1,0 +1,20 @@
+pkgbase = warp-lang-bin
+	pkgdesc = Warp: a data notation that is also a programming language, compiled to WebAssembly GC
+	pkgver = 1.2.6
+	pkgrel = 1
+	url = https://warp.pannous.com/
+	arch = x86_64
+	arch = aarch64
+	license = custom
+	depends = glibc
+	depends = gcc-libs
+	provides = warp-lang
+	conflicts = warp-lang
+	options = !strip
+	options = !debug
+	source_x86_64 = https://github.com/pannous/warp/releases/download/v1.2.6/warp-v1.2.6-x86_64-unknown-linux-gnu.tar.gz
+	sha256sums_x86_64 = 53c92db525c14fb27c68844eef76d91c29799b574b4fbf3eb6f75355a2642c35
+	source_aarch64 = https://github.com/pannous/warp/releases/download/v1.2.6/warp-v1.2.6-aarch64-unknown-linux-gnu.tar.gz
+	sha256sums_aarch64 = de2f9204f86067f6e6f609c3a14d8a000ccbba96d4d87767ea92c4c0758596a1
+
+pkgname = warp-lang-bin
