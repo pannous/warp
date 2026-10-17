@@ -4,7 +4,7 @@
 # version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
 # Usage: build.sh [optimized|debug|components|pinned|served <site>|site <site>]   (all when omitted)
-#   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
+#   optimized → warp.wasm: profile web-release (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
 #               emitter bugs are named and stack traces and the browser's debugger show Rust functions and lines
@@ -50,7 +50,7 @@ compile() {
 
 build_optimized() {
 	local compiled
-	compiled=$(compile release)
+	compiled=$(compile web-release)
 	# without wasm-opt (or an older one refusing a feature) the module of the LTO build serves, a seventh larger
 	wasm-opt "${WASM_OPT_FLAGS[@]}" "$compiled" -o "$page/warp.wasm" || cp "$compiled" "$page/warp.wasm"
 	echo "built $page/warp.wasm ($(wc -c < "$page/warp.wasm") bytes)"
