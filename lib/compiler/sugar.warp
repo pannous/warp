@@ -15,8 +15,8 @@ sugared(node: any) := {
 	if node === ø or not (node is list) { return node }
 	node = node.map(sugared)
 	if node#1 == "key" and KEY_SUGAR contains node#2 {
-		rewrite = KEY_REWRITES#(position_of(KEY_SUGAR, node#2))
-		return rewrite(node#3, node#4)
+		key_rewrite = KEY_REWRITES#(position_of(KEY_SUGAR, node#2))
+		return key_rewrite(node#3, node#4)
 	}
 	if node#1 == "type" and node#3 !== ø { return ["type", node#2, typed_fields(node#3)] }
 	if node#1 == "symbol" {
