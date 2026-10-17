@@ -4,7 +4,10 @@ use crate::is;
 
 #[test]
 fn a_byte_loop_over_a_text_parameter() {
-	is!("total(t) := { s = 0; i = 0; while i < t.bytecount { s = s + byte_at(t, i); i = i + 1 }; s }; total(\"abc\")", 294);
+	is!(
+		"total(t) := { s = 0; i = 0; while i < t.bytecount { s = s + byte_at(t, i); i = i + 1 }; s }; total(\"abc\")",
+		294
+	);
 	is!(
 		"fast total(t) := { s = 0; i = 0; while i < t.bytecount { s = s + byte_at(t, i); i = i + 1 }; s }; total(\"é\")",
 		364

@@ -11,7 +11,8 @@ fn shalom(code: &str) -> String {
 
 #[test]
 fn shalom_counts_four_characters_and_six_code_points() {
-	for four in ["count s", "count s.graphemes", "count(s.chars)", "number of chars in s", "number of characters in s"] {
+	for four in ["count s", "count s.graphemes", "count(s.chars)", "number of chars in s", "number of characters in s"]
+	{
 		is!(&shalom(four), 4);
 	}
 	for six in ["count s.codepoints", "number of codepoints in s"] {
