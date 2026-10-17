@@ -52,7 +52,9 @@ BOARD_QUERY = """query($owner: String!, $name: String!, $number: Int!) {
 CREATE_ISSUE = """mutation($repository: ID!, $title: String!, $body: String) {
   createIssue(input: {repositoryId: $repository, title: $title, body: $body}) { issue { id url } } }"""
 ADD_ITEM = """mutation($project: ID!, $content: ID!) {
-  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id } } }"""
+  addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id databaseId } } }"""
+UPDATE_BODY = """mutation($issue: ID!, $body: String!) { updateIssue(input: {id: $issue, body: $body}) { issue { id } } }"""
+CARD_LINK = f"Board card: https://github.com/users/{OWNER}/projects/{BOARD_NUMBER}?pane=issue&itemId=%s"  # as todo's
 SET_COLUMN = """mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
   updateProjectV2ItemFieldValue(input: {projectId: $project, itemId: $item, fieldId: $field,
     value: {singleSelectOptionId: $option}}) { projectV2Item { id } } }"""
@@ -102,9 +104,10 @@ def make_card(report):
     board = graphql(BOARD_QUERY, owner=OWNER, name=REPOSITORY_NAME, number=BOARD_NUMBER)
     project, status = board["user"]["projectV2"]["id"], board["user"]["projectV2"]["field"]
     issue = graphql(CREATE_ISSUE, repository=board["repository"]["id"], title=title, body=body)["createIssue"]["issue"]
-    item = graphql(ADD_ITEM, project=project, content=issue["id"])["addProjectV2ItemById"]["item"]["id"]
+    item = graphql(ADD_ITEM, project=project, content=issue["id"])["addProjectV2ItemById"]["item"]
+    graphql(UPDATE_BODY, issue=issue["id"], body=body + "\n\n" + CARD_LINK % item["databaseId"])
     option = next(option["id"] for option in status["options"] if option["name"] == COLUMNS[report["express"]])
-    graphql(SET_COLUMN, project=project, item=item, field=status["id"], option=option)
+    graphql(SET_COLUMN, project=project, item=item["id"], field=status["id"], option=option)
     return issue["url"]
 
 
