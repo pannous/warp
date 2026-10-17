@@ -521,6 +521,10 @@ def prefixed(p) {
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
+	declared = type_declaration(p)
+	if declared != ø { return declared }
+	declared = global_declaration(p)
+	if declared != ø { return declared }
 	if keyword_at(p, "loop") {
 		endless = endless_loop(p)
 		if endless != ø { return endless }
@@ -898,6 +902,138 @@ def spread(arguments) {
 	if arguments == ø { return [] }
 	if arguments is list and arguments#1 == "list" { return arguments[3 .. arguments.length] }
 	[arguments]
+}
+
+// The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type
+// word types it, `global int n = 0` is `n:int = 0`
+// Rust twin: mod.rs DECLARATION_MODIFIERS, words.rs CONSTANT_KEYWORDS, analyzer type_word_kind
+DECLARATION_MODIFIERS = ["export", "mutable", "mut", "const", "constant", "final", "val"]
+DECLARED_TYPE_WORDS = ["int", "float", "number", "text", "string", "bool", "char", "byte"]
+
+// `global x = 1`, `global n`, `export api: clock` as `global: x = 1`, a module-level variable; `global a, b` declares
+// each; `export` without a name after it stays a word
+// Rust twin: definitions/variables.rs try_parse_global_declaration, skip_declaration_modifiers, typed_global
+def global_declaration(p) {
+	keyword = if keyword_at(p, "global") then "global" else if keyword_at(p, "export") then "export" else ""
+	if keyword == "" { return ø }
+	at = blank_end(p, p.at + keyword.length)
+	if at == p.at + keyword.length or not is_name_start(peek(p.code, at, p.n)) { return ø }
+	p.at = at
+	type_word = ø
+	while true {
+		end = name_end(p.code, p.at, p.n)
+		word = p.code[p.at .. end]
+		after = blank_end(p, end)
+		if not (DECLARATION_MODIFIERS contains word or DECLARED_TYPE_WORDS contains word) or not is_name_start(peek(p.code, after, p.n)) { break }
+		if DECLARED_TYPE_WORDS contains word { type_word = word }
+		p.at = after
+	}
+	declaration = expression(p, 0)
+	if type_word != ø and declaration is list and declaration#1 == "key" and declaration#2 == "=" and is_symbol(declaration#3) {
+		declaration = ["key", "=", ["key", ":", declaration#3, ["symbol", type_word]], declaration#4]
+	}
+	names = [declaration]
+	while keyword == "global" and is_symbol(names#(names.length)) and is_at(p.code, p.at, ',', p.n) {
+		p.at = p.at + 1
+		skip_spaces(p)
+		names = names + [atom(p)]
+	}
+	declared = [["key", ":", ["symbol", "global"], name] for name in names]
+	if declared.length == 1 { return declared#1 }
+	listed("", ";", declared)
+}
+
+// The words that declare a type: `class V {…}`, `struct P {…}`, `type Point {…}`
+// Rust twin: mod.rs TYPE_DECLARATION_WORDS, types/declarations.rs declares_type
+TYPE_WORDS = ["class", "struct", "type"]
+// What follows the name of a lowercase `type`: `type point {…}`, `type size = u32`, `type pair<T>`
+TYPE_BODY_STARTS = "{=:<"
+// The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
+// Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
+CODE_MEMBER_WORDS = FUNCTION_KEYWORDS + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]
+
+// `class V { x: int }` as ["type", name, body], else ø with nothing read
+def type_declaration(p) {
+	if p.at > 0 and p.code[p.at - 1] == '.' { return ø }
+	for word in TYPE_WORDS {
+		if keyword_at(p, word) and declares_type(p, word) { return declared_type(p, word) }
+	}
+	ø
+}
+
+// `class:"btn"`, `type = "text"` are keys and `type(x)`, `type 3.5` the type of a value: a declaration names its type,
+// after `type` a capital name or a name with its body
+// Rust twin: types/declarations.rs declares_type, type_declaration_follows
+def declares_type(p, word) {
+	at = blank_end(p, p.at + word.length)
+	c = peek(p.code, at, p.n)
+	if (c == ':' or c == '=') and peek(p.code, at + 1, p.n) != '=' { return false }
+	if word != "type" { return true }
+	if not is_name_start(c) { return false }
+	end = symbol_end(p.code, at, p.n)
+	after = blank_end(p, end)
+	body_follows = TYPE_BODY_STARTS.contains(peek(p.code, after, p.n)) and peek(p.code, after + 1, p.n) != '='
+	c.upper() == c or body_follows or p.code[at .. end] == "of"
+}
+
+def blank_end(p, from) {
+	at = from
+	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	at
+}
+
+// The name and `{fields}` of a type declaration; `class Dog extends Animal` carries its parent on the name, a bare
+// `class Marker` is marked and gets an empty body
+// Rust twin: types/declarations.rs parse_class_declaration, parse_type_declaration_body
+def declared_type(p, word) {
+	p.at = p.at + word.length
+	skip_blanks(p)
+	end = symbol_end(p.code, p.at, p.n)
+	name = ["symbol", p.code[p.at .. end]]
+	p.at = end
+	ends_statement = ";}\n".contains(peek(p.code, blank_end(p, p.at), p.n))
+	skip_blanks(p)
+	if keyword_at(p, "extends") {
+		p.at = p.at + 7
+		skip_blanks(p)
+		end = symbol_end(p.code, p.at, p.n)
+		name = ["attribute", "extends", ["symbol", p.code[p.at .. end]], name]
+		p.at = end
+		skip_blanks(p)
+	}
+	if is_at(p.code, p.at, '{', p.n) {
+		p.at = p.at + 1
+		return ["type", name, typed_fields(items(p, '}', "{"))]
+	}
+	if not ends_statement { return ["type", name, ø] }
+	if word == "class" { name = ["attribute", "bare_class", true, name] }
+	["type", name, ["list", "{", ""]]
+}
+
+// A class body's fields with their types, `x: int` holding the type int; a method keeps its code
+// Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type
+def typed_fields(node) {
+	if not (node is list) { return node }
+	if node#1 == "key" {
+		if node#2 == ":=" { return node }
+		value = node#4
+		if is_symbol(value) { value = ["type", value, ø] }
+		return ["key", node#2, node#3, value]
+	}
+	if node#1 != "list" or node.length < 4 or starts_code(node#4) { return node }
+	members = [typed_fields(member) for member in node[3 .. node.length]]
+	// the line `left: Node` is the one field
+	if node#2 == "" and members.length == 1 and members#1 is list and members#1#1 == "key" and members#1#2 == ":" {
+		return members#1
+	}
+	listed(node#2, node#3, members)
+}
+
+// `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
+// Rust twin: lookahead.rs starts_code
+def starts_code(first) {
+	if is_symbol(first) { return CODE_MEMBER_WORDS contains first#2 }
+	is_call_head(first) and is_symbol(first#4)
 }
 
 // The digits of a number in `base` (`_` between binary digits), read
