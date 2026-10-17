@@ -243,7 +243,7 @@ def line_breaks_after(p, at) := p.breaks[at] == true
 def code_after(p, at) := if line_ends_after(p, at) then '\n' else p.code[p.resumes[at]]
 
 def skip_spaces(p) {
-	while p.at < p.n and (p.code[p.at] == ' ' or p.code[p.at] == '\t') { p.at = p.at + 1 }
+	p.at = blank_end(p, p.at)
 }
 
 // An expression of operators binding at least `min_power` on the left
@@ -419,8 +419,7 @@ def is_call_head(node) := node is list and node.length > 3 and node#1 == "list" 
 // `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
 // Rust twin: suffixes.rs try_parse_control_suffix
 def times_binds(p, min_power) {
-	at = p.at + 5
-	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+	at = blank_end(p, p.at + 5)
 	c = peek(p.code, at, p.n)
 	value_follows = is_digit(c) or c == '"' or c == '\'' or is_name_start(c)
 	min_power <= TIMES_POWER or c == '[' or (value_follows and min_power <= 150)
@@ -449,8 +448,7 @@ def count_worded(p) {
 	if FUNCTION_KEYWORDS contains word_before(p) { return ø }
 	for word in COUNT_WORDS {
 		if keyword_at(p, word#1) and not (p.bound contains word#1) {
-			at = p.at + word#1.length
-			while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+			at = blank_end(p, p.at + word#1.length)
 			c = peek(p.code, at, p.n)
 			if c != '{' and c != '[' and c != '"' and c != '\'' { return ø }
 			start = p.at
@@ -496,9 +494,7 @@ def floor_division_at(p) {
 
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
 def opens_block(p, width) {
-	at = p.at + width
-	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
-	is_at(p.code, at, '{', p.n)
+	is_at(p.code, blank_end(p, p.at + width), '{', p.n)
 }
 
 // `x in xs`, `xs contains x`: the membership word at the parser's position, else ""
