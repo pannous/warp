@@ -19,12 +19,9 @@ Decision self-hosting:
   is!/samples suite through the warp pipeline and reports the pass count; that count is the progress number. A warp
   stage becomes the default when the suite passes with it. 80–90% passing is fine at the start: breadth over the
   long tail, the failing rest is a ranked list, not a blocker.
-- The Rust compiler stays as fallback and reference implementation, and it is cleaned up FIRST, stage by stage, so
-  the port starts from a clean basis and doesn't meet the same historic detours again: each structural decision of
-  the rewrite (the parser simplifications S1–S7, the target pipeline, the flow analyzer, the value layout, retiring
-  library words, cards rust-*) lands in Rust first or together with its warp stage, by that stage's worker; the warp
-  stage then ports the cleaned design. Where warp is already ahead (flow analyzer, value layout), the design goes
-  back into Rust.
+- The Rust compiler stays as fallback and reference implementation, and gets an intermediate cleanup phase now
+  (notes/rust_cleanup.md): every worker finishes its current card, applies the rewrite's structural decisions to the
+  Rust side of its stage, then self-hosting resumes and ports the cleaned design.
 - Twins (a warp part next to its Rust original, compared over every source) are scaffolding only: kept where a warp
   stage hands its result to a Rust stage, because the Rust side needs a compatible shape, and dropped as soon as the
   stages on both sides are warp. No new intermediate twin is written where the suite can already judge.
@@ -35,7 +32,7 @@ Decision self-hosting:
 - Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
   result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
   warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
-  (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
+  (notes/self_hosting_dropped.md, the component's "deviations" section, with an example each), and the Rust side gets a bug card or,
   when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
   quirks before its Rust part is removed.
 - The same holds for structurally unsound decisions, not only bugs: special cases for single words, passes that undo
@@ -58,9 +55,13 @@ parser-keyword-table. Target shapes:
 - parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
   `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
   each; the twin compares after that pass.
+  Done (lib/compiler/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
+  `loop {…}`. Count words wait for parser-scope-pass (a program's own `twice`); `1e3`, `2x`, `x⁻¹`, `global int n`
+  already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
   knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+  Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
   restoring by hand.
 - parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,

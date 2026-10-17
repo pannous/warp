@@ -2,6 +2,7 @@
 # dot only group it. The parser gives the call `f()` the form of the group `(f)`, so only a name the program binds to
 # a value (an assignment that is no lambda, a loop variable) ungroups; `f().b`, `today().year` stay calls.
 use "walk.warp"
+use "scope.warp"
 
 # `(p)`: the one name in parentheses, else ø
 grouped_name(n: any) := {
@@ -11,38 +12,14 @@ grouped_name(n: any) := {
 	ø
 }
 
-# `x => …`, `(x => …)`: a lambda value
-is_arrow_view(view: any) := {
-	kind = kind_of(view)
-	if kind == "key" { return view#2 == "=>" or view#2 == "->" }
-	kind == "list" and view#2 == "(" and #view == 4 and is_arrow_view(view#4)
-}
+# a name the program binds to a value, never to a function
+is_variable(scope: any, name: text) := (binds_as(scope, name, "variable") or binds_as(scope, name, "loop")) and not binds_as(scope, name, "function")
 
-# the names `name := …` and `def name …` define as functions
-function_names_of(view: any) := {
-	if kind_of(view) == "key" and view#2 == ":=" { return [head_name(view#3)] }
-	names_after_words(view, function_keywords, no)
-}
-
-# the names assigned a value that is no lambda, and the loop variables, without the program's functions
-bound_variables(program: any) := {
-	variables = []
-	functions = []
-	for view in views_in(program) {
-		variables += loop_variables_of(view)
-		if kind_of(view) == "key" and view#2 == "=" and kind_of(view#3) == "symbol" and not is_arrow_view(view#4) {
-			variables += [view#3#2]
-		}
-		functions += function_names_of(view)
-	}
-	variables.filter(name => not (functions contains name))
-}
-
-# `(p).a` as `p.a` when p is one of the variables
-ungrouped(n: any, variables: any) := {
+# `(p).a` as `p.a` when p is a variable
+ungrouped(n: any, scope: any) := {
 	if type(n) is not key or op_of(n) != "." { return n }
 	name = grouped_name(key_of(n))
-	if name == ø or not (variables contains name_of(name)) { return n }
+	if name == ø or not is_variable(scope, name_of(name)) { return n }
 	key(name, ".", value_of(n))
 }
 
@@ -50,6 +27,6 @@ grouped_receivers(program: any) := {
 	if not view_has(view_of(program), part => kind_of(part) == "key" and part#2 == "." and grouped_name(node_of(part#3)) != ø) {
 		return program
 	}
-	variables = bound_variables(program)
-	bottom_up(program, part => ungrouped(part, variables))
+	scope = scope_of(program)
+	bottom_up(program, part => ungrouped(part, scope))
 }

@@ -3746,7 +3746,6 @@ PASSED:
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
   ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
-  ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
   ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
@@ -6347,6 +6346,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_lexer::numbers_match_their_rust_twin
 
 SUMMARY:
-16 ignored, 6344 passed, 0 failed, 6344 total tested
+16 ignored, 6343 passed, 1 failed, 6344 total tested
