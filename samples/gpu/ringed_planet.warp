@@ -2,8 +2,11 @@
 # a compute.toys kernel through compute_toy of `use compute_toys` (samples/gpu/lava_lamp.warp shows the simplest):
 # a gas giant with rings, lit by a sun off to the left. Every pixel's ray is tested against the planet (a sphere) and
 # the rings (a flat disc with a hole); the planet's bands drift with time, the rings throw a shadow on it and it on them.
-# The pointer turns the view: left and right go around the planet, up and down tilt the rings.
+# The pointer turns the view: left and right go around the planet, up and down tilt the rings; the wheel flies closer
+# or farther (compute.toys' mouse.zoom). Full HD, so a star is one pixel
 use compute_toys
+width = 1920
+height = 1080
 planet = compute_toy(shader {
 	const PLANET = 1.0;
 	const RING_INNER = 1.45;
@@ -61,7 +64,8 @@ planet = compute_toy(shader {
 		let pointer = select(float2(mouse.pos) / size, float2(0.5, 0.45), mouse.pos.x <= 0 && mouse.pos.y <= 0);
 		let around = (pointer.x - 0.5) * 4.0;
 		let tilt = 0.08 + (pointer.y - 0.2) * 0.8;
-		let eye = 6.0 * float3(sin(around) * cos(tilt), sin(tilt), -cos(around) * cos(tilt));
+		let distance = clamp(6.0 / mouse.zoom, 2.2, 30.0);
+		let eye = distance * float3(sin(around) * cos(tilt), sin(tilt), -cos(around) * cos(tilt));
 		let forward = normalize(-eye);
 		let right = normalize(cross(float3(0.0, 1.0, 0.0), forward));
 		let up = cross(forward, right);
@@ -72,8 +76,8 @@ planet = compute_toy(shader {
 		let t = time.elapsed;
 
 		// the sky: stars, sparse and faint
-		let star = hash(floor(float2(id.xy) / 2.0));
-		var color = float3(0.004, 0.006, 0.015) + float3(select(0.0, 0.7, star > 0.997));
+		let star = hash(float2(id.xy));
+		var color = float3(0.004, 0.006, 0.015) + float3(select(0.0, 0.8, star > 0.9985));
 
 		let planet_at = hit_planet(eye, ray);
 		let rings_at = hit_rings(eye, ray);
