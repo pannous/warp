@@ -72,3 +72,13 @@ fn grouped_receivers_match_their_rust_twin() {
 		&FUNCTION_REFERENCES,
 	);
 }
+
+#[test]
+fn element_wise_operators_match_their_rust_twin() {
+	pass_differential(
+		warp::lowering::broadcasting::lower_element_wise_operators,
+		"broadcasting",
+		"element_wise_operators_pass",
+		&[],
+	);
+}

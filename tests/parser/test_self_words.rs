@@ -48,4 +48,6 @@ fn type_words_are_the_rust_type_words() {
 fn copied_tables_are_their_rust_constants() {
 	assert_eq!(warp_list("function_keywords"), warp::operators::FUNCTION_KEYWORDS);
 	assert_eq!(warp_list("selector_words"), warp::lowering::of_lookups::SELECTOR_WORDS);
+	let element_wise: Vec<&str> = warp::operators::ELEMENT_WISE_OPERATORS.iter().map(|op| op.as_str()).collect();
+	assert_eq!(warp_list("element_wise_operators"), element_wise);
 }
