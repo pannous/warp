@@ -1,0 +1,6 @@
+// parser/passes: pattern matching over Node shapes with code holes
+// n, n + k, twice
+simplify(code) := match code { data($a + 0) => a; data($a * 1) => a; _ => code }
+print(simplify(data(n * 1)))
+print(data(n * 1 + k * 1) replace data($a * 1) with a)
+print(match data(g(y, y)) { data($f($x, $x)) => "twice"; _ => "no" })

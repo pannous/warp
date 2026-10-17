@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::lowering::nodes::children_rewritten;
-use crate::words::{ANY_TYPE, LIST_WORD};
+use crate::words::{ANY_TYPE, FLOAT_WORD, LIST_WORD, NUMBER_WORD};
 
 mod definitions;
 pub(crate) use definitions::*;
@@ -185,7 +185,21 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, &body);
-	let scope = function_body_scope(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+	let mut scope = function_body_scope(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+	// `number sine(number x){ x = x % turn …` with a float turn: the `number` parameter holds a float throughout
+	let mut params = params;
+	let mut widened = false;
+	for param in
+		params.iter_mut().filter(|param| scope.locals.get(&param.name).is_some_and(|local| local.kind.is_float()))
+	{
+		if param.annotation.as_ref().is_some_and(|declared| declared.name() == NUMBER_WORD) {
+			param.annotation = Some(Node::Symbol(FLOAT_WORD.to_string()));
+			widened = true;
+		}
+	}
+	if widened {
+		scope = function_body_scope(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+	}
 	let return_kind = infer_function_return_kind(&body, &scope);
 	UserFunctionDef {
 		name: name.to_string(),
@@ -580,6 +594,14 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		// number decided at run time takes both; an Int parameter refused the float
 		if kinds.contains(&Kind::Data) && kinds.iter().all(|kind| matches!(kind, Kind::Data | Kind::Float)) {
 			kinds = vec![Kind::Data];
+		}
+		// passed values of several kinds held as Nodes (`kind_of(parse("x"))` and `kind_of(parse("x + 1"))`, a symbol
+		// and a key): a Node, whose kind the run time tells
+		let several_nodes = kinds.len() > 1 && kinds.iter().all(|kind| kind.is_ref() && *kind != Kind::Data);
+		if several_nodes && unknown && takes_passed_kind(param) {
+			param.used_as = Some(Kind::Empty);
+			changed = true;
+			continue;
 		}
 		let [kind] = kinds.as_slice() else { continue };
 		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
@@ -1124,6 +1146,14 @@ fn type_parameters_by_arguments(ctx: &mut Context, argument_kinds: HashMap<(Stri
 	for ((name, index), kinds) in argument_kinds {
 		let function = ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions");
 		let param = &mut function.params[index];
+		// `number sine(number x)` called with `π / 2` or `sqrt(2)`: a number parameter given a float holds floats, as
+		// fit() widens an Int to a Float
+		if param.annotation.as_ref().is_some_and(|declared| declared.name() == NUMBER_WORD)
+			&& kinds.contains(&Kind::Float)
+		{
+			param.annotation = Some(Node::Symbol(FLOAT_WORD.to_string()));
+			continue;
+		}
 		if param.annotation.is_some() || param.default.is_some() {
 			continue;
 		}

@@ -26,6 +26,12 @@ mod swizzles;
 pub use fields_and_keys::*;
 pub use swizzles::*;
 
+/// The run-time type tests tell a map by node_is_map
+pub(in crate::wasm_emitter) fn type_test_dependencies() -> Vec<crate::wasm_emitter::runtime_dependencies::Dependency> {
+	use crate::type_tests::{NODE_IS_MAP, NODE_KIND_IN, NODE_TYPE_NAME};
+	vec![crate::wasm_emitter::runtime_dependencies::any(&[NODE_KIND_IN, NODE_TYPE_NAME], &[NODE_IS_MAP])]
+}
+
 const UTF8_LENGTH_STEPS: [i64; 3] = [0x80, 0x800, 0x10000];
 /// The kinds a value of unknown static type may have at run time, named by node_type_name as Kind's Display does
 const RUN_TIME_TYPE_KINDS: [Kind; 12] = [
@@ -136,6 +142,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_list_cell_access();
 		self.emit_node_counting();
+		self.emit_node_is_map();
 		self.emit_node_kind_test();
 		self.emit_list_marks();
 		self.emit_node_indexing();
@@ -388,14 +395,45 @@ impl WasmGcEmitter {
 		Self::emit_list(f, &instructions);
 	}
 
-	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`)
-	pub(in crate::wasm_emitter) fn emit_is_map(&self, func: &mut Function) {
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::RefAsNonNull, I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
-			I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::CURLY_LIST_KIND),
-			I::I64Eq,
-		]);
+	/// node on the stack → i32 1 when it is a map (node_is_map)
+	pub(in crate::wasm_emitter) fn emit_is_map(&mut self, func: &mut Function) {
+		func.instruction(&I::RefAsNonNull);
+		self.emit_call(func, crate::type_tests::NODE_IS_MAP);
+	}
+
+	/// node_is_map(node) -> i32: 1 when its kind carries the curly bracket and it is empty or begins with a pair
+	/// (`{}`, `{a: 1}`); a quoted block `{print 1}` is a curly list too, but code, and so is a parse() result marked as
+	/// code (`parse("{a: b}")`)
+	fn emit_node_is_map(&mut self) {
+		if !self.should_emit_function(crate::type_tests::NODE_IS_MAP) {
+			return;
+		}
+		let node_type = self.type_manager.node_type;
+		self.runtime_function(
+			crate::type_tests::NODE_IS_MAP,
+			vec![Ref(self.node_ref(false))],
+			vec![ValType::I32],
+			vec![],
+			|s, f| {
+				s.emit_field(f, 0, 0);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(UNMARKED_KIND | crate::type_kinds::CODE_MARK), I::I64And, I::I64Const(CURLY_LIST_KIND),
+					I::I64Ne, I::If(BlockType::Empty), I32Const(0), I::Return, I::End,
+				]);
+				s.emit_field(f, 0, 1);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefIsNull, I::If(BlockType::Empty), I32Const(1), I::Return, I::End,
+				]);
+				s.emit_field(f, 0, 1);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefCastNonNull(HeapType::Concrete(node_type)), I::StructGet { struct_type_index: node_type, field_index: 0 },
+					I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Key as i64), I::I64Eq,
+				]);
+			},
+		);
 	}
 
 	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol

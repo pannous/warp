@@ -1,0 +1,4 @@
+// every pass: recursion over a deep tree (a long else-if chain nests ~ 1 level per line)
+// 100000
+depth(n) := if n == 0 then 0 else 1 + depth(n - 1)
+print(depth(100000))

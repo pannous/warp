@@ -148,7 +148,9 @@ impl Node {
 				}
 			}
 			Type { name, body } => format!("type {} {}", name.serialize_recurse(meta), body.serialize_recurse(meta)),
-			Data(d) => crate::numbers::units::describe(d).unwrap_or_else(|| format!("Data({:?})", d)),
+			Data(d) => crate::numbers::units::describe(d)
+				.or_else(|| crate::lowering::blocks::sealed_text(d))
+				.unwrap_or_else(|| format!("Data({:?})", d)),
 			// _ => format!("{:?}", self),
 		}
 	}

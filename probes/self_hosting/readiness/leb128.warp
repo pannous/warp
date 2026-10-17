@@ -1,0 +1,15 @@
+// emitter: unsigned and signed LEB128 with bitwise ops
+// [229 142 38], [192 187 120]
+use math
+uleb(n) := { out = []; while n >= 128 { out += [bit_or(bit_and(n, 127), 128)]; n = n >> 7 }; out += [n]; out }
+sleb(n) := {
+	out = []; more = yes
+	while more {
+		b = bit_and(n, 127); n = n >> 7
+		if (n == 0 and bit_and(b, 64) == 0) or (n == -1 and bit_and(b, 64) != 0) { more = no } else { b = bit_or(b, 128) }
+		out += [b]
+	}
+	out
+}
+print(uleb(624485))
+print(sleb(-123456))

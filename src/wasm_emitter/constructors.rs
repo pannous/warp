@@ -93,6 +93,8 @@ impl WasmGcEmitter {
 }
 
 pub const NEW_BOOL: &str = "new_bool";
+/// new_type(name, body): a type declaration in code, `class P {x: int}` (Kind::TypeDef)
+pub const NEW_TYPE: &str = "new_type";
 /// `as_bool(node) -> ref $Node`: an Int 1/0 as the bool it stands for, any other node as it is
 pub const AS_BOOL: &str = "as_bool";
 
@@ -145,7 +147,7 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 		WithInfo,
 		vec![LocalGet(0), LocalGet(1)],
 	);
-	emitter.emit_node_constructor("new_type", Kind::TypeDef, vec![node, node], Plain, vec![LocalGet(0), LocalGet(1)]);
+	emitter.emit_node_constructor(NEW_TYPE, Kind::TypeDef, vec![node, node], Plain, vec![LocalGet(0), LocalGet(1)]);
 	emitter.emit_node_constructor(
 		"new_list",
 		Kind::List,

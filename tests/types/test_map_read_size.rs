@@ -13,6 +13,7 @@ fn a_size_entry_of_a_map_read_at_run_time() {
 	is!("f(xs) := { s = 0; for i in 0 ..< xs.length { s += xs#(i+1) }; s }\nf([1 2 3])", 6);
 }
 
+#[cfg(feature = "native")] // writes a file: the browser's programs see no files of the test's
 #[test]
 fn the_size_entry_of_shell_info() {
 	let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scratch/map_read");
@@ -25,6 +26,7 @@ fn the_size_entry_of_shell_info() {
 }
 
 /// reviewer: every uncalled word on a value that may be a map reads its entry first, not only counting words
+#[cfg(feature = "native")] // writes a file, as above
 #[test]
 fn any_entry_of_shell_info() {
 	let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scratch/map_read");

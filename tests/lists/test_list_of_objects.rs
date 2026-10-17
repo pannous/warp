@@ -12,8 +12,5 @@ fn an_element_of_a_list_of_objects_has_fields() {
 
 #[test]
 fn an_element_of_a_computed_list_of_objects_has_fields() {
-	is!(
-		"data = {users: [{name: \"a\", age: 30}, {name: \"b\", age: 20}]}; data.users.filter(u => u.age > 25)#1.name",
-		"a"
-	);
+	is!("db = {users: [{name: \"a\", age: 30}, {name: \"b\", age: 20}]}; db.users.filter(u => u.age > 25)#1.name", "a");
 }

@@ -156,6 +156,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::switch::check_unit_names,
 	// `tree find {type: "image", src}` and `tree replace p with q`: each a recursive walker of its own (tree_walks.rs)
 	crate::lowering::tree_walks::lower,
+	// `data($a + 1)` builds the code with a's value before any pass renames a, once tree walks are match arms (quasi_quote.rs)
+	crate::lowering::quasi_quote::lower,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::lowering::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)

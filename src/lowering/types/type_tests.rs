@@ -22,6 +22,8 @@ use std::collections::HashSet;
 pub const NODE_KIND_IN: &str = "node_kind_in";
 /// `node_type_name(node)`: `type(x)` of a value of unknown static type, its run-time type as a symbol (list_ops.rs)
 pub const NODE_TYPE_NAME: &str = "node_type_name";
+/// `node_is_map(node)`: 1 when the node is a map at run time, a curly list of pairs; quoted code `{print 1}` is none
+pub const NODE_IS_MAP: &str = "node_is_map";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];

@@ -8,6 +8,8 @@ ACTIVE again (decision self-hosting-resumed, 2026-10-17): self-hosting is the fl
 their current work, then switch to it. The first step is a readiness survey (session warp-self-survey): are all the
 language parts there, or should macros (or a cheaper feature) come first so the warp compiler doesn't bloat? The twins
 on main stay and keep being tested.
+Readiness survey result: notes/self_hosting_readiness.md, which features come before the port (no macros;
+forward-function, data-splice, data-pattern-sealed, parsed-kinds).
 
 Decision self-hosting:
 - Purpose: dogfooding (the compiler in warp shows what the language lacks), independence from Rust, a showcase.

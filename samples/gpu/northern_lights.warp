@@ -9,7 +9,7 @@ lights = compute_toy(shader {
 
 	// a number in 0 … 1 for each grid cell, scrambled by integer multiplies (sin-based hashes stripe in f32)
 	fn hash(p: float2) -> f32 {
-		var h = bitcast<u32>(vec2i(p).x) * 1597334677u ^ bitcast<u32>(vec2i(p).y) * 3812015801u;
+		var h = (bitcast<u32>(vec2i(p).x) * 1597334677u) ^ (bitcast<u32>(vec2i(p).y) * 3812015801u);
 		h = (h ^ (h >> 16u)) * 2246822519u;
 		h = h ^ (h >> 13u);
 		return f32(h) / 4294967295.0;

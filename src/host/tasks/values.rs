@@ -4,7 +4,7 @@ use super::*;
 pub(crate) const CAPTURED_FIELD: usize = 1;
 
 /// The exported constructors a value is rebuilt with in an instance
-pub(crate) const CONSTRUCTORS: [&str; 11] = [
+pub(crate) const CONSTRUCTORS: [&str; 12] = [
 	"new_empty",
 	"new_int",
 	crate::wasm_emitter::NEW_BOOL,
@@ -14,6 +14,7 @@ pub(crate) const CONSTRUCTORS: [&str; 11] = [
 	"new_symbol",
 	"new_key",
 	"new_list",
+	crate::wasm_emitter::NEW_TYPE,
 	crate::wasm_emitter::CLOSURE_REBUILD,
 	NODE_AT,
 ];
@@ -38,6 +39,8 @@ pub enum TaskValue {
 	List(Vec<TaskValue>, i64),
 	/// left, the operator's code, right
 	Key(Box<TaskValue>, i64, Box<TaskValue>),
+	/// a type declaration of parsed code, `class P {x: int}`: its name and body
+	Type(Box<TaskValue>, Box<TaskValue>),
 	/// a function value: its target's name and its captured values, rebuilt by the module's closure_rebuild
 	Closure(String, Box<TaskValue>),
 	/// an exact number beyond the fixnums: numerator and denominator (1 for an integer)
@@ -74,6 +77,9 @@ impl TaskValue {
 				crate::operators::op_to_code(op),
 				Box::new(TaskValue::of(right)?),
 			),
+			Node::Type { name, body } => {
+				TaskValue::Type(Box::new(TaskValue::of(name)?), Box::new(TaskValue::of(body)?))
+			}
 			other => return Err(anyhow!("{} cannot cross to another task yet", other.serialize())),
 		})
 	}
@@ -192,6 +198,10 @@ impl Builders {
 			TaskValue::Key(left, op, right) => {
 				let (left, right) = (self.build(left, store)?, self.build(right, store)?);
 				self.call("new_key", &[left, right, Val::I64(*op)], store)
+			}
+			TaskValue::Type(name, body) => {
+				let (name, body) = (self.build(name, store)?, self.build(body, store)?);
+				self.call(crate::wasm_emitter::NEW_TYPE, &[name, body], store)
 			}
 			// ø, as the emitter makes `[]`: a null would not pass for a Node (a wrapper's empty argument list)
 			TaskValue::List(items, _) if items.is_empty() => self.call("new_empty", &[], store),

@@ -63,6 +63,9 @@ pub(crate) fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Optio
 	(is_operator && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
 }
 
+/// The infix operator of lib/regex.warp whose right operand is a regex: `/a.c/` reads as its text there
+const REGEX_OPERATOR: &str = "matches";
+
 /// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
 pub(crate) fn is_operator_word(glyph: &[char]) -> bool {
 	glyph.first().is_some_and(|c| c.is_alphabetic())
@@ -332,8 +335,42 @@ impl WarpParser {
 		}
 		self.advance_by(operator.glyph.len());
 		self.skip_whitespace();
-		let rhs = self.parse_expr(right_bp);
+		let rhs = match operator.glyph.iter().copied().eq(REGEX_OPERATOR.chars()) {
+			true => self.slashed_regex().unwrap_or_else(|| self.parse_expr(right_bp)),
+			false => self.parse_expr(right_bp),
+		};
 		Some(operator_call(&operator.glyph, vec![lhs.clone(), rhs]))
+	}
+
+	/// `"abc" matches /a.c/`: where a regex is expected, slashes delimit its text as in JavaScript, `\/` a slash in it;
+	/// `//` and `/*` stay comments, a `/` without its closing one on the line stays what it was (card slash-notation)
+	fn slashed_regex(&mut self) -> Option<Node> {
+		if self.current_char() != '/' || matches!(self.peek_char(1), '/' | '*') {
+			return None;
+		}
+		let mut pattern = String::new();
+		let mut offset = 1;
+		loop {
+			match self.peek_char(offset) {
+				'/' => break,
+				'\\' if self.peek_char(offset + 1) == '/' => {
+					pattern.push('/');
+					offset += 2;
+				}
+				'\\' => {
+					pattern.push('\\');
+					pattern.push(self.peek_char(offset + 1));
+					offset += 2;
+				}
+				'\n' | '\0' => return None,
+				other => {
+					pattern.push(other);
+					offset += 1;
+				}
+			}
+		}
+		self.advance_by(offset + 1);
+		Some(Node::Text(pattern))
 	}
 
 	/// `∆3`: the call of the prefix operator on the operand after it

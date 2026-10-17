@@ -1,0 +1,30 @@
+// port of the core of src/lowering/control/switch.rs (Lowering::switch, is_default, no_case, cases_of without
+// alternatives: ~60 Rust lines): `switch s {k: body …}` becomes an if/else chain over a fresh subject variable
+// (switch_subject_1=x;if switch_subject_1==1 then 'one' else if … else 'many')
+// today keys print `:` (card built-key-print) and the group loses its `;` (card self-node-separator)
+switches = 0
+default_keys = {default: yes, other: yes, else: yes, "_": yes}
+fresh_subject() := { global switches; switches += 1; symbol("switch_subject_" + switches) }
+if_then_else(condition, body, otherwise) := key(key(key(ø, "if", condition), "then", body), "else", otherwise)
+is_default(k) := k is symbol and k.name in default_keys
+no_case(subject, value) := bracketed([symbol("switch_no_case"), key(subject.string(), ":", value)], "")
+bracket_of(n) := try { n.bracket } catch e { "" }
+cases_of(block) := if block is key then [block] else block.map(x => x)
+switched(head, subject, cases) := {
+	if not (head == symbol("switch") or head == symbol("match")) or bracket_of(cases) != "{" { return ø }
+	value = fresh_subject()
+	miss = no_case(subject, value)
+	tests = []
+	for c in cases_of(cases) { if is_default(c.key) { miss = c.value } else { tests += [c] } }
+	chain = miss
+	for c in tests.reverse() { chain = if_then_else(key(value, "==", c.key), c.value, chain) }
+	bracketed([key(value, "=", subject), chain], "(")
+}
+switches_lowered(n) := {
+	if n is key { return key(switches_lowered(n.key), n.op, switches_lowered(n.value)) }
+	if not (n is list or bracket_of(n) != "") { return n }
+	n = bracketed(n.map(switches_lowered), n.bracket)
+	if #n == 3 { s = switched(n#1, n#2, n#3); if s != ø { return s } }
+	n
+}
+print(switches_lowered(parse("switch x {1: 'one'; 2: 'two'; other: 'many'}")))
