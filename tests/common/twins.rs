@@ -5,7 +5,7 @@
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
 use warp::warp_parser::parse;
-use warp::{Bracket, Node, Number, Separator};
+use warp::{Bracket, Node, Number, Op, Separator};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
@@ -330,6 +330,37 @@ fn mentions_error(view: &Node) -> bool {
 			items.first().and_then(Node::text_value).as_deref() == Some("error") || items.iter().any(mentions_error)
 		}
 		_ => false,
+	}
+}
+
+/// The analyzer's twin (card inferred-kinds, notes/self_hosting.md step 14): each source the pipeline lowers goes to
+/// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its text compared with src/analyzer/inferred_kinds.rs
+/// on the same program
+pub fn analyzer_differential(paths: &[PathBuf]) {
+	let cases = paths.iter().filter_map(|path| {
+		let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
+		Some(Case::new(path, view_json(&program), warp_list(kinds.iter().map(|kind| Node::text(kind)))))
+	});
+	report("inferred_kinds", &differences_of(cases, "analyzer", "inferred_kinds(node_of(json(argument)))"));
+}
+
+/// The view of the program after every lowering pass and the kinds the Rust analyzer infers in it; None for a program
+/// refused or answered before code generation
+pub fn analyzed(code: &str) -> Option<(Node, Vec<String>)> {
+	let program = std::panic::catch_unwind(|| warp::pipeline::lower(code).ok()).ok()??;
+	Some((plain_view(&declared_types_shown(program.clone())), warp::analyzer::inferred_kinds(&program)))
+}
+
+/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
+fn declared_types_shown(node: Node) -> Node {
+	match node {
+		Node::Key(target, Op::Assign, value)
+			if let Node::Meta { node: name, data } = *target.clone()
+				&& matches!(*data, Node::Symbol(_)) =>
+		{
+			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
+		}
+		other => other.map_children(declared_types_shown),
 	}
 }
 
