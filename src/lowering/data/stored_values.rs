@@ -44,7 +44,9 @@ const VALUE_PLACEHOLDER: &str = "storage_value";
 pub fn lower(program: Node) -> Node {
 	// each store word where the program leaves it free: a function's own `local` is its variable
 	let program = stores_used(&program).into_iter().fold(program, |program, store| {
-		crate::program_names::rewritten_where_free(program, store.0, &|free| storage_accesses(free, &[store.clone()]))
+		crate::program_names::rewritten_where_free(program, store.0, &|free| {
+			storage_accesses(free, std::slice::from_ref(&store))
+		})
 	});
 	let stores = crate::warp_parser::mentions(&program, STORED_WORD)
 		&& !crate::program_names::ProgramNames::of(&program).takes(STORED_WORD);
