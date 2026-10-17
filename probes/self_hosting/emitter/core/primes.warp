@@ -1,0 +1,15 @@
+# emitter core: nested loops with an if inside, % as a test
+# 25
+count = 0
+n = 2
+while n < 100 {
+	d = 2
+	prime = 1
+	while d * d <= n {
+		if n % d == 0 then prime = 0
+		d++
+		}
+	count += prime
+	n++
+	}
+count

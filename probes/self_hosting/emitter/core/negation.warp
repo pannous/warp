@@ -1,0 +1,5 @@
+# emitter core: unary minus on ints and floats
+# -4.5
+x = 3
+y = -1.5
+-x + y

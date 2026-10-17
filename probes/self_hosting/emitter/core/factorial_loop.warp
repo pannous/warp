@@ -1,0 +1,11 @@
+# emitter core: a loop inside a function
+# 3628800
+factorial(n) := {
+	product = 1
+	while n > 1 {
+		product *= n
+		n -= 1
+	}
+	product
+}
+factorial(10)
