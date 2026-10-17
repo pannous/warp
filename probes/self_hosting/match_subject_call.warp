@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+# card match-subject-call: a method call as the subject of match is read as a free function: undefined function: map
+xs = [1, 2]
+print(match xs.map(x => x * 2) { [a, b] => b; _ => 0 })  # expected 4
