@@ -4430,6 +4430,9 @@ PASSED:
   ✓ text::test_text_type_words::every_float_type_word_rounds_an_exact_real
   ✓ text::test_text_type_words::every_text_type_word_calls_the_printable_operation
   ✓ text::test_text_type_words::every_text_type_word_gives_the_text_of_an_exact_real
+  ✓ text::test_text_unit_lists::bytes_are_the_byte_list_and_count_as_the_byte_size
+  ✓ text::test_text_unit_lists::codepoints_and_graphemes_are_lists
+  ✓ text::test_text_unit_lists::counting_phrases_count_the_unit_lists
   ✓ text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned
   ✓ text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter
   ✓ text::test_trim::strip_and_trim_without_parentheses
@@ -5416,6 +5419,8 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
+  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -6256,8 +6261,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
-  ✗ web::test_app_keys::on_key_hears_the_app_pages_key_presses
 
 SUMMARY:
-13 ignored, 6253 passed, 2 failed, 6255 total tested
+13 ignored, 6258 passed, 0 failed, 6258 total tested
