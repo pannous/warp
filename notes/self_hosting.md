@@ -17,6 +17,12 @@ Decision self-hosting:
 - Integration: twins, checked. Each warp part runs next to its Rust twin, and a differential test over every sample
   compares them. The Rust part goes only when its twin matches everywhere.
 - Language gaps are fixed in the language as cards of this topic, never worked around in the warp code.
+- Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
+  result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
+  warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
+  (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
+  when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
+  quirks before its Rust part is removed.
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
 src ~59k.
