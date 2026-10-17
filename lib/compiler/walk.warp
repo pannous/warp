@@ -11,6 +11,16 @@ kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
 is_group(n: any) := bracket_of(n) != ø
 
+# the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
+# (decision empty-group-node); Rust twin: tests/common/twins.rs plain
+plain(view: any) := {
+	kind = kind_of(view)
+	if kind == "literal" or kind == "attribute" { return plain(view#(#view)) }
+	if kind == "list" and #view == 3 { return ø }
+	if view is list { return view.map(plain) }
+	view
+}
+
 # the node a view stands for
 node_of(view: any) := {
 	kind = kind_of(view)
@@ -34,6 +44,9 @@ view_of(n: any) := {
 	if is_group(n) { return ["list", bracket_of(n), separator_of(n)] + n.map(view_of) }
 	n
 }
+
+# the call `name(arguments…)`
+call_of(name: text, arguments: any) := bracketed([symbol(name)] + arguments, "(")
 
 # a node with f applied to each of its children
 children(n: any, f: any) := {

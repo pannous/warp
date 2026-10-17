@@ -484,6 +484,9 @@ PASSED:
   ✓ control::test_member_completion::an_unknown_receiver_offers_nothing
   ✓ control::test_member_completion::every_offered_builtin_is_a_method_of_its_type
   ✓ control::test_member_completion::literals_offer_their_type_s_methods
+  ✓ control::test_method_let_shadows_field::a_bare_field_write_changes_the_field
+  ✓ control::test_method_let_shadows_field::a_let_local_hides_the_field
+  ✓ control::test_method_let_shadows_field::a_let_local_starts_after_its_value
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
@@ -1454,6 +1457,8 @@ PASSED:
   ✓ functions::test_dot_lambda::a_leading_dot_number_stays_a_number
   ✓ functions::test_dot_lambda::a_parameter_s_number_word_method_is_the_word
   ✓ functions::test_each_spellings::for_each_spellings_are_each
+  ✓ functions::test_early_return_kind::a_word_ending_with_a_throwing_call_gives_its_other_values
+  ✓ functions::test_early_return_kind::an_early_return_of_another_kind_is_tested_at_run_time
   ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
   ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
   ✓ functions::test_effects_value::effects_of_a_parameter_reads_its_field
@@ -2440,6 +2445,7 @@ PASSED:
   ✓ modules::test_module_map_keys::a_renamed_local_keeps_its_map_key
   ✓ modules::test_module_meta::an_imported_warp_module_reflects_its_functions
   ✓ modules::test_module_meta::the_meta_section_names_functions_and_classes
+  ✓ modules::test_module_refused_definition::a_modules_refused_definition_is_its_error
   ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
   ✓ modules::test_module_signals::a_stored_value_of_a_used_module_is_kept_by_the_program
   ✓ modules::test_netbase_package::a_query_is_a_url_path
@@ -3727,6 +3733,8 @@ PASSED:
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
+  ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
@@ -3735,9 +3743,13 @@ PASSED:
   ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
   ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
   ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
+  ✓ parser::test_self_passes::arrow_result_types_match_their_rust_twin
   ✓ parser::test_self_passes::every_source_is_a_node_and_back
+  ✓ parser::test_self_passes::interpolation_matches_its_rust_twin
+  ✓ parser::test_self_passes::match_arms_match_their_rust_twin
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
+  ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -4246,6 +4258,7 @@ PASSED:
   ✓ scope::test_variable_kind_clash::a_function_body_is_checked_too
   ✓ scope::test_variable_kind_clash::a_variable_given_another_kind_is_a_compile_error
   ✓ scope::test_variable_kind_clash::kinds_that_mix_stay_allowed
+  ✓ scope::test_variable_named_like_method::a_variable_named_like_a_word_leaves_the_word_after_a_dot
   ✓ sweeps::test_crash_card_location::crash_card_names_the_crashing_frame
   ✓ sweeps::test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value
   ✓ sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator
@@ -6316,4 +6329,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 6311 passed, 0 failed, 6311 total tested
+14 ignored, 6324 passed, 0 failed, 6324 total tested

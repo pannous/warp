@@ -1,0 +1,4 @@
+# emitter core: Euclid's algorithm, recursion with %
+# 6
+gcd(a, b) := if b == 0 then a else gcd(b, a % b)
+gcd(48, 18)

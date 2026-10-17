@@ -28,6 +28,11 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - sugar-twins-drops: lib/compiler/passes.warp leaves out Rust Option forms (`if let Some`, `match o {Some/None}`,
   `unwrap_or`, `expect`, `is_some`; warp has `o != ø`, `o ?? d`, `o ?? raise(m)`) and the `set x to y` pass;
   setter-calls stands, `set x of y to z` comes back as a library code template.
+- sugar-triage: web + markup, media + host, help + reflection passes stay out of the warp compiler and return as library
+  code. `of`/`in` are right-associative infix operators (`length of characters in text` = `length of (characters in
+  text)`), so the of extras are no special passes; forms that aren't a right-hand infix application are dropped or carded.
+  `in`/`from` are a lookup only after a selector word (chars, words, lines, keys, …; one table), membership otherwise
+  (in-bool); `print words in t` walks and `byte count of t` are dropped (Interviewer's decision).
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
@@ -78,6 +83,11 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - warning-levels / hints-are-warnings: one Diagnostic with a level hint < weak < normal < severe; `--no-hints` and `use strict` are thresholds (notes/welcoming.md).
 - canvas-zero: a missing setting takes a sensible default; errors only for an ambiguity too dangerous to guess.
 - P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip.
+- julia-compat (user, 2026-10-17): stay close to Julia; its syntax is beautiful and its semantics often near perfect (unlike Rust). Julia forms read with Julia's meaning; deliberate departures listed in wiki/Julia.md.
+  - julia-floor-divide: `÷` is floor division as in Julia (synonym of `/!`, `7 ÷ 2` → 3), with a hint for newcomers expecting `/`; replaces #27's normalization of `÷` to `/`.
+  - julia-pair-range: `1:4` stays a pair; iterated (for, sum, comprehensions) a pair of two numbers is the range.
+  - julia-text-times-hint: `"a" * "b"` concatenates with a got-it warning naming `+`; an error only when a text holds a number (`"3" * "4"`).
+  - julia-dollar-interpolation: `"x is $x"` only as a toggled feature after the self-hosting migration (`$million`, `$0` clash).
 - P78 modifiers from other languages (`public`, `static`, `inline`, …) are skipped with a got-it note; words with a warp meaning keep it.
 - Word choices are not asked: the recommended word is canonical, synonyms are aliases with a note.
 - rust-forms-welcome: warp may read Rust's forms (`<T>` included) as long as each has a nicer warp form, which stays canonical.
@@ -223,6 +233,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - one-method-form: methods are functions: a class-body `def x()` is `def x(_:P)`, `p.x() == x(p)`; `methods(P)` = every function whose first parameter is P, an ancestor or a trait P implements; `dir(p)` = fields + methods(P); where a function is declared is only metadata (`.declared_in`).
 - default-methods: `x.word` ≡ `x.word()`, resolved by multi-dispatch on the receiver's type; a member or method of the object's own class is more specific and wins.
 - class-members-free: built-in and library words are not keywords; class fields and methods dispatch on their class and never conflict; locals may shadow them.
+- receiver-field-assign: `fresh(f: F) := { body = 99 }` writes f.body, same as in a class-body method (one-method-form, P115/P116); `let body = …` makes a local; any warning applies equally in both places (Interviewer's decision).
 - library-words-typed / dispatch-untyped-library-words: every library word has a full type signature and is immutable for its types; a program's untyped definition of the same name covers only other values, with a hint (`count(x) := 7; count([1,2])` → 2, `first(3)` → the program's).
 - field-forms: plain fields take only `.` and `of` (read and set); call forms (`w(b)`, `b.w(5)`) are only for properties.
 - cross-module-overload: definitions in different modules overload by argument type, no shadowing (`use script; sort ./names.txt` sorts lines, `sort [3 1 2]` the list).
@@ -281,7 +292,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P55 a while loop's value is its last body value. P213 a loop ending in `print` gives ø.
 - `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`, `when {cond -> …}` = an if chain; each warns naming the word meant.
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
-- P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized.
+- P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ now floor division: julia-floor-divide).
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
 

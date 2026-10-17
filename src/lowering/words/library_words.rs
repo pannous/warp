@@ -405,6 +405,7 @@ pub fn lower(node: Node) -> Node {
 		.map(|(operation, _)| operation.to_string())
 		.collect();
 	shadowed.extend(variants);
+	let functions = shadowed.clone();
 	crate::type_tests::collect_outer_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);
@@ -418,6 +419,7 @@ pub fn lower(node: Node) -> Node {
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
+		functions,
 		program: crate::program_names::ProgramNames::of(&node),
 		objects,
 		plain,
@@ -572,6 +574,9 @@ struct Lowering {
 	/// The names the program defines where the lowering is: its functions, the variables outside functions and those
 	/// the function being lowered assigns (a local in one function hides no library word in another)
 	shadowed: RefCell<HashSet<String>>,
+	/// The functions the program defines, the only names that hide a library word after a dot: a variable named like
+	/// the word is no member of the receiver (`t.bytes` with `bytes = …` still reads the bytes)
+	functions: HashSet<String>,
 	/// The program's functions at the numbers of arguments they take
 	program: crate::program_names::ProgramNames,
 	objects: HashMap<String, Node>,
@@ -829,20 +834,38 @@ impl Lowering {
 	}
 
 	fn library_word(&self, name: &str) -> Option<&'static str> {
-		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(word))
+		self.word_unless(name, &|word| self.shadows(word))
+	}
+
+	fn word_unless(&self, name: &str, shadows: &dyn Fn(&str) -> bool) -> Option<&'static str> {
+		canonical_word(name).filter(|word| !shadows(name) && !shadows(word))
 	}
 
 	/// The library word a call of `name` with that many arguments (receiver included) means; shadowing is per arity:
 	/// `first(x) := …` leaves `first(xs, 2)` to the library (notes/dispatch.md); a prelude word answers to its own
 	/// name too (`round_to(x, 2)` as `round(x, 2)` does, card lib-math)
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
+		self.word_for_unless(name, argument_count, &|word| self.shadows(word))
+	}
+
+	/// The library word `x.name(…)` calls: only the program's functions hide it (Lowering::functions)
+	fn method_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
+		self.word_for_unless(name, argument_count, &|word| self.functions.contains(word))
+	}
+
+	fn word_for_unless(
+		&self,
+		name: &str,
+		argument_count: usize,
+		shadows: &dyn Fn(&str) -> bool,
+	) -> Option<&'static str> {
 		let variant = arity_variant(name, argument_count);
 		let prelude_word = || crate::modules::prelude_word(name);
 		if self.program.function_takes(name, argument_count) == Some(false) && !self.program.binds(name) {
 			return variant.or_else(|| canonical_word(name)).or_else(prelude_word);
 		}
-		let unshadowed = || prelude_word().filter(|_| !self.shadows(name));
-		variant.filter(|_| !self.shadows(name)).or_else(|| self.library_word(name)).or_else(unshadowed)
+		let unshadowed = || prelude_word().filter(|_| !shadows(name));
+		variant.filter(|_| !shadows(name)).or_else(|| self.word_unless(name, shadows)).or_else(unshadowed)
 	}
 
 	/// `word(x, args)` and `word x args`
@@ -1015,7 +1038,7 @@ impl Lowering {
 		}
 		// `p.center`, `s.words` of another module's word on what may be an object: its field, as before the word was
 		// loaded; a parameter or a user function's result may be of the word's type module, chosen at run time
-		let is_module_word = is_bare && is_loaded_module_word(name) && self.library_word_for(name, 1).is_none();
+		let is_module_word = is_bare && is_loaded_module_word(name) && self.method_word_for(name, 1).is_none();
 		let may_be_object = match own_member {
 			OwnMember::Maybe => true,
 			OwnMember::Not => self.is_object(receiver, name),
@@ -1094,7 +1117,7 @@ impl Lowering {
 		let call = |call: Node| WordMeaning::Call { call, typed: false };
 		// a counting word without parentheses stays the count the emitter reads (`xs.count`)
 		if let Some(word) = self
-			.library_word_for(name, arguments.len() + 1)
+			.method_word_for(name, arguments.len() + 1)
 			.filter(|_| !is_bare || counting_method(name, &self.context).is_none())
 		{
 			let typed = !reads_entry_first(name, word);

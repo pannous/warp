@@ -17,6 +17,18 @@ Decision self-hosting:
 - Integration: twins, checked. Each warp part runs next to its Rust twin, and a differential test over every sample
   compares them. The Rust part goes only when its twin matches everywhere.
 - Language gaps are fixed in the language as cards of this topic, never worked around in the warp code.
+- Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
+  result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
+  warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
+  (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
+  when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
+  quirks before its Rust part is removed.
+- The same holds for structurally unsound decisions, not only bugs: special cases for single words, passes that undo
+  another pass's work, two mechanisms for one concept, tables duplicated across stages, pass order that exists only to
+  work around an earlier pass. The warp compiler may restructure (merge or split passes, change an internal tree
+  shape, replace special cases by one general rule). Where it does, the twin compares at the next level where both
+  agree (the tree after a later pass, or the program's result) instead of forcing the Rust structure. Each
+  restructuring is a short entry in Deviations; ones that change the language go to warp-interviewer.
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k, Node 2.1k, analyzer 6.6k, emitter 23k, lowering + top-level
 src ~59k.
@@ -120,6 +132,26 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
+## Emitter core (card emits-wasm, step 15)
+lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
+node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
+the text "outside the core: <first form>". Module: type, function, export (main), code and a name section with
+function and local names. No GC types, no memory: the core needs neither.
+- Kinds: int = i64, float = f64, a condition = i32. A parameter takes its annotation, else the kind of its first
+  call's argument; a function's result is read twice, so a recursive call knows it (the pending kind takes the kind
+  it meets). `%` is Euclidean as in Rust's emitter (r + |b| for a negative truncated remainder).
+- Twin (tests/parser/test_self_emitter.rs, tests/common/twins.rs emitter_differential): the module runs
+  (wasm_reader::read_bytes) and its value is compared with eval(source); a float equals another number of exactly
+  its value (3.5 * 2 is 7.0 here, 7 in Rust). probes/self_hosting/emitter/core/ holds one program per form, all inside
+  the core; the checked share of every sample and probe must have at least a floor of programs inside.
+- Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
+- Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
+  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no result, a loop's value, texts, lists, every
+  runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
+  library words a user function's name meets (`add` becomes add·any).
+- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
+  (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word
 by index. `late_call(callee, params, results)` (src/wasm_emitter/functions/late_calls.rs) gives the callee a funcref
@@ -198,3 +230,5 @@ shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard p
 (copies or handles, notes/ffi_handles.md), macOS windows on the main thread.
 wasmtime stays bundled in every executable: even with the program precompiled (.cwasm) it is the GC, the loader and
 the trap handling. Replacing it (WAMR's wamrc AOT with its own GC; wasm2c lacks GC) is not on the table.
+Shared runtime library (`warp build --shared`, libwarp-runtime.dylib): only an option, card exe-shared-runtime (Later):
+no total saving, loses self-contained files, and a .cwasm only runs on the exact wasmtime that compiled it.

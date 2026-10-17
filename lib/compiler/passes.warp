@@ -1,0 +1,18 @@
+# The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): a source parsed by parser.warp, then
+# each pass twin in the order src/pipeline.rs runs its Rust twin. A pass joins here once its twin matches.
+use "parser.warp"
+use "interpolation.warp"
+use "welcome_forms.warp"
+use "times_phrases.warp"
+use "number_words.warp"
+
+passes = [interpolation, match_arms, arrow_result_types, times_phrases, number_words_pass]
+
+# a node after every pass, in order
+lowered_node(n: any) := {
+	for pass in passes { n = pass(n) }
+	n
+}
+
+# the source text as the passes leave it, as its view
+lowered(source: text) := view_of(lowered_node(node_of(plain(tree(source)))))

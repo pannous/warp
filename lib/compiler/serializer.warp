@@ -3,7 +3,8 @@
 //   a number, yes, no or ø, ["text", "abc"], ["symbol", "x"], ["char", 'c'], ["key", op, left, right],
 //   ["list", bracket, separator, items…], ["literal", source, node] (a literal kept as written: 01234, 1.10),
 //   ["attribute", name, value, node] (@name(value) node), ["error", node], ["type", name, body], ["data", description]
-//   ["number", text] (a number beyond int and float, as Rust writes it)
+//   ["number", text] (a number beyond int and float, as Rust writes it), ["template", text] (an interpolating text,
+//   holes `${expr}`, literal dollars `$$`)
 // an op as written (":", "=", "#"), a bracket by its opening ("{" "[" "(" "<", "" for none, both glyphs for another
 // pair), a separator as written ("," ";" "\n" "\t" " ", "" for none)
 
@@ -57,7 +58,7 @@ written(view: any, with_attributes: any) := {
 	if is_empty(view) { return empty_text }
 	tag = kind(view)
 	if tag == "symbol" { return view#2 }
-	if tag == "text" { return quoted(view#2) }
+	if tag == "text" or tag == "template" { return quoted(view#2) }
 	if tag == "char" { return quoted_by("" + view#2, "'") }
 	if tag == "list" { return list_text(view) }
 	if tag == "key" { return key_text(view#2, view#3, view#4, view) }

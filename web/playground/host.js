@@ -250,6 +250,7 @@ function buildValue(module, tree) {
 		return module.closure_rebuild(name, tree.captured === null ? null : buildValue(module, tree.captured));
 	}
 	if (tree.key) return module.new_key(buildValue(module, tree.key[0]), buildValue(module, tree.key[1]), BigInt(tree.kind) >> 8n);
+	if (tree.type) return module.new_type(buildValue(module, tree.type[0]), buildValue(module, tree.type[1]));
 	if (tree.items) return tree.items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, BigInt(tree.kind) >> 8n), null) ?? module.new_empty();
 	const kind = BigInt(tree.kind);
 	const payload = tree.data ?? {};
