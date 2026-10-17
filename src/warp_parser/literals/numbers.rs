@@ -206,7 +206,16 @@ impl WarpParser {
 		}
 		if self.current_char() == '0' && matches!(self.peek_char(1), 'x' | 'X') {
 			self.advance_by(2);
-			let hex_str = self.take_while_char(|ch| ch.is_ascii_hexdigit());
+			let mut hex_str = String::new();
+			// `_` only between hex digits: `0xFF_FF`
+			while self.current_char().is_ascii_hexdigit()
+				|| (self.current_char() == '_' && !hex_str.is_empty() && self.peek_char(1).is_ascii_hexdigit())
+			{
+				if self.current_char() != '_' {
+					hex_str.push(self.current_char());
+				}
+				self.advance();
+			}
 			return i64::from_str_radix(&hex_str, 16)
 				.map(Node::int)
 				.unwrap_or_else(|_| error(&format!("Invalid hex: 0x{}", hex_str)));
