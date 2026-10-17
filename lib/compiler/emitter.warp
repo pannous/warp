@@ -1,0 +1,370 @@
+# The emitter core (card emits-wasm, notes/self_hosting.md step 15; Rust twin: src/wasm_emitter): the lowered
+# program (pipeline::lower) as a node gives a wasm module as a list of bytes, whose main returns the program's value.
+# The core knows ints (i64), floats (f64), yes/no conditions (i32), arithmetic, comparisons, locals, functions, if
+# and while. Any other form refuses the program: `wasm_module` then gives a text naming the form, and the twin harness
+# (tests/common/twins.rs emitter_differential) counts the source as outside the core. A function's parameters take
+# their kinds from their annotations, else from the first call; its result kind from its body, read twice so that a
+# recursive call knows it.
+use "walk.warp"
+use math
+
+wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
+type_bytes = {int: 126, float: 124, bool: 127}
+section_ids = {custom: 0, type: 1, function: 3, export: 7, code: 10}
+function_type_byte = 96
+export_function_byte = 0
+names_subsections = {functions: 1, locals: 2}
+# block type of a block that leaves nothing
+no_value = 64
+# opcodes (WebAssembly core spec, section 5.4)
+op = {block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, call: 16, drop: 26, select: 27,
+	local_get: 32, local_set: 33, local_tee: 34, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80,
+	i64_rem_s: 129, i64_extend_i32_u: 173, f64_convert_i64_s: 185, f64_neg: 154, i32_and: 113, i32_or: 114}
+int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
+float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
+comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
+compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
+steps = {"++": "+", "--": "-"}
+smallest_int = -9223372036854775808
+largest_int = 9223372036854775807
+# (a refusal is thrown; a word ends with its value, not with `refuse`, whose kind would become the word's: card
+# is-early-return)
+# the kind of a recursive call before its function's body is read: it takes the kind of what it meets
+pending = "?"
+# what a refusal says first: the twin harness counts such a program as outside the core
+outside_the_core = "outside the core: "
+no_kind = "none"
+
+## bytes
+uleb(n: int) := {
+	out = []
+	while n >= 128 {
+		out += [bit_or(bit_and(n, 127), 128)]
+		n = n >> 7
+	}
+	out + [n]
+}
+sleb(n: int) := {
+	out = []
+	more = yes
+	while more {
+		b = bit_and(n, 127)
+		n = n >> 7
+		if (n == 0 and bit_and(b, 64) == 0) or (n == -1 and bit_and(b, 64) != 0) { more = no } else { b = bit_or(b, 128) }
+		out += [b]
+	}
+	out
+}
+# the 8 little-endian bytes of an int's low 64 bits
+le64(n: int) := {
+	out = []
+	for i in 0..8 { out += [bit_and(n >> (8 * i), 255)] }
+	out
+}
+joined(parts: any) := {
+	out = []
+	for part in parts { out += part }
+	out
+}
+vector(parts: any) := uleb(#parts) + joined(parts)
+name_bytes(name: text) := vector(name.bytes.map(b => [b]))
+section(id: int, content: any) := [id] + uleb(#content) + content
+
+## the program's functions
+# a function as written; compiling it gives the rest
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø }
+class Module { functions: any; order: any }
+
+module = Module({}, [])
+
+refuse(why: text) := {
+	throw outside_the_core + why
+}
+
+# a refused form in a few words: `key :=`, `group ( memo_known`, a name
+form_of(n: any) := {
+	if type(n) is key { return "key " + op_of(n) }
+	if n is symbol { return name_of(n) }
+	if is_group(n) and #n > 0 and n#1 is symbol { return "group " + bracket_of(n) + " " + name_of(n#1) }
+	if is_group(n) { return "group " + bracket_of(n) }
+	"a " + type(n)
+}
+
+parameter_symbol(p: any) := if type(p) is key and op_of(p) == ":" then key_of(p) else p
+annotation_of(p: any) := {
+	if type(p) is key and op_of(p) == ":" and value_of(p) is symbol { return name_of(value_of(p)) }
+	ø
+}
+
+# `(name params…) := body` at the program's top level
+definition(n: any) := {
+	if type(n) is key and op_of(n) == ":=" and bracket_of(key_of(n)) == "(" and #key_of(n) > 0 and key_of(n)#1 is symbol {
+		return key_of(n)
+	}
+	ø
+}
+
+statements_of(n: any) := {
+	if is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
+	[n]
+}
+
+collect_functions(program: any) := {
+	kept = []
+	for n in statements_of(program) {
+		head = definition(n)
+		if head == ø { kept += [n] } else {
+			parameters = head[1..].map(parameter_symbol)
+			annotations = head[1..].map(annotation_of)
+			module.functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
+		}
+	}
+	kept
+}
+
+## one function's locals while its body is read
+class Body { names: any; kinds: any; order: any; scratch: int }
+
+local_index(body: Body, name: text, kind: text) := {
+	if name in body.names { return body.names[name] }
+	body.names[name] = #body.kinds
+	body.kinds += [kind]
+	body.order += [name]
+	body.names[name]
+}
+fresh_local(body: Body, kind: text) := {
+	body.scratch += 1
+	local_index(body, "·scratch" + body.scratch, kind)
+}
+
+## expressions: each gives [kind, code]
+joint_kind(a: text, b: text) := {
+	if a == pending { return b }
+	if b == pending or a == b { return a }
+	if (a == "int" and b == "float") or (a == "float" and b == "int") { return "float" }
+	"mixed"
+}
+# code of kind `from` as kind `to`
+converted(value: any, to: text) := {
+	from = value#1
+	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
+	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
+	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
+	value#2
+}
+# a value as a yes/no condition: non-zero is yes
+condition(value: any) := {
+	kind = value#1
+	if kind == "int" { return value#2 + [op.i64_eqz, op.i32_eqz] }
+	if kind == "float" { return value#2 + [op.f64_const] + le64(0) + [float_ops["!="]] }
+	if kind != "bool" { refuse("a " + kind + " as a condition") }
+	value#2
+}
+
+number_value(n: any) := {
+	if n is float { return ["float", [op.f64_const] + le64(float_bits(n))] }
+	if n < smallest_int or n > largest_int { return refuse("an int beyond 64 bits") }
+	["int", [op.i64_const] + sleb(n)]
+}
+
+local_value(body: Body, n: any) := {
+	name = name_of(n)
+	if not (name in body.names) { return refuse("the unknown name " + name) }
+	index = body.names[name]
+	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
+}
+
+operation(body: Body, symbol: text, a: any, b: any) := {
+	kind = joint_kind(a#1, b#1)
+	if kind == pending { kind = "int" }
+	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
+	if symbol == "/" and kind == "int" { return refuse("int division, an exact rational") }
+	ops = if kind == "float" then float_ops else int_ops
+	if not (symbol in ops) { return refuse("the operator " + symbol + " on " + kind) }
+	result = if symbol in comparisons then "bool" else kind
+	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
+}
+
+# a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r
+euclidean_remainder(body: Body, a: any, b: any) := {
+	divisor = uleb(fresh_local(body, "int"))
+	rest = uleb(fresh_local(body, "int"))
+	get_divisor = [op.local_get] + divisor
+	get_rest = [op.local_get] + rest
+	zero = [op.i64_const, 0]
+	absolute = zero + get_divisor + [int_ops["-"]] + get_divisor + get_divisor + zero + [int_ops["<"], op.select]
+	code = a#2 + b#2 + [op.local_tee] + divisor + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [int_ops["<"]]
+	["int", code + [op.if, type_bytes.int] + get_rest + absolute + [int_ops["+"], op.else] + get_rest + [op.end]]
+}
+
+assignment(body: Body, target: any, value: any) := {
+	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
+	name = name_of(target)
+	kind = value#1
+	if kind == "bool" { return refuse("a yes/no variable") }
+	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
+		kind = body.kinds#(body.names[name] + 1)
+	}
+	index = uleb(local_index(body, name, kind))
+	[kind, converted(value, kind) + [op.local_tee] + index]
+}
+
+call(body: Body, f: Function, arguments: any) := {
+	if #arguments != #f.parameters { return refuse("a call of " + f.name + " with " + #arguments + " arguments") }
+	values = arguments.map(a => expression(body, a))
+	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
+	code = []
+	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
+	[f.result, code + [op.call] + uleb(f.index)]
+}
+
+# `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
+conditional(body: Body, test: any, yes_branch: any, no_branch: any) := {
+	c = condition(expression(body, test))
+	a = expression(body, yes_branch)
+	if no_branch == ø { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.end]] }
+	b = expression(body, no_branch)
+	kind = joint_kind(a#1, b#1)
+	if kind == pending { kind = "int" }
+	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
+	[kind, c + [op.if, type_bytes[kind]] + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
+}
+# `while c do body`: block { loop { exit unless c; body; again } }
+loop_of(body: Body, test: any, block: any) := {
+	exit_unless = condition(expression(body, test)) + [op.i32_eqz, op.br_if, 1]
+	[no_kind, [op.block, no_value, op.loop, no_value] + exit_unless + dropped(expression(body, block)) + [op.br, 0, op.end, op.end]]
+}
+
+# a statement's code, its value dropped
+dropped(value: any) := if value#1 == no_kind then value#2 else value#2 + [op.drop]
+
+sequence(body: Body, items: any) := {
+	if #items == 0 { return refuse("an empty block") }
+	code = []
+	for item in items[0..<(#items - 1)] { code += dropped(expression(body, item)) }
+	last = expression(body, items#(#items))
+	code += last#2
+	[last#1, code]
+}
+
+expression(body: Body, n: any) := {
+	if n is number { return number_value(n) }
+	if n is symbol { return local_value(body, n) }
+	if type(n) is key { return key_expression(body, n) }
+	if not is_group(n) { refuse("the value " + form_of(n)) }
+	group_expression(body, n)
+}
+
+group_expression(body: Body, n: any) := {
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions {
+		return call(body, module.functions[name_of(n#1)], n[1..].map(x => x))
+	}
+	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
+	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
+	sequence(body, n.map(x => x))
+}
+
+key_expression(body: Body, n: any) := {
+	symbol = op_of(n)
+	left = key_of(n)
+	right = value_of(n)
+	if symbol == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
+	if symbol == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
+	if symbol == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
+	if symbol == "=" { return assignment(body, left, expression(body, right)) }
+	if symbol in compound_ops { return assignment(body, left, operation(body, compound_ops[symbol], expression(body, left), expression(body, right))) }
+	if symbol in steps and right == ø { return assignment(body, left, operation(body, steps[symbol], expression(body, left), number_value(1))) }
+	if symbol == "-" and left == ø { return negation(expression(body, right)) }
+	if symbol == "and" or symbol == "or" { return logical(body, symbol, left, right) }
+	if symbol == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
+	if left == ø or right == ø { return refuse("the operator " + symbol) }
+	operation(body, symbol, expression(body, left), expression(body, right))
+}
+right_of_if(n: any) := value_of(n)
+
+negation(value: any) := {
+	if value#1 == "float" { return ["float", value#2 + [op.f64_neg]] }
+	if value#1 != "int" { refuse("the negation of a " + value#1) }
+	["int", [op.i64_const, 0] + value#2 + [int_ops["-"]]]
+}
+# `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
+logical(body: Body, symbol: text, left: any, right: any) := {
+	a = condition(expression(body, left))
+	b = condition(expression(body, right))
+	if symbol == "and" { return ["bool", a + [op.if, type_bytes.bool] + b + [op.else, op.i64_const, 0, op.i64_eqz, op.i32_eqz, op.end]] }
+	["bool", a + [op.if, type_bytes.bool, op.i64_const, 1, op.i64_eqz, op.i32_eqz, op.else] + b + [op.end]]
+}
+
+## functions
+# the locals of f's body, its parameters first
+# (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
+new_scope(f: Function) := {
+	scope = Body({}, [], [], 0)
+	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
+	scope
+}
+
+compile_function(f: Function, argument_kinds: any) := {
+	f.index = #module.order
+	module.order += [f]
+	parameter_kinds = []
+	for i in 0..<#f.parameters {
+		annotation = f.annotations[i]
+		parameter_kinds += [if annotation == ø then argument_kinds[i] else annotation]
+	}
+	for kind in parameter_kinds { if not (kind in type_bytes) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
+	f.kinds = parameter_kinds
+	# the first reading finds the result kind, the second gives the code with every recursive call knowing it
+	f.result = pending
+	f.result = expression(new_scope(f), f.body)#1
+	scope = new_scope(f)
+	compiled = expression(scope, f.body)
+	if compiled#1 != "int" and compiled#1 != "float" { return refuse(f.name + " giving a " + compiled#1) }
+	f.result = compiled#1
+	f.code = compiled#2
+	f.locals = scope.kinds[(#f.parameters)..]
+	f.local_names = scope.order
+}
+
+## the module
+function_type(f: Function) := [function_type_byte] + vector(f.kinds.map(k => [type_bytes[k]])) + [1, type_bytes[f.result]]
+function_body(f: Function) := {
+	content = vector(f.locals.map(k => [1, type_bytes[k]])) + f.code + [op.end]
+	uleb(#content) + content
+}
+index_name(i: int, name: text) := uleb(i) + name_bytes(name)
+local_name_map(f: Function) := uleb(f.index) + vector(range_list(#f.local_names).map(i => index_name(i, f.local_names#(i + 1))))
+range_list(n: int) := {
+	out = []
+	for i in 0..n { out += [i] }
+	out
+}
+names_section(functions: any) := {
+	function_names = vector(functions.map(f => index_name(f.index, f.name)))
+	locals = vector(functions.map(local_name_map))
+	content = name_bytes("name") + [names_subsections.functions] + uleb(#function_names) + function_names
+	section(section_ids.custom, content + [names_subsections.locals] + uleb(#locals) + locals)
+}
+
+module_bytes(functions: any) := {
+	types = section(section_ids.type, vector(functions.map(function_type)))
+	declared = section(section_ids.function, vector(functions.map(f => uleb(f.index))))
+	exported = section(section_ids.export, vector([name_bytes("main") + [export_function_byte, 0]]))
+	codes = section(section_ids.code, vector(functions.map(function_body)))
+	wasm_header + types + declared + exported + codes + names_section(functions)
+}
+
+# the module of a lowered program, or a text naming the first form outside the core
+wasm_module(program: any) := {
+	module.functions = {}
+	module.order = []
+	main = Function("main", [], [], ø)
+	try {
+		main.body = separated(bracketed(collect_functions(program), ""), ";")
+		compile_function(main, [])
+		module_bytes(module.order)
+	} catch refusal {
+		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+		"" + refusal
+	}
+}

@@ -1,0 +1,5 @@
+# emitter core: and, or, not in conditions
+# 3
+x = 5
+y = 0
+if (x > 3 and not y > 1) or x == 0 then 3 else 4

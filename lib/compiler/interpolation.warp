@@ -1,0 +1,82 @@
+# Interpolated text (card sugar-twins; Rust twin: src/text/interpolation.rs): the parser keeps `"a \(x) b"` as its
+# template ["template", "a ${x} b"] (holes `${expr}`, a literal dollar `$$`); here it becomes text building,
+# `"a " + text_form(x) + " b"`, so every later pass reads the holes as code. The first pass: a template inside a type
+# or an error, which stay opaque views, is rewritten there too. sql and sh templates are not ported
+# (notes/self_hosting_dropped.md).
+use "walk.warp"
+use "parser.warp"
+
+text_form_word = "text_form"
+template_kind = "template"
+
+# the end of the hole whose `{` is before `at`: after its closing `}`
+hole_close(template: text, at: int) := {
+	depth = 1
+	while at < #template {
+		if template[at] == '{' { depth += 1 }
+		if template[at] == '}' {
+			depth -= 1
+			if depth == 0 { return at + 1 }
+		}
+		at += 1
+	}
+	at
+}
+
+# the hole's code: parsed as a program of its own, its templates built too
+hole(code: text) := call_of(text_form_word, [interpolated_node(node_of(plain(tree(code))))])
+
+# the literal pieces and holes of a template, in order; an empty literal is none
+pieces(template: text) := {
+	found = []
+	literal = ""
+	at = 0
+	while at < #template {
+		c = template[at]
+		next = if at + 1 < #template then template[at + 1] else ' '
+		if c == '$' and next == '$' {
+			literal = literal + '$'
+			at += 2
+		} else if c == '$' and next == '{' {
+			end = hole_close(template, at + 2)
+			if literal != "" { found += [literal] }
+			literal = ""
+			found += [hole(template[at + 2 .. end - 1])]
+			at = end
+		} else {
+			literal = literal + c
+			at += 1
+		}
+	}
+	if literal != "" { found += [literal] }
+	found
+}
+
+# the template as the sum of its pieces
+built(template: text) := {
+	parts = pieces(template)
+	if #parts == 0 { return "" }
+	sum = parts#1
+	for part in parts[1..] { sum = key(sum, "+", part) }
+	sum
+}
+
+# a view with each template in it built: the inside of an opaque type or error
+in_view(view: any) := {
+	if kind_of(view) == template_kind { return view_of(built(view#2)) }
+	if view is list { return view.map(in_view) }
+	view
+}
+
+template_built(n: any) := {
+	if type(n) is key and key_of(n) == symbol(opaque_word) {
+		view = value_of(n)
+		if kind_of(view) == template_kind { return built(view#2) }
+		return key(symbol(opaque_word), ":", in_view(view))
+	}
+	n
+}
+
+interpolated_node(n: any) := bottom_up(n, template_built)
+
+interpolation(program: any) := interpolated_node(program)

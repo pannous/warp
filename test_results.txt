@@ -3656,7 +3656,6 @@ PASSED:
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
   ✓ parser::test_parameter_scope::a_parameter_divides_only_inside_its_definition
-  ✓ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
   ✓ parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
@@ -3728,6 +3727,8 @@ PASSED:
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
+  ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
@@ -3736,7 +3737,10 @@ PASSED:
   ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
   ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
   ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
+  ✓ parser::test_self_passes::arrow_result_types_match_their_rust_twin
   ✓ parser::test_self_passes::every_source_is_a_node_and_back
+  ✓ parser::test_self_passes::interpolation_matches_its_rust_twin
+  ✓ parser::test_self_passes::match_arms_match_their_rust_twin
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
@@ -4248,6 +4252,7 @@ PASSED:
   ✓ scope::test_variable_kind_clash::a_function_body_is_checked_too
   ✓ scope::test_variable_kind_clash::a_variable_given_another_kind_is_a_compile_error
   ✓ scope::test_variable_kind_clash::kinds_that_mix_stay_allowed
+  ✓ scope::test_variable_named_like_method::a_variable_named_like_a_word_leaves_the_word_after_a_dot
   ✓ sweeps::test_crash_card_location::crash_card_names_the_crashing_frame
   ✓ sweeps::test_panic_sweep::test_cube_root_prefix_is_an_error_or_a_value
   ✓ sweeps::test_panic_sweep::test_float_compound_assignment_uses_the_float_operator
@@ -6316,6 +6321,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
 
 SUMMARY:
-14 ignored, 6313 passed, 0 failed, 6313 total tested
+14 ignored, 6318 passed, 1 failed, 6319 total tested

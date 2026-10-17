@@ -1,0 +1,21 @@
+# emitter: the shapes of the forms the emitter core reads, as parse() gives them
+n = parse("square(x):=x*x; square(7); while i<3 { i++ }; if x>2 then 1.5 else 2; -x")
+print(#n)
+print(separator_of(n))
+d = n#1
+print(op_of(d))
+print(bracket_of(key_of(d)))
+print(key_of(d)#1)
+w = n#3
+print(op_of(w))
+print(op_of(key_of(w)))
+print(value_of(key_of(w)))
+i = n#4
+print(op_of(i))
+print(value_of(key_of(i)))
+print(value_of(i) is float)
+print(value_of(i) is int)
+print(op_of(n#5))
+print(key_of(n#5))
+print(type(n#2))
+print(type(3.5))
