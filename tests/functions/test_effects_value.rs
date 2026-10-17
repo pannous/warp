@@ -22,3 +22,9 @@ fn effects_of_as_a_value() {
 	is!("f(x) := print x\n\"f does \\(f.effects)\"", "f does IO");
 	is!("g() := { puts \"hi\"; emit ask }\nes = effects of g\nes#2", "ask");
 }
+
+#[test]
+fn effects_of_a_parameter_reads_its_field() {
+	// a parameter is no function: `b.effects` reads the field effects (card lib-field-name)
+	is!("chain_of(b) := b.effects\ncount(chain_of({id:1, effects:[5, 6]}))", 2);
+}
