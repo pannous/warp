@@ -818,7 +818,8 @@ fn unaliased_uses(node: Node, aliases: &mut Vec<String>) -> Node {
 	node.map_children(|child| unaliased_uses(child, aliases))
 }
 
-fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
+/// `use list as l`: the module and the program's name for it
+pub(crate) fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
 	let Node::Key(module, Op::As, alias) = used.drop_meta() else {
 		return None;
 	};
