@@ -120,3 +120,16 @@ for args:print it
 if c: x
 while c: x
 for c in s: print ord c
+if c then print n
+if n == 2 { x } elif n == 3 { y } else { z }
+if c: x = 1 elif d: x = 2 else: x = 3
+if c: x = 1 else: x = 3
+if c { x } else if d { y }
+if n == 2 { x } elsif n == 3 { y } else { z }
+if c: x elif d: y
+print n
+print a, b
+if c then x else y
+if c { x } else print a, b
+for i in xs { print i, i*2 }
+{ print upper n }
