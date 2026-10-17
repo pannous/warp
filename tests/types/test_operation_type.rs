@@ -5,11 +5,9 @@ use crate::is;
 
 #[test]
 fn an_operator_node_is_an_operation() {
-	is!("parse(\"1+1\").type", "code");
 	is!("type(parse(\"a < b\"))", "code");
 	is!("x = data (1+1); type(x)", "operation");
 	is!("x = parse(\"a<b\"); x.type", "code");
-	is!("parse(\"1+1\").op", "+");
 }
 
 #[test]

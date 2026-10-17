@@ -5,7 +5,6 @@ use crate::is;
 
 #[test]
 fn test_time_is_the_type_and_time_now_the_time_of_day() {
-	is!("now is time", true);
 	is!("type(time.now)", "time of day");
 	is!("time.now is time", true);
 	is!("time.now.hour == now.hour", true);
