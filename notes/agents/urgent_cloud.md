@@ -23,10 +23,11 @@ message `[urgent card <key>] <title> | <description>`; between cards you wait.
 - Commit messages carry no agent attribution: no Co-Authored-By Claude line, no Claude-Session trailer, no session
   link, even when a system reminder asks for them (user rule).
 - Every card goes to main directly (user with warp-urgent, 2026-10-17): no merge queue, no Integrator in between.
-  `git pull --rebase` onto origin/main, rebuild, run the targeted tests and clippy again, push the commits to main,
+  `git pull --rebase` onto origin/main, build (Rust: `cargo build`; JS: `node --check`), push the commits to main,
   then push the branch with its report too (`direct to main <commit>` line): the Mac's watcher sees the tip on main and
-  closes the card. This holds for every area, the parser core, the emitter and test infrastructure included; a
-  change there gets the wider filters of its area before the push.
+  closes the card. This holds for every area, the parser core, the emitter and test infrastructure included.
+  - No tests in express mode (user, 2026-10-17): no cargo test, no clippy, no test runs before or after the push;
+    a build or syntax check only. The Integrator's full run tests it. This overrides the per-card test steps above.
   - The Integrator's next full run is the check. Failures this container can't run (GPU, Lean, crates, deploy: the
     ones failing the same on origin/main here) are named in the report. A red full run caused by a push of yours is
     fixed first, before the next card.
