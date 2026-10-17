@@ -146,13 +146,15 @@ class ReportHandler(BaseHTTPRequestHandler):
         if not report["comment"].strip():
             return self.reply(400, {"error": "the report has no comment"})
         report_id = time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(3)
-        (STATE / f"{report_id}.json").write_text(json.dumps(report))
+        # queued only when making the card fails: a report queued while its card was being made got a second card
+        # from the Mac's pull (card-made-2)
         try:
             card = make_card(report)
-        except Exception as failure:  # the report stays queued: the Mac's pull makes its card
+        except Exception as failure:
+            (STATE / f"{report_id}.json").write_text(json.dumps(report))
             print(f"{report_id}: no card ({failure}); queued for the Mac's pull", file=sys.stderr, flush=True)
             return self.reply(200, {"queued": report_id})
-        acknowledge([report_id])
+        (STATE / DONE / f"{report_id}.json").write_text(json.dumps(report))
         self.reply(200, {"card": card})
 
 
