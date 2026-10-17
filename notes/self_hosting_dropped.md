@@ -149,3 +149,17 @@ or question for the Rust side.
   (notes/self_hosting.md "Value layout"). Rust boxes nearly every value as a $Node, keeps texts in linear memory as
   (ptr, len) $String and lists as cons cells. Example: `xs#500` walks 500 cells in Rust's module, one array.get in
   warp's. Same program results. Rust side: card rust-emitter.
+
+## analyzer (lib/compiler/analyzer.warp, card lib-compiler)
+One general flow inference instead of Rust's heuristics; the twin (tests/common/twins.rs analyzer_differential)
+accepts a slot when warp's kind is Rust's or a more general one (covers: empty ⊒ all, data ⊒ int/float), and the
+real measure is the suite through the warp compiler (notes/self_hosting.md). Deviations kept:
+- `round_to`: warp int where Rust says float (accepted by the Integrator, card inferred-kinds).
+- Recursive results (sources q3–q8, guarded_number): Rust infers node, warp keeps list. Back: none needed; the flow
+  join is the more precise answer.
+- `g := it#2`: Rust adds an extra `g: text` variable; warp reads `g` as a function of it, no variable.
+- closure_call_N helpers: Rust's text lists them, warp leaves them out (lowering artefacts, not program slots).
+- Unknown builtin calls default to int (unsound): back by a builtin kinds table, ported from builtin_word_kind in
+  src/analyzer/inference.rs.
+- Element types don't flow through function results (`sieve(100)` → plain list): back by carrying the element slot
+  of a result.

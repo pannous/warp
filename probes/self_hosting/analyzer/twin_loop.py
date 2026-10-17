@@ -12,8 +12,11 @@ CASES = "data/self_analyzer/cases.jsonl"
 CASE_FOLDER = "scratch/analyzer_cases"
 WARP = "scratch/warp"
 SEPARATOR = " | "
-# the sources whose kinds match, written by each run
+# the sources whose kinds warp covers (each slot Rust's kind or a more general one, tests/common/twins.rs covers),
+# written by each run
 MATCHING = "data/self_analyzer/matching.txt"
+# every difference in full, one JSON object per line: path, warp, rust (generality.py reads it)
+DIFFERING = "data/self_analyzer/differing.jsonl"
 
 
 def arguments():
@@ -38,6 +41,29 @@ def warp_kinds(chunk):
     return warp_kinds(chunk[:half]) + warp_kinds(chunk[half:])
 
 
+def slots(text):
+    """{slot: kind} of a kinds text: f(0) a parameter, f() a result, a variable by name, = the value"""
+    found = {}
+    for line in text.split(SEPARATOR):
+        if line.startswith("= "):
+            found["="] = line[2:]
+        elif ") -> " in line:
+            signature, result = line.split(") -> ", 1)
+            name, params = signature.split("(", 1)
+            for index, kind in enumerate(filter(None, params.split(", "))):
+                found[f"{name}({index})"] = kind
+            found[f"{name}()"] = result
+        elif ": " in line:
+            name, kind = line.rsplit(": ", 1)
+            found[name] = kind
+    return found
+
+
+def covers(warp, rust):
+    general = lambda w, r: w == r or w == "empty" or (w == "data" and r in ("int", "float"))
+    return len(warp) == len(rust) and all(name in warp and general(warp[name], kind) for name, kind in rust.items())
+
+
 def main():
     only, limit, chunk_size = arguments()
     os.makedirs(CASE_FOLDER, exist_ok=True)
@@ -55,9 +81,12 @@ def main():
             expected = SEPARATOR.join(case["kinds"])
             if got != expected:
                 differing.append((case["path"], got, expected))
-    differing_paths = {path for path, _, _ in differing}
+    uncovered = {path for path, got, expected in differing if not covers(slots(got), slots(expected))}
     with open(MATCHING, "w") as out:
-        out.writelines(case["path"] + "\n" for case in cases if case["path"] not in differing_paths)
+        out.writelines(case["path"] + "\n" for case in cases if case["path"] not in uncovered)
+    print(f"{len(cases) - len(uncovered)} of {len(cases)} covered (each slot Rust's kind or a more general one)")
+    with open(DIFFERING, "w") as out:
+        out.writelines(json.dumps({"path": path, "warp": got, "rust": expected}) + "\n" for path, got, expected in differing)
     words = collections.Counter()
     for path, got, expected in differing:
         print(f"## {path}\n  warp: {got[:400]}\n  rust: {expected[:400]}")
@@ -68,4 +97,5 @@ def main():
         print(f"  {count:4} {line}")
 
 
-main()
+if __name__ == "__main__":
+    main()
