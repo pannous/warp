@@ -57,6 +57,17 @@ pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
 /// A node as plain warp data, the view the parser and serializer twins share (notes/self_hosting.md): a number,
 /// bool or ø is itself, every other node a list tagged by its kind
 pub fn node_view(node: &Node) -> Node {
+	view(node, false)
+}
+
+/// The view with the source position of each node that has one, ["at", line, column, view] (card carries-line): a pass
+/// twin reports where its Rust twin does
+pub fn positioned_view(node: &Node) -> Node {
+	view(node, true)
+}
+
+fn view(node: &Node, positions: bool) -> Node {
+	let node_view = |node: &Node| view(node, positions);
 	match node {
 		Node::True | Node::False | Node::Empty => node.clone(),
 		Node::Number(number @ (Number::Int(_) | Number::Float(_))) => Node::Number(*number),
@@ -64,33 +75,40 @@ pub fn node_view(node: &Node) -> Node {
 		Node::Char(c) => tagged("char", [Node::Char(*c)]),
 		Node::Text(text) => tagged("text", [Node::text(text)]),
 		Node::Symbol(name) => tagged("symbol", [Node::text(name)]),
-		Node::Error(inner) => tagged("error", [node_view(inner)]),
+		// an error and a type stay opaque to a pass twin (walk.warp node_of): no positions inside
+		Node::Error(inner) => tagged("error", [view(inner, false)]),
 		Node::Key(left, op, right) => tagged("key", [Node::text(op.as_str()), node_view(left), node_view(right)]),
 		Node::List(items, bracket, separator) => {
 			let mut parts = vec![Node::text(&bracket_glyphs(bracket)), Node::text(&separator_glyph(separator))];
 			parts.extend(items.iter().map(node_view));
 			tagged("list", parts)
 		}
-		Node::Type { name, body } => tagged("type", [node_view(name), node_view(body)]),
+		Node::Type { name, body } => tagged("type", [view(name, false), view(body, false)]),
 		Node::Data(data) => tagged(
 			"data",
 			[Node::text(&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")))],
 		),
-		Node::Meta { node: inner, .. } => meta_view(node, inner),
+		Node::Meta { node: inner, .. } => match node.get_lineinfo() {
+			Some(info) if positions && inner.get_lineinfo().is_none() => {
+				let at = [Node::int(info.line_nr as i64), Node::int(info.column as i64)];
+				tagged("at", at.into_iter().chain([meta_view(node, inner, positions)]))
+			}
+			_ => meta_view(node, inner, positions),
+		},
 	}
 }
 
-/// A source literal (`01234`, `1.10`) and an annotation (`@name(value)`) survive, comments and positions go
-fn meta_view(node: &Node, inner: &Node) -> Node {
+/// A source literal (`01234`, `1.10`) and an annotation (`@name(value)`) survive, comments go
+fn meta_view(node: &Node, inner: &Node, positions: bool) -> Node {
 	if let Some(literal) = node.source_literal() {
-		return tagged("literal", [Node::text(literal), node_view(inner)]);
+		return tagged("literal", [Node::text(literal), view(inner, positions)]);
 	}
 	let attributes = node.attributes();
 	if attributes.len() > inner.attributes().len() {
 		let (name, value) = attributes[0];
-		return tagged("attribute", [Node::text(name), node_view(value), node_view(inner)]);
+		return tagged("attribute", [Node::text(name), view(value, positions), view(inner, positions)]);
 	}
-	node_view(inner)
+	view(inner, positions)
 }
 
 fn tagged(kind: &str, parts: impl IntoIterator<Item = Node>) -> Node {
@@ -216,26 +234,59 @@ fn differences_of(cases: impl Iterator<Item = Case>, part: &str) -> Vec<(String,
 
 /// A lowering pass's twin (card twin-harness, notes/self_hosting.md step 10): for every source the Rust passes before
 /// `pass` run, the program goes to `word` of lib/compiler/<part>.warp as a node (walk.warp node_of), and the view of
-/// its result is compared with the view after the Rust pass. Literal and attribute layers are left out on both sides
-/// (a warp node has none); a source the pipeline refuses before the passes, or whose passes fail, is no case.
+/// its result is compared with the view after the Rust pass, next to what each reported (walk.warp report) as
+/// [line, column, message, preferred]. Literal and attribute layers are left out on both sides (a warp node has none);
+/// the nodes carry their positions where the Rust pass reports or makes an error (card carries-line). A source the
+/// pipeline refuses before the passes, or whose passes fail, is no case.
 /// `dropped`: the sources of the fringe forms the twin leaves out, each named in DROPPED_NOTES with how to bring it
 /// back (user 2026-10-17: the port keeps the clean core, not every Rust case)
 pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped: &[&str]) {
 	let cases = twin_sources(dropped).into_iter().filter_map(|path| {
 		let text = std::fs::read_to_string(&path).ok()?;
-		let (before, after) = std::panic::catch_unwind(|| warp::pipeline::around_source_pass(&text, pass)).ok()??;
-		let call = format!("view_of({word}(node_of({})))", json_argument(&plain_view(&before)));
-		Some(Case { path: path.display().to_string(), call, expected: plain_view(&after) })
+		let reporting = || warp::pipeline::around_source_pass_reporting(&text, pass);
+		let (before, after, diagnostics) = std::panic::catch_unwind(reporting).ok()??;
+		let reports = warp_list(diagnostics.iter().map(report_view));
+		let after = plain_view(&after);
+		let given = if reports != Node::Empty || mentions_error(&after) { positioned_plain_view } else { plain_view };
+		let given = given(&before);
+		let call = format!("reported(view_of({word}(node_of({}))))", json_argument(&given));
+		Some(Case { path: path.display().to_string(), call, expected: warp_list([after, reports].into_iter()) })
 	});
 	report(word, &differences_of(cases, part));
 }
 
+/// A hint or warning as a twin reports it: [line, column, message, preferred form or ø]
+fn report_view(diagnostic: &warp::errors::diagnostic::Diagnostic) -> Node {
+	let preferred = diagnostic.preferred.as_deref().map_or(Node::Empty, Node::text);
+	let parts =
+		[Node::int(diagnostic.line as i64), Node::int(diagnostic.column as i64), Node::text(&diagnostic.message)];
+	warp_list(parts.into_iter().chain([preferred]))
+}
+
+fn mentions_error(view: &Node) -> bool {
+	match view {
+		Node::List(items, ..) => {
+			items.first().and_then(Node::text_value).as_deref() == Some("error") || items.iter().any(mentions_error)
+		}
+		_ => false,
+	}
+}
+
 /// The bridge every pass twin relies on: the view of each parsed source, made a node and viewed again, is itself
 pub fn bridge_differential() {
+	bridge_differential_of(plain_view)
+}
+
+/// The bridge with positions: a positioned node is the node, its position read by `n.line` and `n.column`
+pub fn positioned_bridge_differential() {
+	bridge_differential_of(positioned_plain_view)
+}
+
+fn bridge_differential_of(given: fn(&Node) -> Node) {
 	let cases = twin_sources(&[]).into_iter().map(|path| {
-		let view = plain_view(&parse(&std::fs::read_to_string(&path).unwrap()));
-		let call = format!("view_of(node_of({}))", json_argument(&view));
-		Case { path: path.display().to_string(), call, expected: view }
+		let parsed = parse(&std::fs::read_to_string(&path).unwrap());
+		let call = format!("view_of(node_of({}))", json_argument(&given(&parsed)));
+		Case { path: path.display().to_string(), call, expected: plain_view(&parsed) }
 	});
 	report("view_of", &differences_of(cases, "walk"));
 }
@@ -328,6 +379,11 @@ fn twin_sources(dropped: &[&str]) -> Vec<PathBuf> {
 /// decision empty-group-node)
 fn plain_view(node: &Node) -> Node {
 	plain(node_view(node))
+}
+
+/// The plain view with the positions: ["at", line, column, view] around each positioned node
+fn positioned_plain_view(node: &Node) -> Node {
+	plain(positioned_view(node))
 }
 
 fn plain(view: Node) -> Node {

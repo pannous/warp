@@ -96,7 +96,14 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   lib/compiler/walk.warp has the bridge (`node_of`, `view_of`; an error, a type or sealed data stays opaque) and the
   shared walk (`children(n, f)`, `bottom_up(n, f)`; a group is `n.bracket != ø`). Both sides drop literal and attribute
   layers, read a character as a text and an empty group as ø (card empty-group-node, open). `bridge_differential`
-  checks the bridge alone. Twins so far: times_phrases.warp, number_words.warp (hints not compared yet: carries-line).
+  checks the bridge alone. Twins so far: times_phrases.warp, number_words.warp (with its hints).
+- Positions and reports (card carries-line): where the Rust pass hints, warns or makes an error, pass_differential
+  gives the twin the positioned view, ["at", line, column, view] around each positioned node (twins.rs
+  positioned_view); walk.warp node_of makes it `positioned(node, line, column)`, read back by `line_of(n)` /
+  `column_of(n)` (ø for a node a pass made; `n.line` itself fails there). The twin says `report(n, message,
+  preferred)`, and the call `reported(view)` compares [view, reports] with [view after the Rust pass, its hints and
+  warnings as [line, column, message, preferred]] (pipeline::around_source_pass_reporting). Trees are compared
+  without positions. First twin with reports: number_words.warp.
 - The analyzer: its result is the kind of each definition and value, not a tree. It needs scopes (text-key maps work).
 - The emitter: needs byte output and float bits; its twin compares run results, not bytes.
 

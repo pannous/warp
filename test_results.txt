@@ -2765,6 +2765,7 @@ PASSED:
   ✓ node::test_parsed_node_walks::only_groups_have_brackets
   ✓ node::test_parsed_node_walks::parsed_braces_are_lists
   ✓ node::test_parsed_node_walks::parsed_type_declarations_are_nodes
+  ✓ node::test_parsed_node_walks::part_readers_never_clash_with_fields
   ✓ node::test_parsed_node_walks::quoted_definitions_define_nothing
   ✓ node::test_quote_as_written::quoted_code_is_the_code_parse_gives
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
@@ -3654,6 +3655,8 @@ PASSED:
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
   ✓ parser::test_parameter_scope::a_parameter_divides_only_inside_its_definition
+  ✓ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
+  ✓ parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
@@ -3728,6 +3731,13 @@ PASSED:
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
   ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
+  ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
+  ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
+  ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
+  ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
+  ✓ parser::test_self_passes::every_source_is_a_node_and_back
+  ✓ parser::test_self_passes::number_words_match_their_rust_twin
+  ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6304,8 +6314,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_parse_long_definitions::many_definitions_before_a_late_end_parse_in_linear_time
-  ✗ parser::test_parse_long_definitions::many_definitions_parse_in_linear_time
 
 SUMMARY:
-13 ignored, 6301 passed, 2 failed, 6303 total tested
+14 ignored, 6311 passed, 0 failed, 6311 total tested
