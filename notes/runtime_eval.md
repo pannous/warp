@@ -1,8 +1,7 @@
 # Run-time `!`
 
 `x!` on a quote whose value is known only at run time (wiki/charged.md §5): data read at run time, a `block`
-parameter called with different blocks, `xs#2!`. The feasibility study (options interpreter / run-time compile /
-hybrid, the shared-store design, optimisation invariants, effort table): notes/OLD/runtime_eval_study.md.
+parameter called with different blocks, `xs#2!`.
 
 ## As built: copying through the host
 - Step 0: `x : a+b` over names defined nowhere warns that `x!` can never run it

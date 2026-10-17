@@ -5,8 +5,6 @@
 - `tests/welcoming/test_footguns.rs`: passing tests = Solved entries; `#[ignore = "next"]` = NOT YET entries with a
   clear answer. When a NOT YET bug gets fixed, un-ignore its test and move the entry to Solved.
 - `warp eval` and `is!` use the same `wasm_emitter::eval`, so CLI output is representative.
-- The 2026-09 work-area logs (what each probing round fixed and left open, drafts for the wiki) are in
-  notes/OLD/footguns_work_areas.md; their open items are unverified since.
 
 ## Not in the wiki yet
 

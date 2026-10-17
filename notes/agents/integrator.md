@@ -13,7 +13,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   (`git -C "$W" checkout --detach <P's HEAD>`) and gate it there. Never wait idle on a test run.
 - The queue is the board: `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
   cards are merged, each at origin/<branch> when that descends from the tip its card names (owners push newer tips
-  without updating the card; a stale tip re-resolved a hand-resolved conflict), else at the card tip; the tip is fixed
+  without updating the card), else at the card tip; the tip is fixed
   once merged, push_tested.sh's ancestry check catches a push during the run. A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
   branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
   and tell the Supervisor about lost-looking work.
@@ -21,7 +21,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   `integrator_tools/express.sh [<card>…]` pushes them untested at once (merge, push, close, Playground deploy with
   skip_checks; ~15 s), even while a gate runs; push_tested.sh merges those pushes (express_untested.txt) like docs. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
-- Scripts (card integrator-scripts): `integrator_tools/batch_build.sh [--worktree "$P"] [--base <ref>] [--cloud]
+- Scripts: `integrator_tools/batch_build.sh [--worktree "$P"] [--base <ref>] [--cloud]
   [<card>…]` assembles a batch from the Ready cards (express cards left to express.sh, ≤8 tips, held tips in ../integrate_held.txt
   skipped), merges them with merge_batch.sh (`<branch>@<tip>`), runs keywords.py, native + wasm32 cargo check and fmt,
   writes ../<worktree>_batch.txt and prints the bounces as todo commands (~2 min). After push_tested.sh,
@@ -48,7 +48,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   in the page, the Ask flow and the fix buttons work; ~3 min).
 - Before pushing also check the browser build (the playground deploys from main; a native-only item breaks it):
   `cargo check --offline --lib --target wasm32-unknown-unknown --no-default-features`, and compile the browser test
-  build (native-only API in a test broke it twice): `tests/queue.sh cargo --offline test --target wasm32-wasip1
+  build: `tests/queue.sh cargo --offline test --target wasm32-wasip1
   --no-default-features --test tests --no-run`. Both with zero warnings (CI denies them).
 - Reviewer (notes/agents/reviewer.md): it reviews each Ready card while you gate, never in front of you. Before a
   push, leave out a card warp-reviewer vetoed (it moves the card back to Now with a note; drop it from the batch); its
@@ -65,13 +65,12 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   is carded and fixed forward with priority, the last good site stays up meanwhile. An urgent fix (the user waiting to
   try it) is deployed at once: `gh workflow run Playground -R pannous/warp` (main). The local gate cannot see the
   runner's environment:
-  GitHub's runner has no GPU and is slower (a "ready" status raced the first run; samples/graphics/webgpu logged Chrome's
-  "No available adapters." — fixed by AGENT_BROWSER_ARGS SwiftShader in pages.yml). So a batch that adds or changes a
+  GitHub's runner has no GPU (pages.yml renders WebGPU with SwiftShader via AGENT_BROWSER_ARGS) and is slower. So a batch that adds or changes a
   sample, web/playground/** or pages.yml gets the runner's verdict before main: push the tested tip as a branch and
   `gh workflow run Playground -R pannous/warp --ref <branch>`; job build green = both tours pass on the runner (its
   deploy job fails on a branch, expected: the Pages environment takes main only).
   The runner tours the collected site (pages.yml SITE_FILES), the local tour the whole repository: a new site file
-  missing from SITE_FILES (guide-expert.md, batch 20) shows only there.
+  missing from SITE_FILES shows only there.
 - web::test_bundle_budget fails when a branch grows every program's app.wasm: integrator_tools/site_size.sh
   <commits> measures the hello-world site per first-parent merge (worktree budget_bisect), the grower goes back to
   its worker with the section/segment diff (`wasm-tools objdump`).

@@ -1,8 +1,7 @@
 # Ahead-of-time compilation (native, wasmtime 49)
 
 Probes in probes/aot/ (`measure.sh`: wasmtime CLI JIT vs .cwasm; `standalone.sh`: a standalone executable;
-`run_speed.sh`; `shared_runtime.sh`: two-Module Linker / `warp_runtime`). Measurements and the survey behind this
-note: notes/OLD/aot_measurements.md.
+`run_speed.sh`; `shared_runtime.sh`: two-Module Linker / `warp_runtime`).
 
 ## Cranelift in dev builds
 `[profile.dev.package.wasmtime] opt-level = 3` optimizes only the wasmtime crate itself; cranelift-codegen, regalloc2

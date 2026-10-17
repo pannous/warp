@@ -18,7 +18,7 @@ program, its output, the version and the page address, and becomes a card on the
   carries the token itself (BUG_TOKEN; the user accepts the abuse risk), so the parameter is only needed for another
   one: a new token from `install` means updating BUG_TOKEN. A refused token (403) is forgotten and the form shows a
   token field.
-- Limits (user, 2026-10-17): with the shared token an address may send 10 reports an hour (429 after that); past 100
+- Limits: with the shared token an address may send 10 reports an hour (429 after that); past 100
   attempts within an hour it is banned for good (/var/lib/warp-bug-report/banned.txt; delete its line and restart the
   unit to lift it). The address is the last X-Forwarded-For entry Ferron adds. The user's own owner token
   (~/.config/warp/bug-report-owner-token, /etc/warp-bug-report.owner-token) has no limit: `scripts/bug_report.py token`

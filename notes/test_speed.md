@@ -1,7 +1,6 @@
 # Test speed
 
-Where the full suite's time goes and what keeps the gate fast. The two measured full runs (opt-level 0 vs 2, per-test
-distributions, logs in data/perf/): notes/OLD/test_speed_measurements.md.
+Where the full suite's time goes and what keeps the gate fast. Logs of measured runs: data/perf/.
 
 ## The run is throughput-bound
 - 16 test threads on 10 cores: the summed test time divided by 16 is the binary's wall clock. No single test is the
