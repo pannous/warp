@@ -26,6 +26,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - git-hook restore: agents may restore only Cargo.toml/Cargo.lock (the build tweak); the hook backs up the diff first.
 - #1 avoid panics, errors as values. #14 not-implemented errors unless easy.
 - P151 the crates.io package is `warp-lang`, the runtime `warp-runtime`. P150 license (2026-10-17): the compiler AGPL-3.0-or-later, warp-runtime MIT (programs built with warp stay their authors'), contributor agreement in CONTRIBUTING.md so warp can be dual-licensed commercially. release-channels: next a PyPI wheel wrapping the binary, named warp-language (`pip install warp-language`; NVIDIA's Warp owns warp-lang there), Linux .deb/.rpm (warp-lang), AUR (warp-lang-bin).
+- laws-file (2026-10-17, user): the human-owned laws move from root LAWS.warp to samples/laws.warp, keeping the
+  "AI agents must not edit this file" header; test_bend_laws runs `warp verify samples/laws.warp`.
 - Language name: warp everywhere; `.wasp` files still read; URLs/domains and wisp unchanged.
 - P180 split-debuginfo "unpacked" plus the hourly sweep. P90 ./test.wasm is written at every compile. P91 one shared analysis per compile, refreshed only when a pass changed the program.
 - Repo layout: tests/ in topic folders (P14); CLAUDE.md is a symlink to AGENTS.md (P15); wisp format stays with a roundtrip test (P11); GcObject is the GC reading API (P12) with gc_struct!/wasm_struct!/wasm_object! as sugar (P97); test macros in tests/common (P100).
