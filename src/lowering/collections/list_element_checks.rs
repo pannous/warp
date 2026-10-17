@@ -104,10 +104,12 @@ impl ElementChecks {
 					return Node::Key(target, op, Box::new(value));
 				};
 				self.declared.insert(name.clone(), type_name.clone());
-				if let Some(test) = union_test(&name, &type_name) {
-					let mut checks = vec![];
-					let value = self.checked_item(value, &[test], &mut checks);
-					return self.with_checks(checks, Node::Key(target, op, Box::new(value)));
+				// checked after the store: the value stays in the declaration, where the compiler refuses a known misfit
+				if let Some(test) = union_test(&name, &type_name).filter(|_| computed_literal_kind(&value).is_none()) {
+					let store = Node::Key(target, op, Box::new(value));
+					let stored = Node::Symbol(name);
+					let statements = vec![store, item_check(&stored, &test), stored];
+					return Node::List(statements, Bracket::None, Separator::Semicolon);
 				}
 				match element_test(&name, &type_name) {
 					Some(test) => self.checked_store(&[test], &Node::Symbol(name), *target, op, value),
