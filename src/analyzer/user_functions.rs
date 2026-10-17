@@ -581,6 +581,14 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		if kinds.contains(&Kind::Data) && kinds.iter().all(|kind| matches!(kind, Kind::Data | Kind::Float)) {
 			kinds = vec![Kind::Data];
 		}
+		// passed values of several kinds held as Nodes (`kind_of(parse("x"))` and `kind_of(parse("x + 1"))`, a symbol
+		// and a key): a Node, whose kind the run time tells
+		let several_nodes = kinds.len() > 1 && kinds.iter().all(|kind| kind.is_ref() && *kind != Kind::Data);
+		if several_nodes && unknown && takes_passed_kind(param) {
+			param.used_as = Some(Kind::Empty);
+			changed = true;
+			continue;
+		}
 		let [kind] = kinds.as_slice() else { continue };
 		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
 		let guessed = matches!(param.used_as, None | Some(Kind::Int))

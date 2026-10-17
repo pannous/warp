@@ -20,6 +20,9 @@ pub const TEXT_APPEND: &str = "text_append";
 pub const TEXT_OF: &str = "text_of";
 /// What a text joined with `+` takes as its literal when made at run time: `"x " + parse("[1 2]")`
 pub(in crate::wasm_emitter) const STRUCTURE_KINDS: [Kind; 2] = [Kind::Key, Kind::List];
+/// The forms of parsed code the joins test by their whole kind field: marked as code, they join unmarked
+const MARKED_CODE_FORMS: [Kind; 7] =
+	[Kind::Empty, Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::Symbol, Kind::TypeDef];
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
 /// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
@@ -551,9 +554,16 @@ impl WasmGcEmitter {
 				func.instruction(&I::I32Or);
 			}
 		}
+		// code of any form, a parsed symbol or number too, joins as its literal: `print parse("x")`
+		self.emit_is_marked_code(func, local);
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
+			I::I32Or,
 			I::If(BlockType::Empty),
+		]);
+		self.emit_without_code_mark(func, local);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
 				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(local),
 				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::I32Const(pointer as i32),
 				I::I32Const(length as i32),
@@ -561,6 +571,32 @@ impl WasmGcEmitter {
 		self.call(func, "new_text");
 		self.call(func, super::super::reflection::library_ops::LIST_TEXT);
 		Self::emit_list(func, &[I::LocalSet(local), I::End]);
+	}
+
+	/// i32 1 when Node local `local` is one of MARKED_CODE_FORMS marked as code (as_code); a time keeps its own info in those bits
+	fn emit_is_marked_code(&self, func: &mut Function, local: u32) {
+		self.emit_field(func, local, 0);
+		Self::emit_list(func, &[I::I64Const(crate::type_kinds::CODE_MARK), I::I64And, I::I64Const(0), I::I64Ne]);
+		for (index, kind) in MARKED_CODE_FORMS.iter().enumerate() {
+			self.emit_field(func, local, 0);
+			Self::emit_kind_test(func, *kind as i64, I::I64Eq);
+			if index > 0 {
+				func.instruction(&I::I32Or);
+			}
+		}
+		func.instruction(&I::I32And);
+	}
+
+	/// Code in Node local `local` as the plain node of its form, which the kind tests read as written (as_code marks it)
+	pub(in crate::wasm_emitter) fn emit_without_code_mark(&self, func: &mut Function, local: u32) {
+		self.emit_is_marked_code(func, local);
+		func.instruction(&I::If(BlockType::Empty));
+		self.emit_field(func, local, 0);
+		Self::emit_list(func, &[I::I64Const(!crate::type_kinds::CODE_MARK), I::I64And]);
+		self.emit_field(func, local, 1);
+		self.emit_field(func, local, 2);
+		let node_type = self.type_manager.node_type;
+		Self::emit_list(func, &[I::StructNew(node_type), I::LocalSet(local), I::End]);
 	}
 
 	/// An Error node carrying `reason`, the way a failed fetch reports

@@ -388,13 +388,14 @@ impl WasmGcEmitter {
 		Self::emit_list(f, &instructions);
 	}
 
-	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`)
+	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`), unless it is
+	/// code (`parse("{a; b}")`), whose braces group statements
 	pub(in crate::wasm_emitter) fn emit_is_map(&self, func: &mut Function) {
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
 			I::RefAsNonNull, I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
-			I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::CURLY_LIST_KIND),
-			I::I64Eq,
+			I::I64Const(crate::type_kinds::UNMARKED_KIND | crate::type_kinds::CODE_MARK), I::I64And,
+			I::I64Const(crate::type_kinds::CURLY_LIST_KIND), I::I64Eq,
 		]);
 	}
 

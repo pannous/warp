@@ -1,6 +1,9 @@
 //! Text words: text_split, list_join and the joining of items into one text, text_quoted, the decimal digits of an Int
 use super::*;
 
+/// How a type declaration of parsed code is written (Node::serialize): `type P {…}`
+const TYPE_DECLARATION_WORD: &str = "type";
+
 impl WasmGcEmitter {
 	/// text_split(text, separator): the pieces between the separators as a list of texts that share the bytes of the text
 	pub(super) fn emit_text_split(&mut self) {
@@ -284,6 +287,10 @@ impl WasmGcEmitter {
 			(self.written_operator_bound() > op_to_code(&Op::Colon)).then(|| self.allocate_operator_texts());
 		let instance_texts = [self.allocate_string(""), self.allocate_string(Op::Colon.as_str())];
 		let empty_text = self.allocate_string(EMPTY_TEXT);
+		let type_word = self.allocate_string(TYPE_DECLARATION_WORD);
+		// the unbracketed, space-separated list that line is joined as
+		let type_line_kind =
+			(crate::wasm_emitter::list_info(&Bracket::None, &Separator::Space) << KIND_BITS) | Kind::List as i64;
 		let empty = self.allocate_string("");
 		let bool_texts = [self.allocate_string(crate::node::NO), self.allocate_string(crate::node::YES)];
 		let i64_box = self.type_manager.i64_box_type;
@@ -315,9 +322,10 @@ impl WasmGcEmitter {
 				if !nested {
 					// code parsed at run time joins as its literal: `print "area:", parse(t)` (card print-parse); a list
 					// stays no joinable item of join, as Python's ",".join([[1]])
-					s.emit_structure_as_literal(f, element, &[Kind::Key], empty);
+					s.emit_structure_as_literal(f, element, &[Kind::Key, Kind::TypeDef], empty);
 				}
 				if nested {
+					s.emit_without_code_mark(f, element);
 					// a text or a character in a container is quoted (P126, chars-codepoints): `['a' "bc"]`
 					s.emit_field(f, element, 0);
 					Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
@@ -444,6 +452,24 @@ impl WasmGcEmitter {
 						f.instruction(&I::End);
 					}
 					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
+					// a type declaration of parsed code as Node::serialize writes it, the line `type name body`
+					is_kind(f, Kind::TypeDef);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::If(BlockType::Empty),
+							I::I64Const(type_line_kind), I32Const(type_word.0 as i32), I32Const(type_word.1 as i32),
+					]);
+					s.call(f, "new_symbol");
+					f.instruction(&I::I64Const(type_line_kind));
+					s.emit_field(f, element, 1);
+					f.instruction(&I::I64Const(type_line_kind));
+					s.emit_field(f, element, 2);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+							I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type),
+							I::StructNew(node_type), I::LocalSet(element),
+						I::End,
+					]);
 					// the bracket info sits above the kind, the separator code higher still (card keep-list)
 					masked_kind_is(f, Kind::List);
 					f.instruction(&I::If(BlockType::Empty));
