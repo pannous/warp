@@ -87,6 +87,15 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   it matches everywhere. They take node_view data, the form parser.warp's `tree` writes
   (probes/self_hosting/next_phase/view_pass.warp rebuilds a view bottom-up). A `parse` word giving real Nodes becomes a
   card once a pass needs Meta the view cannot carry.
+- Positions and reports (card carries-line): where the Rust pass hints, warns or makes an error, pass_differential
+  gives the twin the positioned view, ["at", line, column, view] around each positioned node (twins.rs
+  positioned_view); walk.warp node_of makes it `positioned(node, line, column)`, read back by `line_of(n)` /
+  `column_of(n)` (ø for a node a pass made; `n.line` itself fails there). The twin says `report(n, message,
+  preferred)`, and the call `reported(view)` compares [view, reports] with [view after the Rust pass, its hints and
+  warnings as [line, column, message, preferred]] (pipeline::around_source_pass_reporting). Trees are compared
+  without positions. First twin: lib/compiler/number_words.warp. Blocked like the other pass twins on parsed-kinds:
+  walk.warp is_group fails on every non-list; a cloud run with a stand-in is_group took 2000 s, mostly bisecting
+  failing chunks down to single sources.
 - The analyzer: its result is the kind of each definition and value, not a tree. It needs scopes (text-key maps work).
 - The emitter: needs byte output and float bits; its twin compares run results, not bytes.
 
