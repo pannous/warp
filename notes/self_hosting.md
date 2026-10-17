@@ -164,3 +164,39 @@ lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-w
 arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
 Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
 text search words above).
+
+## Speed of a warp-written compiler (user discussion, 2026-10-17)
+No fundamental reason for "several times slower". Measured: warp `find` 1.7x the hand-emitted builtin (both wasm),
+parser.warp tree of 100 KB ~0.6 s. The only fixed cost is wasm vs native: Cranelift optimizes less than LLVM, GC
+objects cost more than Rust's stack values; typically 1.2-2x, less for allocation-heavy tree walking (a compiler);
+`wasm-opt` (supports GC) narrows it. The rest is today's code generation, fixable and good for every user program:
+
+| Cost today | Why | Fix |
+|---|---|---|
+| Node fields are `anyref` | a checked cast on every read | typed structs for typed values |
+| Numbers boxed (`$i64box`) | an allocation per number | unboxed i64 fields, i31ref |
+| Lists are cons cells | `n#i` is O(i) | wasm GC arrays |
+| `text[i]` walks graphemes | ~300 fuel per ASCII step | byte indexing (`byte_at`) |
+| Unbounded ints | overflow checks/masks per operation | i64 path when the type is known (card int-i64) |
+| Fuel metering on | a counter per loop and call | off for trusted code (card fuel-metering) |
+| Little inlining | small functions stay calls | emitter inlining or wasm-opt |
+
+Host after self-hosting: the native `warp` stays a Rust shell (wasmtime, host words, FFI, graphics, sound) embedding
+`compiler.wasm` precompiled to .cwasm; the playground loads the same file. New interface: compiler imports for
+reading `use`d files, FFI signatures, the host-word list.
+
+## Ahead-of-time executables and a host made of FFI (2026-10-17)
+Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
+(wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
+`warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
+(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
+(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
+modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
+shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
+(audio callbacks: a wasmtime Store is single-threaded → ring buffer in shared memory), GC refs never cross to C
+(copies or handles, notes/ffi_handles.md), macOS windows on the main thread.
+wasmtime stays bundled in every executable: even with the program precompiled (.cwasm) it is the GC, the loader and
+the trap handling. Replacing it (WAMR's wamrc AOT with its own GC; wasm2c lacks GC) is not on the table.
+Shared runtime library (`warp build --shared`, libwarp-runtime.dylib): only an option, card exe-shared-runtime (Later):
+no total saving, loses self-contained files, and a .cwasm only runs on the exact wasmtime that compiled it.

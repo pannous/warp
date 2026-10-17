@@ -21,6 +21,7 @@ mod test_module_error_file; // card module-error-file
 mod test_module_function_dir; // card use-math
 mod test_module_map_keys;
 mod test_module_meta; // card reflection-foreign-meta
+mod test_module_refused_definition; // card module-error-hidden
 mod test_module_signals;
 mod test_netbase_package;
 mod test_node_json; // card node-json

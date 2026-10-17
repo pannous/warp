@@ -2440,6 +2440,7 @@ PASSED:
   ✓ modules::test_module_map_keys::a_renamed_local_keeps_its_map_key
   ✓ modules::test_module_meta::an_imported_warp_module_reflects_its_functions
   ✓ modules::test_module_meta::the_meta_section_names_functions_and_classes
+  ✓ modules::test_module_refused_definition::a_modules_refused_definition_is_its_error
   ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
   ✓ modules::test_module_signals::a_stored_value_of_a_used_module_is_kept_by_the_program
   ✓ modules::test_netbase_package::a_query_is_a_url_path
@@ -3738,6 +3739,7 @@ PASSED:
   ✓ parser::test_self_passes::every_source_is_a_node_and_back
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
+  ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6316,4 +6318,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 6311 passed, 0 failed, 6311 total tested
+14 ignored, 6313 passed, 0 failed, 6313 total tested
