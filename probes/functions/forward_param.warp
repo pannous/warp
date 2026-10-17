@@ -1,7 +1,7 @@
-// a function parameter passed on: to map, inside a lambda, to a recursive call
-// 3
-// [2 3]
-// [2 3]
+# a function parameter passed on: to map, inside a lambda, to a recursive call
+# 3
+# [2 3]
+# [2 3]
 twice(f, x) := f(f(x))
 apply_all(xs, f) := xs.map(f)
 wrap_all(xs, f) := xs.map(x => f(x))
