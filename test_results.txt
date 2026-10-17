@@ -1249,8 +1249,12 @@ PASSED:
   ✓ functions::test_arity_and_type_overloads::a_type_overload_beside_several_arities_keeps_them_all
   ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
   ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
+  ✓ functions::test_arity_overloads::a_map_field_named_like_an_overloaded_function_is_set_on_the_map
   ✓ functions::test_arity_overloads::an_overload_may_call_another_one_and_log_keeps_its_types
+  ✓ functions::test_arity_overloads::an_overloaded_name_called_on_a_receiver_is_the_variant_counting_it
   ✓ functions::test_arity_overloads::an_overloaded_name_given_as_a_function_is_the_variant_called
+  ✓ functions::test_arity_overloads::an_unrelated_map_key_leaves_a_class_setter_in_place
+  ✓ functions::test_arity_overloads::an_untyped_overload_never_turns_a_field_assignment_into_a_call
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
@@ -3901,6 +3905,8 @@ PASSED:
   ✓ programs::test_program_cache::a_module_looking_beyond_the_keyed_folders_is_not_kept
   ✓ programs::test_program_cache::a_program_runs_again_from_its_cached_module
   ✓ programs::test_property_definitions::a_class_defines_a_property_of_its_instances
+  ✓ programs::test_property_definitions::a_class_defines_a_setter_of_its_instances
+  ✓ programs::test_property_definitions::a_class_property_names_its_instance_self_or_this
   ✓ programs::test_property_definitions::a_program_defines_a_property_with_a_setter
   ✓ programs::test_property_definitions::a_property_of_a_value_or_an_instance_setter_is_refused_loudly
   ✓ programs::test_property_definitions::a_property_without_a_setter_is_read_only
@@ -5410,8 +5416,6 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
-  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
-  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -6252,6 +6256,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✗ web::test_app_keys::on_key_hears_the_app_pages_key_presses
 
 SUMMARY:
-13 ignored, 6249 passed, 0 failed, 6249 total tested
+13 ignored, 6253 passed, 2 failed, 6255 total tested
