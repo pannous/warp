@@ -39,6 +39,15 @@ pub(crate) fn typed_parameter(arguments: Node) -> Node {
 			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => {
 				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
 			}
+			// Go's `x int`, `s Shape`: the type after the name
+			[name, type_word]
+				if matches!(name.drop_meta(), Symbol(_))
+					&& !is_type_word(name)
+					&& (is_type_word(type_word)
+						|| matches!(type_word.drop_meta(), Symbol(word) if word.starts_with(char::is_uppercase))) =>
+			{
+				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
+			}
 			// `x of int`: the parameter x of type int
 			[name, of, type_word]
 				if of.drop_meta().is_symbol(OF_WORD)

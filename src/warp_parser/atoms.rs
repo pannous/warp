@@ -4,7 +4,7 @@ use super::*;
 use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
-const VOID_WORD: &str = "void";
+use crate::words::VOID_WORD;
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";

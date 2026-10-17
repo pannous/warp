@@ -31,6 +31,8 @@ pub const EVENT_ALIASES: [(&str, &str, bool); 9] = [
 ];
 pub const WHENEVER_WORD: &str = "whenever";
 pub const RETURN_WORD: &str = "return";
+/// C's result type of a function that returns nothing: `void f() { … }`
+pub const VOID_WORD: &str = "void";
 pub const SUM_WORD: &str = "sum";
 
 /// `switch x {…}` / `match x {…}` (lowering/control/switch.rs)
