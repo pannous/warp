@@ -28,3 +28,10 @@ fn test_known_words_are_untouched() {
 	assert_eq!(shown("print 3"), "ø"); // print gives nothing (issue #18)
 	assert_eq!(shown("3 km"), "3km");
 }
+
+#[test]
+fn test_an_unknown_word_in_a_condition_is_an_error() {
+	fails_with("x=3; if odd x then 1 else 2", "undefined: odd");
+	fails_with("x=3; while odd x do x=1; x", "undefined: odd");
+	fails_with("[1 2].filter(x => odd x)", "undefined: odd");
+}

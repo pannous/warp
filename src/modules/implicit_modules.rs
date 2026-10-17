@@ -103,11 +103,6 @@ pub(crate) fn without_use_of(program: Node, module: &str) -> Node {
 	}
 }
 
-/// `xs.unique()`, `unique(xs)`: the words of the standard modules named after a type (lib/list.warp, text.warp,
-/// map.warp) are standard functions of every program, called either way (user decision type-library-words, card
-/// dispatch: "just provide the standard functions for list and map by default"), so a program calling one uses that
-/// module. A library word stays the builtin, a word the program defines is its own, a word of two such modules needs
-/// its `use`, `list.zip(a, b)` names the module (test_std_qualified)
 /// The standard modules named after a type with their words, the methods of that type: list, map, text
 pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 	std_module_names()
@@ -116,6 +111,11 @@ pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 		.collect()
 }
 
+/// `xs.unique()`, `unique(xs)`: the words of the standard modules named after a type (lib/list.warp, text.warp,
+/// map.warp) are standard functions of every program, called either way (user decision type-library-words, card
+/// dispatch: "just provide the standard functions for list and map by default"), so a program calling one uses that
+/// module. A library word stays the builtin, a word the program defines is its own, a word of two such modules needs
+/// its `use`, `list.zip(a, b)` names the module (test_std_qualified)
 pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	let mut defined = own_functions(&program);
 	defined.extend(imported_module_exports(&program));
@@ -157,9 +157,13 @@ pub fn uses_sound(program: &Node) -> bool {
 	says_use(program, SOUND_MODULE) || first_called_undefined(program, SOUND_WORDS).is_some()
 }
 
-/// Whether the program says `use <module>`
+/// Whether the program says `use <module>`, also first in a line of several (`use json; m = …` before other lines)
 pub(crate) fn says_use(program: &Node, module: &str) -> bool {
-	statements_of(program).iter().filter_map(used_module).any(|used| used.name == module)
+	statements_of(program)
+		.iter()
+		.flat_map(Node::sequence_statements)
+		.filter_map(used_module)
+		.any(|used| used.name == module)
 }
 
 /// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)

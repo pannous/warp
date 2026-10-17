@@ -81,9 +81,11 @@ pub use warp_runtime::host_words::FOREIGN_CALL;
 /// browser playground (host.js); natively a PNG file (src/graphics/paint.rs)
 pub const PAINT: &str = "paint";
 /// `use draw` on the GPU (src/graphics/gpu_canvas.rs, lib/draw.warp): draw_shape(kind, a, b, c, d, color) adds a shape,
-/// draw_show(width, height) shows the canvas with the shapes added since the last show
+/// draw_show(width, height) shows the canvas with the shapes added since the last show, draw_shader(code) gives the
+/// shader drawing them
 pub const DRAW_SHAPE: &str = "draw_shape";
 pub const DRAW_SHOW: &str = "draw_show";
+pub const DRAW_SHADER: &str = "draw_shader";
 /// save_picture(pixels, width, height, file): `save canvas as "painting.png"` of `use draw` (card save-painting), its
 /// pixels as paint takes them, or 0 when drawn on the GPU; natively a PNG file, in the playground a download
 pub const SAVE_PICTURE: &str = "save_picture";
@@ -185,9 +187,10 @@ pub const VALUE_GIVING_WORDS: [&str; 15] = [
 use wasm_encoder::ValType::{F64, I32, I64};
 const NODE: wasm_encoder::ValType = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 /// name, parameters, results of each host word
-pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 68] = [
+pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 69] = [
 	(DRAW_SHAPE, &[I64, F64, F64, F64, F64, I64], &[]),
 	(DRAW_SHOW, &[I64, I64], &[]),
+	(DRAW_SHADER, &[NODE], &[]),
 	(GPU_COMPUTE, &[NODE, NODE, I64], &[NODE]),
 	(GPU_RENDER, &[NODE, I64, I64, NODE], &[NODE]),
 	(TEXT_COVERAGE, &[NODE, I64], &[NODE]),
@@ -255,6 +258,14 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(CHANNEL_WORDS[3], &[I64], &[I64]),
 	(CHANNEL_WORDS[4], &[I64], &[]),
 ];
+/// A text as it is, any other value as warp writes it
+pub(crate) fn text_or_written(node: Node) -> String {
+	match node {
+		Node::Text(text) => text,
+		other => other.serialize(),
+	}
+}
+
 /// The host words taking nothing and giving a value (`random`): a bare one is its call, as a program's function without
 /// parameters is (bare_calls.rs)
 pub fn parameterless_host_words() -> impl Iterator<Item = &'static str> {

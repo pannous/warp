@@ -32,6 +32,7 @@ mod test_package_shadow; // card sample-local
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
 mod test_packages;
+mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
 mod test_replaced_module_function; // card use-sound-def
 mod test_std_aliases;
@@ -61,6 +62,7 @@ mod test_std_net;
 mod test_std_prelude;
 mod test_std_qualified;
 mod test_std_random;
+mod test_std_reflection_hints; // card function-repeat
 mod test_std_regex;
 mod test_std_shadowed_names; // card libm-function
 mod test_std_time;
