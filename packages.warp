@@ -8,4 +8,4 @@
 
 // `use uniscript` calls the package's committed c/ffi/uniscript_c.wasm (the C library as a core module) through lib/packages/uniscript.warp;
 // data/entities.idx, the compiled entity index, is what `warp tool uniscript check` and the uniscript web page read
-uniscript: {repository: "https://github.com/pannous/uniscript.git", version: 1.0.9, library: "c/ffi/uniscript_c"}
+uniscript: {repository: "https://github.com/pannous/uniscript.git", version: 1.0.10, library: "c/ffi/uniscript_c"}
