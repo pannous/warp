@@ -89,6 +89,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader
 		.resolve(program)
+		.and_then(|program| loader.finish_imports(program))
 		.and_then(|program| {
 			loader.loading_implicitly = true;
 			let loaded = loader.implicit_std_modules(&program);
