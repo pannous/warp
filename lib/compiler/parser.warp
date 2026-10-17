@@ -25,7 +25,8 @@ def items(p, closer, bracket) {
 		before = p.at
 		item = expression(p, 0)
 		newline = skip_blanks(p)
-		found += [[item, separator(p, closer, newline)]]
+		after = separator(p, closer, newline)
+		found += [[statement, after] for statement in statements_of(item)]
 		// a closer of another bracket: skipped, so the reading goes on
 		if p.at == before { p.at = p.at + 1 }
 	}
@@ -997,6 +998,17 @@ def global_declaration(p) {
 	declared = [["key", ":", ["symbol", "global"], name] for name in names]
 	if declared.length == 1 { return declared#1 }
 	listed("", ";", declared)
+}
+
+// The statements an item stands for in its block: `global a, b` is the declarations `global: a` and `global: b`
+// Rust twin: definitions/variables.rs declarations_of_several_globals
+def statements_of(item) {
+	if not (item is list and item.length > 3 and item#1 == "list" and item#2 == "" and item#3 == ";") { return [item] }
+	declarations = item[3 ..]
+	for declaration in declarations {
+		if not (declaration is list and declaration#1 == "key" and declaration#2 == ":" and declaration#3 == ["symbol", "global"]) { return [item] }
+	}
+	declarations
 }
 
 // The words that declare a type: `class V {…}`, `struct P {…}`, `type Point {…}`
