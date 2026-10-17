@@ -323,6 +323,7 @@ pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
 		crate::lowering::broadcasting::implied_words(statements),
 		crate::gpu_maps::implied_words(statements),
 		crate::lowering::library_words::implied_count_words(statements),
+		crate::lowering::library_words::implied_similarity_words(statements),
 		crate::wasm_emitter::numbers::radix::implied_words(statements),
 	]
 	.concat();

@@ -75,6 +75,22 @@ popped_item(x, k) := if x is map then x.get(k) else x#(popped_position(x, k))
 popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x#i for i in 1 to count(x) if i != popped_position(x, k)]
 // Python's xs.clear() and m.clear() (card python-aliases, declaration_lowering cleared_collection): the empty list or map
 cleared(x) := if x is map then {} else []
+// `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
+// pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
+// other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
+alike(a: any, b: any, tolerance: float, rough: bool) := {
+	if bracket_of(a) == "{" and bracket_of(b) == "{" {
+		return #a == #b and keys(a).all(k => b has k and alike(a[k], b[k], tolerance, rough))
+	}
+	if bracket_of(a) != ø and bracket_of(a) == bracket_of(b) {
+		return #a == #b and (1 to #a).all(i => alike(a#i, b#i, tolerance, rough))
+	}
+	if type(a) is key and type(b) is key {
+		keys_alike = alike(key_of(a), key_of(b), tolerance, rough)
+		return op_of(a) == op_of(b) and keys_alike and alike(value_of(a), value_of(b), tolerance, rough)
+	}
+	if rough then values_rough(a, b, tolerance) else values_similar(a, b, tolerance)
+}
 // `a .op b` where the compiler cannot tell which side is a list (broadcasting.rs, card compile-shaders): each item of
 // a list with the other side, two lists paired by index, two numbers plainly; `combined` is `(l, r) => l op r`. Both
 // sides are `any`: inferred from the body, one call with a number made it a list

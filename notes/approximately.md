@@ -11,11 +11,15 @@
 | anything else | `==` |
 
 ## How
-- library_words.rs lowers `a ≈ b` to the call `values_similar(a, b, tolerance)`.
-- wasm_emitter/similarity.rs: two plain numbers (static types Int/Float, not bool) compare inline through
-  `numbers_similar(f64, f64, f64)`; any other operands go to the runtime function `values_similar(anyref, anyref, f64)`.
-  values_similar and its text_fold table (~25 KB of data) are emitted only when such an operand shows up (a rerun via
-  discovered_needs), so numeric programs stay small.
+- library_words.rs lowers `a ≈ b` to lib/prelude.warp's `alike(a, b, tolerance, rough)` (card lists-maps): `{…}` maps
+  key by key in any order, other lists item by item, pairs and instances (a class name paired with its fields, as an
+  `any` value) part by part, each with alike again; any other two values go to the runtime function
+  `values_similar(anyref, anyref, f64)` (bool, uncertain, numbers, texts, else values_equal).
+- wasm_emitter/similarity.rs: a call of alike with two plain numbers (static types Int/Float, not bool) compiles inline
+  to `numbers_similar(f64, f64, f64)`. alike is loaded with every `≈` (implied_similarity_words) but left out of the
+  emitted program until a call needs it (user_function_calls.rs COMPILED_ON_NEED, a rerun via discovered_needs), so a
+  numeric program stays ~3 KB instead of carrying alike, the map runtime and text_fold's table (~25 KB of data).
+  folding.rs never specialises alike's calls (a variant would hide the call from the emitter).
 - text_fold is text_lower's emitter with CaseMapping::Fold: a letter whose canonical decomposition adds only combining
   marks maps to its base letter's lower case. Hangul syllables stay themselves. No full case folding: `ß` stays `ß`.
 
@@ -23,7 +27,7 @@
 - `a ~ b` (also `~~`) is Op::Rough: the same rules with `rough_tolerance` (default 0.01), and texts are trimmed of
   whitespace, control characters and ASCII punctuation at both ends before folding (text_rough_trim):
   `"Hello!" ~ "hello"`. Lists, objects and instances compare entry by entry with `~` again.
-- library_words.rs SIMILARITY_LEVELS: operator, call (values_similar, values_rough), tolerance variable, default;
-  similarity.rs emits both runtime functions from one body (`rough` adds text_of + text_rough_trim before text_fold).
+- library_words.rs SIMILARITY_LEVELS: operator, runtime function (values_similar, values_rough), tolerance variable,
+  default; alike's `rough` picks the function; similarity.rs emits both from one body (`rough` adds text_of + text_rough_trim before text_fold).
 - A class method `approximately(o)` is `≈`, `similar(o)` is `~` (class_methods.rs OPERATOR_METHODS); a class defining
   only one has it serve both operators (INTERCHANGEABLE_OPERATORS); with neither, the field-by-field rule.

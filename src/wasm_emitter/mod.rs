@@ -503,7 +503,15 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub fn emit_for_node(&mut self, node: &Node) {
+	pub fn emit_for_node(&mut self, program: &Node) {
+		let needed;
+		let node = match self.without_unneeded_words(program) {
+			Some(without) => {
+				needed = without;
+				&needed
+			}
+			None => program,
+		};
 		let lowered;
 		let node = if crate::numbers::real::mentions_real(node) {
 			lowered = crate::numbers::real::lower(node.clone());
@@ -591,7 +599,7 @@ impl WasmGcEmitter {
 			rerun.ratio_division = self.ratio_division;
 			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
 			rerun.inherited_needs = rerun.discovered_needs.clone();
-			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
+			crate::normalize::without_hints(|| rerun.emit_for_node(program)); // the first pass already hinted the same program
 			*self = rerun;
 		}
 	}

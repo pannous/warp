@@ -1,18 +1,18 @@
-//! `a ≈ b` (circa, approximately; cards approximately, approximately-all, notes/approximately.md): two numbers
-//! within the relative tolerance inline (numbers_similar), any other two values at run time (values_similar): a bool and
-//! any value alike in truthiness, texts and characters alike in case and accents (text_fold), lists, objects and
-//! instances entry by entry with ≈ again, anything else by values_equal. `a ~ b` (P211, values_rough) is the same with
+//! `a ≈ b` (circa, approximately; cards approximately, approximately-all, lists-maps, notes/approximately.md): two
+//! numbers within the relative tolerance inline (numbers_similar), any other two values by lib/prelude.warp's alike,
+//! which compares lists, maps, pairs and instances entry by entry and the rest at run time (values_similar): a bool and
+//! any value alike in truthiness, texts and characters alike in case and accents (text_fold), anything else by
+//! values_equal. `a ~ b` (P211, values_rough) is the same with
 //! its own tolerance, texts also without the whitespace and punctuation around them (text_rough_trim).
 
 use super::super::numbers::uncertain::UNCERTAIN_SIMILAR;
-use super::super::reflection::equality::IS_META_ENTRY;
 use super::super::runtime_dependencies::{any, Dependency};
 use super::super::text::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
 use super::super::text::text_unicode::CaseMapping;
 use super::super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
-use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
+use crate::library_words::{is_similarity_call, ALIKE_FUNCTION, SIMILARITY_LEVELS, VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;
-use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND};
+use crate::type_kinds::{Kind, BOOL_KIND};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -24,7 +24,7 @@ const ABSOLUTE_TOLERANCE: f64 = 1e-12;
 /// text_fold(text) -> text: lower case without accents
 pub const TEXT_FOLD: &str = "text_fold";
 /// What values_similar calls
-const VALUES_SIMILAR_NEEDS: [&str; 5] = [NUMBERS_SIMILAR, TEXT_FOLD, VALUES_EQUAL, IS_TRUTHY, IS_META_ENTRY];
+const VALUES_SIMILAR_NEEDS: [&str; 4] = [NUMBERS_SIMILAR, TEXT_FOLD, VALUES_EQUAL, IS_TRUTHY];
 const TEXT_KINDS: [Kind; 2] = [Kind::Text, Kind::Codepoint];
 
 /// `a ≈ b` needs numbers_similar; values_similar, with its text_fold table, only when the emitter finds an operand that is
@@ -34,15 +34,19 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 }
 
 impl WasmGcEmitter {
-	/// Push i64 1/0 for `values_similar(a, b, tolerance)` or `values_rough(a, b, tolerance)`, the function given
+	/// Push i64 1/0 for a similarity call and say so: lib/prelude.warp's `alike(a, b, tolerance, rough)` of two plain
+	/// numbers inline (numbers_similar), `values_similar(a, b, tolerance)` and `values_rough(…)` by their runtime
+	/// function. False for any other call, and for alike of other values once loaded: an ordinary call of the warp word
 	pub(in crate::wasm_emitter) fn emit_similarity(
 		&mut self,
 		func: &mut Function,
 		function: &str,
-		left: &Node,
-		right: &Node,
-		tolerance: &Node,
-	) {
+		arguments: &[Node],
+	) -> bool {
+		let is_alike = function == ALIKE_FUNCTION;
+		let ([left, right, tolerance, ..], true) = (arguments, is_alike || is_similarity_call(function)) else {
+			return false;
+		};
 		let is_plain_number = |emitter: &Self, side: &Node| {
 			matches!(emitter.get_type(side), Kind::Int | Kind::Float)
 				&& !crate::analyzer::is_boolean(side, &emitter.scope)
@@ -52,17 +56,21 @@ impl WasmGcEmitter {
 			self.emit_float_value(func, right);
 			self.emit_float_value(func, tolerance);
 			self.emit_call(func, NUMBERS_SIMILAR);
+		} else if is_alike {
+			if self.ctx.user_functions.contains_key(ALIKE_FUNCTION) {
+				return false;
+			}
+			self.emit_call(func, ALIKE_FUNCTION); // left out till now (without_unneeded_words): a need, the rerun has it
 		} else {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_float_value(func, tolerance);
-			let (_, function, ..) = crate::library_words::SIMILARITY_LEVELS
-				.iter()
-				.find(|(_, known, ..)| *known == function)
-				.expect("a similarity call");
+			let (_, function, ..) =
+				SIMILARITY_LEVELS.iter().find(|(_, known, ..)| *known == function).expect("a similarity call");
 			self.emit_call(func, function);
 		}
 		func.instruction(&I::I64ExtendI32U);
+		true
 	}
 
 	/// After the library ops (text_fold shares text_lower's emitter) and the equality ops
@@ -104,23 +112,19 @@ impl WasmGcEmitter {
 	}
 
 	/// values_similar(a: anyref, b: anyref, tolerance: f64) -> i32, or values_rough when `rough`, which trims texts
-	/// before folding them. Locals 3, 4: the kinds; 7, 8, 9: the walk of emit_unordered_entries_equal; 10, 11: the payloads
+	/// before folding them; lists, maps, pairs and instances are lib/prelude.warp alike's, which calls this for the rest.
+	/// Locals 3, 4: the kinds; 5, 6: the payloads
 	fn emit_values_similar(&mut self, name: &'static str, rough: bool) {
-		let recurse = self.next_func_idx;
 		let node = self.type_manager.node_type;
-		let (a, b, tolerance, kind_a, kind_b, payload_a, payload_b) = (0, 1, 2, 3, 4, 10, 11);
-		let tolerance_argument = [I::LocalGet(tolerance)];
+		let (a, b, tolerance, kind_a, kind_b, payload_a, payload_b) = (0, 1, 2, 3, 4, 5, 6);
 		let (i64t, i32t) = (ValType::I64, ValType::I32);
-		let cell = ValType::Ref(self.node_ref(true));
-		let locals = vec![i64t, i64t, i32t, i32t, cell, cell, i32t, Self::any_ref(), Self::any_ref()];
+		let locals = vec![i64t, i64t, Self::any_ref(), Self::any_ref()];
 		self.runtime_function(
 			name,
 			vec![Self::any_ref(), Self::any_ref(), ValType::F64],
 			vec![i32t],
 			locals,
 			|s, f| {
-				s.skip_meta_cell(f, a, b, recurse, &tolerance_argument);
-				s.skip_meta_cell(f, b, a, recurse, &tolerance_argument);
 				let call_with_tolerance = |s: &Self, f: &mut Function, name: &str| {
 					f.instruction(&I::LocalGet(tolerance));
 					s.call(f, name);
@@ -191,21 +195,7 @@ impl WasmGcEmitter {
 					s.call(f, TEXT_FOLD);
 				}
 				s.call(f, VALUES_EQUAL);
-				Self::emit_list(f, &[I::Return, I::End, I::LocalGet(kind_a), I::LocalGet(kind_b), I::I64Ne]);
-				Self::return_if(f, 0);
-				// `{…}` objects are maps: their entries may come in any order
-				Self::emit_list(
-					f,
-					&[I::LocalGet(kind_a), I::I64Const(CURLY_LIST_KIND), I::I64Eq, I::If(BlockType::Empty)],
-				);
-				Self::emit_unordered_entries_equal(f, node, recurse, s.func_index(IS_META_ENTRY), &tolerance_argument);
-				f.instruction(&I::End);
-				for field_index in [1, 2] {
-					Self::field(f, a, node, field_index);
-					Self::field(f, b, node, field_index);
-					Self::emit_list(f, &[I::LocalGet(tolerance), I::Call(recurse)]);
-				}
-				Self::emit_list(f, &[I::I32And, I::Return, I::End]);
+				Self::emit_list(f, &[I::Return, I::End, I::End]);
 				// payloads: numbers within the tolerance, anything else equal
 				s.is_number_payload(f, a);
 				s.is_number_payload(f, b);
