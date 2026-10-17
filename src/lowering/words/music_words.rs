@@ -634,4 +634,3 @@ fn midi_of(name: &str) -> Option<i64> {
 	};
 	Some(12 * (octave_digit.to_digit(10)? as i64 + 1) + semitone + shift)
 }
-
