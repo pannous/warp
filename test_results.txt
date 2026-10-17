@@ -976,6 +976,8 @@ PASSED:
   ✓ control::test_window_clicks::on_click_hears_the_paint_windows_clicks
   ✓ control::test_window_opens::reading_window_open_opens_the_window_once
   ✓ control::test_word_named_variables::a_bound_name_shadows_the_library_word
+  ✓ control::test_word_named_variables::a_loop_variable_shadows_words_taking_nothing
+  ✓ control::test_word_named_variables::operator_words_and_constants_bind_no_name
   ✓ control::test_word_statements::a_glued_go_block_is_a_task
   ✓ control::test_word_statements::a_word_statement_in_a_block_is_no_call_of_the_next_lines
   ✓ extensions::strings::tests::test_char_str_eq
@@ -6240,4 +6242,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6235 passed, 0 failed, 6235 total tested
+13 ignored, 6237 passed, 0 failed, 6237 total tested
