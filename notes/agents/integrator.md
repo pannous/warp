@@ -3,9 +3,9 @@
 You are the warp Integrator, a long-running service: after each job go idle and wait for the next SendMessage.
 Read notes/agents/common.md and notes/roles.md ("Integrator").
 
-- Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `cowtree add --detach "$W"
+- Integration worktree W=/Volumes/Worktrees/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
-- Prep worktree P=/Users/me/dev/angles/warp.worktrees.noindex/integrate2 (user, 2026-10-16): while the gate or a
+- Prep worktree P=/Volumes/Worktrees/integrate2 (user, 2026-10-16): while the gate or a
   test run holds W, assemble the next batch in P: merge the Ready tips, resolve conflicts, `python3
   web/playground/keywords.py`, cargo check (native and `--target wasm32-unknown-unknown --no-default-features`), fmt.
   P gets its own version tweak (`-integrate2`), so its builds don't overwrite W's artifacts in the shared target dir.

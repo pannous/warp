@@ -65,7 +65,7 @@ passes unedited needs no question; editing its assertions still needs a decision
 
 ## Integrator (also the Tester)
 The only session that runs the full suite and the only one that pushes code to main.
-- Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main;
+- Keeps one integration worktree (/Volumes/Worktrees/integrate, detached, follows origin/main;
   created with `cowtree add --detach <path> origin/main`).
 - Its queue is the board's Ready column (user, 2026-10-16): workers push and run `todo ready <card>`, which records
   branch and tip and refuses a branch that does not merge cleanly into origin/main; `todo list Ready` shows them. Only
