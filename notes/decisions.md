@@ -78,6 +78,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - warning-levels / hints-are-warnings: one Diagnostic with a level hint < weak < normal < severe; `--no-hints` and `use strict` are thresholds (notes/welcoming.md).
 - canvas-zero: a missing setting takes a sensible default; errors only for an ambiguity too dangerous to guess.
 - P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip.
+- julia-compat (user, 2026-10-17): stay close to Julia; its syntax is beautiful and its semantics often near perfect (unlike Rust). Julia forms read with Julia's meaning; deliberate departures listed in wiki/Julia.md.
 - P78 modifiers from other languages (`public`, `static`, `inline`, …) are skipped with a got-it note; words with a warp meaning keep it.
 - Word choices are not asked: the recommended word is canonical, synonyms are aliases with a note.
 - rust-forms-welcome: warp may read Rust's forms (`<T>` included) as long as each has a nicer warp form, which stays canonical.
