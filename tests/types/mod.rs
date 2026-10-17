@@ -97,6 +97,7 @@ mod test_list_element_types;
 mod test_list_test_of_a_map;
 mod test_loop_item_into_annotated;
 mod test_loop_text_arithmetic;
+mod test_map_read_size; // card map-read
 mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
 mod test_match_exhaustive; // card match-exhaustive
@@ -105,6 +106,7 @@ mod test_match_static_variant;
 mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
 mod test_method_result_text; // card instance-result
+mod test_mixed_list_parameter_kinds; // card infers-int
 mod test_multi_word_class; // card multi-word-class
 mod test_mutating_methods;
 mod test_nested_type_calls; // text hex 255 is text(hex(255))

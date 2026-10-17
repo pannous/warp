@@ -221,10 +221,10 @@ impl WasmGcEmitter {
 	pub(crate) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
 		if self.returns_list {
 			self.emit_list_abi_value(func, value);
-		} else if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
+		} else if let Some(message) = returned_error_message(value).filter(|_| self.returns_number) {
 			self.emit_trap_detail(func, message);
 			self.emit_runtime_error(func, lists::list_ops::RETURNED_ERROR);
-		} else if self.returns_node {
+		} else if !self.returns_number {
 			self.emit_node_instructions(func, value);
 		} else if self.returns_float {
 			self.emit_float_value(func, value);

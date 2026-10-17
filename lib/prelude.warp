@@ -111,7 +111,12 @@ window.height(new_height) := set_system_value("window_height", new_height)
 // a program cannot resize the display: set window.width or canvas.width instead
 display.width := display_width
 display.height := display_height
-// the device pixels per inch, a quantity in dpi that turns lengths into px, `3 cm * display.dpi`; a program sets it in
-// dpi, `display.dpi = 300 dpi`
-display.dpi := display_dpi * 1dpi
-display.dpi(density) := set_system_value("display_dpi", density / 1dpi)
+// the device pixels per length (decision display-names, other names display.dpi and display.ppi), a quantity in dpi
+// that turns lengths into px, `3 cm * display.density`; a program sets it in dpi, `display.density = 300 dpi`
+display.density := display_dpi * 1dpi
+display.density(density) := set_system_value("display_dpi", density / 1dpi)
+// width × height in px (other names display.dimensions and display.resolution)
+display.size := [display_width, display_height] px
+// the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
+// float)
+display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)

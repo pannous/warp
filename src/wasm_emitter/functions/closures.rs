@@ -771,15 +771,13 @@ impl WasmGcEmitter {
 
 impl WasmGcEmitter {
 	/// A program whose function values may be shown needs function_text
-	pub(in crate::wasm_emitter) fn require_function_text(&mut self) {
-		let required = &mut self.ctx.required_functions;
-		let shows_values =
-			[super::super::host::wasi_emitter::PRINT_VALUE, super::super::host::wasi_emitter::PUT_VALUE, "list_join"]
-				.iter()
-				.any(|name| required.contains(name));
-		if shows_values && !self.ctx.closure_targets.is_empty() {
-			required.extend([FUNCTION_TEXT, FUNCTION_DUMP]);
-		}
+	pub(in crate::wasm_emitter) fn function_text_dependency(
+		&self,
+	) -> Option<super::super::runtime_dependencies::Dependency> {
+		use super::super::host::wasi_emitter::{PRINT_VALUE, PUT_VALUE};
+		let shows_values = [PRINT_VALUE, PUT_VALUE, "list_join"];
+		let has_closures = !self.ctx.closure_targets.is_empty();
+		has_closures.then(|| super::super::runtime_dependencies::any(&shows_values, &[FUNCTION_TEXT, FUNCTION_DUMP]))
 	}
 
 	/// The text of a closure target: a named function's name (without its enclosing function's), a lambda's

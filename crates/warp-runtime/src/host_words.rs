@@ -34,7 +34,6 @@ pub const BATTERY: &str = "battery";
 pub const CHARGING: &str = "charging";
 pub const ONLINE: &str = "online";
 pub const DARK_MODE: &str = "dark mode";
-/// The system values, and whether each is a yes/no value
 /// How often the clipboard changed since the machine started (macOS NSPasteboard changeCount): `on clipboard change`
 pub const CLIPBOARD_COUNT: &str = "clipboard count";
 /// The pointer over the page's canvas, in canvas pixels, and whether a button is down (card drawing-frames)
@@ -83,6 +82,7 @@ pub const ESCAPE_KEPT: &str = "escape kept";
 pub const CLICK_PRESSED: &str = "click_pressed";
 pub const CLICK_X: &str = "click_x";
 pub const CLICK_Y: &str = "click_y";
+/// The system values, and whether each is a yes/no value
 pub const SYSTEM_VALUES: [(&str, bool); 18] = [
 	(BATTERY, false),
 	(CHARGING, true),

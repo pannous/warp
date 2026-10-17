@@ -151,8 +151,6 @@ pub(crate) fn map_children_or_failure(
 	failure.map_or(Ok(node), Err)
 }
 
-/// `m.f(x)`, `m.g` of an imported module m: the call of its qualified import; a bare `f(x)` of an export a builtin takes
-/// (a cast like `double(21)`) is the ambiguity error naming both (P141)
 /// `m.f` naming an exported function f of the imported module m
 pub(crate) fn is_module_function(node: &Node, modules: &[String]) -> bool {
 	let Node::Key(receiver, Op::Dot, member) = node.drop_meta() else {
@@ -166,6 +164,8 @@ pub(crate) fn is_module_function(node: &Node, modules: &[String]) -> bool {
 	})
 }
 
+/// `m.f(x)`, `m.g` of an imported module m: the call of its qualified import; a bare `f(x)` of an export a builtin takes
+/// (a cast like `double(21)`) is the ambiguity error naming both (P141)
 pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 	let module_of = |alias: &str, export: &str| {
 		modules.iter().find(|path| module_alias(path) == alias && exports(path).contains_key(export))
@@ -189,9 +189,7 @@ pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 					_ => (String::new(), vec![]),
 				};
 				if let Some(path) = module_of(alias, &export) {
-					let arguments =
-						arguments.into_iter().map(|argument| qualify(argument, modules)).collect::<Result<_, _>>()?;
-					return Ok(call(&qualified(path, &export), ordered_arguments(path, &export, arguments)?));
+					return qualified_call(path, &export, arguments, modules);
 				}
 			}
 		}
@@ -214,18 +212,19 @@ pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 				// `minus(amount: 2, from: 10)`: an export called by its parameter names
 				let named = arguments.iter().any(|argument| crate::named_arguments::named_argument(argument).is_some());
 				if let (true, Some(path)) = (named, exporting) {
-					let arguments = arguments
-						.iter()
-						.cloned()
-						.map(|argument| qualify(argument, modules))
-						.collect::<Result<_, _>>()?;
-					return Ok(call(&qualified(path, name), ordered_arguments(path, name, arguments)?));
+					return qualified_call(path, name, arguments.to_vec(), modules);
 				}
 			}
 		}
 		_ => {}
 	}
 	map_children_or_failure(node, |child| qualify(child, modules))
+}
+
+/// The call of `export` of the module at `path`, its arguments qualified and in the export's parameter order
+fn qualified_call(path: &str, export: &str, arguments: Vec<Node>, modules: &[String]) -> Result<Node, Node> {
+	let arguments = arguments.into_iter().map(|argument| qualify(argument, modules)).collect::<Result<_, _>>()?;
+	Ok(call(&qualified(path, export), ordered_arguments(path, export, arguments)?))
 }
 
 /// The arguments of a call of the function `export` in its parameter order, a named one (`amount: 2`, `amount=2`) at its
