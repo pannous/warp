@@ -124,9 +124,10 @@ pub enum Op {
 	Do,    // do (used with while)
 
 	// Index/Range
-	Hash,  // #  (1-based index)
-	Range, // ..
-	To,    // to  ...  …
+	Hash,      // #  (1-based index)
+	Subscript, // xs[i]  only while parsing: parse() makes it xs#(i+1) or a slice (warp_parser sugar.rs)
+	Range,     // ..
+	To,        // to  ...  …
 
 	// Type conversion
 	As, // as  (type cast)

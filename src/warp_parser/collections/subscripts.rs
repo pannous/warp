@@ -87,7 +87,9 @@ pub(crate) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) 
 		format!("{target}#({index}{written}{end})"),
 		format!("({target}#{index}){written}{end}"),
 	);
-	let message = format!("{as_written} is the range from the value {target}#{index}: for the slice write {slice}, for the range write {range}");
+	let message = format!(
+		"{as_written} is the range from the value {target}#{index}: for the slice write {slice}, for the range write {range}"
+	);
 	Some(Diagnostic::at(lhs, message).offer("the slice", &as_written, slice).offer(
 		"the range from the value",
 		&as_written,
@@ -189,13 +191,17 @@ impl WarpParser {
 		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(
-				&crate::normalize::operand_text(lhs),
+				&crate::normalize::operand_text(&super::sugar::sugared(lhs.clone())),
 				&crate::normalize::operand_text(&indices[0]),
 				true,
 			);
 		}
 
-		Some(indices.into_iter().fold(lhs.clone(), subscript))
+		Some(
+			indices
+				.into_iter()
+				.fold(lhs.clone(), |target, index| Node::Key(Box::new(target), Op::Subscript, Box::new(index))),
+		)
 	}
 
 	/// `a[id=1]{…}` (wiki/reference.md): attributes in brackets before a body are its meta entries, `a{@id:1 …}`

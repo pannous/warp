@@ -62,6 +62,7 @@ mod annotations;
 mod math_notation;
 mod rust_macros;
 mod suffixes;
+mod sugar;
 mod types;
 pub(crate) use math_notation::*;
 pub(crate) use types::*;
@@ -360,19 +361,6 @@ pub fn parse_file(path: &str) -> Node {
 	}
 }
 
-/// `=>` reads as in JS while parsing (Op::FatArrow: its binding, a lambda's body, a field holding a lambda); the program
-/// has one arrow, `->` (user 2026-10-14: "equal for us, but not for others")
-fn one_arrow(node: Node) -> Node {
-	let node = match node {
-		Node::Type { name, body } => Node::Type { name, body: Box::new(one_arrow(*body)) },
-		other => crate::node::children_rewritten(other, one_arrow),
-	};
-	match node {
-		Node::Key(parameters, Op::FatArrow, body) => Node::Key(parameters, Op::Arrow, body),
-		other => other,
-	}
-}
-
 pub fn parse(input: &str) -> Node {
 	if input.ends_with(".warp") {
 		return parse_file(input);
@@ -618,7 +606,7 @@ impl WarpParser {
 			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
-		let program = one_arrow(parser.parse_list_with_separators(None, Bracket::None));
+		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None));
 		if options == ParserOptions::default() {
 			crate::normalize::check_style(&program);
 		}

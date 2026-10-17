@@ -23,7 +23,7 @@ impl Op {
 			Op::Dot | Op::SafeDot => (180, 181),
 			Op::Scope => (175, 176),
 			// index operator #: its index is an atom, so `w#1.upper()` is `(w#1).upper()`
-			Op::Hash => (170, 182),
+			Op::Hash | Op::Subscript => (170, 182),
 
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
 			Op::Pow | Op::ArrowUp | Op::ArrowDown => (160, 159),
