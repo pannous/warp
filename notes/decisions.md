@@ -224,6 +224,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - one-method-form: methods are functions: a class-body `def x()` is `def x(_:P)`, `p.x() == x(p)`; `methods(P)` = every function whose first parameter is P, an ancestor or a trait P implements; `dir(p)` = fields + methods(P); where a function is declared is only metadata (`.declared_in`).
 - default-methods: `x.word` ≡ `x.word()`, resolved by multi-dispatch on the receiver's type; a member or method of the object's own class is more specific and wins.
 - class-members-free: built-in and library words are not keywords; class fields and methods dispatch on their class and never conflict; locals may shadow them.
+- receiver-field-assign: `fresh(f: F) := { body = 99 }` writes f.body, same as in a class-body method (one-method-form, P115/P116); `let body = …` makes a local; any warning applies equally in both places (Interviewer's decision).
 - library-words-typed / dispatch-untyped-library-words: every library word has a full type signature and is immutable for its types; a program's untyped definition of the same name covers only other values, with a hint (`count(x) := 7; count([1,2])` → 2, `first(3)` → the program's).
 - field-forms: plain fields take only `.` and `of` (read and set); call forms (`w(b)`, `b.w(5)`) are only for properties.
 - cross-module-overload: definitions in different modules overload by argument type, no shadowing (`use script; sort ./names.txt` sorts lines, `sort [3 1 2]` the list).
