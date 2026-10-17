@@ -174,7 +174,7 @@ const RECORD_WORD: &str = "record";
 const UPTO: &str = "upto";
 /// `10 down to 1` is `reverse(1 to 10)`
 const DOWN_WORD: &str = "down";
-const REVERSE_WORD: &str = "reverse";
+pub(crate) const REVERSE_WORD: &str = "reverse";
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `f x as T`, which casts the argument (card parameter-named-number)
 const ARGUMENT_CAST: &str = "argument-cast";
