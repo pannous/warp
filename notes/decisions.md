@@ -255,6 +255,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - `pixels size` works like `size of pixels`.
 - swizzles: `.x .y .z .w` and combinations (`.xy`, `.zyx`) read a list of 2–4 numbers everywhere; Euclidean length is `norm(v)` (alias `magnitude`), `length` stays the count.
 - curly-group: `{a; b}` is a list at every depth; `{a: b}` is a map literal at every depth, inside a parse() result too (`parse("f {a: b}")#2 is map`); walkers test groups with `n.bracket != ø` (Interviewer's decision).
+- empty-group-node (leave as is, user 2026-10-17): an empty group in code is ø (`parse("{}") == ø`, `bracketed([], "{")` is ø); self-hosting twins compare with ø ≈ {} or the bridge maps ø back to the Rust bracket.
 
 ## Control flow, matching and errors
 - match-whole-value: no binding syntax; inside an arm the subject's name and `value` are the whole matched value.
