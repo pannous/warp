@@ -297,10 +297,9 @@ pub fn chain_differential(paths: &[PathBuf], part: &str, word: &str, rust_passes
 		let text = std::fs::read_to_string(&path).ok()?;
 		let lowered =
 			std::panic::catch_unwind(|| rust_passes.iter().fold(parse(&text), |node, pass| pass(node))).ok()?;
-		let call = format!("{word}(read(\"{}\"))", path.display());
-		Some(Case { path: path.display().to_string(), call, expected: plain_view(&lowered) })
+		Some(Case::new(&path, path.display().to_string(), plain_view(&lowered)))
 	});
-	report(word, &differences_of(cases, part));
+	report(word, &differences_of(cases, part, &format!("{word}(read(argument))")));
 }
 
 /// A hint or warning as a twin reports it: [line, column, message, preferred form or ø]
