@@ -1,14 +1,16 @@
 // Runs stop at a time limit of computing instead of counting fuel steps, which made calls about four times slower
 // (decision fuel-metering); `use fuel` and `warp fuel <steps>` count steps on request
 use std::time::Duration;
-use warp::node::Node;
-use warp::util::{with_time_limit, TIME_LIMIT_VARIABLE};
+use warp::util::with_time_limit;
 use warp::wasm_emitter::eval;
 
 const SHORT_LIMIT: Duration = Duration::from_millis(200);
 
+#[cfg(feature = "native")] // wasmtime's epochs stop the run; the browser cannot interrupt its wasm
 #[test]
 fn a_runaway_stops_at_the_time_limit() {
+	use warp::node::Node;
+	use warp::util::TIME_LIMIT_VARIABLE;
 	match with_time_limit(SHORT_LIMIT, || eval("i = 0; while 1 { i = i + 1 }")) {
 		Node::Error(message) => {
 			let message = format!("{message}");
