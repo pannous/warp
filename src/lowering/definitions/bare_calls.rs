@@ -4,54 +4,69 @@
 //! where the emitter calls a program's function by itself: as a statement, after `print` and `type` (card random-should).
 //! A name overloaded by arity with a variant taking nothing, `canvas()` beside `canvas(width, height)`, calls that
 //! variant `canvas·0`, also as a call's argument: `save(canvas, "x.png")` (decision saved-words).
+//! A name is called only where the program leaves it free: `f(x) := { random = 4; … }` keeps its own random inside f.
 
 use super::nodes::{call, children_rewritten};
 use crate::lowering::reflection::CALLING_WORDS;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use std::collections::{HashMap, HashSet};
+use crate::program_names::ProgramNames;
+use std::collections::HashMap;
 
 /// A bare name and the function it calls
 type Calls = HashMap<String, String>;
 
-/// The names a bare word calls: every function without parameters, of them the host's, and the arity overloads'
+/// The names a bare word calls where they are free: every function without parameters, of them the host's, and the
+/// arity overloads'
 struct Parameterless {
 	all: Calls,
 	host: Calls,
 	overloaded: Calls,
+	names: ProgramNames,
+}
+
+impl Parameterless {
+	/// The functions without parameters, the program's and the host's, whose names no top-level variable takes
+	fn of(node: &Node) -> Self {
+		let functions = crate::analyzer::function_definitions(node).user_functions;
+		let host: Calls = crate::host::parameterless_host_words()
+			.filter(|name| !functions.contains_key(*name))
+			.map(|name| (name.to_string(), name.to_string()))
+			.collect();
+		let parameterless = functions.iter().filter(|(_, function)| function.params.is_empty());
+		let overloaded: Calls = parameterless
+			.clone()
+			.filter_map(|(name, _)| zero_arity_base(name).map(|base| (base.to_string(), name.clone())))
+			.filter(|(base, _)| !functions.contains_key(base))
+			.collect();
+		let program = parameterless.map(|(name, _)| (name.clone(), name.clone()));
+		let all = program.chain(host.clone()).chain(overloaded.clone()).collect();
+		Parameterless { all, host, overloaded, names: ProgramNames::of(node) }.free()
+	}
+
+	/// Inside the function `node` defines: without the names its parameters and assignments take
+	fn inside(&self, node: &Node) -> Option<Self> {
+		let names = self.names.inside(node)?;
+		let calls = (self.all.clone(), self.host.clone(), self.overloaded.clone());
+		Some(Parameterless { all: calls.0, host: calls.1, overloaded: calls.2, names }.free())
+	}
+
+	fn free(mut self) -> Self {
+		let names = &self.names;
+		for calls in [&mut self.all, &mut self.host, &mut self.overloaded] {
+			calls.retain(|name, _| !names.binds(name));
+		}
+		self
+	}
 }
 
 pub fn lower(node: Node) -> Node {
-	let parameterless = parameterless_functions(&node);
+	let parameterless = Parameterless::of(&node);
 	if parameterless.all.is_empty() {
 		return node;
 	}
 	let node = rewrite(node, &parameterless);
 	called_value(node, &parameterless.host)
-}
-
-/// The functions without parameters, the program's and the host's, whose names no variable or parameter takes
-fn parameterless_functions(node: &Node) -> Parameterless {
-	let functions = crate::analyzer::function_definitions(node).user_functions;
-	// a loop variable too: `for random in xs { x = random }` reads the item (card library-word)
-	let mut assigned: HashSet<String> = node.assigned_names(|op| *op == Op::Assign);
-	assigned.extend(crate::lowering::for_loop::loop_variables(node));
-	let parameters: HashSet<&str> =
-		functions.values().flat_map(|function| function.params.iter().map(|param| param.name.as_str())).collect();
-	let free = |name: &str| !assigned.contains(name) && !parameters.contains(name);
-	let host: Calls = crate::host::parameterless_host_words()
-		.filter(|name| free(name) && !functions.contains_key(*name))
-		.map(|name| (name.to_string(), name.to_string()))
-		.collect();
-	let parameterless = functions.iter().filter(|(_, function)| function.params.is_empty());
-	let overloaded: Calls = parameterless
-		.clone()
-		.filter_map(|(name, _)| zero_arity_base(name).map(|base| (base.to_string(), name.clone())))
-		.filter(|(base, _)| free(base) && !functions.contains_key(base))
-		.collect();
-	let program = parameterless.filter(|(name, _)| free(name)).map(|(name, _)| (name.clone(), name.clone()));
-	let all = program.chain(host.clone()).chain(overloaded.clone()).collect();
-	Parameterless { all, host, overloaded }
 }
 
 /// `canvas` of `canvas·0`, the variant of an arity overload taking nothing
@@ -60,6 +75,8 @@ fn zero_arity_base(name: &str) -> Option<&str> {
 }
 
 fn rewrite(node: Node, parameterless: &Parameterless) -> Node {
+	let inner = parameterless.inside(&node);
+	let parameterless = inner.as_ref().unwrap_or(parameterless);
 	let called = |side: Node| called_value(side, &parameterless.all);
 	let host_called = |side: Node| called_value(side, &parameterless.host);
 	match children_rewritten(node, |child| rewrite(child, parameterless)) {

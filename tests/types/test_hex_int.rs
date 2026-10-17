@@ -48,7 +48,7 @@ fn print_shows_hex() {
 fn print_shows_radix_through_the_prelude() {
 	assert_eq!(crate::common::printed("print [-5 as binary, 4095 as hex, 0 as hex]").trim(), "[-0b101 0xFFF 0x0]");
 	assert_eq!(
-		crate::common::printed("hex_text(n) := \"mine\"; print(255 as hex); print hex_text(1)").trim(),
+		crate::common::printed("hex_text(n) := \"mine\"; print(255 as hex); print hex_text(\"a\")").trim(),
 		"0xFF\nmine"
 	);
 	is!("to_base(255, 16, upper: true)", "FF");

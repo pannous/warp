@@ -42,21 +42,17 @@ pub fn lower(node: Node) -> Node {
 	let mut registry = TypeRegistry::new();
 	collect_all_types(&mut registry, &node);
 	let constructors = defined_constructors(&node, &registry);
-	let node = conversion_calls(node.clone(), &node);
+	let node = crate::program_names::rewritten_by_scope(node, &conversion_call);
 	construct(node, &Classes { registry: &registry, constructors: &constructors, defaulting: Default::default() })
 }
 
 /// A built-in type called as a function converts as in Python (card types-constructor): `hex(123)` is `123 as hex`,
-/// unless the program names hex itself
-fn conversion_calls(node: Node, program: &Node) -> Node {
-	let node = children_rewritten(node, |child| conversion_calls(child, program));
+/// unless the program takes hex itself where the call stands (a field `{hex: 1}` takes no bare word)
+fn conversion_call(node: Node, names: &crate::program_names::ProgramNames) -> Node {
 	match node.drop_meta() {
 		// braced `hex(255)` and braceless `byte 65` alike: one call shape (analyzer::applied_word)
 		Node::List(items, bracket, separator) => match crate::analyzer::applied_word(items, bracket, separator) {
-			Some((name, value))
-				if crate::wasm_emitter::is_called_conversion(name)
-					&& !crate::soft_keywords::program_names(program, name) =>
-			{
+			Some((name, value)) if crate::wasm_emitter::is_called_conversion(name) && !names.takes(name) => {
 				key(value.clone(), Op::As, items[0].clone())
 			}
 			_ => node,

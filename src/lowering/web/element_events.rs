@@ -9,7 +9,7 @@
 //! `input{ bind: age }` a number field of step 1, which the browser refuses 2.5 in, `float` one of any step, `bool` a
 //! checkbox; an attribute the element sets itself wins.
 
-use super::nodes::key;
+use super::nodes::{any_part, key};
 use crate::event_signals::{is_element_event, ELEMENT_EVENT_JOINER};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -50,12 +50,9 @@ pub fn lower(program: Node) -> Node {
 }
 
 pub(crate) fn has_element_handler(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		found |=
-			element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some()))
-	});
-	found
+	any_part(node, |part| {
+		element_items(part).is_some_and(|items| (0..items.len()).any(|index| handler_at(items, index).is_some()))
+	})
 }
 
 /// Each `bind: name` of an element spelled out as its attribute and handler, with the checks of name's declared type
@@ -183,9 +180,7 @@ pub(crate) fn element_items(node: &Node) -> Option<&Vec<Node>> {
 	let Node::Key(tag, Op::Colon | Op::None, content) = node else {
 		return None;
 	};
-	let Node::Symbol(tag) = tag.drop_meta() else {
-		return None;
-	};
+	let tag = tag.symbol_name()?;
 	match content.drop_meta() {
 		Node::List(items, Bracket::Curly, _) if crate::web::markup::is_element_tag(tag) => Some(items),
 		_ => None,

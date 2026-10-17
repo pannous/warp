@@ -3,9 +3,9 @@
 //! (`def fib(n): …; fib(10)` compiles to 55), also inside a function body or a loop (an invariant part hoisted to
 //! compile time). Only `compile` folds: `eval` would do the same work twice.
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
-//! program computes; a call that fails or runs out of fuel stays a call.
+//! program computes; a call that fails or computes past FOLDING_FUEL stays a call.
 
-use super::nodes::{branches, call, children_rewritten, key};
+use super::nodes::{any_part, branches, call, children_rewritten, key, round_call, word_headed};
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::extensions::numbers::Number;
@@ -20,6 +20,10 @@ use std::collections::{HashMap, HashSet};
 const MAX_VARIANTS: usize = 32;
 /// Between a function's name and the constant arguments of its variant: `power·n3`
 const VARIANT_SEPARATOR: &str = "·";
+/// The steps a compile spends on its constant calls, counted as fuel so the compiled program doesn't depend on the
+/// machine's load (decision fuel-metering); a call taking more is computed when the program runs. About 0.5 to 2 s:
+/// a tight loop burns ~1.5e10 steps a second, calls ~4 times fewer (probes/fast_int/fuel_cost.sh)
+const FOLDING_FUEL: u64 = 10_000_000_000;
 
 /// The function a variant was made of, as its messages name it: `f` of `f·a1`
 pub fn unspecialised_name(name: &str) -> &str {
@@ -60,7 +64,7 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = statement.drop_meta() else {
 		return statement;
 	};
-	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name));
+	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|name| *name == function.name));
 	if !is_head || contains_definition(body) {
 		return statement;
 	}
@@ -114,9 +118,7 @@ fn is_plain_symbol(node: &Node) -> bool {
 
 /// A function or lambda defined inside the body: its parameters could shadow a main-level name
 fn contains_definition(body: &Node) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)));
-	found
+	any_part(body, |node| matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)))
 }
 
 /// Is every use of `name` in `node` a read of its value: not a property (`m.k`), a key (`m#k`, `{k: 1}`), a target
@@ -187,7 +189,7 @@ pub fn fold_constant_calls(program: Node) -> Node {
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return program;
 	};
-	let values = match crate::pipeline::run_module(module).drop_meta() {
+	let values = match computed_at_compile_time(module).drop_meta() {
 		Node::List(values, _, _) if values.len() == calls.len() => values.clone(),
 		_ => return program,
 	};
@@ -229,7 +231,7 @@ pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return Ok(program);
 	};
-	let Node::List(values, _, _) = crate::pipeline::run_module(module).drop_meta().clone() else {
+	let Node::List(values, _, _) = computed_at_compile_time(module).drop_meta().clone() else {
 		return Ok(program);
 	};
 	for ((called, name, arguments), value) in calls.iter().zip(values) {
@@ -247,12 +249,9 @@ fn constant_call<T>(node: &Node, functions: &HashMap<String, T>) -> Option<(Stri
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
 		return None;
 	};
-	let (head, arguments) = items.split_first()?;
-	let Node::Symbol(name) = head.drop_meta() else {
-		return None;
-	};
+	let (name, arguments) = word_headed(items)?;
 	(functions.contains_key(name) && !arguments.is_empty() && arguments.iter().all(is_constant))
-		.then(|| (name.clone(), arguments.to_vec()))
+		.then(|| (name.to_string(), arguments.to_vec()))
 }
 
 /// The type of a body's checked result (type_name_matching checked_result: `the result: int = v`, the type kept on the
@@ -391,13 +390,7 @@ impl Specialiser {
 	/// `f(y, 3)` → `f·n3(y)`, or None when f is no pure function, no argument or every argument is constant (folding
 	/// takes that), or the chain of variants would be too deep
 	fn specialised_call(&mut self, called: &Node, depth: usize) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = called.drop_meta() else {
-			return None;
-		};
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = round_call(called)?;
 		let definition = self.definitions.get(name)?.clone();
 		let parameters = definition.param_names();
 		if parameters.len() != arguments.len() {
@@ -566,7 +559,13 @@ fn is_expression(body: &Node) -> bool {
 
 /// Does `node` call the function `name`
 fn calls(node: &Node, name: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(called)) if called == name)));
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|called| called == name)),
+	)
+}
+
+/// The values of the constant calls `module` computes, within FOLDING_FUEL
+fn computed_at_compile_time(module: crate::pipeline::CompiledModule) -> Node {
+	crate::util::with_fuel(FOLDING_FUEL, || crate::pipeline::run_module(module))
 }

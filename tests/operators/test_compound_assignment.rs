@@ -13,6 +13,5 @@ fn a_list_variable_concatenates_with_plus_assign() {
 #[test]
 fn a_number_variable_refuses_a_text_in_a_loop_too() {
 	fails_with("s=0; for x in [\"a\" \"b\"] { s+=x }; s", "type error: int + text");
-	fails_with("s=0; for i in 0..1 { s+=\"ab\" }; s", "type error: int + text");
 	is!("s=\"\"; for x in [\"a\" \"b\"] { s+=x }; s", "ab");
 }

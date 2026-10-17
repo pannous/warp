@@ -8,7 +8,7 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
-use super::nodes::{call, called_name, children_rewritten, if_then_else, key, parameter_name};
+use super::nodes::{any_part, call, called_name, children_rewritten, if_then_else, key, parameter_name, word_headed};
 use crate::analyzer::call_name;
 use crate::named_arguments::named_argument;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -60,6 +60,11 @@ pub fn lower_list_spreads(node: Node) -> Node {
 
 /// `*xs`, `...xs` (parsed as `*xs`) and `xs...` (an open range of xs): the name xs; typed `*xs: int` (Python) and
 /// `xs: Int...` (Swift) too
+/// `xs...`, `...xs`, `*xs`: a parameter collecting the remaining arguments
+pub(crate) fn is_rest_parameter(parameter: &Node) -> bool {
+	starred(parameter).is_some()
+}
+
 fn starred(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => {
@@ -95,9 +100,7 @@ fn definition_head(node: &Node) -> Option<&[Node]> {
 
 fn head_items(head: &Node) -> Option<&[Node]> {
 	match head.drop_meta() {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			Some(items)
-		}
+		Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => Some(items),
 		Node::Key(head, Op::Colon | Op::Arrow, _) => head_items(head),
 		_ => None,
 	}
@@ -132,14 +135,10 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) 
 }
 
 fn has_spread(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		if let Node::List(items, bracket, separator) = part {
-			found |= call_name(items, bracket, separator).is_some()
-				&& items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some());
-		}
-	});
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::List(items, bracket, separator) if call_name(items, bracket, separator).is_some() && items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some())),
+	)
 }
 
 struct Variadic {
@@ -173,6 +172,14 @@ impl Variadic {
 		}
 		match node {
 			Node::List(items, bracket, separator) if self.is_call(&items, &bracket, &separator) => self.call(items),
+			// the uniform call `3.f(4, 5)` of `f(xs...)` is `f(3, 4, 5)`: the receiver is the first value collected
+			Node::Key(receiver, Op::Dot, member) if self.takes_rest(&member) => {
+				let (name, arguments) = match member.drop_meta().clone() {
+					Node::List(items, Bracket::Round, _) => (items[0].clone(), items[1..].to_vec()),
+					name => (name, vec![]),
+				};
+				self.call([vec![name, *receiver], arguments].concat())
+			}
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
@@ -191,6 +198,15 @@ impl Variadic {
 			}
 			other => other.clone(),
 		}
+	}
+
+	/// The method form `.f` or `.f(…)` of a program function with a rest parameter
+	fn takes_rest(&self, member: &Node) -> bool {
+		let name = match member.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().and_then(Node::symbol_name),
+			other => other.symbol_name(),
+		};
+		name.and_then(|name| self.signatures.get(name)).is_some_and(|signature| signature.rest)
 	}
 
 	/// `f(…)` with a spread argument, a call of a function with a rest parameter, also `f 1 2 3`

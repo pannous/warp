@@ -1,4 +1,0 @@
-// card match-negative-subject: a glued sign after match or switch starts the subject
-x = 3
-print match -3 { -3 => "minus three"; _ => "other" }  // minus three
-print match -x { -3 => "minus x"; _ => "other" }      // minus x

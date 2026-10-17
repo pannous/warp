@@ -2,7 +2,7 @@
 
 use warp::host::HostState;
 use warp::run::wasm_reader::{link_imports, Imports};
-use warp::util::{fueled_store, gc_engine};
+use warp::util::{gc_engine, limited_store};
 use warp::wasm_emitter::compile;
 use wasmtime::{Instance, Linker, Memory, Module, Rooted, Store, StructRef, Val};
 
@@ -23,7 +23,7 @@ impl Compiled {
 			compile(code).unwrap_or_else(|value| panic!("nothing to compile: {}", value.serialize())).bytes;
 		let engine = gc_engine();
 		let module = Module::new(&engine, &module_bytes).unwrap();
-		let mut store = fueled_store(&engine, HostState::new());
+		let mut store = limited_store(&engine, HostState::new());
 		// the host words plus the modules it imports by path: `use uniscript` imports uniscript_c.wasm, as run_main links it
 		let mut linker = Linker::new(&engine);
 		link_imports(&mut linker, &engine, &module, Imports { host: true, ..Imports::default() }).unwrap();

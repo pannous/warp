@@ -77,18 +77,11 @@ fn shortest_digits(x: f64) -> (i64, i32) {
 	(mantissa.replace('.', "").parse().unwrap_or(0), exponent.parse().unwrap_or(0))
 }
 
-fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Real, D::Error> {
-	Real::deserialize(deserializer).map(|real| &*Box::leak(Box::new(real)))
-}
-
-fn deserialize_leaked_bigint<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static BigInt, D::Error> {
-	BigInt::deserialize(deserializer).map(|big| &*Box::leak(Box::new(big)))
-}
-
-fn deserialize_leaked_rational<'de, D: serde::Deserializer<'de>>(
+/// A leaked payload of Number read back (BigInt, BigQuotient, Real)
+fn deserialize_leaked<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
 	deserializer: D,
-) -> Result<&'static Rational, D::Error> {
-	Rational::deserialize(deserializer).map(|ratio| &*Box::leak(Box::new(ratio)))
+) -> Result<&'static T, D::Error> {
+	T::deserialize(deserializer).map(|value| &*Box::leak(Box::new(value)))
 }
 
 // PartialEq per hand!
@@ -105,13 +98,13 @@ pub enum Number {
 	Complex(f64, f64),
 	/// Integer beyond i64: always normalized, a value that fits i64 is `Int`.
 	/// Leaked to keep Number Copy: every distinct big value costs its memory for the process lifetime.
-	BigInt(#[serde(deserialize_with = "deserialize_leaked_bigint")] &'static BigInt),
+	BigInt(#[serde(deserialize_with = "deserialize_leaked")] &'static BigInt),
 	/// Exact ratio whose numerator or denominator exceeds i64. Leaked like BigInt to keep Number Copy.
 	/// A ratio that fits in two i64 is always `Quotient`.
-	BigQuotient(#[serde(deserialize_with = "deserialize_leaked_rational")] &'static Rational),
+	BigQuotient(#[serde(deserialize_with = "deserialize_leaked")] &'static Rational),
 	/// Exact real beyond Q (2√2, π/2, 3+√2) or a marked approximation (≈0.841…), see reals.rs.
 	/// Rationals never take this form. Leaked like BigInt to keep Number Copy.
-	Real(#[serde(deserialize_with = "deserialize_leaked_real")] &'static Real),
+	Real(#[serde(deserialize_with = "deserialize_leaked")] &'static Real),
 	// use num_traits::{One, Zero};
 	// Number::BigNum(_) => unimplemented!(),
 	// Hyper(Vec<Pair<f64,f64>>)
@@ -486,15 +479,7 @@ impl Div for Number {
 			(Number::Float(n1), ratio @ (Number::Quotient(..) | Number::BigQuotient(_))) => {
 				Number::Float(n1 / f64::from(ratio))
 			}
-			(a, b)
-				if matches!(a, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_))
-					&& matches!(
-						b,
-						Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)
-					) =>
-			{
-				Number::ratio(a, b)
-			}
+			(a, b) if a.is_rational() && b.is_rational() => Number::ratio(a, b),
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 / n2),
 			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 / n2),
 			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 / n2 as f64),

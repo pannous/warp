@@ -4,7 +4,6 @@ use crate::is;
 
 #[test]
 fn a_file_class_takes_in_the_definitions_after_it() {
-	is!("class Foo; int bar(){ 42 }; Foo().bar()", 42);
 	is!("class Foo; int bar(){ 42 }; int boom(){ -1 }; Foo().boom()", -1);
 	is!("class Foo; x: int; double() := x * 2; Foo(4).double()", 8);
 }

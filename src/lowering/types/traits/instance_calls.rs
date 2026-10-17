@@ -124,7 +124,7 @@ impl InstanceCalls {
 			return None;
 		};
 		let is_call = matches!(head.drop_meta(), Node::List(called, Bracket::Round, Separator::None)
-			if matches!(called.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains(name)));
+			if called.first().and_then(Node::symbol_name).is_some_and(|name| self.functions.iter().any(|function| function == name)));
 		if *bracket == Bracket::Square || !is_call || arguments.is_empty() {
 			return None;
 		}
@@ -191,16 +191,4 @@ fn lambda_parameters(parameters: &Node) -> Vec<String> {
 		Node::List(items, _, _) => items.iter().flat_map(lambda_parameters).collect(),
 		_ => vec![],
 	}
-}
-
-fn untyped_parameters(head: &Node) -> Vec<String> {
-	let parameters = definition_head(head).map(|items| items[1..].to_vec()).unwrap_or_default();
-	parameters
-		.iter()
-		.filter_map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			Node::Key(name, Op::Assign, _) => Some(name.name()),
-			_ => None,
-		})
-		.collect()
 }

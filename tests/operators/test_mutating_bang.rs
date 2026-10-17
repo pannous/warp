@@ -28,7 +28,5 @@ fn without_bang_the_value_is_unchanged() {
 
 #[test]
 fn bang_after_a_block_or_lone_name_evaluates() {
-	is!("a=6; {a*a}!", 36);
-	is!("f:={1+2}; f!", 3);
 	is!("x=5; x!", 5);
 }

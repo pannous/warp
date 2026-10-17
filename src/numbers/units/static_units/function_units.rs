@@ -332,18 +332,41 @@ impl Inference {
 			self.loop_instance(&items);
 		}
 		// `5 km`: an amount and a unit
-		// the amount is a value: a number, an expression or a variable, never a word like `use` in `use m` (the libm module)
+		// the amount is a value: a number, an expression or a variable holding a list or a quantity, never a word like
+		// `use` in `use m` (the libm module); a variable holding a plain number takes its unit as `n * 1 km`
 		let is_amount = |item: &Node| match item.drop_meta() {
 			Node::Symbol(name) => self.variables.contains_key(name),
 			Node::Text(_) | Node::Char(_) => false,
 			_ => true,
 		};
 		if let ([amount, unit], Bracket::None, Separator::Space) = (items.as_slice(), &bracket, &separator) {
-			if let Some(unit) = self.unit_word(unit).filter(|_| is_amount(amount)) {
+			if let Some(unit_word) = self.unit_word(unit).filter(|_| is_amount(amount)) {
+				if self.is_unbound_amount(amount)? {
+					return Err(Stop::Error(format!("DimensionError: {}", unit_after_name_advice(amount, unit))));
+				}
+				let unit = unit_word;
 				let outer = std::mem::replace(&mut self.at_top, false);
 				let inferred = self.amount_in(amount.clone(), unit);
 				self.at_top = outer;
 				return inferred;
+			}
+		}
+		// `2 g0` of a quantity g0 (`g0 = …`, or `g0 := …`, a call `(g0)` by now): spaced, a number and a name stay a
+		// list (decisions.md, juxtaposition only glued)
+		if let ([number @ Node::Number(_), quantity], Separator::Space) =
+			(items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice(), &separator)
+		{
+			if self.infer((*quantity).clone()).is_ok_and(|(_, signature)| !signature.is_empty()) {
+				let name = match quantity {
+					Node::List(call, Bracket::Round, _) if call.len() == 1 => call[0].serialize(),
+					other => other.serialize(),
+				};
+				let (number, name) = (number.serialize(), name);
+				let (number, name) = (number.trim(), name.trim());
+				return Err(Stop::Error(format!(
+					"`{number} {name}` is a list of {number} and {name}, a spaced number multiplies only a unit: \
+					 write {number}{name} or {number} * {name}"
+				)));
 			}
 		}
 		let is_host_call = bracket == Bracket::Round
@@ -369,10 +392,16 @@ impl Inference {
 					continue;
 				}
 			}
+			// a final construction `Display(96 dpi, 24 inch)` shows its fields in units, as a variable holding it does
+			let final_construction =
+				(statements && index + 1 == count && self.at_top).then(|| self.instance_fields(&item)).flatten();
 			let outer = std::mem::replace(&mut self.at_top, false);
 			let inferred = self.infer(item);
 			self.at_top = outer;
 			let (item, signature) = inferred?;
+			if let Some(fields) = final_construction {
+				self.result_fields = Some(fields.into_iter().filter(|(_, signature)| !signature.is_empty()).collect());
+			}
 			lowered.push(item);
 			signatures.push(signature);
 		}

@@ -16,5 +16,5 @@ fn a_word_around_a_broadcast_of_a_list_variable_maps_too() {
 fn a_broadcast_of_a_list_variable_assigned_is_a_list_variable() {
 	assert_eq!(printed("xs = [1.5 2.5]; ys = floor(xs); round(ys)"), "[1 2]");
 	assert_eq!(printed("xs = [1 9]; ys = log(xs, 3); round(ys)"), "[0 2]");
-	assert_eq!(printed("add(a, b) := a + b; xs = [1 2]; ys = add(xs, 10); ys.count"), "2");
+	assert_eq!(printed("plus(a, b) := a + b; xs = [1 2]; ys = plus(xs, 10); ys.count"), "2");
 }

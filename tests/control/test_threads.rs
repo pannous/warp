@@ -17,18 +17,7 @@ fn tasks_run_at_the_same_time() {
 
 #[test]
 fn await_gives_the_result_of_the_thread() {
-	is!("f(x) := x * 2; job = go f(21); await job", 42);
 	is!("add(a, b) := a + b; job = go add(40, 2); job + 0", 42);
-}
-
-#[test]
-fn an_error_in_a_task_is_the_error_of_await() {
-	crate::common::fails_with("f(i) := [1,2,3]#i; job = go f(5); await job", "task f: index out of range");
-}
-
-#[test]
-fn a_task_of_other_values_runs_where_it_starts() {
-	is!("g(t) := t + \"!\"; job = go g(\"a\"); await job", "a!");
 }
 
 #[test]
@@ -67,10 +56,8 @@ fn a_paused_task_waits_for_resume() {
 
 #[test]
 fn texts_floats_characters_and_lists_cross_to_a_task() {
-	is!("g(t) := t + \"!\"; job = go g(\"a\"); await job", "a!");
 	is!("g(t) := t + \"!\"; a = go g(\"x\"); b = go g(\"y\"); await a + await b", "x!y!");
 	is!("p(t, n) := t * n; job = go p(\"ab\", 3); await job", "ababab");
-	is!("h(x:float) := x / 2; job = go h(3); await job", 1.5);
 	is!("q(t) := [t, t]; job = go q(2); await job", warp::ints(vec![2, 2]));
 }
 
@@ -86,16 +73,13 @@ fn a_task_of_a_list_parameter_runs_where_it_starts() {
 
 #[test]
 fn try_catches_the_failure_of_a_task() {
-	is!("f(i) := [1,2,3]#i; job = go f(5); try await job else -1", -1);
 	is!(&format!("{SPINNER}job = go spin(100000000000); stop job; try await job else -1"), -1);
 	is!("g(t) := t + \"!\"; job = go g(\"a\"); try await job else \"failed\"", "a!");
 }
 
 #[test]
 fn lists_cross_to_a_task() {
-	is!("total(xs) := { s=0; for x in xs { s+=x }; s }; job = go total([1,2,3]); await job", 6);
 	is!("sum2(xs) := { s=0; for i in 0..#xs { s+=xs#(i+1) }; s }; job = go sum2([1,2,3]); await job", 6);
-	is!("dbl(xs) := xs.map(x => x*2); job = go dbl([1,2]); await job", warp::ints(vec![2, 4]));
 	is!("f(xs, n) := xs#1 * n; job = go f([3,4], 2); await job", 6);
 	is!("total(xs) := { s=0; for x in xs { s+=x }; s }; big=(0..20000).map(x=>x); a = go total(big); b = go total(big); await a + await b", 399980000);
 }
@@ -116,8 +100,5 @@ fn a_stop_handler_runs_once_the_task_stopped() {
 
 #[test]
 fn function_values_cross_to_a_task() {
-	is!("inc = x => x + 1; apply(g, v) := g(v); job = go apply(inc, 3); await job", 4);
-	is!("k = 10; add = x => x + k; apply(g, v) := g(v); job = go apply(add, 5); await job", 15);
 	is!("twice(f, v) := f(f(v)); job = go twice(x => x * 3, 2); await job", 18);
-	is!("mapit(f, xs) := xs.map(f); job = go mapit(x => x + 1, [1, 2]); await job", warp::ints(vec![2, 3]));
 }

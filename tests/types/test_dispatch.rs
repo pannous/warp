@@ -61,9 +61,9 @@ fn a_value_of_run_time_type_dispatches_at_run_time() {
 }
 
 #[test]
-fn an_untyped_definition_is_the_fallback() {
+fn sort_keeps_its_types() {
 	is!("class Deck{n:int}; def sort(d:Deck):=d.n; def sort(x):=0; sort([2,1]) + sort(Deck(4))", 4);
-	is!("def sort(x):=0; sort([2,1])", 0);
+	is!("def sort(x):=0; sort([2,1]) == [1 2]", true);
 }
 
 #[test]

@@ -38,33 +38,39 @@ const TAU: f64 = std::f64::consts::TAU;
 const PI: f64 = std::f64::consts::PI;
 const HALF_PI: f64 = std::f64::consts::FRAC_PI_2;
 const LEAST_AT_ZERO: [Extremum; 1] = [turns(0.0, 0.0, false, 0.0)];
+/// A math word and its run-time function, uncertain_<word>
+macro_rules! interval_word {
+	($word:literal, $extrema:expr) => {
+		($word, concat!("uncertain_", $word), $extrema)
+	};
+}
 /// The math words an interval passes through (card plus-minus-playground, P217): √ ∛ abs and the libm functions of one
 /// argument map the endpoints, an extremum or pole inside the interval is a bound. With the run-time function of each
 /// (wasm_emitter/uncertain.rs)
 pub const INTERVAL_WORDS: [(&str, &str, &[Extremum]); 23] = [
-	("sqrt", "uncertain_sqrt", &[]),
-	("cbrt", "uncertain_cbrt", &[]),
-	("abs", "uncertain_abs", &LEAST_AT_ZERO),
-	("fabs", "uncertain_fabs", &LEAST_AT_ZERO),
-	("sin", "uncertain_sin", &[turns(HALF_PI, TAU, true, 1.0), turns(-HALF_PI, TAU, false, -1.0)]),
-	("cos", "uncertain_cos", &[turns(0.0, TAU, true, 1.0), turns(PI, TAU, false, -1.0)]),
-	("tan", "uncertain_tan", &[turns(HALF_PI, PI, true, f64::INFINITY), turns(HALF_PI, PI, false, f64::NEG_INFINITY)]),
-	("asin", "uncertain_asin", &[]),
-	("acos", "uncertain_acos", &[]),
-	("atan", "uncertain_atan", &[]),
-	("sinh", "uncertain_sinh", &[]),
-	("cosh", "uncertain_cosh", &[turns(0.0, 0.0, false, 1.0)]),
-	("tanh", "uncertain_tanh", &[]),
-	("exp", "uncertain_exp", &[]),
-	("expm1", "uncertain_expm1", &[]),
-	("log", "uncertain_log", &[]),
-	("log2", "uncertain_log2", &[]),
-	("log10", "uncertain_log10", &[]),
-	("log1p", "uncertain_log1p", &[]),
-	("floor", "uncertain_floor", &[]),
-	("ceil", "uncertain_ceil", &[]),
-	("round", "uncertain_round", &[]),
-	("trunc", "uncertain_trunc", &[]),
+	interval_word!("sqrt", &[]),
+	interval_word!("cbrt", &[]),
+	interval_word!("abs", &LEAST_AT_ZERO),
+	interval_word!("fabs", &LEAST_AT_ZERO),
+	interval_word!("sin", &[turns(HALF_PI, TAU, true, 1.0), turns(-HALF_PI, TAU, false, -1.0)]),
+	interval_word!("cos", &[turns(0.0, TAU, true, 1.0), turns(PI, TAU, false, -1.0)]),
+	interval_word!("tan", &[turns(HALF_PI, PI, true, f64::INFINITY), turns(HALF_PI, PI, false, f64::NEG_INFINITY)]),
+	interval_word!("asin", &[]),
+	interval_word!("acos", &[]),
+	interval_word!("atan", &[]),
+	interval_word!("sinh", &[]),
+	interval_word!("cosh", &[turns(0.0, 0.0, false, 1.0)]),
+	interval_word!("tanh", &[]),
+	interval_word!("exp", &[]),
+	interval_word!("expm1", &[]),
+	interval_word!("log", &[]),
+	interval_word!("log2", &[]),
+	interval_word!("log10", &[]),
+	interval_word!("log1p", &[]),
+	interval_word!("floor", &[]),
+	interval_word!("ceil", &[]),
+	interval_word!("round", &[]),
+	interval_word!("trunc", &[]),
 ];
 
 /// A math word an interval passes through

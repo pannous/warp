@@ -99,6 +99,10 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	if let Some(task) = failure.chain().find_map(|cause| cause.downcast_ref::<crate::host::tasks::TaskFailure>()) {
 		return crate::node::error(&task.0);
 	}
+	if let Some(out_of_time) = failure.chain().find_map(|cause| cause.downcast_ref::<warp_runtime::engine::OutOfTime>())
+	{
+		return crate::errors::run_time::out_of_time(out_of_time.0);
+	}
 	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
 		None => return crate::node::error(&format!("could not run the program: {failure:#}")),
 		Some(wasmtime::Trap::OutOfFuel) => return out_of_fuel(crate::util::fuel_budget()),

@@ -122,7 +122,7 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 			}
 			// `x: bool = 1` (P199): the value stored, a bool
 			Op::Assign | Op::Define => {
-				matches!(left.drop_meta(), Node::Symbol(name) if is_bool_variable(name, scope) || is_boolean(right, scope))
+				left.symbol_name().is_some_and(|name| is_bool_variable(name, scope) || is_boolean(right, scope))
 			}
 			_ => false,
 		},

@@ -3,6 +3,7 @@
 
 use super::nodes::{call, children_rewritten, is_binding, key};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
+use crate::lowering::typed_library_words::library_word_of;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -206,15 +207,25 @@ fn function_position(items: &[Node], words: &SuffixWords) -> usize {
 /// program assigns is its variable, never a suffix word (`solved = solve(x); return solved`)
 fn suffix_words(node: &Node) -> SuffixWords {
 	// loop variables and parameters too: `for ord in xs { x = ord }` reads the item (card codepoint-loop-variable)
-	let variables = crate::lowering::module_properties::bound_names(node);
-	let functions = crate::analyzer::applicable_function_names(node);
+	let mut variables: HashSet<String> = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
+	crate::library_words::collect_assigned_names(node, &mut variables);
+	variables.extend(crate::analyzer::function_definitions(node).parameter_names());
+	let mut functions = crate::analyzer::applicable_function_names(node);
+	// `trim(x) := x-1` is the program's trim·any beside the library's trim: `4 trimmed` chooses between them
+	let own_library_words: Vec<String> =
+		functions.iter().filter_map(|function| library_word_of(function)).map(String::from).collect();
 	// the library's words of one value apply too (`x sined`, `x floored`), unless the program names them
 	let library_words = crate::lowering::library_signatures::one_value_words()
-		.filter(|word| !variables.contains(*word) && !functions.contains(*word))
+		.filter(|word| {
+			!variables.contains(*word) && !functions.contains(*word) && !own_library_words.contains(&word.to_string())
+		})
 		.map(String::from);
 	let applicable: Vec<String> = functions.iter().cloned().chain(library_words).collect();
-	let words =
-		applicable.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
+	functions.extend(own_library_words);
+	let spelled = |function: &str| library_word_of(function).unwrap_or(function).to_string();
+	let words = applicable
+		.iter()
+		.flat_map(|function| past_forms(&spelled(function)).into_iter().map(|word| (word, function.clone())));
 	let mut words: HashMap<String, String> =
 		words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
@@ -447,9 +458,7 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
 	if let Some(op) = operator_reference(word) {
 		return Some(Suffix::Operator(op));
 	}
-	let Node::Symbol(word) = word.drop_meta() else {
-		return None;
-	};
+	let word = word.symbol_name()?;
 	functions.words.get(word).cloned().map(Suffix::Function)
 }
 
@@ -482,7 +491,10 @@ fn suffix_call(suffix: &Suffix, argument: Node) -> Node {
 			let exponent = if power == "square" { 2 } else { 3 };
 			key(argument, Op::Pow, Node::int(exponent))
 		}
-		None => call(function, vec![argument]),
+		None => match library_word_of(function) {
+			Some(library_word) => crate::lowering::typed_library_words::dispatched(library_word, vec![argument]),
+			None => call(function, vec![argument]),
+		},
 	}
 }
 
@@ -521,10 +533,6 @@ fn heading_suffix_word(item: &Node, functions: &SuffixWords) -> Option<(Node, Su
 
 fn is_infix_arithmetic(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, op, _) if ARITHMETIC.contains(op))
-}
-
-fn grouped(node: Node) -> Node {
-	parens(vec![node])
 }
 
 /// `x squared` is `square(x)`; after ungrouped arithmetic (`1+2 squared`) the user is asked what the word applies to (D9)
@@ -588,7 +596,7 @@ fn suffix_precedence(operand: &Node, word: &Node) -> Result<bool, Node> {
 		nearest = leaf.clone();
 		Node::List(vec![leaf, word.clone()], Bracket::Round, Separator::Space)
 	});
-	let loose = Node::List(vec![grouped(operand.clone()), word.clone()], Bracket::None, Separator::Space);
+	let loose = Node::List(vec![parens(vec![operand.clone()]), word.clone()], Bracket::None, Separator::Space);
 	let (word_text, whole_text) = (word.serialize(), operand.serialize());
 	let written = format!("{whole_text} {word_text}");
 	let readings = vec![

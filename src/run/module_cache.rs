@@ -144,10 +144,15 @@ pub fn is_precompiled(bytes: &[u8]) -> bool {
 	Engine::detect_precompiled(bytes) == Some(Precompiled::Module)
 }
 
-/// Whether `bytes` were compiled ahead of time for the task engine: such a module does not load into the gc_engine
-pub fn precompiled_for_tasks(bytes: &[u8]) -> bool {
+/// Whether machine code (`warp compile --aot`) counts fuel, and whether it starts tasks: code compiled for the engine
+/// counting fuel does not load into the one checking the time
+pub fn precompiled_engine(bytes: &[u8]) -> (bool, bool) {
 	// SAFETY: as in compiled_module
-	is_precompiled(bytes) && unsafe { Module::deserialize(&crate::util::gc_engine(), bytes) }.is_err()
+	let loaded = |fuel| unsafe { Module::deserialize(&crate::util::shared_engine(fuel), bytes) }.ok();
+	match loaded(false) {
+		Some(module) => (false, crate::host::tasks::imports_tasks(&module)),
+		None => (true, loaded(true).is_some_and(|module| crate::host::tasks::imports_tasks(&module))),
+	}
 }
 
 /// The cache directory: `WARP_MODULE_CACHE`, else ~/.cache/warp/modules; none when it is `off`

@@ -40,6 +40,12 @@ fn an_int_becomes_a_case_explicitly() {
 	is!(&with_coin("Coin(1)"), symbol("Nickel"));
 	is!(&with_coin("n = 0; n as Coin"), symbol("Penny"));
 	fails_with(&with_coin("9 as Coin"), "9 is no Coin case");
+	is!(
+		&with_coin(
+			"cents(c: Coin) := match c { Penny: 1; Nickel: 5; Dime: 10 }; cents(Coin.Nickel) + cents(2 as Coin)"
+		),
+		15
+	);
 }
 
 #[test]

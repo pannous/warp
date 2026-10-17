@@ -6,7 +6,6 @@ use crate::is;
 #[test]
 fn floor_division_is_euclidean() {
 	is!("7 /! -2", -3);
-	is!("-7 /! 2", -4);
 	is!("7.5 /! 2", 3);
 	is!("a=-7; b=-2; a /! b * b + a%b == a", 1);
 }

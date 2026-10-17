@@ -1,4 +1,0 @@
-def a():=1
-x=a
-print type(x)
-print x

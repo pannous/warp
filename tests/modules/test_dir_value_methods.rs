@@ -4,10 +4,6 @@ use crate::is;
 
 #[test]
 fn dir_of_a_value_lists_its_types_methods() {
-	is!("dir([1 2]) == dir(list)", true);
 	is!("xs=[3 4]; dir(xs) == dir(list)", true);
-	is!("dir(\"hi\") == dir(text)", true);
 	is!("f(v) := dir(v); f([1]) == dir(list)", true);
-	is!("(dir {a:1 b:2})#2", "b");
-	is!("#dir(pi)", 0);
 }

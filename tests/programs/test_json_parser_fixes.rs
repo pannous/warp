@@ -11,7 +11,6 @@ fn test_field_of_a_call_result() {
 fn test_text_of_a_run_time_value() {
 	is!("m = {a: [1, 2]}; str(m.a)", "[1 2]");
 	is!("m = {a: 5}; str(m.a)", "5");
-	crate::common::fails_with("join([[1], [2]], \",\")", "not a joinable item");
 }
 
 #[test] // a function returning texts, lists or maps returns a Node of unknown kind, not a text

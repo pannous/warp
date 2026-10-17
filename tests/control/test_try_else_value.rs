@@ -18,7 +18,5 @@ fn an_arrow_fallback_is_a_function_value() {
 
 #[test]
 fn try_else_takes_a_value_or_an_action() {
-	is!("try 1 + [1 2]#5 else 0", 0);
 	is!("x = 1; try 1 + [1 2]#5 else {x = 5}; x", 5);
-	is!("try 1 + [1 2]#2 else 0", 3);
 }

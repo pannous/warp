@@ -243,6 +243,7 @@ impl WarpParser {
 		Some(crate::closures::function_reference(name))
 	}
 
+	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	pub(crate) fn starts_function_reference(&self) -> bool {
 		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
 	}

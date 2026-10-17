@@ -282,6 +282,11 @@ pub(crate) fn take_result_units() -> Option<ResultUnits> {
 	crate::compiler::compile_context::change(|context| context.result_units.take())
 }
 
+/// Does the last lowered program's result have units, which only a module's `warp.meta` carries
+pub(crate) fn has_result_units() -> bool {
+	crate::compiler::compile_context::read(|context| context.result_units.is_some())
+}
+
 /// The entry of the module's `warp.meta` section (meta_section.rs) naming the units of `main`'s result (`km:1 h:-1`), or
 /// of its result's fields (`dist=km:1;time=s:1`): a module that returns SI amounts says which quantities they are, and
 /// running it reads them back (wasm_reader)
@@ -754,6 +759,32 @@ struct Inference {
 	started: HashMap<String, String>,
 }
 
+/// `n km`, `D(n inch)`: units bind only after a number (notes/decisions.md), the way that works
+fn unit_after_name_advice(value: &Node, unit: &Node) -> String {
+	format!("a unit binds only after a number, write {}", with_unit_written(value, unit.serialize().trim()))
+}
+
+/// `amount` in `unit` as written: `96 dpi` after a number literal, otherwise multiplied by one unit, as units bind only
+/// after a number (decision unit-definitions): `n * 1 dpi`, `p.n * 1 dpi`, `(a + b) * 1 dpi`
+pub(super) fn with_unit_written(amount: &Node, unit: &str) -> String {
+	let text = amount.serialize().trim().to_string();
+	match amount.drop_meta() {
+		_ if is_number_literal(amount) => format!("{text} {unit}"),
+		Node::Key(_, op, _) if *op != Op::Dot => format!("({text}) * 1 {unit}"),
+		_ => format!("{text} * 1 {unit}"),
+	}
+}
+
+/// `5`, `(5)`, `5 ± 0.01`: the amount a unit word binds to
+fn is_number_literal(amount: &Node) -> bool {
+	match amount.drop_meta() {
+		Node::Number(_) => true,
+		Node::Key(value, Op::PlusMinus, tolerance) => is_number_literal(value) && is_number_literal(tolerance),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_number_literal(&items[0]),
+		_ => false,
+	}
+}
+
 /// The last statement of a program or block
 /// What a call of a function with this body gives: its last statement, of a `def f(x) { body }` block too
 fn returned_value(body: &Node) -> Option<&Node> {
@@ -962,6 +993,9 @@ impl Inference {
 				self.infer(list_units::each_in_unit(&list, op, &unit))
 			}
 			Node::Key(amount, Op::Mul, unit) if self.unit_word(&unit).is_some() => {
+				if self.is_unbound_amount(&amount)? {
+					return Err(Stop::Error(format!("DimensionError: {}", unit_after_name_advice(&amount, &unit))));
+				}
 				self.amount_in(*amount, self.unit_word(&unit).expect("guarded"))
 			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
@@ -1386,6 +1420,19 @@ impl Inference {
 			Node::Symbol(name) if !self.variables.contains_key(name) => unit_named(name),
 			_ => None,
 		}
+	}
+
+	/// `n`, `p.n`, `f(x)`, `(a + b)` before a unit word: one plain number not written as a number, which the unit
+	/// doesn't bind to (decision unit-definitions: units bind only after a number); a list `xs cm` is each element's,
+	/// a quantity stays one
+	pub(super) fn is_unbound_amount(&mut self, amount: &Node) -> Result<bool, Stop> {
+		let written_item = matches!(amount.drop_meta(), Node::Symbol(name) if name.starts_with(list_units::ITEM));
+		let not_a_number = matches!(amount.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Empty);
+		if is_number_literal(amount) || written_item || not_a_number || self.plain_list_depth(amount) > 0 {
+			return Ok(false);
+		}
+		let (_, signature) = self.infer(amount.clone())?;
+		Ok(signature.is_empty() && signature.depth == 0)
 	}
 
 	/// `40°C`: an amount in a unit as an SI amount, counted from the unit's zero

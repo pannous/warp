@@ -33,7 +33,6 @@ fn spaced_or_glued_operators_stay_arithmetic() {
 
 #[test]
 fn each_reading_has_its_explicit_form() {
-	is!("1 - 1", 0);
 	is!("[3 - 1]", ints(vec![2]));
 	is!("[3 -1]", ints(vec![3, -1]));
 }

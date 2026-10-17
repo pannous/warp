@@ -29,20 +29,18 @@ pub fn lower_aliases(node: Node) -> Node {
 	if !node.mentions_any(&HOST_ALIASES.map(|(alias, _, _)| alias)) {
 		return node;
 	}
-	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = HOST_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
-	if aliases.is_empty() {
-		return node;
-	}
-	renamed_heads(node, &aliases)
+	// each alias where the program leaves its word free (notes/dispatch.md: shadowing is scoped)
+	HOST_ALIASES.into_iter().fold(node, |node, alias| {
+		crate::program_names::rewritten_where_free(node, alias.0, &|free| renamed_heads(free, &[alias]))
+	})
 }
 
 /// The random forms as the prelude words they call, before modules::resolve: a program loads only the words it uses
 pub fn lower_random_forms(node: Node) -> Node {
-	if !node.mentions_any(&[RANDOM_WORD]) || crate::library_words::defined_names(&node).contains(RANDOM_WORD) {
+	if !node.mentions_any(&[RANDOM_WORD]) {
 		return node;
 	}
-	random_forms(node)
+	crate::program_names::rewritten_where_free(node, RANDOM_WORD, &random_forms)
 }
 
 /// `random int`, `random(bool)`: the call of the prelude word giving a random value of that type, a type without one an
