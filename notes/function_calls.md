@@ -1,14 +1,14 @@
-# Function calls (functions worker, 2026-10-06)
+# Function calls
 
 Ported call forms from Python, Kotlin, Swift, C#, JS/TS, Ruby and Julia; tests in tests/functions/, the quick case
 list in probes/function_calls*.md (run probes/function_calls.sh <file> after scripts/own-warp.sh). Every case that
 passes goes into tests/functions/test_ported_calls.rs (one table), so no ported form breaks unseen.
 
-## Decided forms (defaults taken, Interviewer asked where marked)
+## Forms
 - Defaults: `f(a, b=2)`, typed `f(a, b:int=2)`, a default may read earlier parameters `f(a, b=a*2)`. Named
   arguments `f(b=1)` / `f(b:1)` skip defaults and mix with positional ones (P37).
   A bare flag name sets it: `f(3, loud)` of a parameter `loud = no` (default yes or no) is `f(3, loud: yes)` when no
-  variable loud is in scope, as `x.copy(shallow)` is `x.copy(shallow: yes)` (card copy-shallow, named_arguments.rs
+  variable loud is in scope, as `x.copy(shallow)` is `x.copy(shallow: yes)` (named_arguments.rs
   flag_arguments).
 - Overloading by arity: `def f(a)` + `def f(a,b)` become `f·1`, `f·2` (src/lowering/definitions/overloads.rs
   `lower_arity_overloads`, a MEANING pass before broadcasting reads arities). A call names the variant its argument
@@ -22,31 +22,30 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Prefix nesting: `square square 2` / `square(square 2)` → `square(square(2))` when the call has more juxtaposed
   arguments than its function takes (broadcasting.rs `lower_prefix_calls`, before the function value passes).
 - Ruby keyword parameters `def f(a, b: 2)`: a literal after the colon is the default (named_arguments.rs).
-- Prepositions as argument labels (card prepositions-call, user 2026-10-14; Swift's labels): a parameter written
+- Prepositions as argument labels (Swift's labels): a parameter written
   after a preposition, `play(tone, for duration)`, `move(x, from a, to b)`, is passed by that word, which in a call
-  always takes a colon (decision labels-calls, 2026-10-15): `play 440Hz for: 0.5s`, `play(440Hz, for: 0.5s)`,
+  always takes a colon: `play 440Hz for: 0.5s`, `play(440Hz, for: 0.5s)`,
   `play tone:440Hz for:0.5s`, `move 1 from: 10 to: 3` (any order), `r = move 1 to: 3 from: 10`, `s + f 9 to: 4`
   (the parser reads `word: ` after a call's argument as its label, suffixes.rs labelled_argument). A call without
-  brackets also names arguments: `f b=1 a=5` (before, the `=` assigned). Words: to of from with in into at by for
+  brackets also names arguments: `f b=1 a=5`. Words: to of from with in into at by for
   on each (type_name_matching.rs PREPOSITIONS; preposition_calls.rs is a FUNCTION pass before named_arguments, which
   picks the overload the names fit). Without the colon a word keeps its meaning, `for` loops, `1 to 5` a range, `x in
   xs` a membership; in a call of a function taking it, the bare word (`move x to 5`) is an error naming the colon
   form, or a warning where it cannot mean anything else (`play C4 for 1s`, `melody xs each 1 beat`: for and each,
   preposition_calls.rs UNAMBIGUOUS_LABELS). A variable named `by` stays a variable; a label the function does not take is an error naming those it takes.
-  `as` labels a parameter too (card save-sound): `save(made, as file)` is called `save sound as: "x.wav"`
+  `as` labels a parameter too: `save(made, as file)` is called `save sound as: "x.wav"`
   (type_name_matching.rs AS_LABEL).
 - Result types before a block body: `-> int { … }`, `: number { … }`, `-> int: body` (declarations.rs `typed_result`).
 - A function body block of one braceless call `def f(x){square x}` is that call (library_words.rs `body_statement`).
 - Partial application stays `add(1, _)`; `add(1)` is a missing-argument error.
 
-- Closures changing an enclosing variable (P124 asked, default A forced by test_partial_application's counter): a
+- Closures changing an enclosing variable (P124): a
   lambda shares it (`()=>{ n+=1; n }` counts 1, 2, …), `nonlocal n` may be written; a nested def needs `nonlocal n`,
   else a loud error. nonlocal_cells.rs `lower_lambdas` hoists such a lambda into a nested def `lambda·N` + reference.
 
 - Optional parameters `x?`, `x: int?` mean `x=ø` (the type is dropped: the value is held boxed); `a ?? b` (Op::Coalesce,
   right-assoc, just above `or`) is `if a == ø then b else a`, a computed once (library_words.rs `lower_coalesce`).
-  `maybe x`, `maybe int x`, `x: maybe int` are the same (user, P125: "x=ø, maybe x, or x? Same as with optional
-  types"). `??` itself was not addressed: default stands. P124 decided A (lambdas share).
+  `maybe x`, `maybe int x`, `x: maybe int` are the same (P125).
 - Anonymous functions `function(a, b) {…}`, `fn(x) {…}`, `lambda x: …` (welcome_forms.rs); C `void f() {…}`.
 - Swift labels `func greet(person name: String)`: the parameter is `person`, the body starts `name = person`; `_ x: Int`
   is `x: Int` (declarations.rs `labeled_parameter`; partial_application skips `_` before a typed parameter).
@@ -81,7 +80,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Python `list()` is `[]` (library_words `empty_list_calls`, unless the program defines list).
 - Spreading into a function parameter `def apply(f, *args){ f(*args) }`: variadic.rs keeps the spread of a call of a
   parameter, function_values.rs runs variadic::lower again once f is known.
-- Card speak-parens (user asked why `speak() :=`): `speak := …` and `speak() := …` both run the body at every use;
+- Getters and actions: `speak := …` and `speak() := …` both run the body at every use;
   `:=` is the canonical form (examples, kitchensink: `speak := name + " barks"`, read as `rex.speak`). The empty
   parentheses stay for actions: a body with effects (`step() := { cells = next }`, `print`, `random()`) written
   `step := …` warns "step runs … at every read", since a bare read should not change anything; `step()` says "call".
@@ -94,11 +93,11 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   start value is `fold` (lambdas.rs `with_start`).
 - Python generator argument `sum(x*x for x in xs)` (comprehensions.rs), `any(xs)`/`all(xs)` test the items;
   Swift labels on function-typed parameters (body renamed to the label; a lambda block is a named argument).
-- P142 (user): prefer broadcasting `square [1 2 3]` and `square all xs` (wiki/all.md) over map in tests, hints, docs.
+- P142: prefer broadcasting `square [1 2 3]` and `square all xs` (wiki/all.md) over map in tests, hints, docs.
   `f all xs` → map with a lambda (broadcasting.rs `all_calls`); library words of one value (`upper`, `round` …) and
-  `abs`/`sqrt`/`cbrt` broadcast over a list literal or list variable. P143 (user): `f x == y` is `(f x) == y` when f's
+  `abs`/`sqrt`/`cbrt` broadcast over a list literal or list variable. P143: `f x == y` is `(f x) == y` when f's
   first parameter is typed as no truth value, else a loud error naming both forms. probes/broadcasting_forms.md.
-- Broadcasting (P142) now covers: lambda variables, library words over a call (`sum square xs`), several parameters
+- Broadcasting (P142) covers: lambda variables, library words over a call (`sum square xs`), several parameters
   (`add [1, 2] 10`, the one list argument to a scalar parameter is mapped), `all` in any argument (`add(all xs, 10)`),
   nested literals (`square all [[1, 2], [3]]` spliced at compile time), lists built by appending; `max xs` without
   parentheses (min_max.rs). Same speed as map (call_benchmark.sh list rows): all lower to the same loop.
@@ -106,11 +105,10 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 ## Call efficiency (probes/call_benchmark.sh [N], 10^8 calls each)
 - Plain, default, named, overload and lambda calls compile to the same direct `call $f` with i64 arguments: equal
   within noise (the machine is shared, runs vary up to 2x).
-- A declared result type `-> int` lowered to `body as int`, which boxed (new_int) and unboxed (get_int_value) on every
-  call: 5x a plain call. Fixed: `x as int` of an Int emits the i64 (values.rs, casts.rs `emit_int_value_truncated`,
-  test_call_efficiency). The ratio truncation (`exact_trunc` when the range may leave fixnums) stays.
-- A returned closure `h = mk(1); h(i)` was 4-6x a plain call (closure_call_1 tests and casts the $Closure twice, calls
-  through call_ref, the entry unboxes each capture per call). Now even with a plain call:
+- A declared result type `-> int` costs nothing: `x as int` of an Int emits the i64 (values.rs, casts.rs
+  `emit_int_value_truncated`, test_call_efficiency). The ratio truncation (`exact_trunc` when the range may leave fixnums) stays.
+- A returned closure `h = mk(1); h(i)` is as fast as a plain call (the generic path, closure_call_1 through call_ref
+  with captures unboxed per call, is 4-6x slower):
   - a closure variable whose targets (closure_variable_targets) are one function, and no parameter of that name
     anywhere, calls that target's entry directly (wasm_emitter/closures.rs `emit_direct_closure_call`);
   - assigned once with captured values, lowering/definitions/closures.rs `hoist_captures` reads them once after the assignment,
@@ -118,73 +116,59 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
     closure_call_kind), and the call passes the locals to the target itself (`emit_hoisted_closure_call`). Nested
     functions with capture globals keep the entry, which restores them.
 
-- Batch 19: Haskell `twice x = x * 2; twice 4` among statements (declarations.rs `haskell_definitions`: a later
-  statement uses the name, the body every parameter; type words, library words, `print x = 5` stay); R's
-  `f <- function(x) x * 2` and braceless `f = function(x) x * 2` (welcome_forms.rs `assigned_braceless_function`);
-  JS destructured parameters `({a, b}, k) => …` (welcome_forms.rs `destructured_parameters`, `object·0.a` fields).
-  P145 (user): `x <- 3` assigns with a got-it note "write x = 3", the cramped `x<-3` (and `x<- 3`) is an error naming
+## More ported forms (probes/function_calls_round5.md … round7.md)
+- Haskell `twice x = x * 2; twice 4` among statements (declarations.rs `haskell_definitions`: a later statement uses
+  the name, the body every parameter; type words, library words, `print x = 5` stay); R's `f <- function(x) x * 2`
+  and braceless `f = function(x) x * 2` (welcome_forms.rs `assigned_braceless_function`); JS destructured parameters
+  `({a, b}, k) => …` (welcome_forms.rs `destructured_parameters`, `object·0.a` fields).
+- P145: `x <- 3` assigns with a got-it note "write x = 3", the cramped `x<-3` (and `x<- 3`) is an error naming
   `x = 3` and `x < -3`, `x < -3` and `x <-3` compare (scanning.rs `left_arrow_assignment`). `<-` stays reserved: no
   docs or new tests beyond P145's.
-- Batch 20: Elixir `fn a, b -> body end` (parser atoms.rs `parse_elixir_function`, needs `->` on the line and a
-  closing `end`; Rust's `fn(x) -> i32 { … }` stays); a dot call on a number `f.(4)` is the call (Julia/Elixir
-  broadcast a scalar as itself). Round 5 (probes/function_calls_round5.md, all pass): typed Kotlin lambdas
+- Elixir `fn a, b -> body end` (parser atoms.rs `parse_elixir_function`, needs `->` on the line and a closing `end`;
+  Rust's `fn(x) -> i32 { … }` stays); a dot call on a number `f.(4)` is the call. Typed Kotlin lambdas
   `{ a: Int, b: Int -> a + b }` and Swift closures `{ (x: Int) -> Int in x * x }` (lambdas.rs `arrow_parts`); Ruby
   stabby `->(x) { … }` (parser atom), `lambda { |x| … }` / `proc { … }` and `f.call(args)` (welcome_forms.rs); Lua
   `local` a foreign modifier; Crystal `def sq(x : Int) : Int; …; end` (end_definitions gives the Kotlin head shape);
   Kotlin `listOf`/`arrayOf`/`mutableListOf` are list literals (library_words.rs `list_constructor_calls`).
-- Batch 21: round 6 (probes/function_calls_round6.md). `xs.sort()` panicked (lambdas.rs iteration_method subtracted
-  1 from zero arguments); Python f-strings `f"hi {name}"` (parser literals.rs `parse_f_string`, `brace_holes`, `{{` a
-  brace, a note for `"hi \(name)"`); `return square n` returned the bare function because try_parse_return parsed
-  at binding power 0, which takes no braceless argument (now the assigned-value power); an unknown word under a cast
-  or result type (`def g() -> str: return cube "x"`, `cube 3 as int`) trapped or was data, now the P51 error (casts.rs).
-  Round 6 still open: variadics `vararg xs: Int`, `xs: Int...`, `params int[] xs`; C# `(int x) => …` and PHP
-  `fn($x) => …` lambdas; a default naming an earlier parameter `(a, b = a * 2)`; JS `reduce(f, 0)`; Scala currying
-  `add(x)(y)`; Swift returning `{ $0 + k }`; Kotlin `"hi $name"` (a bare `$` is text by D1).
-- Batch 22: C# `(int a, int b) => …` and PHP `fn($x) => …` lambdas (lambdas.rs `c_style_parameters`); typed rest
-  parameters `*xs: int`, Swift `_ xs: Int...` (variadic.rs `starred`, declarations.rs partial_application guard); a
-  lambda default naming an earlier parameter `(a, b = a * 2)` was the phrase definition `a b = a * 2`
-  (lower_spaced_definitions now only reads space phrases). Cards: p143-misses (`def f(x) = …` with parameters is a
-  `:=` definition; lower_prefix_calls knows implicit definitions) and P149 (user): an untyped parameter used in
-  arithmetic rules out a truth value, so `f x op y` is `(f x) op y`; the ambiguity stays for a body accepting
-  anything (`same(x) := x`). lazy-range-power: a bound of arithmetic `1..10^12` stays a descriptor.
-- Batch 23: round 6 all pass. JS `reduce(f, start)` and Swift's trailing closure after arguments
-  `xs.reduce(0) { $0 + $1 }` (lambdas.rs `trailing_closure`); returned Swift closures `return { $0 + k }`: the enclosing
-  block no longer counts the inner `$0` (`mentions_outside_blocks`), a parameter named `$0` wins over the positional
-  `$0` (arithmetic.rs), closures.rs `tail` stops at a closure, a definition with parameters walks its block body
-  (card functions-calling); Swift `-> (Int) -> Int` results and Scala's curried `def add(x)(y) = …`
-  (declarations.rs `function_typed_result`, `curried_definition`); `xs.max()` was "max of an empty list" (min_max.rs);
-  C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming warp's word (welcome_forms.rs, alias rule).
-- Batch 24: round 7 (probes/function_calls_round7.md). Regression fix: Python's one-line `def f(x): return a if c
-  else b` was "undefined function: f" since batch 21 (try_parse_return continues at binding power 0 after the
-  phrase). OCaml `let inc = fun x -> x + 1 in inc 4` printed nothing (split_at_in descends into the lambda body),
-  `fun a b -> …` (lambdas.rs `keyword_and_names`); Python lambdas `lambda a, b=2: …`, `lambda *xs: …`, `lambda: 42`
-  (parser atoms.rs `parse_python_lambda`; a lambda variable with a rest parameter is a definition, welcome_forms.rs
-  `starred_lambda`); Go function literals `func(a, b int) int { … }` and `f func(int) int` parameters. P70c (user):
-  a lambda made in a loop keeps its iteration's variable (already so, pinned).
-  Round 7 still open: F# `List.map (fun x -> …) [1; 2; 3]`, MATLAB `@(x)`, R `sapply(c(…), …)`, Dart
-  `{required int a}`, Rust generics `fn apply<F: Fn(i32) -> i32>`.
-- Batch 25: F# `List.map f xs` (Seq., Array.) is `map f xs` with a note, `(fun x -> …)` as an argument (only `fun`
-  with plain names, Swift's `func f(x) -> Int` stays a definition); Rust type parameters `fn apply<F: …>` are skipped
-  and P157 (user) generics compile untyped with a note; Dart named parameters `{required int a, int b = 2}`; English
-  `To square a number: return it times it`, `square of x`, `square of x is 9` (P149), numeric `times` multiplies
-  (alias rule). Fix: `def add(a, b: int) -> int` lost a parameter (flat call arguments were read as a Swift label;
-  now only after `func`). P161 (user): Swift argument labels compile with the note "warp names a parameter once"
-  (tests/functions/test_argument_labels.rs). Round 7 still open: MATLAB `@(x)`, R `sapply(c(…), function(x) …)`,
-  `func id<T>(_ x: T)`.
-- Batch 26: `it` and `$0` belong to the innermost lambda (Kotlin): `xs.map{ it.map{ it*10 } }` shadows, a function's
-  `it` stops at an inner lambda (lambdas.rs `bind_parameter`, declarations.rs `bind_it`); glued `xs.map{ it*2 }` after
-  a dot with an iteration word is the call, not the data `map:{…}`; two lambda-lowering runs no longer reuse
-  `loop_out_0` (`first_fresh_number`). Parser: a trailing block after a method call in a definition or lambda belongs
-  to the call (`f(xs) := xs.map { it*10 }` was `(f(xs) := xs.map) {…}`). Shaped parameters (wiki/argument.md,
-  parameter_shapes.rs): `to call person{name?, phone number, mutable status} do …` and `f(p{name, title?})`; a
-  missing required field of an object written at the call (`{…}`, `person{…}`, `person {…}`) is a compile error.
-  Open: the type word of `phone number` is not checked (the wiki passes the text "899-573-5842"), nor `mutable`.
+- Python f-strings `f"hi {name}"` (parser literals.rs `parse_f_string`, `brace_holes`, `{{` a brace, a note for
+  `"hi \(name)"`); `return square n` parses its value at the assigned-value binding power, so a braceless call
+  works; an unknown word under a cast or result type (`def g() -> str: return cube "x"`, `cube 3 as int`) is the P51
+  error (casts.rs).
+- C# `(int a, int b) => …` and PHP `fn($x) => …` lambdas (lambdas.rs `c_style_parameters`); typed rest parameters
+  `*xs: int`, Swift `_ xs: Int...` (variadic.rs `starred`, declarations.rs partial_application guard); a lambda
+  default naming an earlier parameter `(a, b = a * 2)` (lower_spaced_definitions only reads space phrases).
+  `def f(x) = …` with parameters is a `:=` definition. P149: an untyped parameter used in arithmetic rules out a
+  truth value, so `f x op y` is `(f x) op y`; the ambiguity stays for a body accepting anything (`same(x) := x`).
+- JS `reduce(f, start)` and Swift's trailing closure after arguments `xs.reduce(0) { $0 + $1 }` (lambdas.rs
+  `trailing_closure`); returned Swift closures `return { $0 + k }`: the enclosing block does not count the inner `$0`
+  (`mentions_outside_blocks`), a parameter named `$0` wins over the positional `$0` (arithmetic.rs), closures.rs
+  `tail` stops at a closure; Swift `-> (Int) -> Int` results and Scala's curried `def add(x)(y) = …`
+  (declarations.rs `function_typed_result`, `curried_definition`); C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work
+  with a note naming warp's word (welcome_forms.rs, alias rule).
+- OCaml `let inc = fun x -> x + 1 in inc 4`, `fun a b -> …` (lambdas.rs `keyword_and_names`); Python lambdas
+  `lambda a, b=2: …`, `lambda *xs: …`, `lambda: 42` (parser atoms.rs `parse_python_lambda`; a lambda variable with a
+  rest parameter is a definition, welcome_forms.rs `starred_lambda`); Go function literals `func(a, b int) int { … }`
+  and `f func(int) int` parameters. P70c: a lambda made in a loop keeps its iteration's variable.
+- F# `List.map f xs` (Seq., Array.) is `map f xs` with a note, `(fun x -> …)` as an argument (only `fun` with plain
+  names, Swift's `func f(x) -> Int` stays a definition); Rust type parameters `fn apply<F: …>` are skipped and P157
+  generics compile untyped with a note; Dart named parameters `{required int a, int b = 2}`; English
+  `To square a number: return it times it`, `square of x`, `square of x is 9` (P149), numeric `times` multiplies.
+  P161: Swift argument labels (only after `func`) compile with the note "warp names a parameter once"
+  (tests/functions/test_argument_labels.rs).
+- `it` and `$0` belong to the innermost lambda (Kotlin): `xs.map{ it.map{ it*10 } }` shadows, a function's `it` stops
+  at an inner lambda (lambdas.rs `bind_parameter`, declarations.rs `bind_it`); glued `xs.map{ it*2 }` after a dot with
+  an iteration word is the call, not the data `map:{…}`. A trailing block after a method call in a definition or
+  lambda belongs to the call (`f(xs) := xs.map { it*10 }`).
+- Shaped parameters (wiki/argument.md, parameter_shapes.rs): `to call person{name?, phone number, mutable status} do …`
+  and `f(p{name, title?})`; a missing required field of an object written at the call (`{…}`, `person{…}`,
+  `person {…}`) is a compile error.
 
 ## Open
-- Board cards: functions-ruby-yield (warp-93); functions-sort-op,
-  functions-key, functions-foreach, functions-lambda-defaults (warp-14). Cases: probes/function_calls_round4.md.
+- MATLAB `@(x)`, R `sapply(c(…), function(x) …)`, `func id<T>(_ x: T)`.
+- Shaped parameters: the type word of `phone number` is not checked (the wiki passes the text "899-573-5842"), nor
+  `mutable`.
 
-## Python and Ruby definitions (cards functions-python, functions-ruby-def)
+## Python and Ruby definitions
 - `def f(*args): body` (colon body, Python): declarations::keyword_definition reads `def head: body` as `head := body`
   early, so variadic.rs sees the rest parameter (it ran before the later pass that knew the colon form).
 - `def f(x, **kw): …` (Python): the parser reads `**kw` as the symbol `**kw` (atoms.rs); variadic.rs passes the named
@@ -197,10 +181,10 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Ruby `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`, also `def h` without parentheses:
   declarations::end_definitions (start of lower_c_functions) gives them a `{…}` body. Nested `if … then … end` keeps
   its own `end` (the parser takes it).
-- Ruby blocks and `yield` (card functions-ruby-yield, src/lowering/control/blocks.rs lower_trailing_blocks, after lower_spaced_definitions): a
+- Ruby blocks and `yield` (src/lowering/control/blocks.rs lower_trailing_blocks, after lower_spaced_definitions): a
   function whose body yields and that some call passes a block (`f {…}`, `f(a) {…}`, `f(a) do |x| … end`) gets the
   block as its last parameter `yield·block`; `yield a, b` → `yield·block(a, b)`, a block without `|params|` is
-  `() => block`. Functions no call passes a block keep `yield` (free for generators).
+  `() => block`.
 - A lambda changes the caller's variable, never a copy (P124). Inside a function it shares a cell (nonlocal_cells.rs
   `lower_lambdas`); at main level the variable becomes a `global` (`main_lambda_changes`, main runs once), and
   closures never capture a global, so `total = 0; each_twice { |x| total += x }` is 3. A closure still changing a
