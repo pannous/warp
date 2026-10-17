@@ -5,16 +5,13 @@
 //! its standard deviation, low and high one deviation from the value; its arithmetic propagates linearly and adds
 //! independent deviations in quadrature (gaussian_add and its siblings), so `(5 ± 1σ) + (2 ± 1σ)` is 7 ± 1.4σ
 
-use super::super::layout::BYTE;
 use super::super::lists::list_ops::TEXT_AS_FLOAT;
-use super::super::numbers::float_text::FLOAT_TEXT;
 use super::super::reflection::library_ops::NODE_ORDER;
 use super::super::runtime_dependencies::{any, Dependency};
 use super::super::text::similarity::NUMBERS_SIMILAR;
-use super::super::text::text_builtins::TEXT_CONCAT;
 use super::super::WasmGcEmitter;
 use crate::node::Node;
-use crate::numbers::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
+use crate::numbers::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use wasm_encoder::*;
@@ -75,15 +72,23 @@ const UNCERTAIN_FIELDS: [(i32, &str); 4] = [
 	(HIGH, INTERVAL_FIELDS[2]),
 	(RADIUS_FIELD, INTERVAL_FIELDS[3]),
 ];
-const PLUS_MINUS_SEPARATOR: &str = " ± ";
-/// More decimals than this, or a value of MAX_SCALED units of its place or more, shows as float_text
-const MAX_DECIMALS: i32 = 17;
-const MAX_SCALED: f64 = 1e17;
-/// Both numbers of at most 17 digits with sign and point, the separator and σ
-const TEXT_BYTES: i32 = 64;
-/// The scaled ± part shows 2 digits: it rounds to 10 at least and below 100 (0.0999… shows as 0.10)
-const ROUNDS_TO_TEN: f64 = 9.5;
-const ROUNDS_TO_HUNDRED: f64 = 99.5;
+/// lib/prelude.warp's uncertain_text, by its prelude name; the program loads it where it writes ± (implied_words)
+const UNCERTAIN_TEXT_WORD: &str = "prelude·uncertain_text";
+const UNCERTAIN_TEXT_NAME: &str = "uncertain_text";
+
+/// The prelude word that prints ± values, for modules::resolve where the statements write ±: the printer calls it,
+/// the program does not
+pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
+	let writes_plus_minus = statements.iter().any(|statement| {
+		let mut found = false;
+		statement.visit(&mut |node| found |= matches!(node.drop_meta(), Node::Key(_, Op::PlusMinus, _)));
+		found
+	});
+	match writes_plus_minus {
+		true => vec![UNCERTAIN_TEXT_NAME.to_string()],
+		false => vec![],
+	}
+}
 
 /// A program that makes uncertain values gets the whole family: any arithmetic may meet one
 pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
@@ -612,153 +617,31 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// uncertain_text(node) -> text: `7.0 ± 2.0`, as uncertain::Uncertain shows it read back (P219): the ± part to
-	/// 2 significant digits, the value to the same place; a ± part of 0 or ∞, or digits beyond an i64, as float_text
-	/// shows each. After float_text and text_concat, before list_join, which calls it
+	/// list_join shows ± values: the program makes them and loaded the prelude word that writes them
+	pub(in crate::wasm_emitter) fn prints_uncertain(&self) -> bool {
+		self.should_emit_function(UNCERTAIN_TEXT) && self.ctx.user_functions.contains_key(UNCERTAIN_TEXT_WORD)
+	}
+
+	/// uncertain_text(node) -> text: `7.0 ± 2.0` (P219), written in warp: lib/prelude.warp `uncertain_text(value,
+	/// radius, gaussian)`, called late with the value, the ± part and whether it is a Gaussian's. Before list_join, which
+	/// calls it
 	pub(in crate::wasm_emitter) fn emit_uncertain_text(&mut self) {
-		if !self.should_emit_function(UNCERTAIN_TEXT) {
+		if !self.prints_uncertain() {
 			return;
 		}
-		self.emit_text_heap_global();
 		let node_ref = ValType::Ref(self.node_ref(false));
-		let separator = self.allocate_string(PLUS_MINUS_SEPARATOR);
-		let sigma = self.allocate_string(SIGMA);
-		let mut locals = vec![self.parts_ref()];
-		locals.extend([ValType::F64; 4]);
-		locals.extend([ValType::I32; 3]);
-		locals.extend([ValType::I64; 2]);
+		let late = self.late_call(UNCERTAIN_TEXT_WORD, vec![ValType::F64, ValType::F64, ValType::I64], vec![node_ref]);
+		let locals = vec![self.parts_ref()];
 		self.runtime_function(UNCERTAIN_TEXT, vec![node_ref], vec![node_ref], locals, |s, f| {
-			let (parts, value, radius, scale, x, decimals, address, position, digits, power) =
-				(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-			let new_text = |f: &mut Function, (text_address, length): (u32, u32)| {
-				Self::emit_list(f, &[I::I32Const(text_address as i32), I::I32Const(length as i32)]);
-				s.call(f, "new_text");
-			};
-			let each_as_float_text = |f: &mut Function| {
-				f.instruction(&I::LocalGet(value));
-				s.call(f, FLOAT_TEXT);
-				new_text(f, separator);
-				s.call(f, TEXT_CONCAT);
-				f.instruction(&I::LocalGet(radius));
-				s.call(f, FLOAT_TEXT);
-				s.call(f, TEXT_CONCAT);
-				s.is_gaussian(f, parts);
-				f.instruction(&I::If(BlockType::Result(node_ref)));
-				new_text(f, sigma);
-				f.instruction(&I::Else);
-				new_text(f, (sigma.0, 0));
-				f.instruction(&I::End);
-				s.call(f, TEXT_CONCAT);
-				f.instruction(&I::Return);
-			};
-			let put = |f: &mut Function, byte: u8| {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE),
-					I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position),
-				]);
-			};
-			let write_decimal = |f: &mut Function, number: &[I<'static>]| {
-				f.instruction(&I::LocalGet(position));
-				Self::emit_list(f, number);
-				s.call(f, "int_to_decimal");
-			};
-			// the number in `x` to the place of `scale`: rounded half away from zero to whole units of 1/scale, or
-			// half to even at `decimals` digits after the point, as Rust's `{:.*}`
-			let fixed = |f: &mut Function| {
-				Self::emit_list(f, &[I::LocalGet(x), I::F64Const(0.0.into()), I::F64Lt, I::If(BlockType::Empty)]);
-				put(f, b'-');
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(x), I::F64Neg, I::LocalSet(x),
-					I::End,
-					I::LocalGet(decimals), I::I32Eqz, I::If(BlockType::Empty),
-				]);
-				#[rustfmt::skip]
-				write_decimal(f, &[
-					I::LocalGet(x), I::LocalGet(scale), I::F64Mul, I::F64Const(0.5.into()), I::F64Add, I::F64Floor,
-					I::I64TruncF64S, I::F64Const(1.0.into()), I::LocalGet(scale), I::F64Div, I::F64Nearest,
-					I::I64TruncF64S, I::I64Mul,
-				]);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(position), I::I32Add, I::LocalSet(position),
-					I::Else,
-						I::LocalGet(scale), I::I64TruncF64S, I::LocalSet(power),
-						I::LocalGet(x), I::LocalGet(scale), I::F64Mul, I::F64Nearest, I::I64TruncF64S,
-						I::LocalSet(digits),
-				]);
-				write_decimal(f, &[I::LocalGet(digits), I::LocalGet(power), I::I64DivS]);
-				Self::emit_list(f, &[I::LocalGet(position), I::I32Add, I::LocalSet(position)]);
-				// the fraction with its leading zeros: power + fraction, its leading 1 overwritten by the point
-				write_decimal(f, &[I::LocalGet(power), I::LocalGet(digits), I::LocalGet(power), I::I64RemS, I::I64Add]);
-				f.instruction(&I::Drop);
-				put(f, b'.');
-				Self::emit_list(
-					f,
-					&[I::LocalGet(position), I::LocalGet(decimals), I::I32Add, I::LocalSet(position), I::End],
-				);
-			};
-
+			let parts = 1;
 			f.instruction(&I::LocalGet(0));
 			s.call(f, UNCERTAIN_PARTS);
 			f.instruction(&I::LocalSet(parts));
 			Self::emit_list(f, &s.part(parts, VALUE));
-			f.instruction(&I::LocalSet(value));
 			s.push_radius(f, parts);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalTee(radius), I::F64Const(0.0.into()), I::F64Gt, I::LocalGet(radius),
-				I::F64Const(f64::INFINITY.into()), I::F64Lt, I::I32And, I::I32Eqz, I::If(BlockType::Empty),
-			]);
-			each_as_float_text(f);
-			f.instruction(&I::End);
-			// scale: the power of ten that puts the ± part, rounded, in [10, 100): its 2 significant digits before the point
-			let scaled_radius = [I::LocalGet(radius), I::LocalGet(scale), I::F64Mul];
-			Self::emit_list(f, &[I::F64Const(1.0.into()), I::LocalSet(scale)]);
-			let mut too_small = scaled_radius.to_vec();
-			#[rustfmt::skip]
-			too_small.extend([
-				I::F64Const(ROUNDS_TO_TEN.into()), I::F64Lt, I::LocalGet(decimals), I::I32Const(MAX_DECIMALS),
-				I::I32LeS, I::I32And,
-			]);
-			#[rustfmt::skip]
-			Self::emit_while(f, &too_small, &[
-				I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Mul, I::LocalSet(scale),
-				I::LocalGet(decimals), I::I32Const(1), I::I32Add, I::LocalSet(decimals),
-			]);
-			let mut too_large = scaled_radius.to_vec();
-			too_large.extend([I::F64Const(ROUNDS_TO_HUNDRED.into()), I::F64Ge]);
-			Self::emit_while(
-				f,
-				&too_large,
-				&[I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Div, I::LocalSet(scale)],
-			);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(decimals), I::I32Const(MAX_DECIMALS), I::I32GtS, I::LocalGet(value), I::F64Abs,
-				I::LocalGet(scale), I::F64Mul, I::F64Const(MAX_SCALED.into()), I::F64Lt, I::I32Eqz, I::I32Or,
-				I::If(BlockType::Empty),
-			]);
-			each_as_float_text(f);
-			f.instruction(&I::End);
-
-			Self::emit_list(f, &[I::I32Const(TEXT_BYTES), I::LocalSet(position)]);
-			s.emit_text_allocation(f, position, address);
-			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position), I::LocalGet(value), I::LocalSet(x)]);
-			fixed(f);
-			for byte in PLUS_MINUS_SEPARATOR.bytes() {
-				put(f, byte);
-			}
-			Self::emit_list(f, &[I::LocalGet(radius), I::LocalSet(x)]);
-			fixed(f);
 			s.is_gaussian(f, parts);
-			f.instruction(&I::If(BlockType::Empty));
-			for byte in SIGMA.bytes() {
-				put(f, byte);
-			}
-			f.instruction(&I::End);
-			s.emit_new_text_to(f, address, position);
+			f.instruction(&I::I64ExtendI32U);
+			Self::emit_late_call(f, &late);
 		});
 	}
 
