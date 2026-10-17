@@ -34,7 +34,8 @@ pannous/homebrew-tap, formula built from source with cargo.
     warp-language, owner pannous, repository warp, workflow release.yml, environment pypi; then
     `gh variable set PYPI_PUBLISH -R pannous/warp -b true`. AUR: account on aur.archlinux.org with an ssh public key
     (`ssh-keygen -t ed25519 -f ~/.ssh/aur -N ''`, paste ~/.ssh/aur.pub in My Account), then
-    `gh secret set AUR_SSH_KEY -R pannous/warp < ~/.ssh/aur`. The next tag (or a repackage run) publishes both.
+    `gh secret set AUR_SSH_KEY -R pannous/warp < ~/.ssh/aur`. The next tag (or a repackage run) publishes both. Then the README's Install gets `pip install warp-language` and
+    `yay -S warp-lang-bin` (the .deb/.rpm line is there since 2026-10-17; v1.2.6 got them by a repackage run).
 - `cargo install --locked --git https://github.com/pannous/warp warp warp-runtime`.
 - crates.io, prepared, not uploaded: packages `warp-lang` (user 2026-10-06; `warp` is the web framework; the library is
   still `warp`, the binary `warp`) and `warp-runtime` (1.2.3, same version). `cargo package --workspace` verifies both
