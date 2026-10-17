@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+# Packages: a name with no local module is a folder of the default registry github.com/pannous/warp-packages,
+# fetched once into packages/ (wiki/use.md); packages.warp only pins: `colors: 1.0.0`
+use colors
+print to_hex(mix(from_hex("#ff0000"), from_hex("#0000ff"), 0.5))   # #800080
+print [to_hex(color) for color in triad(from_hex("#ff8800"))]

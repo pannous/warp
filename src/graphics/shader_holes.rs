@@ -3,7 +3,7 @@
 //! marks the shader's text with the names; this pass gives every paint or gpu_render of that shader the entries
 //! `name: name` in its values map, so the warp variable is read at each call. A map written out keeps its own entry
 //! of a name. Bare WGSL names still never capture warp variables.
-//! The built-in holes (card shader-builtins) $width, $height, $size, $time, $frame, $mouse, $mouse_down and $key get no entry unless the program
+//! The built-in holes (card shader-builtins) $width, $height, $size, $time, $frame, $mouse, $mouse_down, $mouse_wheel and $key get no entry unless the program
 //! has a variable of that name: the host fills them at each render (src/graphics/gpu.rs builtin_values, host-gpu.js).
 
 use crate::node::{Bracket, Node, Separator};
@@ -22,26 +22,30 @@ const SIZE_INDEX: usize = 2;
 /// The program's own size words, which paint(shader) takes before the view's size
 const SIZE_WORDS: [&str; 2] = ["width", "height"];
 /// Holes every shader has, filled by the host: the image's size in pixels, seconds since the first render, the renders
-/// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
+/// before this one, the pointer over the image (in its pixels), whether a button is down, the wheel steps turned over
+/// it since the start (up adds; system value mouse_wheel), the key held down (its
 /// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
 /// and `$previous(at)`, the shader's own previous frame at a pixel (src/graphics/gpu.rs PREVIOUS_FRAME)
-pub const BUILTIN_HOLES: [&str; 9] =
-	["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key", PREVIOUS_HOLE];
+pub const BUILTIN_HOLES: [&str; 10] =
+	["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key", PREVIOUS_HOLE];
 pub const PREVIOUS_HOLE: &str = "previous";
 /// other words for $previous, which stay the program's own names: a value missing under one of them hints at $previous
 pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
 
 /// Underscore spellings of a built-in hole's member, aliases that hint at the dotted form (user 2026-10-14, card
 /// values-number): `$mouse_x` is `$mouse.x`; and The Book of Shaders' uniform names (glslCanvas, GLSL Sandbox; card
-/// compute-toys): `$u_time` is `$time`, `$u_resolution` `$size`, `$u_mouse` `$mouse`
-pub const HOLE_ALIASES: [(&str, &str, &str); 5] = [
+/// compute-toys): `$u_time` is `$time`, `$u_resolution` `$size`, `$u_mouse` `$mouse`; `$wheel` is
+/// `$mouse_wheel` (card shader-wheel)
+pub const HOLE_ALIASES: [(&str, &str, &str); 6] = [
 	("mouse_x", "mouse.x", POINTER_REASON),
 	("mouse_y", "mouse.y", POINTER_REASON),
 	("u_time", "time", BOOK_OF_SHADERS_REASON),
 	("u_resolution", "size", BOOK_OF_SHADERS_REASON),
 	("u_mouse", "mouse", BOOK_OF_SHADERS_REASON),
+	("wheel", "mouse_wheel", WHEEL_REASON),
 ];
 const POINTER_REASON: &str = "the pointer is the built-in hole $mouse, a vec2f";
+const WHEEL_REASON: &str = "the wheel is the built-in hole $mouse_wheel, as the pointer is $mouse";
 const BOOK_OF_SHADERS_REASON: &str = "The Book of Shaders' uniform names are aliases of warp's built-in holes";
 
 /// The dotted form of an aliased hole (`mouse_x` → `mouse.x`), any other name itself

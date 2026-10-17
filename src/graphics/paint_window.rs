@@ -15,7 +15,7 @@ use std::io::{BufRead, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -57,6 +57,9 @@ const TRIANGLE_CORNERS: u32 = 3;
 /// middle then): `input x y down key held…`, the pointer in the frame's pixels, down 1 while a button is, key as
 /// shader_holes.rs BUILTIN_HOLES says, then the code of every key held, in the order they went down (card allow-diagonals)
 const INPUT_LINE: &str = "input";
+/// The line the viewer writes as the wheel turns over its window: `wheel steps`, the steps turned since it opened
+/// (system_values MOUSE_WHEEL)
+const WHEEL_LINE: &str = "wheel";
 /// The line the viewer writes as its window opens or resizes: `size width height`, in points
 const SIZE_LINE: &str = "size";
 /// The line the viewer writes as the user ends it (closing the window, Cmd-Q): the run ends with it (card
@@ -89,6 +92,7 @@ pub fn follow_input(lines: impl BufRead) -> bool {
 				warp_runtime::system_values::tell_keys_held(&held);
 				warp_runtime::system_values::tell_window_input([x, y, down, key]);
 			}
+			(Some(WHEEL_LINE), &[steps]) => warp_runtime::system_values::tell_wheel(steps as i64),
 			(Some(SIZE_LINE), &[width, height]) => {
 				warp_runtime::system_values::tell_window_size(width as i64, height as i64)
 			}
@@ -406,6 +410,8 @@ struct Screen {
 	frame_size: (u32, u32),
 	pointer: (f64, f64),
 	button_down: bool,
+	/// the wheel steps turned over the window, a trackpad's scroll in fractions of one
+	wheel: f64,
 	/// the keys held, in the order they went down: the last is the key held (`held_key`)
 	held: Vec<u32>,
 	/// The size in points the program set (window.width = …): frames of another size no longer resize the window
@@ -478,6 +484,16 @@ impl ApplicationHandler<Message> for Viewer {
 			WindowEvent::MouseInput { state, .. } => {
 				screen.button_down = state.is_pressed();
 				screen.tell_input();
+			}
+			WindowEvent::MouseWheel { delta, .. } => {
+				screen.wheel += match delta {
+					MouseScrollDelta::LineDelta(_, lines) => f64::from(lines),
+					MouseScrollDelta::PixelDelta(pixels) => {
+						pixels.to_logical::<f64>(screen.window.scale_factor()).y
+							/ warp_runtime::host_words::PIXELS_PER_WHEEL_STEP
+					}
+				};
+				screen.tell_wheel();
 			}
 			WindowEvent::KeyboardInput { event, .. } => {
 				if let Some(code) = key_code(&event.logical_key) {
@@ -634,6 +650,7 @@ impl Screen {
 			frame_size: (0, 0),
 			pointer: (0.0, 0.0),
 			button_down: false,
+			wheel: 0.0,
 			held: vec![],
 			asked,
 		};
@@ -737,6 +754,12 @@ impl Screen {
 	/// The key held now: the last to go down of those held, 0 for none
 	fn key(&self) -> u32 {
 		self.held.last().copied().unwrap_or(0)
+	}
+
+	/// The wheel's whole steps as the program's side takes them (follow_input)
+	fn tell_wheel(&self) {
+		let mut output = std::io::stdout().lock();
+		let _ = writeln!(output, "{WHEEL_LINE} {}", self.wheel.round()).and_then(|_| output.flush());
 	}
 
 	/// The input as the program's side takes it (follow_input)

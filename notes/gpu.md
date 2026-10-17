@@ -181,11 +181,14 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
   gain doesn't amplify leakage.
 
 ## Shader built-ins
-$width $height $size $time $frame $mouse $mouse_down $key need no variable: shader_holes.rs BUILTIN_HOLES leaves them
+$width $height $size $time $frame $mouse $mouse_down $mouse_wheel $key need no variable: shader_holes.rs BUILTIN_HOLES leaves them
 out of the values map unless the program assigns that name; the host fills those the shader reads (`values.<name>`):
 natively gpu::with_builtin_values (input from the paint window's stdout lines `input x y down key`,
 paint_window::input), in the browser host-gpu.js builtinValues (pointer and key from canvas.js's shared buffer).
 time = seconds since the first render, frame = renders before, key = code point, arrows 0xF700–0xF703, 0 = none.
+mouse_wheel = whole wheel steps turned since the start, up adding (viewer line `wheel steps`; the page's canvas.js
+counts WheelEvent deltas, 100 px or 3 lines a step, and keeps the wheel off the page while over a canvas); also the
+system value mouse_wheel; `$wheel` is its alias; compute_toy's mouse.zoom = 1.05^mouse_wheel, as compute.toys zooms.
 Costs nothing for a shader that doesn't mention them.
 
 ## $previous: a shader's own last frame

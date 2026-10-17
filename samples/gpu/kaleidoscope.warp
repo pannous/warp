@@ -1,8 +1,9 @@
 #!/usr/bin/env warp
 # a kaleidoscope as a WGSL fragment shader: paint colors every pixel on the GPU, frame after frame. Each pixel is folded
 # into one wedge of the circle and mirrored, so shards of colored glass drifting through that wedge repeat all around.
-# The pointer runs it: left to right gives 3 to 12 mirrors, up and down zooms; a press holds the tube up to the light.
-# $time, $mouse, $mouse_down and $size are paint's values, read at each frame
+# The pointer runs it: left to right gives 3 to 12 mirrors, up and down zooms; a press holds the tube up to the light,
+# the wheel turns the tube, a quarter wedge a step. $time, $mouse, $mouse_down, $mouse_wheel and $size are paint's
+# values, read at each frame
 kaleidoscope = shader {
 	const TAU = 6.2831853;
 
@@ -48,9 +49,10 @@ kaleidoscope = shader {
 		let mirrors = floor(3.0 + 9.99 * clamp(pointer.x, 0.0, 1.0));
 		let zoom = 2.0 + 6.0 * clamp(pointer.y, 0.0, 1.0);
 		let centered = (at.xy - 0.5 * $size) / $size.y;
-		var angle = atan2(centered.y, centered.x) + $time * 0.1;
-		// fold into one wedge, then mirror every other wedge
 		let wedge = TAU / mirrors;
+		// a wheel step turns the tube a quarter wedge
+		var angle = atan2(centered.y, centered.x) + $time * 0.1 + $mouse_wheel * wedge * 0.25;
+		// fold into one wedge, then mirror every other wedge
 		angle = abs(angle - wedge * floor(angle / wedge) - 0.5 * wedge);
 		let radius = length(centered);
 		let folded = vec2f(cos(angle), sin(angle)) * radius * zoom;

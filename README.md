@@ -89,6 +89,17 @@ warp help                         # all commands
 `samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
 Python-like style and an idiomatic Warp style, one folder per chapter of the guide (samples/graphics, samples/sound …).
 
+## Packages
+
+`use` loads a local module, or else a package of the registry
+[warp-packages](https://github.com/pannous/warp-packages) by name, fetched once into `packages/`:
+```warp
+use colors
+to_hex(mix(from_hex("#ff0000"), from_hex("#0000ff"), 0.5))   # "#800080"
+```
+Packages so far: `colors`, `geometry`, `webgl`, `ciphers`, `life` and `uniscript`; `packages.warp` pins versions
+([use](https://github.com/pannous/warp/wiki/use)).
+
 ## Rust ⇄ Wasm GC round trip
 
 ```rust

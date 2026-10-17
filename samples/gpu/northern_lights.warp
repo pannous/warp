@@ -2,6 +2,7 @@
 # a compute.toys kernel through compute_toy of `use compute_toys` (samples/gpu/lava_lamp.warp shows the simplest):
 # northern lights over a frozen lake. Curtains of light hang from wavy lines that drift and ripple with time, each
 # curtain its own color; stars twinkle behind them, a ridge of hills stands in front, the lake below mirrors it all.
+# The wheel makes the lights stronger or fainter (compute.toys' mouse.zoom).
 use compute_toys
 lights = compute_toy(shader {
 	const CURTAINS = 4;
@@ -50,7 +51,7 @@ lights = compute_toy(shader {
 		}
 		let hues = array<float3, CURTAINS>(float3(0.1, 1.0, 0.45), float3(0.15, 0.8, 0.9), float3(0.6, 0.3, 1.0), float3(1.0, 0.25, 0.5));
 		for (var i = 0; i < CURTAINS; i++) {
-			color += hues[i] * curtain(at, f32(i), t) * 0.6;
+			color += hues[i] * curtain(at, f32(i), t) * 0.6 * clamp(mouse.zoom, 0.2, 3.0);
 		}
 		return color;
 	}
