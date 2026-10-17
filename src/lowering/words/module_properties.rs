@@ -132,7 +132,7 @@ pub fn lower(program: Node) -> Node {
 	// `canvas.width := …` is fine
 	// before tuples::lower the analyzer reads `[p, q] = …` as a definition of p: a destructured name is a value
 	let functions = crate::analyzer::function_definitions(&original).user_functions;
-	let destructured = destructured_names(&original);
+	let destructured = destructured_variables(&original);
 	let values: HashSet<String> = bound_names(&original)
 		.into_iter()
 		.filter(|name| destructured.contains(name) || !functions.contains_key(name))
