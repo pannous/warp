@@ -766,10 +766,11 @@ pub(super) fn with_unit_written(amount: &Node, unit: &str) -> String {
 	}
 }
 
-/// `5`, `(5)`: the amount a unit word binds to
+/// `5`, `(5)`, `5 ± 0.01`: the amount a unit word binds to
 fn is_number_literal(amount: &Node) -> bool {
 	match amount.drop_meta() {
 		Node::Number(_) => true,
+		Node::Key(value, Op::PlusMinus, tolerance) => is_number_literal(value) && is_number_literal(tolerance),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_number_literal(&items[0]),
 		_ => false,
 	}

@@ -32,3 +32,10 @@ fn the_advice_parenthesizes_any_operator() {
 	fails_with(&format!("{SETUP}\ny = (a ?? b) km\ny"), "write (a??b) * 1 km");
 	assert_eq!(shown("(a ?? b) * 1 km"), "1km");
 }
+
+// integrator bounce: a written tolerance `5 ± 0.01` is a number literal too, a unit binds to it
+#[test]
+fn a_written_tolerance_takes_the_unit() {
+	assert_eq!(shown("5 ± 0.01 m"), "5.000 ± 0.010m");
+	fails_with(&format!("{SETUP}\ny = (a ± 0.1) m\ny"), "* 1 m");
+}
