@@ -642,13 +642,6 @@ PASSED:
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_for_header
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_match_arm
   ✓ control::test_rust_inclusive_range::an_inclusive_range_is_the_range_to_its_end
-  ✓ control::test_rust_option::a_function_returns_an_option
-  ✓ control::test_rust_option::a_match_of_some_and_none
-  ✓ control::test_rust_option::a_programs_own_option_method_keeps_its_meaning
-  ✓ control::test_rust_option::if_let_some_binds_the_value
-  ✓ control::test_rust_option::loop_runs_until_break
-  ✓ control::test_rust_option::option_type_is_optional
-  ✓ control::test_rust_option::some_is_the_value_none_is_nothing
   ✓ control::test_schema_cast::a_field_that_does_not_convert_is_named
   ✓ control::test_schema_cast::a_fitting_value_is_itself
   ✓ control::test_schema_cast::a_missing_optional_field_stays_missing
@@ -2584,6 +2577,7 @@ PASSED:
   ✓ modules::test_std_words::json_of_an_instance_given_its_classes
   ✓ modules::test_std_words::math_inverse_and_hyperbolic_words
   ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
+  ✓ modules::test_use_modules::a_module_is_used_as_an_alias
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::a_programs_global_is_not_a_module_functions_local
   ✓ modules::test_use_modules::a_quoted_path_uses_that_file
@@ -2905,8 +2899,6 @@ PASSED:
   ✓ numbers::test_libm_functions::test_cube_root_of_a_runtime_value
   ✓ numbers::test_libm_functions::trigonometry_and_logarithms_from_libm
   ✓ numbers::test_literal_type_words::every_number_type_word_types_a_literal
-  ✓ numbers::test_litre_hectare::a_glued_litre_needs_use_units
-  ✓ numbers::test_litre_hectare::litre_and_hectare_are_units
   ✓ numbers::test_log_base::log_takes_a_base
   ✓ numbers::test_log_exact::a_list_variable_with_a_base_is_the_log_of_each_item
   ✓ numbers::test_log_exact::a_list_with_a_base_is_the_log_of_each_item
@@ -4405,6 +4397,9 @@ PASSED:
   ✓ text::test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic
   ✓ text::test_text_search::a_text_contains_a_text
   ✓ text::test_text_search::a_text_starts_and_ends_with_a_text
+  ✓ text::test_text_slices::a_text_slice_is_its_graphemes
+  ✓ text::test_text_slices::consecutive_slices_of_a_long_text_take_linear_steps
+  ✓ text::test_text_slices::short_texts_read_between_leave_a_long_texts_cursor
   ✓ text::test_text_type_words::every_float_type_word_rounds_an_exact_real
   ✓ text::test_text_type_words::every_text_type_word_calls_the_printable_operation
   ✓ text::test_text_type_words::every_text_type_word_gives_the_text_of_an_exact_real
@@ -5192,6 +5187,7 @@ PASSED:
   ✓ types::test_variant_payloads::a_payload_free_variant_is_its_symbol_and_of_its_type
   ✓ types::test_variant_payloads::a_typed_variable_unwraps_a_single_payload
   ✓ types::test_variant_payloads::an_or_of_a_grouped_operation_keeps_its_right_side
+  ✓ types::test_variant_payloads::payload_fields_by_position
   ✓ types::test_variant_payloads::payload_names_name_the_fields
   ✓ types::test_variant_payloads::rust_style_positions_count_from_zero
   ✓ types::test_widened_list_views::a_bracketed_class_list_is_a_list
@@ -6205,8 +6201,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ modules::test_use_modules::a_module_is_used_as_an_alias
-  ✗ types::test_variant_payloads::payload_fields_by_position
 
 SUMMARY:
-13 ignored, 6202 passed, 2 failed, 6204 total tested
+13 ignored, 6198 passed, 0 failed, 6198 total tested
