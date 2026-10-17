@@ -1,0 +1,5 @@
+# fixture: imports words of two files; its own helper stays in the package
+from tags import tagged
+from palette import shade
+box(x) := tagged("box " + str(shade(x)))
+helper(x) := x
