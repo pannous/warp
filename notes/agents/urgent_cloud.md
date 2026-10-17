@@ -44,7 +44,10 @@ message `[urgent card <key>] <title> | <description>`; between cards you wait.
     live in a minute, the hourly run checks it later). Then watch https://warp.pannous.com/version.js in the background
     (`until curl -s …/version.js | grep -q <commit>; do sleep 30; done`) and tell the user `live: <commit>`, or the
     failed run's step when the workflow fails, and send `live: <card> <commit>` with its try line to warp-interviewer
-    (send_message to its session: list_sessions, the running one titled warp-interviewer), who tells the user (user,
-    2026-10-17). No interviewer running: a PushNotification instead. This session runs on Linux in the cloud, so it
-    has no `say`.
+    (send_message to session_01N8ioY9tJfZGnPmtM9Lazxe, a Remote Control session in the Mac's tmux whose claude.ai title
+    may differ), who tells the user (user, 2026-10-17). Unreachable: send it to warp-supervisor
+    (session_019zLX6up9ferLyQ8brjWu1h, the session sending the cards), which relays. This session runs on Linux in the
+    cloud, so it has no `say`.
+  - A direct push still pushes the card's branch with its report: the cron watcher closes the card itself when the
+    branch tip is already on main.
 - Back to waiting. When main has moved a lot since priming, `git pull` and rebuild before the next card.
