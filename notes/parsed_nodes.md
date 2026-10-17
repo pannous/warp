@@ -14,8 +14,7 @@ needs (notes/self_hosting_readiness.md). Tests: tests/node/test_parsed_node_walk
 - `bracketed([], b)` and `separated([], s)` are ø, the empty list, as `()` parses.
 - `key(l, op, r)` registers its op as a key-operator need, or every op when only the run time knows it, so list_text
   writes `y+z` and not `y:z`.
-- A parameter that gets values of several Node kinds (a symbol and a key) takes a Node (widen_parameters). Before,
-  it stayed an Int and the call emitted `as_code(…)` as a statement ("undefined variable: as_code").
+- A parameter that gets values of several Node kinds (a symbol and a key) takes a Node (widen_parameters).
 - `data f(x) := …` defines nothing: extract_user_functions_in skips quoted data.
 - parse() of a constant text that declares a type is not folded. The run time builds it (TaskValue::Type,
   new_type), because a folded `class P {…}` would read as the program's own type P. A TypeDef prints as
