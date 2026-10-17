@@ -11,13 +11,10 @@
 - Pinned packages: `name: {repository: "git url", version: 1.2.3}` in packages.warp is the git tag `v1.2.3` (or `1.2.3`),
   cloned once per machine into `~/.cache/warp/packages/<name>@1.2.3` and linked as `packages/<name>`; versioned `use`
   (`packages/<name>@<version>`) links the same cache. A tag never changes, so exports, worktrees and test runs never
-  fetch again; raising the pinned version is the update (the stale link is replaced on the next `use`).
-  uniscript is pinned: unpinned, every fresh export cloned the moving default branch (inline-tag warnings, eaten
-  whitespace) and 6-7 of warp's uniscript tests failed there.
+  fetch again; raising the pinned version is the update (the stale link is replaced on the next `use`).  uniscript is pinned: unpinned, every fresh export would clone the moving default branch.
 - uniscript ships its compiled entity data, `data/entities.idx`; warp only reads it and never compiles the
-  `data/entities/**/*.warp` sources. What was slow was compiling `use uniscript` itself: ~8 s per program, almost all
-  of it re-parsing the C headers of m, c and SDL2 for every name the analyzer met (`ffi::get_signatures_from_headers`,
-  `get_ffi_signatures`); parsed once per process now: ~0.9 s, tests/web/test_uniscript.rs 335 s → 24 s.
+  `data/entities/**/*.warp` sources. C headers are parsed once per process
+  (`ffi::get_signatures_from_headers`, `get_ffi_signatures`): `use uniscript` compiles in ~0.9 s.
   A prebuilt uniscript.wasm linked into programs would need cross-module linking (shared memory for $String ptr/len,
   identical GC rec groups); not there yet.
 - Package tools are prebuilt WebAssembly, never built from source into a shared target (src/modules/package_tools.rs):
@@ -25,15 +22,11 @@
   under wasmtime-wasi with the package directory preopened as `.`. One artifact for every OS, no per-platform binaries.
   It comes from `<package>/<name>.wasm`, else the GitHub release asset `<name>.wasm` of the pinned tag (v1.2.3 or 1.2.3),
   else (loudly) `cargo build --target wasm32-wasip1 --bin <name>` with CARGO_TARGET_DIR in the package's own build
-  directory: `~/.cache/warp/packages/<name>@<version>.build` (pinned clone) or `packages/.build/<name>` (anything else).
-  Why: on 2026-10-02 16:54 tests/web/test_uniscript.rs `the_index_matches_the_readable_entities` ran `cargo run --release
-  -- check` inside the fetched ~/.cache/warp/packages/uniscript@1.0.0 without CARGO_TARGET_DIR, so cargo used
-  ~/.cargo/config.toml's shared target-dir and, as the same crate uniscript 1.0.0, overwrote ~/dev/uniscript's binary
-  and rlib (Sublime lost completions; its main.rs compiled against that rlib). With CARGO_TARGET_DIR set, the same
-  `cargo run` would have built the package into warp's own target instead. Never run cargo inside a package directory.
+  directory: `~/.cache/warp/packages/<name>@<version>.build` (pinned clone) or `packages/.build/<name>` (anything else).  Never run cargo inside a package directory: with the shared target-dir, a fetched uniscript of the same crate
+  version overwrites ~/dev/uniscript's binary and rlib.
   uniscript's v1.0.0 release ships uniscript.wasm (4.2 MB): the first run downloads it once per machine, no build.
   A package publishes its tool with `cargo build --release --target wasm32-wasip1 --bin <name>` as release asset <name>.wasm.
-- Libraries (card takes-three, 2026-10-15): `library: "uniscript_c"` in a pinned entry of packages.warp makes `use <name>`
+- Libraries: `library: "uniscript_c"` in a pinned entry of packages.warp makes `use <name>`
   load warp's binding lib/packages/<name>.warp (LIBRARY_BINDINGS, packages.rs) as if it lay beside the library, so its
   `import uniscript_c` calls the core module uniscript_c.wasm with the header uniscript_c.h (texts through its malloc,
   notes/wasm_modules.md). Both come from the package itself or the pinned tag's release assets, downloaded once into the
