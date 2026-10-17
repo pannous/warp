@@ -545,16 +545,17 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Check if this is a statement sequence
-		let is_statement_sequence =
-			is_unbracketed_block(items, bracket, separator) || items.iter().any(|item| is_statement(item, bracket));
+		// A parenthesized comma tuple keeps every computed element, including a grouped control-flow expression.
+		let is_tuple = *separator == Separator::Comma && items.len() > 1;
+		let is_statement_sequence = !(*bracket == Bracket::Round && is_tuple)
+			&& (is_unbracketed_block(items, bracket, separator)
+				|| items.iter().any(|item| is_statement(item, bracket)));
 
 		if is_statement_sequence {
 			self.emit_statement_sequence(func, items, Self::emit_node_instructions);
 		} else {
 			// Check for pure numeric expressions; a square list and a comma tuple `(h + 1, 2)` keep all their items,
 			// whatever they compute
-			let is_tuple = *separator == Separator::Comma && items.len() > 1;
 			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
 			let has_field =
 				items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));

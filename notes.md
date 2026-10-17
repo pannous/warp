@@ -79,3 +79,5 @@
 - 2026-10-17 (warp-parser): object_entries must not take a square list of key: value items as one object: a one-entry map in a list is held as a bare key ([{first: 2}] is [first: 2]), so [a: 1, b: 2] is also a list of one-entry maps; generalising it broke 10 tests (list fields, possessives). Local readings (a held lambda's holder) are fine.
 
 2026-10-17 interviewer: src/extensions.rs texts! Separator::Colon edit (unknown origin, user "fix it") reverted to Comma; backup data/patches/texts-macro-colon-2026-10-17.patch
+
+- 2026-10-17 parenthesized-first: parsing and lowering preserved `((try e else 0), 2)` as a round comma tuple, but inference treated it as the last element's type and list emission treated its control-flow element as a statement sequence. Round comma tuples must be classified and emitted as value collections at both boundaries.
