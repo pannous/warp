@@ -521,7 +521,10 @@ impl Listeners {
 		Listeners {
 			counts: handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect(),
 			// a handler nothing emits is gone: its name binds nothing
-			bound: statements.iter().flat_map(|statement| crate::program_names::Bindings::of(statement).bound()).collect(),
+			bound: statements
+				.iter()
+				.flat_map(|statement| crate::program_names::Bindings::of(statement).bound())
+				.collect(),
 			named,
 		}
 	}
