@@ -128,6 +128,7 @@ pub fn lower(node: Node) -> Node {
 	let mut changing = Changing::default();
 	let statics = static_members(&node);
 	let setters = property_setters(&node);
+	let instance_fields = class_typed_fields(&node);
 	let node = lower_classes(node, &mut changing);
 	let node = if setters.is_empty() { node } else { setter_calls(node, &setters) };
 	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
@@ -136,7 +137,11 @@ pub fn lower(node: Node) -> Node {
 	let node = if shared.is_empty() && changing.is_empty() {
 		node
 	} else {
-		method_calls(node, &shared, &changing, &Counter::starting_at(1))
+		method_calls(
+			node,
+			&MethodCalls { called: &shared, changing: &changing, instance_fields: &instance_fields },
+			&Counter::starting_at(1),
+		)
 	};
 	match (traits.is_empty(), node) {
 		(true, node) => node,
@@ -551,9 +556,11 @@ fn trait_operation(declaration: &Node) -> Option<String> {
 
 /// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`; of a method changing its object, on a variable,
 /// the update `x = m(x, args)`; each call's pair is a temp of its own, `pop·result·1`, so a call inside a method shares
-/// no name with one in main
-fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Counter) -> Node {
-	let recurse = |child: Node| method_calls(child, called, changing, calls);
+/// no name with one in main. A library word's method on a field of no declared class (`items.pop()` in
+/// `pop() := items.pop()`) stays the library word
+fn method_calls(node: Node, methods: &MethodCalls, calls: &Counter) -> Node {
+	let MethodCalls { called, changing, instance_fields } = methods;
+	let recurse = |child: Node| method_calls(child, methods, calls);
 	let Node::Key(receiver, Op::Dot, member) = node else {
 		return node.map_children(recurse);
 	};
@@ -565,7 +572,9 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Coun
 		}
 		_ => return key(receiver, Op::Dot, recurse(*member)),
 	};
-	if !called.contains(&name) && !changing.contains(&name) {
+	let library_call_on_field = is_library_method(&name)
+		&& matches!(receiver.drop_meta(), Node::Key(_, Op::Dot, field) if !instance_fields.contains(&field.drop_meta().name()));
+	if library_call_on_field || !called.contains(&name) && !changing.contains(&name) {
 		return key(receiver, Op::Dot, recurse(*member));
 	}
 	let call = parens([Node::Symbol(name.clone()), receiver.clone()].into_iter().chain(arguments).collect());
@@ -588,6 +597,30 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Coun
 		Node::Symbol(_) if changing.itself.contains(&name) => key(receiver, Op::Assign, call),
 		_ => call,
 	}
+}
+
+/// What method_calls rewrites: the shared methods, the changing ones, and the fields that may hold an instance
+struct MethodCalls<'a> {
+	called: &'a [String],
+	changing: &'a Changing,
+	instance_fields: &'a [String],
+}
+
+/// The fields some class declares with a class type (`top: Node`, not `items: list`, `[Point]` or `items = []`)
+fn class_typed_fields(node: &Node) -> Vec<String> {
+	let mut fields = vec![];
+	node.visit(&mut |part| {
+		if let Node::Type { body, .. } = part {
+			for item in class_items(body).iter().filter(|item| method_parts(item).is_none()) {
+				let type_name = field_type_name(item);
+				let is_class = !type_name.is_empty()
+					&& !type_name.starts_with('[')
+					&& crate::type_tests::builtin_type_name(&type_name).is_none();
+				fields.extend(declared_field_name(item).filter(|_| is_class));
+			}
+		}
+	});
+	fields
 }
 
 /// The methods changing their object: those giving it back (`inc() := n += 1`) and those giving a value besides
