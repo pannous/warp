@@ -6,9 +6,10 @@ needs (notes/self_hosting_readiness.md). Tests: tests/node/test_parsed_node_walk
 - Code is marked as code only in its top node (as_code, type_kinds::CODE_MARK). The joins (list_join, list_text)
   test atoms by their whole kind field, so a marked atom or type declaration joins as its unmarked form
   (text_builtins::emit_without_code_mark). Only MARKED_CODE_FORMS are tested: a time keeps its own info in those bits.
-- `emit_is_map`: a curly list marked as code is no map. Code-typed subjects skip the "a map is no list" exclusion,
-  so `parse("{a; b}") is list`. A curly group deeper in the tree is still a map at run time (card curly-group).
-  `n.bracket != ø` is the group test that holds at every depth.
+- node_is_map: a curly list marked as code is no map, nor is one that doesn't begin with a pair (card
+  replace-quoted-block). Code-typed subjects skip the "a map is no list" exclusion, so `parse("{a: b}") is list`.
+  A `{a: b}` deeper in the tree is still a map at run time (card curly-group). `n.bracket != ø` is the group test
+  that holds at every depth.
 - `n.bracket` and `n.separator` of a node that is no group are ø, not "no field".
 - `bracketed([], b)` and `separated([], s)` are ø, the empty list, as `()` parses.
 - `key(l, op, r)` registers its op as a key-operator need, or every op when only the run time knows it, so list_text
