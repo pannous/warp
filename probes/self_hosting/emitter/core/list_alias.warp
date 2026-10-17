@@ -1,0 +1,7 @@
+names = ["hi"]
+f(xs) := xs.add("yo")
+f(names)
+ys = names
+ys += ["z", 3]
+print #names
+names

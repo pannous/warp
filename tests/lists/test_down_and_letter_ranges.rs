@@ -24,3 +24,11 @@ fn a_range_from_an_undefined_name_names_it() {
 	fails_with("r = x to 3; r", "undefined variable: x");
 	fails_with("for i in x to 3 { print i }", "undefined variable: x");
 }
+
+#[test]
+fn a_for_loop_down_to_counts_without_a_list() {
+	let lowered = warp::pipeline::lower("for i in 5 down to 1 { print i }").expect("a program").serialize();
+	assert!(!lowered.contains("reverse") && lowered.contains("i>=1") && lowered.contains("i--"), "{lowered}");
+	is!("s = 0; for i in 2 down to 3 { s = 9 }; s", 0);
+	is!("hi = 4; lo = 2; s = 0; for i in hi - 1 down to lo { s = s * 10 + i }; s", 32);
+}

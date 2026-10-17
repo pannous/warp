@@ -19,3 +19,11 @@ lowered_node(n: any) := {
 
 # the source text as the passes leave it, as its view
 lowered(source: text) := view_of(lowered_node(node_of(plain(tree(source)))))
+
+# One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
+# parse tree's view, [i, view] the view after passes#i
+stage(request: any) := {
+	if request#1 == 0 { return plain(tree(request#2)) }
+	pass = passes#(request#1)
+	view_of(pass(node_of(request#2)))
+}

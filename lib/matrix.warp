@@ -1,18 +1,17 @@
 // The standard library matrix module (notes/stdlib.md): `use matrix`. A matrix is a list of rows: m[i][j] (m#i#j)
-// reads and writes an element, printing and equality are those of lists. Locals are `var`: a program's own m or row stays
-// apart from them
-matrix(r, c, f) := { var m = []; for i in 1 to r { var row = []; for j in 1 to c { row = row + [f()] }; m = m + [row] }; m }
-filled_matrix(r, c, v) := { var m = []; for i in 1 to r { var row = []; for j in 1 to c { row = row + [v] }; m = m + [row] }; m }
+// reads and writes an element, printing and equality are those of lists
+matrix(r, c, f) := [[f() for j in 1 to c] for i in 1 to r]
+filled_matrix(r, c, v) := [[v for j in 1 to c] for i in 1 to r]
 zeros(r, c) := filled_matrix(r, c, 0)
 ones(r, c) := filled_matrix(r, c, 1)
-random_matrix(r, c) := { var m = []; for i in 1 to r { var row = []; for j in 1 to c { row = row + [random()] }; m = m + [row] }; m }
-identity(n) := { var m = []; for i in 1 to n { var row = []; for j in 1 to n { row = row + [if i == j then 1 else 0] }; m = m + [row] }; m }
+random_matrix(r, c) := [[random() for j in 1 to c] for i in 1 to r]
+identity(n) := [[if i == j then 1 else 0 for j in 1 to n] for i in 1 to n]
 rows(m) := count(m)
 cols(m) := count(m#1)
 shape(m) := [rows(m), cols(m)]
-transpose(m) := { var t = []; for j in 1 to cols(m) { var row = []; for i in 1 to rows(m) { row = row + [m#i#j] }; t = t + [row] }; t }
-matrix_add(a, b) := { var m = []; for i in 1 to rows(a) { var row = []; for j in 1 to cols(a) { row = row + [a#i#j + b#i#j] }; m = m + [row] }; m }
-scale(m, k) := { var out = []; for i in 1 to rows(m) { var row = []; for j in 1 to cols(m) { row = row + [k * m#i#j] }; out = out + [row] }; out }
-map_matrix(m, f) := { var out = []; for i in 1 to rows(m) { var row = []; for j in 1 to cols(m) { row = row + [f(m#i#j)] }; out = out + [row] }; out }
-dot(u, v) := { var s = 0; for i in 1 to count(u) { s = s + u#i * v#i }; s }
-matmul(a, b) := { var m = []; for i in 1 to rows(a) { var row = []; for j in 1 to cols(b) { var s = 0; for k in 1 to cols(a) { s = s + a#i#k * b#k#j }; row = row + [s] }; m = m + [row] }; m }
+transpose(m) := [[m#i#j for i in 1 to rows(m)] for j in 1 to cols(m)]
+map_matrix(m, f) := [[f(x) for x in row] for row in m]
+matrix_add(a, b) := [[a#i#j + b#i#j for j in 1 to cols(a)] for i in 1 to rows(a)]
+scale(m, k) := map_matrix(m, x => k * x)
+dot(u, v) := sum([u#i * v#i for i in 1 to count(u)])
+matmul(a, b) := [[sum([a#i#k * b#k#j for k in 1 to cols(a)]) for j in 1 to cols(b)] for i in 1 to rows(a)]

@@ -1055,8 +1055,7 @@ def with_glued_factor(p, amount) {
 	["key", "*", amount, if power == ø then factor else power]
 }
 
-// `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5 (Rust keeps a lone ² or ³ as its own operator:
-// notes/self_hosting_dropped.md Deviations square-cube):
+// `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
 // the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
 // Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
 def superscript_power(p, left, min_power) {

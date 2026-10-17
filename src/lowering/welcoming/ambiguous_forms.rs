@@ -371,7 +371,7 @@ fn is_number_or_text(node: &Node) -> bool {
 /// `2⁻¹`, `2²`, `3+1`: arithmetic of numbers
 fn is_arithmetic_of_values(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(left, op, right) if ARITHMETIC.contains(op) || matches!(op, Op::Square | Op::Cube) => {
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) => {
 			(left.is_empty_node() || is_number_or_text(left) || is_arithmetic_of_values(left))
 				&& (right.is_empty_node() || is_number_or_text(right) || is_arithmetic_of_values(right))
 		}

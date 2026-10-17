@@ -10,4 +10,6 @@ pub mod function;
 pub mod function_equality;
 pub mod local;
 pub mod meta;
+pub mod node_views;
 pub mod run_time_blocks;
+pub mod self_hosted;
