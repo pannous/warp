@@ -268,8 +268,12 @@ Load order (lib-from-runtime, landed with zero-fill-lib): code generation that c
 named, through `compiler_word(word)` (a call it writes, `n times [x]` → filled_list) or a late_call whose callee is
 missing, notes the word; pipeline::loading_compiler_words then compiles once more with resolve loading it (hints muted).
 The second compile is a safety net, not the plan: with it alone 13 of 216 samples compiled twice (~7% of compile time),
-so each move also adds an implied_words scan of the forms that need its word (filled_lists.rs: none twice). Loading
-the prelude costs a small program ~0.4 s (debug CLI), so a scan must not load words a program cannot need.
+so each move also adds an implied_words scan of the forms that need its word (filled_lists.rs: none twice).
+Measured cost (2026-10-17, quick-release, thread CPU of the lowering; cards cache-lowered, parse-once): a small program
+4 ms, with one function of its own 11 ms, with one prelude word 22 ms (the prelude parse 8 ms, the reach look-ahead
+4 ms, the word itself as an own function). So a scan must not load words a program cannot need, and a runtime function
+that nearly every program carries stays Rust until lowered prelude words are cached across runs: exact_text (any int
+arithmetic links ratio_new, so its printer) stays, `as decimal`'s decimal_text moved (card exact-text-warp).
 Speed is the main risk: ratio_new, contains and min/max are hot; each move measures against the builtin first (as the
 text search words above).
 

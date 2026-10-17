@@ -63,6 +63,29 @@ place_text(x: float, scale: float, decimals: int) := {
 	while #fraction < decimals { fraction = (digits % 10 + 48) as char + fraction; digits = digits /! 10 }
 	sign + to_base(digits, 10) + "." + fraction
 }
+// `x as decimal` of a ratio (card repeating-decimals): the digits before the period, then the period's overlined, 1/6
+// is 0.16̅; a terminating decimal, or a period longer than 1000 digits, as the ratio prints. The cast calls it with the
+// ratio's parts, the denominator never 0 (wasm_emitter/numbers/exact.rs)
+decimal_text(numerator: int, denominator: int) := {
+	rest = denominator; twos = 0; fives = 0
+	while rest % 2 == 0 { rest = rest /! 2; twos += 1 }
+	while rest % 5 == 0 { rest = rest /! 5; fives += 1 }
+	if rest == 1 { return "\(numerator / denominator)" }
+	// the period: the first power of ten that is 1 modulo the rest
+	power = 10 % rest; period = 1
+	while power != 1 and period <= 1000 { power = power * 10 % rest; period += 1 }
+	if period > 1000 { return "\(numerator / denominator)" }
+	before_period = if twos > fives then twos else fives
+	whole = abs(numerator)
+	text = (if numerator < 0 then "-" else "") + "\(whole /! denominator)."
+	remainder = whole % denominator
+	for digit in 1 to before_period + period {
+		remainder = remainder * 10
+		text = text + "\(remainder /! denominator)" + (if digit > before_period then "̅" else "")
+		remainder = remainder % denominator
+	}
+	text
+}
 // x as a fraction, by its continued fraction (src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
