@@ -1,12 +1,10 @@
 # Module manager: the sketch (card module-manager)
 
-samples/modules/modules.warp was this sketch of a module system, from the warp repo. It ended in an uncaught error through
-the CLI (card samples-uncaught), so the sample now shows the module forms that work, and the sketch lives here as
-input for card module-manager. What it needs, as found on 2026-10-09:
-- `module name { … }` blocks, nested ones, and `graphics.colors.red` into them: `module` is an undefined variable.
-- `use super.colors` inside a nested module: "module not found: super.colors".
-- `use { sin, cos, pi } from math` works but warns "[FFI] No functions found for library 'sin'".
-- `use math as m`: `m.sqrt(16)` reads m as the unit metre (DimensionError).
+The module system sketched below is input for card module-manager (samples/modules/modules.warp shows the forms that
+work). Working: `use math`, `use { sin, cos } from math`, `use math as m; m.sqrt(16)`. Missing (checked 2026-10-17):
+- `module name { … }` blocks, nested ones, and `graphics.colors.red` into them (`module colors { red = 1 };
+  colors.red` is "no field red").
+- `use super.colors` inside a nested module.
 - `use * from utils`: "undefined variable: use".
 - `use geometry as geo`, `use platform.windows if os == "windows"`: taken as C libraries ("[FFI] No functions found").
 - `def _helper() := ...`: "Unexpected character '.'" (`...` as a placeholder body).

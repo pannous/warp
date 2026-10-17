@@ -1,18 +1,18 @@
-# Multi-value results (branch multi-value, 2026-10-03)
+# Multi-value results
 
 User functions return the general Node, so multi-value pays off only inside the runtime helpers, where a helper
 naturally produces two numbers. Tests: tests/functions/test_multi_value.rs (result counts read from the name section, results of
 big division and exact division, an optimized module through wasm-opt).
 
-## Survey: where two values travel today
-| place | before | now |
-|---|---|---|
-| `mag_divmod` (big_int.rs) | quotient as result, remainder in the global `int_remainder_global` (comment: "wasm-opt runs without multivalue") | returns `(quotient, remainder)`; the global is gone |
-| `big_quot` / `big_rem` | two functions, each one long division, reading the global | one `big_divmod(a, b) -> (q, r)` |
-| `int_quot_slow` / `int_rem_slow` | one long division each | thin wrappers over `int_divmod_slow(a, b) -> (q, r)` that drop one result |
-| `exact_div` on big integers | cross products, then `ratio_new` → `int_gcd` (an Euclid loop of big divisions) and two quotients, even when b divides a | one `int_divmod_slow`; zero remainder → the quotient, else the old ratio path |
-| host imports `fetch`, `fetch_within`, `read` | already `(ptr, len)` as two i32 results | unchanged |
-| `wasm_optimizer.rs` BINARYEN_FEATURES | no multivalue | `--enable-multivalue` |
+## Where two values travel
+| place | two results |
+|---|---|
+| `mag_divmod` (big_int.rs) | `(quotient, remainder)` |
+| `big_divmod(a, b)` | `(q, r)`, one long division for both |
+| `int_quot_slow` / `int_rem_slow` | thin wrappers over `int_divmod_slow(a, b) -> (q, r)` that drop one result |
+| `exact_div` on big integers | one `int_divmod_slow`; zero remainder → the quotient, else the ratio path (gcd) |
+| host imports `fetch`, `fetch_within`, `read` | `(ptr, len)` as two i32 results |
+| `wasm_optimizer.rs` BINARYEN_FEATURES | `--enable-multivalue` |
 
 Left as is, and why:
 - `int_heap_global` / `int_count_global`, the text heap and list heap globals, `try_guard`'s depth/caught globals:
@@ -40,11 +40,11 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
   3 bytes smaller; it mainly removes a global and lets wasm-opt see the data flow.
 - The win comes from what a two-result division enables: `f /! 10` is `(f - f%10)/10`, and the exact division of a big
   integer used to run a gcd loop of big divisions before ratio_new; now it is one divmod. About -26 % on this program.
-- Done 2026-10-04 (night): `a /! b` (then spelled `a//b`) is the pseudo-call `floor_quotient(a, b)` (warp_parser.rs `floor_division`), emitted
+- `a /! b` is the pseudo-call `floor_quotient(a, b)` (warp_parser.rs `floor_division`), emitted
   as `exact_euclid_div` (exact_div, then exact_floor; ceil for a negative divisor) or the f64 quotient rounded the same
   way: each operand evaluated once. Building it on `int_divmod_slow` directly would save the gcd of exact_div.
 
-## Tuple returns (branch tuple-returns, user decision "yes")
+## Tuple returns
 `return a, b` and `x, y = f()` (src/lowering/types/tuples.rs lowers, src/wasm_emitter/lists/tuple_emitter.rs emits; tests/functions/test_tuple_returns.rs).
 - Parsing: the comma binds loosest, so `f() := return 1, 2` arrives as `(f() := return 1), 2` and `x, y = f()` as
   `x, (y = f())`. tuples::lower (first lowering) regroups them into `return 1 2` and `$destructure (x, y) f()`.
