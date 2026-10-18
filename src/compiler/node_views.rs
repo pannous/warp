@@ -189,6 +189,8 @@ fn without_layers(view: Node, dropped: &[&str]) -> Node {
 		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
 			Some(kind) if dropped.contains(&kind) => without_layers(items.pop().unwrap_or(Node::Empty), dropped),
 			Some("list") if items.len() == 3 => Node::Empty,
+			// an error and a type are opaque to a pass twin: kept whole, `class P {}` keeps its empty body and attributes
+			Some("type" | "error") => Node::List(items, bracket, separator),
 			Some("char") => {
 				items[0] = Node::text("text");
 				Node::List(items, bracket, separator)
