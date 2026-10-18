@@ -178,10 +178,11 @@ Each step is useful on its own and is what the next ones stand on.
   attribute (`hreff:`, shown as text; fix the near attribute, else `data-…`), a handler of no page event (`on clik`), an
   input type the browser does not know (`nubmer`), content of a void element (`img{ "x" }`, dropped). Handlers are taken
   out of an element's items first, so `input{ on input {…} }` no longer reads its event as a nested input.
-- Options from a list (card select-shorthand, select_options.rs, a source pass before markup_tags): a list item in a
-  select is one `option{}` per value (`select{ bind: fruit; ["apple" "pear"] }`), a map item `"s": "small"` the option
-  `option{ value: "s" "small" }`, a list variable `select{ fruits }` the loop `for … in fruits { option{…} }`. A list
-  right after the bound variable (`bind: fruit ["apple" "pear"]`) is split off it, no longer glued into the value.
+- Options from a list (card select-shorthand): lib/markup.warp renders what a select holds besides elements as its
+  options (html_options), one `<option>` per value (`select{ bind: fruit; ["apple" "pear"] }`, a list variable
+  `select{ fruits }`, plain `select{ "apple" "pear" }`), a pair `"s": "small"` the option `value="s"` labelled small.
+  No compiler pass (decisions.md markup-plain-library). A line of pairs before more items (`bind: fruit aria-label:
+  "f"` then `[…]`) still binds: lower_binds reads the line's pairs as items.
 - `bind:` inside a component (card web-bind-component): element_events::lower_binds spells binds out before
   component_state, which then keeps the bound variable per instance like any handler's. Sample
   samples/web/component_binding.warp.

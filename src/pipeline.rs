@@ -122,7 +122,9 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
 	// `post "/todos" { … }` as a route
 	crate::lowering::markup_tags::lower_form_routes,
-	crate::lowering::markup_tags::lower_html_attributes,
+	// `a{ href="/about" "About" }`, `Person{ class = "a" }`: `=` in a data block is an entry (tag_entries.rs), before
+	// soft_keywords reads `class = …` as a definition
+	crate::lowering::tag_entries::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::lowering::soft_keywords::lower,
 	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
@@ -171,12 +173,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
 	crate::lowering::lambdas::lower_member_lambdas,
-	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options
-	// of a select are read
-	crate::lowering::glued_attributes::lower,
-	// `select{ bind: fruit; ["apple" "pear"] }`: its options spelled out (select_options.rs), before markup_tags makes the
-	// loop over a list variable's options a comprehension and any pass reads the bind
-	crate::lowering::select_options::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::lowering::markup_tags::lower,
