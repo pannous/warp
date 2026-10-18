@@ -68,7 +68,11 @@ pub(crate) fn warn_replaced(
 	let mut warned = HashSet::new();
 	for definition in definitions {
 		let Some((head, _, _)) = crate::type_tests::function_definition(definition) else { continue };
-		let Some(name) = leftmost_symbol(&head) else { continue };
+		// the compiler's own functions (`go·block·1` of a go block) are each code's own, nobody wrote them
+		let Some(name) = leftmost_symbol(&head).filter(|name| !name.contains(crate::analyzer::TEMPORARY_SEPARATOR))
+		else {
+			continue;
+		};
 		let Some(replacing) = words.replacing(&name, head_arities(&head)) else { continue };
 		if warned.insert(name.clone()) {
 			let replaced = signature(&name, &head);

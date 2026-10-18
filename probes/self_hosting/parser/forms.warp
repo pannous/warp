@@ -159,3 +159,7 @@ is_post(m: symbol) := m == :post
 is_post(:post)
 methods = [:get, :post]
 size([]) := 0
+func add1(x int) int { return x + 1 }
+scaled(int k, s Shape) := k
+tail_of(vararg xs) := xs
+padded(int b = 2) := b

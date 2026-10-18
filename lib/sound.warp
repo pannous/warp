@@ -10,12 +10,19 @@ global loudness = 0.3 as float
 global wave_shape = "sine"
 // `as float`: a float assigned later (loudness = -6 dB) stays readable in the functions (card float-global)
 global note_seconds = 0.5 as float
-// beats per minute: `play(C4, 1/4 beat)`, `melody([C4 E4], 1/8 beat)`, `sleep 1 bar` (src/lowering/music_words.rs);
+// beats per minute: `play(C4, beat(1/4))`, `melody([C4 E4], beat(1/8))`, `sleep bar 1`;
 // a float, so `tempo *= 1.05` a round stays short instead of an exact ratio growing digits (card exact-tempo-growth)
 global tempo = 120 as float
 global beats_per_bar = 4
 beat_seconds(beats) := beats * 60.0 / tempo
 bar_seconds(bars) := beat_seconds(bars * beats_per_bar)
+// the words of music (decision music-plain-library): `beats 2`, `bar 1` are seconds at the tempo, `dB -6` the gain
+// factor of decibels
+beat(n) := beat_seconds(n)
+beats(n) := beat_seconds(n)
+bar(n) := bar_seconds(n)
+bars(n) := bar_seconds(n)
+dB(level) := decibels(level)
 // the samples cross to the host as whole numbers ≥ 0: amplitude + 32768 (src/sound/mod.rs SAMPLE_OFFSET), a stereo sound's
 // interleaved left, right
 sample_offset = 32768
@@ -32,8 +39,254 @@ scale_letters = "C.D.EF.G.A.B"
 global tuning = 440.0 as float
 
 // the frequency of MIDI note n (C4 is 60) at the tuning, equal-tempered, to a hundredth of a Hz as tables write it
-// (C4 = 261.63): a note name lowers to it (src/lowering/music_words.rs)
+// (C4 = 261.63)
 midi_hertz(n) := round(tuning * 2 ^ ((n - 69) / 12) * 100) / 100
+// the note names (decision music-plain-details): a letter, a sharp (♯ or s) or flat (b or ♭) and an octave 0–8 is its MIDI
+// note's frequency at the tuning, `play F♯4`, `melody [C4 Eb4 G4]`; charged, so `tuning = 432` retunes them; the text
+// "F#4" names a note too (note_hertz), and so does F#4 itself (PitchClass)
+C0 := midi_hertz(12)
+D0 := midi_hertz(14)
+E0 := midi_hertz(16)
+F0 := midi_hertz(17)
+G0 := midi_hertz(19)
+A0 := midi_hertz(21)
+B0 := midi_hertz(23)
+C♯0 := midi_hertz(13)
+Cs0 := C♯0
+D♯0 := midi_hertz(15)
+Ds0 := D♯0
+F♯0 := midi_hertz(18)
+Fs0 := F♯0
+G♯0 := midi_hertz(20)
+Gs0 := G♯0
+A♯0 := midi_hertz(22)
+As0 := A♯0
+Db0 := midi_hertz(13)
+D♭0 := Db0
+Eb0 := midi_hertz(15)
+E♭0 := Eb0
+Gb0 := midi_hertz(18)
+G♭0 := Gb0
+Ab0 := midi_hertz(20)
+A♭0 := Ab0
+Bb0 := midi_hertz(22)
+B♭0 := Bb0
+C1 := midi_hertz(24)
+D1 := midi_hertz(26)
+E1 := midi_hertz(28)
+F1 := midi_hertz(29)
+G1 := midi_hertz(31)
+A1 := midi_hertz(33)
+B1 := midi_hertz(35)
+C♯1 := midi_hertz(25)
+Cs1 := C♯1
+D♯1 := midi_hertz(27)
+Ds1 := D♯1
+F♯1 := midi_hertz(30)
+Fs1 := F♯1
+G♯1 := midi_hertz(32)
+Gs1 := G♯1
+A♯1 := midi_hertz(34)
+As1 := A♯1
+Db1 := midi_hertz(25)
+D♭1 := Db1
+Eb1 := midi_hertz(27)
+E♭1 := Eb1
+Gb1 := midi_hertz(30)
+G♭1 := Gb1
+Ab1 := midi_hertz(32)
+A♭1 := Ab1
+Bb1 := midi_hertz(34)
+B♭1 := Bb1
+C2 := midi_hertz(36)
+D2 := midi_hertz(38)
+E2 := midi_hertz(40)
+F2 := midi_hertz(41)
+G2 := midi_hertz(43)
+A2 := midi_hertz(45)
+B2 := midi_hertz(47)
+C♯2 := midi_hertz(37)
+Cs2 := C♯2
+D♯2 := midi_hertz(39)
+Ds2 := D♯2
+F♯2 := midi_hertz(42)
+Fs2 := F♯2
+G♯2 := midi_hertz(44)
+Gs2 := G♯2
+A♯2 := midi_hertz(46)
+As2 := A♯2
+Db2 := midi_hertz(37)
+D♭2 := Db2
+Eb2 := midi_hertz(39)
+E♭2 := Eb2
+Gb2 := midi_hertz(42)
+G♭2 := Gb2
+Ab2 := midi_hertz(44)
+A♭2 := Ab2
+Bb2 := midi_hertz(46)
+B♭2 := Bb2
+C3 := midi_hertz(48)
+D3 := midi_hertz(50)
+E3 := midi_hertz(52)
+F3 := midi_hertz(53)
+G3 := midi_hertz(55)
+A3 := midi_hertz(57)
+B3 := midi_hertz(59)
+C♯3 := midi_hertz(49)
+Cs3 := C♯3
+D♯3 := midi_hertz(51)
+Ds3 := D♯3
+F♯3 := midi_hertz(54)
+Fs3 := F♯3
+G♯3 := midi_hertz(56)
+Gs3 := G♯3
+A♯3 := midi_hertz(58)
+As3 := A♯3
+Db3 := midi_hertz(49)
+D♭3 := Db3
+Eb3 := midi_hertz(51)
+E♭3 := Eb3
+Gb3 := midi_hertz(54)
+G♭3 := Gb3
+Ab3 := midi_hertz(56)
+A♭3 := Ab3
+Bb3 := midi_hertz(58)
+B♭3 := Bb3
+C4 := midi_hertz(60)
+D4 := midi_hertz(62)
+E4 := midi_hertz(64)
+F4 := midi_hertz(65)
+G4 := midi_hertz(67)
+A4 := midi_hertz(69)
+B4 := midi_hertz(71)
+C♯4 := midi_hertz(61)
+Cs4 := C♯4
+D♯4 := midi_hertz(63)
+Ds4 := D♯4
+F♯4 := midi_hertz(66)
+Fs4 := F♯4
+G♯4 := midi_hertz(68)
+Gs4 := G♯4
+A♯4 := midi_hertz(70)
+As4 := A♯4
+Db4 := midi_hertz(61)
+D♭4 := Db4
+Eb4 := midi_hertz(63)
+E♭4 := Eb4
+Gb4 := midi_hertz(66)
+G♭4 := Gb4
+Ab4 := midi_hertz(68)
+A♭4 := Ab4
+Bb4 := midi_hertz(70)
+B♭4 := Bb4
+C5 := midi_hertz(72)
+D5 := midi_hertz(74)
+E5 := midi_hertz(76)
+F5 := midi_hertz(77)
+G5 := midi_hertz(79)
+A5 := midi_hertz(81)
+B5 := midi_hertz(83)
+C♯5 := midi_hertz(73)
+Cs5 := C♯5
+D♯5 := midi_hertz(75)
+Ds5 := D♯5
+F♯5 := midi_hertz(78)
+Fs5 := F♯5
+G♯5 := midi_hertz(80)
+Gs5 := G♯5
+A♯5 := midi_hertz(82)
+As5 := A♯5
+Db5 := midi_hertz(73)
+D♭5 := Db5
+Eb5 := midi_hertz(75)
+E♭5 := Eb5
+Gb5 := midi_hertz(78)
+G♭5 := Gb5
+Ab5 := midi_hertz(80)
+A♭5 := Ab5
+Bb5 := midi_hertz(82)
+B♭5 := Bb5
+C6 := midi_hertz(84)
+D6 := midi_hertz(86)
+E6 := midi_hertz(88)
+F6 := midi_hertz(89)
+G6 := midi_hertz(91)
+A6 := midi_hertz(93)
+B6 := midi_hertz(95)
+C♯6 := midi_hertz(85)
+Cs6 := C♯6
+D♯6 := midi_hertz(87)
+Ds6 := D♯6
+F♯6 := midi_hertz(90)
+Fs6 := F♯6
+G♯6 := midi_hertz(92)
+Gs6 := G♯6
+A♯6 := midi_hertz(94)
+As6 := A♯6
+Db6 := midi_hertz(85)
+D♭6 := Db6
+Eb6 := midi_hertz(87)
+E♭6 := Eb6
+Gb6 := midi_hertz(90)
+G♭6 := Gb6
+Ab6 := midi_hertz(92)
+A♭6 := Ab6
+Bb6 := midi_hertz(94)
+B♭6 := Bb6
+C7 := midi_hertz(96)
+D7 := midi_hertz(98)
+E7 := midi_hertz(100)
+F7 := midi_hertz(101)
+G7 := midi_hertz(103)
+A7 := midi_hertz(105)
+B7 := midi_hertz(107)
+C♯7 := midi_hertz(97)
+Cs7 := C♯7
+D♯7 := midi_hertz(99)
+Ds7 := D♯7
+F♯7 := midi_hertz(102)
+Fs7 := F♯7
+G♯7 := midi_hertz(104)
+Gs7 := G♯7
+A♯7 := midi_hertz(106)
+As7 := A♯7
+Db7 := midi_hertz(97)
+D♭7 := Db7
+Eb7 := midi_hertz(99)
+E♭7 := Eb7
+Gb7 := midi_hertz(102)
+G♭7 := Gb7
+Ab7 := midi_hertz(104)
+A♭7 := Ab7
+Bb7 := midi_hertz(106)
+B♭7 := Bb7
+C8 := midi_hertz(108)
+D8 := midi_hertz(110)
+E8 := midi_hertz(112)
+F8 := midi_hertz(113)
+G8 := midi_hertz(115)
+A8 := midi_hertz(117)
+B8 := midi_hertz(119)
+C♯8 := midi_hertz(109)
+Cs8 := C♯8
+D♯8 := midi_hertz(111)
+Ds8 := D♯8
+F♯8 := midi_hertz(114)
+Fs8 := F♯8
+G♯8 := midi_hertz(116)
+Gs8 := G♯8
+A♯8 := midi_hertz(118)
+As8 := A♯8
+Db8 := midi_hertz(109)
+D♭8 := Db8
+Eb8 := midi_hertz(111)
+E♭8 := Eb8
+Gb8 := midi_hertz(114)
+G♭8 := Gb8
+Ab8 := midi_hertz(116)
+A♭8 := Ab8
+Bb8 := midi_hertz(118)
+B♭8 := Bb8
 // the MIDI note nearest a frequency: midi(C4) is 60, midi(440Hz) 69
 midi(pitch) := plain_midi(si_amount(pitch))
 // the units go first: a quantity tested against a class fails (card quantity-is-class)
@@ -67,6 +320,18 @@ class Note {
 	minus(semitones) := plus(-semitones)
 	equals(o) := o is Note and key == o.key and cents == o.cents
 }
+// `F#4` (decision music-plain-details): a letter is its pitch class, indexed by an octave its sharp note there, F♯4
+class PitchClass {
+	key: int
+	index(octave) := midi_hertz(12 * (octave + 1) + key + 1)
+}
+C = PitchClass(0)
+D = PitchClass(2)
+E = PitchClass(4)
+F = PitchClass(5)
+G = PitchClass(7)
+A = PitchClass(9)
+B = PitchClass(11)
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
 note(pitch) := nearest_note(hertz_of(pitch))
 nearest_note(frequency) := {
@@ -83,16 +348,16 @@ transposed(frequency, semitones) := {
 	if midi_hertz(key) == frequency and semitones is int then midi_hertz(key + semitones) else frequency * 2 ^ (semitones / 12)
 }
 // the semitones of a chord's notes above its root, and of a scale's up to its octave: chord(C4, major7), scale(D4, dorian)
-// (a kind word the program doesn't define is its text, src/lowering/music_words.rs)
+// (a kind word the program doesn't define is its symbol)
 chord_intervals = {major: [0, 4, 7], minor: [0, 3, 7], diminished: [0, 3, 6], augmented: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7], seventh: [0, 4, 7, 10], major7: [0, 4, 7, 11], minor7: [0, 3, 7, 10], diminished7: [0, 3, 6, 9]}
 scale_intervals = {major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 10, 12], ionian: [0, 2, 4, 5, 7, 9, 11, 12], dorian: [0, 2, 3, 5, 7, 9, 10, 12], phrygian: [0, 1, 3, 5, 7, 8, 10, 12], lydian: [0, 2, 4, 6, 7, 9, 11, 12], mixolydian: [0, 2, 4, 5, 7, 9, 10, 12], aeolian: [0, 2, 3, 5, 7, 8, 10, 12], locrian: [0, 1, 3, 5, 6, 8, 10, 12], pentatonic: [0, 2, 4, 7, 9, 12], minor_pentatonic: [0, 3, 5, 7, 10, 12], blues: [0, 3, 5, 6, 7, 10, 12], chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
 chord(root, kind) := transpose_each(root, chord_intervals[kind])
 scale(root, kind) := transpose_each(root, scale_intervals[kind])
 transpose_each(root, intervals) := [transpose(root, i) for i in intervals]
-// the gain factor of decibels: loudness = -6 dB is about half (src/lowering/music_words.rs reads `-6 dB`)
+// the gain factor of decibels: loudness = dB(-6) is about half
 decibels(level) := 10 ^ (level / 20.0)
-// note names (C4, F#4, Bb3, any octave 0–9) are their frequencies in a program that uses sound: the compiler parses them
-// (src/lowering/music_words.rs), as note(name) does at run time
+// note names (C4, F♯4 or Fs4, B♭3 or Bb3, octaves 0–8) are the constants of their frequencies below; note("F#4") reads
+// a note's text at run time
 
 // one wave at phase p (0 to 1) of its period, from -1 to 1, a sample advancing the phase by dt; the jumps of square
 // and sawtooth are band-limited (card reason-beep), sharp without dt
@@ -279,7 +544,10 @@ plain_hertz(pitch) := {
 	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
 	raise "not a pitch: " + str(pitch)
 }
-play(tone, for duration) := sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
+// a signal function, `play(hum, 2s)`, or a pair of them [left, right] plays as play_signal (user 2026-10-12: no snake
+// case for signals)
+play(tone, for duration) := if is_signal(tone) then play_signal(tone, duration) else sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
+is_signal(tone) := tone is function or tone is list and count(tone) == 2 and tone[0] is function
 // the note played through a bus (card shared-buses stage 2): play(C4, 1s, bus: room)
 play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), play(tone, duration))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
@@ -289,13 +557,18 @@ stop_sound(handle = 0) := std_io("sound", "stop", [handle])
 // a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play(C4, 4s);
 // fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. save sound writes the fade too
 fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
-// a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t); play(hum, 2s) (or
-// play_signal(hum, 2s); play([left, right], 2s) in stereo) calls hum for every sample, t its time in seconds, a block
-// ahead of the speaker; returns the handle when the last is queued
-play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
-// block-wise: hum(block, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi * 220 * (t + (i - 1) / sample_rate)) };
-// play_blocks(hum, 2s) calls hum once a block, block a linear float array of its samples, t the first one's time;
-// the compiler writes its call out (music_words.rs with_block_signals)
+// a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t), of a float to a float by
+// the parameter's type (src/lowering/types/function_types.rs); play(hum, 2s) (play([left, right], 2s) in stereo, or
+// play_signal) calls hum for every sample, t its time in seconds, a block ahead of the speaker; returns the handle when
+// the last is queued
+play_signal(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
+mono_signal(signal: (float) -> float, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
+stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := std_io("sound", "signal", [[left, right], si_amount(seconds), sample_rate])
+// block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
+// 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
+// once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
+// The address until a library function takes a linear array (card linear-parameters)
+play_blocks(fill: (float) -> float, blocks, seconds) := std_io("sound", "blocks", [fill, blocks, si_amount(seconds), sample_rate])
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
@@ -310,16 +583,20 @@ sound() := Recording()
 save(made: Recording, as file) := std_io("sound", "render", [file])
 // the old name, with a note naming save (std_aliases.rs)
 render_sound(path) := save(Recording(), path)
-// `at 2 beats play C4`, `at 1 bar { … }` (card sample-accurate): the statement's sounds start that many seconds after
-// the voice's first sound, exactly so in save sound; the voice goes on where it stood (src/lowering/music_words.rs)
+// `at beats(2) { play C4 }`, `at bar(1) { … }` (card sample-accurate): the block's sounds start that many seconds after
+// the voice's first sound, exactly so in save sound; the voice goes on where it stood
+at(time, actions: block) := { sound_at(time); actions!; sound_at_end() }
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
 sound_at_end() := std_io("sound", "at_end", [])
-// this voice's moment in seconds on the clock every task shares: where its next sound would start (card live-redefine,
-// a live loop defined again plays its new block from the first cycle starting there)
-sound_moment() := std_io("sound", "moment", [])
-// a named live loop says this first each cycle (src/lowering/words/music_words.rs): the playground hands the loop over to
-// the next run at its next cycle (card playground-live), natively it does nothing
+// a live loop says this first each cycle: the playground hands the loop over to the next run at its next cycle (card
+// playground-live), natively it does nothing
 live_cycle_started(name) := std_io("sound", "live_cycle", [name])
+// `live_loop(drums, 4)` (decision music-plain-details): a voice of its own playing drums() 4 cycles one after another,
+// along with the other voices on the beat clock; `live_loop(drums)` plays until the program is stopped; `v =
+// live_loop(drums, 4)` is the voice to await
+// (the name read before the go: inside it cycle.name is read as a Note's, card go-function-type)
+live_loop(cycle: function, cycles) := { name = cycle.name; go { for counted in 0..cycles { live_cycle_started(name); cycle() } } }
+live_loop(cycle: function) := { name = cycle.name; go { while true { live_cycle_started(name); cycle() } } }
 // an audio file's samples to play (card sound-samples): kick = sample("kick.wav") (wav, mp3, ogg, flac, aiff, m4a; the
 // playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,

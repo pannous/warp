@@ -16,14 +16,17 @@ join(xs: list, separator: text): text from warp
 chars(t: text): list of text from warp
 code_point_list(t: text): list of int from warp
 ord(c: codepoint): int from warp
-map_keys(m): list from warp
-map_values(m): list from warp
-map_entries(m): list from warp
-map_without(m, key): list from warp
+map_keys(m: map): list from warp
+map_values(m: map): list from warp
+map_entries(m: map): list from warp
+map_without(m: map, key): list from warp
 map_of_entry(entry): same as entry from warp
-map_get_or(m, key, default = ø): value of m from warp
-collection_contains(xs, x) from warp
-collection_position(xs, x) from warp
+map_get_or(m: map, key, default = ø): value of m from warp
+collection_contains(xs: list, x): bool from warp
+collection_contains(t: text, part): bool from warp
+collection_contains(m: map, key): bool from warp
+collection_position(xs: list, x): int from warp
+collection_position(t: text, part): int from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
 field_with(object, name, value): same as object from warp
@@ -33,7 +36,10 @@ kind_mark(x: any): int from warp
 
 // The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
 // results, as the analyzer reads them
-count(xs): int from emitter
+count(xs: list): int from emitter
+count(t: text): int from emitter
+count(m: map): int from emitter
+sum(xs: list): element of xs from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
@@ -43,19 +49,27 @@ putl(n: int): int from emitter
 putf(x: float): int from emitter
 fetch(url: text, options...): text from emitter
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
-map(xs, f: function) from emitter
-filter(xs, f: function) from emitter
-reduce(xs, f: function) from emitter
-fold(xs, start, f: function) from emitter
-any(xs, f: function): bool from emitter
+// over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
+map(xs: list, f: function): list from emitter
+map(t: text, f: function): list from emitter
+filter(xs: list, f: function): list from emitter
+filter(t: text, f: function): list from emitter
+reduce(xs: list, f: function): element of xs from emitter
+fold(xs: list, start, f: function): same as start from emitter
+any(xs: list, f: function): bool from emitter
+any(t: text, f: function): bool from emitter
+// all of any value: `f(all xs)` broadcasts (wiki/all.md), a typed `all` would nest as a call of two values
 all(xs, f: function): bool from emitter
-find(xs, f: function) from emitter
-each(xs, f: function) from emitter
-add(xs, x) from emitter
-insert(xs, x, at: int) from emitter
-remove(xs, x) from emitter
-pop(xs) from emitter
-clear(xs) from emitter
+find(xs: list, f: function): element of xs from emitter
+find(t: text, f: function): element of t from emitter
+each(xs: list, f: function) from emitter
+each(t: text, f: function) from emitter
+add(xs: list, x): same as xs from emitter
+insert(xs: list, x, at: int): same as xs from emitter
+remove(xs: list, x) from emitter
+remove(m: map, key) from emitter
+pop(xs: list): element of xs from emitter
+clear(xs: list): same as xs from emitter
 number(x): number from emitter
 // the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
 list_become(place, fresh): same as place from emitter

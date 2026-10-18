@@ -7,8 +7,10 @@ pub(crate) const UNITS_MODULE: &str = "units";
 pub(crate) const QUANTITY: &str = "quantity";
 /// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/web/serve.rs) are read by the router's words
 pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
-/// lib/router.warp: a route's `status 418` and `header "name" "value"`
-const ANSWER_PARTS: [&str; 2] = ["status", "header"];
+/// lib/router.warp: a route's `status 418` and `header "name" "value"`, and the table of routes without a server
+const ANSWER_PARTS: [&str; 3] = ["status", "header", crate::serve::ROUTE_ADD];
+/// lib/markup.warp: `form post "/todos" { … }`, a form named by its route
+const FORM_ROUTE: &str = "form";
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 pub(crate) const AGENT_MODULE: &str = "agent";
 /// lib/fast_math.warp: sin cos exp pow atan2 as wasm polynomials, `use fast_math` or for every program `warp fast <file>`
@@ -50,7 +52,9 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 9] = [
 	("file", mentions_file_url),
 	("markup", |program| {
 		let mode = crate::pipeline::compile_mode();
-		mode.renders_itself() || mode.for_hosting && calls_undefined(program, crate::page_html::TO_HTML)
+		mode.renders_itself()
+			|| mode.for_hosting && calls_undefined(program, crate::page_html::TO_HTML)
+			|| calls_undefined(program, FORM_ROUTE)
 	}),
 	("router", |program| {
 		defined(program, crate::routes::PAGE_ROUTES).is_some()
@@ -153,7 +157,7 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	)
 }
 
-/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
+/// Whether the program plays sound: it calls a sound word or says `use sound`
 pub fn uses_sound(program: &Node) -> bool {
 	// `use sound` first: it reads the statements, the calls walk the whole program
 	says_use(program, SOUND_MODULE) || first_called_undefined(program, SOUND_WORDS).is_some()

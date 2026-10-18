@@ -11,6 +11,9 @@ static NATIVE_CALL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// Lowercase name prefixes of the libraries whose calls take the native call turn
 const NOT_THREAD_SAFE_LIBRARIES: [&str; 2] = ["sdl", "raylib"];
 
+/// Library functions that open a native window: refused under WARP_NO_WINDOW or CI, so no test or agent run pops one up
+const WINDOW_OPENERS: [&str; 4] = ["InitWindow", "SDL_CreateWindow", "SDL_CreateWindowAndRenderer", "glfwCreateWindow"];
+
 // Extern C Functions and Hardcoded Signatures (Fallback)
 
 // Extern C functions from libc/libm
@@ -411,6 +414,7 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 		}
 	}
 
+	refuse_headless_windows(&libs_to_link)?;
 	// Link each discovered library
 	for (lib_name, imported) in libs_to_link {
 		match link_dynamic_library(linker, engine, &lib_name, &imported) {
@@ -424,6 +428,21 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 		}
 	}
 
+	Ok(())
+}
+
+fn refuse_headless_windows(libs_to_link: &HashMap<String, std::collections::HashSet<String>>) -> Result<()> {
+	if !crate::graphics::paint::headless() {
+		return Ok(());
+	}
+	for (lib_name, imported) in libs_to_link {
+		if let Some(opener) = WINDOW_OPENERS.iter().find(|opener| imported.contains(**opener)) {
+			anyhow::bail!(
+				"{opener} from {lib_name} opens a window: refused under {} or CI",
+				crate::graphics::paint::NO_WINDOW_VARIABLE
+			);
+		}
+	}
 	Ok(())
 }
 

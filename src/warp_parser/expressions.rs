@@ -3,6 +3,11 @@
 use super::*;
 use crate::warp_parser::context::Context;
 
+const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
+/// Words between two operands besides the operator words (operators::is_operator_word): `of`, `matches`
+const JOINING_WORDS: [&str; 2] = [OF_WORD, "matches"];
+const COMPARISON_FIRST: &str = "the comparison first, as C";
+
 /// Characters that end a statement: a body cannot start with them
 pub(crate) const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
 /// A braceless argument takes arithmetic and ranges, stops at comparisons: f 3-1 > 5, sqrt 4 + 5 > 2, y = sum 1..4

@@ -171,6 +171,8 @@ pub(crate) fn expanded_word_definition(word: &str) -> Option<String> {
 	Some(format!("{name}({parameters}) := {template}"))
 }
 const DICT_WORD: &str = "dict";
+/// The type of a parameter taking a function value: `c: function`
+const FUNCTION_TYPE_WORD: &str = "function";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
@@ -272,7 +274,7 @@ pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
 		crate::words::NUMBER_WORD | crate::analyzer::BOOL_TYPE => None,
 		// a Node of any kind, decided at run time (`removed_value(x, k)`)
 		crate::words::ANY_TYPE => Some(Kind::Empty),
-		result => crate::analyzer::type_word_kind(result),
+		_ => line_result_kind(line).or_else(|| crate::analyzer::type_word_kind(line.result)),
 	}
 }
 
@@ -419,6 +421,7 @@ pub fn lower(node: Node) -> Node {
 		plain,
 		instances,
 		parameters: RefCell::new(vec![]),
+		function_parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
 		times,
@@ -580,6 +583,9 @@ struct Lowering {
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
 	parameters: RefCell<Vec<String>>,
+	/// The parameters declared `function` of the definitions being lowered: `c.name` reads the function's name, never a
+	/// class's method name()
+	function_parameters: RefCell<Vec<String>>,
 	/// The functions being defined, innermost last, each with its parameters: `start(l) := l.start` reads the field
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
@@ -723,6 +729,8 @@ impl Lowering {
 		let mut locals = self.shadowed.borrow().clone();
 		collect_assigned_names(&right, &mut locals);
 		let outer = self.shadowed.replace(locals);
+		let function_scope = self.function_parameters.borrow().len();
+		self.function_parameters.borrow_mut().extend(crate::traits::parameters_of_type(head, FUNCTION_TYPE_WORD));
 		let lowered = self.within_function(name, parameters, || {
 			let body = self.body_statement(head, right);
 			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
@@ -731,6 +739,7 @@ impl Lowering {
 			}
 			self.expand(body)
 		});
+		self.function_parameters.borrow_mut().truncate(function_scope);
 		self.shadowed.replace(outer);
 		lowered
 	}
@@ -891,7 +900,10 @@ impl Lowering {
 				// a synonym calls its library word: `sorted xs` is sort(xs)
 				let word = canonical_spelling(head);
 				let function = if word == head { function.clone() } else { symbol(word) };
-				return Some(word_call(&function, argument, vec![]));
+				// the call lowered as if written so: an expanded word (`sum xs`) expands
+				let call = word_call(&function, argument, vec![]);
+				let Node::List(call_items, call_bracket, call_separator) = &call else { unreachable!("a call") };
+				return Some(self.word_call(call_items, call_bracket, call_separator).unwrap_or(call));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
@@ -1005,6 +1017,14 @@ impl Lowering {
 			return Some(crate::warp_parser::subscript(receiver.clone(), method.clone()));
 		}
 		let (word_node, name, arguments) = method_parts(method)?;
+		// `c.name` of a parameter `c: function`: what the function value answers at run time
+		let is_function_parameter = receiver
+			.symbol_name()
+			.is_some_and(|parameter| self.function_parameters.borrow().iter().any(|p| p == parameter));
+		let is_function_word = || crate::wasm_emitter::functions::function_words().any(|(word, _)| word == name);
+		if is_function_parameter && arguments.is_empty() && is_function_word() {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
 			return Some(self.call(FROMKEYS, word_node, arguments, false));
 		}

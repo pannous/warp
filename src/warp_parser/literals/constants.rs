@@ -1,6 +1,26 @@
 //! Constants: truth glyphs `✓`/`✗`, assignments to built-in constants
 use super::*;
 
+/// In data only JSON's words are literals; aliases like `yes`, `no`, `none`, `pi` stay symbols.
+const DATA_WORD_LITERALS: [&str; 3] = ["true", "false", "null"];
+/// The glyphs that are true or false (card keyword-glyphs), longest spelling first: `✔️` is `✔` with an emoji variation
+/// selector. Most start an emoji, which would otherwise be a codepoint (atoms.rs, parse_emoji)
+const TRUTH_GLYPHS: [(&str, bool); 13] = [
+	("✔️", true),
+	("✓️", true),
+	("☑️", true),
+	("⊤", true),
+	("✓", true),
+	("✔", true),
+	("☑", true),
+	("✅", true),
+	("🗸", true),
+	("🗹", true),
+	("⊥", false),
+	("❌", false),
+	("✗", false),
+];
+
 pub(crate) fn truth_glyph(glyph: &str) -> Option<Node> {
 	TRUTH_GLYPHS
 		.iter()
@@ -33,7 +53,7 @@ pub(crate) fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 impl WarpParser {
 	/// `⊤`, `✅`, `❌` …: the truth value a glyph at the position spells, and its length in chars
 	pub(crate) fn truth_glyph_at(&self) -> Option<(Node, usize)> {
-		super::TRUTH_GLYPHS.iter().find_map(|(glyph, _)| {
+		TRUTH_GLYPHS.iter().find_map(|(glyph, _)| {
 			let length = glyph.chars().count();
 			let ahead: String = self.chars[self.pos..].iter().take(length).collect();
 			(ahead == *glyph).then(|| (super::truth_glyph(glyph).expect("a truth glyph"), length))

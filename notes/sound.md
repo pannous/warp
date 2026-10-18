@@ -61,12 +61,12 @@ Each layer keeps the ones above working and lowers to them. Order of value: 1 + 
    - Handles: `play`, `melody`, `tone`, `play "song.mp3"` give the sound's number in the run (from 1);
      `stop_sound(h)` drops or stops that one, `stop_sound` all (tests/programs/test_sound_handles.rs).
    - Offline render: `save sound as: "song.wav"` / `save(sound, "song.wav")` (the word sound is a lib Recording,
-     music_words.rs with_recording; `render_sound` the old name with a note) writes the sounds since the last render
+     `render_sound` the old name with a note) writes the sounds since the last render
      into one WAV, mixed at their logical places at the highest rate among them, and gives its seconds; headless too,
      so tests check audio without speakers (tests/programs/test_sound_render.rs). Kept in memory (the $TMPDIR folder
      is shared by all warp processes). The playground refuses it.
-   - Tempo: `1/4 beat`, `2 beats`, `1 bar` are seconds at the module's `tempo` (120) and `beats_per_bar` (4)
-     (music_words.rs → lib beat_seconds, bar_seconds; tests/programs/test_sound_tempo.rs). No SI unit.
+   - Tempo: `beat(1/4)`, `beats 2`, `bar 1` are seconds at the module's `tempo` (120) and `beats_per_bar` (4)
+     (lib/sound.warp beat_seconds, bar_seconds; tests/programs/test_sound_tempo.rs). No SI unit.
    - Voices: every task (`go { }`) is a voice forking its starter's place in time (src/sound/mod.rs Voice), so a
      task's notes sound along with the starter's (tests/programs/test_sound_voices.rs). In the playground each Worker
      keeps its voice's end on a shared clock (host-tasks.js voiceSounded); a task's sounds reach the page once the
@@ -80,9 +80,11 @@ Each layer keeps the ones above working and lowers to them. Order of value: 1 + 
    - `fade_sound(handle, gain, seconds)` ramps a playing sound's gain linearly (0 = all handles), natively, in the
      browser (a GainNode per sound) and in render_sound (tests/programs/test_sound_fades.rs).
 2. **Music values** (built, tests/programs/test_sound_notes.rs, test_music_values.rs, test_note_values.rs).
-   - Note names are parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9, when the program uses sound
-     and doesn't define that name; `F#4` parses as `F # 4`. A name lowers to `midi_hertz(midi)`, so `tuning = 442`
-     tunes every note. Bare names stay frequencies (`C4` is 261.63).
+   - Note names are constants of lib/sound.warp (decision music-plain-details): a letter A–G, `♯`/`s` or `b`/`♭`, an
+     octave 0–8, each `midi_hertz(midi)` charged, so `tuning = 442` tunes every note. They are frequencies (`C4` is
+     261.63). `F#4` parses as `F # 4`: the letter F is a PitchClass whose index operator `#` is its sharp in that
+     octave (a class's `index(n)`, tests/types/test_class_index_operator.rs; a used module's variables keep their
+     class for it, compile_context module_instance_classes).
    - `midi(pitch)`, `note_name(pitch)`, `transpose(pitch or list, semitones)` (keeps a note a note, multiplies any
      other frequency), `chord(root, kind)`, `scale(root, kind)` (kinds in lib chord_intervals / scale_intervals, as an
      undefined word directly in the call or a text), `interval(low, high)`.
@@ -132,10 +134,9 @@ Each layer keeps the ones above working and lowers to them. Order of value: 1 + 
      `c4?` / `c4?0.3` chance. Events end at the sample their cumulated seconds reach (no drift). `swing = 0..1`
      delays each second step. The chance is a hash of `pattern_seed`, the cycle and the item's place: the same each
      run, the program's random sequence untouched. A cycle counts how often the voice played that pattern text.
-   - `live_loop 4 { … }` is `live_voice = go { for … 0..4 { … } }` (music_words.rs lower_live_loops); `live_loop
-     drums 4 { … }` names the voice (`await drums`); without a count it is endless.
-   - A named loop defined again (`at 2 bars live_loop bass { … }`) is no new voice: each cycle plays the latest block
-     whose moment (sound_moment) it reached (tests/programs/test_live_redefine.rs).
+   - `live_loop(drums, 4)` (lib/sound.warp, decision music-plain-details) plays the function `drums` four times in a
+     voice of its own named after it (`await drums`); without a count it is endless. Defining a loop again within the
+     program is dropped (decision); the playground's live reload below still hands loops over.
    - Playground live reload (tests/web/test_live_handover.rs): while named loops play, Ctrl/Cmd-Enter or editing
      reruns; playground.js handOver keeps the old Worker sounding, the new run's loop of the same name moves onto the
      old loop's grid (host-tasks.js liveCycleStarted) and the old loop is clipped there; a loop the new code drops
@@ -153,13 +154,15 @@ Each layer keeps the ones above working and lowers to them. Order of value: 1 + 
      timestamp. `midi_receive` and the device lists fail loudly in the browser (a Worker cannot wait for the page).
 8. **Real-time DSP in warp** (samples/sound/siren_sound.warp, stereo_sound.warp; tests/programs/test_sound_signal.rs,
    tests/web/test_signal_sound.rs).
-   - `play hum for: 2s` of a program function is `play_signal(hum, 2s)` (one parameter `t`, or a pair [left, right]):
-     the host calls the export (f64) -> f64 per sample; music_words.rs makes the function floats to a float. On the
+   - `play(hum, 2s)` of a program function is `play_signal(hum, 2s)` (one parameter `t`, or a pair [left, right]):
+     the host calls the export (f64) -> f64 per sample; lib's `signal: (float) -> float` parameter makes the function
+     floats to a float (src/lowering/types/function_types.rs, card parameter-typed). On the
      Mixer the samples go out in blocks of 512 queued at most 100 ms ahead, each a sound of the same handle. The call
      blocks; `go { play_signal(…) }` plays it beside the program. DSP state lives in globals declared `as float`.
-   - Block-wise: `play_blocks(fill, 2s)` (or play of a function of two or three parameters) calls `fill(block, t)`
-     with a 512-cell linear float array (notes/linear_arrays.md), or `(left, right, t)` for stereo; the host reads the
-     cells straight from memory (native.rs played_blocks), about twice as fast as play_signal.
+   - Block-wise: `play_blocks(fill, linear_address(block), 2s)` calls `fill(t)` once a block to fill the program's own
+     linear float array (`linear block = float[512]`, notes/linear_arrays.md), `[linear_address(left),
+     linear_address(right)]` for stereo; the host reads the cells straight from memory (sound/host_words.rs
+     played_blocks), about twice as fast as play_signal.
    - Browser: host-files.js STD_ADAPTERS.sound.signal / blocks compute the samples in the program's Worker, paced
      (a block when the voice holds less than 100 ms) once the page was clicked, else all at once.
    - Still to build: an AudioWorklet running the module, f32 cells, microphone input.

@@ -14,8 +14,6 @@ use std::collections::HashMap;
 
 /// Kotlin's `when (c) { … }`, matched like `match`
 const KOTLIN_MATCH_WORD: &str = "when";
-/// The arm patterns matching any value
-const CATCH_ALLS: [&str; 4] = ["_", "default", "other", "else"];
 
 pub fn check(program: Node) -> Node {
 	let cases: HashMap<String, Vec<String>> =
@@ -166,7 +164,7 @@ fn subject_name(subject: &Node) -> Option<String> {
 /// or a pattern of another form
 fn case_named(pattern: &Node, type_name: &str) -> Option<String> {
 	match pattern.drop_meta() {
-		Node::Symbol(name) if CATCH_ALLS.contains(&name.as_str()) => None,
+		Node::Symbol(name) if crate::lowering::switch::DEFAULT_KEYS.contains(&name.as_str()) => None,
 		Node::Symbol(name) => Some(name.clone()),
 		Node::List(items, Bracket::Round, _) => match items.as_slice() {
 			[head, ..] if matches!(head.drop_meta(), Node::Symbol(_)) => Some(head.drop_meta().name()),

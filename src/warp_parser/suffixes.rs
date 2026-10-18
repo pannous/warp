@@ -3,6 +3,13 @@
 use super::*;
 use crate::warp_parser::context::Context;
 
+/// Topic of the Ask about `f x as T`, which casts the argument (card parameter-named-number)
+const ARGUMENT_CAST: &str = "argument-cast";
+/// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
+const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
+/// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
+const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
+
 /// The operands a braceless call binds in: from the right side of `or` to the right side of `+`; a `*` operand keeps
 /// `h*w int` the typed array `(h*w) int`
 /// Words whose subject is the glued call before them in an assigned value: `x = f(y) where it > 1`, `x = f(y) replace …`

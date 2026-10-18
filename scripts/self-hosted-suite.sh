@@ -7,11 +7,17 @@
 #                                                      commit switching self-hosting on (.cargo/config.toml [env]), one
 #                                                      job per TEST_GROUPS entry at once, each on its own branch
 #                                                      SCRATCH_PREFIX/<tip>-<group>, deleted after the run
+#   scripts/self-hosted-suite.sh --stage <name>=<VAR>… [<tip>]   the same with a later stage's switch on too (VAR=1 beside
+#                                                      the front end's), counted apart as run <tip>+<name>; e.g.
+#                                                      --stage analyzer=WARP_SELF_HOSTED_ANALYZER (notes/self_hosting.md
+#                                                      "Back-end focus": front end only, + analyzer, + emitter)
 #   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
+STAGE=""                         # the later stages switched on too (--stage), as the run's name suffix
+STAGE_SWITCHES=()
 SKIPPED=parser::test_self_       # the twins compare warp with Rust themselves
 SCRATCH_PREFIX=self-hosted       # the throwaway branches
 CONFIG=.cargo/config.toml
@@ -99,10 +105,13 @@ failed_tests() {
 	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^.*test \([^ ]*\) \.\.\. FAILED$/\1/p' | LC_ALL=C sort -u
 }
 
+# A run's name as its cloud results folder spells it
+folder_name() { printf %s "$1" | tr -c 'A-Za-z0-9._-' '-'; }
+
 # The tests failing now that passed in the last recorded run (a regression check), from the logs both runs left
 newly_failed() {
 	local previous=$1; shift
-	local previous_logs=("$CLOUD_RESULTS/$SCRATCH_PREFIX-$previous"-*/log.txt.gz)
+	local previous_logs=("$CLOUD_RESULTS/$(folder_name "$SCRATCH_PREFIX/$previous")"-[0-9]-*/log.txt.gz)
 	[ -e "${previous_logs[0]}" ] || return 0
 	echo "newly failing since $previous:"
 	LC_ALL=C comm -13 <(failed_tests "${previous_logs[@]}") <(failed_tests "$@")
@@ -113,7 +122,8 @@ switched_on() {
 	local tip=$1 group=$2 index blob commit
 	index=$(mktemp "${TMPDIR:-/tmp}/self-hosted-index.XXXXXX")
 	GIT_INDEX_FILE=$index git read-tree "$tip"
-	blob=$({ git show "$tip:$CONFIG"; echo "$SWITCH = \"1\""; echo "$SPEED_PROFILE"; } | git hash-object -w --stdin)
+	blob=$({ git show "$tip:$CONFIG"; printf '%s = "1"\n' "$SWITCH" ${STAGE_SWITCHES[@]+"${STAGE_SWITCHES[@]}"}; echo "$SPEED_PROFILE"; } |
+		git hash-object -w --stdin)
 	GIT_INDEX_FILE=$index git update-index --cacheinfo "100644,$blob,$CONFIG"
 	commit=$(git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip: $group")
 	rm -f "$index"
@@ -121,13 +131,14 @@ switched_on() {
 }
 
 cloud_run() {
-	local tip group number branch commit logs=() branches=() commits=()
+	local tip run group number branch commit logs=() branches=() commits=()
 	tip=$(git rev-parse "${1:-HEAD}") || fail "no tip ${1:-HEAD}"
+	run=${tip:0:8}${STAGE:++$STAGE}
 	git branch -r --contains "$tip" | grep -q . || fail "tip $tip is not pushed"
 	[ "$(git show "$tip:$CONFIG" | grep '^\[' | tail -1)" = "[env]" ] || fail "$CONFIG of $tip does not end with its [env] table"
 	for number in "${!TEST_GROUPS[@]}"; do
 		group=${TEST_GROUPS[$number]}
-		branch=$SCRATCH_PREFIX/${tip:0:8}-$number
+		branch=$SCRATCH_PREFIX/$run-$number
 		commit=$(switched_on "$tip" "$group")
 		git push -q -f origin "$commit:refs/heads/$branch" || fail "push of $branch failed"
 		# shellcheck disable=SC2086 # the group is a list of filters
@@ -138,21 +149,31 @@ cloud_run() {
 		branch=${branches[$number]} commit=${commits[$number]}
 		scripts/cloud-test.sh --result "$branch" "$commit" > /dev/null
 		git push -q origin --delete "$branch"
-		logs+=("$CLOUD_RESULTS/$(printf %s "$branch" | tr -c 'A-Za-z0-9._-' '-')-${commit:0:8}/log.txt.gz")
+		logs+=("$CLOUD_RESULTS/$(folder_name "$branch")-${commit:0:8}/log.txt.gz")
 	done
 	mkdir -p "$REPORTS"
-	rank "${logs[@]}" | tee "$REPORTS/${tip:0:8}.txt"
+	local report=$REPORTS/$run.txt previous
+	rank "${logs[@]}" | tee "$report"
 	mkdir -p "$(dirname "$COUNTS")"
-	[ -s "$COUNTS" ] && newly_failed "$(tail -1 "$COUNTS" | awk '{ print $2 }')" "${logs[@]}" | tee -a "$REPORTS/${tip:0:8}.txt"
-	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //; s/ passed//')" \
-		"data/self-hosted/${tip:0:8}.txt" >> "$COUNTS"
-	echo "(report: $REPORTS/${tip:0:8}.txt, logs: ${logs[*]})"
+	# against the last complete run of the same stages: a line noting "incomplete" lacks the tests of its killed part
+	previous=$(grep -v -e '^#' -e incomplete "$COUNTS" 2>/dev/null | awk -v stage="$STAGE" '
+		{ plus = index($2, "+"); if ((plus ? substr($2, plus + 1) : "") == stage) last = $2 } END { print last }')
+	[ -n "$previous" ] && newly_failed "$previous" "${logs[@]}" | tee -a "$report"
+	printf '%s  %s  %s  %s\n' "$(date +%F)" "$run" "$(head -1 "$report" | sed 's/^self-hosted: //; s/ passed//')" \
+		"data/self-hosted/$run.txt" >> "$COUNTS"
+	echo "(report: $report, logs: ${logs[*]})"
 }
 
 case "${1:-}" in
 	--rank) shift; rank "$@" ;;
 	--tests) shift; LISTED=$1; shift; rank "$@" ;;
+	--stage)
+		while [ "${1:-}" = --stage ]; do
+			STAGE=${STAGE:+$STAGE+}${2%%=*} STAGE_SWITCHES+=("${2#*=}")
+			shift 2
+		done
+		cloud_run "$@" ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,12p' "$0"; exit 2 ;;
+	--*) sed -n '2,16p' "$0"; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac

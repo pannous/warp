@@ -177,9 +177,10 @@ impl WasmGcEmitter {
 	/// (forget_list_cursor). The list extended last and its last cell, so a loop's `out += [x]` appends there instead of
 	/// walking the list. Globals in the order of LIST_CURSOR_PARTS.
 	pub(in crate::wasm_emitter) fn emit_list_cursor_globals(&mut self) {
-		if !["list_at", "list_node_at", "node_count", LIST_EXTEND]
-			.iter()
-			.any(|function| self.should_emit_function(function))
+		if self.list_cursor_global.is_some()
+			|| !["list_at", "list_node_at", "node_count", LIST_EXTEND]
+				.iter()
+				.any(|function| self.should_emit_function(function))
 		{
 			return;
 		}
@@ -208,7 +209,7 @@ impl WasmGcEmitter {
 	/// The text cursors of text_grapheme_offset, newest first, and the counted texts of text_grapheme_count, each keyed
 	/// by the text's bytes ($Text, never changed in place: an append builds a new text)
 	pub(in crate::wasm_emitter) fn emit_text_cursor_globals(&mut self) {
-		if !TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
+		if self.text_cursor_global.is_some() || !TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
 		let text_type = self.type_manager.text_type;

@@ -120,6 +120,7 @@ mod test_unit_conversion;
 mod test_unit_definitions; // card dimensions-units Q2
 mod test_unit_field_display; // card unit-value
 mod test_unit_fields; // card unit-fields
+mod test_unit_functions_as_values;
 mod test_unit_glue_hint; // card unit-glue
 mod test_unit_literals;
 mod test_unit_named_function; // card static-units-function

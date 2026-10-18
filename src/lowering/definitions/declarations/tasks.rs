@@ -59,8 +59,9 @@ pub fn lower_tasks(node: Node) -> Node {
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
 	let mut started = std::collections::HashMap::new();
+	let mut task_functions = std::collections::HashMap::new();
 	node.visit(&mut |part| {
-		if let Node::Key(head, Op::Define | Op::Assign, _) = part {
+		if let Node::Key(head, Op::Define | Op::Assign, value) = part {
 			let name = match head.drop_meta() {
 				Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
 				Node::Symbol(name) => Some(name.clone()),
@@ -73,9 +74,24 @@ pub fn lower_tasks(node: Node) -> Node {
 				}
 			}
 			if matches!(head.drop_meta(), Node::List(..)) {
+				if let Some((function, started)) = name.clone().zip(started_at_end(value)) {
+					task_functions.insert(function, started);
+				}
 				functions.extend(name.clone());
 			}
 			defined.extend(name);
+		}
+	});
+	// `voice = live_loop(drums, 2)` of a function whose value is the task its `go` starts
+	node.visit(&mut |part| {
+		if let Node::Key(head, Op::Define | Op::Assign, value) = part {
+			let called = value.call_parts().map(|(function, _)| function);
+			if let (Node::Symbol(variable), Some(function)) = (head.drop_meta(), called) {
+				if let Some(function) = task_functions.get(function) {
+					tasks.insert(variable.clone());
+					started.insert(variable.clone(), function.clone());
+				}
+			}
 		}
 	});
 	let words: Vec<&str> = TASK_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
@@ -102,6 +118,18 @@ pub fn lower_tasks(node: Node) -> Node {
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
+}
+
+/// The function a body's value starts as a task: `go { … }` (go_blocks.rs made it `go go·block·1(…)`), the last
+/// statement of a block
+fn started_at_end(body: &Node) -> Option<String> {
+	match body.drop_meta() {
+		Node::List(items, _, _) if is_start(body) => started_call(&items[1..]).map(|(function, _)| function),
+		Node::List(items, _, separator) if separator.separates_statements() || items.len() == 1 => {
+			items.last().and_then(started_at_end)
+		}
+		_ => None,
+	}
 }
 
 /// `job = go f(x)`: the task variable and the words of its start

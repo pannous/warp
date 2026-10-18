@@ -675,6 +675,16 @@ pub fn untyped_parameters(head: &Node) -> Vec<String> {
 	parameters.iter().filter_map(untyped).collect()
 }
 
+/// The parameters a definition head declares of this type: `c` of `live_loop(c: function, n)`
+pub fn parameters_of_type(head: &Node, type_name: &str) -> Vec<String> {
+	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
+	let typed = |parameter: &Node| match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, declared) if declared.drop_meta().name() == type_name => Some(name.name()),
+		_ => None,
+	};
+	parameters.iter().filter_map(typed).collect()
+}
+
 /// The declared type a parameter `name:T` names
 fn parameter_type<'a>(parameter: &'a Node, registry: &TypeRegistry) -> Option<&'a str> {
 	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else {
