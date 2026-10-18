@@ -37,7 +37,8 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 
 /// `count`, `length`, `size`, `len`: a word counting its argument (`number x` is a cast)
 pub(crate) fn is_counting_word(name: &str) -> bool {
-	name == COUNT_WORD || crate::modules::prelude_aliases().iter().any(|(alias, word)| alias == name && word == COUNT_WORD)
+	name == COUNT_WORD
+		|| crate::modules::prelude_aliases().iter().any(|(alias, word)| alias == name && word == COUNT_WORD)
 }
 
 /// `x.count`, `x.length`, `x.size`, the bytes `x.bytecount` (memory) and the unit counts a counting phrase builds
