@@ -25,6 +25,7 @@ slice(xs, start, end = ø) from warp
 field_with(object, name, value) from warp
 instance_copy(x, shallow) from warp
 wasi_environment(): text from warp
+kind_mark(x: any): int from warp
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
@@ -97,6 +98,13 @@ from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwx
 radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
 hex_text(n: int) := radix_text(n, 16, "0x")
 binary_text(n: int) := radix_text(n, 2, "0b")
+// a value's form as its kind field holds it (card kind-reflection, src/type_kinds.rs), what the lib printers read:
+// the Kind in the low byte (Int 1, Text 3, Key 6, List 8, Error 11, …), the info byte above it (a key's operator, a
+// list's bracket, an Int's bool 1, hex 2 or binary 3), and the mark of a type value (`int`, `type(x)`; code is
+// `x is code`)
+kind_number(x: any) := kind_mark(x) % 256
+kind_info(x: any) := (kind_mark(x) >> 8) % 256
+is_type_value(x: any) := (kind_mark(x) >> 54) % 2 == 1
 // n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
 // compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives
 filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
