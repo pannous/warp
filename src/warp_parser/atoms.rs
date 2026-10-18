@@ -441,8 +441,12 @@ impl WarpParser {
 			});
 		}
 		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
-		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
-			return Some(self.parse_enum_with_values());
+		if symbol == ENUM_WORD && self.in_code() {
+			match self.enum_body_ahead() {
+				Some(true) => return Some(self.parse_enum_with_values()),
+				Some(false) => return Some(self.parse_plain_enum()),
+				None => {}
+			}
 		}
 		self.foreign_form(symbol)
 	}

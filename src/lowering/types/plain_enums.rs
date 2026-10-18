@@ -5,7 +5,7 @@
 //! becomes a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case has that index.
 
 use super::nodes::{key, matched};
-use super::sum_variants::sum_type;
+use super::sum_variants::{case_rows, sum_type};
 use crate::analyzer::match_exhaustive::typed_subjects;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
@@ -71,7 +71,7 @@ fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else {
 		return None;
 	};
-	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
+	let names: Option<Vec<String>> = case_rows(cases).iter().map(case_name).collect();
 	word.is_symbol(ENUM_WORD).then_some((name.to_string(), names?))
 }
 
