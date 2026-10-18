@@ -116,7 +116,7 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::lowering::component_worlds::lower,
-	// `input{type="text"}`: HTML's attribute form is the attribute (markup_tags.rs), before soft_keywords refuses `class = …`
+	// `input{type="text"}`: HTML's attribute form is the attribute (tag_entries.rs), before soft_keywords refuses `class = …`
 	// `a{ href="/about" "About" }`, `Person{ class = "a" }`: `=` in a data block is an entry (tag_entries.rs), before
 	// soft_keywords reads `class = …` as a definition
 	crate::lowering::tag_entries::lower,
@@ -167,10 +167,10 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
 	crate::lowering::lambdas::lower_member_lambdas,
-	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
+	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (tag_children.rs), before any pass
 	// reads it as a call
-	crate::lowering::markup_tags::lower,
-	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after markup_tags read `p.note "hi"` as an element
+	crate::lowering::tag_children::lower,
+	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after tag_children read `p.note "hi"` as an element
 	crate::lowering::member_phrases::lower,
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
 	crate::lowering::introspection::lower,
