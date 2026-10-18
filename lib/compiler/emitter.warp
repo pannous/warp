@@ -64,6 +64,8 @@ length_words = {length: yes, count: yes}
 characters = {text: yes, char: yes}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
 equalities = {"==": yes, "!=": yes}
+# the library words Rust's lowering calls that are runtime words here, each taking boxed values
+library_runtime_words = {map_entries: yes, map_keys: yes, map_values: yes, collection_contains: yes}
 compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}
 smallest_int = -9223372036854775808
@@ -592,6 +594,9 @@ group_expression(body: Body, n: any) := {
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
 	if bracket_of(n) == "[" { return list_value(body, n.map(x => x)) }
 	if bracket_of(n) == "{" and #n > 0 and n.all(is_entry) { return map_value(body, n.map(x => x)) }
+	if bracket_of(n) == "(" and #n > 1 and n#1 is symbol and name_of(n#1) in library_runtime_words {
+		return runtime_call(name_of(n#1), n[1..].map(x => ["node", boxed(expression(body, x))]))
+	}
 	# a map of one entry, as Rust's lowering marks it: map_value already gives the map
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("map_of_entry") { return expression(body, n#2) }
 	if bracket_of(n) == "(" and #n == 4 and n#1 == symbol("field_with") {
