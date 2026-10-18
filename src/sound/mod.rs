@@ -49,8 +49,6 @@ const HEADER_SIZE_AFTER_RIFF: u32 = 36;
 const DEFAULT_RATE: u32 = 22_050;
 /// The sounds and music files of this run so far: a sound's handle is its number among them, from 1
 static SOUNDED: AtomicUsize = AtomicUsize::new(0);
-/// The clock the voices' moments are counted on (moment_seconds), the same for every task of the run
-static RUN_CLOCK: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
 /// The handles stop_sound(handle) stopped one by one
 static STOPPED: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 /// The music file formats warp plays and reads
@@ -393,13 +391,6 @@ pub fn at_end() {
 /// the voice. Nothing is queued, the voice stays where it stands
 pub fn moment() -> (Instant, f64) {
 	scheduled(0.0)
-}
-
-/// This voice's moment in seconds on the run's clock, comparable across tasks: a live loop takes the body redefined
-/// at or before the moment its cycle starts (card live-redefine)
-pub fn moment_seconds() -> f64 {
-	let (start, _) = moment();
-	start.saturating_duration_since(*RUN_CLOCK).as_secs_f64()
 }
 
 /// `run` at this voice's moment: at once when that is now, else on a thread of its own sleeping until then (the

@@ -163,6 +163,9 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Element types flow through function results (`r = f(); r#1` is int when f gives a list of ints), where Rust says
   any value: probes/algo/dijkstra/12c_implicit_return_list.warp, probes/algo/sorting/69_return_list_noreturn.warp,
   probes/module_scope/mytext.warp and four more left the pinned list for it.
+- A parameter used as a list and passed on as a function (`play_signal(signal, seconds) := if signal is list then
+  stereo_signal(signal[0], …) else mono_signal(signal, seconds)`, lib/sound.warp) is a function where its calls give one,
+  where Rust says empty: probes/sound/signal_state.warp left the pinned list for it (card music-plain).
 
 ## Emitter: deviations
 - Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors

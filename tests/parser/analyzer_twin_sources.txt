@@ -847,7 +847,6 @@ probes/sort_xs_try.warp
 probes/sorting_library_try.warp
 probes/sound/block_global.warp
 probes/sound/exact_tempo_growth.warp
-probes/sound/signal_state.warp
 probes/static_result.warp
 probes/std_modules/std_uses_std.warp
 probes/stored.warp

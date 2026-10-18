@@ -387,8 +387,6 @@ addHostPart({
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },
-			// the voice's moment on the clock every Worker shares (src/sound/mod.rs moment_seconds, card live-redefine)
-			moment: () => self.voiceMoment?.() ?? 0,
 			// a named live loop's cycle starts (lib live_cycle_started, host-tasks.js liveCycleStarted)
 			live_cycle: name => { self.liveCycleStarted?.(contentText(name)); return null; },
 			wait: () => null,
