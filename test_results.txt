@@ -4889,6 +4889,10 @@ PASSED:
   ✓ types::test_iterable::for_walks_what_iterate_gives
   ✓ types::test_iterable::in_searches_what_iterate_gives
   ✓ types::test_kept_wiki_forms::the_kept_wiki_definition_forms
+  ✓ types::test_kind_marks::a_type_value_is_marked
+  ✓ types::test_kind_marks::the_kind_info_is_the_byte_above
+  ✓ types::test_kind_marks::the_kind_mark_is_the_whole_field
+  ✓ types::test_kind_marks::the_kind_number_is_the_low_byte
   ✓ types::test_list_annotations::a_postfix_list_annotation_declares_the_list
   ✓ types::test_list_element_types::declared_list_checks_element_assignment
   ✓ types::test_list_element_types::declared_list_checks_run_time_items_at_the_store
@@ -6358,4 +6362,4 @@ FAILED:
   ✗ wasm::test_gc_struct::test_raw_person_struct
 
 SUMMARY:
-16 ignored, 6351 passed, 2 failed, 6353 total tested
+16 ignored, 6355 passed, 2 failed, 6357 total tested
