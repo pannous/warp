@@ -11,6 +11,7 @@ pub fn clean_rust_tree(node: &Node) -> Node {
 		}
 		Node::Meta { node: inner, data } => Node::Meta { node: Box::new(clean_rust_tree(inner)), data: data.clone() },
 		Node::Error(inner) => Node::Error(Box::new(clean_rust_tree(inner))),
+		Node::Type { name, body } => Node::Type { name: name.clone(), body: Box::new(clean_rust_tree(body)) },
 		other => other.clone(),
 	};
 	definition_head_spread(&cleaned)

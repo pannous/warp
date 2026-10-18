@@ -208,7 +208,7 @@ fn help_subject(node: &Node) -> Option<&Node> {
 	word_applied(node, HELP_WORD).map(ungrouped)
 }
 
-/// `(x)` → x
+/// `(x)` → x, a node outside parentheses keeps its meta (its position)
 fn ungrouped(node: &Node) -> &Node {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),

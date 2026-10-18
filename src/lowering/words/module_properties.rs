@@ -10,7 +10,7 @@
 //! (`canvas = {width: 9}`, `f(width) := …`) keeps its own; a field name (`{width: 5}`, `p.width`) is none.
 //! Runs before modules::resolve, which then brings lib/draw.warp, and before system_values marks the window's reads.
 
-use super::nodes::{for_in_variable, function_head, key, parameter_name};
+use super::nodes::{key, parameter_name};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -144,13 +144,14 @@ pub fn lower(program: Node) -> Node {
 	let original = program.clone();
 	collect(&crate::modules::statements(program.clone()), None, &mut own);
 	let program = if own.is_empty() { program } else { without_definitions(program) };
-	let bound = bound_names(&program);
+	let bound = crate::program_names::Bindings::of(&program).bound();
 	// a value (a variable, parameter or loop variable), not a function: `canvas() := Picture()` beside
 	// `canvas.width := …` is fine
 	// before tuples::lower the analyzer reads `[p, q] = …` as a definition of p: a destructured name is a value
 	let functions = crate::analyzer::function_definitions(&original).user_functions;
 	let destructured = destructured_variables(&original);
-	let values: HashSet<String> = bound_names(&original)
+	let values: HashSet<String> = crate::program_names::Bindings::of(&original)
+		.bound()
 		.into_iter()
 		.filter(|name| destructured.contains(name) || !functions.contains_key(name))
 		.collect();
@@ -295,45 +296,11 @@ fn without_definitions(node: Node) -> Node {
 	}
 }
 
-/// The names the program gives: variables, functions, their parameters (`def f(width) {…}` and the destructured
-/// `area({width, height})` too), loop variables; a field binds its name only inside its object or class
-/// (Rewrite::rewritten), a property written (`canvas.width = 3`) binds no name
-pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
-	let names = crate::soft_keywords::names_given_with_kinds(program).into_iter();
-	let mut bound: HashSet<String> = names.filter(|(_, kind)| *kind != "field").map(|(name, _)| name).collect();
-	bound.extend(destructured_variables(program));
-	program.visit(&mut |node| {
-		if let Some(head) = function_head(node) {
-			let parameters = head.parameters();
-			bound.extend(parameters.iter().flat_map(|parameter| destructured_names(parameter)));
-			bound.extend(parameters.into_iter().filter_map(parameter_name));
-		}
-		match node {
-			Node::Key(target, op, _) if op.is_write() || *op == Op::Define => {
-				bound.extend(target_name(target).map(String::from))
-			}
-			Node::List(items, _, _) => bound.extend(for_in_variable(items)),
-			_ => {}
-		}
-	});
-	bound
-}
-
 /// The variables the program's destructurings bind: `a, b = …`, `[a, b] = …`, `{x, y} = …`, `{x: a} = …`
 fn destructured_variables(program: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	program.visit(&mut |node| names.extend(crate::tuples::destructured_names(node)));
 	names
-}
-
-/// `width` and `h` of a destructuring parameter `{width, height: h}`
-fn destructured_names(parameter: &Node) -> Vec<String> {
-	let Node::List(entries, Bracket::Curly, _) = parameter.drop_meta() else { return vec![] };
-	let name = |entry: &Node| match entry.drop_meta() {
-		Node::Key(_, Op::Colon, name) => name.drop_meta().symbol_name().map(String::from),
-		other => other.symbol_name().map(String::from),
-	};
-	entries.iter().filter_map(name).collect()
 }
 
 /// The fields `{width: 5}` or `class R{width: int}` declares
@@ -349,14 +316,6 @@ fn declared_fields(node: &Node) -> Vec<String> {
 		_ => None,
 	};
 	entries.iter().filter_map(field).collect()
-}
-
-/// `height` of a write's target `height` or a declared `height: length`
-fn target_name(target: &Node) -> Option<&str> {
-	match target.drop_meta() {
-		Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name(),
-		other => other.symbol_name(),
-	}
 }
 
 struct Rewrite {

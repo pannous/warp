@@ -67,10 +67,8 @@ impl WasmGcEmitter {
 
 	/// A value that is tested or compared as a Node: a structured value, an object, or either of them in parentheses
 	fn is_structural_operand(&self, node: &Node) -> bool {
-		match node.drop_meta() {
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_structural_operand(&items[0]),
-			other => self.is_structured_value(other) || Self::is_object_literal(other),
-		}
+		let operand = node.ungrouped();
+		self.is_structured_value(operand) || Self::is_object_literal(operand)
 	}
 
 	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text) or symbol

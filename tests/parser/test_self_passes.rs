@@ -14,7 +14,7 @@ pub(super) const SQL_AND_SH: [&str; 4] = [
 /// The sources of `(function f).dump`, whose function-reference mark the bridge drops (notes/self_hosting_dropped.md)
 pub(super) const FUNCTION_REFERENCES: [&str; 1] = ["probes/joinable_error.warp"];
 /// Where scope.warp is cleaner than the Rust passes' own name walks (notes/self_hosting_dropped.md, Deviations)
-pub(super) const SCOPE_DEVIATIONS: [&str; 1] = ["probes/algo/queens/p8_plus_eq_call.warp"];
+pub(super) const SCOPE_DEVIATIONS: [&str; 0] = [];
 
 #[test]
 fn a_source_pass_is_seen_before_and_after() {

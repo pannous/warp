@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+// parser.warp's tree of an explicit ø: `return ø` (twin difference on probes/generators/iterator_class.warp, 2026-10-18)
+use "lib/compiler/parser.warp"
+print tree("[1 ø 2]")
+print tree("return ø")
+print tree("if n { return ø }")
+print tree("if n { return }")

@@ -621,7 +621,7 @@ impl Exporter {
 		if annotation.is_none() && is_evident_bool(value) {
 			self.bool_names.push(name.clone());
 		}
-		if matches!(unwrapped(value), Node::Key(_, Op::Arrow, _)) {
+		if matches!(value.ungrouped(), Node::Key(_, Op::Arrow, _)) {
 			self.lambda_names.push(name.clone());
 		}
 		if map_entries(value).is_some() {

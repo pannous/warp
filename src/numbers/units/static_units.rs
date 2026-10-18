@@ -777,10 +777,9 @@ pub(super) fn with_unit_written(amount: &Node, unit: &str) -> String {
 
 /// `5`, `(5)`, `5 ± 0.01`: the amount a unit word binds to
 fn is_number_literal(amount: &Node) -> bool {
-	match amount.drop_meta() {
+	match amount.ungrouped() {
 		Node::Number(_) => true,
 		Node::Key(value, Op::PlusMinus, tolerance) => is_number_literal(value) && is_number_literal(tolerance),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_number_literal(&items[0]),
 		_ => false,
 	}
 }
@@ -803,10 +802,7 @@ fn last_statement(node: &Node) -> Option<&Node> {
 
 /// The units a conversion shows: `q as km`, `q in km/h`
 fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => conversion_target(&items[0]),
-		other => super::conversion(other).map(|(_, units)| units),
-	}
+	super::conversion(node.ungrouped()).map(|(_, units)| units)
 }
 
 /// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`, a fraction in parentheses
