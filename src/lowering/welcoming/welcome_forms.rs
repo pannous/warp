@@ -7,7 +7,9 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{assign, block, call, children_rewritten, is_block, is_call_head, is_kinded_type_word, is_return, key};
+use super::nodes::{
+	assign, block, call, children_rewritten, is_block, is_call_head, is_kinded_type_word, is_return, key,
+};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
