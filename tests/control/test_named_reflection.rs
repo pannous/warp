@@ -31,7 +31,7 @@ fn help_of_a_module_word_has_its_comment() {
 
 #[test]
 fn help_of_a_name_known_at_run_time() {
-	assert_contains("use sound\nword = dir(sound)#18\nhelp(word)", &["midi(pitch)", "the MIDI note nearest"]);
+	assert_contains("use sound\nword = dir(sound)#266\nhelp(word)", &["midi(pitch)", "the MIDI note nearest"]);
 }
 
 #[test]

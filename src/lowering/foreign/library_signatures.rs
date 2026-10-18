@@ -26,11 +26,11 @@ pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 		.or_else(|| prelude_signature(word))
 		.or_else(|| libm_signature(word))
 		.or_else(|| text_builtin_signature(word))
+		.or_else(|| emitter_signature(word))
 		.or_else(|| {
 			crate::library_words::is_library_word(word)
 				.then(|| positional(crate::library_words::arity(word), None, Kind::Empty))
-		})
-		.or_else(|| emitter_signature(word))?;
+		})?;
 	Some((parameter_names(&signature), signature))
 }
 
@@ -58,8 +58,7 @@ pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 pub fn library_types(word: &str) -> Vec<String> {
 	let word = crate::library_words::canonical_spelling(word);
 	// each overload's (`reverse` of a list and of a text)
-	let overloads: Vec<String> = crate::ffi::runtime_word_lines()
-		.iter()
+	let overloads: Vec<String> = crate::ffi::typed_word_lines()
 		.filter(|line| line.name == word)
 		.filter_map(|line| line.first_type().map(str::to_string))
 		.collect();

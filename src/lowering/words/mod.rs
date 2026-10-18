@@ -7,7 +7,6 @@ use super::*;
 pub mod braceless_arguments;
 pub mod library_words;
 pub mod member_phrases;
-pub mod music_words;
 pub mod negated_calls;
 pub mod number_words;
 pub mod parse_word;

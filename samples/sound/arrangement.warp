@@ -4,9 +4,9 @@
 use sound
 
 tempo = 96
-at 0 bars { melody([C4 E4 G4 E4], 1 beat) }           # the tune, bar 1
-at 1 bar { melody([F4 A4 C5 A4], 1 beat) }            # bar 2
-at 0 bars play([C3 G3], 1 bar)                         # a pad under bar 1
-at 1 bar play([F2 C3], 1 bar)                          # and under bar 2
-at 2 bars play([C3 E3 G3 C4], 2 beats)                 # the last chord
+at bars(0) { melody([C4 E4 G4 E4], beat 1) }           # the tune, bar 1
+at bar(1) { melody([F4 A4 C5 A4], beat 1) }            # bar 2
+at bars(0) { play([C3 G3], bar 1) }                     # a pad under bar 1
+at bar(1) { play([F2 C3], bar 1) }                      # and under bar 2
+at bars(2) { play([C3 E3 G3 C4], beats 2) }             # the last chord
 wait_sound()

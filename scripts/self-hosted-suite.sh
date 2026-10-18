@@ -143,7 +143,8 @@ cloud_run() {
 	mkdir -p "$REPORTS"
 	rank "${logs[@]}" | tee "$REPORTS/${tip:0:8}.txt"
 	mkdir -p "$(dirname "$COUNTS")"
-	[ -s "$COUNTS" ] && newly_failed "$(tail -1 "$COUNTS" | awk '{ print $2 }')" "${logs[@]}" | tee -a "$REPORTS/${tip:0:8}.txt"
+	# against the last complete run: a line noting "incomplete" lacks the tests of its killed part
+	[ -s "$COUNTS" ] && newly_failed "$(grep -v -e '^#' -e incomplete "$COUNTS" | tail -1 | awk '{ print $2 }')" "${logs[@]}" | tee -a "$REPORTS/${tip:0:8}.txt"
 	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //; s/ passed//')" \
 		"data/self-hosted/${tip:0:8}.txt" >> "$COUNTS"
 	echo "(report: $REPORTS/${tip:0:8}.txt, logs: ${logs[*]})"

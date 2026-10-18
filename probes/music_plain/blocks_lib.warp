@@ -1,0 +1,13 @@
+// play_blocks as a plain library word: the program's own linear block, which its fill fills each time (music-plain)
+use sound
+global calls = 0
+linear hum_block = float[512]
+hum(t: float) := {
+  calls = calls + 1
+  for i in 1 to #hum_block { hum_block#i = 0.5 * sin(2 * pi * 441 * (t + (i - 1) / sample_rate)) }
+  0.0 as float
+}
+played_blocks(fill, cells, seconds) := std_io("sound", "blocks", [fill, linear_address(cells), si_amount(seconds), sample_rate])
+played_blocks(hum, hum_block, 0.1)
+print(round(render_sound("data/sound/probe_blocks.wav") * 100))
+calls

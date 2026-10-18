@@ -716,7 +716,7 @@ impl WasmGcEmitter {
 		self.source_position = None;
 		self.wrapping_ints = crate::compiler::compile_mode::is_fast_program();
 		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
-		self.live_loops = crate::lowering::music_words::live_loop_names(node);
+		self.live_loops = crate::host::live_loop_names(node);
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
 		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));

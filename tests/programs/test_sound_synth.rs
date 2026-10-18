@@ -1,5 +1,5 @@
 // card sound-pro, layer 3 (synthesis): an ADSR envelope (attack, decay, sustain, release in seconds and a share),
-// a noise wave, gain in decibels (`loudness = -6 dB`)
+// a noise wave, gain in decibels (`loudness = dB(-6)`)
 #![cfg(feature = "native")]
 use crate::is;
 
@@ -24,8 +24,8 @@ fn noise_is_a_wave() {
 
 #[test]
 fn gain_in_decibels() {
-	is!("use sound\nx = -6 dB\nround(x * 1000)", 501);
+	is!("use sound\nx = dB(-6)\nround(x * 1000)", 501);
 	is!("use sound\ndecibels(20)", 10.0); // the word it lowers to
-	is!("use sound\nround(-6dB * 1000)", 501);
-	is!("loudness = -20 dB\nplay(C4, 5ms)\nloudness", 0.1);
+	is!("use sound\nround(dB(-6) * 1000)", 501);
+	is!("loudness = dB(-20)\nplay(C4, 5ms)\nloudness", 0.1);
 }
