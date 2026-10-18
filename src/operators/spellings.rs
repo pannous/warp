@@ -5,7 +5,7 @@ use super::*;
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs). The math
 /// spellings (× ≤ √ …) are lib/math.warp's alias lines instead (aliases.rs, decision operator-alias)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 120] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -126,6 +126,7 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 120] = [
 	(".*", Op::Mul),
 	("./", Op::Div),
 	(".^", Op::Pow),
+	(".%", Op::Mod), // card elementwise-modulo: `p .% 289` wraps each coordinate
 	("|>", Op::Pipe),
 	("in", Op::In),
 	("is in", Op::In), // `item is in basket` reads as `item in basket`
@@ -152,7 +153,7 @@ pub(crate) const NEGATED_SPELLINGS: [(&str, &str); 8] = [
 /// Glyphs that are fine as written, so no style hint suggests the ASCII spelling of their operator
 pub(crate) const PLAIN_GLYPHS: &str = "×÷≤≥≠≈⋍±¬⌞⌟…∈∉∋";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
-pub const ELEMENT_WISE_OPERATORS: [Op; 5] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Pow];
+pub const ELEMENT_WISE_OPERATORS: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Pow, Op::Mod];
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
 pub const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
 	(Op::Add, &["plus", "add", "__add__"]),
