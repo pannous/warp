@@ -4,7 +4,7 @@ use super::*;
 use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
-const VOID_WORD: &str = "void";
+use crate::words::VOID_WORD;
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
@@ -544,10 +544,9 @@ impl WarpParser {
 
 				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
 				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header && !is_switch_subject {
-					// Function with body: name(params) { body }
+					// Function with body: name(params) { body }, its head the call
 					let body = self.parse_bracketed('{');
-					let signature = call(&symbol, vec![typed_parameters(args_node)]);
-					Node::List(vec![signature, body], Bracket::Round, Separator::None)
+					Node::List(vec![function_call(symbol, args_node), body], Bracket::Round, Separator::None)
 				} else if symbol == PRINT_WORD {
 					print_call(print_arguments(args_node))
 				} else {
@@ -587,11 +586,20 @@ impl WarpParser {
 fn function_call(symbol: String, args_node: Node) -> Node {
 	let mut items = vec![Symbol(symbol)];
 	match typed_parameters(args_node) {
+		// Swift's labeled parameter `greet(person name: String)` stays one argument, unlike Go's `f(a, b int)`
+		Node::List(args, bracket, Separator::Space) if is_labeled_parameter(&args) => {
+			items.push(Node::List(args, bracket, Separator::Space))
+		}
 		Node::List(args, _, _) => items.extend(args),
 		Node::Empty => {}
 		other => items.push(other),
 	}
 	Node::List(items, Bracket::Round, Separator::None)
+}
+
+/// `person name: String`: a label, then the typed parameter
+fn is_labeled_parameter(words: &[Node]) -> bool {
+	matches!(words, [label, typed] if matches!(label.drop_meta(), Symbol(_)) && matches!(typed.drop_meta(), Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Symbol(_))))
 }
 
 /// The arguments of a glued group `(5)`, `(1, 2)`, `()`, as a round list
