@@ -91,15 +91,19 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
-	loader.program_words = program_words(&program);
+	loader.program_words = crate::compiler::phase_times::timed("resolve: program words", || program_words(&program));
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader
 		.resolve(program)
-		.and_then(|program| loader.finish_imports(program))
+		.and_then(|program| {
+			crate::compiler::phase_times::timed("resolve: finish imports", || loader.finish_imports(program))
+		})
 		.and_then(|program| {
 			loader.loading_implicitly = true;
-			let loaded = loader.implicit_std_modules(&program);
+			let loaded = crate::compiler::phase_times::timed("resolve: implicit modules", || {
+				loader.implicit_std_modules(&program)
+			});
 			loader.loading_implicitly = false;
 			loaded.map(|_| program)
 		})
@@ -108,7 +112,11 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 			None => Ok(program),
 		})
 		.map(|program| crate::modules::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
-		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
+		.map(|program| {
+			crate::compiler::phase_times::timed("resolve: needed definitions", || {
+				with_needed_definitions(program, loader.hidden_apart())
+			})
+		});
 	let files = loader.loaded.iter().chain(&loader.included).filter(|path| path.is_file()).cloned().collect();
 	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;

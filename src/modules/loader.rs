@@ -569,12 +569,15 @@ impl<'a> Loader<'a> {
 		// a program's own `first(xs) := …` takes its calls from the prelude's: a hint, as a used module's is a warning
 		let replaced: Vec<&str> =
 			prelude.iter().filter(|word| self.program_words.contains(word)).map(String::as_str).collect();
-		let replaced = prelude_declarations_of(&replaced);
+		let replaced = crate::compiler::phase_times::timed("prelude: replaced declarations", || {
+			prelude_declarations_of(&replaced)
+		});
 		warn_replaced(&replaced, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
 		let reached = reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat());
 		let module = Node::List(reached, Bracket::None, Separator::Semicolon);
-		let definitions =
-			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))?;
+		let definitions = crate::compiler::phase_times::timed("prelude: load reached", || {
+			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))
+		})?;
 		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
 		// n: int)` overloads it by parameter type (card easy-add)
 		let qualified_words: Vec<&String> =
@@ -591,7 +594,10 @@ impl<'a> Loader<'a> {
 				)
 			})
 		};
-		self.std_definitions.extend(definitions.into_iter().map(qualified));
+		let qualified: Vec<Node> = crate::compiler::phase_times::timed("prelude: qualified names", || {
+			definitions.into_iter().map(qualified).collect()
+		});
+		self.std_definitions.extend(qualified);
 		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
 			qualified_words.iter().for_each(|word| {
