@@ -121,12 +121,20 @@ pub const LIVE_LOOPS_SECTION: &str = "warp.live_loops";
 /// lib/sound.warp's `live_loop(drums, 4)`: its first argument names the loop
 const LIVE_LOOP_WORD: &str = "live_loop";
 
-/// The names of the program's live loops, the functions its `live_loop(drums, 4)` calls play (LIVE_LOOPS_SECTION)
+/// The names of the program's live loops, the functions its `live_loop(drums, 4)` calls play (LIVE_LOOPS_SECTION), as
+/// lowered: `live_loop·2(closure_new(drums), 4)`
 pub fn live_loop_names(program: &Node) -> std::collections::BTreeSet<String> {
+	use crate::analyzer::TEMPORARY_SEPARATOR;
+	let function_named = |cycle: &Node| match cycle.call_parts() {
+		Some((crate::closures::CLOSURE_NEW, [function])) => function.symbol_name().map(str::to_string),
+		_ => cycle.symbol_name().map(str::to_string),
+	};
 	let mut names = std::collections::BTreeSet::new();
 	program.visit(&mut |node| {
-		if let Some((LIVE_LOOP_WORD, [cycle, ..])) = node.call_parts() {
-			names.extend(cycle.symbol_name().map(str::to_string));
+		if let Some((word, [cycle, ..])) = node.call_parts() {
+			if word.split(TEMPORARY_SEPARATOR).next() == Some(LIVE_LOOP_WORD) {
+				names.extend(function_named(cycle));
+			}
 		}
 	});
 	names

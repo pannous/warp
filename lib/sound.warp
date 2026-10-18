@@ -545,10 +545,10 @@ stop_sound(handle = 0) := std_io("sound", "stop", [handle])
 // a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play(C4, 4s);
 // fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. save sound writes the fade too
 fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
-// a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t); play(hum, 2s)
-// (play([left, right], 2s) in stereo, or play_signal) calls hum for every sample, t its time in seconds, a block ahead of
-// the speaker; returns the handle when the last is queued. The parameter's type makes hum a function of a float
-// (src/lowering/types/function_types.rs)
+// a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t), of a float to a float by
+// the parameter's type (src/lowering/types/function_types.rs); play(hum, 2s) (play([left, right], 2s) in stereo, or
+// play_signal) calls hum for every sample, t its time in seconds, a block ahead of the speaker; returns the handle when
+// the last is queued
 play_signal(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
 mono_signal(signal: (float) -> float, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
 stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := std_io("sound", "signal", [[left, right], si_amount(seconds), sample_rate])

@@ -6,14 +6,14 @@ use crate::is;
 #[test]
 fn a_beat_is_a_share_of_a_minute() {
 	is!("use sound\nx = beat(1/4)\nx", 0.125);
-	is!("use sound\n2 beats", 1.0);
+	is!("use sound\nbeats 2", 1.0);
 	is!("use sound\nx = bars 2\nx", 4.0);
 	is!("use sound\nbeat_seconds(1) + bar_seconds(1)", 2.5); // the words they lower to
 }
 
 #[test]
 fn the_tempo_sets_the_beat() {
-	is!("use sound\nglobal tempo = 90\nplay(C4, 5ms)\n3 beats", 2.0);
+	is!("use sound\nglobal tempo = 90\nplay(C4, 5ms)\nbeats 3", 2.0);
 	is!("use sound\nglobal tempo = 240\nplay(C4, beat(1/8))\nsound_queued() <= 1/32", true);
 }
 
@@ -27,6 +27,6 @@ fn notes_last_beats() {
 /// a module's `global` is a setting: the program's top-level `tempo = 60` sets it, no `global` needed
 #[test]
 fn the_program_sets_the_modules_settings() {
-	is!("use sound\ntempo = 60\nplay(C4, 5ms)\n2 beats", 2.0);
+	is!("use sound\ntempo = 60\nplay(C4, 5ms)\nbeats 2", 2.0);
 	is!("use sound\nnote_seconds = 0.01\nplay C4\nsound_queued() <= 0.01", true);
 }
