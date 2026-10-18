@@ -1,36 +1,41 @@
-//! Texts as runtime code sees them: their units, grapheme clusters, bounds, and the text heap
+//! Texts as runtime code sees them: their units, grapheme clusters, bounds, and the text heap. Readers walk the $Text
+//! byte array by byte index: `bytes` the array, `at` a byte index, `end` the length
 use super::*;
 
 impl WasmGcEmitter {
 	/// utf8_next and utf8_decode: every reader of text code point by code point steps with these two
 	pub(super) fn emit_utf8_steps(&mut self) {
-		let int = ValType::I32;
-		// utf8_next(pointer, end): past the code point at pointer, never past end
-		self.runtime_function("utf8_next", vec![int, int], vec![int], vec![int], |_, f| {
-			let next = 2;
+		let (int, bytes_type) = (ValType::I32, self.text_ref());
+		let text_type = self.type_manager.text_type;
+		let params = vec![bytes_type, int, int];
+		let (bytes, at, end) = (0, 1, 2);
+		// utf8_next(bytes, at, end): past the code point at `at`, never past end
+		self.runtime_function("utf8_next", params.clone(), vec![int], vec![int], |_, f| {
+			let next = 3;
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(0), I::LocalGet(0), I::I32Load8U(BYTE), I::LocalSet(next),
+				I::LocalGet(at), I::LocalGet(bytes), I::LocalGet(at), I::ArrayGetU(text_type), I::LocalSet(next),
 				I32Const(1), I32Const(2), I32Const(3), I32Const(4), I::LocalGet(next), I32Const(utf8::FOUR_BYTE_LEAD),
 				I::I32LtU, I::Select, I::LocalGet(next), I32Const(utf8::THREE_BYTE_LEAD), I::I32LtU, I::Select,
 				I::LocalGet(next), I32Const(utf8::ONE_BYTE_END), I::I32LtU, I::Select, I::I32Add, I::LocalTee(next),
-				I::LocalGet(1), I::LocalGet(next), I::LocalGet(1), I::I32LtU, I::Select,
+				I::LocalGet(end), I::LocalGet(next), I::LocalGet(end), I::I32LtU, I::Select,
 			]);
 		});
 
-		// utf8_decode(pointer, end): the lead byte keeps 7, 5, 4 or 3 payload bits, each continuation byte adds 6
-		self.runtime_function("utf8_decode", vec![int, int], vec![int], vec![int], |_, f| {
-			let codepoint = 2;
+		// utf8_decode(bytes, at, end): the lead byte keeps 7, 5, 4 or 3 payload bits, each continuation byte adds 6
+		self.runtime_function("utf8_decode", params, vec![int], vec![int], |s, f| {
+			let codepoint = 3;
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(0), I::I32Load8U(BYTE), I::LocalTee(codepoint), I32Const(utf8::ONE_BYTE_END), I::I32GeU,
+				I::LocalGet(bytes), I::LocalGet(at), I::ArrayGetU(text_type), I::LocalTee(codepoint),
+				I32Const(utf8::ONE_BYTE_END), I::I32GeU,
 				I::If(BlockType::Empty),
 					I::LocalGet(codepoint), I32Const(utf8::FOUR_BYTE_PAYLOAD), I32Const(utf8::THREE_BYTE_PAYLOAD),
 					I32Const(utf8::TWO_BYTE_PAYLOAD), I::LocalGet(codepoint), I32Const(utf8::THREE_BYTE_LEAD),
 					I::I32GeU, I::Select, I::LocalGet(codepoint), I32Const(utf8::FOUR_BYTE_LEAD), I::I32GeU, I::Select,
 					I::I32And, I::LocalSet(codepoint),
 			]);
-			Self::emit_skip_continuation_bytes(f, 0, 1, Some(codepoint));
+			s.emit_skip_continuation_bytes(f, (bytes, at, end), Some(codepoint));
 			Self::emit_list(f, &[I::End, I::LocalGet(codepoint)]);
 		});
 	}
@@ -39,44 +44,47 @@ impl WasmGcEmitter {
 	/// `#`, `count`, `length` and `.graphemes` user-perceived characters (grapheme clusters, see GRAPHEME_EXTEND)
 	pub(super) fn emit_text_units(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
-		let (int, long) = (ValType::I32, ValType::I64);
+		let (int, long, bytes_type) = (ValType::I32, ValType::I64, self.text_ref());
+		let text_type = self.type_manager.text_type;
 
-		// grapheme_end(pointer, end): past the grapheme cluster starting at pointer, like strings::grapheme_clusters
-		self.runtime_function("grapheme_end", vec![int, int], vec![int], vec![int; 3], |s, f| {
-			let (previous, next, unpaired) = (2, 3, 4);
+		// grapheme_end(bytes, at, end): past the grapheme cluster starting at `at`, like strings::grapheme_clusters
+		self.runtime_function("grapheme_end", vec![bytes_type, int, int], vec![int], vec![int; 3], |s, f| {
+			let (bytes, at, end, previous, next, unpaired) = (0, 1, 2, 3, 4, 5);
 			// fast path (card text-costs): an ASCII character but \r before an ASCII one or the end is a whole grapheme
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(0), I::I32Load8U(BYTE), I::LocalTee(previous), I32Const(0x80), I::I32LtU,
-				I::LocalGet(previous), I32Const('\r' as i32), I::I32Ne, I::I32And, I::If(BlockType::Empty),
-					I::LocalGet(0), I32Const(1), I::I32Add, I::LocalTee(next), I::LocalGet(1), I::I32GeU,
+				I::LocalGet(bytes), I::LocalGet(at), I::ArrayGetU(text_type), I::LocalTee(previous), I32Const(0x80),
+				I::I32LtU, I::LocalGet(previous), I32Const('\r' as i32), I::I32Ne, I::I32And, I::If(BlockType::Empty),
+					I::LocalGet(at), I32Const(1), I::I32Add, I::LocalTee(next), I::LocalGet(end), I::I32GeU,
 					I::If(BlockType::Empty),
 						I::LocalGet(next), I::Return,
 					I::End,
-					I::LocalGet(next), I::I32Load8U(BYTE), I32Const(0x80), I::I32LtU, I::If(BlockType::Empty),
+					I::LocalGet(bytes), I::LocalGet(next), I::ArrayGetU(text_type), I32Const(0x80), I::I32LtU,
+					I::If(BlockType::Empty),
 						I::LocalGet(next), I::Return,
 				I::End, I::End,
 			]);
-			s.emit_next_code_point(f, 0, 1, previous);
+			s.emit_next_code_point(f, (bytes, at, end), previous);
 			// CR LF stays together, any other control ends the cluster
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(previous), I32Const('\r' as i32), I::I32Eq, I::LocalGet(0), I::LocalGet(1), I::I32LtU,
+				I::LocalGet(previous), I32Const('\r' as i32), I::I32Eq, I::LocalGet(at), I::LocalGet(end), I::I32LtU,
 				I::I32And, I::If(BlockType::Empty),
-					I::LocalGet(0), I::I32Load8U(BYTE), I32Const('\n' as i32), I::I32Eq, I::If(BlockType::Empty),
-						I::LocalGet(0), I32Const(1), I::I32Add, I::Return,
+					I::LocalGet(bytes), I::LocalGet(at), I::ArrayGetU(text_type), I32Const('\n' as i32), I::I32Eq,
+					I::If(BlockType::Empty),
+						I::LocalGet(at), I32Const(1), I::I32Add, I::Return,
 				I::End, I::End,
 			]);
 			Self::emit_in_ranges(f, previous, &[(0x00, 0x1F), (0x7F, 0x9F)]);
-			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(at), I::Return, I::End]);
 			Self::emit_in_ranges(f, previous, &[REGIONAL_INDICATORS]);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalSet(unpaired),
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-						I::LocalGet(0), I::LocalGet(1), I::I32GeU, I::BrIf(1),
-						I::LocalGet(0), I::LocalGet(1),
+						I::LocalGet(at), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+						I::LocalGet(bytes), I::LocalGet(at), I::LocalGet(end),
 			]);
 			s.call(f, "utf8_decode");
 			f.instruction(&I::LocalSet(next));
@@ -91,111 +99,78 @@ impl WasmGcEmitter {
 				I::I32And, I::I32Or, I::I32Eqz, I::BrIf(1),
 				I32Const(0), I::LocalSet(unpaired),
 				I::LocalGet(next), I::LocalSet(previous),
-				I::LocalGet(0), I::LocalGet(1),
+				I::LocalGet(bytes), I::LocalGet(at), I::LocalGet(end),
 			]);
 			s.call(f, "utf8_next");
-			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End, I::LocalGet(0)]);
+			Self::emit_list(f, &[I::LocalSet(at), I::Br(0), I::End, I::End, I::LocalGet(at)]);
 		});
 
-		// text_grapheme_back(start, at, end, index, wanted) -> (address, index): from the grapheme `index` at `at` back to
-		// one at or before `wanted`, by the ASCII bytes before it (each but \n starts a grapheme: nothing joins an ASCII
-		// character to what precedes it, \r\n aside) and the graphemes counted from there; (start, 1) beyond BACK_REACH
+		// text_grapheme_back(bytes, at, end, index, wanted) -> (at, index): from the grapheme `index` at `at` back to one
+		// at or before `wanted`, by the ASCII bytes before it (each but \n starts a grapheme: nothing joins an ASCII
+		// character to what precedes it, \r\n aside) and the graphemes counted from there; (0, 1) beyond BACK_REACH
 		self.runtime_function(
 			"text_grapheme_back",
-			vec![int, int, int, long, long],
+			vec![bytes_type, int, int, long, long],
 			vec![int, long],
 			vec![int; 3],
 			|s, f| {
-				let (start, at, end, index, wanted, back, pointer, counted) = (0, 1, 2, 3, 4, 5, 6, 7);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(at),
-						I::LocalSet(pointer),
-						I::Block(BlockType::Empty),
+				let (bytes, at, end, index, wanted, back, pointer, counted) = (0, 1, 2, 3, 4, 5, 6, 7);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(at), I::LocalSet(pointer),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(index),
-						I::LocalGet(wanted),
-						I::I64LeS,
-						I::If(BlockType::Empty),
-						I::LocalGet(pointer),
-						I::LocalGet(index),
-						I::Return,
-						I::End,
-						// the nearest ASCII byte but \n before pointer
-						I::LocalGet(pointer),
-						I::LocalSet(back),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(back),
-						I32Const(1),
-						I::I32Sub,
-						I::LocalTee(back),
-						I::LocalGet(start),
-						I::I32LtU,
-						I::LocalGet(back),
-						I32Const(BACK_REACH),
-						I::I32Add,
-						I::LocalGet(at),
-						I::I32LtU,
-						I::I32Or,
-						I::BrIf(2),
-						I::LocalGet(back),
-						I::I32Load8U(BYTE),
-						I::LocalTee(counted),
-						I32Const(utf8::ONE_BYTE_END),
-						I::I32GeU,
-						I::LocalGet(counted),
-						I32Const(b'\n' as i32),
-						I::I32Eq,
-						I::I32Or,
-						I::BrIf(0),
-						I::End,
-						// its graphemes up to pointer
-						I::LocalGet(back),
-						I::LocalSet(counted),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(counted),
-						I::LocalGet(end),
-					],
-				);
+							I::LocalGet(index), I::LocalGet(wanted), I::I64LeS, I::If(BlockType::Empty),
+								I::LocalGet(pointer), I::LocalGet(index), I::Return,
+							I::End,
+							// the nearest ASCII byte but \n before pointer
+							I::LocalGet(pointer), I::LocalSet(back),
+							I::Loop(BlockType::Empty),
+								I::LocalGet(back), I32Const(1), I::I32Sub, I::LocalTee(back), I32Const(0), I::I32LtS,
+								I::LocalGet(back), I32Const(BACK_REACH), I::I32Add, I::LocalGet(at), I::I32LtS,
+								I::I32Or, I::BrIf(2),
+								I::LocalGet(bytes), I::LocalGet(back), I::ArrayGetU(text_type), I::LocalTee(counted),
+								I32Const(utf8::ONE_BYTE_END), I::I32GeU, I::LocalGet(counted), I32Const(b'\n' as i32),
+								I::I32Eq, I::I32Or, I::BrIf(0),
+							I::End,
+							// its graphemes up to pointer
+							I::LocalGet(back), I::LocalSet(counted),
+							I::Loop(BlockType::Empty),
+								I::LocalGet(bytes), I::LocalGet(counted), I::LocalGet(end),
+				]);
 				s.call(f, "grapheme_end");
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
-					I::LocalSet(counted),
-					I::LocalGet(index), I::I64Const(1), I::I64Sub, I::LocalSet(index),
-					I::LocalGet(counted), I::LocalGet(pointer), I::I32LtU, I::BrIf(0),
+								I::LocalSet(counted),
+								I::LocalGet(index), I::I64Const(1), I::I64Sub, I::LocalSet(index),
+								I::LocalGet(counted), I::LocalGet(pointer), I::I32LtU, I::BrIf(0),
+							I::End,
+							I::LocalGet(back), I::LocalSet(pointer),
+							I::Br(0),
+						I::End,
 					I::End,
-					I::LocalGet(back), I::LocalSet(pointer),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(start), I::I64Const(1),
+					I32Const(0), I::I64Const(1),
 				]);
 			},
 		);
 
-		// text_grapheme_offset(text, index): address of the grapheme at the 1-based index, trapping out of range. It walks
-		// on from the nearest text cursor at or before the index in the same text, or back from one past it (a look
-		// back, `src#(i-1)`, text_grapheme_back), then moves that text's cursor there: a scan takes linear time. A text
-		// without a cursor takes the one with the smallest index, the cheapest to walk again, so short texts read by
-		// turns (`word#j`) leave a long text's cursor where it is (card long-text)
-		let locals = vec![int, int, int, long, long, int, long, int, long];
+		// text_grapheme_offset(text, index): byte index of the grapheme at the 1-based index, trapping out of range. It
+		// walks on from the nearest text cursor at or before the index in the same text, or back from one past it (a
+		// look back, `src#(i-1)`, text_grapheme_back), then moves that text's cursor there: a scan takes linear time. A
+		// text without a cursor takes the one with the smallest index, the cheapest to walk again, so short texts read
+		// by turns (`word#j`) leave a long text's cursor where it is (card long-text)
+		let locals = vec![int, int, long, long, int, long, int, long, bytes_type];
 		self.runtime_function("text_grapheme_offset", vec![node_ref, long], vec![int], locals, |s, f| {
-			let (pointer, end, start, wanted, base, back, back_index, slot, least) = (2, 3, 4, 5, 6, 7, 8, 9, 10);
+			let (pointer, end, wanted, base, back, back_index, slot, least, bytes) = (2, 3, 4, 5, 6, 7, 8, 9, 10);
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
-			s.emit_text_bounds(f, pointer, end);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(pointer), I::LocalSet(start),
-				I::LocalGet(1), I::LocalSet(wanted),
-				I::I64Const(1), I::LocalSet(base),
-			]);
+			s.emit_text_bounds(f, (bytes, pointer, end));
+			Self::emit_list(f, &[I::LocalGet(1), I::LocalSet(wanted), I::I64Const(1), I::LocalSet(base)]);
 			let cursors = s.text_cursors();
 			for &(text, index, at) in &cursors {
 				#[rustfmt::skip]
 				let in_this_text = [
-					I::GlobalGet(text), I::LocalGet(start), I::I32Eq, I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
+					I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
 					I::I32And,
 				];
 				Self::emit_list(f, &in_this_text);
@@ -212,8 +187,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[
 					I::GlobalGet(index), I::LocalGet(wanted), I::I64GtS, I::I32And, I::LocalGet(base),
 					I::LocalGet(wanted), I::I64LtS, I::I32And, I::If(BlockType::Empty),
-						I::LocalGet(start), I::GlobalGet(at), I::LocalGet(end), I::GlobalGet(index),
-						I::LocalGet(wanted),
+						I::LocalGet(bytes), I::GlobalGet(at), I::LocalGet(end), I::GlobalGet(index), I::LocalGet(wanted),
 				]);
 				s.call(f, "text_grapheme_back");
 				#[rustfmt::skip]
@@ -236,30 +210,27 @@ impl WasmGcEmitter {
 			]);
 			s.emit_fail_if(f, "index_out_of_range");
 			Self::emit_index_compare(f, I::I64LeS);
-			Self::emit_list(f, &[I::BrIf(1), I::LocalGet(pointer), I::LocalGet(end)]);
+			Self::emit_list(f, &[I::BrIf(1), I::LocalGet(bytes), I::LocalGet(pointer), I::LocalGet(end)]);
 			s.call(f, "grapheme_end");
 			f.instruction(&I::LocalSet(pointer));
 			Self::emit_index_compare(f, I::I64Sub);
 			Self::emit_list(f, &[I::LocalSet(1), I::Br(0), I::End, I::End]);
-			s.emit_move_text_cursor(f, &cursors, (start, wanted, pointer), (slot, least));
+			s.emit_move_text_cursor(f, &cursors, (bytes, wanted, pointer), (slot, least));
 			f.instruction(&I::LocalGet(pointer));
 		});
 
 		// text_grapheme_count(text) -> i64
-		let locals = vec![int, int, long, int, int, long];
+		let locals = vec![int, int, long, bytes_type, int, long];
 		self.runtime_function("text_grapheme_count", vec![node_ref], vec![long], locals, |s, f| {
 			s.emit_codepoint_counts_one(f);
-			let (pointer, end, count, start, slot, least) = (1, 2, 3, 4, 5, 6);
-			s.emit_text_bounds(f, pointer, end);
-			f.instruction(&I::LocalGet(pointer));
-			f.instruction(&I::LocalSet(start));
+			let (pointer, end, count, bytes, slot, least) = (1, 2, 3, 4, 5, 6);
+			s.emit_text_bounds(f, (bytes, pointer, end));
 			// a text counted before (its bytes never change): its count
 			let counted = s.texts_counted();
-			for &(counted_start, counted_end, counted_count) in &counted {
+			for &(counted_text, counted_count) in &counted {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
-					I::LocalGet(start), I::GlobalGet(counted_start), I::I32Eq, I::LocalGet(end),
-					I::GlobalGet(counted_end), I::I32Eq, I::I32And, I::If(BlockType::Empty),
+					I::LocalGet(bytes), I::GlobalGet(counted_text), I::RefEq, I::If(BlockType::Empty),
 						I::GlobalGet(counted_count), I::Return,
 					I::End,
 				]);
@@ -269,7 +240,7 @@ impl WasmGcEmitter {
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 						I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
-						I::LocalGet(pointer), I::LocalGet(end),
+						I::LocalGet(bytes), I::LocalGet(pointer), I::LocalGet(end),
 			]);
 			s.call(f, "grapheme_end");
 			#[rustfmt::skip]
@@ -282,27 +253,26 @@ impl WasmGcEmitter {
 			]);
 			// it replaces the smaller count: a short text counted between the counts of a long one leaves it (card
 			// text-slice: `count(t[a:b])` in a loop recounted t at each slice)
-			Self::emit_least_slot(f, counted.iter().map(|&(_, _, counted_count)| counted_count), slot, least);
-			let parts = counted
-				.iter()
-				.map(|&(text_start, text_end, text_count)| [(text_start, start), (text_end, end), (text_count, count)]);
+			Self::emit_least_slot(f, counted.iter().map(|&(_, counted_count)| counted_count), slot, least);
+			let parts = counted.iter().map(|&(text, text_count)| [(text, bytes), (text_count, count)]);
 			Self::emit_set_slot(f, slot, parts);
 			f.instruction(&I::LocalGet(count));
 		});
 
 		// text_codepoint_count(text) -> i64: every byte but a continuation byte (10xxxxxx) starts a code point
-		self.runtime_function("text_codepoint_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
+		let locals = vec![int, int, long, bytes_type];
+		self.runtime_function("text_codepoint_count", vec![node_ref], vec![long], locals, |s, f| {
 			s.emit_codepoint_counts_one(f);
-			let (pointer, end, count) = (1, 2, 3);
-			s.emit_text_bounds(f, pointer, end);
+			let (pointer, end, count, bytes) = (1, 2, 3, 4);
+			s.emit_text_bounds(f, (bytes, pointer, end));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 						I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
-						I::LocalGet(count), I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const(utf8::CONTINUATION_MASK),
-						I::I32And, I32Const(utf8::CONTINUATION_MARK), I::I32Ne, I::I64ExtendI32U, I::I64Add,
-						I::LocalSet(count),
+						I::LocalGet(count), I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(text_type),
+						I32Const(utf8::CONTINUATION_MASK), I::I32And, I32Const(utf8::CONTINUATION_MARK), I::I32Ne,
+						I::I64ExtendI32U, I::I64Add, I::LocalSet(count),
 						I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer),
 						I::Br(0),
 				I::End, I::End,
@@ -337,25 +307,25 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::If(BlockType::Empty), I::I64Const(1), I::Return, I::End]);
 	}
 
-	/// The cursor of the text at local `start` set to grapheme `wanted` at address `pointer` (the locals of `place`): the
-	/// cursor holding that text, else the one with the smallest index (the locals of `scratch`)
+	/// The cursor of the text in local `bytes` set to grapheme `wanted` at byte index `pointer`: the cursor holding that
+	/// text, else the one with the smallest index (locals `slot` and `least` are scratch)
 	fn emit_move_text_cursor(
 		&self,
 		f: &mut Function,
 		cursors: &[(u32, u32, u32)],
-		(start, wanted, pointer): (u32, u32, u32),
+		(bytes, wanted, pointer): (u32, u32, u32),
 		(slot, least): (u32, u32),
 	) {
 		Self::emit_least_slot(f, cursors.iter().map(|&(_, index, _)| index), slot, least);
 		for (number, &(text, _, _)) in cursors.iter().enumerate() {
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::GlobalGet(text), I::LocalGet(start), I::I32Eq, I::If(BlockType::Empty),
+				I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::If(BlockType::Empty),
 					I::I32Const(number as i32), I::LocalSet(slot),
 				I::End,
 			]);
 		}
-		let parts = cursors.iter().map(|&(text, index, at)| [(text, start), (index, wanted), (at, pointer)]);
+		let parts = cursors.iter().map(|&(text, index, at)| [(text, bytes), (index, wanted), (at, pointer)]);
 		Self::emit_set_slot(f, slot, parts);
 	}
 
@@ -389,40 +359,50 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Locals `pointer` and `end` span the bytes of text node local 0
-	pub(in crate::wasm_emitter) fn emit_text_bounds(&self, func: &mut Function, pointer: u32, end: u32) {
-		self.emit_text_field(func, 0, 0);
-		func.instruction(&I::LocalTee(pointer));
-		self.emit_text_field(func, 0, 1);
-		Self::emit_list(func, &[I::I32Add, I::LocalSet(end)]);
+	/// Local `bytes` set to the $Text of text node local 0, `pointer` to 0 and `end` to its length
+	pub(in crate::wasm_emitter) fn emit_text_bounds(
+		&self,
+		func: &mut Function,
+		(bytes, pointer, end): (u32, u32, u32),
+	) {
+		self.emit_text_bytes(func, 0);
+		Self::emit_list(func, &[I::LocalTee(bytes), I::ArrayLen, I::LocalSet(end), I32Const(0), I::LocalSet(pointer)]);
 	}
 
 	/// i32 1 when the text from local `pointer` to local `end` is one character: as many bytes as its first byte's UTF-8
 	/// sequence, 1 + (b ≥ C0) + (b ≥ E0) + (b ≥ F0); local `byte` is scratch
-	pub(in crate::wasm_emitter) fn emit_is_one_character(func: &mut Function, pointer: u32, end: u32, byte: u32) {
+	pub(in crate::wasm_emitter) fn emit_is_one_character(
+		&self,
+		func: &mut Function,
+		(bytes, pointer, end): (u32, u32, u32),
+		byte: u32,
+	) {
+		// an empty text has no first byte to read
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
+			I::LocalGet(end), I::LocalGet(pointer), I::I32GtU, I::If(BlockType::Result(ValType::I32)),
 			I::LocalGet(end), I::LocalGet(pointer), I::I32Sub,
 			I::I32Const(1),
-			I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I::I32Const(utf8::TWO_BYTE_LEAD), I::I32GeU,
+			I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(self.type_manager.text_type), I::LocalTee(byte), I::I32Const(utf8::TWO_BYTE_LEAD), I::I32GeU,
 			I::I32Add,
 			I::LocalGet(byte), I::I32Const(utf8::THREE_BYTE_LEAD), I::I32GeU, I::I32Add,
 			I::LocalGet(byte), I::I32Const(utf8::FOUR_BYTE_LEAD), I::I32GeU, I::I32Add,
 			I::I32Eq,
+			I::Else, I::I32Const(0), I::End,
 		]);
 	}
 
-	/// The code point at local `pointer` into local `code_point`, and `pointer` past it (never past `end`)
+	/// The code point at byte index local `pointer` of local `bytes` into local `code_point`, and `pointer` past it (never
+	/// past `end`)
 	pub(in crate::wasm_emitter) fn emit_next_code_point(
 		&self,
 		func: &mut Function,
-		pointer: u32,
-		end: u32,
+		(bytes, pointer, end): (u32, u32, u32),
 		code_point: u32,
 	) {
-		Self::emit_list(func, &[I::LocalGet(pointer), I::LocalGet(end)]);
+		Self::emit_list(func, &[I::LocalGet(bytes), I::LocalGet(pointer), I::LocalGet(end)]);
 		self.call(func, "utf8_decode");
-		Self::emit_list(func, &[I::LocalSet(code_point), I::LocalGet(pointer), I::LocalGet(end)]);
+		Self::emit_list(func, &[I::LocalSet(code_point), I::LocalGet(bytes), I::LocalGet(pointer), I::LocalGet(end)]);
 		self.call(func, "utf8_next");
 		func.instruction(&I::LocalSet(pointer));
 	}
@@ -437,86 +417,64 @@ impl WasmGcEmitter {
 		]);
 	}
 
-	/// Write the code point in local `code_point` as the `width` UTF-8 bytes at local `at`; uses up `code_point`, `width`
-	/// and `lead`
+	/// Write the code point in local `code_point` as the `width` UTF-8 bytes at byte index local `at` of the $Text in
+	/// local `bytes`; uses up `code_point`, `width` and `lead`
 	pub(in crate::wasm_emitter) fn emit_utf8_store(
+		&self,
 		func: &mut Function,
-		at: u32,
+		(bytes, at): (u32, u32),
 		code_point: u32,
 		width: u32,
 		lead: u32,
 	) {
-		Self::emit_list(
-			func,
-			&[
-				// lead byte marker by width
-				I32Const(0),
-				I32Const(utf8::TWO_BYTE_LEAD),
-				I32Const(utf8::THREE_BYTE_LEAD),
-				I32Const(utf8::FOUR_BYTE_LEAD),
-				I::LocalGet(width),
-				I32Const(3),
-				I::I32Eq,
-				I::Select,
-				I::LocalGet(width),
-				I32Const(2),
-				I::I32Eq,
-				I::Select,
-				I::LocalGet(width),
-				I32Const(1),
-				I::I32Eq,
-				I::Select,
-				I::LocalSet(lead),
-				// continuation bytes from the last one back, 6 bits each
-				I::Block(BlockType::Empty),
+		let text_type = self.type_manager.text_type;
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			// lead byte marker by width
+			I32Const(0), I32Const(utf8::TWO_BYTE_LEAD), I32Const(utf8::THREE_BYTE_LEAD), I32Const(utf8::FOUR_BYTE_LEAD),
+			I::LocalGet(width), I32Const(3), I::I32Eq, I::Select,
+			I::LocalGet(width), I32Const(2), I::I32Eq, I::Select,
+			I::LocalGet(width), I32Const(1), I::I32Eq, I::Select,
+			I::LocalSet(lead),
+			// continuation bytes from the last one back, 6 bits each
+			I::Block(BlockType::Empty),
 				I::Loop(BlockType::Empty),
-				I::LocalGet(width),
-				I32Const(1),
-				I::I32LeU,
-				I::BrIf(1),
-				I::LocalGet(width),
-				I32Const(1),
-				I::I32Sub,
-				I::LocalTee(width),
-				I::LocalGet(at),
-				I::I32Add,
-				I::LocalGet(code_point),
-				I32Const(utf8::CONTINUATION_PAYLOAD),
-				I::I32And,
-				I32Const(utf8::CONTINUATION_MARK),
-				I::I32Or,
-				I::I32Store8(BYTE),
-				I::LocalGet(code_point),
-				I32Const(utf8::PAYLOAD_BITS),
-				I::I32ShrU,
-				I::LocalSet(code_point),
-				I::Br(0),
+					I::LocalGet(width), I32Const(1), I::I32LeU, I::BrIf(1),
+					I::LocalGet(bytes),
+					I::LocalGet(width), I32Const(1), I::I32Sub, I::LocalTee(width), I::LocalGet(at), I::I32Add,
+					I::LocalGet(code_point), I32Const(utf8::CONTINUATION_PAYLOAD), I::I32And,
+					I32Const(utf8::CONTINUATION_MARK), I::I32Or, I::ArraySet(text_type),
+					I::LocalGet(code_point), I32Const(utf8::PAYLOAD_BITS), I::I32ShrU, I::LocalSet(code_point),
+					I::Br(0),
 				I::End,
-				I::End,
-				I::LocalGet(at),
-				I::LocalGet(code_point),
-				I::LocalGet(lead),
-				I::I32Or,
-				I::I32Store8(BYTE),
-			],
-		);
+			I::End,
+			I::LocalGet(bytes), I::LocalGet(at), I::LocalGet(code_point), I::LocalGet(lead), I::I32Or,
+			I::ArraySet(text_type),
+		]);
 	}
 
 	/// pointer++ past following UTF-8 continuation bytes (10xxxxxx), shifting their 6 bits into `accumulator`
-	pub(super) fn emit_skip_continuation_bytes(func: &mut Function, pointer: u32, end: u32, accumulator: Option<u32>) {
+	pub(super) fn emit_skip_continuation_bytes(
+		&self,
+		func: &mut Function,
+		(bytes, pointer, end): (u32, u32, u32),
+		accumulator: Option<u32>,
+	) {
+		let text_type = self.type_manager.text_type;
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
 			I::Loop(BlockType::Empty),
 				I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalTee(pointer), I::LocalGet(end), I::I32LtU,
 				I::If(BlockType::Empty),
-					I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const(utf8::CONTINUATION_MASK), I::I32And,
+					I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(text_type), I32Const(utf8::CONTINUATION_MASK),
+					I::I32And,
 					I32Const(utf8::CONTINUATION_MARK), I::I32Eq, I::If(BlockType::Empty),
 		]);
 		if let Some(accumulator) = accumulator {
 			#[rustfmt::skip]
 			Self::emit_list(func, &[
-				I::LocalGet(accumulator), I32Const(utf8::PAYLOAD_BITS), I::I32Shl, I::LocalGet(pointer),
-				I::I32Load8U(BYTE), I32Const(utf8::CONTINUATION_PAYLOAD), I::I32And, I::I32Or, I::LocalSet(accumulator),
+				I::LocalGet(accumulator), I32Const(utf8::PAYLOAD_BITS), I::I32Shl, I::LocalGet(bytes),
+				I::LocalGet(pointer), I::ArrayGetU(text_type), I32Const(utf8::CONTINUATION_PAYLOAD), I::I32And, I::I32Or, I::LocalSet(accumulator),
 			]);
 		}
 		Self::emit_list(func, &[I::Br(2), I::End, I::End, I::End]);
@@ -524,6 +482,251 @@ impl WasmGcEmitter {
 }
 
 impl WasmGcEmitter {
+	/// The functions every text operation builds on: text_from_memory(ptr, len) copies bytes a host or a builder left in
+	/// linear memory into a new $Text, text_bytes_join, text_bytes_equal and text_flat
+	pub(in crate::wasm_emitter) fn emit_text_foundation(&mut self) {
+		let (int, text) = (ValType::I32, self.text_ref());
+		let text_type = self.type_manager.text_type;
+		self.runtime_function(TEXT_FROM_MEMORY, vec![int, int], vec![text], vec![text, int], |_, f| {
+			let (pointer, length, bytes, index) = (0, 1, 2, 3);
+			Self::emit_list(f, &[I::LocalGet(length), I::ArrayNewDefault(text_type), I::LocalSet(bytes)]);
+			let condition = [I::LocalGet(index), I::LocalGet(length), I::I32LtU];
+			#[rustfmt::skip]
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(bytes), I::LocalGet(index), I::LocalGet(pointer), I::LocalGet(index), I::I32Add,
+				I::I32Load8U(BYTE), I::ArraySet(text_type),
+				I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+			]);
+			Self::emit_list(f, &[I::LocalGet(bytes), I::RefAsNonNull]);
+		});
+		// one call per literal: array.new_data inline takes several times the machine code of a call
+		self.runtime_function(TEXT_LITERAL, vec![int, int], vec![text], vec![], |_, f| {
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::LocalGet(1),
+				I::ArrayNewData { array_type_index: text_type, array_data_index: TEXT_SEGMENT },
+			]);
+		});
+		self.runtime_function(TEXT_BYTES_JOIN, vec![text, text], vec![text], vec![text], |_, f| {
+			let (first, second, joined) = (0, 1, 2);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(first), I::ArrayLen, I::LocalGet(second), I::ArrayLen, I::I32Add,
+				I::ArrayNewDefault(text_type), I::LocalTee(joined),
+				I32Const(0), I::LocalGet(first), I32Const(0), I::LocalGet(first), I::ArrayLen,
+				I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+				I::LocalGet(joined), I::LocalGet(first), I::ArrayLen, I::LocalGet(second), I32Const(0),
+				I::LocalGet(second), I::ArrayLen,
+				I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+				I::LocalGet(joined), I::RefAsNonNull,
+			]);
+		});
+		self.runtime_function(TEXT_PIECE, vec![text, int, int], vec![text], vec![text], |_, f| {
+			let (bytes, start, length, piece) = (0, 1, 2, 3);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(length), I::ArrayNewDefault(text_type), I::LocalTee(piece),
+				I32Const(0), I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(length),
+				I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+				I::LocalGet(piece),
+			]);
+		});
+		self.emit_text_bytes_equal();
+		self.emit_text_flat();
+	}
+
+	/// text_bytes_equal($Text, $Text) -> i32: the same bytes
+	pub(in crate::wasm_emitter) fn emit_text_bytes_equal(&mut self) {
+		let (text, text_type) = (self.text_ref(), self.type_manager.text_type);
+		self.runtime_function(TEXT_BYTES_EQUAL, vec![text, text], vec![ValType::I32], vec![ValType::I32], |_, f| {
+			let (first, second, index) = (0, 1, 2);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(first), I::ArrayLen, I::LocalGet(second), I::ArrayLen, I::I32Ne,
+				I::If(BlockType::Empty), I32Const(0), I::Return, I::End,
+			]);
+			let condition = [I::LocalGet(index), I::LocalGet(first), I::ArrayLen, I::I32LtU];
+			#[rustfmt::skip]
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(first), I::LocalGet(index), I::ArrayGetU(text_type),
+				I::LocalGet(second), I::LocalGet(index), I::ArrayGetU(text_type), I::I32Ne,
+				I::If(BlockType::Empty), I32Const(0), I::Return, I::End,
+				I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+			]);
+			f.instruction(&I32Const(1));
+		});
+	}
+
+	/// text_flat(node) -> $Text: the bytes of a Text, Symbol or Error node; a rope (text_append: data the last piece,
+	/// value the text before it) is flattened once, its node then holding the whole text
+	fn emit_text_flat(&mut self) {
+		let (node, text_type) = (self.type_manager.node_type, self.type_manager.text_type);
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let (text, int) = (self.text_ref(), ValType::I32);
+		let nullable_text = self.text_ref_nullable();
+		self.runtime_function(
+			TEXT_FLAT,
+			vec![node_ref],
+			vec![text],
+			vec![nullable, int, nullable_text, int],
+			|s, f| {
+				let (rope, piece, length, flat, piece_length) = (0, 1, 2, 3, 4);
+				let data = |f: &mut Function, local: u32| {
+					Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+					Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 1 }]);
+					f.instruction(&I::RefCastNonNull(HeapType::Concrete(text_type)));
+				};
+				let rest = |f: &mut Function, local: u32| {
+					Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+					Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 2 }, I::LocalSet(local)]);
+				};
+				s.emit_field(f, rope, 2);
+				Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
+				data(f, rope);
+				Self::emit_list(f, &[I::Return, I::End, I::LocalGet(rope), I::LocalSet(piece)]);
+				let walk = |f: &mut Function, body: &dyn Fn(&mut Function)| {
+					let condition = [I::LocalGet(piece), I::RefIsNull, I::I32Eqz];
+					Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+					Self::emit_list(f, &condition);
+					Self::emit_list(f, &[I::I32Eqz, I::BrIf(1)]);
+					body(f);
+					rest(f, piece);
+					Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+				};
+				walk(f, &|f| {
+					data(f, piece);
+					Self::emit_list(f, &[I::ArrayLen, I::LocalGet(length), I::I32Add, I::LocalSet(length)]);
+				});
+				#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(length), I::ArrayNewDefault(text_type), I::LocalSet(flat),
+				I::LocalGet(rope), I::LocalSet(piece),
+			]);
+				walk(f, &|f| {
+					data(f, piece);
+					#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::ArrayLen, I::LocalTee(piece_length), I::LocalGet(length), I::LocalGet(piece_length), I::I32Sub,
+					I::LocalSet(length), I::Drop,
+					I::LocalGet(flat), I::LocalGet(length),
+				]);
+					data(f, piece);
+					#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I32Const(0), I::LocalGet(piece_length),
+					I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+				]);
+				});
+				#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(rope), I::LocalGet(flat), I::StructSet { struct_type_index: node, field_index: 1 },
+				I::LocalGet(rope), I::RefNull(HeapType::Concrete(node)), I::StructSet { struct_type_index: node, field_index: 2 },
+				I::LocalGet(flat), I::RefAsNonNull,
+			]);
+			},
+		);
+	}
+
+	/// Push the $Text of the Text or Symbol node in local `node`
+	pub(in crate::wasm_emitter) fn emit_text_bytes(&self, func: &mut Function, node: u32) {
+		Self::emit_list(func, &[I::LocalGet(node), I::RefAsNonNull]);
+		self.call(func, TEXT_FLAT);
+	}
+
+	/// text_address(text): a copy of the text's bytes in the heap, for a host or C function reading by address; after
+	/// the runtime errors, out_of_memory among them
+	pub(in crate::wasm_emitter) fn emit_text_address(&mut self) {
+		self.emit_text_heap_global();
+		let (int, text) = (ValType::I32, self.text_ref());
+		let text_type = self.type_manager.text_type;
+		self.runtime_function(TEXT_ADDRESS, vec![text], vec![int], vec![int; 3], |s, f| {
+			let (bytes, length, address, index) = (0, 1, 2, 3);
+			Self::emit_list(f, &[I::LocalGet(bytes), I::ArrayLen, I::LocalSet(length)]);
+			s.emit_text_allocation(f, length, address);
+			let condition = [I::LocalGet(index), I::LocalGet(length), I::I32LtU];
+			#[rustfmt::skip]
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(address), I::LocalGet(index), I::I32Add, I::LocalGet(bytes), I::LocalGet(index),
+				I::ArrayGetU(text_type), I::I32Store8(BYTE),
+				I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+			]);
+			f.instruction(&I::LocalGet(address));
+		});
+	}
+
+	/// (ref $Text)
+	pub(in crate::wasm_emitter) fn text_ref(&self) -> ValType {
+		Ref(RefType { nullable: false, heap_type: HeapType::Concrete(self.type_manager.text_type) })
+	}
+
+	/// (ref null $Text): a local or global holding a text's bytes
+	pub(in crate::wasm_emitter) fn text_ref_nullable(&self) -> ValType {
+		Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.text_type) })
+	}
+
+	/// Push a new Text node of the bytes of local `bytes` from byte index local `start` to `stop`
+	pub(in crate::wasm_emitter) fn emit_text_piece(&self, func: &mut Function, (bytes, start, stop): (u32, u32, u32)) {
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(bytes),
+				I::RefAsNonNull,
+				I::LocalGet(start),
+				I::LocalGet(stop),
+				I::LocalGet(start),
+				I::I32Sub,
+			],
+		);
+		self.call(func, TEXT_PIECE);
+		self.call(func, NEW_TEXT_OF);
+	}
+
+	/// Push a new Text node of the first `length` bytes (a local) of the $Text in local `bytes`
+	pub(in crate::wasm_emitter) fn emit_text_prefix(&self, func: &mut Function, bytes: u32, length: u32) {
+		Self::emit_list(func, &[I::LocalGet(bytes), I::RefAsNonNull, I32Const(0), I::LocalGet(length)]);
+		self.call(func, TEXT_PIECE);
+		self.call(func, NEW_TEXT_OF);
+	}
+
+	/// Write the literal at (offset, length) of the literal segment into the $Text in local `bytes` at index local
+	/// `position`; the position stays
+	pub(in crate::wasm_emitter) fn emit_literal_into(
+		&self,
+		func: &mut Function,
+		(bytes, position): (u32, u32),
+		(offset, length): (u32, u32),
+	) {
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(bytes), I::LocalGet(position), I32Const(offset as i32), I32Const(length as i32),
+			I::ArrayInitData { array_type_index: self.type_manager.text_type, array_data_index: TEXT_SEGMENT },
+		]);
+	}
+
+	/// Push a new Text node of the literal at (offset, length) of the literal segment
+	pub(in crate::wasm_emitter) fn emit_constant_text(&self, func: &mut Function, (offset, length): (u32, u32)) {
+		Self::emit_list(func, &[I32Const(offset as i32), I32Const(length as i32)]);
+		self.call(func, CONSTANT_TEXT);
+	}
+
+	/// Push a new empty Text node
+	pub(in crate::wasm_emitter) fn emit_empty_text(&self, func: &mut Function) {
+		Self::emit_list(func, &[I32Const(0), I::ArrayNewDefault(self.type_manager.text_type)]);
+		self.call(func, NEW_TEXT_OF);
+	}
+
+	/// Push the literal `s` as a new $Text, from the literal segment
+	pub(in crate::wasm_emitter) fn emit_text_literal(&mut self, func: &mut Function, s: &str) {
+		let literal = self.string_table.literal(s);
+		self.emit_literal_text(func, literal);
+	}
+
+	/// Push the literal at (offset, length) of the literal segment (StringTable::literal) as a new $Text
+	pub(in crate::wasm_emitter) fn emit_literal_text(&self, func: &mut Function, (offset, length): (u32, u32)) {
+		Self::emit_list(func, &[I32Const(offset as i32), I32Const(length as i32)]);
+		self.call(func, TEXT_LITERAL);
+	}
+
 	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
 	pub(in crate::wasm_emitter) fn emit_text_heap_global(&mut self) {
 		if self.text_heap_global.is_some() {
@@ -553,21 +756,6 @@ impl WasmGcEmitter {
 			I::End,
 			I::GlobalGet(heap), I::LocalTee(address), I::LocalGet(length), I::I32Add, I::GlobalSet(heap),
 		]);
-	}
-
-	/// Grow the memory, when needed, until `length` more bytes fit after the heap global (new pages come at the end)
-	pub(in crate::wasm_emitter) fn emit_memory_room(&self, func: &mut Function, heap: u32, length: u32) {
-		const PAGE_BITS: i32 = 16;
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::GlobalGet(heap), I::LocalGet(length), I::I32Add, I::MemorySize(0), I32Const(PAGE_BITS), I::I32Shl,
-			I::I32GtU, I::If(BlockType::Empty),
-				I::GlobalGet(heap), I::LocalGet(length), I::I32Add, I::MemorySize(0), I32Const(PAGE_BITS), I::I32Shl,
-				I::I32Sub, I32Const(PAGE_BITS), I::I32ShrU, I32Const(1), I::I32Add, I::MemoryGrow(0), I32Const(-1),
-				I::I32Eq,
-		]);
-		self.emit_fail_if(func, "out_of_memory");
-		func.instruction(&I::End);
 	}
 
 	pub(in crate::wasm_emitter) fn emit_is_text(&self, func: &mut Function) {

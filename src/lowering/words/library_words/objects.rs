@@ -53,12 +53,11 @@ pub(super) fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 /// A field read by name (`p.x`, `p["x"]`), an element of one (`company.employees#2`), or either in parentheses: the
 /// value may be an object
 pub(super) fn is_field_lookup(node: &Node) -> bool {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Key(_, Op::Hash, index) if crate::warp_parser::subscript_key(index).and_then(field_name).is_some() => {
 			true
 		}
 		Node::Key(list, Op::Hash, _) => is_field_lookup(list),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_field_lookup(&items[0]),
 		_ => false,
 	}
 }

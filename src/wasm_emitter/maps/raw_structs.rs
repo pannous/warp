@@ -34,8 +34,8 @@ impl WasmGcEmitter {
 
 		let mut types = TypeSection::new();
 
-		// Type 0: $String = struct { ptr: i32, len: i32 }
-		types.ty().struct_(type_manager::string_fields());
+		// Type 0: $Text = (array (mut i8))
+		types.ty().array(&StorageType::I8, true);
 		let string_type_idx = 0u32;
 
 		// Type 1: User struct type
@@ -69,27 +69,13 @@ impl WasmGcEmitter {
 		functions.function(2); // main uses type 2
 		module.section(&functions);
 
-		// Memory section (only if we have strings)
 		let has_strings = !string_data.is_empty();
-		if has_strings {
-			let mut memories = MemorySection::new();
-			memories.memory(MemoryType {
-				minimum: 1,
-				maximum: None,
-				memory64: false,
-				shared: false,
-				page_size_log2: None,
-			});
-			module.section(&memories);
-		}
-
-		// Export section
 		let mut exports = ExportSection::new();
-		if has_strings {
-			exports.export("memory", ExportKind::Memory, 0);
-		}
 		exports.export("main", ExportKind::Func, 0);
 		module.section(&exports);
+		if has_strings {
+			module.section(&DataCountSection { count: 1 });
+		}
 
 		// Code section
 		let mut codes = CodeSection::new();
@@ -115,7 +101,11 @@ impl WasmGcEmitter {
 					let (ptr, len) = string_offsets[string_idx];
 					Self::emit_list(
 						&mut func,
-						&[I32Const(ptr as i32), I32Const(len as i32), I::StructNew(string_type_idx)],
+						&[
+							I32Const(ptr as i32),
+							I32Const(len as i32),
+							I::ArrayNewData { array_type_index: string_type_idx, array_data_index: 0 },
+						],
 					);
 					string_idx += 1;
 				}
@@ -125,10 +115,10 @@ impl WasmGcEmitter {
 		codes.function(&func);
 		module.section(&codes);
 
-		// Data section for strings
+		// Data section for strings, read by array.new_data
 		if has_strings {
 			let mut data = DataSection::new();
-			data.active(0, &ConstExpr::i32_const(0), string_data.iter().copied());
+			data.passive(string_data.iter().copied());
 			module.section(&data);
 		}
 
@@ -142,15 +132,12 @@ impl WasmGcEmitter {
 
 		// Type names
 		let mut type_names = NameMap::new();
-		type_names.append(string_type_idx, "String");
+		type_names.append(string_type_idx, "Text");
 		type_names.append(struct_type_idx, &type_def.name);
 		names.types(&type_names);
 
 		// Field names for structs
 		let mut type_field_names = IndirectNameMap::new();
-
-		// String struct fields
-		Self::append_string_field_names(&mut type_field_names, string_type_idx);
 
 		// User struct fields
 		let mut struct_fields_names = NameMap::new();

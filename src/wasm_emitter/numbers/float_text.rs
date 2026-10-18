@@ -8,7 +8,6 @@
 //! list_join calls it, so print, `str(x)`, `x as text` and `"a" + x` all show floats the same way.
 
 use crate::extensions::numbers::{LARGEST_POSITIONAL, SMALLEST_POSITIONAL};
-use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
@@ -36,7 +35,6 @@ const RESCALE_BY: i32 = 128;
 /// Sign, "0.", four zeros and the digits fit, so does the exponent form; the digits are formatted behind them
 const TEXT_BYTES: i32 = 32;
 const SCRATCH_BYTES: i32 = 20;
-const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_float_text(&mut self) {
@@ -44,37 +42,40 @@ impl WasmGcEmitter {
 			return;
 		}
 		self.emit_float_shortest_digits();
-		self.emit_text_heap_global();
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let [zero, infinity, negative_infinity, not_a_number] =
-			["0", "∞", "-∞", "NaN"].map(|text| self.allocate_string(text));
-		let mut locals = vec![ValType::I32; 3];
+			["0", "∞", "-∞", "NaN"].map(|text| self.string_table.literal(text));
+		let text_type = self.type_manager.text_type;
+		let mut locals = vec![self.text_ref_nullable(), ValType::I32, ValType::I32];
 		locals.extend([ValType::I64, ValType::I32, ValType::I32, ValType::I32]);
 		self.runtime_function(FLOAT_TEXT, vec![ValType::F64], vec![node_ref], locals, |s, f| {
-			let (x, address, position, exponent, digits, significant, count, shift) = (0, 1, 2, 3, 4, 5, 6, 7);
-			let return_text = |f: &mut Function, (text_address, length): (u32, u32)| {
-				Self::emit_list(f, &[I::I32Const(text_address as i32), I::I32Const(length as i32)]);
-				s.call(f, "new_text");
+			let (x, bytes, position, exponent, digits, significant, count, shift) = (0, 1, 2, 3, 4, 5, 6, 7);
+			let return_text = |f: &mut Function, literal: (u32, u32)| {
+				s.emit_constant_text(f, literal);
 				f.instruction(&I::Return);
 			};
 			let put = |f: &mut Function, byte: u8| {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
-					I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE),
+					I::LocalGet(bytes), I::LocalGet(position), I::I32Const(byte as i32), I::ArraySet(text_type),
 					I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position),
 				]);
 			};
 			// the digits are written to the scratch bytes behind the text, then copied into place
 			let scratch = |f: &mut Function, offset: &[I<'static>]| {
-				Self::emit_list(f, &[I::LocalGet(address), I::I32Const(TEXT_BYTES), I::I32Add]);
+				f.instruction(&I::I32Const(TEXT_BYTES));
 				Self::emit_list(f, offset);
 				f.instruction(&I::I32Add);
 			};
 			let copy = |f: &mut Function, offset: &[I<'static>], length: &[I<'static>]| {
-				f.instruction(&I::LocalGet(position));
+				Self::emit_list(f, &[I::LocalGet(bytes), I::LocalGet(position), I::LocalGet(bytes)]);
 				scratch(f, offset);
 				Self::emit_list(f, length);
-				Self::emit_list(f, &[COPY_BYTES, I::LocalGet(position)]);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
+					I::LocalGet(position),
+				]);
 				Self::emit_list(f, length);
 				Self::emit_list(f, &[I::I32Add, I::LocalSet(position)]);
 			};
@@ -110,11 +111,9 @@ impl WasmGcEmitter {
 			return_text(f, zero);
 			f.instruction(&I::End);
 
-			Self::emit_list(f, &[I::I32Const(TEXT_BYTES + SCRATCH_BYTES), I::LocalSet(count)]);
-			s.emit_text_allocation(f, count, address);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(address), I::LocalSet(position),
+				I::I32Const(TEXT_BYTES + SCRATCH_BYTES), I::ArrayNewDefault(text_type), I::LocalSet(bytes),
 				I::LocalGet(x), I::F64Const(0.0.into()), I::F64Lt, I::If(BlockType::Empty),
 			]);
 			put(f, b'-');
@@ -122,7 +121,7 @@ impl WasmGcEmitter {
 
 			f.instruction(&I::LocalGet(x));
 			s.call(f, FLOAT_DIGITS);
-			Self::emit_list(f, &[I::LocalSet(shift), I::LocalSet(digits)]);
+			Self::emit_list(f, &[I::LocalSet(shift), I::LocalSet(digits), I::LocalGet(bytes)]);
 			scratch(f, &[I::I32Const(0)]);
 			f.instruction(&I::LocalGet(digits));
 			s.call(f, "int_to_decimal");
@@ -179,12 +178,18 @@ impl WasmGcEmitter {
 			put(f, b'e');
 			Self::emit_list(
 				f,
-				&[I::LocalGet(position), I::LocalGet(position), I::LocalGet(exponent), I::I64ExtendI32S],
+				&[
+					I::LocalGet(position),
+					I::LocalGet(bytes),
+					I::LocalGet(position),
+					I::LocalGet(exponent),
+					I::I64ExtendI32S,
+				],
 			);
 			s.call(f, "int_to_decimal");
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(position), I::End]);
 
-			s.emit_new_text_to(f, address, position);
+			s.emit_text_prefix(f, bytes, position);
 		});
 	}
 

@@ -648,22 +648,13 @@ fn function_arguments(
 	let kind_of = |node: &wasmtime::StructRef, store: &mut wasmtime::StoreContextMut<'_, HostState>| {
 		node.field(&mut *store, FIELD_KIND).map(|kind| Kind::of_field(kind.unwrap_i64()))
 	};
-	let mut items = vec![];
-	let mut cell = node_of(&Val::AnyRef(arguments), store);
-	match &cell {
-		Some(node) if kind_of(node, store)? == Some(Kind::List) => {}
-		_ => cell = None,
-	}
-	if cell.is_none() {
-		items.extend(arguments.into_iter().map(|argument| Val::AnyRef(Some(argument))));
-	}
-	while let Some(current) = cell {
-		let first = current.field(&mut *store, FIELD_DATA)?;
-		if first.unwrap_anyref().is_some() {
-			items.push(first);
+	let items = match node_of(&Val::AnyRef(arguments), store) {
+		Some(node) if kind_of(&node, store)? == Some(Kind::List) => {
+			let (first, rest) = (node.field(&mut *store, FIELD_DATA)?, node.field(&mut *store, FIELD_VALUE)?);
+			warp_runtime::gc_values::items_of(first, rest, store)?
 		}
-		cell = node_of(&current.field(&mut *store, FIELD_VALUE)?, store);
-	}
+		_ => arguments.into_iter().map(|argument| Val::AnyRef(Some(argument))).collect(),
+	};
 	items
 		.iter()
 		.map(|item| {

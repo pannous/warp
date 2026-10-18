@@ -798,7 +798,7 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Vec<Vec<Opti
 /// exactly and never `x:int`
 pub(crate) fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> Option<Kind> {
 	use crate::extensions::numbers::Number;
-	match argument.drop_meta() {
+	match argument.ungrouped() {
 		Node::Number(Number::Float(_) | Number::Quotient(..)) => Some(Kind::Float),
 		Node::Number(_) => Some(Kind::Int),
 		Node::Text(_) => Some(Kind::Text),
@@ -812,7 +812,6 @@ pub(crate) fn argument_kind(argument: &Node, variables: &HashMap<String, Option<
 				_ => None,
 			}
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => argument_kind(&items[0], variables),
 		Node::List(_, Bracket::Square, _) => Some(Kind::List),
 		_ => None,
 	}

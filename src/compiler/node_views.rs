@@ -27,8 +27,9 @@ pub fn positioned_view(node: &Node) -> Node {
 /// ["data", "#i"] or ["number", "#i"], its handle in
 /// the returned nodes: `node_of_handled_view` puts the node back where a warp stage left the handle
 pub fn handled_plain_view(node: &Node) -> (Node, Vec<Node>) {
-	let viewer = Viewer { handles: Some(std::cell::RefCell::new(vec![])), ..Viewer::default() };
-	let view = plain(viewer.view(node));
+	let viewer = Viewer { handles: Some(std::cell::RefCell::new(vec![])), marks: true, ..Viewer::default() };
+	// the attribute layers stay: the Rust passes after the warp stage read them (the mark of `x!`, `extends`)
+	let view = without_layers(viewer.view(node), &["literal"]);
 	(view, viewer.handles.map(std::cell::RefCell::into_inner).unwrap_or_default())
 }
 
@@ -36,6 +37,8 @@ pub fn handled_plain_view(node: &Node) -> (Node, Vec<Node>) {
 struct Viewer {
 	positions: std::cell::Cell<bool>,
 	handles: Option<std::cell::RefCell<Vec<Node>>>,
+	/// the mark of `x!` as an attribute layer: the bridge hands it on, a source's own view has no such annotation
+	marks: bool,
 }
 
 impl Viewer {
@@ -104,6 +107,16 @@ impl Viewer {
 			let (name, value) = attributes[0];
 			return tagged("attribute", [Node::text(name), self.view(value), self.view(inner)]);
 		}
+		let mark = match node {
+			Node::Meta { data, .. } if self.marks => crate::mutation::mark_value(data),
+			_ => None,
+		};
+		if let Some(value) = mark {
+			return tagged(
+				"attribute",
+				[Node::text(crate::mutation::MUTATED_MARK), self.view(value), self.view(inner)],
+			);
+		}
 		self.view(inner)
 	}
 }
@@ -166,9 +179,15 @@ pub fn positioned_plain_view(node: &Node) -> Node {
 }
 
 fn plain(view: Node) -> Node {
+	without_layers(view, &["literal", "attribute"])
+}
+
+/// The view without the layers of the `dropped` kinds, a character as a text, an empty group as ø (walk.warp
+/// without_layers)
+fn without_layers(view: Node, dropped: &[&str]) -> Node {
 	match view {
 		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
-			Some("literal" | "attribute") => plain(items.pop().unwrap_or(Node::Empty)),
+			Some(kind) if dropped.contains(&kind) => without_layers(items.pop().unwrap_or(Node::Empty), dropped),
 			Some("list") if items.len() == 3 => Node::Empty,
 			// an error and a type are opaque to a pass twin: kept whole, `class P {}` keeps its empty body and attributes
 			Some("type" | "error") => Node::List(items, bracket, separator),
@@ -176,7 +195,7 @@ fn plain(view: Node) -> Node {
 				items[0] = Node::text("text");
 				Node::List(items, bracket, separator)
 			}
-			_ => Node::List(items.into_iter().map(plain).collect(), bracket, separator),
+			_ => Node::List(items.into_iter().map(|item| without_layers(item, dropped)).collect(), bracket, separator),
 		},
 		other => other,
 	}
@@ -224,6 +243,7 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		}
 		"error" => Node::Error(Box::new(node(1)?)),
 		"type" => Node::Type { name: Box::new(node(1)?), body: Box::new(node(2)?) },
+		"attribute" if text(1)? == crate::mutation::MUTATED_MARK => crate::mutation::with_mark(node(3)?, node(2)?),
 		"attribute" => node(3)?.with_attribute(&text(1)?, node(2)?),
 		"literal" | "at" => node(parts.len() - 1)?,
 		"template" => crate::text::interpolation::template_text(&text(1)?),

@@ -777,7 +777,7 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let warning = self.located(crate::numbers::uncertain::overlap_warning(left, op, right));
-		let message = self.allocate_string(&warning);
+		let message = self.memory_string(&warning);
 		self.emit_uncertain_order_call(func, op, CertaintyMode::Bare, message);
 		true
 	}

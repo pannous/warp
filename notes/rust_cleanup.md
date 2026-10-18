@@ -57,3 +57,15 @@ the inner node with its meta (method_call, try_parse_data): converting them chan
 drops after parser S2/S3 and the word-phrase pass, not helpers.
 Then per file (symbol_name/is_symbol/is_block idioms, shared helpers): rust-closures (lambdas+closures, -124), rust-broadcasting
 (-34), rust-tasks (-29), rust-library-words (-12), rust-welcome (welcome_forms, -8).
+
+## Analyzer: flow settle (warp-self-analyzer, 2026-10-18)
+src-analyzer (branch analyzer-returns, -101 in src/): results step once per flow round, main-level globals widen
+each round, literals tell their kind, free names tell a symbol, parameters forwarded to a typed callee parameter take
+its kind as usage fallback. Traps found on the way:
+- flow::settle can cycle: `out(signal) := sound(clamped_samples(signal))` flipped List<->Node every round, so the
+  sound module ran all 305 rounds (compile 2-3x main). A parameter turning back to a kind it held now settles on
+  all its kinds joined (`held` in given_flows). Watch for this whenever a flow rule can narrow a kind again.
+- A Node of unknown kind passed beside numbers must stand (a number parameter can't hold it: rect's height given
+  `shown[band]` and `2`); beside lists/maps it may drop (`added(xs, ys)`).
+- "Given only Nodes → keep the usage guess" broke code matchers (usage guesses List for `match c { data(…) }`).
+- Bench compile time against a main debug build, never the branch's earlier tip; probes with WARP_MODULE_CACHE=off.

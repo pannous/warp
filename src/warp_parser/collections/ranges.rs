@@ -38,9 +38,8 @@ pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Opti
 
 /// `n-1`, the end a Kotlin writer gives an inclusive `..`
 pub(crate) fn is_minus_one(end: &Node) -> bool {
-	match end.drop_meta() {
+	match end.ungrouped() {
 		Node::Key(_, Op::Sub, one) => matches!(one.drop_meta(), Node::Number(Number::Int(1))),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_minus_one(&items[0]),
 		_ => false,
 	}
 }

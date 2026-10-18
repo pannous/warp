@@ -262,7 +262,7 @@ impl WasmGcEmitter {
 		if !NODE_MAP_FUNCTIONS.iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
-		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		let (node, text) = (self.type_manager.node_type, self.type_manager.text_type);
 		let (map, array, slots) =
 			(self.type_manager.node_map_type, self.type_manager.node_array_type, self.type_manager.limbs_type);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
@@ -287,34 +287,19 @@ impl WasmGcEmitter {
 		});
 
 		// FNV-1a of the letters of a name
-		self.runtime_function(NODE_MAP_HASH, vec![node_ref], vec![int], vec![int, int, int], |s, f| {
-			let (pointer, length, hash) = (1, 2, 3);
-			for (index, local) in [(0, pointer), (1, length)] {
-				s.emit_field(f, 0, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNonNull(HeapType::Concrete(string)),
-						I::StructGet { struct_type_index: string, field_index: index },
-						I::LocalSet(local),
-					],
-				);
-			}
+		let text_bytes = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(text) });
+		self.runtime_function(NODE_MAP_HASH, vec![node_ref], vec![int], vec![text_bytes, int, int], |s, f| {
+			let (bytes, index, hash) = (1, 2, 3);
+			s.emit_text_bytes(f, 0);
+			Self::emit_list(f, &[I::LocalSet(bytes), I::I32Const(FNV_OFFSET), I::LocalSet(hash)]);
+			let condition = [I::LocalGet(index), I::LocalGet(bytes), I::ArrayLen, I::I32LtU];
 			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::I32Const(FNV_OFFSET), I::LocalSet(hash),
-				I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-						I::LocalGet(length), I::I32Eqz, I::BrIf(1),
-						I::LocalGet(hash), I::LocalGet(pointer),
-						I::I32Load8U(MemArg { offset: 0, align: 0, memory_index: 0 }), I::I32Xor,
-						I::I32Const(FNV_PRIME), I::I32Mul, I::LocalSet(hash),
-						I::LocalGet(pointer), I::I32Const(1), I::I32Add, I::LocalSet(pointer),
-						I::LocalGet(length), I::I32Const(1), I::I32Sub, I::LocalSet(length),
-						I::Br(0),
-				I::End, I::End,
-				I::LocalGet(hash),
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(hash), I::LocalGet(bytes), I::LocalGet(index), I::ArrayGetU(text), I::I32Xor,
+				I::I32Const(FNV_PRIME), I::I32Mul, I::LocalSet(hash),
+				I::LocalGet(index), I::I32Const(1), I::I32Add, I::LocalSet(index),
 			]);
+			f.instruction(&I::LocalGet(hash));
 		});
 
 		// the slot of a name: the one holding its entry, else the empty one where it would go

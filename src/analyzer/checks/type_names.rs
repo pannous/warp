@@ -45,10 +45,8 @@ pub fn shown_list_type_name(list: &Node, scope: &Scope) -> String {
 
 /// The type name of a list: `list of int` when all items share a kind (or the variable is declared `ints`), else `list`
 pub fn list_type_name(list: &Node, scope: &Scope) -> String {
-	match list.drop_meta() {
+	match list.ungrouped() {
 		Node::Symbol(name) => variable_list_type(name, scope),
-		// Grouping: `([1 2])` has the type of `[1 2]`, as in infer_type
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => list_type_name(&items[0], scope),
 		// a block `(out = ø; for …; out)` is worth its last value
 		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline)
 			if !items.is_empty() =>

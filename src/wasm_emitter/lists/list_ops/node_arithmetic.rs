@@ -36,11 +36,12 @@ const EXACT_POWERS_OF_TEN: i32 = 22;
 pub(super) const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 
 impl WasmGcEmitter {
-	/// A leading sign of the text at `pointer`: `negative` set for -, the pointer past a - or + (`digit` holds the byte)
-	fn emit_skip_sign(f: &mut Function, pointer: u32, digit: u32, negative: u32) {
+	/// A leading sign of the text `bytes` at `pointer`: `negative` set for -, the pointer past a - or + (`digit` holds the
+	/// byte)
+	fn emit_skip_sign(&self, f: &mut Function, (bytes, pointer): (u32, u32), digit: u32, negative: u32) {
 		#[rustfmt::skip]
 		Self::emit_list(f, &[
-			I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(digit), I32Const('-' as i32), I::I32Eq,
+			I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(self.type_manager.text_type), I::LocalTee(digit), I32Const('-' as i32), I::I32Eq,
 			I::LocalSet(negative),
 			I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or, I::LocalGet(pointer),
 			I::I32Add, I::LocalSet(pointer),
@@ -53,9 +54,10 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64];
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64, self.text_ref()];
+		let text_type = self.type_manager.text_type;
 		self.runtime_function(TEXT_AS_INT, vec![node_ref], vec![ValType::I64], locals, |s, f| {
-			let (pointer, end, negative, digit, value) = (1, 2, 3, 4, 5);
+			let (pointer, end, negative, digit, value, bytes) = (1, 2, 3, 4, 5, 6);
 			let at_end = [I::LocalGet(pointer), I::LocalGet(end), I::I32GeU];
 			// a one-character text is a character node: its digit, else invalid_number
 			s.emit_field(f, 0, 0);
@@ -84,10 +86,10 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "get_int_value");
 			Self::emit_list(f, &[I::Return, I::End]);
-			s.emit_text_bounds(f, pointer, end);
+			s.emit_text_bounds(f, (bytes, pointer, end));
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
-			Self::emit_skip_sign(f, pointer, digit, negative);
+			s.emit_skip_sign(f, (bytes, pointer), digit, negative);
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
@@ -95,7 +97,8 @@ impl WasmGcEmitter {
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::BrIf(1),
-				I::LocalGet(pointer), I::I32Load8U(BYTE), I32Const('0' as i32), I::I32Sub, I::LocalTee(digit),
+				I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(text_type), I32Const('0' as i32), I::I32Sub,
+				I::LocalTee(digit),
 				I32Const(9), I::I32GtU,
 			]);
 			s.emit_fail_if(f, "invalid_number");
@@ -250,13 +253,11 @@ impl WasmGcEmitter {
 						is_text(f, 1);
 						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 						let node_type = s.type_manager.node_type;
-						let empty = s.allocate_string("");
 						for operand in [0, 1] {
 							s.emit_structure_as_literal(
 								f,
 								operand,
 								&super::super::super::text::text_builtins::STRUCTURE_KINDS,
-								empty,
 							);
 						}
 						Self::emit_list(f, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(0)]);
@@ -271,9 +272,7 @@ impl WasmGcEmitter {
 								I::StructNew(node_type),
 							],
 						);
-						let (pointer, length) = s.allocate_string("");
-						Self::emit_list(f, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-						s.call(f, "new_text");
+						s.emit_empty_text(f);
 						s.call(f, super::super::super::reflection::library_ops::LIST_JOIN);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
@@ -354,11 +353,14 @@ impl WasmGcEmitter {
 		locals.push(ValType::F64);
 		locals.extend([ValType::I32; 4]);
 		locals.push(ValType::F64);
+		locals.push(self.text_ref());
+		let text_type = self.type_manager.text_type;
 		self.runtime_function(TEXT_AS_FLOAT, vec![node_ref], vec![ValType::F64], locals, |s, f| {
 			let (pointer, end, negative, digit, value, scale_digits, digits, exponent, exponent_negative, power) =
 				(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+			let bytes = 11;
 			let at_end = [I::LocalGet(pointer), I::LocalGet(end), I::I32GeU];
-			let byte = [I::LocalGet(pointer), I::I32Load8U(BYTE)];
+			let byte = [I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(text_type)];
 			let advance = [I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer)];
 			let kind = |f: &mut Function| {
 				s.emit_field(f, 0, 0);
@@ -384,8 +386,8 @@ impl WasmGcEmitter {
 				f.instruction(&I::F64ConvertI64S);
 			}
 			Self::emit_list(f, &[I::Return, I::End]);
-			s.emit_text_bounds(f, pointer, end);
-			let sign = |f: &mut Function, negative: u32| Self::emit_skip_sign(f, pointer, digit, negative);
+			s.emit_text_bounds(f, (bytes, pointer, end));
+			let sign = |f: &mut Function, negative: u32| s.emit_skip_sign(f, (bytes, pointer), digit, negative);
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			sign(f, negative);

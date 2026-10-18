@@ -10,7 +10,7 @@ use crate::operators::Op;
 use crate::words::{DELETE_WORD, POP_WORD, UNWRAP};
 
 /// Meta key on a name written `x!`
-const MUTATED_MARK: &str = "mutated";
+pub(crate) const MUTATED_MARK: &str = "mutated";
 
 /// The variable a call written before `!` changes: x in `x.upper`, `x.upper()` and `upper(x)`
 pub fn mutated_variable(call: &Node) -> Option<&Node> {
@@ -26,14 +26,27 @@ pub fn mutated_variable(call: &Node) -> Option<&Node> {
 
 /// `x!`: evaluated alone, assigned the result of the call it is the argument of
 pub fn marked(name: Node) -> Node {
-	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::True)) }
+	with_mark(name, Node::True)
 }
 
 /// `x!!`: like `x!`, and a block runs fully (blocks.rs)
 pub fn marked_fully(name: Node) -> Node {
-	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::int(FULLY))) }
+	with_mark(name, Node::int(FULLY))
 }
 const FULLY: i64 = 2;
+
+/// The name marked with the mark's value: true for `x!`, FULLY for `x!!`
+pub(crate) fn with_mark(name: Node, value: Node) -> Node {
+	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, value)) }
+}
+
+/// The mark's value when a Meta layer's data is the mark of `x!`
+pub(crate) fn mark_value(data: &Node) -> Option<&Node> {
+	match data {
+		Node::Key(key, _, value) if key.name() == MUTATED_MARK => Some(value),
+		_ => None,
+	}
+}
 
 /// What a `!` or `!!` follows (a name or a field `o.s1`), and whether it was `!!`
 pub(crate) fn bang_target(node: &Node) -> Option<(Node, bool)> {
@@ -158,7 +171,7 @@ pub(crate) fn is_marked(node: &Node) -> bool {
 }
 
 fn is_mark(data: &Node) -> bool {
-	matches!(data, Node::Key(key, _, _) if key.name() == MUTATED_MARK)
+	mark_value(data).is_some()
 }
 
 fn unmarked(node: Node) -> Node {

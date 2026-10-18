@@ -12,8 +12,8 @@ pub struct TypeManager {
 	/// Type section for WASM module
 	types: TypeSection,
 
-	/// Type index for $String struct
-	pub string_type: u32,
+	/// Type index for $Text = (array (mut i8)): a text's UTF-8 bytes
+	pub text_type: u32,
 
 	/// Type index for $i64box struct (boxed integers)
 	pub i64_box_type: u32,
@@ -74,11 +74,11 @@ pub struct TypeManager {
 }
 
 impl TypeManager {
-	/// Emit core GC types: String, Node, i64box, f64box, and $MetaNode for a program that quotes code (`with_meta`)
+	/// Emit core GC types: Text, Node, i64box, f64box, and $MetaNode for a program that quotes code (`with_meta`)
 	pub fn emit_gc_types(&mut self, with_meta: bool) {
-		// Type 0: $String = (struct (field $ptr i32) (field $len i32))
-		self.types.ty().struct_(string_fields());
-		self.string_type = self.next_type_idx;
+		// Type 0: $Text = (array (mut i8))
+		self.types.ty().array(&StorageType::I8, true);
+		self.text_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
 		// Type 1: $Node = (struct (field $kind i64) (field $data anyref) (field $value (ref null $Node)))
@@ -227,7 +227,7 @@ impl TypeManager {
 			FieldStorage::F64 => Val(ValType::F64),
 			FieldStorage::I32 => Val(ValType::I32),
 			FieldStorage::F32 => Val(ValType::F32),
-			FieldStorage::Text => reference(HeapType::Concrete(self.string_type)),
+			FieldStorage::Text => reference(HeapType::Concrete(self.text_type)),
 			FieldStorage::Node => reference(HeapType::Concrete(self.node_type)),
 			FieldStorage::Named => {
 				match self.user_type_indices.get(crate::type_kinds::named_field_type(&field.type_name)) {
@@ -289,11 +289,6 @@ impl TypeManager {
 	pub fn types_mut(&mut self) -> &mut TypeSection {
 		&mut self.types
 	}
-}
-
-/// The fields of $String: ptr and len of its bytes in linear memory
-pub(super) fn string_fields() -> Vec<FieldType> {
-	vec![FieldType { element_type: Val(ValType::I32), mutable: false }; 2]
 }
 
 /// A struct type that other types may extend (or, with a supertype, one that extends it)
