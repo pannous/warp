@@ -113,7 +113,8 @@ function renderGuide(markdown) {
 	const chapters = sections.map(section => {
 		const [title, ...lines] = section.split("\n");
 		const id = headingId(title);
-		const summary = element("summary", {}, element("a", { href: `#${id}` }, title));
+		// a chapter the reader clicks scrolls to the top once it opened (openedChapter)
+		const summary = element("summary", { onclick: click => { click.currentTarget.parentElement.dataset.clicked = ""; } }, element("a", { href: `#${id}` }, title));
 		return element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title));
 	});
 	return [...renderBody(introLines, ""), ...chapters];
@@ -138,8 +139,12 @@ function showLevel(level) {
 
 function openedChapter(event) {
 	const chapter = event.target;
+	const clicked = "clicked" in chapter.dataset;
+	delete chapter.dataset.clicked;
 	if (!chapter.open) return;
 	for (const other of document.querySelectorAll(".guide-chapter[open]")) if (other !== chapter) other.open = false;
+	// the chapter closed above it moved it: a clicked one goes to the top, as the address's would (card clicking-guide)
+	if (clicked) chapter.scrollIntoView({ block: "start" });
 	// the address names the chapter, or a section of it (openChapterOfAddress)
 	const named = location.hash && document.getElementById(location.hash.slice(1));
 	if (!named || !chapter.contains(named)) history.replaceState(null, "", `#${chapter.id}`);

@@ -84,7 +84,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 4 | of_lookups | 241 | 22 | keep `a of b` and `in`/`from` after a selector word; drop print walks, unit counts (decided, sugar-triage) |
 | 5 | set phrases | welcome_forms | 1 | dropped in both compilers (card set-set, rust-cleanup-drops) |
 | 6 | grouped_receivers | 69 | 1 | keep |
-| 7 | module_properties | 467 | 3 | library (graphics: window.width; decided) |
+| 7 | module_properties | 467 | 3 | core: the property accessors (definitions/property_accessors.rs, supervisor 2026-10-18); its graphics tables (display aliases, bare width) asked at warp-interviewer |
 | 8 | times_phrases | 57 | 26 | keep (ported) |
 | 9 | broadcasting | 1410 | 11 | keep, minimal port |
 | 10 | shader_holes | 250 | 11 | library (gpu; decided) |

@@ -461,6 +461,9 @@ PASSED:
   ✓ control::test_match_ranges::an_exclusive_range
   ✓ control::test_match_ranges::an_inclusive_range
   ✓ control::test_match_ranges::floats_and_ranges_as_alternatives
+  ✓ control::test_match_rest_arm::a_variable_named_rest_stays_a_variable
+  ✓ control::test_match_rest_arm::rest_catches_the_rest_with_a_note
+  ✓ control::test_match_rest_arm::rest_the_arm_reads_is_the_matched_value
   ✓ control::test_match_tuples::literal_tuple_arm_still_compares
   ✓ control::test_match_tuples::tuple_arm_binds_its_names
   ✓ control::test_match_tuples::tuple_arm_checks_the_count
@@ -568,6 +571,7 @@ PASSED:
   ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
   ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
   ✓ control::test_parallel_map::go_maps_in_parallel
+  ✓ control::test_parenthesized_tuple::parenthesized_first_value_stays_in_the_tuple
   ✓ control::test_parsed_code_patterns::code_pattern_matches_code_parsed_at_run_time
   ✓ control::test_parsed_code_patterns::quoted_statements_bind_no_blocks
   ✓ control::test_pattern_unit_name::a_dollar_name_binds_without_a_warning
@@ -1798,6 +1802,8 @@ PASSED:
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
+  ✓ functions::test_overloaded_function_values::a_signal_named_like_a_sound_word_plays
+  ✓ functions::test_overloaded_function_values::an_overloaded_function_passed_for_a_function_typed_parameter_is_the_fitting_variant
   ✓ functions::test_parameter_any::a_parameter_called_with_two_kinds_takes_any
   ✓ functions::test_parameter_any::a_parameter_tested_for_its_kind_takes_any
   ✓ functions::test_parameter_any::an_any_parameter_takes_every_kind
@@ -2002,6 +2008,7 @@ PASSED:
   ✓ functions::test_swift_closures::membership_in_a_block_stays_membership
   ✓ functions::test_swift_closures::swift_closure_parameters
   ✓ functions::test_swift_closures::swift_shorthand_arguments
+  ✓ functions::test_symbol_flow::a_symbol_passes_through_two_functions
   ✓ functions::test_text_joined_parameter::counted_parameter_joined_to_a_text_is_a_text
   ✓ functions::test_text_joined_parameter::std_text_runs_as_a_program
   ✓ functions::test_to_definition::a_typed_phrase_parameter_is_named_by_its_type
@@ -3804,7 +3811,6 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
@@ -4165,6 +4171,7 @@ PASSED:
   ✓ programs::test_sound_filters::vibrato_bends_the_pitch
   ✓ programs::test_sound_handles::play_gives_the_sounds_handle
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
+  ✓ programs::test_sound_note_names::a_letter_indexed_by_an_octave_is_its_sharp_note
   ✓ programs::test_sound_note_names::every_note_name_is_its_midi_notes_frequency
   ✓ programs::test_sound_notes::a_note_inside_a_function_body_plays
   ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
@@ -5495,6 +5502,8 @@ PASSED:
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
   ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
   ✓ wasm::test_start_function_name::the_start_function_is_named_install
+  ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_follows_main
+  ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_runs
   ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ wasm::test_wasm_emitter::test_emit_gc_types
   ✓ wasm::test_wasm_emitter::test_function_usage_tracking
@@ -5701,6 +5710,8 @@ PASSED:
   ✓ web::test_gpu_functions::a_map_calls_a_function_of_one_expression_on_the_gpu
   ✓ web::test_gpu_functions::a_map_calls_functions_of_statements_on_the_gpu
   ✓ web::test_gpu_functions::a_small_map_calling_a_function_stays_exact
+  ✓ web::test_guide_click_scroll::a_chapter_the_page_opens_keeps_its_place
+  ✓ web::test_guide_click_scroll::a_clicked_chapter_scrolls_to_the_top
   ✓ web::test_guide_heading_links::a_section_and_a_titled_chapter_have_githubs_slug
   ✓ web::test_guide_heading_links::a_wiki_heading_link_is_a_markdown_heading_link
   ✓ web::test_guide_heading_links::every_heading_link_of_the_guides_names_a_heading
@@ -6439,6 +6450,7 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6435 passed, 1 failed, 6436 total tested
+16 ignored, 6446 passed, 2 failed, 6448 total tested
