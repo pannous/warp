@@ -287,6 +287,11 @@ def continued(p, left, min_power) {
 			op = p.code[p.at .. p.at + 2]
 			p.at = p.at + 2
 			left = ["key", op, left, ø]
+		} else if c == '!' and SUFFIX_POWER >= min_power and bang_suffix_at(p) {
+			p.at = p.at + 1
+			fully = is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n)
+			if fully { p.at = p.at + 1 }
+			left = forced(left, fully)
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
@@ -610,8 +615,42 @@ def slice_from_start(p) {
 	ø
 }
 
-// Below member access and indexing: `xs#1++`
+// Below member access and indexing: `xs#1++`, `xs#2!`
 SUFFIX_POWER = 165
+
+// The `!` at the parser's position is the suffix `x!`, not a `!=` nor a prefix `!` of the operand after it: glued to
+// its operand and followed by a blank, an infix operator or `)` (`name! email?`, `x!+1`), or no operand follows
+// Rust twin: suffixes.rs try_parse_evaluate_bang
+def bang_suffix_at(p) {
+	next = peek(p.code, p.at + 1, p.n)
+	if next == '=' { return false }
+	glued = p.at > 0 and not is_blank(p.code[p.at - 1]) and " \t!+-*/%^<>)".contains(next)
+	glued or not operand_follows(p, 1)
+}
+
+// `left!` (`left!!` when fully): `x.upper!` and `upper x!` mark their name for mutation.rs, `upper(x)!` assigns the
+// result back to x, `{…}!` runs the block anyway, `ø!` unwraps
+// Rust twin: suffixes.rs try_parse_evaluate_bang
+def forced(left, fully) {
+	if left == ø { return listed("(", "", [["symbol", "unwrap"], ø]) }
+	variable = mutated_variable(left)
+	dotted = left is list and left#1 == "key" and left#2 == "."
+	if variable != ø and not dotted { return ["key", "=", variable, left] }
+	if left is list and left#1 == "list" and left#2 == "{" { return left }
+	["attribute", "mutated", if fully then 2 else true, left]
+}
+
+// The variable a call written before `!` changes: x in `x.upper`, `x.upper()` and `upper(x)`
+// Rust twin: mutation.rs mutated_variable
+def mutated_variable(call) {
+	if not (call is list) { return ø }
+	if call#1 == "key" and call#2 == "." and is_name(call#3) and is_method(call#4) { return call#3 }
+	if call#1 == "list" and call#2 == "(" and call.length == 5 and is_name(call#4) and is_name(call#5) { return call#5 }
+	ø
+}
+
+def is_name(view) := view is list and view.length == 2 and view#1 == "symbol"
+def is_method(view) := is_name(view) or (view is list and view#1 == "list" and view.length > 3 and is_name(view#4))
 // The left power of `#`, which a glued `[` indexes with
 INDEX_POWER = 170
 

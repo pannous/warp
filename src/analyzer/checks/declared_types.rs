@@ -121,12 +121,11 @@ pub(crate) fn union_type_name(node: &Node) -> Option<String> {
 /// The type name of an inline union whose parts may also be declared classes: `Circle | Square` is `Circle or Square`
 pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) -> Option<String> {
 	pub(super) fn collect_parts(node: &Node, parts: &mut Vec<String>) -> Option<()> {
-		match node.drop_meta() {
+		match node.ungrouped() {
 			Node::Key(left, Op::Or, right) => {
 				collect_parts(left, parts)?;
 				collect_parts(right, parts)
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => collect_parts(&items[0], parts),
 			Node::Symbol(word) => {
 				parts.push(word.clone());
 				Some(())

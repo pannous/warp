@@ -70,7 +70,7 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
 - Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message and keeps
   its checkout and cargo output (a repeat build of the same branch: ~0 s vs ~350 s cold). Up to 5 busy
   (MAX_PARALLEL_RUNS), 8 sessions in total (MAX_CLOUD_SESSIONS). After 30 jobs a session gets `/clear`. A session that
-  refuses or never answers (3 h) is dropped into data/cloud/dropped-sessions.txt: archive those in the web UI. New
+  refuses or never answers (90 min) is dropped into data/cloud/dropped-sessions.txt: archive those in the web UI. New
   sessions are named "Cloud Test Lane".
 - Model: defaults to Haiku. A session keeps the model it was created with; reused sessions get a `/model` message
   before each job. `CLOUD_TEST_MODEL=<model>`; `CLOUD_TEST_FAST=1` passes fast mode (from 2026-11-02, to use up the
@@ -79,5 +79,14 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   session after 90 min. A run that can't reach its tests pushes a red result naming why; the test run is killed after
   40 min, or once no test finished for 15 min (STALL_SECONDS). `pkill cargo` leaves the test binary running: the
   watchdog kills timeout's process group.
+- The runtime stub is built before the tests with the run's crate source, as test.sh does (WARP_TEST_STUBS_BUILT=1):
+  in vendor mode the source replacement comes only from --config flags, so a test's own `cargo build --offline` met
+  the VM's empty registry cache and all 22 executable tests failed (card cloud-stub-offline).
+- Disk: a warm VM's target/ grows with every job (branches, features, --full's opt-level 2) and a build once ran out
+  of space; a warm VM had 12 GB free after a few jobs. Below 15 GB free (MIN_FREE_GB) the incremental caches go, then
+  if need be all of target/, and a build that still runs out of space is retried once on an empty target/. The result
+  names it ("disk:").
+- Failures listed in notes/known_failures.md (read in the tested checkout, as the gate reads it at the tested tip) are
+  listed apart as "known" and don't make a run red, like the environmental ones.
 - Cost: ~$0.30 per targeted run, ~$0.50 per full run (tokens, not VM time). A targeted run takes 5–6 min, mostly the
   cold build. A full run is ~25 min and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).
