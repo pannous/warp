@@ -160,9 +160,12 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   precise answer.
 - `g := it#2`: Rust adds an extra `g: text` variable; warp reads `g` as a function of it, no variable.
 - closure_call_N helpers: Rust's text lists them, warp leaves them out (lowering artefacts, not program slots).
-- Unknown builtin calls default to int (unsound): back by builtin kinds read from the lib/prelude signatures.
-- Element types don't flow through function results (`sieve(100)` → plain list): back by carrying the element slot
-  of a result.
+- Builtin calls read their kind off `call_kinds` (lib/compiler/words.warp, checked against Rust's analyzer by
+  test_self_words call_kinds_are_rusts); a word nothing defines or tables (a function value, a host word) is any
+  value, where Rust says int. `length` is left out of the table (card map-key-length).
+- Element types flow through function results (`r = f(); r#1` is int when f gives a list of ints), where Rust says
+  any value: probes/algo/dijkstra/12c_implicit_return_list.warp, probes/algo/sorting/69_return_list_noreturn.warp,
+  probes/module_scope/mytext.warp and four more left the pinned list for it.
 
 ## Emitter: deviations
 - Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors

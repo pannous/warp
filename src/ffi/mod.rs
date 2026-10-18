@@ -41,24 +41,44 @@ pub fn libm_f64_functions() -> &'static [(&'static str, usize)] {
 }
 
 const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
+const PRELUDE_SOURCE: &str = include_str!("../../lib/prelude.warp");
 /// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
 pub const BUILTIN_LIBRARY: &str = "warp";
 
 /// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
+#[derive(Clone, Copy)]
 pub struct ForeignLine<'a> {
 	pub name: &'a str,
 	pub parameters: &'a str,
 	pub result: &'a str,
 }
 
-impl ForeignLine<'_> {
+impl<'a> ForeignLine<'a> {
 	pub fn arity(&self) -> usize {
-		if self.parameters.trim().is_empty() {
-			0
-		} else {
-			self.parameters.split(',').count()
+		self.defaults().count()
+	}
+
+	/// Each parameter's default as written, `" "` of `separator: text = " "`; None for one without
+	pub fn defaults(&self) -> impl Iterator<Item = Option<&'a str>> {
+		let parameters = self.parameters.trim();
+		let parameters = (!parameters.is_empty()).then_some(parameters).into_iter().flat_map(|all| all.split(','));
+		parameters.map(|parameter| parameter.split_once('=').map(|(_, default)| default.trim()))
+	}
+
+	/// `(x:number) -> int`, as a signature reads
+	pub fn signature(&self) -> String {
+		let parameters = self.parameters.replace(": ", ":");
+		match self.result {
+			"" => format!("({parameters})"),
+			result => format!("({parameters}) -> {result}"),
 		}
 	}
+}
+
+/// lib/prelude.warp's `from warp` lines: the words the emitter computes as runtime functions (upper, split, map_keys …)
+pub fn runtime_word_lines() -> &'static [ForeignLine<'static>] {
+	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
+	LINES.get_or_init(|| PRELUDE_SOURCE.lines().filter_map(|line| foreign_line(line, BUILTIN_LIBRARY)).collect())
 }
 
 /// lib/math.warp's foreign lines of one library: `'m'` (libm) or warp itself (BUILTIN_LIBRARY)

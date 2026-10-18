@@ -2,6 +2,30 @@
 // Each is `name(parameters) := body` (modules::prelude_word_arity reads the parameters); library_words maps other
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
 
+// The words warp computes itself, the emitter's runtime functions, with their signatures (decision
+// foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces)
+upper(t: text): text from warp
+lower(t: text): text from warp
+reverse(xs) from warp
+sort(xs: list): list from warp
+split(t: text, separator: text = " "): list of text from warp
+join(xs: list, separator: text): text from warp
+chars(t: text): list of text from warp
+code_point_list(t: text): list of int from warp
+ord(c: codepoint): int from warp
+map_keys(m): list from warp
+map_values(m): list from warp
+map_entries(m): list from warp
+map_without(m, key): list from warp
+map_of_entry(entry) from warp
+map_get_or(m, key, default = ø) from warp
+collection_contains(xs, x) from warp
+collection_position(xs, x) from warp
+slice(xs, start, end = ø) from warp
+field_with(object, name, value) from warp
+instance_copy(x, shallow) from warp
+wasi_environment(): text from warp
+
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
 alias tuple = list

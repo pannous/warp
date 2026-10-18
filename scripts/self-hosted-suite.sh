@@ -119,7 +119,7 @@ cloud_run() {
 	mkdir -p "$REPORTS"
 	rank "${logs[@]}" | tee "$REPORTS/${tip:0:8}.txt"
 	mkdir -p "$(dirname "$COUNTS")"
-	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //')" \
+	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //; s/ passed//')" \
 		"data/self-hosted/${tip:0:8}.txt" >> "$COUNTS"
 	echo "(report: $REPORTS/${tip:0:8}.txt, logs: ${logs[*]})"
 }
