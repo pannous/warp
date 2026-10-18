@@ -30,8 +30,8 @@ const CLEARED_CALL: &str = "cleared";
 pub(crate) const POP_TEMPORARY: &str = "pop_tmp";
 pub(crate) const INSERT_METHOD: &str = "insert";
 
-/// Pseudo-call `list_insert_at(list, position, value)`: the list with value inserted at the 0-based position
-pub const INSERT_AT_CALL: &str = "list_insert_at";
+/// lib/prelude.warp's `inserted(xs, i, v)`: the list with v inserted at the 0-based position i
+const INSERTED_CALL: &str = "inserted";
 /// Pseudo-call `insert_in_either_order(list, a, b)`: `xs.insert(a, b)` before the kinds decide which is the position
 pub const INSERT_EITHER_CALL: &str = "insert_in_either_order";
 
@@ -159,20 +159,26 @@ pub(crate) fn insert_position(argument: &Node) -> Option<&Node> {
 	}
 }
 
-/// `xs = list_insert_at(xs, position, value)`, or `insert_in_either_order(xs, a, b)` that the emitter resolves by the
-/// kinds of a and b: the one Int is the position, two Ints are ambiguous (Python and warp order differ)
+/// `xs = list_become(xs, inserted(xs, position, value))`, or `insert_in_either_order(xs, a, b)` that the emitter
+/// resolves by the kinds of a and b: the one Int is the position, two Ints are ambiguous (Python and warp order differ)
 pub(crate) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
-	let (pseudo_call, first, second) = match inserted_element(&list, call).expect("guarded") {
-		Inserted::At(position, value) => (INSERT_AT_CALL, position, value),
-		Inserted::EitherOrder(first, second) => (INSERT_EITHER_CALL, first, second),
+	let lowered = match inserted_element(&list, call).expect("guarded") {
+		Inserted::At(position, value) => {
+			inserted_in_place(&list, lower_declarations(position), lower_declarations(value))
+		}
+		Inserted::EitherOrder(first, second) => parens(vec![
+			Node::Symbol(INSERT_EITHER_CALL.to_string()),
+			*list.clone(),
+			lower_declarations(first),
+			lower_declarations(second),
+		]),
 	};
-	let arguments = vec![
-		Node::Symbol(pseudo_call.to_string()),
-		*list.clone(),
-		lower_declarations(first),
-		lower_declarations(second),
-	];
-	Node::Key(list, Op::Assign, Box::new(parens(arguments)))
+	Node::Key(list, Op::Assign, Box::new(lowered))
+}
+
+/// `list_become(xs, inserted(xs, position, value))`: lib/prelude.warp's inserted list, in place so every holder sees it
+pub(crate) fn inserted_in_place(list: &Node, position: Node, value: Node) -> Node {
+	became(list, prelude_call(INSERTED_CALL, vec![list.clone(), position, value]))
 }
 
 /// `xs.add(v)` as `xs += [v]` and `xs.insert(i, v)` as its assignment, for a call that `updates_list`
