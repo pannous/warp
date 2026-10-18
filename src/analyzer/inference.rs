@@ -532,7 +532,6 @@ fn library_call_kind(name: &str, items: &[Node], scope: &Scope) -> Kind {
 			kind if kind.is_ref() => kind,
 			_ => Kind::Empty,
 		},
-		LIST_DROP_LAST => Kind::List,
 		// a list, or a text when it sorts a text's characters
 		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => Kind::Empty,
 		// the place itself, changed; the map of `{a:1}` a node as the pair is
