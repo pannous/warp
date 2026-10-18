@@ -10,12 +10,13 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let float_box = self.type_manager.f64_box_type;
 		let exact = self.int_runtime();
-		let mut locals = vec![ValType::I64, ValType::I64, ValType::F64, ValType::F64];
-		locals.extend([ValType::I32; 6]);
+		let text_type = self.type_manager.text_type;
+		let mut locals = vec![ValType::I64, ValType::I64, ValType::F64, ValType::F64, self.text_ref(), self.text_ref()];
+		locals.extend([ValType::I32; 4]);
 		self.runtime_function(NODE_ORDER, vec![node_ref, node_ref], vec![ValType::I32], locals, |s, f| {
 			let (first, second, kinds) = (0, 1, [2, 3]);
 			let (first_float, second_float) = (4, 5);
-			let (first_pointer, second_pointer, first_length, second_length, index, difference) = (6, 7, 8, 9, 10, 11);
+			let (first_bytes, second_bytes, first_length, second_length, index, difference) = (6, 7, 8, 9, 10, 11);
 			let is_kind = |f: &mut Function, local: u32, kind: Kind| {
 				Self::emit_list(f, &[I::LocalGet(local), I::I64Const(kind as i64), I::I64Eq])
 			};
@@ -35,13 +36,9 @@ impl WasmGcEmitter {
 			// texts: the first differing byte, else the shorter one first
 			both(f, Kind::Text, I::I32And);
 			f.instruction(&I::If(BlockType::Empty));
-			for (node, pointer, length) in
-				[(first, first_pointer, first_length), (second, second_pointer, second_length)]
-			{
-				s.emit_text_field(f, node, 0);
-				f.instruction(&I::LocalSet(pointer));
-				s.emit_text_field(f, node, 1);
-				f.instruction(&I::LocalSet(length));
+			for (node, bytes, length) in [(first, first_bytes, first_length), (second, second_bytes, second_length)] {
+				s.emit_text_bytes(f, node);
+				Self::emit_list(f, &[I::LocalTee(bytes), I::ArrayLen, I::LocalSet(length)]);
 			}
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -49,8 +46,8 @@ impl WasmGcEmitter {
 					I::Loop(BlockType::Empty),
 						I::LocalGet(index), I::LocalGet(first_length), I::I32GeU, I::LocalGet(index),
 						I::LocalGet(second_length), I::I32GeU, I::I32Or, I::BrIf(1),
-						I::LocalGet(first_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE),
-						I::LocalGet(second_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE), I::I32Sub,
+						I::LocalGet(first_bytes), I::LocalGet(index), I::ArrayGetU(text_type),
+						I::LocalGet(second_bytes), I::LocalGet(index), I::ArrayGetU(text_type), I::I32Sub,
 						I::LocalTee(difference), I::If(BlockType::Empty),
 							I::LocalGet(difference), I::Return,
 						I::End,
