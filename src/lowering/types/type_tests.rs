@@ -295,7 +295,7 @@ pub(crate) fn program_names(node: &Node) -> Names {
 	let mut variables: HashSet<String> =
 		context.user_functions.keys().filter(|name| !is_builtin_type_word(name)).cloned().collect();
 	collect_outer_assigned_names(node, &mut variables);
-	let mut bound_otherwise = super::module_properties::bound_names(node);
+	let mut bound_otherwise = crate::program_names::Bindings::of(node).bound();
 	bound_otherwise.retain(|name| !context.user_functions.contains_key(name));
 	let functions_taking_arguments = context
 		.user_functions

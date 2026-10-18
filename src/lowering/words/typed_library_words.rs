@@ -65,14 +65,15 @@ fn constant_names(program: &Node) -> HashSet<String> {
 }
 
 /// The parameters and loop variables anywhere in the program: names bound without an assignment
+use crate::program_names::Meaning;
+
 fn names_bound_unassigned(program: &Node) -> Vec<String> {
-	let mut names = crate::for_loop::loop_variables(program);
-	program.visit(&mut |node| {
-		if let Some(head) = function_head(node) {
-			names.extend(head.parameters().into_iter().filter_map(super::nodes::parameter_name));
-		}
-	});
-	names
+	let unassigned = |(_, meaning): &(&str, Meaning)| matches!(meaning, Meaning::Parameter | Meaning::Loop);
+	crate::program_names::Bindings::of(program)
+		.meanings()
+		.filter(unassigned)
+		.map(|(name, _)| name.to_string())
+		.collect()
 }
 
 /// A function the program defines: its name, arguments (fewest, most) and the type of its first parameter

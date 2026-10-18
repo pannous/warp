@@ -284,14 +284,7 @@ fn parameter_names(head: &Node) -> HashSet<String> {
 	let Node::List(parameters, _, _) = head.drop_meta() else {
 		return HashSet::new();
 	};
-	parameters
-		.iter()
-		.filter_map(|parameter| match parameter.drop_meta() {
-			Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name(),
-			other => other.symbol_name(),
-		})
-		.map(str::to_string)
-		.collect()
+	parameters.iter().filter_map(crate::lowering::nodes::parameter_name).collect()
 }
 
 fn makes_intervals(program: &Node) -> bool {

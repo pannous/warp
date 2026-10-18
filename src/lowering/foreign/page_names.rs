@@ -46,11 +46,6 @@ const BIND_ATTRIBUTE: &str = "bind";
 /// jQuery's `$('#who')`
 const JQUERY_WORD: &str = "$";
 const ID_SELECTOR: char = '#';
-/// How names_given_with_kinds and bindings say what the program binds a name as
-const VARIABLE_KIND: &str = "variable";
-const FIELD_KIND: &str = "field";
-const PARAMETER_KIND: &str = "parameter";
-const LOOP_VARIABLE_KIND: &str = "loop variable";
 const OLD_FORM_REASON: &str = "page ids are names: `who` is the element, `$who` its value (card page-ids)";
 
 /// An element of the program's markup that has an id
@@ -151,36 +146,13 @@ fn attribute_value(item: &Node, name: &str, defined: &HashSet<String>) -> Option
 /// An id the program also binds, as a variable, function, parameter or loop variable: the error naming both; a
 /// variable of a field's id is what `bind:` is for (`input{ id: "name" }` + `name = $name`, the most common clash)
 fn clash_with_definition(program: &Node, elements: &BTreeMap<String, PageElement>) -> Option<Node> {
-	let bound = bindings(program);
-	let (id, element) = elements.iter().find(|(id, _)| bound.contains_key(*id))?;
-	let kind = bound[id];
+	let bindings = crate::program_names::Bindings::of(program);
+	let (id, element, meaning) =
+		elements.iter().find_map(|(id, element)| Some((id, element, bindings.meaning_of(id)?)))?;
+	let is_variable = meaning == crate::program_names::Meaning::Variable;
 	let error =
-		clash_error(&innermost_use(program, id), id, element, &format!("the {kind} {id}"), kind == VARIABLE_KIND);
+		clash_error(&innermost_use(program, id), id, element, &format!("the {} {id}", meaning.word()), is_variable);
 	Some(error.into_error())
-}
-
-/// Every name the program binds and how: variables, functions, parameters (`f(x) := …`, `def f(x) {…}`, `x => …`)
-/// and loop variables; a data key or attribute (a field) binds none
-fn bindings(program: &Node) -> BTreeMap<String, &'static str> {
-	let mut bound = BTreeMap::new();
-	for (name, kind) in crate::soft_keywords::names_given_with_kinds(program) {
-		if kind != FIELD_KIND {
-			bound.entry(name).or_insert(kind);
-		}
-	}
-	program.visit(&mut |node| {
-		if let Some(head) = crate::lowering::nodes::function_head(node) {
-			for parameter in head.parameters().into_iter().filter_map(crate::lowering::nodes::parameter_name) {
-				bound.entry(parameter).or_insert(PARAMETER_KIND);
-			}
-		}
-		if let Node::List(items, _, _) = node {
-			if let Some(variable) = crate::lowering::nodes::for_in_variable(items) {
-				bound.entry(variable).or_insert(LOOP_VARIABLE_KIND);
-			}
-		}
-	});
-	bound
 }
 
 /// "name is two things here: the page element of id name (`input{ id: "name" }`) and the variable name", with the

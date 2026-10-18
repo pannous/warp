@@ -108,22 +108,6 @@ pub fn lower(program: Node) -> Node {
 	program
 }
 
-/// Every name the program gives: its variables, parameters, fields and functions
-pub fn names_given(program: &Node) -> std::collections::HashSet<String> {
-	let mut names = std::collections::HashSet::new();
-	walk_names(program, &mut |name, _| {
-		names.insert(name.to_string());
-	});
-	names
-}
-
-/// Each name the program gives with how: "variable", "function", "parameter" or "field"
-pub fn names_given_with_kinds(program: &Node) -> Vec<(String, &'static str)> {
-	let mut names = vec![];
-	walk_names(program, &mut |name, kind| names.push((name.to_string(), kind)));
-	names
-}
-
 /// A hard keyword assigned anywhere, a soft one defined at the top level: the loud error
 fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 	if let Some(name) = bound_names(node).into_iter().find(|name| UNBOUND_KEYWORDS.contains(&name.as_str())) {
@@ -185,55 +169,14 @@ fn preposition_arguments(items: &[Node]) -> bool {
 
 /// The got-it note for each soft keyword the program uses as a local name
 fn note_local_names(program: &Node) {
-	walk_names(program, &mut |name, role| {
+	for (name, meaning) in crate::program_names::Bindings::of(program).meanings() {
 		if SOFT_KEYWORDS.contains(&name) {
 			crate::errors::diagnostic::educate_once(
 				&format!("{TOPIC}-{name}"),
 				name,
 				name,
-				&format!("{name} is a keyword; here it is your {role}"),
+				&format!("{name} is a keyword; here it is your {}", meaning.word()),
 			);
 		}
-	});
-}
-
-/// Every name the program gives: parameters, variables, fields and functions, with their role
-fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &'static str)) {
-	match node.drop_meta() {
-		Node::Key(target, Op::Define | Op::Assign, body) => {
-			match target.drop_meta() {
-				Node::Symbol(name) => found(name, "variable"),
-				Node::List(items, Bracket::Round, _) => {
-					if let Some(name) = items.first().and_then(Node::symbol_name) {
-						found(name, "function");
-					}
-					items.iter().skip(1).filter_map(parameter_name).for_each(|name| found(&name, "parameter"));
-				}
-				_ => {}
-			}
-			walk_names(body, found);
-		}
-		Node::Key(parameters, Op::Arrow, body) => {
-			let names: Vec<String> = match parameters.drop_meta() {
-				Node::List(items, _, _) => items.iter().filter_map(parameter_name).collect(),
-				other => parameter_name(other).into_iter().collect(),
-			};
-			names.iter().for_each(|name| found(name, "parameter"));
-			walk_names(body, found);
-		}
-		Node::List(entries, Bracket::Curly, _) => entries.iter().for_each(|entry| {
-			if let Node::Key(key, Op::Colon, _) = entry.drop_meta() {
-				if let Some(name) = key.symbol_name() {
-					found(name, "field");
-				}
-			}
-			walk_names(entry, found);
-		}),
-		Node::Key(left, _, right) => {
-			walk_names(left, found);
-			walk_names(right, found);
-		}
-		Node::List(items, _, _) => items.iter().for_each(|item| walk_names(item, found)),
-		_ => {}
 	}
 }

@@ -35,7 +35,7 @@ pub fn lower(program: Node) -> Node {
 	if !program.mentions(NOW_WORD) {
 		return program;
 	}
-	let bound = crate::system_values::assigned_symbols(&program);
+	let bound = crate::program_names::Bindings::of(&program).bound();
 	if bound.contains(NOW_WORD) {
 		return program;
 	}

@@ -937,7 +937,7 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 	if !(needs_quantities(&program) || program.mentions_any(&[NOW_WORD, TIME_WORD])) {
 		return program;
 	}
-	let bound = crate::system_values::assigned_symbols(&program);
+	let bound = crate::program_names::Bindings::of(&program).bound();
 	let constants = constant_quantities(&program);
 	let clock = !bound.contains(NOW_WORD);
 	let time_is_the_type = !bound.contains(TIME_WORD);

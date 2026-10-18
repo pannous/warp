@@ -521,7 +521,10 @@ impl Listeners {
 		Listeners {
 			counts: handlers.iter().map(|(_, name, _)| (name.clone(), unnamed(name))).collect(),
 			// a handler nothing emits is gone: its name binds nothing
-			bound: statements.iter().flat_map(assigned_and_loop_names).collect(),
+			bound: statements
+				.iter()
+				.flat_map(|statement| crate::program_names::Bindings::of(statement).bound())
+				.collect(),
 			named,
 		}
 	}
@@ -733,25 +736,6 @@ fn first_error(node: &Node) -> Option<Node> {
 	found
 }
 
-/// The names a program binds: assigned ones and loop variables (`for l in …`)
-fn assigned_and_loop_names(program: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	program.visit(&mut |part| match part {
-		Node::Key(target, Op::Assign | Op::Define, _) => {
-			names.insert(word(target));
-		}
-		Node::List(items, _, _) => {
-			if let [first, variable, ..] = items.as_slice() {
-				if word(first) == "for" {
-					names.insert(word(variable));
-				}
-			}
-		}
-		_ => {}
-	});
-	names
-}
-
 /// `on alarm {body}`, `on stop the machine {body}`, `on alarm: body`, `once alarm {body}`: the event's name, the body
 /// and whether it runs once
 fn handler(statement: &Node) -> Option<(String, Node, bool)> {
@@ -760,7 +744,7 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 
 /// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
 pub(crate) fn emit_verbs(program: &Node) -> Vec<String> {
-	let names = crate::soft_keywords::names_given(program);
+	let names = crate::program_names::Bindings::of(program).given();
 	EMIT_WORDS
 		.iter()
 		.chain(EMIT_ALIASES.iter())
