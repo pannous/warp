@@ -3914,7 +3914,6 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_live_redefine::a_loop_defined_once_is_unchanged
   ✓ programs::test_live_redefine::a_named_loop_announcing_its_cycles_still_runs
-  ✓ programs::test_live_redefine::a_redefined_loop_plays_its_new_block_from_the_next_cycle
   ✓ programs::test_midi::a_broken_file_fails_loudly
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
   ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
@@ -6356,6 +6355,7 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_words::call_kinds_are_rusts
+  ✗ programs::test_live_redefine::a_redefined_loop_plays_its_new_block_from_the_next_cycle
 
 SUMMARY:
-16 ignored, 6352 passed, 1 failed, 6353 total tested
+16 ignored, 6351 passed, 2 failed, 6353 total tested
