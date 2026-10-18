@@ -402,7 +402,7 @@ fn struct_node<T>(
 		Some(Kind::Int) => int_node(store, &data, high_byte),
 		Some(Kind::Float) => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
 		Some(Kind::Codepoint) => char_node(store, &data),
-		Some(Kind::Text) => Node::Text(text_of(store, &data, memory)),
+		Some(Kind::Text) => Node::Text(rope_text(store, data, child, memory)),
 		Some(Kind::Symbol) if kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
 			Node::type_value(&text_of(store, &data, memory))
 		}
@@ -487,7 +487,7 @@ fn list_in<T>(
 	memory: Option<wasmtime::Memory>,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
 ) -> Node {
-	if let Some(items) = vector_items(&first, store) {
+	if let Some(items) = warp_runtime::gc_values::vector_items(&first, store) {
 		let items = items.iter().map(|item| node_along(item, store, memory, path)).collect();
 		return Node::List(items, bracket, separator);
 	}
@@ -515,18 +515,6 @@ fn list_in<T>(
 	Node::List(items, bracket, separator)
 }
 
-/// The items of a list held as a vector, `$list (len i32, items (array anyref))` (lib/compiler/emitter.warp): its first
-/// field is the i32 length, where a cons cell's first item is a $Node, whose first field is the i64 kind
-fn vector_items<T>(data: &Val, store: &mut StoreContextMut<'_, T>) -> Option<Vec<Val>> {
-	let vector = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
-	let Val::I32(length) = vector.field(&mut *store, 0).ok()? else {
-		return None;
-	};
-	let items = vector.field(&mut *store, 1).ok()?.unwrap_anyref()?.as_array(&*store).ok()??;
-	let items: Vec<Val> = items.elems(&mut *store).ok()?.take(length as usize).collect();
-	Some(items)
-}
-
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
 	let float_box = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
 	float_box.field(&mut *store, 0).ok().map(|value| warp_runtime::floats::canonical_nan(value.unwrap_f64()))
@@ -538,8 +526,25 @@ fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<
 	Some(parts)
 }
 
-/// The letters of a `$String(ptr, len)` in linear memory
-/// A text's bytes: a `$String` (ptr, len) in memory, or a GC byte array `(array i8)` (lib/compiler/emitter.warp)
+/// The text of a Text node: its bytes, after those of the texts before it when it is a rope (text_append: data the last
+/// piece, the value field the text before it)
+fn rope_text<T>(
+	store: &mut StoreContextMut<'_, T>,
+	data: Val,
+	before: Val,
+	memory: Option<wasmtime::Memory>,
+) -> String {
+	let mut pieces = vec![text_of(store, &data, memory)];
+	let mut before = before;
+	while let Some(structref) = before.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) {
+		let Some((_, data, earlier)) = node_fields(&structref, store) else { break };
+		pieces.push(text_of(store, &data, memory));
+		before = earlier;
+	}
+	pieces.into_iter().rev().collect()
+}
+
+/// A text's bytes: a GC byte array `$Text`, or a `$String` (ptr, len) in memory
 fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: Option<wasmtime::Memory>) -> String {
 	let read = |store: &mut StoreContextMut<'_, T>| -> Option<String> {
 		if let Ok(Some(bytes)) = data.unwrap_anyref()?.as_array(&*store) {

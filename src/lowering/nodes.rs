@@ -143,11 +143,10 @@ pub(crate) fn block(statements: Vec<Node>) -> Node {
 /// A place a value can be written to: a variable `s`, a field of one `box.shape`, `p#…` (a declared type's field
 /// index), `shapes#1`, in parentheses or not
 pub(crate) fn is_place(node: &Node) -> bool {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Symbol(_) => true,
 		Node::Key(object, Op::Dot, field) => matches!(field.drop_meta(), Node::Symbol(_)) && is_place(object),
 		Node::Key(object, Op::Hash, _) => is_place(object),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_place(&items[0]),
 		_ => false,
 	}
 }

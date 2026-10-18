@@ -66,15 +66,8 @@ Per form: the form, the sources showing it, why it is left out, how to bring it 
 - `(function f).dump` in grouped_receivers: a function reference in parentheses keeps its group. The bridge's plain
   view drops the function-reference mark (an attribute layer), so the twin sees `(f)` and ungroups it when f is a
   loop variable. Sources: probes/joinable_error.warp. Back: keep the function-reference mark in plain views (twins.rs
-  plain, walk.warp plain).
-- `sort xs!`, `print friends!` (D2's in-place bang, suffixes.rs try_parse_evaluate_bang: the name gets the attribute
-  `mutated`, mutation.rs assigns or not). parser.warp has no `!` suffix: it reads a prefix `not` with no operand, a
-  third item `["key" "not" ø ø]`, so self-hosted `sort xs!` is the two-argument sort ("sort needs a function, got not
-  ø"; card suite-sort-bang; tests operators::test_print_bang, the first passed before 2026-10-18 only because the
-  extra argument went unnoticed). Same gap as the function reference above: walk.warp node_of, the bridge's plain view
-  and node_views node_of all drop attribute layers, and the twinned passes run before mutation. Back: an attribute
-  layer through the self-hosted views (plain keeps `["attribute", name, value, node]`, node_of makes it Meta, the
-  pass twins walk into it), then parser.warp writes `["attribute", "mutated", true, x]` (`x!!`: 2).
+  plain, walk.warp plain). The self-hosted bridge keeps attribute layers since card suite-sort-bang (walk.warp
+  bridged, node_views handled_plain_view); the twin comparisons still use plain.
 
 ## Passes: SUGAR_PASSES triage
 Sources changed = probes and samples whose program the pass changes (tests/parser/test_sugar_survey.rs,
