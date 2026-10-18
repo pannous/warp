@@ -80,6 +80,9 @@ pub struct CompileContext {
 	pub written_problems: HashSet<String>,
 	/// the functions of the program being lowered, by name: a GPU kernel may call them (card gpu-functions)
 	pub(crate) program_functions: HashMap<String, ProgramFunction>,
+	/// the values the program's main level assigns its variables first, by name: a shader reads a vector of them as a
+	/// vecNf (card kernel-global-lists)
+	pub(crate) program_values: HashMap<String, crate::node::Node>,
 	/// the number of the next temporary the compile invents across passes (`race·0`, `item·0`)
 	pub fresh_number: usize,
 	/// how deep in compiles we are: only the outermost one starts its fresh numbers from 0
@@ -127,6 +130,7 @@ impl Default for CompileContext {
 			float_kernels: HashMap::new(),
 			written_problems: HashSet::new(),
 			program_functions: HashMap::new(),
+			program_values: HashMap::new(),
 			fresh_number: 0,
 			compile_depth: 0,
 			compiler_words: vec![],
