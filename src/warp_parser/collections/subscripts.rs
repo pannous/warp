@@ -2,6 +2,9 @@
 use super::*;
 use crate::warp_parser::context::Context;
 
+/// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
+const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
+
 /// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
 const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
 

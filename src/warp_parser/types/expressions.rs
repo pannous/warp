@@ -2,6 +2,13 @@
 use super::*;
 use crate::words::LIST_WORD;
 
+/// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
+const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
+/// Other languages' list types: warp's list holds any elements, unboxed numbers too, so `Vec<int>` is `list of int`
+const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"];
+/// `left: ref Node?`: WebAssembly's reference type word before a field's type
+const REF_TYPE_WORD: &str = "ref";
+
 /// Two words naming one built-in type (user 2026-10-16, card fast-scope): `x: fast int` is i64, `fast float` f64
 const COMPOUND_TYPES: [(&str, &str, &str); 2] = [("fast", "int", "i64"), ("fast", "float", "f64")];
 /// The heads of an optional type `option<int>`, `Option<i32>`

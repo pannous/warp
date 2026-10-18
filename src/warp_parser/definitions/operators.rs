@@ -1,6 +1,9 @@
 //! User operators: `infix operator ⊕`, their glyphs, precedence declarations, operator methods and calls
 use super::*;
 
+/// Pascal's floor division `7 div 2`, also the html tag `div {…}`
+const DIV_WORD: &str = "div";
+
 /// The got-it note on `infix divides(d, n) := …`, the alias of `infix operator divides(d, n) := …` (card g_mnvA)
 const INFIX_WORD_TOPIC: &str = "infix-operator-word";
 /// The Unicode blocks of symbols a program may use before anything defines them (decision unicode-symbols): arrows,

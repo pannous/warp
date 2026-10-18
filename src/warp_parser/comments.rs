@@ -2,6 +2,10 @@
 use super::scanning::is_number_or_short_name;
 use super::*;
 
+/// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
+const SLASH_COMMENT_TOPIC: &str = "slash-comment";
+const FLOOR_DIVISION_ASSIGN: &str = "/!=";
+
 /// `(col // 3) * 3`: a spaced `//` after code starts a comment, and when the rest of its line closes a bracket that is
 /// open before it, the writer meant floor division (a glued `col//3` warns as it is read, warn_on_floor_division_comment).
 /// The line, column and the hidden closing bracket.
