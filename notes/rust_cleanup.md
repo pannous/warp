@@ -54,3 +54,5 @@ convert to `match x.ungrouped()` only when no arm reads the parameter again (gua
 of x); the ~8 left (type_names, law expressions, for_loop, time holds_time, equality, control_flow) need a reading of
 each arm's meta use first. The lowering is otherwise well factored: the remaining line gains are the repair-pass
 drops after parser S2/S3 and the word-phrase pass, not helpers.
+Then per file (symbol_name/is_symbol/is_block idioms, shared helpers): rust-closures (lambdas+closures, -124), rust-broadcasting
+(-34), rust-tasks (-29), rust-library-words (-12), rust-welcome (welcome_forms, -8).
