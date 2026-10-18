@@ -2,7 +2,7 @@
 use sound
 
 print "the sound module contains many useful functions and tweaks"
-help(sound)
+print help(sound)
 
 for trick in dir(sound):
 	print "sound trick: " + trick
