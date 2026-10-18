@@ -141,6 +141,13 @@ map_get(m: any, name: text) := {
 	if at == 0 { fail() }
 	key_value(unboxed_list(fields_of(m))#at)
 }
+# `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
+node_get(n: any, key: any) := {
+	if kind_code(key) == 1 { return node_element(n, unboxed_int(key) + 1) }
+	map_get(n, node_text(key))
+}
+# `x#i` of a list known only at run time, counted from 1
+node_element(n: any, index: int) := unboxed_list(n)#index
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry
 field_with(m: any, name: text, value: any) := {

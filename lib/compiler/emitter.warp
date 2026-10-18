@@ -258,13 +258,16 @@ vector_code(item_codes: any) := {
 }
 ## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
-entry_code(name_code: any, value_code: any) := [op.i64_const] + sleb(node_kind_codes.entry) + node(node_kind_codes.symbol, name_code) + as_node(value_code) + gc_code("struct_new", [gc.node])
+entry_code(name_code: any, value_code: any) := keyed_code(node_kind_codes.symbol, name_code, value_code)
+# a quoted name `{"+": 1}` stays a text, as Rust's
+keyed_code(name_kind: int, name_code: any, value_code: any) := [op.i64_const] + sleb(node_kind_codes.entry) + node(name_kind, name_code) + as_node(value_code) + gc_code("struct_new", [gc.node])
 # the name of an entry `x: v` or a subscript's text "x"
 name_text(n: any) := if n is symbol then name_of(n) else n
 is_entry(n: any) := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text)
 # `{a: 1, b: "x"}`: a map
 map_value(body: Body, entries: any) := {
-	codes = entries.map(e => entry_code(text_bytes(name_text(key_of(e))), boxed(expression(body, value_of(e)))))
+	name_kind = e => if key_of(e) is symbol then node_kind_codes.symbol else node_kind_codes.text
+	codes = entries.map(e => keyed_code(name_kind(e), text_bytes(name_text(key_of(e))), boxed(expression(body, value_of(e)))))
 	["node", node(node_kind_codes.map, vector_code(codes))]
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
@@ -414,6 +417,7 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 	if kind == pending { kind = "int" }
 	if symbol == "#" and a#1 == "list" { return element(a, b) }
 	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, b]) }
+	if symbol == "#" and a#1 == "node" and b#1 == "int" { return runtime_call("node_element", [a, b]) }
 	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
 	textual = a#1 in characters or b#1 in characters
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
@@ -588,6 +592,8 @@ group_expression(body: Body, n: any) := {
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
 	if bracket_of(n) == "[" { return list_value(body, n.map(x => x)) }
 	if bracket_of(n) == "{" and #n > 0 and n.all(is_entry) { return map_value(body, n.map(x => x)) }
+	# a map of one entry, as Rust's lowering marks it: map_value already gives the map
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("map_of_entry") { return expression(body, n#2) }
 	if bracket_of(n) == "(" and #n == 4 and n#1 == symbol("field_with") {
 		return field_assignment(expression(body, n#2), expression(body, n#3), expression(body, n#4))
 	}
@@ -612,6 +618,10 @@ key_expression(body: Body, n: any) := {
 		return instance_value(body, name_of(left), right.map(x => x))
 	}
 	if operator == "#" and left != ø and subscript_name(right) != ø { return map_get(expression(body, left), subscript_name(right)) }
+	if operator == "#" and left != ø and op_of(right) == "+" and value_of(right) == 1 {
+		target = expression(body, left)
+		if target#1 == "node" { return runtime_call("node_get", [target, ["node", boxed(expression(body, key_of(right)))]]) }
+	}
 	if operator == "+=" {
 		target = expression(body, left)
 		if target#1 == "list" { return runtime_call("list_append", [target, expression(body, right)]) }
