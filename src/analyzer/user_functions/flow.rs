@@ -1,8 +1,8 @@
 //! The kinds of user function parameters and results as one flow inference (card src-analyzer, the Rust side of
 //! lib/compiler/analyzer.warp): each undeclared parameter holds the join of the kinds that flow into it (the arguments
 //! of every call, the values a closure captures, the literals its body assigns it), else the kind its body's use
-//! suggests, else what the closure calls pass; results follow from the bodies. Every round recomputes the flows from
-//! the kinds of the last one, until nothing changes.
+//! suggests, else what the closure calls pass; results follow from the bodies, starting from Int. Every round
+//! recomputes the results and the flows from the kinds of the last one, until nothing changes.
 
 use super::*;
 
@@ -31,13 +31,14 @@ pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<St
 		.collect();
 	let judge = ArgumentJudge::of(ctx, program);
 	let slots: usize = ctx.user_functions.values().map(|function| function.params.len() + 1).sum();
+	assume_int_results(ctx);
 	for _ in 0..=slots {
-		refine_return_kinds(ctx, globals);
-		let kinds = FunctionKinds::new(known_function_kinds(ctx));
+		let results_changed = step_result_kinds(ctx, &all_function_kinds(ctx), globals);
+		let kinds = all_function_kinds(ctx);
 		let flows = flows(ctx, program, &kinds, globals, &judge, &usages);
 		let widened =
 			widen_globals_by_functions(globals, ctx.user_functions.values(), &kinds, &ctx.closure_variable_targets);
-		if !(given_flows(ctx, &flows, &usages) | widened) {
+		if !(given_flows(ctx, &flows, &usages) | widened | results_changed) {
 			return;
 		}
 	}

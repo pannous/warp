@@ -886,48 +886,52 @@ fn assigned_literal_kinds(body: &Node, name: &str) -> Vec<Kind> {
 	kinds
 }
 
-/// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),
-/// until the kinds settle: a call of a float-returning function is itself Float. After the first round only the
-/// functions naming one whose kinds changed are inferred again (a closure call's kind joins its targets', unnamed)
-pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
-	// a wasm module's export gives what its header says (`f(t) := shout(t)` gives shout's char *, a text)
-	let mut function_kinds: HashMap<String, Kind> = ctx
+/// The kinds the functions are known to give, the user functions' as of the last round: a wasm module's export gives
+/// what its header says (`f(t) := shout(t)` gives shout's char *, a text), a user function shadows it
+pub(super) fn all_function_kinds(ctx: &Context) -> FunctionKinds {
+	let mut kinds: HashMap<String, Kind> = ctx
 		.ffi_imports
 		.iter()
 		.filter(|(_, import)| crate::modules::wasm_modules::is_module_path(import.library))
 		.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)))
 		.collect();
-	function_kinds.extend(ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)));
-	function_kinds.extend(ctx.field_kinds.clone());
-	let mut stale: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
-	for _ in 0..=ctx.user_functions.len() {
-		let known = FunctionKinds::new(function_kinds.clone());
-		let inferred: Vec<(String, Kind)> = stale
-			.iter()
-			.map(|function| (function.name.clone(), settled_return_kind(function, ctx, &known, globals)))
-			.collect();
-		let tuples: Vec<(String, String, Kind)> =
-			stale.iter().flat_map(|function| element_kinds(function, ctx, &known, globals)).collect();
-		let changed: HashSet<String> = inferred
-			.iter()
-			.map(|(name, kind)| (name, name, kind))
-			.chain(tuples.iter().map(|(function, key, kind)| (function, key, kind)))
-			.filter(|(_, key, kind)| function_kinds.get(key.as_str()) != Some(kind))
-			.map(|(function, _, _)| function.clone())
-			.collect();
-		if changed.is_empty() {
-			break;
-		}
-		stale = naming_changed(ctx, &known, &changed);
-		function_kinds.extend(inferred);
-		function_kinds.extend(tuples.into_iter().map(|(_, key, kind)| (key, kind)));
-	}
+	kinds.extend(known_function_kinds(ctx));
+	kinds.extend(ctx.field_kinds.clone());
+	FunctionKinds::new(kinds)
+}
+
+/// Every user function's result assumed an Int, where the flow starts (recursion assumes Int first)
+pub(super) fn assume_int_results(ctx: &mut Context) {
 	for function in ctx.user_functions.values_mut() {
-		function.return_kind = function_kinds[&function.name];
-		function.tuple_kinds = (0..crate::tuples::tuple_arity(&function.body).unwrap_or(0))
-			.map(|index| function_kinds[&crate::tuples::element_key(&function.name, index)])
-			.collect();
+		function.return_kind = Kind::Int;
+		function.tuple_kinds = vec![Kind::Int; crate::tuples::tuple_arity(&function.body).unwrap_or(0)];
 	}
+}
+
+/// Each function's result kinds inferred once from the kinds of the last round (a call of a float-returning function
+/// is itself Float); whether one changed
+pub(super) fn step_result_kinds(ctx: &mut Context, kinds: &FunctionKinds, globals: &HashMap<String, Local>) -> bool {
+	let results: Vec<(String, Kind, Vec<Kind>)> = ctx
+		.user_functions
+		.values()
+		.map(|function| {
+			let tuple = match crate::tuples::tuple_arity(&function.body) {
+				Some(_) => infer_tuple_kinds(&function.body, &body_scope(function, ctx, kinds, globals)),
+				None => vec![],
+			};
+			(function.name.clone(), settled_return_kind(function, ctx, kinds, globals), tuple)
+		})
+		.collect();
+	let mut changed = false;
+	for (name, kind, tuple) in results {
+		let function = ctx.user_functions.get_mut(&name).expect("inferred from the user functions");
+		if function.return_kind != kind || function.tuple_kinds != tuple {
+			function.return_kind = kind;
+			function.tuple_kinds = tuple;
+			changed = true;
+		}
+	}
+	changed
 }
 
 /// The kind function returns, given the kinds of the others; a closure call's kind joins its targets'
@@ -960,37 +964,4 @@ fn body_scope(
 	globals: &HashMap<String, Local>,
 ) -> Scope {
 	function_body_scope(&function.params, &function.body, function_kinds, globals, &ctx.closure_variable_targets)
-}
-
-/// The kinds of the elements of the tuple function returns: (function, element key, kind)
-fn element_kinds(
-	function: &UserFunctionDef,
-	ctx: &Context,
-	function_kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
-) -> Vec<(String, String, Kind)> {
-	if crate::tuples::tuple_arity(&function.body).is_none() {
-		return vec![];
-	}
-	infer_tuple_kinds(&function.body, &body_scope(function, ctx, function_kinds, globals))
-		.into_iter()
-		.enumerate()
-		.map(|(index, kind)| (function.name.clone(), crate::tuples::element_key(&function.name, index), kind))
-		.collect()
-}
-
-/// The functions to infer again: those naming a function whose kinds changed, and the closure calls
-fn naming_changed<'a>(
-	ctx: &'a Context,
-	function_kinds: &FunctionKinds,
-	changed: &HashSet<String>,
-) -> Vec<&'a UserFunctionDef> {
-	let changed: Vec<&str> = changed.iter().map(String::as_str).collect();
-	ctx.user_functions
-		.values()
-		.filter(|function| {
-			crate::closures::closure_call_kind(&function.name, ctx, function_kinds).is_some()
-				|| function.body.mentions_any(&changed)
-		})
-		.collect()
 }
