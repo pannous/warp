@@ -180,10 +180,11 @@ const ARITY_VARIANTS: [(&str, usize, &str); 5] = [
 ];
 const AS_LIST: &str = "as_list";
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
-/// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
+/// and popped_rest, `x.clear()` to cleared, `x.insert(v, at: i)` to inserted (list_mutations removed_key,
+/// cleared_collection, lowered_insert)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
-const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
-	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 4] =
+	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"]), ("insert", &["inserted"])];
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand";

@@ -2136,6 +2136,8 @@ PASSED:
   ✓ lists::test_index_assignment::test_index_assign_with_variable
   ✓ lists::test_index_assignment::test_simple_index_assign
   ✓ lists::test_index_out_of_range::an_index_out_of_range_names_the_range
+  ✓ lists::test_inserted_word::insert_is_seen_by_every_holder
+  ✓ lists::test_inserted_word::inserted_is_the_list_with_the_item_at_the_position
   ✓ lists::test_int_map::a_global_map_is_set_in_a_function
   ✓ lists::test_int_map::a_global_map_takes_constant_time_per_entry
   ✓ lists::test_int_map::a_number_is_found_in_a_map
@@ -6356,4 +6358,4 @@ FAILED:
   ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
 
 SUMMARY:
-16 ignored, 6347 passed, 4 failed, 6351 total tested
+16 ignored, 6349 passed, 4 failed, 6353 total tested
