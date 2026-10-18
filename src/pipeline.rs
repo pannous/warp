@@ -133,6 +133,9 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::type_name_matching::lower_prefixed_declarations,
 	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
 	crate::lowering::test_blocks::lower,
+	// the built-in node's cases (decision compiler-node-enum): `Node.Key` is Key, `n: Node` any node, node.warp's Op,
+	// Bracket and Separator in front, before plain_enums lowers them
+	crate::lowering::node_cases::lower,
 	// card plain-enum: `enum Coin { Penny, Dime }` is the sum type of its cases, `Coin.Dime` is Dime, before sum_variants
 	crate::lowering::plain_enums::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
@@ -222,6 +225,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `for x in c` of an object with next() (for_loop.rs) before class_methods lowers the next() calls
 	crate::lowering::for_loop::lower_iterators,
 	crate::lowering::class_methods::lower,
+	// `Key(a, op, b)` and `List(items, bracket, separator)` build nodes, once class_methods took the match patterns apart
+	crate::lowering::node_cases::lower_constructions,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
 	crate::lowering::reflection::lower_component_words,
 	// page ids as names: `who` is document.getElementById("who"), `$who` its value, with `use js document`, which foreign_modules lowers

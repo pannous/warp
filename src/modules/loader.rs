@@ -906,7 +906,7 @@ fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node
 	// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 	// alias lines are the loader's (modules::resolve), no code of the module
 	let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
-	let module = sequence(statements(module).into_iter().filter(kept).collect());
+	let module = sequence(module_statements(module).into_iter().filter(kept).collect());
 	let module = crate::compiler::phase_times::timed_as(
 		|| format!("module source passes of {}", shown.display()),
 		|| crate::pipeline::lower_module_source(module),
