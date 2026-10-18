@@ -12,6 +12,8 @@ use std::sync::{Mutex, OnceLock};
 
 const SWITCH: &str = "WARP_SELF_HOSTED";
 const STAGES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp");
+/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
+const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
 /// The input files of the stage programs, one per worker
@@ -97,7 +99,8 @@ fn spawn_worker() -> Sender<Request> {
 	requests
 }
 
-/// passes.warp `stage` of the JSON its input file holds, compiled once
+/// passes.warp `stage` of the JSON its input file holds, compiled once per worker, and kept in the module cache across
+/// runs while warp, lib/ and the WARP_ settings stay as they are (a compile of it takes seconds)
 struct StageProgram {
 	module: Result<crate::pipeline::CompiledModule, Node>,
 	input: PathBuf,
@@ -105,8 +108,10 @@ struct StageProgram {
 
 impl StageProgram {
 	fn new(input: PathBuf) -> Self {
-		let program = format!("use \"{STAGES}\"\nstage(json(read(\"{}\")))", input.display());
-		StageProgram { module: crate::pipeline::compile(&program), input }
+		// the input file is the worker's argument, so the program, and its kept module, is the same for every worker
+		crate::modules::std_adapters::set_program_arguments(vec![input.display().to_string()]);
+		let program = format!("use \"{STAGES}\"\nuse os\nstage(json(read(args#1)))");
+		StageProgram { module: compiled_stages(&program), input }
 	}
 
 	/// The view the stage gives as JSON, or the failure as a text that is no JSON
@@ -127,6 +132,47 @@ impl Drop for StageProgram {
 	fn drop(&mut self) {
 		let _ = std::fs::remove_file(&self.input);
 	}
+}
+
+/// The stage program compiled, or the module kept for it
+fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Node> {
+	use crate::run::program_cache::{keep_under, kept_under};
+	let key = stage_key(program);
+	if let Some(module) = key.as_deref().and_then(kept_under) {
+		return Ok(module);
+	}
+	let module = crate::pipeline::compile(program)?;
+	if let Some(key) = key {
+		keep_under(&key, &module);
+	}
+	Ok(module)
+}
+
+/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/; none
+/// when the binary has no path
+fn stage_key(program: &str) -> Option<String> {
+	use sha2::{Digest, Sha256};
+	let binary = std::env::current_exe().ok()?;
+	let mut hasher = Sha256::new();
+	let settings = crate::run::program_cache::warp_settings();
+	hasher.update(format!(
+		"{}\n{:?}\n{settings:?}\n{program}\n",
+		binary.display(),
+		crate::run::program_cache::stamp(&binary)
+	));
+	let mut files: Vec<PathBuf> = files_below(PathBuf::from(LIBRARY));
+	files.sort();
+	for file in files {
+		hasher.update(format!("{}\n", file.display()));
+		hasher.update(std::fs::read(&file).unwrap_or_default());
+	}
+	Some(crate::extensions::hex_text(&hasher.finalize()))
+}
+
+/// The files below `folder`, at any depth
+fn files_below(folder: PathBuf) -> Vec<PathBuf> {
+	let entries = std::fs::read_dir(&folder).into_iter().flatten().flatten().map(|entry| entry.path());
+	entries.flat_map(|path| if path.is_dir() { files_below(path) } else { vec![path] }).collect()
 }
 
 /// The view a JSON value writes: an array a list, null ø

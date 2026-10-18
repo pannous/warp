@@ -54,6 +54,8 @@ mod test_self_differential; // card self-differential
 #[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
 #[cfg(feature = "native")]
+mod test_self_hosted_cache; // card End-end
+#[cfg(feature = "native")]
 mod test_self_hosted_views; // card warp-pipeline-suite
 #[cfg(feature = "native")]
 mod test_self_lexer; // card self-lexer
