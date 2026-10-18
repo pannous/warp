@@ -444,7 +444,6 @@ assignment(body: Body, target: any, value: any) := {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	kind = value#1
-	if kind == "bool" { return refuse("a yes/no variable") }
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		kind = body.kinds#(body.names[name] + 1)
