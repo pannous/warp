@@ -512,6 +512,9 @@ PASSED:
   ✓ control::test_named_reflection::help_of_a_module_word_has_its_comment
   ✓ control::test_named_reflection::help_of_a_name_known_at_run_time
   ✓ control::test_named_reflection::help_of_a_standard_module_is_its_index
+  ✓ control::test_nested_block_calls::a_block_call_alone_in_a_branch_runs_the_function
+  ✓ control::test_nested_block_calls::a_block_call_in_a_loop_runs_each_time
+  ✓ control::test_nested_block_calls::a_call_before_the_block_is_the_value_argument
   ✓ control::test_not_condition_block::a_comparison_with_empty_in_a_group
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
@@ -1290,6 +1293,10 @@ PASSED:
   ✓ functions::test_bare_host_words::random_of_a_range
   ✓ functions::test_bare_host_words::random_of_a_type
   ✓ functions::test_bare_host_words::the_random_prelude_words
+  ✓ functions::test_block_function_argument::a_block_names_what_is_around_it
+  ✓ functions::test_block_function_argument::a_block_to_a_function_parameter_is_called
+  ✓ functions::test_block_function_argument::a_kept_block_is_called_later
+  ✓ functions::test_block_function_argument::a_lambda_or_function_still_passes_as_is
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
@@ -1399,6 +1406,8 @@ PASSED:
   ✓ functions::test_closures::test_map_and_reduce_with_a_closure_variable
   ✓ functions::test_closures::test_not_a_function_stays_loud
   ✓ functions::test_closures::test_returned_closure
+  ✓ functions::test_collection_result_types::a_list_or_map_result_type_defines_the_function
+  ✓ functions::test_collection_result_types::a_value_of_another_type_fails_the_declared_collection
   ✓ functions::test_comma_calls::an_output_word_takes_a_prefix_call
   ✓ functions::test_comma_calls::comma_arguments_of_a_short_call
   ✓ functions::test_concatenated_text_argument::concatenated_text_fills_a_counted_parameter
@@ -1416,6 +1425,10 @@ PASSED:
   ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
+  ✓ functions::test_data_parameter::a_data_argument_is_its_code
+  ✓ functions::test_data_parameter::a_tag_block_is_the_data_argument
+  ✓ functions::test_data_parameter::bound_names_in_data_are_their_values
+  ✓ functions::test_data_parameter::other_parameters_take_values
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_is_a_function
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_runs_its_statements
@@ -2495,6 +2508,13 @@ PASSED:
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
   ✓ modules::test_replaced_module_function::a_program_function_replacing_a_module_function_warns
+  ✓ modules::test_rewrites::a_phrase_rule_rewrites_runs_inside_phrases
+  ✓ modules::test_rewrites::a_program_rewrites_its_own_phrases
+  ✓ modules::test_rewrites::a_rule_of_several_statements_takes_the_statements_place
+  ✓ modules::test_rewrites::a_rule_with_an_origin_rewrites_only_its_variables
+  ✓ modules::test_rewrites::a_statement_rule_keeps_a_block
+  ✓ modules::test_rewrites::a_typed_hole_takes_only_code_of_its_kind
+  ✓ modules::test_rewrites::own_definitions_shadow_standard_rules
   ✓ modules::test_runtime_word_lines::a_left_out_parameter_takes_its_default
   ✓ modules::test_runtime_word_lines::a_signature_is_its_line
   ✓ modules::test_runtime_word_lines::the_runtime_words_are_callable_by_name
@@ -5110,6 +5130,9 @@ PASSED:
   ✓ types::test_symbolism_object::test_block_entry_runs_only_at_bang
   ✓ types::test_symbolism_object::test_markup_content_stays_an_element
   ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
+  ✓ types::test_tag_entries::a_block_of_statements_stays_code
+  ✓ types::test_tag_entries::a_keyword_names_an_entry
+  ✓ types::test_tag_entries::an_assignment_beside_content_is_an_entry
   ✓ types::test_tagged_objects::a_field_of_a_tagged_object_is_read_from_its_fields
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_tagged_unions::arrow_arms_bind_the_variant_data
@@ -5515,8 +5538,6 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
-  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
-  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -6363,6 +6384,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✗ web::test_app_keys::on_key_hears_the_app_pages_key_presses
 
 SUMMARY:
-16 ignored, 6360 passed, 0 failed, 6360 total tested
+16 ignored, 6381 passed, 2 failed, 6383 total tested

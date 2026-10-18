@@ -1,0 +1,8 @@
+# select_options.rs as rewrite rules (card compiler-modules, markup slice): a list in a select lists its options.
+# Needs: a typed hole ($options: list), a rule firing on any item of a select's list; the per-item map is the
+# for-loop the template writes (the variable case of select_options.rs already lowers to it). The map form
+# `"s": "small"` → option{ value: "s" "small" } would need the loop body to test a pair: a warp function in lib/markup.warp.
+rewrite select{ $before... $options: list $rest... } => select{ $before... for listed_option in $options { option{ listed_option } } $rest... }
+use markup
+print to_html(select{ ["apple" "pear"] })
+# <select><option>apple</option><option>pear</option></select>

@@ -154,6 +154,7 @@ mod test_struct_instances;
 mod test_struct_types;
 mod test_sum_types;
 mod test_symbolism_object; // card symbolism-object
+mod test_tag_entries; // decision markup-plain-library
 mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions
 mod test_text_as_bool; // card yes-print
