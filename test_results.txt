@@ -2136,6 +2136,8 @@ PASSED:
   ✓ lists::test_index_assignment::test_index_assign_with_variable
   ✓ lists::test_index_assignment::test_simple_index_assign
   ✓ lists::test_index_out_of_range::an_index_out_of_range_names_the_range
+  ✓ lists::test_inserted_word::insert_is_seen_by_every_holder
+  ✓ lists::test_inserted_word::inserted_is_the_list_with_the_item_at_the_position
   ✓ lists::test_int_map::a_global_map_is_set_in_a_function
   ✓ lists::test_int_map::a_global_map_takes_constant_time_per_entry
   ✓ lists::test_int_map::a_number_is_found_in_a_map
@@ -3767,6 +3769,7 @@ PASSED:
   ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_serializer::a_view_is_json
+  ✓ parser::test_self_words::call_kinds_are_rusts
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6355,4 +6358,4 @@ FAILED:
   ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
 
 SUMMARY:
-16 ignored, 6346 passed, 4 failed, 6350 total tested
+16 ignored, 6349 passed, 4 failed, 6353 total tested

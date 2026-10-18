@@ -417,7 +417,7 @@ pub(super) fn infer_list_type(
 
 /// The kind of a lowered form headed by `name` that is no function call: an insertion, a time, `return x`, `data …`
 fn special_form_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scope) -> Option<Kind> {
-	if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name) {
+	if [ZERO_FILL_CALL, INSERT_EITHER_CALL].contains(&name) {
 		return Some(Kind::List);
 	}
 	// `now`, `2024-02-29`: a time, a kind the node operations meet at run time (wasm_emitter/times.rs)
