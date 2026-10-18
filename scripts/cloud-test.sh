@@ -120,6 +120,16 @@ run_tests_here() {
 	cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
 	local build_status=$?
 	build_seconds=$((SECONDS - build_start))
+	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
+	# `cargo build --offline` found no miniz_oxide in the VM's registry cache (card cloud-stub-offline); the page stub is
+	# macOS-only
+	if [ $build_status -eq 0 ]; then
+		if cargo build "${source_flags[@]}" --quiet -p warp-runtime --bin warp-runtime >> "$HERE_WORK/log.txt" 2>&1; then
+			export WARP_TEST_STUBS_BUILT=1
+		else
+			echo "cloud-test: the runtime stub's build failed, the executable tests build it themselves" >> "$HERE_WORK/log.txt"
+		fi
+	fi
 	local test_start=$SECONDS
 	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
