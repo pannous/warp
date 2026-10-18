@@ -32,7 +32,7 @@ every element `tag{…}`.
   naming `document.querySelector(…)`.
 - Untouched: texts (markup text, single-quoted strings: `$` means something only in warp code), bare `$main` of no
   id (tests/parser/test_dollar_names.rs), `$0`, `$a` naming an enclosing data node (references.rs), `data …`
-  (code patterns' holes). A route's `$title` (lowering/web) and shader holes are taken before this pass.
+  (code patterns' holes). Shader holes are taken before this pass.
 - Open (decision): bare `$who` in markup text position as a live binding.
 
 ## In the playground's Worker

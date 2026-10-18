@@ -47,6 +47,7 @@ use crate::lowering::nodes::with_statements_first;
 use needed_definitions::*;
 mod program_file;
 pub use program_file::*;
+pub mod rewrites;
 mod use_statements;
 pub(crate) use use_statements::*;
 

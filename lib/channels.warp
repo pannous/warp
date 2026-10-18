@@ -1,0 +1,23 @@
+// Channels (P155, notes/channels.md): Go's unbuffered channel inside one run, on the host words of tasks.rs, and
+// `channel "chat"`, the machine-wide channel (src/host/channels.rs) with the same words. The words are rewrite rules
+// (card compiler-modules, src/modules/rewrites.rs): every program mentioning them gets them, no `use` needed.
+// `ch.send(v)` waits until a receiver took v, `for v in ch {…}` receives until the channel is closed.
+rewrite channel() => channel_new()
+rewrite $c.send($v) => channel_put($c, $v) where $c = channel()
+rewrite send $v to $c => channel_put($c, $v) where $c = channel()
+rewrite $c.receive() => channel_take($c) where $c = channel()
+rewrite $c.close() => channel_close($c) where $c = channel()
+rewrite (for $item in $c $body) => while channel_more($c) { $item = channel_take($c); $body } where $c = channel()
+
+// the machine-wide channel listens from its assignment on: a variable holds its name and its listener
+rewrite channel $name => machine_channel($name)
+rewrite $c.send($v) => channel_send($c#1, $v) where $c = channel $name
+rewrite send $v to $c => channel_send($c#1, $v) where $c = channel $name
+rewrite $c.receive() => machine_receive($c#2) where $c = channel $name
+
+// listener ids of channel variables, apart from those system_signals counts from 0
+global last_listener = 1048576
+
+machine_channel(name) := { last_listener += 1; channel_listen(last_listener, name); [name, last_listener] }
+// a receive looks for a message every 5 ms
+machine_receive(listener) := { while channel_pending(listener) == 0 { sleep(5 ms) }; channel_next(listener) }
