@@ -626,6 +626,12 @@ fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
 fn element_wise_call(receiver: Node, operand: Node, combined: Node) -> Node {
 	// the prelude's name for it: library_words, which names prelude words so, runs after this pass
 	let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
+	// min and max of vectors imply no load of it (implied_word): noted, so a compile missing it compiles again with it
+	crate::compiler::compile_context::change(|context| {
+		if !context.missing_compiler_words.iter().any(|missing| missing == ELEMENT_WISE_ANY) {
+			context.missing_compiler_words.push(ELEMENT_WISE_ANY.to_string());
+		}
+	});
 	call(&word, vec![receiver, operand, combined])
 }
 
@@ -1245,12 +1251,12 @@ impl Broadcast {
 }
 
 /// The prelude word this pass may call where the program writes none (modules IMPLIED_WORDS): element_wise_any, of
-/// any element-wise operator (the parser wrote it as a map whose lambda parameter no module scan counts), `dot`
-/// (`sum(a .* b)`) or min and max (of vectors, vector_extremum)
+/// any element-wise operator (the parser wrote it as a map whose lambda parameter no module scan counts) or `dot`
+/// (`sum(a .* b)`). Not of min and max: every program naming them would load it, and its closure calls make the
+/// parameters of every function value of two parameters Nodes (`n times t` of repeat refused); min and max of vectors
+/// (vector_extremum) load it by compiling again (pipeline.rs loading_compiler_words)
 pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
-	let implying = [DOT_WORD].into_iter().chain(EXTREMUM_WORDS);
-	(element_wise_parts(node).is_some() || implying.into_iter().any(|word| node.is_symbol(word)))
-		.then_some(ELEMENT_WISE_ANY)
+	(element_wise_parts(node).is_some() || node.is_symbol(DOT_WORD)).then_some(ELEMENT_WISE_ANY)
 }
 
 /// P166 (user): an element-wise operator on a plain number is the plain operator, `6 ./ 2` is 3. The parser wrote

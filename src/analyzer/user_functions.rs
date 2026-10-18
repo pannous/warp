@@ -590,10 +590,12 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 			changed = true;
 			continue;
 		}
-		// passed a list and a number or a Node (`fract(v)` and `fract(item)` of a run-time choice, broadcasting each_any):
-		// a Node, a list wrapped no number into a list of one
-		let list_and_values = kinds.contains(&Kind::List)
-			&& kinds.iter().any(|kind| matches!(kind, Kind::Empty | Kind::Float | Kind::Data));
+		// passed a list and a float or a Node (`fract(v)` and `fract(item)` of a run-time choice, broadcasting each_any):
+		// a Node, a list wrapped no number into a list of one. Not a list beside a value of run-time kind (`unique(a +
+		// b)` of union) or beside Nodes where the body already uses it (repeat as a function value): a list
+		let numbers = kinds.contains(&Kind::Float);
+		let nodes = kinds.contains(&Kind::Empty);
+		let list_and_values = kinds.contains(&Kind::List) && (numbers || nodes);
 		if list_and_values && matches!(param.used_as, None | Some(Kind::List | Kind::Int)) && takes_passed_kind(param) {
 			param.used_as = Some(Kind::Empty);
 			changed = true;
