@@ -40,6 +40,7 @@ mod test_hash_range_warning;
 mod test_held_element_compare;
 mod test_index_assignment;
 mod test_index_out_of_range;
+mod test_inserted_word; // card insert-at-warp
 pub(crate) mod test_int_map; // card int-map
 mod test_key_lookup;
 mod test_key_subscript_hint;

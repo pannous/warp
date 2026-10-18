@@ -39,6 +39,7 @@ mod test_packages;
 mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
 mod test_replaced_module_function; // card use-sound-def
+mod test_runtime_word_lines; // card retire-library-words
 mod test_selective_package; // card import-hides
 mod test_std_aliases;
 mod test_std_args; // card std-args

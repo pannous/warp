@@ -1,0 +1,6 @@
+xs = [1, "two", 'c']
+print(xs)
+ys = ø
+ys += [3]
+ys += [4]
+print ys

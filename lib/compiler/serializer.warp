@@ -125,7 +125,7 @@ operand_text(left: any) := if kind(bare(left)) == "text" or kind(bare(left)) == 
 shown(view: any) := {
 	if view is number { return "" + view }
 	tag = kind(view)
-	if tag == "symbol" or tag == "text" or tag == "data" or tag == "number" { return view#2 }
+	if tag == "symbol" or tag == "text" or tag == "template" or tag == "data" or tag == "number" { return view#2 }
 	if tag == "char" { return "" + view#2 }
 	if is_layer(view) { return shown(layered(view)) }
 	if tag == "list" {

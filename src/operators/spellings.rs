@@ -242,6 +242,7 @@ impl Op {
 			Op::Assign => "=",
 			Op::Arrow => "->",
 			Op::FatArrow => "=>",
+			Op::Subscript => "[]",
 			Op::ArrowUp => "↑",
 			Op::ArrowDown => "↓",
 
@@ -303,8 +304,6 @@ impl Op {
 			// Suffix
 			Op::Inc => "++",
 			Op::Dec => "--",
-			Op::Square => "²",
-			Op::Cube => "³",
 
 			// Ternary/Index/Range
 			Op::Question => "?",

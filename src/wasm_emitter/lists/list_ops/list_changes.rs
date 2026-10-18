@@ -195,8 +195,8 @@ impl WasmGcEmitter {
 	}
 
 	/// list_become(list, fresh): the list takes the items of the fresh list in place, every holder sees them (`xs.pop(i)`,
-	/// `xs.clear()`, card aliased-list): its first cell takes fresh's kind, item and rest, its element mark stays; an
-	/// empty fresh list makes it ø itself, ø takes nothing and is fresh
+	/// `xs.clear()`, `xs.insert(v, at: i)`, card aliased-list): its first cell takes fresh's kind, item and rest, its
+	/// element mark stays and checks fresh's items; an empty fresh list makes it ø itself, ø takes nothing and is fresh
 	pub(super) fn emit_list_become(&mut self) {
 		if !self.should_emit_function(crate::list_mutations::LIST_BECOME) {
 			return;
@@ -213,6 +213,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				Self::emit_list(f, &s.forget_list_cursor());
 				let (list, fresh) = (0, 1);
+				s.emit_item_check(f, super::super::super::declared_values::LIST_ITEMS_CHECK, list, fresh);
 				s.emit_empty_as_null(f, fresh);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[

@@ -152,7 +152,6 @@ impl WasmGcEmitter {
 		self.emit_list_become();
 		self.emit_element_children();
 		self.emit_element_body();
-		self.emit_list_insert_at();
 		self.emit_swizzled();
 	}
 
@@ -713,97 +712,6 @@ impl WasmGcEmitter {
 				},
 			);
 		}
-	}
-
-	/// list_insert_at(list, position, value): value at the 0-based position, in place so every holder sees it (P200b):
-	/// the cell there moves one on and takes value; a position past the end (or negative) appends, ø becomes [value]
-	fn emit_list_insert_at(&mut self) {
-		if !self.should_emit_function(crate::list_mutations::INSERT_AT_CALL) {
-			return;
-		}
-		let node_ref = Ref(self.node_ref(false));
-		let node_ref_nullable = Ref(self.node_ref(true));
-		let node_type = self.type_manager.node_type;
-		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
-		let params = vec![node_ref_nullable, ValType::I64, node_ref];
-		self.runtime_function(
-			crate::list_mutations::INSERT_AT_CALL,
-			params,
-			vec![node_ref],
-			vec![node_ref_nullable],
-			|s, f| {
-				Self::emit_list(f, &s.forget_list_cursor());
-				let (list, position, value, cell) = (0, 1, 2, 3);
-				#[rustfmt::skip]
-				let lone_cell = [
-					I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::RefNull(HeapType::Concrete(node_type)),
-					I::StructNew(node_type),
-				];
-				s.emit_item_check(f, super::super::declared_values::LIST_ITEM_CHECK, list, value);
-				Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
-				Self::emit_list(f, &lone_cell);
-				Self::emit_list(f, &[I::Return, I::End]);
-				s.emit_field(f, list, 0);
-				s.emit_unmarked(f);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
-						I::LocalGet(list), I::I64Const(SQUARE_LIST_KIND),
-				]);
-				s.emit_or_element_mark(f, list);
-				Self::emit_list(
-					f,
-					&[
-						set(0),
-						I::LocalGet(list),
-						I::LocalGet(value),
-						set(1),
-						I::LocalGet(list),
-						I::RefAsNonNull,
-						I::Return,
-						I::End,
-						I::LocalGet(list),
-						I::LocalSet(cell),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(position),
-						I::I64Eqz,
-						I::If(BlockType::Empty),
-						I::LocalGet(cell),
-					],
-				);
-				// the cell there keeps its place and takes value, a new cell after it its old item and rest
-				s.emit_field(f, cell, 0);
-				s.emit_field(f, cell, 1);
-				s.emit_field(f, cell, 2);
-				Self::emit_list(
-					f,
-					&[
-						I::StructNew(node_type),
-						set(2),
-						I::LocalGet(cell),
-						I::LocalGet(value),
-						set(1),
-						I::LocalGet(list),
-						I::RefAsNonNull,
-						I::Return,
-						I::End,
-					],
-				);
-				s.emit_field(f, cell, 2);
-				Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(cell)]);
-				Self::emit_list(f, &lone_cell);
-				Self::emit_list(f, &[set(2), I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
-				s.emit_field(f, cell, 2);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalSet(cell),
-					I::LocalGet(position), I::I64Const(1), I::I64Sub, I::LocalSet(position),
-					I::Br(0),
-					I::End,
-					I::Unreachable,
-				]);
-			},
-		);
 	}
 
 	/// The grapheme at a 1-based index: a Codepoint when it is one code point (`'héllo'#2` → 'é'),

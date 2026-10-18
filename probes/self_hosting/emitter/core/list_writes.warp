@@ -1,0 +1,19 @@
+xs = [1, 2, 3]
+xs#2 = 20
+ys = xs + [4, "five"]
+n = #ys
+print n
+print ys#5
+print(xs.length + count(ys))
+t = "aé€😀b"
+print t#1
+print t#2
+print t#3
+print t#4
+print t#5
+print t.length
+x = 3
+y = float(x) / 2
+print y > 1
+print x as float < 3.5
+xs#2 + ys#2

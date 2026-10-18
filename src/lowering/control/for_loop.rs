@@ -8,7 +8,7 @@
 use super::nodes::{assign, block, call, for_in_variable, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::while_do;
+use crate::warp_parser::{while_do, REVERSE_WORD};
 use crate::wasm_emitter::{is_step, mark_step};
 use crate::words::ORD_WORD;
 use crate::words::{CHR_WORD, FOR_WORD, IMPLICIT_PARAMETER, IN_WORD};
@@ -20,7 +20,7 @@ const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 /// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
 const CODE_SUFFIX: &str = "·code";
-/// `for c in w.chars`: walked, a unit count is the list of its items, `chars(w)`, `codepoint·list(w)`
+/// `for c in w.chars`: walked, a unit count is the list of its items, `chars(w)`, `code_point_list(w)`
 const WALKED_UNITS: [(&str, &str); 2] = [
 	(crate::analyzer::GRAPHEME_COUNT, crate::library_words::CHARS_WORD),
 	(crate::analyzer::CODE_POINT_COUNT, crate::library_words::CODE_POINT_LIST),
@@ -111,6 +111,9 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	}
 	if names.len() > 1 {
 		return Some(destructuring_loop(&names, iterable, body));
+	}
+	if let Some((high, low)) = falling_range(&iterable) {
+		return Some(counter_loop(variable, &high, (Op::Ge, Op::Dec), &low, body));
 	}
 	Some(match counting_range(&iterable).drop_meta() {
 		Node::Key(start, op @ (Op::Range | Op::To), end) => match letters(start, *op, end) {
@@ -240,9 +243,27 @@ fn for_it(items: &[Node]) -> Option<Node> {
 	for_in(&[keyword.clone(), symbol(IMPLICIT_PARAMETER), symbol(IN_WORD), iterable.clone(), body.clone()])
 }
 
-fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {
+/// `for i in 10 down to 1`, parsed as `reverse(1 to 10)`: the high end and the low end of a falling count of numbers
+/// (letters keep the walked list)
+fn falling_range(iterable: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, _, _) = iterable.drop_meta() else { return None };
+	let [word, range] = items.as_slice() else { return None };
+	match range.drop_meta() {
+		Node::Key(low, Op::To, high) if word.is_symbol(REVERSE_WORD) && !is_letter(low) && !is_letter(high) => {
+			Some((counted_start(high), (**low).clone()))
+		}
+		_ => None,
+	}
+}
+
+fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, body: Vec<Node>) -> Node {
 	let test_op = if range == Op::To { Op::Le } else { Op::Lt };
-	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
+	counter_loop(variable, start, (test_op, Op::Inc), end, body)
+}
+
+/// `variable = start; while variable <test> end do {body; variable <step>}`, the end held in a variable unless literal
+fn counter_loop(variable: &Node, start: &Node, (test_op, step): (Op, Op), end: &Node, mut body: Vec<Node>) -> Node {
+	body.push(mark_step(key(variable.clone(), step, Node::Empty)));
 	let mut statements = vec![assign(variable.clone(), start.clone())];
 	let is_literal = matches!(end.drop_meta(), Node::Number(_) | Node::Char(_));
 	let end = if !is_literal {
