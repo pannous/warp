@@ -988,7 +988,9 @@ const SWIFT_FUNCTION_KEYWORD: &str = "func";
 pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let [result_type, definition] = items else { return None };
 	let result_word = result_type.symbol_name()?;
-	if crate::analyzer::type_word_kind(result_word).is_none() && result_word != VOID_WORD {
+	if is_function_keyword(result_word)
+		|| crate::analyzer::type_word_kind(result_word).is_none() && result_word != VOID_WORD
+	{
 		return None;
 	}
 	let (head, body) = match definition.drop_meta() {
