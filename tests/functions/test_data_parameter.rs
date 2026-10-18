@@ -28,3 +28,9 @@ fn bound_names_in_data_are_their_values() {
 	is!("n = 2\nwritten(code: data) := str(code)\nwritten(\"count \" + n)", "count 2");
 	is!("written(code: data) := str(code)\nshown(x) := written(color: x)\nshown('blue')", "{color:\"blue\"}");
 }
+
+// a name assigned inside a data argument is not bound by the program: it stays as written
+#[test]
+fn names_assigned_in_data_stay_written() {
+	is!("written(code: data) := str(code)\nwritten{ x = 1 }", "{x=1}");
+}
