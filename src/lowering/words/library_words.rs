@@ -15,6 +15,7 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::Kind;
 use crate::warp_parser::{parse_template, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 use crate::words::COPY_WORD;
@@ -200,15 +201,42 @@ const SAFE_BASE: &str = "safe";
 
 /// A library word's result when it is always a text or a list: its signature's (upper, split, map_keys), a text
 /// builtin's (trim), list_extend's (`xs + ys` of lists)
-pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
-	use crate::type_kinds::Kind;
+pub fn result_kind(word: &str) -> Option<Kind> {
+	call_result_kind(word, || None)
+}
+
+/// A library word's result for a first argument of the kind `argument` gives: the result of its overload for that
+/// kind (`reverse(t: text): text`, card typed-builtins), else the one all its overloads share; a value no overload is
+/// typed for (a Node of run-time kind) is a Node when the overloads differ. The argument is inferred only then
+pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> Option<Kind> {
 	let word = canonical_spelling(word);
-	match runtime_word(word).map(|line| line.result) {
-		Some("text") => Some(Kind::Text),
-		Some(result) if result.starts_with(LIST_WORD) => Some(Kind::List),
-		Some(_) => None,
-		None if word == crate::wasm_emitter::lists::list_ops::LIST_EXTEND => Some(Kind::List),
-		None => crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, 1).filter(|kind| *kind == Kind::Text),
+	let overloads: Vec<_> = crate::ffi::runtime_word_lines().iter().filter(|line| line.name == word).collect();
+	let Some(first) = overloads.first() else {
+		return match word {
+			crate::wasm_emitter::lists::list_ops::LIST_EXTEND => Some(Kind::List),
+			_ => {
+				crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, 1).filter(|kind| *kind == Kind::Text)
+			}
+		};
+	};
+	if overloads.iter().all(|line| line_result_kind(line) == line_result_kind(first)) {
+		return line_result_kind(first);
+	}
+	let argument = argument().map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind });
+	let fitting = argument.and_then(|kind| {
+		overloads.iter().find(|line| line.first_type().and_then(crate::analyzer::type_word_kind) == Some(kind))
+	});
+	match fitting {
+		Some(line) => line_result_kind(line),
+		None => argument.map(|_| Kind::Empty),
+	}
+}
+
+fn line_result_kind(line: &crate::ffi::ForeignLine) -> Option<Kind> {
+	match line.result {
+		"text" => Some(Kind::Text),
+		result if result.starts_with(LIST_WORD) => Some(Kind::List),
+		_ => None,
 	}
 }
 

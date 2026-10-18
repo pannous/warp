@@ -197,6 +197,7 @@ mod test_type_word_scopes;
 mod test_type_word_user_function;
 mod test_type_words;
 mod test_typed_arrays;
+mod test_typed_builtins; // card typed-builtins
 mod test_typed_list_elements; // card typed-list-elements
 mod test_types;
 mod test_types_scope;

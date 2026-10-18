@@ -521,12 +521,6 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 fn library_call_kind(name: &str, items: &[Node], scope: &Scope) -> Kind {
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR};
 	match name {
-		// a slice, reversal or sort of a text is a text, of a Node (known at runtime only) a Node, of anything else a list
-		_ if name == crate::words::SLICE || name == "reverse" || name == "sort" => match infer_type(&items[1], scope) {
-			Kind::Text | Kind::Codepoint => Kind::Text,
-			Kind::Empty => Kind::Empty,
-			_ => Kind::List,
-		},
 		// the object with one field set, or its copy: a Node, whatever the object's kind is known as
 		FIELD_WITH | INSTANCE_COPY => match infer_type(&items[1], scope) {
 			kind if kind.is_ref() => kind,
@@ -540,7 +534,9 @@ fn library_call_kind(name: &str, items: &[Node], scope: &Scope) -> Kind {
 		REMOVED_VALUE_CALL => Kind::Empty,
 		// `m.get(k)` is worth what `m[k]` is: a value of the map
 		MAP_GET_OR => element_kind(&items[1], scope).unwrap_or(Kind::Empty),
-		_ => crate::library_words::result_kind(name).unwrap_or(Kind::Int),
+		// an overloaded word's by its first argument: a reversal of a text is a text, of a list a list
+		_ => crate::library_words::call_result_kind(name, || items.get(1).map(|first| infer_type(first, scope)))
+			.unwrap_or(Kind::Int),
 	}
 }
 
