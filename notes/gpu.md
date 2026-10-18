@@ -202,7 +202,7 @@ into a new texture and keeps it per shader text (native gpu.rs PREVIOUS_FRAMES, 
 previousFrames); a canvas paint then copies it into the canvas texture (configured COPY_DST). Kept as 8 bits per
 channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
 
-## Several passes (card gpu-multipass, design, not built)
+## Several passes (card gpu-multipass: render passes built natively, browser host and compute passes open)
 web-ocean renders its sea in passes (FFT spectra, a height-field texture, then the sea that samples it); one fragment
 shader per paint covers only the last pass. The plan, in warp's words, with $previous as the model:
 - **A pass is a painted function whose image stays on the GPU.** `waves = render(height_field, 256, 256)` (decision
@@ -220,8 +220,13 @@ shader per paint covers only the last pass. The plan, in warp's words, with $pre
   pixel, so the fallback paints the same.
 - **Compute passes** (an FFT over a spectrum) are maps over lists kept on the GPU (kept_on_gpu, linear arrays), a later
   step; an image built from such a list (`image(list, width, height)`) joins them to the paint.
-- First step: render + reading an image in a painted function, native only, one probe rendering a gradient into an
-  image and painting it shifted (probes/gpu/). Then the browser host, then samples/gpu/ocean.warp's waves as a texture.
+- Built (natively): kernels.rs render_call / rendered_image lower `waves = render(f, w, h)` to the map
+  `{shader: <f's WGSL, its value in the first channels>, width, height, values: {…}}`; Translation::image_read makes
+  `waves(at)` the host's `warp_image_waves(at)` (src/graphics/gpu.rs image_declarations: textureLoad of the nearest
+  pixel, rgba16float) and adds `waves: waves` to the paint's values; images_read_on_cpu rewrites `waves(at)` to
+  `f(floor(min(max(x, 0), w - 1)), …)` for the CPU. Values are the program's at the `render` statement; built-ins
+  ($time …) are filled for each pass. Tests tests/programs/test_render_passes.rs, probe probes/gpu/render_pass.warp.
+- Open: the browser host (web/playground/host-gpu.js has no images yet), compute passes, ocean's waves as a texture.
 
 ## WGSL errors at their place in the program
 WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). Both hosts report a
