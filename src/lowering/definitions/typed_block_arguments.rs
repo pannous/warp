@@ -78,7 +78,9 @@ fn taking_functions(program: &Node) -> Positions {
 fn std_functions_taking() -> Positions {
 	thread_local!(static FUNCTIONS: Positions = crate::normalize::without_hints(|| {
 		let functions = crate::modules::std_data_functions().iter();
-		functions.flat_map(|(_, line)| functions_taking(&crate::warp_parser::parse(line))).collect()
+		// the head alone: a body's `{` opening on the line would leave its missing-`}` fix in the program's report
+		let head = |line: &str| format!("{} := ø", line.split(":=").next().unwrap_or_default());
+		functions.flat_map(|(_, line)| functions_taking(&crate::warp_parser::parse(&head(line)))).collect()
 	}));
 	FUNCTIONS.with(Clone::clone)
 }
