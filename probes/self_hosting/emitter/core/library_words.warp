@@ -1,0 +1,11 @@
+# emitter core: library words a program calls, given by runtime.warp (emitter.warp library_words)
+xs = [1, "a", 2.5]
+print xs.join(", ")
+print 3 times "ab"
+ys = int[3]
+print ys
+print round(float(5) / 2)
+print round(float(7) / 2)
+print len([1, 2, 3])
+n = 4
+"n = \(n)"
