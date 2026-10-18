@@ -5,7 +5,7 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
-(none)
+- rust-texts (card rust-emitter, defaults in place): (a) `t += x` builds a rope (text_append: the new piece and the text before it), flattened once when read, so appending in a loop stays linear; (b) tests/wasm/test_gc_struct.rs reads a raw struct's text as `$String(ptr, len)`: update read_string_field to read the `$Text` byte array (implied by the byte-array layout)? Meanwhile listed in notes/known_failures.md.
 
 ## Parked
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
