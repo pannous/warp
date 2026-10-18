@@ -344,7 +344,7 @@ fn lift_closures(program: Node) -> Node {
 	let context = crate::analyzer::function_context(&program);
 	let variables = captured_variables_of(&program);
 	let values = settled_function_values(&program, &context);
-	let callable_fields = values.callable_fields(&program);
+	let callable_fields = values.callable_fields(&program, &context);
 	let FunctionValues {
 		functions,
 		returning: returns_function,
@@ -656,7 +656,11 @@ impl FunctionValues {
 	/// (`Holder(x => x + 1)`) or an object entry given one (`hs = [{d: x => x * 3}]`), unless a function or method is
 	/// named so. A field named like a library method (`join`, `size`) is called only on a path assigned the function:
 	/// other receivers keep the method, as a class's method of such a name does (card lambda-held, reviewer)
-	fn callable_fields(&self, program: &Node) -> HashSet<String> {
+	fn callable_fields(&self, program: &Node, context: &Context) -> HashSet<String> {
+		let parameters = self.function_parameters(program, context);
+		let is_given = |value: &Node| {
+			self.is_function_value(value) || value.symbol_name().is_some_and(|name| parameters.contains(name))
+		};
 		let mut fields = HashSet::new();
 		program.visit(&mut |node| {
 			let entries = match node {
@@ -665,8 +669,7 @@ impl FunctionValues {
 				}
 				_ => self.constructed_fields(node),
 			};
-			let given_functions =
-				entries.unwrap_or_default().into_iter().filter(|(_, value)| self.is_function_value(value));
+			let given_functions = entries.unwrap_or_default().into_iter().filter(|(_, value)| is_given(value));
 			fields.extend(given_functions.map(|(field, _)| field));
 		});
 		let is_function_name = |field: &String| {
@@ -674,6 +677,20 @@ impl FunctionValues {
 		};
 		fields.retain(|field| !is_function_name(field) && !crate::class_methods::is_library_method(field));
 		fields
+	}
+
+	/// The parameters a call gives a function value: answer of `route(path, answer)` called `route("/x", q => q + 1)`,
+	/// whose `{answer: answer}` then holds it (card field-closure-call)
+	fn function_parameters(&self, program: &Node, context: &Context) -> HashSet<String> {
+		let mut parameters = HashSet::new();
+		program.visit(&mut |node| {
+			let Node::List(items, Bracket::Round, Separator::None) = node else { return };
+			let Some((head, arguments)) = items.split_first() else { return };
+			let Some(function) = head.symbol_name().and_then(|name| context.user_functions.get(name)) else { return };
+			let given = function.params.iter().zip(arguments).filter(|(_, argument)| self.is_function_value(argument));
+			parameters.extend(given.map(|(param, _)| param.name.clone()));
+		});
+		parameters
 	}
 
 	/// `Holder(x => x + 1)` of `class Holder {d}`: the field d given the lambda, as `{d: x => x + 1}` gives it

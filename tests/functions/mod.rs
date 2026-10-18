@@ -73,6 +73,7 @@ mod test_empty_function_bodies;
 mod test_event_effects;
 mod test_fail_effect;
 mod test_failed_word;
+mod test_field_closure_call; // card field-closure-call
 mod test_field_function_values;
 mod test_float_list_parameters; // card untyped-parameters
 mod test_float_to_int_parameter;
