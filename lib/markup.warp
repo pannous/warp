@@ -22,6 +22,7 @@ html_attributes = ["class", "id", "href", "src", "alt", "title", "style", "type"
 html_boolean_attributes = ["checked", "disabled", "selected", "readonly", "required", "hidden", "multiple", "autofocus"]
 // a meta element's own attributes: `meta{ charset: "utf-8" }` stays the element, `meta: { author: "Ann" }` names metas
 html_meta_attributes = ["charset", "name", "content", "http-equiv", "property", "media"]
+html_starting_style = "data-warp-starting-style"
 // where an element's one style attribute goes among its attributes, its styles joined: a "<" no attribute holds
 html_style_mark = "<style>"
 // CSS properties whose number has no unit; any other number is pixels
@@ -67,9 +68,9 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var styles = []
 	for item in items {
 		if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(keys(item)#1, values(item)#1) }
-		else if html_is_attribute(item, tag) and keys(item)#1 == "style" and html_is_declarations(values(item)#1) {
+		else if html_is_attribute(item, tag) and keys(item)#1 == "style" {
 			if count(styles) == 0 { attributes = attributes + html_style_mark }
-			styles.add(html_css(values(item)#1))
+			styles.add(if html_is_declarations(values(item)#1) then html_css(values(item)#1) else html_attribute_value(values(item)#1))
 		}
 		else if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
 		else if tag == "style" { children = children + html_style_rule(item, scope) + " " }
@@ -144,9 +145,9 @@ html_is_attribute(item: any, tag: any) := {
 	if not (item is pair) { return false }
 	let name = keys(item)#1
 	let value = values(item)#1
-	named = starts_with(name, "data-") or starts_with(name, "aria-") or name == "key" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
+	named = starts_with(name, "data-") or starts_with(name, "aria-") or name == "key" or name == "starting-style" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
 	if not named { return false }
-	if (name == "style" or name == "data-warp-starting-style") and tag != "head" and html_is_declarations(value) { return true }
+	if (name == "style" or html_attribute_name(name) == html_starting_style) and tag != "head" and html_is_declarations(value) { return true }
 	not (value is pair) and (not html_is_group(value) or not html_holds_pairs(value))
 }
 
@@ -165,7 +166,9 @@ html_attribute(item: any) := {
 }
 
 // `li{ key: todo.id … }` names a list item: the attribute data-warp-key, by which the page moves its element
-html_attribute_name(name: any) := if name == "key" then "data-warp-key" else name
+// `starting-style: { opacity: 0 }`, the state an element enters from (CSS @starting-style, which an inline style cannot
+// hold): the attribute the page applies (markup-transitions.js)
+html_attribute_name(name: any) := if name == "key" then "data-warp-key" else if name == "starting-style" then html_starting_style else name
 
 // `{ color: theme padding: 8 }`: a block of CSS properties with plain values; a dashed one (`color-scheme: dark`) is
 // no custom element
@@ -278,7 +281,14 @@ html_elements_in(item: any) := {
 
 // `style{ .card { padding: 8px } }` a style sheet, `style: { color: theme }` an element's inline style: the element
 // with its selectors and lengths as the texts CSS writes, the tree as the parser read it (decisions.md data-parameter)
-style(sheet: data) := key(symbol("style"), ":", style_body(sheet))
+style(sheet: data) := key(symbol("style"), ":", if sheet is text then sheet else style_body(sheet))
+
+// `form post "/todos" { button{ "add" } }`: a form named by the route it sends to, as the route is written
+// (decisions.md markup-plain-library); `form{ method: "post" action: "/todos" … }` spells the attributes
+form(method: symbol, action: text, body: any) := {
+	let route = [key(symbol("method"), ":", str(method)), key(symbol("action"), ":", action)]
+	key(symbol("form"), ":", bracketed(route + html_items(body), "{"))
+}
 
 // lengths CSS writes with a unit, where warp reads `8px` as 8 * px
 style_units = ["px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm"]
@@ -425,4 +435,85 @@ style_selector_text(node: any) := {
 	let right = style_selector_text(node.value)
 	if joiner == ø or left == ø or right == ø { return ø }
 	left + joiner + right
+}
+
+// `li{ transition: opacity 200ms ease-out }`, `animation: pop 400ms`: the element's inline CSS, its words as data,
+// durations in milliseconds, a text as written (decisions.md transitions-data). fade, scale and slide are the CSS
+// transitions of opacity and transform, from the starting style the kind names
+transition(spec: data) := {
+	let parts = css_parts(spec)
+	let words = parts#1
+	let kind = css_kind(words)
+	if kind == ø { return [css_style("transition", words)] + parts#2 }
+	[key(symbol("starting-style"), ":", css_kinds[kind]), css_style("transition", css_of_kind(words))] + parts#2
+}
+
+animation(spec: data) := {
+	let parts = css_parts(spec)
+	[css_style("animation", parts#1)] + parts#2
+}
+
+// `leave: pop 400ms reverse`: the animation the page plays before it removes the element (CSS has no waiting removal)
+leave(spec: data) := {
+	let parts = css_parts(spec)
+	[key(symbol("data-warp-leave"), ":", parts#1)] + parts#2
+}
+
+// the starting style each kind before CSS enters from
+css_kinds = {fade: {opacity: "0"}, scale: {opacity: "0", transform: "scale(0.8)"}, slide: {opacity: "0", transform: "translateY(-1em)"}}
+css_default_duration = "200ms"
+
+css_style(property: any, value: any) := key(symbol("style"), ":", bracketed([key(symbol(property), ":", value)], "{"))
+
+// the words of a spec as CSS writes them, and the element's children after them (`opacity 1s "a"`): `fade 1s ease-out`
+// → "fade 1000ms ease-out"; a text leading the spec as written
+css_parts(spec: any) := {
+	let items = css_items(spec)
+	if items#1 is text { return [items#1, [items#i for i in 2 to count(items)]] }
+	var words = []
+	var children = []
+	for item in items {
+		if count(children) == 0 and css_is_word(item) { words.add(css_word(item)) }
+		else { children.add(item) }
+	}
+	[join(words, " "), children]
+}
+
+// a spec's items, its lines of words one by one
+css_items(spec: any) := {
+	if spec is pair or str(spec.bracket) != "" { return [spec] }
+	var items = []
+	for item in spec { items = items + css_items(item) }
+	items
+}
+
+// `ease-out`, `200ms`, `2`
+css_is_word(item: any) := item is symbol or item is number or (item is pair and str(item.op) == "*" and item.key is number and item.value is symbol)
+
+// `2s` → 2000ms, `200ms` as written: CSS reads both, the page's script milliseconds
+css_word(word: any) := {
+	if not (word is pair) or str(word.op) != "*" { return str(word) }
+	let unit = str(word.value)
+	if unit == "s" { return str(word.key * 1000) + "ms" }
+	str(word.key) + unit
+}
+
+// the kind a spec's first word names, ø for CSS
+css_kind(words: any) := {
+	let first = split(words, " ")#1
+	if contains(keys(css_kinds), first) then first else ø
+}
+
+// `fade 1s ease-out` → `opacity 1s ease-out, transform 1s ease-out`, 200ms when it names no duration
+css_of_kind(words: any) := {
+	var timing = []
+	var timed = false
+	for word in split(words, " ") {
+		if css_kind(word) == ø {
+			timing.add(word)
+			if contains("0123456789", str(word#1)) { timed = true }
+		}
+	}
+	let rest = join(if timed then timing else [css_default_duration] + timing, " ")
+	"opacity " + rest + ", transform " + rest
 }

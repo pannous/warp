@@ -153,6 +153,7 @@ mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
 mod test_optional_words;
+mod test_overloaded_function_values;
 mod test_parameter_any;
 mod test_parameter_assignment;
 mod test_parameter_call_kinds;
@@ -209,6 +210,7 @@ mod test_statement_blocks; // card statement-block
 mod test_suffix_word_spellings;
 mod test_suffix_words;
 mod test_swift_closures;
+mod test_symbol_flow; // card regression-module
 mod test_text_joined_parameter;
 mod test_to_definition;
 mod test_tuple_function_values;

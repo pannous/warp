@@ -8,12 +8,18 @@ use wasmparser::{ConstExpr, ElementItems, ExternalKind, Name, NameSectionReader,
 
 /// `module` without the functions nothing reaches; the very bytes when every function is live
 pub fn without_dead_functions(module: &[u8]) -> Result<Vec<u8>, String> {
-	let graph = CallGraph::of(module).map_err(|failure| failure.to_string())?;
+	relocated_without_dead_functions(module, &HashMap::new())
+}
+
+/// As without_dead_functions, its calls of stand-in indices calling the functions `relocated` maps them to (the
+/// emitter's unforeseen calls)
+pub fn relocated_without_dead_functions(module: &[u8], relocated: &HashMap<u32, u32>) -> Result<Vec<u8>, String> {
+	let graph = CallGraph::relocated(module, relocated).map_err(|failure| failure.to_string())?;
 	let live = graph.live();
-	if live.iter().all(|&is_live| is_live) {
+	if relocated.is_empty() && live.iter().all(|&is_live| is_live) {
 		return Ok(module.to_vec());
 	}
-	let mut renumbering = Renumbering::new(graph.imported, &live);
+	let mut renumbering = Renumbering::new(graph.imported, &live, relocated);
 	let mut pruned = wasm_encoder::Module::new();
 	renumbering.parse_core_module(&mut pruned, Parser::new(0), module).map_err(|failure| format!("{failure:?}"))?;
 	Ok(pruned.finish())
@@ -54,7 +60,12 @@ pub(crate) struct CallGraph {
 }
 
 impl CallGraph {
+	#[cfg(feature = "native")] // the route split, native only
 	pub fn of(module: &[u8]) -> wasmparser::Result<CallGraph> {
+		Self::relocated(module, &HashMap::new())
+	}
+
+	fn relocated(module: &[u8], relocated: &HashMap<u32, u32>) -> wasmparser::Result<CallGraph> {
 		let mut graph = CallGraph::default();
 		for payload in Parser::new(0).parse_all(module) {
 			match payload? {
@@ -97,7 +108,7 @@ impl CallGraph {
 					let mut callees = Vec::new();
 					for operator in body.get_operators_reader()? {
 						if let Some(function) = function_operand(&operator?) {
-							callees.push(function);
+							callees.push(relocated.get(&function).copied().unwrap_or(function));
 						}
 					}
 					graph.callees.push(callees);
@@ -155,15 +166,17 @@ struct Renumbering {
 	/// old index → new index, for imports and live functions
 	new_index: HashMap<u32, u32>,
 	live: Vec<bool>,
+	/// stand-in index → old index
+	relocated: HashMap<u32, u32>,
 }
 
 impl Renumbering {
-	fn new(imported: u32, live: &[bool]) -> Renumbering {
+	fn new(imported: u32, live: &[bool], relocated: &HashMap<u32, u32>) -> Renumbering {
 		let mut new_index: HashMap<u32, u32> = (0..imported).map(|index| (index, index)).collect();
 		let live_indices =
 			live.iter().enumerate().filter(|(_, &is_live)| is_live).map(|(defined, _)| imported + defined as u32);
 		new_index.extend(live_indices.zip(imported..));
-		Renumbering { new_index, live: live.to_vec() }
+		Renumbering { new_index, live: live.to_vec(), relocated: relocated.clone() }
 	}
 
 	fn is_live(&self, defined: usize) -> bool {
@@ -201,6 +214,7 @@ impl Reencode for Renumbering {
 	type Error = String;
 
 	fn function_index(&mut self, function: u32) -> Result<u32, Error<String>> {
+		let function = self.relocated.get(&function).copied().unwrap_or(function);
 		self.new_index
 			.get(&function)
 			.copied()

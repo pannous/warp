@@ -5,6 +5,15 @@ use crate::warp_parser::context::Context;
 use crate::words::COUNT_WORD;
 use crate::words::IS_ERROR_WORD;
 
+/// The control words that negate their condition: `unless c` is `if not c`, `until c` is `while not c`
+const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op::While)];
+/// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
+const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
+const EMPTY_WORD: &str = "empty";
+/// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
+/// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
+const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
+
 /// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`
 pub(crate) fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
 	if guard == Op::While {

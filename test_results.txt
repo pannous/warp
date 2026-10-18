@@ -461,6 +461,9 @@ PASSED:
   ✓ control::test_match_ranges::an_exclusive_range
   ✓ control::test_match_ranges::an_inclusive_range
   ✓ control::test_match_ranges::floats_and_ranges_as_alternatives
+  ✓ control::test_match_rest_arm::a_variable_named_rest_stays_a_variable
+  ✓ control::test_match_rest_arm::rest_catches_the_rest_with_a_note
+  ✓ control::test_match_rest_arm::rest_the_arm_reads_is_the_matched_value
   ✓ control::test_match_tuples::literal_tuple_arm_still_compares
   ✓ control::test_match_tuples::tuple_arm_binds_its_names
   ✓ control::test_match_tuples::tuple_arm_checks_the_count
@@ -487,6 +490,10 @@ PASSED:
   ✓ control::test_member_completion::an_unknown_receiver_offers_nothing
   ✓ control::test_member_completion::every_offered_builtin_is_a_method_of_its_type
   ✓ control::test_member_completion::literals_offer_their_type_s_methods
+  ✓ control::test_meta_values::a_classes_meta
+  ✓ control::test_meta_values::a_modules_meta
+  ✓ control::test_meta_values::dir_of_a_module_known_at_run_time
+  ✓ control::test_meta_values::meta_of_a_value_known_at_run_time
   ✓ control::test_method_let_shadows_field::a_bare_field_write_changes_the_field
   ✓ control::test_method_let_shadows_field::a_let_local_hides_the_field
   ✓ control::test_method_let_shadows_field::a_let_local_starts_after_its_value
@@ -506,7 +513,7 @@ PASSED:
   ✓ control::test_named_patterns::is_tests_a_named_pattern
   ✓ control::test_named_patterns::named_patterns_combine_with_and
   ✓ control::test_named_patterns::the_word_pattern_stays_a_call_outside_a_definition
-  ✓ control::test_named_reflection::a_help_statement_prints
+  ✓ control::test_named_reflection::a_help_statement_prints_nothing
   ✓ control::test_named_reflection::a_name_that_is_no_word_is_named_in_the_error
   ✓ control::test_named_reflection::an_unjoinable_item_names_its_kind
   ✓ control::test_named_reflection::dump_of_a_function_named_at_run_time
@@ -564,6 +571,7 @@ PASSED:
   ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
   ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
   ✓ control::test_parallel_map::go_maps_in_parallel
+  ✓ control::test_parenthesized_tuple::parenthesized_first_value_stays_in_the_tuple
   ✓ control::test_parsed_code_patterns::code_pattern_matches_code_parsed_at_run_time
   ✓ control::test_parsed_code_patterns::quoted_statements_bind_no_blocks
   ✓ control::test_pattern_unit_name::a_dollar_name_binds_without_a_warning
@@ -1158,6 +1166,7 @@ PASSED:
   ✓ ffi::test_foreign_type_tests::test_type_test_of_a_python_result
   ✓ ffi::test_glibc_math_header::a_glibc_style_math_header_declares_libm
   ✓ ffi::test_glibc_math_header::glibc_math_macros_expand_to_double_declarations
+  ✓ ffi::test_headless_windows::a_raylib_window_is_refused_under_no_window
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
   ✓ ffi::test_host_words::test_clock_and_sleep
   ✓ ffi::test_host_words::test_random_stays_in_range
@@ -1628,6 +1637,7 @@ PASSED:
   ✓ functions::test_kebab_members::a_missing_kebab_field_is_an_error_offering_the_subtraction
   ✓ functions::test_kebab_members::an_existing_kebab_field_is_read
   ✓ functions::test_kind_tested_parameter::a_kind_tested_parameter_takes_a_list_whole
+  ✓ functions::test_lambda_global::a_lambda_reads_a_stored_table_as_global
   ✓ functions::test_lambda_global::a_lambda_with_global_changes_mains_variable
   ✓ functions::test_lambda_held_by_field::a_field_holding_a_lambda_is_passed_as_a_function
   ✓ functions::test_lambda_held_by_field::a_field_named_like_a_library_method_keeps_the_method
@@ -1792,6 +1802,8 @@ PASSED:
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
+  ✓ functions::test_overloaded_function_values::a_signal_named_like_a_sound_word_plays
+  ✓ functions::test_overloaded_function_values::an_overloaded_function_passed_for_a_function_typed_parameter_is_the_fitting_variant
   ✓ functions::test_parameter_any::a_parameter_called_with_two_kinds_takes_any
   ✓ functions::test_parameter_any::a_parameter_tested_for_its_kind_takes_any
   ✓ functions::test_parameter_any::an_any_parameter_takes_every_kind
@@ -1996,6 +2008,7 @@ PASSED:
   ✓ functions::test_swift_closures::membership_in_a_block_stays_membership
   ✓ functions::test_swift_closures::swift_closure_parameters
   ✓ functions::test_swift_closures::swift_shorthand_arguments
+  ✓ functions::test_symbol_flow::a_symbol_passes_through_two_functions
   ✓ functions::test_text_joined_parameter::counted_parameter_joined_to_a_text_is_a_text
   ✓ functions::test_text_joined_parameter::std_text_runs_as_a_program
   ✓ functions::test_to_definition::a_typed_phrase_parameter_is_named_by_its_type
@@ -3798,7 +3811,6 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
@@ -4159,6 +4171,7 @@ PASSED:
   ✓ programs::test_sound_filters::vibrato_bends_the_pitch
   ✓ programs::test_sound_handles::play_gives_the_sounds_handle
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
+  ✓ programs::test_sound_note_names::a_letter_indexed_by_an_octave_is_its_sharp_note
   ✓ programs::test_sound_note_names::every_note_name_is_its_midi_notes_frequency
   ✓ programs::test_sound_notes::a_note_inside_a_function_body_plays
   ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
@@ -5167,6 +5180,8 @@ PASSED:
   ✓ types::test_symbolism_object::test_block_entry_runs_only_at_bang
   ✓ types::test_symbolism_object::test_markup_content_stays_an_element
   ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
+  ✓ types::test_tag_children::a_call_among_a_tags_items_takes_its_parameters
+  ✓ types::test_tag_children::a_call_of_an_unbound_name_with_pairs_is_a_tag
   ✓ types::test_tag_entries::a_block_of_statements_stays_code
   ✓ types::test_tag_entries::a_keyword_names_an_entry
   ✓ types::test_tag_entries::an_assignment_beside_content_is_an_entry
@@ -5341,6 +5356,8 @@ PASSED:
   ✓ types::test_typed_builtins::a_value_no_overload_is_typed_for_takes_the_first_line
   ✓ types::test_typed_builtins::count_declares_a_list_a_text_and_a_map_overload
   ✓ types::test_typed_builtins::each_overload_type_is_the_librarys
+  ✓ types::test_typed_builtins::the_map_and_membership_words_declare_their_kinds
+  ✓ types::test_typed_builtins::the_member_words_declare_a_list_and_a_text_overload
   ✓ types::test_typed_builtins::the_member_words_declare_their_signatures_in_the_prelude
   ✓ types::test_typed_builtins::the_overload_of_the_argument_type_gives_the_result
   ✓ types::test_typed_list_elements::a_bracketed_list_parameter_holds_its_element_type
@@ -5485,6 +5502,8 @@ PASSED:
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
   ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
   ✓ wasm::test_start_function_name::the_start_function_is_named_install
+  ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_follows_main
+  ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_runs
   ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
   ✓ wasm::test_wasm_emitter::test_emit_gc_types
   ✓ wasm::test_wasm_emitter::test_function_usage_tracking
@@ -5628,7 +5647,7 @@ PASSED:
   ✓ web::test_components::the_block_after_the_call_is_the_children
   ✓ web::test_css_transitions::a_css_transition_is_the_inline_style
   ✓ web::test_css_transitions::a_css_transition_joins_the_element_style
-  ✓ web::test_css_transitions::a_made_up_kind_is_css_with_a_hint
+  ✓ web::test_css_transitions::a_made_up_kind_is_css
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
   ✓ web::test_css_transitions::css_keyframes_animate_an_element_and_its_leaving
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
@@ -5677,6 +5696,7 @@ PASSED:
   ✓ web::test_form_bindings::a_site_with_a_submit_handler_carries_the_forms_script
   ✓ web::test_form_bindings::a_submitted_form_hands_its_fields_to_its_handler
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
+  ✓ web::test_form_routes::a_call_among_children_takes_its_parameters
   ✓ web::test_form_routes::a_form_route_inside_an_element
   ✓ web::test_form_routes::a_form_written_as_its_route
   ✓ web::test_glued_attribute_content::a_bound_value_ends_before_a_text
@@ -5690,6 +5710,8 @@ PASSED:
   ✓ web::test_gpu_functions::a_map_calls_a_function_of_one_expression_on_the_gpu
   ✓ web::test_gpu_functions::a_map_calls_functions_of_statements_on_the_gpu
   ✓ web::test_gpu_functions::a_small_map_calling_a_function_stays_exact
+  ✓ web::test_guide_click_scroll::a_chapter_the_page_opens_keeps_its_place
+  ✓ web::test_guide_click_scroll::a_clicked_chapter_scrolls_to_the_top
   ✓ web::test_guide_heading_links::a_section_and_a_titled_chapter_have_githubs_slug
   ✓ web::test_guide_heading_links::a_wiki_heading_link_is_a_markdown_heading_link
   ✓ web::test_guide_heading_links::every_heading_link_of_the_guides_names_a_heading
@@ -5810,6 +5832,7 @@ PASSED:
   ✓ web::test_routes::a_layout_shows_the_route_at_its_outlet
   ✓ web::test_routes::a_typed_route_parameter_computes_with_its_type
   ✓ web::test_routes::nested_routes_show_inside_their_layout
+  ✓ web::test_routes::route_answer_prefers_the_exact_path
   ✓ web::test_routes::route_patterns_accept_the_url_pattern_syntax
   ✓ web::test_routes::the_route_index_names_the_route_the_path_picks
   ✓ web::test_routes::the_route_matching_the_path_is_shown
@@ -6427,6 +6450,7 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6423 passed, 1 failed, 6424 total tested
+16 ignored, 6446 passed, 2 failed, 6448 total tested

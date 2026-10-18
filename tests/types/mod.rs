@@ -157,6 +157,7 @@ mod test_struct_types;
 mod test_sum_types;
 mod test_symbol_parameters; // card symbol-parameters
 mod test_symbolism_object; // card symbolism-object
+mod test_tag_children; // tag_children.rs: the items of any tag's block
 mod test_tag_entries; // decision markup-plain-library
 mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions

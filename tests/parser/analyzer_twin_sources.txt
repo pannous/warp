@@ -557,7 +557,6 @@ probes/docs_sync/form.warp
 probes/docs_sync/one.warp
 probes/docs_sync/sandbox_exec.warp
 probes/docs_sync/strict.warp
-probes/docs_sync/teapot.warp
 probes/docs_sync/types_bad.warp
 probes/docs_sync/types.warp
 probes/docs_sync/visits.warp
@@ -600,7 +599,6 @@ probes/gpu/wgsl_field_error_caught.warp
 probes/headless_counter.warp
 probes/hints_dismissed/index_hint.warp
 probes/hosting/gc_check.warp
-probes/hosting/oauth_demo.warp
 probes/hosting/wagi_check.warp
 probes/hosting/wagi_json.warp
 probes/hosting/wasi_environment.warp
@@ -726,7 +724,6 @@ probes/reflection_classes/shapes.warp
 probes/reflection_mode/function_meta.warp
 probes/reflection_sample/t.warp
 probes/request_headers.warp
-probes/route_position.warp
 probes/ruby_yield/bare.warp
 probes/ruby_yield/each_twice.warp
 probes/ruby_yield/pair.warp
@@ -818,9 +815,6 @@ probes/self_hosting/scan_speed.warp
 probes/self_hosting/text_builders.warp
 probes/self_hosting/text_memory.warp
 probes/self_reserved_try.warp
-probes/server_routes/one_source.warp
-probes/server_routes/rpc_everywhere.warp
-probes/server_routes/rpc_stub.warp
 probes/shader_errors/colon.warp
 probes/shader_holes.warp
 probes/shadow.warp
@@ -834,7 +828,6 @@ probes/sin_one_item_list.warp
 probes/site/parallel.warp
 probes/site/routed_tasks.warp
 probes/site/routes.warp
-probes/site/served.warp
 probes/site/ticker.warp
 probes/sort_xs_try.warp
 probes/sorting_library_try.warp
@@ -897,7 +890,6 @@ probes/variance/widening_const.warp
 probes/view_steady/gpu_jobs.warp
 probes/view_steady/view_steady.warp
 probes/warning_levels.warp
-probes/warp_serve/app.warp
 probes/web/dash_element.warp
 probes/web/data_map.warp
 probes/webgpu/double.warp
@@ -980,7 +972,6 @@ samples/objects/dijkstra_idiomatic.warp
 samples/objects/dijkstra.warp
 samples/objects/json_parser.warp
 samples/objects/references.warp
-samples/servers/route_headers.warp
 samples/storage/store.warp
 samples/system/crontab.warp
 samples/tasks/async.warp

@@ -214,9 +214,13 @@ function and local names.
   its value (3.5 * 2 is 7.0 here, 7 in Rust). probes/self_hosting/emitter/core/ holds one program per form, all inside
   the core; the checked share of every sample and probe must have at least a floor of programs inside.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
-- Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
-  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no variable, a loop's value, operators on texts and
-  lists beyond `+` on texts, `#` and `xs#i` (`==`, slices, a list's `+`), error values (a run-time error traps, without
+- Int `/` gives an exact rational (runtime word exact_ratio): an Int `$Node` holding a `$Ratio` of two `$i64box`, as
+  the Rust reader reads it; exact again with ints and ratios (exact_add/sub/mul/div/order), shown as Rust shows it
+  (exact_text: 3.5, 1/3); `%` on one and a ratio with a float go through floats. `#`, `x#i` and `x#i = v` on a value
+  known only at run time call node_length / node_at / node_set_at.
+- Not in the core yet (outside, not dropped): decimals as exact rationals (the core reads a decimal as f64, so
+  `1/3 + 0.5` is a float where Rust gives 5/6), ints beyond 64 bits (Rust promotes; a ratio's parts overflow
+  silently), a yes/no variable, a loop's value, slices, error values (a run-time error traps, without
   Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
 - Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
@@ -376,6 +380,31 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   positions and literal layers (a plain view has none), so position-checking tests fail by design.
 - The stage program compiles once per worker thread (its compile has thread-local state the outer compile keeps);
   the twin tests parser::test_self_* are skipped (they compare warp with Rust themselves).
+- Since card End-end (branch self-switch): three stage programs, each its own warp program (a `Stage` static with
+  its worker pool): passes.warp `stage`, analyzer.warp `kinds` (self_hosted::analysis, JSON; separate because
+  analyzer.warp's names clash with parser.warp's, card local-variable-named) and emitter.warp `wasm_module`
+  (wasm_emitter::emit_module asks it first; "outside the core: …" falls back to the Rust emitter, other failures are
+  errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
+  binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
+  with the Rust pipeline (that compile shows a Rust `emit` phase).
+- Emit refusals ranked 2026-10-18 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
+  refusal once per program; raw list data/self_hosting/refusals.txt): 1471 programs, 585 inside the core (or no emit).
+  | programs | family (refusal texts) | owner |
+  |---|---|---|
+  | 57 | `view·opaque`: a class/type or error node kept whole | warp-clicking-guide (classes), warp-self-emitter (errors) |
+  | 47+4 | `#` on int, `^` on int | warp-self-emitter |
+  | 41+10+9+5 | operator `:` on int / char and text / char and int / char and list (ranges, slices, pairs) | warp-self-emitter (slices) |
+  | 33+8 | int division, an exact rational; floor_quotient | warp-self-emitter |
+  | 27+27+18+4 | untyped values: the length of a node, a node where an int/list is needed, an assignment to an element of a node | warp-self-emitter with warp-self-analyzer's kinds |
+  | 52 | `use` / `import` statements still in the lowered program (Rust skips declarations) | warp-cache |
+  | 20 | closure_new (lambdas, closures) | warp-cache |
+  | 16+14+14+13 | host calls: system_value, clock, std_io, foreign_call | warp-cache |
+  | 14 | `break` | warp-cache |
+  | 12+8 | a yes/no variable; `global` | warp-cache |
+  | 12+6+5+4+8 | maps: map_entries, map_of_entry, field_with, key, collection_contains | warp-clicking-guide |
+  | 26+12+6+6+5+5+4+8 | runtime words not yet in runtime.warp: join, zero_fill, times·text, text_form, len, random_below, round, as_code | warp-self-passes |
+  | 10 | `try` | warp-self-emitter (errors) |
+  | 11+14+6+5 | sound/signals/tasks: midi_hertz, signal_new/listen, task_spawn_values, linear_new | later |
 - The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
   warp-lang at opt-level 2, as test.sh), in three jobs at once (TEST_GROUPS: self-hosted, the whole suite outlasts the
   lane's 2400 s limit), branches self-hosted/<tip>-<n>, deleted after the run.

@@ -35,3 +35,10 @@ fn every_note_name_is_its_midi_notes_frequency() {
 		is!(&program, true);
 	}
 }
+
+#[test]
+fn a_letter_indexed_by_an_octave_is_its_sharp_note() {
+	is!("use sound\nF#4 == F♯4", true);
+	is!("use sound\n[C#0, D#3, G#8, A#4] == [Cs0, Ds3, Gs8, As4]", true);
+	is!("use sound\nC#4 + 0", 277.18);
+}

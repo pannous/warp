@@ -3,6 +3,8 @@ use super::*;
 use crate::lowering::nodes::is_block;
 use crate::warp_parser::context::Context;
 
+const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
+
 /// A statement of these Rust items ends at its closing `}`: `impl P {…} P { x: 1 }.f()` is two statements
 const ITEM_WORDS: [&str; 4] = ["struct", "enum", "impl", "trait"];
 

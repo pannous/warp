@@ -3,6 +3,9 @@
 use super::*;
 use crate::words::GLOBAL_WORD;
 
+const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
+const LEFT_ARROW_TOPIC: &str = "left-arrow";
+
 /// `global float y = 2` as `global y: float = 2` (card w0-globals: the type word was dropped, so y held the int 2);
 /// `global int k` without a value stays the declaration of k
 pub(crate) fn typed_global(declaration: Node, type_word: Option<String>) -> Node {

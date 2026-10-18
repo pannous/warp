@@ -100,9 +100,9 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::of_lookups::lower,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
 	crate::lowering::grouped_receivers::lower,
-	// `window.width = 800`, `canvas.height`, a bare width (module_properties.rs): getters and setters, before any pass
+	// `window.width = 800`, `canvas.height`, a bare width (property_accessors.rs): getters and setters, before any pass
 	// reads a field's write; resolve brings draw for them
-	crate::lowering::module_properties::lower,
+	crate::lowering::property_accessors::lower,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
@@ -116,10 +116,7 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::lowering::component_worlds::lower,
-	// `input{type="text"}`: HTML's attribute form is the attribute (markup_tags.rs), before soft_keywords refuses `class = …`
-	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
-	// `post "/todos" { … }` as a route
-	crate::lowering::markup_tags::lower_form_routes,
+	// `input{type="text"}`: HTML's attribute form is the attribute (tag_entries.rs), before soft_keywords refuses `class = …`
 	// `a{ href="/about" "About" }`, `Person{ class = "a" }`: `=` in a data block is an entry (tag_entries.rs), before
 	// soft_keywords reads `class = …` as a definition
 	crate::lowering::tag_entries::lower,
@@ -170,16 +167,15 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
 	crate::lowering::lambdas::lower_member_lambdas,
-	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
+	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (tag_children.rs), before any pass
 	// reads it as a call
-	crate::lowering::markup_tags::lower,
-	// `li{ transition: fade 200ms }`: words as data, the attribute data-warp-transition (transitions.rs), before any pass
-	// reads fade as a variable
-	crate::lowering::transitions::lower,
-	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after markup_tags read `p.note "hi"` as an element
+	crate::lowering::tag_children::lower,
+	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after tag_children read `p.note "hi"` as an element
 	crate::lowering::member_phrases::lower,
-	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
-	crate::lowering::introspection::lower,
+	// `meta(math)`, `meta(P)`: what the compiler knows of a module or class, as a map, and its views `dir(time)`,
+	// `methods(math)` (meta_values.rs), before any pass reads time as a value
+	crate::lowering::meta_values::lower,
+	crate::lowering::meta_values::with_table,
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
 	// `help(sound)`, `help(midi)`: a standard module's index, a word's head and comment (word_help.rs), before reflection.rs
 	// answers help(sound) with the signature of the word sound
@@ -395,10 +391,11 @@ const MEANING_PASSES: &[Pass] = &[
 /// A module's source after the passes the program ran before its `use` was resolved (MODULE_SOURCE_PHASES):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
-/// become calls) serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
+/// become calls), meta_values::with_table (the program's table of its classes and modules), serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let program_only: [Pass; 3] = [
+	let program_only: [Pass; 4] = [
 		crate::lowering::getters::lower,
+		crate::lowering::meta_values::with_table,
 		crate::lowering::serve::with_default_routes,
 		crate::lowering::serve::with_page_routes,
 	];

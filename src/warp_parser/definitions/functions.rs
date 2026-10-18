@@ -1,6 +1,14 @@
 //! Function definitions: heads, typed parameters, result types, definition blocks, function references
 use super::*;
 
+/// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
+const REST_MARKERS: [&str; 2] = ["vararg", "params"];
+/// `function add`, `func add`: a reference to a function (P82), like `&add`
+const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
+const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
+/// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
+const RESULT_TYPE_WORD: &str = "as";
+
 /// A lowercase word that names no type, or a parameter group `(x, y)`
 pub(crate) fn is_parameter_word(node: &Node) -> bool {
 	match node.drop_meta() {

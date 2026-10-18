@@ -3,7 +3,7 @@
 Skips files with their own `assign` (fn or local binding) and the files warp-dispatch owns."""
 import re, subprocess, sys
 
-OWNED_ELSEWHERE = ("library_words", "saved_words", "module_properties", "member_phrases", "of_lookups", "data/members", "nodes.rs")
+OWNED_ELSEWHERE = ("library_words", "saved_words", "property_accessors", "member_phrases", "of_lookups", "data/members", "nodes.rs")
 CALL = re.compile(r"\bkey\(")
 
 def top_level_commas(text, start):

@@ -54,6 +54,11 @@ fn declared_signatures(statements: &[&Node]) -> Signatures {
 		.collect()
 }
 
+/// How many arguments a parameter typed as a function takes: 1 of `f: (float) -> float`
+pub(crate) fn declared_arity(parameter: &Node) -> Option<usize> {
+	declared_signature(parameter).map(|signature| signature.parameters.len())
+}
+
 /// `f: (float) -> float`, parsed `(f: (float)) -> float`
 fn declared_signature(parameter: &Node) -> Option<Signature> {
 	let Node::Key(typed, Op::Arrow, result) = parameter.drop_meta() else {

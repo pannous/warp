@@ -3,6 +3,42 @@
 use super::*;
 use crate::warp_parser::atoms::note_alias_at;
 
+/// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
+const FOREIGN_MODIFIERS: [&str; 19] = [
+	"public",
+	"private",
+	"protected",
+	"internal",
+	"static",
+	"extern",
+	"external",
+	"C",
+	"inline",
+	"local",
+	"virtual",
+	"override",
+	"abstract",
+	"constexpr",
+	"volatile",
+	"thread_local",
+	"synchronized",
+	"transient",
+	"native",
+];
+/// Modifiers with a warp meaning that change nothing before a function definition (a function is global and constant)
+const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", "final", "mutable", "mut"];
+const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
+/// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
+/// `open`, `abstract`, `sealed`, `final`, visibility
+const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
+/// `new Point(1, 2)`: the construction `Point(1, 2)`
+const NEW_WORD: &str = "new";
+/// `constant x = 3` is `const x = 3`, with a note naming const (card constant-alias)
+const CONSTANT_ALIAS: &str = "constant";
+const CONST_WORD: &str = "const";
+/// Ruby's field declarations `attr_accessor :x, :y`
+const RUBY_FIELD_WORDS: [&str; 3] = ["attr_accessor", "attr_reader", "attr_writer"];
+
 impl WarpParser {
 	/// `public static fun f(){…}`, `private x = 4` (P78): a run of modifiers that ends before a function definition, or of
 	/// modifiers without warp meaning before a name, is skipped, each meaningless one with a note; the statement after it

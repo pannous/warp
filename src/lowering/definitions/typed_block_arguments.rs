@@ -9,7 +9,7 @@
 //! `get "/echo" { it.body }` keeps `it => {it.body}` to call later, `run { n + 1 }` gets `() => {n + 1}`; a lambda or a
 //! function passes as it is. Before the quotes are sealed, so no sugar pass rewrites inside an argument.
 use crate::lowering::blocks::{quote, DATA_WORD};
-use crate::lowering::nodes::{function_head, is_block, parameter_name};
+use crate::lowering::nodes::{for_in_variable, function_head, is_block, parameter_name};
 use crate::node::{children_rewritten, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::IMPLICIT_PARAMETER;
@@ -48,9 +48,15 @@ pub fn lower(program: Node) -> Node {
 	taken_arguments(program, &scope)
 }
 
+/// The program's variables, its functions and its loop variables (`[li{ todo.text } for todo in todos]`)
 fn program_names(program: &Node) -> HashSet<String> {
 	let mut names: HashSet<String> = program.written_names();
-	program.visit(&mut |node| names.extend(function_head(node).map(|head| head.name.to_string())));
+	program.visit(&mut |node| {
+		names.extend(function_head(node).map(|head| head.name.to_string()));
+		if let Node::List(items, _, _) = node {
+			names.extend((0..items.len()).filter_map(|start| for_in_variable(&items[start..])));
+		}
+	});
 	names
 }
 
@@ -72,7 +78,9 @@ fn taking_functions(program: &Node) -> Positions {
 fn std_functions_taking() -> Positions {
 	thread_local!(static FUNCTIONS: Positions = crate::normalize::without_hints(|| {
 		let functions = crate::modules::std_data_functions().iter();
-		functions.flat_map(|(_, line)| functions_taking(&crate::warp_parser::parse(line))).collect()
+		// the head alone: a body's `{` opening on the line would leave its missing-`}` fix in the program's report
+		let head = |line: &str| format!("{} := ø", line.split(":=").next().unwrap_or_default());
+		functions.flat_map(|(_, line)| functions_taking(&crate::warp_parser::parse(&head(line)))).collect()
 	}));
 	FUNCTIONS.with(Clone::clone)
 }
@@ -109,8 +117,8 @@ pub(crate) fn is_function_type(kind: &Node) -> bool {
 fn taken(argument: Node, takes: Takes, scope: &Scope) -> Node {
 	match takes {
 		Takes::Data => quote(spliced(argument, &scope.bound)),
-		Takes::Function if is_block(&argument) => block_lambda(argument),
-		_ => argument,
+		Takes::Function if is_block(&argument) => block_lambda(taken_arguments(argument, scope)),
+		_ => taken_arguments(argument, scope),
 	}
 }
 
@@ -142,7 +150,6 @@ fn taken_arguments(node: Node, scope: &Scope) -> Node {
 		}
 		return node.map_children(|child| taken_arguments(child, &inner));
 	}
-	let node = node.map_children(|child| taken_arguments(child, scope));
 	match node {
 		Node::List(items, bracket @ Bracket::Round, separator) => {
 			with_taken(items, bracket, separator, scope, |_| true)
@@ -151,16 +158,81 @@ fn taken_arguments(node: Node, scope: &Scope) -> Node {
 		Node::List(items, bracket @ Bracket::None, separator @ Separator::Space) => {
 			with_taken(items, bracket, separator, scope, is_block)
 		}
-		// `style{ … }`, `run{ … }`: the block is the one argument
-		Node::Key(tag, Op::Colon, block) if is_block(&block) => {
-			match scope.functions.get(&tag.name()).map(Vec::as_slice) {
-				Some(&[takes]) if takes != Takes::Value => {
-					crate::node::call(&tag.name(), vec![taken(*block, takes, scope)])
-				}
-				_ => Node::Key(tag, Op::Colon, block),
-			}
+		// `style{ … }`, `run{ … }`: the block is the one argument, taken as written before any part of it is
+		Node::Key(tag, Op::Colon, block) if is_block(&block) => match one_taking(&tag, scope) {
+			Some(takes) => crate::node::call(&tag.name(), vec![taken(*block, takes, scope)]),
+			None => Node::Key(tag, Op::Colon, Box::new(tag_block(*block, scope))),
+		},
+		other => other.map_children(|child| taken_arguments(child, scope)),
+	}
+}
+
+/// What the one parameter of the function `tag` names takes, of a function with one data or function parameter
+fn one_taking(tag: &Node, scope: &Scope) -> Option<Takes> {
+	match scope.functions.get(&tag.symbol_name()?.to_string()).map(Vec::as_slice) {
+		Some(&[takes]) if takes != Takes::Value => Some(takes),
+		_ => None,
+	}
+}
+
+/// A tag's block: in it `transition: opacity 200ms ease-out` is the call of a function with one data parameter, its
+/// words the bare words and quantities after the colon, up to the children (decisions.md transitions-data)
+fn tag_block(block: Node, scope: &Scope) -> Node {
+	block.under_meta(|block| match block {
+		Node::List(items, bracket, separator) => Node::List(entries_taken(items, scope), bracket, separator),
+		other => taken_arguments(other, scope),
+	})
+}
+
+fn entries_taken(items: Vec<Node>, scope: &Scope) -> Vec<Node> {
+	let mut taken_items = vec![];
+	let mut items = items.into_iter().flat_map(line_items).peekable();
+	while let Some(item) = items.next() {
+		let Some((tag, value)) = data_key(&item, scope) else {
+			taken_items.push(taken_arguments(item, scope));
+			continue;
+		};
+		let mut words = vec![value];
+		while let Some(word) = items.next_if(|next| is_bare_word(next, scope)) {
+			words.push(word);
 		}
-		other => other,
+		let body = if words.len() == 1 { words.remove(0) } else { Node::List(words, Bracket::None, Separator::Space) };
+		taken_items.push(crate::node::call(&tag, vec![taken(body, Takes::Data, scope)]));
+	}
+	taken_items
+}
+
+/// The items of a line of words `transition: fade 200ms "a"` one by one, any other item as it is
+fn line_items(item: Node) -> Vec<Node> {
+	match item.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space)
+			if items.first().is_some_and(|first| matches!(first.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
+			items.clone()
+		}
+		_ => vec![item],
+	}
+}
+
+/// `transition: fade`: the function's name and the value after its colon
+fn data_key(item: &Node, scope: &Scope) -> Option<(String, Node)> {
+	match item.drop_meta() {
+		Node::Key(tag, Op::Colon, value) if one_taking(tag, scope) == Some(Takes::Data) => {
+			Some((tag.name(), value.as_ref().clone()))
+		}
+		_ => None,
+	}
+}
+
+/// `ease-out`, `400ms`, `2`: a word of a data entry, no name the program binds
+fn is_bare_word(node: &Node, scope: &Scope) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => !scope.bound.contains(name),
+		Node::Number(_) => true,
+		Node::Key(amount, Op::Mul, unit) => {
+			matches!(amount.drop_meta(), Node::Number(_)) && matches!(unit.drop_meta(), Node::Symbol(_))
+		}
+		_ => false,
 	}
 }
 
@@ -172,16 +244,14 @@ fn with_taken(
 	scope: &Scope,
 	changes: fn(&Node) -> bool,
 ) -> Node {
-	let Some(positions) = items.first().and_then(|callee| scope.functions.get(&callee.name())) else {
-		return Node::List(items, bracket, separator);
-	};
-	let mut items = items.into_iter();
-	let callee = items.next().into_iter();
-	let arguments = items.enumerate().map(|(index, argument)| match positions.get(index) {
-		Some(takes) if changes(&argument) => taken(argument, *takes, scope),
-		_ => argument,
+	let positions = items.first().and_then(|callee| scope.functions.get(&callee.name()));
+	let arguments = items.into_iter().enumerate().map(|(index, item)| {
+		match positions.and_then(|positions| positions.get(index.checked_sub(1)?)) {
+			Some(takes) if changes(&item) => taken(item, *takes, scope),
+			_ => taken_arguments(item, scope),
+		}
 	});
-	Node::List(callee.chain(arguments).collect(), bracket, separator)
+	Node::List(arguments.collect(), bracket, separator)
 }
 
 /// The definition with its data parameters typed any, its body's arguments taken as their parameters take them

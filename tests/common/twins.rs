@@ -365,7 +365,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
 		for ((path, _, text), module) in cases.iter().zip(twin.values(&arguments)) {
 			if let Some(refusal) = module.text_value().filter(|text| text.starts_with(OUTSIDE_THE_CORE)) {
-				*refusals.entry(refusal).or_insert(0) += 1;
+				refusals.entry(refusal).or_insert_with(Vec::new).push(path.clone());
 				continue;
 			}
 			inside.push(path.clone());
@@ -379,9 +379,11 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	}
 	if std::env::var_os(REFUSALS_REPORT).is_some() {
 		let mut ranked: Vec<_> = refusals.into_iter().collect();
-		ranked.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+		ranked.sort_by_key(|(_, paths)| std::cmp::Reverse(paths.len()));
 		eprintln!("{} inside; outside the core:", inside.len());
-		ranked.iter().for_each(|(refusal, count)| eprintln!("{count:5} {refusal}"));
+		ranked.iter().for_each(|(refusal, paths)| {
+			eprintln!("{:5} {refusal}  e.g. {}", paths.len(), paths[..paths.len().min(3)].join(" "))
+		});
 	}
 	let _ = std::fs::remove_file(&runtime);
 	report("wasm_module", &differing);

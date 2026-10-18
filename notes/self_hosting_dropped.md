@@ -84,7 +84,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 4 | of_lookups | 241 | 22 | keep `a of b` and `in`/`from` after a selector word; drop print walks, unit counts (decided, sugar-triage) |
 | 5 | set phrases | welcome_forms | 1 | dropped in both compilers (card set-set, rust-cleanup-drops) |
 | 6 | grouped_receivers | 69 | 1 | keep |
-| 7 | module_properties | 467 | 3 | library (graphics: window.width; decided) |
+| 7 | module_properties | 467 | 3 | core: the property accessors (definitions/property_accessors.rs, supervisor 2026-10-18); its graphics tables (display aliases, bare width) asked at warp-interviewer |
 | 8 | times_phrases | 57 | 26 | keep (ported) |
 | 9 | broadcasting | 1410 | 11 | keep, minimal port |
 | 10 | shader_holes | 250 | 11 | library (gpu; decided) |
@@ -172,6 +172,12 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   {bench_higher_order,bench_hoisted}.warp, probes/functions/forward_param.warp, probes/generators/yield_from.warp,
   probes/ruby_yield/{do_block,twice}.warp, probes/self_hosting/readiness/ports/times_phrases.warp. Back: the warp flow
   joins a run-time number beside ints to data, as Rust's `joined` does.
+- Route lambdas (serve.rs route_entry, 2026-10-18): a route is `route_add(METHOD, path, request => {…})`, called by
+  lib/router.warp route_answer through closure_call_1; Rust types the never-annotated `request` from the closure call
+  (`closure_lambda_1(empty)`), warp keeps int. Same program output. Left the pinned list: probes/docs_sync/teapot.warp,
+  probes/hosting/oauth_demo.warp, probes/route_position.warp, probes/server_routes/{one_source,rpc_everywhere,
+  rpc_stub}.warp, probes/site/served.warp, probes/warp_serve/app.warp, samples/servers/route_headers.warp. Back: the
+  warp flow types a lambda parameter from the closure calls of its arity, as Rust's does.
 
 - Style sheets through lib/markup.warp's style (card style-sheets): a program with a `style{…}` block now carries the
   library's style_* functions, whose list helpers warp reads more generally: `length: empty |

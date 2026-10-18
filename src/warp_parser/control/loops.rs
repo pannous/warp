@@ -3,6 +3,11 @@
 use super::*;
 use crate::warp_parser::context::Context;
 
+/// What ends a loop's iterable besides its body: the statement, a comprehension's bracket or condition (`if`)
+const ITERABLE_ENDS: [char; 6] = [';', '}', ']', ')', ',', '\0'];
+/// `N times` takes everything up to an assignment: `n+1 times {…}`
+const TIMES_BP: u8 = 50;
+
 /// The words an operand may start counting with: `thrice {…}` is `3 times {…}`
 const COUNT_WORDS: [(&str, i64); 3] = [("once", 1), ("twice", 2), ("thrice", 3)];
 const COUNT_WORD: &str = "count-word";

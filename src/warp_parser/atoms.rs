@@ -6,6 +6,15 @@ use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
 use crate::words::VOID_WORD;
+
+/// Rust's endless `loop { … }`
+const LOOP_WORD: &str = "loop";
+/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/control/go_blocks.rs,
+/// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
+const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
+/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
+const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
+const TO_SENTENCE_WORD: &str = "To";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
