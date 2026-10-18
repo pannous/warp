@@ -156,3 +156,20 @@ reached library function, for every program that reaches them (pages, routes, so
 ### Order (supervisor, 2026-10-18; open until the user decides otherwise)
 Step 2 first. Step 1 waits until the plain-library and parser cleanup has settled, because it would audit ~100
 passes that those cleanups are still merging and removing.
+
+### Found while measuring step 2: the emitter runs twice for most programs
+`emit` for the style page (release, warm): extract_user_functions 6-10 ms, user functions 7-17, main 2, types and
+runtime 1, finish 2. Then the whole emit_for_node again (13-30 ms). When a body calls a runtime function that
+analyze_required_functions didn't foresee, emit_call writes `unreachable`, notes a Need, and emit_for_node reruns
+with the needs inherited. That happens to 175 of the 218 samples (`compile --wasm`, cache off). Most frequent: print_value
+139, node_list_at 134, node_list_push / node_list_as_node 112, tagged_field / elements_field 105, node_order 102,
+node_add 92, list_join 82, node_slice 76, text_concat 68, m.pow (an import) 45. So about half of every program's
+emit is the rerun.
+- Predicting more in analyze_required_functions (print → print_value, list_text, text_of) is the cheap fix, but it's
+  case by case.
+- The structural fix is lazy runtime functions: emit_call takes the next index for an unforeseen runtime function and
+  emits its body (with its runtime_dependencies) after the others. Today 144 `should_emit_function` gates emit runtime
+  functions in a fixed order, so they'd need a name → emitter table. Imports (m.pow) still can't be appended: their
+  indices come first.
+- Step 2 can cut part of it: a cached body carries the needs it discovered, so seeding them up front makes the
+  library functions' share of reruns disappear (main's own needs, such as print_value, remain).
