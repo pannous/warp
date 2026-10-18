@@ -231,6 +231,7 @@ mod test_task_signals;
 mod test_task_values;
 mod test_tasks;
 mod test_text_loop_value;
+mod test_text_patterns; // card text-patterns
 mod test_threads;
 mod test_time_of_day;
 mod test_times_count_once;
