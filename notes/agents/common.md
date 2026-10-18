@@ -126,7 +126,10 @@ instead of bending the code.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
   Cargo.lock build tweak and whose commits a ref holds, a merged worktree (a remote branch holds its HEAD) whatever it
   changes, saved first under refs/removed-worktrees, a branch whose tip main or a remote branch holds. If it blocks,
-  something would be lost: look before you delete. What is left over, scripts/prune-worktrees.sh removes daily
+  something would be lost: look before you delete. Your remote branch too, once it is on main:
+  `git fetch -q origin <branch> && git push -q origin --delete <branch>`; the hook allows deleting any fetched
+  remote branch but main (it checks origin/<branch> exists locally, so fetch first). Never hand a delete command to
+  the user: if it still blocks, tell the supervisor with the exact error. What is left over, scripts/prune-worktrees.sh removes daily
   (merged, idle 6 h, only the tweak changed) together with merged branches and loose files of the worktrees folder.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; when the board stays unreachable it says "CARD QUEUED" and keeps the card in ~/.cache/todo-board/pending.json5, which `todo flush` and the hourly cron add later; never into todo.md).

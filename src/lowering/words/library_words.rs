@@ -335,7 +335,7 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 }
 
 /// The word a prelude alias names (`size` → count), else the name itself
-fn unaliased(name: &str) -> &str {
+pub(crate) fn unaliased(name: &str) -> &str {
 	let aliases = crate::modules::prelude_aliases();
 	aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str())
 }
