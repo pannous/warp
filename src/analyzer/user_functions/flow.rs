@@ -113,18 +113,11 @@ fn joined(kinds: &[Kind]) -> Option<Kind> {
 	})
 }
 
-/// The kinds joined, a Node of unknown kind beside known kinds leaving them standing (`added(xs, ys)` given a list and
-/// a map value); beside numbers it stands, as a number parameter can't hold it (`rect(x, y, w, shown[band], c)` and
-/// `rect(x, y, w, 2, c)`)
+/// The kinds joined, a number of run-time kind beside floats leaving them floats; a Node of unknown kind stands beside
+/// any other kind, which it may not be (parser.warp's `expression` giving numbers and lists)
 fn joined_known(kinds: &[Kind]) -> Option<Kind> {
 	let floats = kinds.contains(&Kind::Float);
-	let numbers = floats || kinds.contains(&Kind::Int);
-	let known: Vec<Kind> = kinds
-		.iter()
-		.copied()
-		.filter(|kind| (*kind != Kind::Empty || numbers) && !(floats && *kind == Kind::Data))
-		.collect();
-	joined(if known.is_empty() { kinds } else { &known })
+	joined(&kinds.iter().copied().filter(|kind| !(floats && *kind == Kind::Data)).collect::<Vec<_>>())
 }
 
 /// The kinds every call, closure and assignment of the program passes the parameters, in the scopes of the last round
@@ -169,8 +162,11 @@ fn flows(
 					.drop_meta()
 					.symbol_name()
 					.and_then(|passed| function.params.iter().position(|param| param.name == passed));
-				let kind = param_kind(&ctx.user_functions[name].params[index]);
-				if let Some(own) = own.filter(|_| kind != Kind::Int) {
+				let callee = &ctx.user_functions[name].params[index];
+				let kind = param_kind(callee);
+				// a callee's own usage guess is no fact to pass on (`p.at` of a parser state guessed a list)
+				let guess = callee.annotation.is_none() && callee.used_as == usages[&(name.to_string(), index)];
+				if let Some(own) = own.filter(|_| kind != Kind::Int && !guess) {
 					flows.forwarded.entry((owner.clone(), own)).or_default().push(kind);
 				}
 			}
