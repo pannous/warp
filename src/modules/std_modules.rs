@@ -93,7 +93,9 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 	STD_MODULES.iter().map(|(module, _)| *module)
 }
 
-pub(super) fn std_module(name: &str) -> Option<&'static str> {
+/// A standard module's source as the binary embeds it: `module_source("prelude")`, which the warp compiler reads its
+/// typed builtin lines from
+pub fn std_module(name: &str) -> Option<&'static str> {
 	let name = std_module_name(name);
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
