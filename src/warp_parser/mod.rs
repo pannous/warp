@@ -20,7 +20,9 @@ use crate::node::ATTRIBUTE_MARK;
 mod declaration_scan;
 pub use declaration_scan::*;
 mod collections;
+mod context;
 pub use collections::*;
+use context::Context;
 
 /// The value of a `Result<_, String>`; an error returns from the parse function as an error node
 macro_rules! or_return_error {
@@ -418,14 +420,9 @@ pub struct WarpParser {
 	pub current_line: String,
 	/// The input's lines, for current_line at each line break (splitting the input at every one was quadratic)
 	lines: Vec<String>,
-	base_indent: usize,
-	/// Inside a block indented with spaces below a trailing `:` spaces count as indent too (elsewhere only tabs do)
-	indent_counts_spaces: bool,
 	options: ParserOptions,
-	/// Inside an `if`/`while` condition `=` compares instead of assigning (wiki/Bad.md)
-	equals_compares: bool,
-	/// Inside the iterable of `for x in …` a block is the loop body, never an argument: `for i in 0..n {…}`
-	in_for_header: bool,
+	/// What the enclosing constructs say about the text being parsed (context.rs), set for a stretch by within()
+	context: Context,
 	/// The variables of the enclosing `for k in keys(m)` loops: `m[k]` looks a key up, so no indexing hint
 	key_variables: Vec<String>,
 	/// Names assigned a text or typed text (`l = "en"`, `k:text`): `m[l]` looks a key up too (card text-key)
@@ -444,43 +441,17 @@ pub struct WarpParser {
 	/// The parameters of the definitions around: ` /name` after one divides, as after a variable; each definition's
 	/// until the statement holding it ends (card path-parameter-scope)
 	parameters_in_scope: Vec<String>,
-	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
-	glued_pair_bp: Option<u8>,
-	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
-	group_start: (usize, usize),
-	/// While the `then` body of `if c: body else …` is parsed, `else` ends it instead of joining it
-	stops_at_else: bool,
 	/// Inside `class Name {…}`: its fields named like a constant (`pi = 3`, `pi:int`), which its methods read instead
 	/// of the constant; None outside a type body
 	type_fields: Option<std::collections::HashSet<String>>,
-	/// The binding power of the `then` or `else` branch or the condition being parsed: there a braceless call takes a
-	/// variable argument (`then count xs`, `if square x > 5`), as at assignment level
-	branch_bp: Option<u8>,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
 	signed_list_element: Option<usize>,
-	/// Directly inside a list literal `[…]` without commas: a space and a glued sign start the next item (`[a -1]`,
-	/// decision list-sign)
-	in_spaced_list: bool,
-	/// Inside `do … end`: the `end` keyword closes the statement list
-	stops_at_end: bool,
-	/// Inside Python's `f"…{x}…"`: braces are holes, `{{` and `}}` the braces themselves
-	brace_holes: bool,
 	/// The type parameters skipped after a function's name (`fn id<T>`), marked on the atom (P157)
 	generic_names: Option<(String, Vec<String>)>,
-	/// Parsing an argument of a braceless call at statement level (`sleep 1s …`): an `and` followed by a statement ends it
-	in_command: bool,
-	/// Parsing the block of a data literal (`a{ … }`, not a declared type's constructor): a spaced child `c { d:3 }` there
-	/// is the child node of the glued `c{ d:3 }`, as no call with a block can be meant (card spaced-child)
-	in_data_literal: bool,
 	/// The next `{…}` is the block of a named tag (`ul{…}`, `ul {…}`): a repeated `key: value` there is a child, as
 	/// repeated elements in XML/HTML (`ul{ li: "a" li: "b" }`), no duplicate key; a plain `{…}` is a map that reports
 	/// one (user decision P176, card g-_bGo). Taken by the list it opens, so blocks inside it are not tag blocks
 	tag_block: bool,
-	/// Parsing the rules of a style sheet `style{ … }`: a blank before `.x` or `#x` is CSS's descendant combinator, which
-	/// starts the next part of a selector instead of a member access (`#main .x`, card web-styles-parser)
-	in_style_sheet: bool,
-	/// Parsing the one argument of a braceless call (`square xs |> sum`): the pipeline after it takes the whole call
-	pipe_takes_call: bool,
 	/// The atoms read so far, in source order: the lexer's view of the source (read_atoms); a rewind forgets those read
 	/// after its mark
 	atoms: Vec<Atom>,
@@ -490,8 +461,6 @@ pub struct WarpParser {
 	after_function_keyword: bool,
 	/// The expression continue_expr goes on with heads a definition: `foo` of `def foo: hi=2*2`
 	continues_definition_head: bool,
-	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
-	in_capture: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
 	elvis_operands: usize,
 	/// `try … catch … finally {…}` parsed so far, numbering the variables holding their values
@@ -558,37 +527,22 @@ impl WarpParser {
 			char: '\0',
 			current_line,
 			lines,
-			base_indent: 0,
-			indent_counts_spaces: false,
 			options,
-			equals_compares: false,
-			in_for_header: false,
+			context: Context::default(),
 			key_variables: vec![],
 			text_variables: Default::default(),
 			variables: Default::default(),
 			path_end: None,
 			program_functions,
 			parameters_in_scope: Vec::new(),
-			glued_pair_bp: None,
-			group_start: (0, 0),
-			stops_at_else: false,
 			type_fields: None,
-			branch_bp: None,
 			signed_list_element: None,
-			in_spaced_list: false,
-			stops_at_end: false,
-			brace_holes: false,
 			generic_names: None,
-			in_command: false,
-			in_data_literal: false,
 			tag_block: false,
-			in_style_sheet: false,
-			pipe_takes_call: false,
 			atoms: vec![],
 			pending_comment: None,
 			after_function_keyword: false,
 			continues_definition_head: false,
-			in_capture: false,
 			elvis_operands: 0,
 			finally_blocks: 0,
 			functions: Default::default(),
