@@ -278,6 +278,7 @@ pub const TEXT_TIMES: &str = "times·text";
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// The severe warning on a `//` comment meant as floor division, `7//2` (decision floor-division)
 pub const FLOOR_DIVISION_TOPIC: &str = "floor-division-comment";
+const JULIA_FLOOR_DIVISION_TOPIC: &str = "julia-floor-division";
 const FLOOR_DIVISION: &str = "/!";
 /// Pascal's floor division `7 div 2`, also the html tag `div {…}`
 const DIV_WORD: &str = "div";

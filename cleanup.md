@@ -144,3 +144,10 @@
 - Apply the standard-library-wide rule there, without hiding hints from the user's program.
 - Run the focused test before and after, then formatting, clippy, and the wasm32 check.
 - Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.
+
+# Julia floor-division alias cleanup
+
+- Upgrade the existing Unicode-operator regression from the obsolete `÷` plain-division decision before changing production code.
+- Route `÷` and `÷=` through the existing `FloorDiv` and `FloorDivAssign` operators; do not add a parallel arithmetic path.
+- Emit one shared newcomer note that explains Julia-compatible floor division and names `/` for plain division.
+- Keep the Rust and self-hosted parser operator tables aligned, update the two specified wiki sections, and run the focused parser tests, clippy, and wasm32 check.
