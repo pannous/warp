@@ -29,7 +29,9 @@ pub fn lower(program: Node) -> Node {
 	if functions.is_empty() {
 		return program;
 	}
-	let scope = Scope { functions: &functions, bound: program_names(&program) };
+	// the names bound outside the data arguments: `.done = "red"` in a style sheet binds nothing
+	let unspliced = quoted_arguments(program.clone(), &Scope { functions: &functions, bound: HashSet::new() });
+	let scope = Scope { functions: &functions, bound: program_names(&unspliced) };
 	quoted_arguments(program, &scope)
 }
 
