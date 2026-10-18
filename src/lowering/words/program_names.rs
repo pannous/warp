@@ -127,7 +127,6 @@ fn binds_inside(node: &Node, word: &str) -> bool {
 	binds
 }
 
-/// `x = 1` of a parameter `x = 1`: a default value, which may be left out
 /// The loop variables outside function bodies
 fn outer_loop_variables(node: &Node) -> Vec<String> {
 	if function_head(node).is_some() {
