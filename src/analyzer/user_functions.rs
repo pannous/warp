@@ -144,6 +144,13 @@ pub(super) fn infer_function_return_kind(body: &Node, scope: &Scope) -> Kind {
 			kind => kind,
 		},
 	};
+	let gives_number = |kind: &Kind| kind.is_int() || kind.is_float();
+	// `if n > 0 { return n }; [1]`: a number here, a list there, known only at run time
+	if (last_kind.is_ref() && returned.iter().any(gives_number))
+		|| (gives_number(&last_kind) && !returned_nodes.is_empty())
+	{
+		return Kind::Empty;
+	}
 	match returned_nodes.as_slice() {
 		// `if c { return "out" }; [1, 2]`: a list here, a text there, known only at run time
 		nodes if last_kind.is_ref() && nodes.iter().any(|kind| *kind != last_kind) => Kind::Empty,
