@@ -313,6 +313,13 @@ def continued(p, left, min_power) {
 			p.at = p.at + word.length
 			skip_blanks(p)
 			left = listed("", " ", [left, ["symbol", word], expression(p, 116)])
+		} else if down_to_at(p) > 0 {
+			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
+			powers = binding_powers("to")
+			if powers#1 < min_power { break }
+			p.at = p.at + down_to_at(p)
+			skip_blanks(p)
+			left = listed("(", "", [["symbol", "reverse"], ["key", "to", expression(p, powers#2), left]])
 		} else {
 			op = operator_at(p)
 			if op.length == 0 {
@@ -644,6 +651,14 @@ def operand_follows(p, width) {
 
 // `word` at the parser's position as a whole word
 def keyword_at(p, word) := keyword_at_position(p, word, p.at)
+
+// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), else 0
+// Rust twin: ranges.rs down_to_length
+def down_to_at(p) {
+	if not keyword_at(p, "down") { return 0 }
+	at = blank_end(p, p.at + 4)
+	if at > p.at + 4 and keyword_at_position(p, "to", at) then at + 2 - p.at else 0
+}
 
 // Left and right binding power of an operator
 // Rust twin: operators.rs Op::binding_power
