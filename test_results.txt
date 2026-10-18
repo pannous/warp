@@ -3767,6 +3767,7 @@ PASSED:
   ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
   ✓ parser::test_self_serializer::a_view_is_json
+  ✓ parser::test_self_words::call_kinds_are_rusts
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6355,4 +6356,4 @@ FAILED:
   ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
 
 SUMMARY:
-16 ignored, 6346 passed, 4 failed, 6350 total tested
+16 ignored, 6347 passed, 4 failed, 6351 total tested
