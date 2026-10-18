@@ -559,6 +559,11 @@ impl Node {
 		names.into_iter().collect()
 	}
 
+	/// `x` of every `x = …` and `x := …` anywhere in this node
+	pub fn written_names<Names: FromIterator<String>>(&self) -> Names {
+		self.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
+	}
+
 	/// The name `x = …`, `f(x) := …`, `f := …it…`, `def f(x){…}` or `def ((init ø) {1})` defines
 	pub fn defined_name(&self) -> Option<String> {
 		fn leading_symbol(node: &Node) -> Option<String> {

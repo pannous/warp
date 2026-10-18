@@ -204,10 +204,6 @@ pub(crate) fn data_binding(item: &Node) -> Option<(&str, &Node)> {
 	is_data.then(|| (name.as_str(), value.drop_meta()))
 }
 
-pub(crate) fn assigned_names(program: &Node) -> HashSet<String> {
-	program.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
-}
-
 /// Arithmetic on literals that gives a float: a decimal (`0.1 + 0.2`), √2, π (decision exact-default)
 pub(super) fn is_float_literal_value(node: &Node) -> bool {
 	!matches!(node.drop_meta(), Node::Symbol(_)) && infer_type(node, &Scope::new()) == Kind::Float
@@ -231,7 +227,7 @@ pub(super) fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &N
 
 /// A data key `a-b:2` also reads as the subtraction `a - b` when `a` and `b` are variables
 pub(in crate::analyzer) fn kebab_ambiguities(program: &Node) -> Vec<Diagnostic> {
-	let variables = assigned_names(program);
+	let variables: HashSet<String> = program.written_names();
 	let mut warnings = vec![];
 	program.visit(&mut |item| {
 		let Some((name, _)) = data_binding(item) else { return };
