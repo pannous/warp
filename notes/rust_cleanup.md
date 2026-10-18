@@ -65,8 +65,9 @@ its kind as usage fallback. Traps found on the way:
 - flow::settle can cycle: `out(signal) := sound(clamped_samples(signal))` flipped List<->Node every round, so the
   sound module ran all 305 rounds (compile 2-3x main). A parameter turning back to a kind it held now settles on
   all its kinds joined (`held` in given_flows). Watch for this whenever a flow rule can narrow a kind again.
-- A Node of unknown kind passed beside numbers must stand (a number parameter can't hold it: rect's height given
-  `shown[band]` and `2`); beside lists/maps it may drop (`added(xs, ys)`).
+- A Node of unknown kind passed beside any known kind must stand: dropped beside numbers, rect's height given
+  `shown[band]` and `2` became an int; dropped beside lists, parser.warp's `expression` read as a list and
+  `operand is number` folded to no (-1 parsed as a negation).
 - "Given only Nodes → keep the usage guess" broke code matchers (usage guesses List for `match c { data(…) }`).
 - Bench compile time against a main debug build, never the branch's earlier tip; probes with WARP_MODULE_CACHE=off.
 
