@@ -321,9 +321,9 @@ fn fewest_arguments(word: &str) -> usize {
 	arity(word) - optional
 }
 
-/// The spelling word lists name a library word by (`sorted` → sort, the alias `size` → count); any other name as it is
+/// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
 pub fn canonical_spelling(name: &str) -> &str {
-	canonical_word(name).unwrap_or_else(|| unaliased(name))
+	canonical_word(name).unwrap_or(name)
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
@@ -335,7 +335,7 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 }
 
 /// The word a prelude alias names (`size` → count), else the name itself
-fn unaliased(name: &str) -> &str {
+pub(crate) fn unaliased(name: &str) -> &str {
 	let aliases = crate::modules::prelude_aliases();
 	aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str())
 }

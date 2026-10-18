@@ -234,9 +234,10 @@ impl FirstParameter {
 	}
 }
 
-/// `count`, `size`, `upper` …: a library word whose every type (members.rs) is no truth value
+/// `count`, `size`, `upper` …: a library word whose every type (members.rs) is no truth value; used_words leaves out a
+/// program's own `size`, so the alias is the library's
 fn is_member_word(name: &str) -> bool {
-	let types = crate::lowering::library_signatures::library_types(name);
+	let types = crate::lowering::library_signatures::library_types(crate::library_words::unaliased(name));
 	!types.is_empty() && types.iter().all(|type_name| FirstParameter::of_type(type_name) == FirstParameter::Value)
 }
 
