@@ -47,6 +47,11 @@ pub(crate) fn phrase_words(items: &[Node]) -> Vec<Node> {
 		.collect()
 }
 
+/// The words of the phrase `node`, as phrase_words reads them
+pub(crate) fn phrase_words_of(node: &Node) -> Vec<Node> {
+	phrase_words(std::slice::from_ref(node))
+}
+
 /// The operands of `a or b or c` (`|` parses as or, between whole numbers as the bit or), else the node itself
 pub(crate) fn or_operands(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
@@ -114,6 +119,20 @@ pub(crate) fn with_parts_rewritten(node: Node, rewrite: &mut dyn FnMut(Node) -> 
 /// Statements run in order: `a; b`, `{a; b}`
 pub(crate) fn statement_list(statements: Vec<Node>, bracket: Bracket) -> Node {
 	Node::List(statements, bracket, Separator::Semicolon)
+}
+
+/// `first` before the program's own statements, at its main level: a program of one statement becomes a list of them
+pub(crate) fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
+	if first.is_empty() {
+		return program;
+	}
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			Node::List([first, statements].concat(), Bracket::None, separator)
+		}
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_statements_first(node, first)),
+		single => statement_list([first, vec![single]].concat(), Bracket::None),
+	}
 }
 
 /// `{a; b}`

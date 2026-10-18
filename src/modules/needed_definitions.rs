@@ -234,24 +234,9 @@ fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, nam
 	}
 }
 
-pub(crate) fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
-	if first.is_empty() {
-		return program;
-	}
-	match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator)
-		}
-		meta @ Node::Meta { .. } => meta.under_meta(|node| with_statements_first(node, first)),
-		single => {
-			Node::List(first.into_iter().chain(std::iter::once(single)).collect(), Bracket::None, Separator::Newline)
-		}
-	}
-}
-
 pub(crate) fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	let needed = needed_definitions(&program, &definitions);
-	with_statements_in_front(program, needed)
+	crate::lowering::nodes::with_statements_first(program, needed)
 }
 
 /// The definitions the program's calls reach, and those their calls reach in turn
@@ -292,20 +277,6 @@ fn is_implicit_operation_of(definition: &Node, mentioned: &HashSet<String>) -> b
 	};
 	crate::lowering::traits::IMPLICIT_OPERATIONS.contains(&name.name().as_str())
 		&& matches!(first.drop_meta(), Node::Key(_, Op::Colon, type_node) if mentioned.contains(&type_node.drop_meta().name()))
-}
-
-/// The program with the statements before its own
-pub(crate) fn with_statements_in_front(program: Node, needed: Vec<Node>) -> Node {
-	if needed.is_empty() {
-		return program;
-	}
-	let (statements, separator) = match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			(statements, separator)
-		}
-		single => (vec![single], Separator::Semicolon),
-	};
-	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
 /// A mentioned name, or the companion f_as of a mentioned f: overloads lowering calls it where f gives an expected type;
