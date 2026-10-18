@@ -237,10 +237,7 @@ fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
-	match node.drop_meta() {
-		Node::Symbol(name) => arities.get(name).copied(),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| arities.get(name).copied())
 }
 
 /// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading; in a
