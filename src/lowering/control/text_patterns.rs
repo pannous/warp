@@ -4,7 +4,7 @@
 //! tests each hole's type (fits_text_type).
 
 use super::nodes::{call, key};
-use super::switch::{bind, split_switch, WILDCARD};
+use super::switch::{bind, is_switch_head, split_switch, WILDCARD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{COUNT_WORD, TEXT_WORD};
@@ -98,8 +98,10 @@ impl TextPattern {
 pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
 	let is_text_pattern = |part: &Node| TextPattern::of(part, &|_| false).is_some();
 	let implied = match node {
-		Node::List(items, _, _) => split_switch(items).is_some_and(|(_, _, cases)| match cases.drop_meta() {
-			Node::List(arms, Bracket::Curly, _) => arms.iter().any(|arm| left_spine(arm).any(is_text_pattern)),
+		Node::List(items, _, _) => split_switch(items).is_some_and(|(head, _, cases)| match cases.drop_meta() {
+			Node::List(arms, Bracket::Curly, _) if is_switch_head(head) => {
+				arms.iter().any(|arm| left_spine(arm).any(is_text_pattern))
+			}
 			_ => false,
 		}),
 		Node::Key(_, Op::Eq, pattern) => is_text_pattern(pattern),
