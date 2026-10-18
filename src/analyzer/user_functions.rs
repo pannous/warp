@@ -102,6 +102,7 @@ pub(super) fn infer_function_return_kind(body: &Node, scope: &Scope) -> Kind {
 	// (`return [dist, prev]`: a List when every returned Node is one)
 	let mut returned_nodes: Vec<Kind> = vec![];
 	let mut returned: Vec<Kind> = vec![];
+	let mut returned_numbers: Vec<Kind> = vec![];
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if items.len() == 2 && items[0].is_symbol("return") && !is_error(&items[1]) {
@@ -112,6 +113,9 @@ pub(super) fn infer_function_return_kind(body: &Node, scope: &Scope) -> Kind {
 					infer_type(&items[1], scope)
 				};
 				returned.push(kind);
+				if !calls_user_function(&items[1], scope) {
+					returned_numbers.push(kind);
+				}
 				if kind.is_ref() && !returned_nodes.contains(&kind) {
 					returned_nodes.push(kind);
 				}
@@ -144,10 +148,11 @@ pub(super) fn infer_function_return_kind(body: &Node, scope: &Scope) -> Kind {
 			kind => kind,
 		},
 	};
+	// `if n > 0 { return n }; [1]`: a number here, a list there, known only at run time; a user function's result
+	// (`return f(xs[1:])`) is no number yet, the rounds start every result as an int
 	let gives_number = |kind: &Kind| kind.is_int() || kind.is_float();
-	// `if n > 0 { return n }; [1]`: a number here, a list there, known only at run time
-	if (last_kind.is_ref() && returned.iter().any(gives_number))
-		|| (gives_number(&last_kind) && !returned_nodes.is_empty())
+	if (last_kind.is_ref() && returned_numbers.iter().any(gives_number))
+		|| (gives_number(&last_kind) && !returned_nodes.is_empty() && !calls_user_function(last, scope))
 	{
 		return Kind::Empty;
 	}
@@ -159,6 +164,19 @@ pub(super) fn infer_function_return_kind(body: &Node, scope: &Scope) -> Kind {
 		[Kind::Empty] => Kind::Empty,
 		[Kind::List] => Kind::List,
 		_ => Kind::Empty, // Nodes of different kinds (a text here, a list there): known only at run time
+	}
+}
+
+/// `f(x)` or `return f(x)` of a user function, whose result kind is still being settled
+fn calls_user_function(node: &Node, scope: &Scope) -> bool {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol("return") => {
+			calls_user_function(&items[1], scope)
+		}
+		Node::List(items, _, _) => {
+			items.first().and_then(Node::symbol_name).is_some_and(|name| scope.function_kind(name).is_some())
+		}
+		_ => false,
 	}
 }
 
