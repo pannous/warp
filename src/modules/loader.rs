@@ -559,7 +559,10 @@ impl<'a> Loader<'a> {
 	/// lib/prelude.warp, its words named `prelude·first` (prelude_name), when the program or a used standard module
 	/// mentions one of them in any spelling (`isdigit`); with_needed_definitions keeps those called
 	pub(super) fn use_prelude(&mut self, program: &Node) -> Result<(), Node> {
-		let mentioned = called_names(&[std::slice::from_ref(program), &self.std_definitions].concat());
+		// the used standard modules' definitions the program reaches: a style page calls ~20 of lib/markup.warp's, and
+		// with_needed_definitions keeps no others, so the prelude words of the rest are never needed
+		let callers = [vec![program.clone()], needed_definitions(program, &self.std_definitions)].concat();
+		let mentioned = called_names(&callers);
 		let prelude = std_module_definitions(PRELUDE_MODULE).unwrap_or_default();
 		if !prelude.iter().any(|word| mentioned.contains(word)) {
 			return Ok(());
@@ -571,7 +574,7 @@ impl<'a> Loader<'a> {
 			prelude_declarations_of(&replaced)
 		});
 		warn_replaced(&replaced, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
-		let reached = reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat());
+		let reached = reached_prelude_definitions(&callers);
 		let module = sequence(reached);
 		let definitions = crate::compiler::phase_times::timed("prelude: load reached", || {
 			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))
