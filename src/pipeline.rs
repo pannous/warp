@@ -475,6 +475,8 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	use crate::analyzer::effects::{without_constraints, EffectReport};
 	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
 	let node = crate::lowering::for_loop::headers::lower(node);
+	// `shape(a + b)` of `shape(code: data)`: the argument quoted (data_parameters.rs), then sealed with every `data e`
+	let node = crate::lowering::data_parameters::lower(node);
 	// `data e` as written: no sugar pass rewrites inside e
 	let node = crate::lowering::blocks::seal_quoted(node);
 	// the list items as written, before passes build lists of their own

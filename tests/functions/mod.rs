@@ -47,6 +47,7 @@ mod test_constant_free_variables;
 mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
+mod test_data_parameter; // card data-parameter
 mod test_deep_recursion;
 mod test_def_block_without_parentheses; // card def-hello
 mod test_def_bool_result;
