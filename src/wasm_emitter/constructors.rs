@@ -163,7 +163,7 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 	emitter.emit_node_constructor("new_symbol", Kind::Symbol, int_pair(), Plain, in_memory());
 	emitter.emit_node_constructor(NEW_TEXT_OF, Kind::Text, vec![text_ref], Plain, vec![LocalGet(0), no_value()]);
 	emitter.emit_node_constructor(NEW_SYMBOL_OF, Kind::Symbol, vec![text_ref], Plain, vec![LocalGet(0), no_value()]);
-	emitter.runtime_function(CONSTANT_TEXT, int_pair(), vec![node.clone()], vec![], |s, f| {
+	emitter.runtime_function(CONSTANT_TEXT, int_pair(), vec![node], vec![], |s, f| {
 		WasmGcEmitter::emit_list(f, &[LocalGet(0), LocalGet(1)]);
 		s.call(f, TEXT_LITERAL);
 		s.call(f, NEW_TEXT_OF);
