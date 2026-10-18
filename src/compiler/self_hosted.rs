@@ -33,6 +33,8 @@ const EMIT_PROGRAM: &str = concat!(
 const RUNTIME_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/runtime.warp");
 /// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
 const OUTSIDE_THE_CORE: &str = "outside the core: ";
+/// The file each refusal of emitter.warp goes to as a line, when set
+const REFUSALS_FILE: &str = "WARP_EMIT_REFUSALS";
 /// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
 #[cfg(feature = "native")]
 const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
@@ -122,6 +124,7 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
 			log::trace!("self-hosted emit: {refusal}");
+			record_refusal(&refusal);
 			None
 		}
 		Err(failure) => Some(Err(crate::node::error(&format!("the self-hosted emitter failed: {failure}")))),
@@ -129,6 +132,16 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host: false, needs_wasi: true, needs_ffi: false }))
 		}
 	}
+}
+
+/// The refusal as a line of the file REFUSALS_FILE names, when set: a run over many programs ranks what keeps them
+/// outside the core (`sort | uniq -c | sort -rn`)
+fn record_refusal(refusal: &str) {
+	use std::io::Write;
+	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
+	let line = refusal.lines().next().unwrap_or_default();
+	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
+	let _ = appended.and_then(|mut file| writeln!(file, "{line}"));
 }
 
 /// The bytes of the module emitter.warp answers as a list of byte numbers, else its answer as the failure
@@ -290,7 +303,9 @@ fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let binary = std::env::current_exe().ok()?;
 	let mut hasher = Sha256::new();
-	let settings = crate::run::program_cache::warp_settings();
+	// where refusals go changes no compile
+	let mut settings = crate::run::program_cache::warp_settings();
+	settings.retain(|(name, _)| name != REFUSALS_FILE);
 	hasher.update(format!(
 		"{}\n{:?}\n{settings:?}\n{program}\n",
 		binary.display(),
