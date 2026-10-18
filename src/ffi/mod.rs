@@ -68,6 +68,13 @@ impl<'a> ForeignLine<'a> {
 		arguments >= required - usize::from(rest) && (rest || arguments <= self.arity())
 	}
 
+	/// Each parameter's name, `separator` of `separator: text = " "`, `values` of `values...`
+	pub fn names(&self) -> impl Iterator<Item = &'a str> {
+		self.parameters
+			.split(',')
+			.map(|parameter| parameter.split([':', '=']).next().unwrap_or_default().trim().trim_end_matches("..."))
+	}
+
 	/// Each parameter's default as written, `" "` of `separator: text = " "`; None for one without
 	pub fn defaults(&self) -> impl Iterator<Item = Option<&'a str>> {
 		let parameters = self.parameters.trim();
