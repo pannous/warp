@@ -254,7 +254,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			&[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY]
 		}
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
-		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
+		INSERT_EITHER_CALL => &[crate::list_mutations::LIST_BECOME],
 		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
 		crate::wasm_emitter::text::text_builtins::TEXT_FORM => &["list_join"],
 		// IEEE bits beyond the fixnums are BigInts
