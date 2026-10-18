@@ -32,7 +32,10 @@ fn the_warp_emitter_emits_inside_its_core() {
 	let (inside, phases) = self_hosted_run(&cache, "square(x: int) := x * x; print(square(5)); square(3)");
 	assert!(inside.contains("25") && inside.contains('9'), "{inside}");
 	assert!(!phases.contains("emit ("), "the Rust emitter ran: {phases}");
-	let (beyond, phases) = self_hosted_run(&cache, "class Point { x: int }; p = Point(3); p.x + 4");
+	let (class, phases) = self_hosted_run(&cache, "class Point { x: int }; p = Point(3); p.x + 4");
+	assert!(class.contains('7'), "{class}");
+	assert!(!phases.contains("emit ("), "a class instance is inside the core: {phases}");
+	let (beyond, phases) = self_hosted_run(&cache, "#([\"ab\", \"cd\"].join(\"\")) + 3");
 	assert!(beyond.contains('7'), "{beyond}");
-	assert!(phases.contains("emit ("), "a class is beyond the core: {phases}");
+	assert!(phases.contains("emit ("), "join is beyond the core: {phases}");
 }
