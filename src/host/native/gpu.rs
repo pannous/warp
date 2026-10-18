@@ -430,13 +430,39 @@ pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::graphics::gpu::S
 					vector.resize(crate::graphics::gpu::VECTOR_FLOATS, 0.0);
 					floats.extend(vector);
 				}
-				return Ok(crate::graphics::gpu::ShaderValue { name, floats, array: true });
+				return Ok(crate::graphics::gpu::ShaderValue::numbers(name, floats, true));
+			}
+			if let Some(image) = shader_image(value)? {
+				let mut read = crate::graphics::gpu::ShaderValue::numbers(name, vec![], false);
+				read.image = Some(Box::new(image));
+				return Ok(read);
 			}
 			let floats = floats_of(value)?;
 			let array = floats.len() > crate::graphics::gpu::VECTOR_FLOATS;
-			Ok(crate::graphics::gpu::ShaderValue { name, floats, array })
+			Ok(crate::graphics::gpu::ShaderValue::numbers(name, floats, array))
 		})
 		.collect()
+}
+
+/// `{shader: …, width: …, height: …, values: {…}}`, what `render(f, width, height)` gives (card gpu-multipass): the
+/// image another shader draws first; None for any other value
+fn shader_image(value: &Node) -> Result<Option<crate::graphics::gpu::ShaderImage>, String> {
+	let field = |name: &str| {
+		value.iter().find_map(|entry| match entry.drop_meta() {
+			Node::Key(key, _, field) if key.drop_meta().name() == name => Some(field.drop_meta().clone()),
+			_ => None,
+		})
+	};
+	use crate::graphics::gpu::{IMAGE_SHADER, IMAGE_VALUES};
+	let (Node::List(..), Some(Node::Text(shader))) = (value.drop_meta(), field(IMAGE_SHADER)) else {
+		return Ok(None);
+	};
+	let side = |name: &str| match field(name) {
+		Some(Node::Number(number)) if f64::from(number) >= 1.0 => Ok(f64::from(number) as u32),
+		other => Err(format!("render's image is a whole number of pixels {name}, got {}", other.unwrap_or(Node::Empty).serialize())),
+	};
+	let values = shader_values(&field(IMAGE_VALUES).unwrap_or(Node::Empty))?;
+	Ok(Some(crate::graphics::gpu::ShaderImage { shader, width: side("width")?, height: side("height")?, values }))
 }
 
 /// The WGSL text of a gpu word's shader

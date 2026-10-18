@@ -40,6 +40,15 @@ fn warp_previous(at: vec2f) -> vec4f {
 	let last = vec2i(textureDimensions(warp_previous_frame)) - vec2i(1);
 	return textureLoad(warp_previous_frame, clamp(vec2i(at), vec2i(0), last), 0);
 }";
+/// `waves(at)` of `waves = render(f, width, height)` (card gpu-multipass, notes/gpu.md "Several passes"): the value f
+/// gave at pixel `at` of its image, drawn on the GPU before the shader reading it, bound after the previous frame
+const FIRST_IMAGE_BINDING: u32 = 2;
+const IMAGE_FUNCTION_PREFIX: &str = "warp_image_";
+/// The fields of the map `render(f, width, height)` gives: `{shader: …, width: …, height: …, values: {…}}`
+pub const IMAGE_SHADER: &str = "shader";
+pub const IMAGE_VALUES: &str = "values";
+/// An image another shader reads keeps f's numbers as they are: negative heights, values above 1
+const PASS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// A uniform struct is a whole number of 16-byte rows
 const UNIFORM_ALIGNMENT: usize = 16;
 
@@ -47,12 +56,56 @@ const UNIFORM_ALIGNMENT: usize = 16;
 pub const VECTOR_FLOATS: usize = 4;
 
 /// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f), or an array of vec4f
-/// (`values.<name>[i]`), its floats four by four
+/// (`values.<name>[i]`), its floats four by four; or an image another shader draws first, read as `warp_image_<name>(at)`
 #[derive(Clone)]
 pub struct ShaderValue {
 	pub name: String,
 	pub floats: Vec<f32>,
 	pub array: bool,
+	pub image: Option<Box<ShaderImage>>,
+}
+
+/// The image a shader draws for another to read (`render(f, width, height)`, card gpu-multipass)
+#[derive(Clone)]
+pub struct ShaderImage {
+	pub shader: String,
+	pub width: u32,
+	pub height: u32,
+	pub values: Vec<ShaderValue>,
+}
+
+impl ShaderValue {
+	pub fn numbers(name: String, floats: Vec<f32>, array: bool) -> ShaderValue {
+		ShaderValue { name, floats, array, image: None }
+	}
+}
+
+/// The values the uniform holds, not the images
+fn numbers_of(values: &[ShaderValue]) -> impl Iterator<Item = &ShaderValue> {
+	values.iter().filter(|value| value.image.is_none())
+}
+
+fn images_of(values: &[ShaderValue]) -> impl Iterator<Item = (&String, &ShaderImage)> {
+	values.iter().filter_map(|value| value.image.as_deref().map(|image| (&value.name, image)))
+}
+
+/// The WGSL binding the images and their reading functions, after the shader
+fn image_declarations(values: &[ShaderValue]) -> String {
+	images_of(values)
+		.enumerate()
+		.map(|(index, (name, _))| {
+			let binding = FIRST_IMAGE_BINDING + index as u32;
+			let texture = format!("{IMAGE_FUNCTION_PREFIX}{name}_texture");
+			format!(
+				"
+@group(0) @binding({binding}) var {texture}: texture_2d<f32>;
+fn {IMAGE_FUNCTION_PREFIX}{name}(at: vec2f) -> vec4f {{
+	let last = vec2i(textureDimensions({texture})) - vec2i(1);
+	return textureLoad({texture}, clamp(vec2i(floor(at)), vec2i(0), last), 0);
+}}"
+			)
+		})
+		.collect()
 }
 
 struct Gpu {
@@ -413,7 +466,7 @@ pub fn checked_values(
 	let values = with_builtin_values(shader, width, height, values);
 	let Gpu { device, .. } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
-	let prepared = prepared(device, shader, &values);
+	let prepared = prepared(device, shader, &values, IMAGE_FORMAT);
 	validated(validation)?;
 	prepared.map(|_| values)
 }
@@ -436,18 +489,25 @@ pub fn render_texture(
 }
 
 /// The shader with its values compiled into its painter, and the values' bytes
-fn prepared(device: &wgpu::Device, shader: &str, values: &[ShaderValue]) -> Result<(Painter, Vec<u8>), String> {
+fn prepared(
+	device: &wgpu::Device,
+	shader: &str,
+	values: &[ShaderValue],
+	format: wgpu::TextureFormat,
+) -> Result<(Painter, Vec<u8>), String> {
 	let (declarations, bytes) = uniform_layout(values)?;
 	let reads_previous = reads_value(shader, crate::graphics::shader_holes::PREVIOUS_HOLE);
+	let images = image_declarations(values);
 	let source = match reads_previous {
 		true => format!(
-			"{}{FULL_IMAGE_VERTICES}{declarations}{PREVIOUS_FRAME}",
+			"{}{FULL_IMAGE_VERTICES}{declarations}{PREVIOUS_FRAME}{images}",
 			shader
 				.replace(&format!("{VALUES_NAME}.{}", crate::graphics::shader_holes::PREVIOUS_HOLE), PREVIOUS_FUNCTION)
 		),
-		false => format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"),
+		false => format!("{shader}{FULL_IMAGE_VERTICES}{declarations}{images}"),
 	};
-	let painter = painter(device, source, !bytes.is_empty(), reads_previous)?;
+	let layout = BindingsLayout { values: !bytes.is_empty(), previous: reads_previous, images: images_of(values).count() };
+	let painter = painter(device, source, layout, format)?;
 	Ok((painter, bytes))
 }
 
@@ -460,39 +520,58 @@ fn drawn_image(
 	values: &[ShaderValue],
 	view_format: Option<wgpu::TextureFormat>,
 ) -> Result<(wgpu::Texture, wgpu::CommandEncoder), String> {
-	let (Painter { pipeline, bindings_layout }, bytes) = prepared(device, shader, values)?;
-	let reads_previous = reads_value(shader, crate::graphics::shader_holes::PREVIOUS_HOLE);
-	let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
-	let previous = reads_previous.then(|| previous_frame(device, shader, size));
-	let bindings = bindings_layout.map(|layout| bindings(device, &layout, &bytes, previous.as_ref()));
+	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 	let usage =
 		wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING;
 	let view_formats: Vec<_> = view_format.into_iter().filter(|format| *format != IMAGE_FORMAT).collect();
-	let image = image_texture(device, "gpu_render image", size, usage, &view_formats);
+	let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
+	let image = device.create_texture(&image_descriptor("gpu_render image", size, IMAGE_FORMAT, usage, &view_formats));
+	draw(device, &mut encoder, shader, values, &image)?;
+	Ok((image, encoder))
+}
+
+/// The shader drawn into `image` by `encoder`, the images it reads drawn first
+fn draw(
+	device: &wgpu::Device,
+	encoder: &mut wgpu::CommandEncoder,
+	shader: &str,
+	values: &[ShaderValue],
+	image: &wgpu::Texture,
+) -> Result<(), String> {
+	let (Painter { pipeline, bindings_layout }, bytes) = prepared(device, shader, values, image.format())?;
+	let reads_previous = reads_value(shader, crate::graphics::shader_holes::PREVIOUS_HOLE);
+	let previous = reads_previous.then(|| previous_frame(device, shader, image.size()));
+	let images: Vec<wgpu::TextureView> = images_of(values)
+		.map(|(_, pass)| {
+			let size = wgpu::Extent3d { width: pass.width, height: pass.height, depth_or_array_layers: 1 };
+			let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
+			let drawn = device.create_texture(&image_descriptor("gpu_render pass", size, PASS_FORMAT, usage, &[]));
+			draw(device, encoder, &pass.shader, &pass.values, &drawn)?;
+			Ok(drawn.create_view(&wgpu::TextureViewDescriptor::default()))
+		})
+		.collect::<Result<_, String>>()?;
+	let bindings = bindings_layout.map(|layout| bindings(device, &layout, &bytes, previous.as_ref(), &images));
 	if reads_previous {
 		keep_previous_frame(shader, image.clone());
 	}
 	let view = image.create_view(&wgpu::TextureViewDescriptor::default());
-	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-	{
-		let target = wgpu::RenderPassColorAttachment {
-			view: &view,
-			depth_slice: None,
-			resolve_target: None,
-			ops: wgpu::Operations::default(),
-		};
-		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-			label: Some("gpu_render"),
-			color_attachments: &[Some(target)],
-			..Default::default()
-		});
-		pass.set_pipeline(&pipeline);
-		if let Some(bindings) = &bindings {
-			pass.set_bind_group(0, bindings, &[]);
-		}
-		pass.draw(0..TRIANGLE_CORNERS, 0..1);
+	let target = wgpu::RenderPassColorAttachment {
+		view: &view,
+		depth_slice: None,
+		resolve_target: None,
+		ops: wgpu::Operations::default(),
+	};
+	let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+		label: Some("gpu_render"),
+		color_attachments: &[Some(target)],
+		..Default::default()
+	});
+	pass.set_pipeline(&pipeline);
+	if let Some(bindings) = &bindings {
+		pass.set_bind_group(0, bindings, &[]);
 	}
-	Ok((image, encoder))
+	pass.draw(0..TRIANGLE_CORNERS, 0..1);
+	Ok(())
 }
 
 /// The RGBA bytes of a 4-byte-per-pixel image, row by row, once the encoder's work on it is done
@@ -553,16 +632,26 @@ fn image_texture(
 	usage: wgpu::TextureUsages,
 	view_formats: &[wgpu::TextureFormat],
 ) -> wgpu::Texture {
-	device.create_texture(&wgpu::TextureDescriptor {
+	device.create_texture(&image_descriptor(label, size, IMAGE_FORMAT, usage, view_formats))
+}
+
+fn image_descriptor<'a>(
+	label: &'a str,
+	size: wgpu::Extent3d,
+	format: wgpu::TextureFormat,
+	usage: wgpu::TextureUsages,
+	view_formats: &'a [wgpu::TextureFormat],
+) -> wgpu::TextureDescriptor<'a> {
+	wgpu::TextureDescriptor {
 		label: Some(label),
 		size,
 		mip_level_count: 1,
 		sample_count: 1,
 		dimension: wgpu::TextureDimension::D2,
-		format: IMAGE_FORMAT,
+		format,
 		usage,
 		view_formats,
-	})
+	}
 }
 
 fn keep_previous_frame(shader: &str, frame: wgpu::Texture) {
@@ -578,6 +667,11 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 	static FIRST_RENDER: LazyLock<std::time::Instant> = LazyLock::new(std::time::Instant::now);
 	static RENDERS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 	let frame = RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f32;
+	filled_values(shader, width, height, values, frame, FIRST_RENDER.elapsed().as_secs_f32())
+}
+
+/// The values with the built-in holes the shader reads, an image's own among its values
+fn filled_values(shader: &str, width: u32, height: u32, values: &[ShaderValue], frame: f32, time: f32) -> Vec<ShaderValue> {
 	let size = [width as f32, height as f32];
 	let [mouse_x, mouse_y, mouse_down, key] = warp_runtime::system_values::window_input();
 	let wheel = warp_runtime::system_values::wheel() as f32;
@@ -591,7 +685,7 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 			"width" => vec![size[0]],
 			"height" => vec![size[1]],
 			"size" => size.to_vec(),
-			"time" => vec![FIRST_RENDER.elapsed().as_secs_f32()],
+			"time" => vec![time],
 			"frame" => vec![frame],
 			"mouse" => vec![mouse_x, mouse_y],
 			"mouse_down" => vec![mouse_down],
@@ -600,8 +694,16 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 			other => unreachable!("{other} is no built-in hole"),
 		},
 		array: false,
+		image: None,
 	});
-	values.iter().cloned().chain(builtins).collect()
+	let filled_image = |value: &ShaderValue| {
+		let mut value = value.clone();
+		if let Some(image) = value.image.as_deref_mut() {
+			image.values = filled_values(&image.shader, image.width, image.height, &image.values, frame, time);
+		}
+		value
+	};
+	values.iter().map(filled_image).chain(builtins).collect()
 }
 
 /// Whether the shader reads `values.name`
@@ -612,12 +714,12 @@ fn reads_value(shader: &str, name: &str) -> bool {
 /// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the
 /// uniform, laid out as WGSL aligns its members: f32 by 4, vec2f by 8, vec3f, vec4f and arrays of vec4f by 16
 pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), String> {
-	if values.is_empty() {
+	if numbers_of(values).next().is_none() {
 		return Ok((String::new(), Vec::new()));
 	}
 	let mut members = Vec::new();
 	let mut bytes = Vec::new();
-	for ShaderValue { name, floats, array } in values {
+	for ShaderValue { name, floats, array, .. } in numbers_of(values) {
 		let (wgsl_type, alignment) = match floats.len() {
 			_ if *array => (format!("array<vec4f, {}>", floats.len().div_ceil(VECTOR_FLOATS).max(1)), 16),
 			1 => ("f32".into(), 4),
@@ -641,6 +743,14 @@ pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), Strin
 	Ok((declarations, bytes))
 }
 
+/// What a shader binds: its values, its previous frame, the images it reads
+#[derive(Clone, Copy)]
+struct BindingsLayout {
+	values: bool,
+	previous: bool,
+	images: usize,
+}
+
 /// A fragment shader compiled into its pipeline, with the layout of its values and previous frame (none: it takes
 /// neither)
 #[derive(Clone)]
@@ -651,12 +761,20 @@ struct Painter {
 
 /// The painter of a shader text, compiled once: compiling a pipeline anew for every frame costs more than drawing it
 /// (over 100 ms for a raymarching shader on Metal, samples/gpu/gpu_visualizer.warp)
-fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_previous: bool) -> Result<Painter, String> {
-	static PAINTERS: LazyLock<Mutex<HashMap<String, Painter>>> = LazyLock::new(Default::default);
+fn painter(
+	device: &wgpu::Device,
+	source: String,
+	layout: BindingsLayout,
+	format: wgpu::TextureFormat,
+) -> Result<Painter, String> {
+	static PAINTERS: LazyLock<Mutex<HashMap<(String, wgpu::TextureFormat), Painter>>> = LazyLock::new(Default::default);
 	let mut painters = PAINTERS.lock().unwrap();
-	if let Some(painter) = painters.get(&source) {
+	let key = (source, format);
+	if let Some(painter) = painters.get(&key) {
 		return Ok(painter.clone());
 	}
+	let BindingsLayout { values: takes_values, previous: reads_previous, images } = layout;
+	let source = &key.0;
 	let module = compiled(device, &source)?;
 	// explicit, so a shader that leaves `values` unread still binds them
 	let values = takes_values.then_some(wgpu::BindGroupLayoutEntry {
@@ -669,8 +787,8 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_prev
 		},
 		count: None,
 	});
-	let previous = reads_previous.then_some(wgpu::BindGroupLayoutEntry {
-		binding: PREVIOUS_FRAME_BINDING,
+	let texture_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
+		binding,
 		visibility: wgpu::ShaderStages::FRAGMENT,
 		ty: wgpu::BindingType::Texture {
 			sample_type: wgpu::TextureSampleType::Float { filterable: false },
@@ -678,8 +796,10 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_prev
 			multisampled: false,
 		},
 		count: None,
-	});
-	let entries: Vec<_> = values.into_iter().chain(previous).collect();
+	};
+	let previous = reads_previous.then(|| texture_entry(PREVIOUS_FRAME_BINDING));
+	let images = (0..images as u32).map(|index| texture_entry(FIRST_IMAGE_BINDING + index));
+	let entries: Vec<_> = values.into_iter().chain(previous).chain(images).collect();
 	let bindings_layout = (!entries.is_empty()).then(|| {
 		device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: Some("gpu_render values"),
@@ -709,7 +829,7 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_prev
 			module: &module,
 			entry_point: Some(ENTRY_POINT),
 			compilation_options: Default::default(),
-			targets: &[Some(IMAGE_FORMAT.into())],
+			targets: &[Some(format.into())],
 		}),
 		multiview_mask: None,
 		cache: None,
@@ -718,16 +838,17 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_prev
 		painters.clear();
 	}
 	let painter = Painter { pipeline, bindings_layout };
-	painters.insert(source, painter.clone());
+	painters.insert(key, painter.clone());
 	Ok(painter)
 }
 
-/// The values' bytes (none: the shader takes none) and the previous frame, bound as `layout` says
+/// The values' bytes (none: the shader takes none), the previous frame and the images, bound as `layout` says
 fn bindings(
 	device: &wgpu::Device,
 	layout: &wgpu::BindGroupLayout,
 	bytes: &[u8],
 	previous: Option<&wgpu::TextureView>,
+	images: &[wgpu::TextureView],
 ) -> wgpu::BindGroup {
 	let buffer = (!bytes.is_empty()).then(|| {
 		device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -743,7 +864,11 @@ fn bindings(
 		binding: PREVIOUS_FRAME_BINDING,
 		resource: wgpu::BindingResource::TextureView(view),
 	});
-	let entries: Vec<_> = values.into_iter().chain(previous).collect();
+	let images = images.iter().enumerate().map(|(index, view)| wgpu::BindGroupEntry {
+		binding: FIRST_IMAGE_BINDING + index as u32,
+		resource: wgpu::BindingResource::TextureView(view),
+	});
+	let entries: Vec<_> = values.into_iter().chain(previous).chain(images).collect();
 	device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("gpu_render values"), layout, entries: &entries })
 }
 

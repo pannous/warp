@@ -37,6 +37,8 @@ const SHAPES_MARK: u32 = u32::MAX;
 const SHADER_MARK: u32 = u32::MAX - 1;
 /// In a frame's width: the window's size the program asks for follows
 const RESIZE_MARK: u32 = u32::MAX - 2;
+/// A shader value that is an image another shader draws (its shader follows the value), not 0 (numbers) or 1 (an array)
+const IMAGE_VALUE: u32 = 2;
 /// In a frame's width: the shader drawing use draw's shapes follows (gpu_canvas::use_shader), before the first shapes
 const SHAPE_SHADER_MARK: u32 = u32::MAX - 3;
 const WORD_BYTES: usize = 4;
@@ -220,12 +222,22 @@ pub fn shape_shader_message(shader: &str) -> Vec<u8> {
 
 /// The shader and its values as one message for the viewer's stdin
 pub fn shader_message(width: u32, height: u32, shader: &str, values: &[crate::graphics::gpu::ShaderValue]) -> Vec<u8> {
-	let mut bytes = words_bytes(&[SHADER_MARK, width, height, shader.len() as u32, values.len() as u32]);
+	[words_bytes(&[SHADER_MARK, width]), shader_bytes(height, shader, values)].concat()
+}
+
+/// A shader's height, text and values (an image among them as its own shader, card gpu-multipass)
+fn shader_bytes(height: u32, shader: &str, values: &[crate::graphics::gpu::ShaderValue]) -> Vec<u8> {
+	let mut bytes = words_bytes(&[height, shader.len() as u32, values.len() as u32]);
 	bytes.extend(shader.as_bytes());
 	for value in values {
-		bytes.extend(words_bytes(&[value.name.len() as u32, value.floats.len() as u32, u32::from(value.array)]));
+		let kind = if value.image.is_some() { IMAGE_VALUE } else { u32::from(value.array) };
+		bytes.extend(words_bytes(&[value.name.len() as u32, value.floats.len() as u32, kind]));
 		bytes.extend(value.name.as_bytes());
 		bytes.extend(value.floats.iter().flat_map(|float| float.to_le_bytes()));
+		if let Some(image) = &value.image {
+			bytes.extend(words_bytes(&[image.width]));
+			bytes.extend(shader_bytes(image.height, &image.shader, &image.values));
+		}
 	}
 	bytes
 }
@@ -239,11 +251,17 @@ fn read_shader_frame(reader: &mut impl Read, width: u32) -> Option<ShaderFrame> 
 	let shader = String::from_utf8(read_bytes(reader, shader_bytes as usize)?).ok()?;
 	let values = (0..count)
 		.map(|_| {
-			let [name_bytes, floats, array] = read_words(reader)?;
+			let [name_bytes, floats, kind] = read_words(reader)?;
 			let name = String::from_utf8(read_bytes(reader, name_bytes as usize)?).ok()?;
 			let floats = read_bytes(reader, floats as usize * WORD_BYTES)?;
 			let floats = floats.as_chunks::<WORD_BYTES>().0.iter().map(|bytes| f32::from_le_bytes(*bytes)).collect();
-			Some(crate::graphics::gpu::ShaderValue { name, floats, array: array != 0 })
+			let mut value = crate::graphics::gpu::ShaderValue::numbers(name, floats, kind == 1);
+			if kind == IMAGE_VALUE {
+				let [image_width] = read_words(reader)?;
+				let ShaderFrame { width, height, shader, values } = read_shader_frame(reader, image_width)?;
+				value.image = Some(Box::new(crate::graphics::gpu::ShaderImage { shader, width, height, values }));
+			}
+			Some(value)
 		})
 		.collect::<Option<_>>()?;
 	Some(ShaderFrame { width, height, shader, values })
