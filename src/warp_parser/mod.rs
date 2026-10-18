@@ -54,7 +54,7 @@ mod expressions;
 mod literals;
 pub(crate) use expressions::*;
 pub(crate) use literals::*;
-pub use literals::{shader_blocks, without_shader_texts};
+pub use literals::{shader_blocks, without_shader_texts, PathLiteral};
 use lookahead::*;
 pub use scanning::read_atoms;
 use scanning::*;
@@ -602,7 +602,7 @@ impl WarpParser {
 	}
 
 	pub fn parse(input: &str) -> Node {
-		Self::parse_with_options(input, ParserOptions::default())
+		crate::compiler::phase_times::timed("parse", || Self::parse_with_options(input, ParserOptions::default()))
 	}
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
