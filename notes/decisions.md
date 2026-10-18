@@ -16,6 +16,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   self-hosting-resumed: self-hosting is the fleet's next big task; workers
   finish their current work, then switch to it, starting with a readiness survey (warp-self-survey: are all the
   language parts there, or should macros or a cheaper feature come first so the warp compiler doesn't bloat).
+- self-hosting-back-end (user 2026-10-18 night): the fleet's only focus is the analyzer, the emitter and the runtime in warp (lib/compiler), wired into the WARP_SELF_HOSTED pipeline; other cards wait in Soon, except important bug fixes (crashes, regressions on main) and the final Rust cleanup. Owners: notes/self_hosting.md "Back-end focus".
+- compiler-typed (user 2026-10-18): every function of the warp-written compiler and runtime declares its parameter and result types; generic helpers are typed generically (T, element of xs), not left untyped. Untyped functions stay a language feature for scripts.
+- compiler-high-level (user 2026-10-18): the warp compiler is written at the highest level the language has (classes, enums, match, for, comprehensions); a missing or weak feature is fixed in the language, not worked around with low-level code. Only runtime.warp's intrinsics stay instruction-level.
 - self-hosting-minimal: the warp compiler is no blind copy of the Rust one; it drops experimental
   bloat and inelegant passes, cleanest minimal implementation first. Failing fringe/edge forms are fine if each dropped
   form is recorded with how to bring it back (notes/self_hosting_dropped.md); twins measure the kept forms via an

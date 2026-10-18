@@ -146,6 +146,20 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
 - New ports go toward the target: the word-phrase pass and the scope pass (with warp-parsing: parser-scope-pass,
   parser-keyword-table); broadcasting minimal; the structural keepers of the SUGAR_PASSES triage.
 
+## Back-end focus (user 2026-10-18 night, decisions self-hosting-back-end, compiler-typed, compiler-high-level)
+Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
+shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
+| owner | part |
+|---|---|
+| warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
+| warp-list-result-type | the builtins' typed lines as the analyzer's signature table (analyzer.warp reads them); types on every lib/compiler function |
+| warp-self-emitter | emitter.warp beyond the core (int `/`, exact rationals, big ints, `#`, `==`, slices, errors, memo calls); the switch hands emission to it |
+| warp-self-passes | runtime.warp: the text, list and number runtime functions of src/wasm_emitter in warp |
+| warp-clicking-guide (markup) | maps, classes/objects and equality: their layout in emitter.warp and their runtime words (coordinate emitter.warp hunks with warp-self-emitter) |
+| warp-parsing | twins for the source and meaning passes still without one, in target-shape order |
+| warp-cache | the end-to-end switch (each stage compiled once, speed), then caching emitted specialisations |
+| warp-steward | suite count per stage: front end only, + analyzer, + emitter |
+
 ## Next phase: passes, analyzer, emitter
 Order: lowering passes first, then the analyzer, then the emitter; only the bootstrap waits for all three.
 - Next item: lib/math.warp and lib/units.warp become complete standalone warp files, and the parser fetches its
