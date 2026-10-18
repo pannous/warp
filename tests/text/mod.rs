@@ -44,6 +44,7 @@ mod test_quoted_computed_container_text;
 mod test_quoted_container_texts;
 mod test_repeat_typed; // card repeat-int
 mod test_reverse_characters; // card reverse-characters
+mod test_rope_keys; // card suite-json-sample
 mod test_runtime_kind_texts;
 mod test_runtime_text_as_int;
 mod test_scan_by_index; // card self-text-index

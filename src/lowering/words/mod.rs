@@ -5,7 +5,6 @@
 use super::*;
 
 pub mod braceless_arguments;
-pub mod channel_words;
 pub mod library_words;
 pub mod member_phrases;
 pub mod module_properties;

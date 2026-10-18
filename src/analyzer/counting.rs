@@ -1,13 +1,17 @@
 //! Counting words and phrases: count/length/size of a value, units, ranges
 
 use super::*;
-use crate::words::PRINT_WORD;
+use crate::words::{COUNT_WORD, PRINT_WORD};
 
 /// Statement words whose argument is never their property: `return count` is no `return.count`
 pub(crate) const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_WORD, "println", "puts", "not"];
-/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
-/// is_counting_word (a class's own size method is looked up in this order)
-pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
+/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: count and its lib/prelude.warp aliases
+/// (`alias size = count`), which every pass asks through is_counting_word (a class's own size method is looked up in
+/// this order)
+pub(crate) fn counting_words() -> Vec<&'static str> {
+	let aliases = crate::modules::prelude_aliases().iter().filter(|(_, word)| word == COUNT_WORD);
+	std::iter::once(COUNT_WORD).chain(aliases.map(|(alias, _)| alias.as_str())).collect()
+}
 /// `byte_size(x)`, `x.byte_size`, `x.bytecount`: the bytes of x, `count x.bytes` (size is the element count, user
 /// decision P40; `x.bytes` is the byte list, decision text-unit-plurals)
 pub const BYTE_SIZE: &str = "byte_size";
@@ -33,7 +37,8 @@ pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
 
 /// `count`, `length`, `size`, `len`: a word counting its argument (`number x` is a cast)
 pub(crate) fn is_counting_word(name: &str) -> bool {
-	COUNTING_WORDS.contains(&name)
+	name == COUNT_WORD
+		|| crate::modules::prelude_aliases().iter().any(|(alias, word)| alias == name && word == COUNT_WORD)
 }
 
 /// `x.count`, `x.length`, `x.size`, the bytes `x.bytecount` (memory) and the unit counts a counting phrase builds

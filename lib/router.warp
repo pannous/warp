@@ -94,3 +94,8 @@ route_fits(kind: any, segment: any) := {
 	if kind == "float" { return route_number(segment, 1) }
 	true
 }
+
+// a route's answer (card web-route-header): `status 418` sets its status (the CGI header Status), `header "name" "value"`
+// adds a header; the next request starts without them. Through the host's response_header, lib/wagi.warp's in a WAGI build
+status(code: int) := response_header("Status", code)
+header(name: text, value: any) := response_header(name, value)

@@ -10,7 +10,6 @@ mod test_await_go;
 mod test_bare_try; // card failed-raised
 mod test_block_assigns_outer;
 mod test_block_parameter_calls; // card repeats-loop
-mod test_nested_block_calls; // card block-call-nested
 mod test_block_parameters;
 mod test_block_statements;
 mod test_blocks;
@@ -147,6 +146,7 @@ mod test_multiline_errors;
 mod test_named_broadcast;
 mod test_named_patterns; // card patterns-values
 mod test_named_reflection;
+mod test_nested_block_calls; // card block-call-nested
 mod test_not_condition_block;
 mod test_object_blocks;
 mod test_object_functions;

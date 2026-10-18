@@ -8,7 +8,6 @@
 
 use super::nodes::{arguments_rewritten, assign, call, key};
 use crate::database_tables::{stored_table, table_store};
-use crate::declarations::word;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
@@ -22,9 +21,8 @@ const REQUEST_WORD: &str = "request";
 const ANY_TYPE: &str = "any";
 pub(crate) const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 const SERVER_WORD: &str = "server";
-/// `header "name" "value"` and `status 418` in a route's body (with_answer_headers)
+/// `header "name" "value"` in a route's body (lib/router.warp)
 const HEADER_WORD: &str = "header";
-const STATUS_WORD: &str = "status";
 /// a hosted page route's answer (answered_page)
 const CONTENT_TYPE_HEADER: &str = "Content-Type";
 const HTML_TYPE: &str = "text/html; charset=utf-8";
@@ -46,11 +44,7 @@ const PAGE_PATH_CALL: &str = "page_path()";
 /// The path a served route was asked at, which binds its parameters
 const REQUEST_PATH: &str = "request.path";
 const PARAMETER_MARK: char = ':';
-/// `$title` in a route is the request's field title (card g_mQ9U): of a get its query, of the other methods its body
-const FIELD_MARK: char = '$';
 const QUERY_METHOD: &str = "get";
-const QUERY_PART: &str = "query";
-const BODY_PART: &str = "body";
 /// The page's path as a main-level variable, which page·navigated sets anew when the page goes to another path
 /// (host-routes.js navigate)
 const PAGE_PATH: &str = "page·path";
@@ -62,8 +56,6 @@ const NAME_DOT: &str = "_dot_";
 /// What a WAGI build (`warp build --wagi`, lib/wagi.warp, which the build uses) ends in: the routes' answer to the request
 const WAGI_ANSWER: &str =
 	"try { wagi_answer(page·submitted(wagi_request())) } catch error { wagi_failed(error.message) }";
-/// A WAGI build's routes set their answer's headers in lib/wagi.warp, not through the host (no host there, only WASI)
-const WAGI_HEADER: &str = "wagi_header";
 
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
@@ -229,11 +221,7 @@ pub fn with_page_routes(program: Node) -> Node {
 			.into_iter()
 			.filter(|(method, _, body)| method == "GET" && !reads_the_request(body))
 			.map(|(_, path, body)| {
-				Node::List(
-					vec![symbol(crate::routes::ROUTE_WORD), path, with_answer_headers(body)],
-					Bracket::None,
-					Separator::Space,
-				)
+				Node::List(vec![symbol(crate::routes::ROUTE_WORD), path, body], Bracket::None, Separator::Space)
 			})
 			.collect()
 	};
@@ -252,7 +240,7 @@ pub fn with_page_routes(program: Node) -> Node {
 }
 
 fn reads_the_request(body: &Node) -> bool {
-	body.mentions_where(|name| name == REQUEST_WORD || name.starts_with(FIELD_MARK))
+	body.mentions_any(&[REQUEST_WORD])
 }
 
 /// A hosted page route answers GET at its path with its page's HTML, rendered by the Worker (cards program-answers,
@@ -552,35 +540,20 @@ fn with_bound_routes(statement: Node) -> Node {
 	}
 }
 
-/// `get "/a/:id" {…} post …` as words, each block with its path's parameters and its `$field`s bound
+/// `get "/a/:id" {…} post …` as words, each block with its path's parameters bound
 fn bound_routes(words: Vec<Node>) -> Vec<Node> {
 	let mut bound = words.clone();
 	let mut index = 0;
 	while index + 2 < bound.len() {
 		match METHODS.contains(&bound[index].drop_meta().name().as_str()) {
 			true => {
-				let part = if bound[index].drop_meta().name() == QUERY_METHOD { QUERY_PART } else { BODY_PART };
-				bound[index + 2] =
-					with_request_fields(with_path_parameters(&bound[index + 1], bound[index + 2].clone()), part);
+				bound[index + 2] = with_path_parameters(&bound[index + 1], bound[index + 2].clone());
 				index += 3;
 			}
 			false => index += 1,
 		}
 	}
 	bound
-}
-
-/// `$title` → `request.body.title` (or `request.query.title`); `$1` stays a positional parameter
-fn with_request_fields(body: Node, part: &str) -> Node {
-	match body {
-		Node::Symbol(ref name) => match name.strip_prefix(FIELD_MARK) {
-			Some(field) if field.starts_with(|first: char| first.is_alphabetic() || first == '_') => {
-				crate::warp_parser::parse_generated(&format!("{REQUEST_WORD}.{part}.{field}"))
-			}
-			_ => body,
-		},
-		other => other.map_children(|child| with_request_fields(child, part)),
-	}
 }
 
 /// The route's block with its path's parameters bound from the request's path, as a page's route binds them from
@@ -724,30 +697,7 @@ fn with_local_routes(program: Node) -> Node {
 fn route_function(name: &str, body: Node) -> Node {
 	let request = key(symbol(REQUEST_WORD), Op::Colon, symbol(ANY_TYPE));
 	let head = call(name, vec![request]);
-	key(head, Op::Define, with_answer_headers(body))
-}
-
-/// In a route's body `header "name" "value"` and `status 418` are response_header calls, which the route's HTTP answer
-/// carries (card web-route-header; `status` is the CGI header Status); `header{…}` stays the markup tag
-fn with_answer_headers(node: Node) -> Node {
-	let setter = match crate::pipeline::compile_mode().for_wagi {
-		true => WAGI_HEADER,
-		false => crate::host::RESPONSE_HEADER,
-	};
-	let is_operand = |item: &Node| !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _));
-	match node.drop_meta() {
-		Node::List(items, Bracket::None | Bracket::Round, _)
-			if items.len() == 3 && word(&items[0]) == HEADER_WORD && items[1..].iter().all(is_operand) =>
-		{
-			call(setter, items[1..].to_vec())
-		}
-		Node::List(items, Bracket::None | Bracket::Round, _)
-			if items.len() == 2 && word(&items[0]) == STATUS_WORD && is_operand(&items[1]) =>
-		{
-			call(setter, vec![text(crate::host::STATUS_HEADER), items[1].clone()])
-		}
-		_ => node.map_children(with_answer_headers),
-	}
+	key(head, Op::Define, body)
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the

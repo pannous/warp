@@ -1,6 +1,7 @@
 //! Suffixes: suffix operators, bang and test words, implicit application
 
 use super::*;
+use crate::warp_parser::context::Context;
 
 /// The operands a braceless call binds in: from the right side of `or` to the right side of `+`; a `*` operand keeps
 /// `h*w int` the typed array `(h*w) int`
@@ -99,7 +100,7 @@ impl WarpParser {
 		argument_bp: u8,
 		max_bp_for_application: u8,
 	) -> Option<Node> {
-		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
+		let in_assignment_context = min_bp <= 60 || self.context.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let lhs_is_callable = match lhs.drop_meta() {
 			Node::Symbol(_) => true,
 			Node::List(_, Bracket::None, _) => true, // Function call from implicit application
@@ -120,7 +121,7 @@ impl WarpParser {
 		// item is no argument (word_begins_item)
 		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp)
 			&& min_bp != argument_bp
-			&& if self.in_for_header { self.word_ends_header() } else { !self.word_begins_item() };
+			&& if self.context.in_for_header { self.word_ends_header() } else { !self.word_begins_item() };
 		let ch = self.current_char();
 		let arg_is_non_identifier =
 			ch.is_numeric()
@@ -135,21 +136,23 @@ impl WarpParser {
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
 		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does
 		let takes_one_argument = lhs_is_defined_function && !self.functions_with_parameters.contains(&lhs.name());
-		if (min_bp == 0 && !takes_one_argument) || min_bp > max_bp_for_application || self.glued_pair_bp == Some(min_bp)
+		if (min_bp == 0 && !takes_one_argument)
+			|| min_bp > max_bp_for_application
+			|| self.context.glued_pair_bp == Some(min_bp)
 		{
 			return None;
 		}
-		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.in_for_header) {
+		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.context.in_for_header) {
 			return None;
 		}
 
 		let start = self.pos;
 		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's; so is a
 		// block after any call's argument in a condition, `if exists profile {…}`
-		let outer_header = self.in_for_header;
-		self.in_for_header = outer_header || !applies_otherwise || self.equals_compares;
-		let arg = self.labelled_argument(argument_bp).unwrap_or_else(|| self.parse_expr(argument_bp));
-		self.in_for_header = outer_header;
+		let in_for_header = self.context.in_for_header || !applies_otherwise || self.context.equals_compares;
+		let arg = self.within(Context { in_for_header, ..self.context }, |parser| {
+			parser.labelled_argument(argument_bp).unwrap_or_else(|| parser.parse_expr(argument_bp))
+		});
 		if arg == Empty && self.pos == start {
 			return None; // an ø or [] written there is the argument: `x = sum []`
 		}

@@ -176,7 +176,7 @@ impl WarpParser {
 			if ch == '\n' {
 				had_newline = true;
 				line_indent = 0; // reset for new line
-			} else if ch == '\t' || (ch == ' ' && self.indent_counts_spaces) {
+			} else if ch == '\t' || (ch == ' ' && self.context.indent_counts_spaces) {
 				line_indent += 1; // tabs count as indent, spaces only inside a space-indented block
 			}
 			self.advance();

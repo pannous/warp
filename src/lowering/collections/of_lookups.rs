@@ -6,15 +6,14 @@
 //! `width of p = 12` is `p.width = 12` (decision setter-calls). The object is one item with its qualifier: `name of people with age > 20` reads the field of
 //! the filtered list. `type of x` is the call `type(x)`, so both spellings answer alike (card type-of-consistency).
 //! `in` and `from` select the same way after a selector word the program does not define (card of-in-chain):
-//! `length of characters in text` is `text.characters.length`; otherwise `x in xs` stays the membership test, and the
-//! walk `print words in t` prints each word.
+//! `length of characters in text` is `text.characters.length`; otherwise `x in xs` stays the membership test.
+//! Dropped (decision sugar-triage): the walk `print words in t` and the unit count `byte count of t`.
 
 use super::nodes::{call, children_rewritten, key, spaced_statement};
-use crate::analyzer::is_counting_property;
 use crate::lowering::comprehensions::{WHERE_KEYWORD, WITHOUT_WORD, WITH_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{FOR_WORD, FROM_WORD, IN_WORD, OF_WORD, PRINT_WORD};
+use crate::words::{FROM_WORD, IN_WORD, OF_WORD};
 
 /// The words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t`
 pub const SELECTOR_WORDS: [&str; 11] = [
@@ -31,10 +30,6 @@ pub const SELECTOR_WORDS: [&str; 11] = [
 	"values",
 ];
 const SELECTING_PREPOSITIONS: [&str; 2] = [IN_WORD, FROM_WORD];
-/// `print all words in t`: the walk's optional word before the selection
-const ALL_WORD: &str = "all";
-/// The loop variable of the walk `print words in t`, numbered fresh
-const WALKED_PART: &str = "walked_part_";
 
 pub fn lower(node: Node) -> Node {
 	let mut has_type_of = false;
@@ -49,9 +44,6 @@ pub fn lower(node: Node) -> Node {
 }
 
 fn rewrite(node: Node, selectors: &[&str]) -> Node {
-	if let Some(walk) = print_walk(&node, selectors) {
-		return walk;
-	}
 	match children_rewritten(as_one_phrase(node), |child| rewrite(child, selectors)) {
 		// a phrase, a call's arguments `str(name of people)`, a block of one statement `{remove b from listeners of t}`
 		Node::List(
@@ -91,37 +83,6 @@ fn as_one_phrase(node: Node) -> Node {
 	}
 }
 
-/// `print words in t`, `print all words in t`: the walk printing each selected part, `for part in t.words {print part}`
-/// (as counting print_walk does for a name no variable has)
-fn print_walk(node: &Node, selectors: &[&str]) -> Option<Node> {
-	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	let [print, phrase] = items.as_slice() else { return None };
-	let Node::List(words, _, _) = phrase.drop_meta() else { return None };
-	let selection = match words.as_slice() {
-		[all, rest @ ..] if all.is_symbol(ALL_WORD) => rest,
-		words => words,
-	};
-	// `print all words in t` arrives as `all (words in t)`
-	let selection = match selection {
-		[grouped] => match grouped.drop_meta() {
-			Node::List(words, Bracket::None, _) => words.as_slice(),
-			_ => selection,
-		},
-		_ => selection,
-	};
-	let [selector, _, value] = selection else { return None };
-	// `print w of p` prints one field: only a selection of parts is walked
-	let selects_parts = selector.symbol_name().is_some_and(|name| selectors.contains(&name));
-	if !print.is_symbol(PRINT_WORD) || !selects_parts || !is_selection(selection, 1, selectors) {
-		return None;
-	}
-	let selected = member_of(rewrite(value.clone(), selectors), selector.clone());
-	let part = Node::Symbol(format!("{WALKED_PART}{}", crate::lowering::nodes::fresh_number()));
-	let body = Node::List(vec![print.clone(), part.clone()], Bracket::Curly, Separator::Space);
-	let words = [Node::Symbol(FOR_WORD.to_string()), part, Node::Symbol(IN_WORD.to_string()), selected, body];
-	Some(Node::List(words.to_vec(), Bracket::None, Separator::Space))
-}
-
 /// `of` after anything but a type head, `in` and `from` after a selector word: `words in t`
 fn is_selection(items: &[Node], at: usize, selectors: &[&str]) -> bool {
 	let before = &items[at - 1];
@@ -142,17 +103,9 @@ fn looked_up(mut items: Vec<Node>, selectors: &[&str]) -> Vec<Node> {
 		items.remove(at);
 		let word = items.remove(at - 1);
 		let before = at.checked_sub(2).and_then(|before| items[before].symbol_name());
-		let unit = before
-			.and_then(crate::analyzer::text_unit)
-			.filter(|_| word.symbol_name().is_some_and(is_counting_property));
-		let (start, member) = match (before, word.drop_meta(), unit) {
-			// `byte count of t`: the count in that unit, `t.bytes`
-			(_, _, Some(unit)) => {
-				items.remove(at - 2);
-				(at - 2, Node::Symbol(unit.to_string()))
-			}
+		let (start, member) = match (before, word.drop_meta()) {
 			// `first 3 of xs`: the word before a value takes it, `xs.first(3)`
-			(Some(head), argument, None) if !matches!(argument, Node::Symbol(_)) => {
+			(Some(head), argument) if !matches!(argument, Node::Symbol(_)) => {
 				let member = call(head, vec![word]);
 				items.remove(at - 2);
 				(at - 2, member)

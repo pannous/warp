@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// A router as plain warp (card compiler-modules, slice serve; notes/server_routes.md "Toward a plain library"):
+// routes are records holding their answer, one dispatcher answers a request. Needs card field-closure-call.
+routes = []
+get(path, answer) := { global routes; routes.add({method: "GET", path: path, answer: answer}) }
+answer_request(request) := {
+	for route in routes { if route.method == request.method and route_matches(route.path, request.path) { return route.answer(request) } }
+	"no route"
+}
+get("/users", (request) => ["Ann", "Bo"])
+get("/hello/:name", (request) => "hi " + route_segment("/hello/:name", request.path, "name"))
+answer_request({method: "GET", path: "/hello/Ann"})

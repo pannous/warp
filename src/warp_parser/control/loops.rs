@@ -1,6 +1,7 @@
 //! Loops: for-in, C-style for, while/until, `n times`
 
 use super::*;
+use crate::warp_parser::context::Context;
 
 /// The words an operand may start counting with: `thrice {…}` is `3 times {…}`
 const COUNT_WORDS: [(&str, i64); 3] = [("once", 1), ("twice", 2), ("thrice", 3)];
@@ -10,9 +11,8 @@ impl WarpParser {
 	/// The iterable of a for header and the word that opens the body: `:`, `do` or none.
 	/// In the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
 	fn for_iterable_and_body_word(&mut self) -> (Node, Option<&'static str>) {
-		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
-		self.in_for_header = outer_header;
+		let header = Context { in_for_header: true, equals_compares: false, ..self.context };
+		let iterable = self.within(header, Self::parse_iterable);
 		self.skip_spaces();
 		let body_word =
 			if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
@@ -323,7 +323,11 @@ impl WarpParser {
 	/// `twice: …` stays a key and `twice{a: 1}`, a block of `key: value` pairs, a tag; a function named so (`def twice`),
 	/// a member (`p.twice`) and a binding of the word in scope keep it, the binding asked loudly
 	pub(crate) fn try_parse_count_word(&mut self) -> Option<Node> {
-		if self.options.data_mode || self.in_data_literal || self.after_function_keyword || self.prev_char() == '.' {
+		if self.options.data_mode
+			|| self.context.in_data_literal
+			|| self.after_function_keyword
+			|| self.prev_char() == '.'
+		{
 			return None;
 		}
 		let (word, count) = COUNT_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word))?;

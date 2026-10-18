@@ -55,14 +55,14 @@ Per form: the form, the sources showing it, why it is left out, how to bring it 
   feature, not text building. Back: port lower_templates in front of lib/compiler/interpolation.warp.
 - Rust Option forms: `if let Some(v) = o { A } else { B }`, `match o { Some(v) => A, None => B }`, `o.unwrap_or(d)`,
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
-  (`if o != ø`, `o ?? d`, `o ?? raise(m)`). Back: port src/lowering/welcoming/rust_options.rs as a pass before the
-  match arms.
+  (`if o != ø`, `o ?? d`, `o ?? raise(m)`). The Rust compiler dropped it too (decision rust-cleanup-drops). Back:
+  src/lowering/welcoming/rust_options.rs from git history, as a pass before the match arms.
 - `set x to 5`, `set width of p to 12` (decision setter-calls: `p.width = 12` with a style hint). Sources:
-  probes/english_setter.warp. Comes back as a library code template, not a pass (card set-set). Back meanwhile: port
-  welcome_forms.rs lower_set_phrases after `a of b`.
+  probes/english_setter.warp. Comes back as a library code template, not a pass (card set-set). The Rust compiler
+  dropped it too (rust-cleanup-drops); its lower_set_phrases is in git history.
 - `print words in t` (the walk `for part in t.words {print part}`) and `byte count of t` (the count in a unit,
-  `t.bytes`) in of_lookups (decision sugar-triage). Sources: none in today's corpus differs. Back: port of_lookups.rs
-  print_walk and the text_unit branch of looked_up.
+  `t.bytes`) in of_lookups (decision sugar-triage). Sources: none in today's corpus differs. The Rust compiler dropped
+  them too (rust-cleanup-drops). Back: of_lookups.rs print_walk and the text_unit branch of looked_up from git history.
 - `(function f).dump` in grouped_receivers: a function reference in parentheses keeps its group. The bridge's plain
   view drops the function-reference mark (an attribute layer), so the twin sees `(f)` and ungroups it when f is a
   loop variable. Sources: probes/joinable_error.warp. Back: keep the function-reference mark in plain views (twins.rs
@@ -78,11 +78,11 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | # | Pass | Lines | Sources changed | Plan |
 |---|------|-------|-----------------|------|
 | 0 | interpolation | 104 | 49 | keep (ported) |
-| 1 | rust_options | 160 | 1 | drop (decided) |
+| 1 | rust_options | 160 | 1 | dropped in both compilers (rust-cleanup-drops) |
 | 2 | match arms | welcome_forms | 15 | keep (ported) |
 | 3 | arrow result types | welcome_forms | 0 | keep (ported, merged into welcome_forms.warp) |
 | 4 | of_lookups | 241 | 22 | keep `a of b` and `in`/`from` after a selector word; drop print walks, unit counts (decided, sugar-triage) |
-| 5 | set phrases | welcome_forms | 1 | drop (decided, card set-set) |
+| 5 | set phrases | welcome_forms | 1 | dropped in both compilers (card set-set, rust-cleanup-drops) |
 | 6 | grouped_receivers | 69 | 1 | keep |
 | 7 | module_properties | 467 | 3 | library (graphics: window.width; decided) |
 | 8 | times_phrases | 57 | 26 | keep (ported) |
@@ -91,9 +91,9 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 11 | conversions | 93 | 0 | keep |
 | 12 | foreign_lines | 78 | 0 | keep |
 | 13 | inline_unions | 30 | 0 | keep |
-| 14 | scoped_handlers | 38 | 1 | drop (only the error for a form dropped earlier; decided) |
+| 14 | scoped_handlers | 38 | 1 | dropped in both compilers (the error for a form dropped earlier; rust-cleanup-drops) |
 | 15 | component_worlds | 285 | 2 | library (wasm build; decided) |
-| 16 | channel_words | 189 | 3 | library (tasks; decided) |
+| 16 | channel_words | 189 | 3 | library (tasks; decided): done, lib/channels.warp rewrite rules (card compiler-modules) |
 | 17, 18, 45 | markup_tags (form routes, html attributes, tags) | 357 | 1, 1, 14 | library (markup), one pass (decided) |
 | 19 | soft_keywords | 239 | 3 | keep |
 | 20 | parameter_patterns | 68 | 2 | keep |

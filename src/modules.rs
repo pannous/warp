@@ -15,6 +15,8 @@ mod std_modules;
 pub use std_modules::*;
 mod std_words_cache;
 use std_words_cache::*;
+mod lowered_modules;
+use lowered_modules::*;
 mod prelude_slices;
 use prelude_slices::*;
 pub mod binaryen;
@@ -43,6 +45,7 @@ use crate::lowering::nodes::with_statements_first;
 use needed_definitions::*;
 mod program_file;
 pub use program_file::*;
+pub mod rewrites;
 mod use_statements;
 pub(crate) use use_statements::*;
 
@@ -67,7 +70,7 @@ pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
 /// `use math` and other native libraries stay in place for the FFI; an unknown name is an error value.
 pub fn resolve(program: Node) -> Node {
-	resolve_in(program, &SEARCH_DIRECTORIES)
+	crate::compiler::phase_times::timed("resolve uses", || resolve_in(program, &SEARCH_DIRECTORIES))
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
@@ -89,15 +92,19 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
-	loader.program_words = program_words(&program);
+	loader.program_words = crate::compiler::phase_times::timed("resolve: program words", || program_words(&program));
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader
 		.resolve(program)
-		.and_then(|program| loader.finish_imports(program))
+		.and_then(|program| {
+			crate::compiler::phase_times::timed("resolve: finish imports", || loader.finish_imports(program))
+		})
 		.and_then(|program| {
 			loader.loading_implicitly = true;
-			let loaded = loader.implicit_std_modules(&program);
+			let loaded = crate::compiler::phase_times::timed("resolve: implicit modules", || {
+				loader.implicit_std_modules(&program)
+			});
 			loader.loading_implicitly = false;
 			loaded.map(|_| program)
 		})
@@ -106,7 +113,11 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 			None => Ok(program),
 		})
 		.map(|program| crate::modules::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
-		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
+		.map(|program| {
+			crate::compiler::phase_times::timed("resolve: needed definitions", || {
+				with_needed_definitions(program, loader.hidden_apart())
+			})
+		});
 	let files = loader.loaded.iter().chain(&loader.included).filter(|path| path.is_file()).cloned().collect();
 	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
@@ -137,6 +148,11 @@ fn modules_used_by(statements: &[Node]) -> Vec<String> {
 }
 
 /// The WebAssembly module a used name finds, when no warp source of that name exists
+/// The file a `use name` finds: a warp module, else a WebAssembly module
+fn module_file(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
+	loader.find(name).or_else(|| loader.find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
+}
+
 fn wasm_module_path(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
 	loader
 		.find(name)
@@ -191,6 +207,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let mut index = 0;
 	while let Some(name) = modules.get(index).cloned() {
 		index += 1;
+		note_lookup(&name, || module_file(&loader, &name));
 		if let Some(module) = wasm_module_path(&loader, &name) {
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);

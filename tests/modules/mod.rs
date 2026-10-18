@@ -15,6 +15,8 @@ mod test_import_words; // card cleanup-closed-lists
 mod test_include;
 mod test_json5; // card json5-parse
 mod test_json_parse_form; // card g_ogQg
+#[cfg(feature = "native")] // the CLI with a cache folder
+mod test_lowered_modules; // card prelude-cache-runs
 mod test_module_cache;
 mod test_module_classes;
 mod test_module_error_file; // card module-error-file
@@ -39,6 +41,7 @@ mod test_packages;
 mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
 mod test_replaced_module_function; // card use-sound-def
+mod test_rewrites; // card compiler-modules
 mod test_runtime_word_lines; // card retire-library-words
 mod test_selective_package; // card import-hides
 mod test_std_aliases;

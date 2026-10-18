@@ -1,6 +1,7 @@
 //! Conditions: if/while heads, statement modifiers `x++ while c`, condition words `x empty`
 
 use super::*;
+use crate::warp_parser::context::Context;
 use crate::words::COUNT_WORD;
 use crate::words::IS_ERROR_WORD;
 
@@ -43,17 +44,12 @@ impl WarpParser {
 	/// (`if area certainly > 10 then`, `while square i < 10`)
 	pub(crate) fn parse_condition(&mut self) -> Node {
 		let condition_bp = Op::If.binding_power().1;
-		let outer = self.branch_bp.replace(condition_bp);
-		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(condition_bp));
-		self.branch_bp = outer;
-		condition
+		let condition = Context { branch_bp: Some(condition_bp), equals_compares: true, ..self.context };
+		self.within(condition, |parser| parser.parse_expr(condition_bp))
 	}
 
 	pub(crate) fn with_equals_comparing<T>(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> T) -> T {
-		let outer = std::mem::replace(&mut self.equals_compares, compares);
-		let node = parse(self);
-		self.equals_compares = outer;
-		node
+		self.within(Context { equals_compares: compares, ..self.context }, parse)
 	}
 
 	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md); `x failed` is `is_error(x)`.

@@ -36,6 +36,7 @@ fn in_stays_membership_elsewhere() {
 
 #[test]
 #[cfg(feature = "native")]
+#[ignore = "dropped: rust-cleanup-drops: the walk print words in t; warp writes for w in words in t: print w"]
 fn printing_a_selection_prints_each_part() {
 	assert!(crate::common::printed("print words in \"ab cd\"").starts_with("ab\ncd\n"));
 	assert!(crate::common::printed("print characters in \"hi\"").starts_with("h\ni\n"));
