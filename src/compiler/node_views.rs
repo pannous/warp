@@ -170,6 +170,8 @@ fn plain(view: Node) -> Node {
 		Node::List(mut items, bracket, separator) => match items.first().and_then(Node::text_value).as_deref() {
 			Some("literal" | "attribute") => plain(items.pop().unwrap_or(Node::Empty)),
 			Some("list") if items.len() == 3 => Node::Empty,
+			// an error and a type are opaque to a pass twin: kept whole, `class P {}` keeps its empty body and attributes
+			Some("type" | "error") => Node::List(items, bracket, separator),
 			Some("char") => {
 				items[0] = Node::text("text");
 				Node::List(items, bracket, separator)
@@ -222,7 +224,8 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		}
 		"error" => Node::Error(Box::new(node(1)?)),
 		"type" => Node::Type { name: Box::new(node(1)?), body: Box::new(node(2)?) },
-		"literal" | "attribute" | "at" => node(parts.len() - 1)?,
+		"attribute" => node(3)?.with_attribute(&text(1)?, node(2)?),
+		"literal" | "at" => node(parts.len() - 1)?,
 		"template" => crate::text::interpolation::template_text(&text(1)?),
 		_ => return Err(unreadable()),
 	})

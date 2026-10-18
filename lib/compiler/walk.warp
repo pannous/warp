@@ -12,10 +12,11 @@ kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
 is_group(n: any) := bracket_of(n) != ø
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
-# (decision empty-group-node); Rust twin: tests/common/twins.rs plain
+# (decision empty-group-node), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
 plain(view: any) := {
 	kind = kind_of(view)
 	if kind == "literal" or kind == "attribute" { return plain(view#(#view)) }
+	if kind == "type" or kind == "error" { return view }
 	if kind == "list" and #view == 3 { return ø }
 	if view is list { return view.map(plain) }
 	view
