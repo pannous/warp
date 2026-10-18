@@ -261,9 +261,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND)]);
 		self.emit_entry_in_braces(func, held);
 		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
-		let (pointer, length) = self.memory_string("");
-		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-		self.emit_call(func, "new_text");
+		self.emit_empty_text(func);
 		self.emit_call(func, reflection::library_ops::LIST_TEXT);
 		func.instruction(&I::End);
 		if shows_definitions {

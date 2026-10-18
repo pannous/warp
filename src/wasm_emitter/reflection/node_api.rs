@@ -437,8 +437,8 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I32And, I::If(BlockType::Empty)]);
 		for (entry, text) in written {
 			Self::emit_list(func, &[I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty)]);
-			self.emit_text_literal(func, text);
-			self.call(func, NEW_TEXT_OF);
+			let literal = self.string_table.literal(text);
+			self.emit_constant_text(func, literal);
 			Self::emit_list(func, &[I::Return, I::End]);
 		}
 		func.instruction(&I::End);
@@ -479,8 +479,8 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalTee(text));
 		self.call(func, coder);
 		Self::emit_list(func, &[I::LocalTee(code), I::I64Const(-1), I::I64Eq, I::If(BlockType::Empty)]);
-		self.emit_text_literal(func, prefix);
-		self.call(func, NEW_TEXT_OF);
+		let literal = self.string_table.literal(prefix);
+		self.emit_constant_text(func, literal);
 		func.instruction(&I::LocalGet(text));
 		self.call(func, TEXT_CONCAT);
 		self.call(func, super::super::text::text_builtins::ERROR_OF);

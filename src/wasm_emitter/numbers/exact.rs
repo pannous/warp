@@ -13,7 +13,6 @@
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
 use super::super::{WasmGcEmitter, NEW_TEXT_OF, TEXT_PIECE};
-use crate::wasm_emitter::layout::BYTE;
 use num_bigint::BigInt;
 use num_traits::One;
 use wasm_encoder::*;
@@ -842,23 +841,21 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(EXACT_TEXT) {
 			return;
 		}
-		self.emit_text_heap_global();
 		let (i64t, i32t, node_ref) = (ValType::I64, ValType::I32, ValType::Ref(self.node_ref(false)));
-		let constant = |s: &mut Self, text: &str| s.memory_string(text);
+		let constant = |s: &mut Self, text: &str| s.string_table.literal(text);
 		let [minus, dot, slash, empty, infinity, negative_infinity, not_a_number] =
 			["-", ".", "/", "", "∞", "-∞", "NaN"].map(|text| constant(self, text));
-		let push_text = |s: &Self, f: &mut Function, (address, length): (u32, u32)| {
-			Self::emit_list(f, &[I::I32Const(address as i32), I::I32Const(length as i32)]);
-			s.call(f, "new_text");
+		let push_text = |s: &Self, f: &mut Function, literal: (u32, u32)| {
+			s.emit_constant_text(f, literal);
 		};
 
 		// int_text(n): sign, then the digits written from the last one back, a chunk of 18 per big division
 		// (card out-fuel), into room for LIMB_DIGITS per limb; the text starts at the first digit written.
-		// locals: negative, digits, address, length, chunk, last (the chunk is the value's top one)
-		let locals = vec![i32t, i32t, i32t, i32t, i64t, i32t];
-		let big_int = self.type_manager.big_int_type;
+		// locals: negative, digits, bytes, length, chunk, last (the chunk is the value's top one)
+		let locals = vec![i32t, i32t, self.text_ref_nullable(), i32t, i64t, i32t];
+		let (big_int, text_type) = (self.type_manager.big_int_type, self.type_manager.text_type);
 		self.runtime_function(INT_TEXT, vec![i64t], vec![node_ref], locals, |s, f| {
-			let (value, negative, digits, address, length, chunk, last) = (0, 1, 2, 3, 4, 5, 6);
+			let (value, negative, digits, bytes, length, chunk, last) = (0, 1, 2, 3, 4, 5, 6);
 			s.is_negative(f, value);
 			Self::emit_list(f, &[I::LocalTee(negative), I::If(BlockType::Empty)]);
 			s.negate_local(f, value);
@@ -868,9 +865,9 @@ impl WasmGcEmitter {
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::StructGet { struct_type_index: big_int, field_index: BIG_INT_LIMBS }, I::ArrayLen,
-				I::I32Const(LIMB_DIGITS), I::I32Mul, I::I32Const(2), I::I32Add, I::LocalTee(digits), I::LocalSet(length),
+				I::I32Const(LIMB_DIGITS), I::I32Mul, I::I32Const(2), I::I32Add, I::LocalTee(digits), I::LocalTee(length),
+				I::ArrayNewDefault(text_type), I::LocalSet(bytes),
 			]);
-			s.emit_text_allocation(f, length, address);
 			Self::emit_list(f, &[I::Loop(BlockType::Empty), I::LocalGet(value), I::I64Const(CHUNK)]);
 			s.call(f, "int_cmp");
 			#[rustfmt::skip]
@@ -892,9 +889,9 @@ impl WasmGcEmitter {
 					I::LocalSet(value),
 				I::End,
 				I::Loop(BlockType::Empty),
-					I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address), I::I32Add,
+					I::LocalGet(bytes), I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits),
 					I::LocalGet(chunk), I::I64Const(DECIMAL_BASE), I::I64RemU, I::I32WrapI64,
-					I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE),
+					I::I32Const(b'0' as i32), I::I32Add, I::ArraySet(text_type),
 					I::LocalGet(chunk), I::I64Const(DECIMAL_BASE), I::I64DivU, I::LocalTee(chunk),
 					// the top chunk stops at 0, a lower one at its leading 1
 					I::I64Const(1), I::LocalGet(last), I::I64ExtendI32U, I::I64Sub, I::I64GtU, I::BrIf(0),
@@ -902,13 +899,11 @@ impl WasmGcEmitter {
 				I::LocalGet(last), I::I32Eqz, I::BrIf(0),
 				I::End,
 				I::LocalGet(negative), I::If(BlockType::Empty),
-					I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address), I::I32Add,
-					I::I32Const(b'-' as i32), I::I32Store8(BYTE),
+					I::LocalGet(bytes), I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits),
+					I::I32Const(b'-' as i32), I::ArraySet(text_type),
 				I::End,
-				I::LocalGet(address), I::LocalGet(digits), I::I32Add,
-				I::LocalGet(length), I::LocalGet(digits), I::I32Sub,
 			]);
-			s.call(f, "new_text");
+			s.emit_text_piece(f, (bytes, digits, length));
 		});
 
 		// exact_text(x); locals: numerator, denominator, rest, scale, fraction digits

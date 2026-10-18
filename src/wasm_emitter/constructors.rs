@@ -108,6 +108,8 @@ pub const TEXT_BYTES_JOIN: &str = "text_bytes_join";
 pub const TEXT_FLAT: &str = "text_flat";
 /// text_literal(offset, length) -> $Text: a literal of the literal segment
 pub const TEXT_LITERAL: &str = "text_literal";
+/// constant_text(offset, length) -> Node: a Text node of a literal of the literal segment, one call per constant
+pub const CONSTANT_TEXT: &str = "constant_text";
 /// text_piece(bytes, start, length) -> $Text: a copy of a stretch of bytes
 pub const TEXT_PIECE: &str = "text_piece";
 /// text_bytes_equal($Text, $Text) -> i32
@@ -161,6 +163,11 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 	emitter.emit_node_constructor("new_symbol", Kind::Symbol, int_pair(), Plain, in_memory());
 	emitter.emit_node_constructor(NEW_TEXT_OF, Kind::Text, vec![text_ref], Plain, vec![LocalGet(0), no_value()]);
 	emitter.emit_node_constructor(NEW_SYMBOL_OF, Kind::Symbol, vec![text_ref], Plain, vec![LocalGet(0), no_value()]);
+	emitter.runtime_function(CONSTANT_TEXT, int_pair(), vec![node.clone()], vec![], |s, f| {
+		WasmGcEmitter::emit_list(f, &[LocalGet(0), LocalGet(1)]);
+		s.call(f, TEXT_LITERAL);
+		s.call(f, NEW_TEXT_OF);
+	});
 	emitter.emit_node_constructor(
 		"new_key",
 		Kind::Key,

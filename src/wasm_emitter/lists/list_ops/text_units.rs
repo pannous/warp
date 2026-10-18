@@ -668,9 +668,50 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_text_piece(&self, func: &mut Function, (bytes, start, stop): (u32, u32, u32)) {
 		Self::emit_list(
 			func,
-			&[I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub],
+			&[
+				I::LocalGet(bytes),
+				I::RefAsNonNull,
+				I::LocalGet(start),
+				I::LocalGet(stop),
+				I::LocalGet(start),
+				I::I32Sub,
+			],
 		);
 		self.call(func, TEXT_PIECE);
+		self.call(func, NEW_TEXT_OF);
+	}
+
+	/// Push a new Text node of the first `length` bytes (a local) of the $Text in local `bytes`
+	pub(in crate::wasm_emitter) fn emit_text_prefix(&self, func: &mut Function, bytes: u32, length: u32) {
+		Self::emit_list(func, &[I::LocalGet(bytes), I::RefAsNonNull, I32Const(0), I::LocalGet(length)]);
+		self.call(func, TEXT_PIECE);
+		self.call(func, NEW_TEXT_OF);
+	}
+
+	/// Write the literal at (offset, length) of the literal segment into the $Text in local `bytes` at index local
+	/// `position`; the position stays
+	pub(in crate::wasm_emitter) fn emit_literal_into(
+		&self,
+		func: &mut Function,
+		(bytes, position): (u32, u32),
+		(offset, length): (u32, u32),
+	) {
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(bytes), I::LocalGet(position), I32Const(offset as i32), I32Const(length as i32),
+			I::ArrayInitData { array_type_index: self.type_manager.text_type, array_data_index: TEXT_SEGMENT },
+		]);
+	}
+
+	/// Push a new Text node of the literal at (offset, length) of the literal segment
+	pub(in crate::wasm_emitter) fn emit_constant_text(&self, func: &mut Function, (offset, length): (u32, u32)) {
+		Self::emit_list(func, &[I32Const(offset as i32), I32Const(length as i32)]);
+		self.call(func, CONSTANT_TEXT);
+	}
+
+	/// Push a new empty Text node
+	pub(in crate::wasm_emitter) fn emit_empty_text(&self, func: &mut Function) {
+		Self::emit_list(func, &[I32Const(0), I::ArrayNewDefault(self.type_manager.text_type)]);
 		self.call(func, NEW_TEXT_OF);
 	}
 

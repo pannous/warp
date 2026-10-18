@@ -7,8 +7,8 @@ use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMA
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::wasm_emitter::lists::list_dispatch::Slot;
 use crate::wasm_emitter::{
-	WasmGcEmitter, NEW_BOOL, NEW_TEXT_OF, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY,
-	TEXT_LITERAL, TEXT_PIECE, TEXT_SEGMENT, VALUES_EQUAL,
+	WasmGcEmitter, CONSTANT_TEXT, NEW_BOOL, NEW_TEXT_OF, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT,
+	TEXT_FROM_MEMORY, TEXT_LITERAL, TEXT_PIECE, TEXT_SEGMENT, VALUES_EQUAL,
 };
 use crate::words::MAP_WORD;
 use wasm_encoder::*;

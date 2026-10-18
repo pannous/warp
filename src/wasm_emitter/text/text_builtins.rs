@@ -513,10 +513,9 @@ impl WasmGcEmitter {
 	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
 		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
 		let node_type = self.type_manager.node_type;
-		let (pointer, length) = self.memory_string("");
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
-		self.emit_structure_as_literal(func, held, &STRUCTURE_KINDS, (pointer, length));
+		self.emit_structure_as_literal(func, held, &STRUCTURE_KINDS);
 		self.emit_field(func, held, 0);
 		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 		Self::emit_list(func, &[I::If(BlockType::Result(node_ref))]);
@@ -528,28 +527,20 @@ impl WasmGcEmitter {
 		]);
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
-			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::I32Const(pointer as i32),
-			I::I32Const(length as i32),
+			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
 		]);
-		self.emit_call(func, "new_text");
+		self.emit_empty_text(func);
 		self.emit_call(func, super::super::reflection::library_ops::LIST_JOIN);
 		func.instruction(&I::End);
 	}
 
 	/// A value of one of `kinds` made at run time (parsed code) in Node local `local` becomes its literal text, to join
-	/// a text: `"x " + parse(t)` (card print-parse); only in a program that parses code. `empty`: the allocated empty text, the separator of that one-item list
-	pub(in crate::wasm_emitter) fn emit_structure_as_literal(
-		&self,
-		func: &mut Function,
-		local: u32,
-		kinds: &[Kind],
-		empty: (u32, u32),
-	) {
+	/// a text: `"x " + parse(t)` (card print-parse); only in a program that parses code
+	pub(in crate::wasm_emitter) fn emit_structure_as_literal(&self, func: &mut Function, local: u32, kinds: &[Kind]) {
 		if !self.parses_code {
 			return;
 		}
 		let node_type = self.type_manager.node_type;
-		let (pointer, length) = empty;
 		for (index, kind) in kinds.iter().enumerate() {
 			self.emit_field(func, local, 0);
 			Self::emit_kind_test(func, *kind as i64, I::I64Eq);
@@ -568,10 +559,9 @@ impl WasmGcEmitter {
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
 				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(local),
-				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::I32Const(pointer as i32),
-				I::I32Const(length as i32),
+				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
 		]);
-		self.call(func, "new_text");
+		self.emit_empty_text(func);
 		self.call(func, super::super::reflection::library_ops::LIST_TEXT);
 		Self::emit_list(func, &[I::LocalSet(local), I::End]);
 	}
@@ -629,15 +619,11 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let (placeholder, _) = self.memory_string(" ");
+		let placeholder = self.string_table.literal(" ");
 		self.runtime_function(TEXT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
 			s.emit_field(f, 0, 0);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
-					I::I32Const(placeholder as i32), I::I32Const(1),
-			]);
-			s.call(f, "new_text");
+			Self::emit_list(f, &[I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Result(node_ref))]);
+			s.emit_constant_text(f, placeholder);
 			f.instruction(&I::I64Const(1));
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::I31), I::I31GetU, I::I64ExtendI32U]);

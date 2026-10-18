@@ -20,10 +20,11 @@ pub(crate) use host::wasi_emitter::{OUTPUT_CALLS, OUTPUT_WORDS};
 pub(crate) use lists::list_sharing::reads_collection;
 pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
-pub use constructors::{NEW_BOOL, NEW_SYMBOL_OF, NEW_TEXT_OF, NEW_TYPE};
 pub(crate) use constructors::{
-	TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_LITERAL, TEXT_PIECE,
+	CONSTANT_TEXT, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_LITERAL,
+	TEXT_PIECE,
 };
+pub use constructors::{NEW_BOOL, NEW_SYMBOL_OF, NEW_TEXT_OF, NEW_TYPE};
 pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
 mod config;
 mod function_builder;
@@ -333,8 +334,9 @@ impl WasmGcEmitter {
 
 	/// The Text node of the literal `s`
 	fn emit_text_node(&mut self, func: &mut Function, s: &str) {
-		self.emit_text_literal(func, s);
-		self.emit_call(func, NEW_TEXT_OF);
+		let (offset, length) = self.string_table.literal(s);
+		Self::emit_list(func, &[I::I32Const(offset as i32), I::I32Const(length as i32)]);
+		self.emit_call(func, CONSTANT_TEXT);
 	}
 
 	/// The Symbol node of the literal `s`

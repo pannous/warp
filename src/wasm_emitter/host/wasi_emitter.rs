@@ -213,8 +213,7 @@ impl WasmGcEmitter {
 		}
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let (empty, _) = self.memory_string("");
-		let newline = self.memory_string(PRINT_TERMINATOR);
+		let newline = self.string_table.literal(PRINT_TERMINATOR);
 		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (value, text) = (0, 1);
 			let write =
@@ -232,17 +231,14 @@ impl WasmGcEmitter {
 			// [x] or [x, "\n"] joined: a printed line is one write, so lines of concurrent tasks do not interleave
 			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value)]);
 			if ends_line {
-				Self::emit_list(
-					f,
-					&[I::I64Const(SQUARE_LIST_KIND), I::I32Const(newline.0 as i32), I::I32Const(newline.1 as i32)],
-				);
-				s.call(f, "new_text");
+				f.instruction(&I::I64Const(SQUARE_LIST_KIND));
+				s.emit_constant_text(f, newline);
 				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 			} else {
 				f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
 			}
-			Self::emit_list(f, &[I::StructNew(node_type), I::I32Const(empty as i32), I::I32Const(0)]);
-			s.call(f, "new_text");
+			f.instruction(&I::StructNew(node_type));
+			s.emit_empty_text(f);
 			s.call(f, "list_join");
 			f.instruction(&I::LocalSet(text));
 			write(f, &|f| s.emit_text_field(f, text, 0), &|f| s.emit_text_field(f, text, 1));
