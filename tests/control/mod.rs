@@ -227,6 +227,7 @@ mod test_task_list_literal;
 mod test_task_name_scope;
 mod test_task_parameter_shadows;
 mod test_task_pool;
+mod test_task_returning_function;
 mod test_task_signals;
 mod test_task_values;
 mod test_tasks;

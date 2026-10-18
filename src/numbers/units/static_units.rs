@@ -1101,10 +1101,9 @@ impl Inference {
 				if !index_signature.is_empty() {
 					return Err(Stop::Unsupported);
 				}
-				// an item of a single quantity, which has none: a branch not taken (lib's is_signal of play(440Hz, 1s)
-				// reads tone#1 of a list only), else an error at run time
-				let element = if signature.is_list() { signature.element() } else { Signature::plain() };
-				Ok((Node::Key(Box::new(list), Op::Hash, Box::new(index)), element))
+				// an item of a single quantity, which has none, its units: a branch not taken (lib's is_signal of
+				// play(440Hz, 1s) reads tone#1 of a list only), else an error at run time
+				Ok((Node::Key(Box::new(list), Op::Hash, Box::new(index)), signature.element()))
 			}
 			// `√a`: the powers halve, an odd power has no root
 			Node::Key(nothing, Op::Sqrt, value) if matches!(nothing.drop_meta(), Node::Empty) => {
