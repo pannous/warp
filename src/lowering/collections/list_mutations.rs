@@ -9,8 +9,6 @@ use crate::words::{AT_WORD, DELETE_WORD, POP_WORD};
 
 /// Methods that append one element: `x.add(v)` is `x += [v]`, in place
 const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
-/// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place (wasm_emitter list_ops emit_list_drop_last)
-pub const LIST_DROP_LAST: &str = "list_drop_last";
 /// Pseudo-call `list_become(xs, ys)`: xs takes the items of the fresh list ys in place, so every holder of xs sees them
 /// (`xs.pop(i)`, `xs.clear()`; wasm_emitter list_ops emit_list_become, card aliased-list)
 pub const LIST_BECOME: &str = "list_become";
@@ -75,7 +73,7 @@ pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	match called_on_place(list, call)? {
 		(POP_WORD, []) => {
 			let template = format!(
-				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"
+				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_BECOME}({POP_PLACE}, {POP_PLACE}[0:count({POP_PLACE}) - 1]); {POP_TEMPORARY})"
 			);
 			Some(super::nodes::filled(&template, [(POP_PLACE, list.clone())]))
 		}

@@ -117,9 +117,11 @@ key_text(op: any, left: any, right: any, view: any) := {
 	attribute_prefix(right) + left_side(left, op) + op + gap + written(right, no)
 }
 
-// the left side of op: a key of `:` stays bare (`name: 1`), a text or character operand keeps its quotes (`"ab"+x`)
+// the left side of op: a key of `:` stays bare (`name: 1`), a text, template or character operand keeps its quotes
+// (`"ab"+x`, `"n is ${n}"==t`)
 left_side(left: any, op: any) := if op == ":" then shown(left) else operand_text(left)
-operand_text(left: any) := if kind(bare(left)) == "text" or kind(bare(left)) == "char" then serialize(left) else shown(left)
+operand_text(left: any) := if QUOTED_OPERANDS.contains(kind(bare(left))) then serialize(left) else shown(left)
+QUOTED_OPERANDS = ["text", "template", "char"]
 
 // a node as Rust's Display shows it: texts and symbols bare, list items with their separator and a space
 shown(view: any) := {

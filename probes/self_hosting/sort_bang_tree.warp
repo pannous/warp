@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+// parser.warp's tree of `sort xs!` (card suite-sort-bang: self-hosted "sort needs a function, got not ø"): no `!`
+// suffix yet, a stray `["key" "not" ø ø]` item (notes/self_hosting_dropped.md)
+use "lib/compiler/parser.warp"
+print tree("xs = [3 1 2]; sort xs!; xs#1")
