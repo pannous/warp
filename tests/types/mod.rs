@@ -153,6 +153,7 @@ mod test_struct_instances;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
 mod test_sum_types;
+mod test_symbol_parameters; // card symbol-parameters
 mod test_symbolism_object; // card symbolism-object
 mod test_tag_entries; // decision markup-plain-library
 mod test_tagged_objects;
