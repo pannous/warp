@@ -412,37 +412,37 @@ pub(crate) fn is_global_declaration(statement: &Node) -> bool {
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
 pub(crate) fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Node> {
-	definitions
-		.into_iter()
-		.map(|definition| {
-			names
-				.iter()
-				.fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))
-		})
-		.collect()
+	let renames = shadowed_renames(names.iter().map(String::as_str));
+	definitions.into_iter().map(|definition| renamed_words(definition, &renames)).collect()
 }
 
-/// `from` as a word renamed `to`; a field `x.from` and a map's key `{from: …}` keep their name (card map-key)
-pub(crate) fn renamed_word(node: Node, from: &str, to: &str) -> Node {
+/// Each word a key of `renames` renamed its value, in one walk; a field `x.from` and a map's key `{from: …}` keep their
+/// name (card map-key)
+pub(crate) fn renamed_words(node: Node, renames: &HashMap<String, String>) -> Node {
 	match node {
-		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
-		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_word(*receiver, from, to)), Op::Dot, field),
+		Node::Symbol(name) => Node::Symbol(renames.get(&name).cloned().unwrap_or(name)),
+		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_words(*receiver, renames)), Op::Dot, field),
 		Node::List(items, Bracket::Curly, separator) => Node::List(
-			items.into_iter().map(|item| renamed_entry_value(item, from, to)).collect(),
+			items.into_iter().map(|item| renamed_entry_value(item, renames)).collect(),
 			Bracket::Curly,
 			separator,
 		),
-		other => other.map_children(|child| renamed_word(child, from, to)),
+		other => other.map_children(|child| renamed_words(child, renames)),
 	}
 }
 
 /// A map entry `from: value` with only its value renamed; any other item as a whole
-fn renamed_entry_value(item: Node, from: &str, to: &str) -> Node {
+fn renamed_entry_value(item: Node, renames: &HashMap<String, String>) -> Node {
 	match item {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_entry_value(*node, from, to)), data },
+		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_entry_value(*node, renames)), data },
 		Node::Key(name, Op::Colon, value) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-			Node::Key(name, Op::Colon, Box::new(renamed_word(*value, from, to)))
+			Node::Key(name, Op::Colon, Box::new(renamed_words(*value, renames)))
 		}
-		other => renamed_word(other, from, to),
+		other => renamed_words(other, renames),
 	}
+}
+
+/// `names` mapped to `lib·name` (SHADOWED_WORD_PREFIX), for renamed_words
+pub(crate) fn shadowed_renames<'a>(names: impl IntoIterator<Item = &'a str>) -> HashMap<String, String> {
+	names.into_iter().map(|name| (name.to_string(), format!("{SHADOWED_WORD_PREFIX}{name}"))).collect()
 }

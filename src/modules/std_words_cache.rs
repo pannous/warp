@@ -73,20 +73,24 @@ pub(super) fn keep_text(extension: &str, text: &str) {
 #[cfg(not(feature = "native"))]
 pub(super) fn keep_text(_: &str, _: &str) {}
 
-/// The sources the words come from and the binary whose parser read them (its path, size and time)
+/// The sources the words come from and the binary whose parser read them (its path, size and time), hashed once per run
 #[cfg(feature = "native")]
 fn words_key() -> Option<String> {
 	use sha2::{Digest, Sha256};
-	let mut hasher = Sha256::new();
-	hasher.update(binary_stamp()?);
-	STD_MODULES.iter().for_each(|(_, source)| hasher.update(source));
-	hasher.update(std_module(PRELUDE_MODULE).unwrap_or_default());
-	Some(crate::extensions::hex_text(&hasher.finalize()))
+	static KEY: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+	KEY.get_or_init(|| {
+		let mut hasher = Sha256::new();
+		hasher.update(binary_stamp()?);
+		STD_MODULES.iter().for_each(|(_, source)| hasher.update(source));
+		hasher.update(std_module(PRELUDE_MODULE).unwrap_or_default());
+		Some(crate::extensions::hex_text(&hasher.finalize()))
+	})
+	.clone()
 }
 
 /// The running warp binary: its path, size and time
 #[cfg(feature = "native")]
-pub(super) fn binary_stamp() -> Option<String> {
+pub(crate) fn binary_stamp() -> Option<String> {
 	let binary = std::env::current_exe().ok()?;
 	let metadata = std::fs::metadata(&binary).ok()?;
 	Some(format!("{}\n{}\n{:?}\n", binary.display(), metadata.len(), metadata.modified().ok()?))

@@ -526,7 +526,9 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(crate::numbers::units::static_units::with_answer_units(answer));
 	}
 	let node = without_located_errors(crate::compiler::phase_times::timed("meaning passes", || {
-		run_passes(node, MEANING_PASSES)
+		MEANING_PASSES.iter().enumerate().fold(node, |node, (index, pass)| {
+			crate::compiler::phase_times::timed_as(|| format!("meaning pass {index}"), || pass(node))
+		})
 	}))?;
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
