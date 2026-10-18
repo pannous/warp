@@ -438,8 +438,6 @@ fn polynomial(node: &Node, parameters: &[String]) -> Option<Polynomial> {
 		Node::List(items, Bracket::Round | Bracket::Curly | Bracket::None, _) if items.len() == 1 => of(&items[0]),
 		Node::Key(left, op, right) => match (left.drop_meta(), op, right.drop_meta()) {
 			(Node::Empty, Op::Neg, _) => Some(of(right)?.neg()),
-			(_, Op::Square, Node::Empty) => of(left)?.pow(2),
-			(_, Op::Cube, Node::Empty) => of(left)?.pow(3),
 			_ => {
 				let (a, b) = (of(left)?, of(right)?);
 				match op {

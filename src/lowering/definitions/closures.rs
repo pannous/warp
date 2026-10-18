@@ -319,6 +319,12 @@ pub(crate) fn captured_variables_of(program: &Node) -> HashSet<String> {
 	variables
 }
 
+/// `match subject {…}` as parsed: `match` and the phrase of its subject and arms
+fn is_match_phrase(items: &[Node]) -> bool {
+	matches!(items, [word, phrase] if word.drop_meta() == &Node::Symbol(crate::words::MATCH_WORD.into())
+		&& matches!(phrase.drop_meta(), Node::List(_, Bracket::None, Separator::Space)))
+}
+
 /// `for variable in list {…}`: the variable and the list
 fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
 	let Node::List(items, _, _) = node else { return None };
@@ -858,6 +864,11 @@ impl Lifting {
 				}
 				None => children_rewritten(Node::Key(receiver, Op::Dot, call), |child| self.walk(child, bound)),
 			},
+			// `match view { … }`: the subject before the arms block is no braceless call of a variable named view
+			Node::List(items, bracket, separator) if is_match_phrase(&items) => {
+				let items = items.into_iter().map(|item| children_rewritten(item, |child| self.walk(child, bound)));
+				Node::List(items.collect(), bracket, separator)
+			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.walk(item, bound)).collect();
 				self.called_value(items, bracket, separator, bound)

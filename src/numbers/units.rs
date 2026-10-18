@@ -15,7 +15,7 @@ pub use quantity_arithmetic::*;
 
 pub mod static_units;
 
-use crate::extensions::reals::Rational;
+use crate::extensions::reals::{superscript, Rational};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::fmt;
@@ -496,13 +496,11 @@ fn with_written_amount(node: Node) -> Node {
 				_ => Node::List(items, Bracket::None, Separator::Space),
 			}
 		}
-		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing)
-			if nothing.is_empty_node() && powered_conversion(&conversion, op).is_some() =>
-		{
+		Node::Key(conversion, Op::Pow, exponent) if powered_conversion(&conversion, &exponent).is_some() => {
 			let Node::Key(quantity, Op::As, unit) = conversion.drop_meta().clone() else {
 				unreachable!("a powered conversion is an `as`")
 			};
-			Node::Key(quantity, Op::As, Box::new(Node::Key(unit, op, nothing)))
+			Node::Key(quantity, Op::As, Box::new(Node::Key(unit, Op::Pow, exponent)))
 		}
 		other => other,
 	}
@@ -738,7 +736,9 @@ fn unit_literal(node: &Node) -> Option<(Node, String)> {
 fn unit_text(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) if is_unit(name) => Some(name.clone()),
-		Node::Key(base, power @ (Op::Square | Op::Cube), _) => Some(format!("{}{power}", unit_text(base)?)),
+		Node::Key(base, Op::Pow, exponent) => {
+			Some(format!("{}{}", unit_text(base)?, superscript(i64::from(whole_exponent(exponent)?))))
+		}
 		_ => None,
 	}
 }

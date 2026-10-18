@@ -1,7 +1,7 @@
 //! The basic text and list words (`upper`, `first`, `sum`, `split` …) in their three spellings: `x.word`, `x.word(args)`,
 //! `word(x, args)` and `word x args` all become the call `word(x, args)`.
 //! Words that need no runtime function are expanded to source here (`first`, `last`, `sum`); the others are calls that the
-//! emitter resolves (`RUNTIME_WORDS`). A user function or variable of the same name wins.
+//! emitter resolves (lib/prelude.warp's `from warp` lines). A user function or variable of the same name wins.
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
@@ -25,9 +25,7 @@ use crate::words::IN_WORD;
 use crate::words::LIST_WORD;
 use crate::words::LOG_WORD;
 use crate::words::NUMBER_WORD;
-use crate::words::ORD_WORD;
-use crate::words::SPLIT_WORD;
-use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
+use crate::words::{MAP_KEYS, RAISE_WORD, SUM_WORD};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -74,101 +72,30 @@ const COUNT_PART: &str = "count_of";
 /// lib/prelude.warp's byte list of a text, `t.bytes`
 pub(crate) const BYTE_LIST: &str = "bytes";
 
-/// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 38] = [
-	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
-	// Python's tuple(xs) (card python-stdlib)
-	(LIST_WORD, &["tuple"]),
-	(MAP_KEYS, &["keys"]),
-	(MAP_VALUES, &["values"]),
-	(MAP_ENTRIES, &[]),
-	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
-	(MAP_GET_OR, &["get"]),
-	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
-	(COLLECTION_POSITION, &["index_of"]),
-	// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too
-	// decision text-unit-plurals: `t.graphemes`, `t.codepoints` are the lists
-	(CHARS_WORD, &["characters", "glyphs", "graphemes"]),
-	(CODE_POINT_LIST, &["codepoints"]),
-	("upper", &["uppercase"]),
-	("lower", &["lowercase"]),
-	// the text builtin trim (text_builtins.rs), Python's strip
-	("trim", &["strip"]),
-	("reverse", &["reversed"]),
-	("sort", &["sorted"]),
-	("split", &[]),
-	("join", &[]),
-	("first", &[]),
-	("last", &[]),
-	(SLICE, &[]),
-	(COPY_WORD, &["clone"]),
-	("replace", &[]),
-	(ORD_WORD, &["ordinal", CODEPOINT]),
-	(IS_DIGIT, &["isdigit"]),
-	("mean", &["average"]),
-	(IS_ALPHA, &["is_letter", "isalpha"]),
-	("is_alphanumeric", &["is_alnum", "isalnum"]),
-	("is_space", &["is_whitespace", "isspace"]),
-	("nearest", &[]),
-	// lib/prelude.warp's digits in a base up to 36 and back
-	("to_base", &[]),
-	("from_base", &[]),
-	// lib/prelude.warp's Euclidean length of a list, a number's absolute value (decision S3)
-	("norm", &[]),
-	("magnitude", &[]),
-	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
-	(DICT_WORD, &[]),
-	(FROMKEYS, &[]),
-	// lib/prelude.warp's count of a part of a text (`count "an" in t` calls it too)
-	(COUNT_PART, &[]),
-	(BYTE_LIST, &[]),
-	(crate::words::UNWRAP, &[]),
-];
+/// The library's words besides the runtime, expanded and prelude words: the text builtins warning and trim, the type
+/// word list and copy; their other spellings are lib/prelude.warp's alias lines
+const OTHER_LIBRARY_WORDS: [&str; 4] =
+	[crate::wasm_emitter::text::text_builtins::WARNING, LIST_WORD, "trim", COPY_WORD];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/lists/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
 /// `t.chars`: the list of a text's characters, a grapheme cluster each (`char` is short for character)
 pub const CHARS_WORD: &str = "chars";
 /// The list of a text's code points, which `for codepoints in t` and `for each codepoint in t` walk
-pub const CODE_POINT_LIST: &str = "codepoint·list";
+pub const CODE_POINT_LIST: &str = "code_point_list";
 /// The runtime functions behind them: text_graphemes(text), the list of its characters; text_chars(text), of its code points
 pub const TEXT_GRAPHEMES: &str = "text_graphemes";
 pub const TEXT_CODE_POINTS: &str = "text_chars";
 
-/// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 21] = [
-	(crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT, 0),
-	(ORD_WORD, 1),
-	("upper", 1),
-	("lower", 1),
-	("reverse", 1),
-	("sort", 1),
-	("split", 2),
-	("join", 2),
-	(CHARS_WORD, 1),
-	(CODE_POINT_LIST, 1),
-	(FIELD_WITH, 3),
-	(MAP_KEYS, 1),
-	(MAP_VALUES, 1),
-	(MAP_ENTRIES, 1),
-	(COLLECTION_CONTAINS, 2),
-	(COLLECTION_POSITION, 2),
-	(MAP_GET_OR, 3),
-	(SLICE, 3),
-	(MAP_WITHOUT, 2),
-	(INSTANCE_COPY, 2),
-	(crate::one_entry_maps::MAP_OF_ENTRY, 1),
-];
-/// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
-/// `s.split` splits at spaces (left_out_argument)
-const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT_WORD, 1)];
-const SPLIT_SEPARATOR: &str = " ";
-/// What an optional argument left out is: the space `s.split` splits at, else ø
-fn left_out_argument(word: &str) -> Node {
-	match word {
-		SPLIT_WORD => text(SPLIT_SEPARATOR),
-		_ => Node::Empty,
-	}
+/// A word the emitter implements as a runtime function: its `from warp` line in lib/prelude.warp
+fn runtime_word(name: &str) -> Option<&'static crate::ffi::ForeignLine<'static>> {
+	crate::ffi::runtime_word_lines().iter().find(|line| line.name == name)
+}
+
+/// The argument at `index` a call leaves out: its parameter's default (the space `s.split` splits at), else ø
+fn left_out_argument(word: &str, index: usize) -> Node {
+	let default = runtime_word(word).and_then(|line| line.defaults().nth(index).flatten());
+	default.map_or(Node::Empty, |default| crate::warp_parser::parse(default).drop_meta().clone())
 }
 
 /// The bases with an exact libm logarithm: `log(1000, 10)` is log10(1000) = 3, where ln(1000)/ln(10) is 2.9999999999999996
@@ -234,7 +161,6 @@ pub(crate) fn expanded_word_definition(word: &str) -> Option<String> {
 	let parameters: String = std::iter::once(TEMPORARY.to_string()).chain(after_receiver).collect();
 	Some(format!("{name}({parameters}) := {template}"))
 }
-const IS_DIGIT: &str = "is_digit";
 const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
@@ -254,11 +180,11 @@ const ARITY_VARIANTS: [(&str, usize, &str); 5] = [
 ];
 const AS_LIST: &str = "as_list";
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
-/// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
+/// and popped_rest, `x.clear()` to cleared, `x.insert(v, at: i)` to inserted (list_mutations removed_key,
+/// cleared_collection, lowered_insert)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
-const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
-	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
-const IS_ALPHA: &str = "is_alpha";
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 4] =
+	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"]), ("insert", &["inserted"])];
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand";
@@ -272,28 +198,17 @@ const WORD_BASE: &str = "word";
 const SAFE_PREFIX: &str = "safe_tmp_";
 const SAFE_BASE: &str = "safe";
 
-/// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 5] =
-	["upper", "lower", "trim", "join", crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT];
-const LIST_RESULT_WORDS: [&str; 9] = [
-	CHARS_WORD,
-	CODE_POINT_LIST,
-	"sort",
-	"split",
-	MAP_KEYS,
-	MAP_VALUES,
-	MAP_ENTRIES,
-	MAP_WITHOUT,
-	crate::wasm_emitter::lists::list_ops::LIST_EXTEND,
-];
-
+/// A library word's result when it is always a text or a list: its signature's (upper, split, map_keys), a text
+/// builtin's (trim), list_extend's (`xs + ys` of lists)
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
 	let word = canonical_spelling(word);
-	if TEXT_RESULT_WORDS.contains(&word) {
-		Some(Kind::Text)
-	} else {
-		LIST_RESULT_WORDS.contains(&word).then_some(Kind::List)
+	match runtime_word(word).map(|line| line.result) {
+		Some("text") => Some(Kind::Text),
+		Some(result) if result.starts_with(LIST_WORD) => Some(Kind::List),
+		Some(_) => None,
+		None if word == crate::wasm_emitter::lists::list_ops::LIST_EXTEND => Some(Kind::List),
+		None => crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, 1).filter(|kind| *kind == Kind::Text),
 	}
 }
 
@@ -309,7 +224,7 @@ pub fn is_field_update_of(name: &str, value: &Node) -> bool {
 }
 
 pub fn is_runtime_word(name: &str) -> bool {
-	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
+	runtime_word(name).is_some()
 }
 
 /// A word of the library, under any of its spellings: `codepoint(c)` calls it, it is no type constructor
@@ -357,7 +272,7 @@ pub fn is_one_value_function(name: &str) -> bool {
 }
 
 fn fewest_arguments(word: &str) -> usize {
-	let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
+	let optional = runtime_word(word).map_or(0, |line| line.defaults().flatten().count());
 	arity(word) - optional
 }
 
@@ -367,16 +282,18 @@ pub fn canonical_spelling(name: &str) -> &str {
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
-	SYNONYMS
-		.iter()
-		.find(|(word, synonyms)| *word == name || synonyms.contains(&name))
-		.map(|(word, _)| *word)
-		.or((name == SUM_WORD).then_some(SUM_WORD))
+	let aliases = crate::modules::prelude_aliases();
+	let name = aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str());
+	let runtime = crate::ffi::runtime_word_lines().iter().map(|line| line.name);
+	let expanded = EXPANDED_WORDS.into_iter().map(|(word, _, _)| word);
+	let built_in = runtime.chain(expanded).chain(OTHER_LIBRARY_WORDS).find(|word| *word == name);
+	built_in.or_else(|| crate::modules::prelude_word(name))
 }
 
 pub(crate) fn arity(word: &str) -> usize {
 	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
-	let built_in = RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
+	let runtime = crate::ffi::runtime_word_lines().iter().map(|line| (line.name, line.arity()));
+	let built_in = runtime.chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
 	built_in.or_else(|| crate::modules::prelude_word_arity(word)).unwrap_or(1)
 }
 
@@ -1256,7 +1173,9 @@ impl Lowering {
 		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
 		let wanted = arity(word);
 		if arguments.len() < wanted && arguments.len() >= fewest_arguments(word) {
-			arguments.resize(wanted, left_out_argument(word));
+			while arguments.len() < wanted {
+				arguments.push(left_out_argument(word, arguments.len()));
+			}
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
 		if let (COPY_WORD, [receiver], shallow) | (COPY_WORD, [receiver, shallow], _) =

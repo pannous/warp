@@ -4,10 +4,13 @@
 # `f(int, float) -> float`, `x: text`, `= int`, definitions sorted, the value last. Kinds are Rust's Kind names; a
 # variable holding a list also has a type word naming its elements (`list of int`, `map of text`, `list of node`).
 use "walk.warp"
+use "words.warp"
 
 # name → the function's definition `(f a b) := body`, its result kind, and the scope of its body ("" for main)
 definitions = {}
 results = {}
+# name → the list type of a function giving a list (`list of int`), so a call's elements keep their type
+result_types = {}
 scopes = {}
 
 arithmetic_ops = {"+": 1, "-": 1, "*": 1, "/": 1, "%": 1, "^": 1, "**": 1, "//": 1, "mod": 1}
@@ -17,12 +20,6 @@ compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%", "^=": "^"
 primitive_kinds = {"int": 1, "float": 1, "codepoint": 1, "i32": 1, "f32": 1, "pointer": 1}
 # the kinds of the values a variable may hold that do not mix: one given two of them holds a node (empty)
 concrete_kinds = {"int": 1, "float": 1, "text": 1, "codepoint": 1, "list": 1, "symbol": 1}
-# words whose call gives a known kind, whatever the arguments
-word_kinds = {print: "empty", count: "int", size: "int", length: "int", type: "symbol", upper: "text",
-	lower: "text", trim: "text", join: "text", chars: "list", split: "list", sort: "list", map_keys: "list",
-	map_values: "list", map_entries: "list", zero_fill: "list", closure_new: "function", fetch: "text",
-	# another runtime's value or a std adapter's: any value (Rust host::ANY_VALUE_WORDS)
-	fetch_reply: "empty", foreign_call: "empty", std_pure: "empty", std_io: "empty", parse_code: "empty"}
 # the built-in type words and the kind a value declared so is held as
 type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
@@ -110,14 +107,15 @@ kind_of_list(n: any, scope: any) := {
 	name = head_name(n)
 	if name == "return" and #n == 2 { return kind_of(n#2, scope) }
 	if name != "" and name in results and not (name in scope.parameters) { return results[name] }
-	if name != "" and name in word_kinds and #n >= 2 { return word_kinds[name] }
 	if (name == "slice" or name == "reverse") and #n >= 2 {
 		element = kind_of(n#2, scope)
 		return if element == "text" or element == "codepoint" then "text" else if element == "empty" then "empty" else "list"
 	}
-	if n.bracket == "(" and #n >= 2 and n.separator != "," and name != "" { return "int" }
+	if name != "" and name in call_kinds and (#n >= 2 or n.bracket == "(") and binding(scope, name) == ø { return call_kinds[name] }
+	# a word nothing defines or tables (a function value, a host word): any value
+	if n.bracket == "(" and #n >= 2 and n.separator != "," and name != "" { return "empty" }
 	if n.bracket == "(" and #n == 1 {
-		if name != "" { return if binding(scope, name) != ø then binding(scope, name) else "int" }
+		if name != "" { return if binding(scope, name) != ø then binding(scope, name) else "empty" }
 		return kind_of(n#1, scope)
 	}
 	statements = n.separator == ";" or n.separator == "\n"
@@ -270,7 +268,7 @@ list_type(n: any, scope: any) := {
 		declared = scope.types.get(n.name)
 		if declared != ø { return declared }
 		if n.name in scope.parameters { return "list of node" }
-		if binding(scope, n.name) == ø and results.get(n.name) == "list" { return "list of node" }
+		if binding(scope, n.name) == ø and results.get(n.name) == "list" { return result_types.get(n.name) ?? "list of node" }
 		return "list"
 	}
 	if is_group(n) and n.bracket == "(" and #n == 1 { return list_type(n#1, scope) }
@@ -281,7 +279,7 @@ list_type(n: any, scope: any) := {
 	if (name == "sort" or name == "reverse") and #n == 2 and n.bracket == "(" { return list_type(n#2, scope) }
 	if name == "split" { return "list of text" }
 	if name == "chars" { return "list of codepoint" }
-	if name != "" and n.bracket == "(" and n.separator == "" { return "list of node" }
+	if name != "" and n.bracket == "(" and n.separator == "" { return result_types.get(name) ?? "list of node" }
 	if is_block(n) and #n > 0 and all_of(n, e => is_key(e, ":")) { return map_type(n, scope) }
 	if is_key(n, "+") and kind_of(n.key, scope) == "list" and kind_of(n.value, scope) == "list" {
 		words = [list_type(n.key, scope), list_type(n.value, scope)]
@@ -498,18 +496,31 @@ returns(n: any, found: any) := {
 }
 
 
-# the kind a function gives: its last value joined with what it returns; a branch raising an error gives nothing
+# the values a function gives: what it returns and its last value; a branch raising an error gives nothing
+result_values(name: text) := {
+	body = definitions[name].value
+	values = []
+	for value in returns(body, []) { if not raises_error(value) { values += [value] } }
+	last = last_statement(body)
+	if not raises_error(last) { values += [last] }
+	values
+}
+
 result_kind(name: text) := {
 	scope = scopes[name]
-	body = definitions[name].value
 	kind = ""
-	for value in returns(body, []) {
-		if not raises_error(value) { kind = joined_kind(kind, flowing_kind(value, scope)) }
+	for value in result_values(name) { kind = joined_kind(kind, flowing_kind(value, scope)) }
+	kind
+}
+
+# the list type of a function giving a list: the list types of its list values joined
+result_type(name: text) := {
+	scope = scopes[name]
+	type = ø
+	for value in result_values(name) {
+		if kind_of(value, scope) == "list" { type = joined_list_type(type, list_type(value, scope)) }
 	}
-	last = last_statement(body)
-	if raises_error(last) { return kind }
-	if is_block(last) and #last == 0 { return joined_kind(kind, "nil") }
-	joined_kind(kind, flowing_kind(last, scope))
+	type
 }
 
 # the kind a value flows into a slot: ø and the empty block are nil (a list or map may hold it), else as held
@@ -607,12 +618,17 @@ apply(flow: any) := {
 	changed = set_slot(holder, target, kind)
 	if holder.kinds[target] == "list" and kind == "list" {
 		known = holder.types.get(target)
-		given = list_type(value, scope)
-		joined = if known == ø then given else if known.starts_with("list of ") and given.starts_with("list of ") then "list of " + joined_word(known[8..], given[8..]) else if known == given then known else "list"
+		joined = joined_list_type(known, list_type(value, scope))
 		if joined != known { changed = yes }
 		holder.types[target] = joined
 	}
 	changed
+}
+
+# the list type both known (ø: none yet) and given fit: their common elements, a plain list when they have none
+joined_list_type(known: any, given: text) := {
+	if known == ø or known == given { return given }
+	if known.starts_with("list of ") and given.starts_with("list of ") { "list of " + joined_word(known[8..], given[8..]) } else { "list" }
 }
 
 # join kind into the slot name of scope; yes when it changed
@@ -637,6 +653,11 @@ settle(flows: any) := {
 			joined = joined_kind(results[name], kind)
 			if joined != results[name] {
 				results[name] = joined
+				changed = yes
+			}
+			type = if joined == "list" then result_type(name) else ø
+			if type != result_types.get(name) {
+				result_types[name] = type
 				changed = yes
 			}
 		}
@@ -681,9 +702,11 @@ register(flows: any) := {
 analyze(program: any) := {
 	global definitions
 	global results
+	global result_types
 	global scopes
 	definitions = {}
 	results = {}
+	result_types = {}
 	scopes = {}
 	scopes[""] = new_scope()
 	for statement in statements(program) {

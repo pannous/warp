@@ -45,7 +45,7 @@ fn test_prefix_neg() {
 
 #[test]
 fn test_suffix_square() {
-	assert_top_operator("x²", Op::Square);
+	assert_top_operator("x²", Op::Pow);
 }
 
 #[test]
