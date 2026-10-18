@@ -142,7 +142,7 @@ impl WarpParser {
 		{
 			return None;
 		}
-		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.context.in_for_header) {
+		if !lhs_is_callable || !self.can_start_atom() || !should_apply || (ch == '{' && self.context.in_header()) {
 			return None;
 		}
 
