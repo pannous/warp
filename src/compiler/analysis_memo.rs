@@ -124,8 +124,11 @@ fn function_fingerprint(name: &str, params: &[Param], body: &Node) -> Option<u64
 		crate::compiler::compile_context::read(|context| context.bool_functions.iter().cloned().collect());
 	bool_functions.sort();
 	bool_functions.hash(&mut hasher);
-	let hash_optional =
-		|node: &Option<Node>, hasher: &mut DefaultHasher| node.as_ref().is_none_or(|node| hash_node(node, hasher));
+	// the presence too: `b: 2` read as an annotation must not meet `b = 2`, the default it lowers to
+	let hash_optional = |node: &Option<Node>, hasher: &mut DefaultHasher| {
+		node.is_some().hash(hasher);
+		node.as_ref().is_none_or(|node| hash_node(node, hasher))
+	};
 	let params_hashed = params.iter().all(|param| {
 		(&param.name, param.used_as).hash(&mut hasher);
 		hash_optional(&param.annotation, &mut hasher) && hash_optional(&param.default, &mut hasher)
