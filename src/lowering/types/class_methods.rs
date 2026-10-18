@@ -173,53 +173,36 @@ pub(crate) fn class_fields(node: &Node) -> ClassFields {
 	let mut fields = std::collections::HashMap::new();
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
-			let typed = class_items(body)
-				.iter()
-				.filter(|item| method_parts(item).is_none())
-				.filter_map(|item| Some((declared_field_name(item)?, field_type_name(item))))
-				.collect();
+			let typed = field_items(body).into_iter().map(|(_, name, type_name)| (name, type_name)).collect();
 			fields.insert(name.drop_meta().name(), typed);
 		}
 	});
 	fields
 }
 
-/// `class Tree{left: Tree}`: a field of the class's own type without `?` could never be filled, every Tree needing a
-/// Tree first (card empty-field, user decision: strict, the fix `left: Tree?`)
-pub fn check_self_typed_fields(program: &Node) -> Option<crate::errors::diagnostic::Diagnostic> {
-	let mut unfillable = None;
-	program.visit(&mut |part| {
-		let Node::Type { name, body } = part else { return };
-		let class = name.drop_meta().name();
-		let field = class_items(body)
-			.into_iter()
-			.filter(|item| method_parts(item).is_none())
-			.find(|item| field_type_name(item) == class);
-		if let Some(field) = field.filter(|_| unfillable.is_none()) {
-			let field_name = declared_field_name(&field).unwrap_or_default();
-			unfillable = Some(
-				crate::errors::diagnostic::Diagnostic::at(
-					&field,
-					format!("{field_name} can never be filled: every {class} needs a {class} first"),
-				)
-				.fix(format!("{field_name}: {class}?")),
-			);
-		}
-	});
-	unfillable
-}
-
 /// Each field of a class body: its name, type name (empty when untyped) and default value (`legs: int = 4`)
 pub(crate) fn field_declarations(body: &Node) -> Vec<(String, String, Option<Node>)> {
-	class_items(body)
-		.iter()
-		.filter(|item| method_parts(item).is_none())
-		.filter_map(|item| {
+	field_items(body)
+		.into_iter()
+		.map(|(item, name, type_name)| {
 			let default = match item.drop_meta() {
 				Node::Key(_, Op::Assign, value) => Some(value.as_ref().clone()),
 				_ => None,
 			};
-			Some((declared_field_name(item)?, field_type_name(item), default))
+			(name, type_name, default)
+		})
+		.collect()
+}
+
+/// Each field of a class body as written, with its name and type name (empty when untyped)
+pub(crate) fn field_items(body: &Node) -> Vec<(Node, String, String)> {
+	class_items(body)
+		.into_iter()
+		.filter(|item| method_parts(item).is_none())
+		.filter_map(|item| {
+			let name = declared_field_name(&item)?;
+			let type_name = field_type_name(&item);
+			Some((item, name, type_name))
 		})
 		.collect()
 }

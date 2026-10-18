@@ -97,6 +97,8 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::rust_options::lower,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
+	// a bare `return` as the phrase `return ø` (welcome_forms.rs), before any pass reads a return
+	crate::lowering::welcome_forms::lower_bare_returns,
 	// `x(p:P) -> int := …` is `x(p:P): int := …` (welcome_forms.rs) before any pass reads a definition's head
 	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
@@ -485,7 +487,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
 		return Err(misread.into_error());
 	}
-	if let Some(unfillable) = crate::lowering::class_methods::check_self_typed_fields(&node) {
+	if let Some(unfillable) = crate::analyzer::self_typed_fields::check_self_typed_fields(&node) {
 		return Err(unfillable.into_error());
 	}
 	crate::errors::diagnostic::report(&crate::web::accessibility::warnings(&node))?;

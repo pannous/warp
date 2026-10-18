@@ -155,22 +155,9 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
 		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
 		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && is_block(body)) => {
-			Some(key(flat_head(&items[0]), Op::Define, converted(&items[1], type_name)))
+			Some(key(items[0].clone(), Op::Define, converted(&items[1], type_name)))
 		}
 		_ => None,
-	}
-}
-
-/// The glued signature keeps its parameters as one group, `(half (x))`: `(half x)` like the head of `half(x) := …`
-fn flat_head(head: &Node) -> Node {
-	match head.drop_meta() {
-		Node::List(items, bracket, separator) if items.len() == 2 => match items[1].drop_meta() {
-			Node::List(parameters, _, _) => {
-				Node::List([vec![items[0].clone()], parameters.clone()].concat(), bracket.clone(), separator.clone())
-			}
-			_ => head.clone(),
-		},
-		_ => head.clone(),
 	}
 }
 

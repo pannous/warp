@@ -33,6 +33,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   text)`), so the of extras are no special passes; forms that aren't a right-hand infix application are dropped or carded.
   `in`/`from` are a lookup only after a selector word (chars, words, lines, keys, …; one table), membership otherwise
   (in-bool); `print words in t` walks and `byte count of t` are dropped (Interviewer's decision).
+- rust-cleanup-drops (user): the Rust compiler drops them too (Option forms, `set x to y` pass, scoped_handlers, print
+  walk, `byte count of t`); same language on both compilers, their tests retired as decision edits.
+- rust-texts (Interviewer's decision): `t += x` builds a rope flattened once when read; test_gc_struct's
+  read_string_field reads the `$Text` byte array.
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
@@ -361,6 +365,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - site-budget: the hello-world site is ≤ 100 KB gzipped. tour-firefox-stall: a Worker-run site ships task-workers.js.
 - Hosting: our own login first, then deploy to one's own provider: Cloudflare Workers, Ferron on pannous.com (`<name>.lambda.pannous.com`), Fermyon/Akamai (notes/hosting.md).
 - P235 WGSL is a `shader { … }` block (alias `wgsl`); P235b no capture of warp variables, `$name` is an explicit hole; shader-untouched: WGSL stays as written otherwise; WGSL errors are reported at the .warp line and column. P234 `paint` takes a shader text; `use graphics` = `use draw`.
+- gpu-multipass: `waves = render(height_field, 256, 256)` paints off-screen, the image stays on the GPU (alias `texture`); another painted function reads it as a function, `waves(uv)`, like `$previous(at)` (Interviewer's decision; notes/gpu.md "Several passes").
 
 ## Sound
 - play-dispatch: `play` dispatches on what it plays (signal, stereo pair, block function); `play(hum, 2s)` until prepositions-call.

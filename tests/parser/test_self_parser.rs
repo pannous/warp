@@ -1,7 +1,6 @@
 //! card self-parser: the parser written in warp (lib/compiler/parser.warp) next to the Rust parser, both trees seen as
 //! node_view (tests/common/twins.rs). The sources it parses as Rust does are listed in PARSED_SOURCES, which only grows;
 //! `parser_progress` (ignored) names the next ones and writes all that match to MATCHING.
-use crate::common::parser_deviations::clean_rust_tree;
 use crate::common::twins::{around_difference, differences, differential_on, node_view, sources};
 use std::path::PathBuf;
 use warp::Node;
@@ -18,9 +17,9 @@ const BLOCK_FORMS: &str = "tests/parser/self_parser_block_forms.txt";
 /// Differences shown by parser_progress
 const SHOWN: usize = 20;
 
-/// The Rust tree as parser.warp writes it: node_view of the Rust parse, its listed quirks cleaned
+/// The Rust tree as parser.warp writes it: node_view of the Rust parse
 pub(super) fn rust_tree(text: &str) -> Node {
-	node_view(&clean_rust_tree(&WarpParser::parse(text)))
+	node_view(&WarpParser::parse(text))
 }
 
 fn lines_of_form(line: &str) -> String {
