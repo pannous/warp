@@ -58,8 +58,7 @@ pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 pub fn library_types(word: &str) -> Vec<String> {
 	let word = crate::library_words::canonical_spelling(word);
 	// each overload's (`reverse` of a list and of a text)
-	let overloads: Vec<String> = crate::ffi::runtime_word_lines()
-		.iter()
+	let overloads: Vec<String> = crate::ffi::typed_word_lines()
 		.filter(|line| line.name == word)
 		.filter_map(|line| line.first_type().map(str::to_string))
 		.collect();

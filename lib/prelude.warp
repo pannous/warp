@@ -33,7 +33,9 @@ kind_mark(x: any): int from warp
 
 // The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
 // results, as the analyzer reads them
-count(xs): int from emitter
+count(xs: list): int from emitter
+count(t: text): int from emitter
+count(m: map): int from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter

@@ -56,3 +56,9 @@ fn a_result_read_off_an_argument_is_spelled_same_as_or_value_of() {
 	let kinds = warp::analyzer::inferred_kinds(&program);
 	assert!(kinds.contains(&"f: text".to_string()) && !kinds.contains(&"q: int".to_string()), "{kinds:?}");
 }
+
+#[test]
+fn count_declares_a_list_a_text_and_a_map_overload() {
+	is!("count.signature", warp::Node::Text("(xs:list) -> int".into()));
+	is!("count(\"ab\") + count({a: 1})", 3);
+}
