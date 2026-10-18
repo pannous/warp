@@ -89,6 +89,7 @@ mod test_fresh_names; // card cleanup-fresh-names
 mod test_function_body; // card g_X_3s
 mod test_function_dir; // card dir-function
 mod test_function_objects; // card module-methods
+mod test_function_value_words; // card introspection-reflection
 mod test_glued_block_words; // card glued-loop
 mod test_go_blocks;
 mod test_go_heavy_map; // card go-heavy-map
@@ -232,6 +233,7 @@ mod test_task_signals;
 mod test_task_values;
 mod test_tasks;
 mod test_text_loop_value;
+mod test_text_patterns; // card text-patterns
 mod test_threads;
 mod test_time_of_day;
 mod test_times_count_once;

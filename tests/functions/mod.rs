@@ -91,6 +91,7 @@ mod test_function_references;
 mod test_function_type_at_run_time; // card type-function
 mod test_function_typed_parameters;
 mod test_function_values;
+mod test_function_words_consume; // card function-words-consume
 mod test_functions;
 mod test_functions_passed_by_name; // card specialise-named-functions
 mod test_gap_feeding; // card gap-feeding
@@ -165,6 +166,7 @@ mod test_parameter_shapes;
 mod test_parens_getter_warning;
 mod test_partial_application;
 mod test_passed_through_functions;
+mod test_pattern_clauses; // card pattern-clauses
 mod test_phrase_calls;
 mod test_phrase_colon_body;
 mod test_phrase_each; // card phrase-each

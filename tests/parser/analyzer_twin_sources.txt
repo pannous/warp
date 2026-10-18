@@ -532,8 +532,6 @@ probes/cargo/strsim.warp
 probes/cargo/use_only.warp
 probes/chars_map_try.warp
 probes/class_field_from_map.warp
-probes/cleanup/lambdas/bench_higher_order.warp
-probes/cleanup/lambdas/bench_hoisted.warp
 probes/cleanup/lambdas/bench_map_filter_sum.warp
 probes/cleanup/program_wide_effects.warp
 probes/cli/assigned_command_word.warp
@@ -584,7 +582,6 @@ probes/format_semicolon.warp
 probes/function_objects/print_parse.warp
 probes/function_values_tour.warp
 probes/functions/deep_recursion.warp
-probes/functions/forward_param.warp
 probes/generators/basic.warp
 probes/generators/block.warp
 probes/generators/hand_inlined.warp
@@ -592,7 +589,6 @@ probes/generators/iterator_class.warp
 probes/generators/lazy.warp
 probes/generators/objects.warp
 probes/generators/ruby.warp
-probes/generators/yield_from.warp
 probes/global_list/alias.warp
 probes/global_list/grow.warp
 probes/global_list/local_alias.warp
@@ -732,10 +728,8 @@ probes/reflection_sample/t.warp
 probes/request_headers.warp
 probes/route_position.warp
 probes/ruby_yield/bare.warp
-probes/ruby_yield/do_block.warp
 probes/ruby_yield/each_twice.warp
 probes/ruby_yield/pair.warp
-probes/ruby_yield/twice.warp
 probes/runtime_positions.warp
 probes/rust_reading/fn_arrow.warp
 probes/rust_reading/inclusive_range.warp
@@ -814,7 +808,6 @@ probes/self_hosting/readiness/modules/walker.warp
 probes/self_hosting/readiness/node_build.warp
 probes/self_hosting/readiness/ports/number_words.warp
 probes/self_hosting/readiness/ports/planned/deletes.warp
-probes/self_hosting/readiness/ports/times_phrases.warp
 probes/self_hosting/readiness/quasi_quote.warp
 probes/self_hosting/readiness/recursion_depth.warp
 probes/self_hosting/readiness/scan_100k.warp

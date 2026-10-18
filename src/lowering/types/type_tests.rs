@@ -86,7 +86,7 @@ const BUILTIN_TYPES: [BuiltinType; 26] = [
 		None,
 		&[],
 	),
-	builtin(SYMBOL_WORD, &[], &[], None, &[K::Symbol as i64]),
+	builtin(SYMBOL_WORD, &[], &[], Some(K::Symbol), &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[OPERATION_WORD], None, &[K::Key as i64, crate::type_kinds::OPERATION_MASK_BIT]),
 	builtin(OPERATION_WORD, &["expression"], &[], None, &[crate::type_kinds::OPERATION_MASK_BIT]),
 	builtin(crate::words::CODE_WORD, &[], &[], None, &[crate::type_kinds::CODE_MASK_BIT]),

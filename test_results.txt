@@ -313,6 +313,9 @@ PASSED:
   ✓ control::test_function_objects::returns_is_return_type
   ✓ control::test_function_objects::the_type_of_a_function_names_its_signature
   ✓ control::test_function_objects::the_words_of_a_function_reference
+  ✓ control::test_function_value_words::a_functions_body_is_code_from_its_value
+  ✓ control::test_function_value_words::a_library_words_return_type_comes_from_its_signature
+  ✓ control::test_function_value_words::a_user_functions_words_come_from_its_value
   ✓ control::test_glued_block_words::a_glued_do_runs_its_block
   ✓ control::test_glued_block_words::a_glued_loop_runs_its_block
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
@@ -843,6 +846,12 @@ PASSED:
   ✓ control::test_text_loop_value::a_text_loop_that_never_ran_is_empty
   ✓ control::test_text_loop_value::a_text_loop_value_stays_a_text_nested_assigned_and_returned
   ✓ control::test_text_loop_value::numeric_loops_keep_their_values
+  ✓ control::test_text_patterns::a_class_hole_tests_its_characters
+  ✓ control::test_text_patterns::a_known_name_in_a_sum_is_a_value
+  ✓ control::test_text_patterns::a_prefix_or_suffix_binds_the_rest
+  ✓ control::test_text_patterns::a_text_pattern_needs_a_piece_between_holes
+  ✓ control::test_text_patterns::a_typed_hole_reads_its_text
+  ✓ control::test_text_patterns::pieces_and_holes_alternate
   ✓ control::test_threads::a_finish_handler_runs_after_the_statement_that_saw_the_task_finish
   ✓ control::test_threads::a_paused_task_waits_for_resume
   ✓ control::test_threads::a_stop_handler_runs_once_the_task_stopped
@@ -1239,6 +1248,7 @@ PASSED:
   ✓ functions::test_all_calls::print_each_friend
   ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
   ✓ functions::test_analysis_memo::test_an_analysis_that_says_something_runs_again
+  ✓ functions::test_analysis_memo::test_the_same_definition_is_analysed_once
   ✓ functions::test_analysis_memo::test_the_same_tree_is_analysed_once
   ✓ functions::test_anonymous_application::test_a_block_applied_to_a_juxtaposed_argument
   ✓ functions::test_anonymous_application::test_a_data_block_is_not_applied
@@ -1556,6 +1566,10 @@ PASSED:
   ✓ functions::test_function_values::test_operators_as_values
   ✓ functions::test_function_values::test_ordinary_calls_are_untouched
   ✓ functions::test_function_values::test_partial_application_of_an_iteration_word
+  ✓ functions::test_function_words_consume::a_comparison_fits_a_truth_parameter_so_it_is_the_argument
+  ✓ functions::test_function_words_consume::a_comparison_is_no_list_so_a_word_of_a_list_stops_before_it
+  ✓ functions::test_function_words_consume::an_argument_reaches_right_while_it_fits_the_parameter
+  ✓ functions::test_function_words_consume::function_words_take_their_arguments_by_their_parameters
   ✓ functions::test_functions_passed_by_name::a_function_parameter_passed_on_in_a_method_call
   ✓ functions::test_functions_passed_by_name::a_function_passed_by_name_is_called_by_name
   ✓ functions::test_functions_passed_by_name::recursive_passed_on_and_several_functions_by_name
@@ -1812,6 +1826,13 @@ PASSED:
   ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
   ✓ functions::test_passed_through_functions::a_returned_parameter_is_called
   ✓ functions::test_passed_through_functions::a_variable_holds_the_returned_function
+  ✓ functions::test_pattern_clauses::a_parameter_name_leaves_a_global_of_the_same_name_alone
+  ✓ functions::test_pattern_clauses::a_value_no_clause_takes_is_no_case
+  ✓ functions::test_pattern_clauses::clauses_are_tried_in_order
+  ✓ functions::test_pattern_clauses::code_clauses_rewrite_code
+  ✓ functions::test_pattern_clauses::list_clauses_take_a_list_apart
+  ✓ functions::test_pattern_clauses::literal_clauses_come_before_the_general_one
+  ✓ functions::test_pattern_clauses::several_parameters_match_together
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_ported_calls::linq_methods_work_with_a_note_naming_warps_word
@@ -3917,6 +3938,7 @@ PASSED:
   ✓ programs::test_file_spectrum::a_files_tone_fills_its_own_band
   ✓ programs::test_file_spectrum::shader_of_is_the_wgsl_a_function_paints_with
   ✓ programs::test_file_spectrum::the_compiled_shader_demo_compiles_to_one_fragment_shader
+  ✓ programs::test_function_cache::a_new_program_compiles_only_its_own_functions
   ✓ programs::test_gpu_draw::an_unknown_draw_choice_warns
   ✓ programs::test_gpu_draw::gpu_draws_what_cpu_draws
   ✓ programs::test_gpu_draw::shapes_cross_to_the_paint_window_whole
@@ -4672,6 +4694,8 @@ PASSED:
   ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
   ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
   ✓ types::test_class_forms_ported::ruby_endless_methods
+  ✓ types::test_class_index_operator::a_class_defines_the_index_operator
+  ✓ types::test_class_index_operator::an_index_of_a_class_without_the_operator_is_its_field
   ✓ types::test_class_interfaces::a_class_method_satisfies_a_trait_operation
   ✓ types::test_class_interfaces::interfaces_as_other_languages_write_them
   ✓ types::test_class_json::a_named_instance_from_json_is_of_its_class
@@ -4951,6 +4975,8 @@ PASSED:
   ✓ types::test_method_bodies::units_in_a_method
   ✓ types::test_method_result_text::an_interpolated_method_result_uses_its_text
   ✓ types::test_mixed_list_parameter_kinds::a_parameter_in_a_mixed_list_literal_takes_any_value
+  ✓ types::test_mixed_results::a_number_or_a_list_is_known_at_run_time
+  ✓ types::test_mixed_results::a_number_or_a_text_is_known_at_run_time
   ✓ types::test_multi_word_class::a_class_of_several_words_is_its_kebab_name
   ✓ types::test_multi_word_class::a_kebab_class_constructs
   ✓ types::test_multi_word_class::a_phrase_slot_matches_the_class_as_a_whole
@@ -5127,6 +5153,9 @@ PASSED:
   ✓ types::test_sum_types::variants_are_the_sum_type
   ✓ types::test_sum_types::variants_on_their_own_lines
   ✓ types::test_sum_types::variants_with_several_or_named_fields
+  ✓ types::test_symbol_parameters::a_symbol_parameter_refuses_a_number
+  ✓ types::test_symbol_parameters::a_symbol_parameter_takes_a_bare_word
+  ✓ types::test_symbol_parameters::a_symbol_parameter_takes_a_symbol
   ✓ types::test_symbolism_object::test_block_entry_runs_only_at_bang
   ✓ types::test_symbolism_object::test_markup_content_stays_an_element
   ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
@@ -5298,6 +5327,7 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
   ✓ types::test_typed_builtins::a_member_words_number_or_bool_result_is_decided_where_it_is_made
+  ✓ types::test_typed_builtins::a_result_read_off_an_argument_is_spelled_same_as_or_value_of
   ✓ types::test_typed_builtins::a_value_known_at_run_time_takes_its_overload_then
   ✓ types::test_typed_builtins::a_value_no_overload_is_typed_for_takes_the_first_line
   ✓ types::test_typed_builtins::each_overload_type_is_the_librarys
@@ -5538,6 +5568,8 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
+  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -6384,8 +6416,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
-  ✗ web::test_app_keys::on_key_hears_the_app_pages_key_presses
 
 SUMMARY:
-16 ignored, 6381 passed, 2 failed, 6383 total tested
+16 ignored, 6413 passed, 0 failed, 6413 total tested

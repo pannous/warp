@@ -396,7 +396,7 @@ voices_of(pitches) := if unison <= 1 then pitches else [frequency * 2^(detune * 
 // the amplitudes through one effect, the bus DSP in Rust (src/sound/effects.rs on_signal, card shared-buses stage 2):
 // ["lowpass", 800, 0.7] (also highpass, bandpass: biquads of the Audio EQ Cookbook), ["delay", seconds, feedback, mix]
 // and ["reverb", mix] with their tail, ["distort", drive] a soft clipper keeping the loudness
-effected(amplitudes: list, effect: list) := std_io("sound", "effect", [effect, amplitudes, sample_rate, loudness * loudest_sample])
+effected(amplitudes: list, effect: list) := std_io("sound", "effect", [effect, amplitudes, sample_rate, loudness * loudest_sample]) as list
 // the amplitudes through the synth's filter setting
 filtered(amplitudes) := if filter == "none" then amplitudes else effected(amplitudes, [filter, cutoff, resonance])
 // the amplitudes of frequencies sounding together
@@ -503,7 +503,7 @@ out(signal, b: Bus) := sent_back(sent_to(b), out(signal))
 // a bus applied to a signal plays it through the bus: `osc(C4, 1s) |> room`, `room(signal)` (trait Callable)
 call(b: Bus, signal) := out(signal, b)
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
-added(a, b) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
+added(a: [float], b: [float]) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))
 // the sound's handle: its number in the run, for stop_sound(handle)
 

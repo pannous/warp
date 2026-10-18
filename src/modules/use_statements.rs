@@ -73,7 +73,7 @@ pub(super) fn fast_name(word: &str) -> String {
 
 /// The node with fast_math's `words` called by their qualified names (fast_name)
 pub(super) fn with_fast_names(node: Node, words: &[String]) -> Node {
-	words.iter().fold(node, |node, word| renamed_word(node, word, &fast_name(word)))
+	renamed_words(node, &words.iter().map(|word| (word.clone(), fast_name(word))).collect())
 }
 
 /// `a / b` of fast code as `(a as float) / b`: a float, never an exact ratio

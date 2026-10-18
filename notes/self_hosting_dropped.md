@@ -166,6 +166,12 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - A parameter used as a list and passed on as a function (`play_signal(signal, seconds) := if signal is list then
   stereo_signal(signal[0], …) else mono_signal(signal, seconds)`, lib/sound.warp) is a function where its calls give one,
   where Rust says empty: probes/sound/signal_state.warp left the pinned list for it (card music-plain).
+- Closure parameters given a run-time number: Rust's flow (card src-analyzer, 2026-10-18) says a number decided at
+  run time (`apply(function, data) -> data`, `closure_lambda_1(data)`), warp keeps int / any value
+  (`apply(function, int) -> empty`). Same program output. Left the pinned list: probes/cleanup/lambdas/
+  {bench_higher_order,bench_hoisted}.warp, probes/functions/forward_param.warp, probes/generators/yield_from.warp,
+  probes/ruby_yield/{do_block,twice}.warp, probes/self_hosting/readiness/ports/times_phrases.warp. Back: the warp flow
+  joins a run-time number beside ints to data, as Rust's `joined` does.
 
 ## Emitter: deviations
 - Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors

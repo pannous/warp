@@ -66,6 +66,12 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 /// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
 /// The result type of a builtin that gives no value (`print(values...): nothing from emitter`)
 const NOTHING_RESULT: &str = "nothing";
+/// The spellings of a result read off an argument (decision same-as-result)
+const ARGUMENT_RESULTS: [(&str, ArgumentResult); 3] = [
+	("same as ", ArgumentResult::Same),
+	("element of ", ArgumentResult::Element),
+	("value of ", ArgumentResult::Element),
+];
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
@@ -236,6 +242,25 @@ pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> 
 	line_result_kind(overloads.iter().find(|line| typed_for(line) == Some(fitting)).unwrap_or(first))
 }
 
+/// How a builtin's result follows one of its arguments (decision same-as-result): its very type, `same as object`, or
+/// the type of its elements, `element of xs`, `value of m`
+#[derive(Clone, Copy)]
+pub enum ArgumentResult {
+	Same,
+	Element,
+}
+
+/// The argument a builtin line's result follows, and how: `field_with(object, name, value): same as object` → (Same,
+/// 0), `map_get_or(m, key, default): value of m` → (Element, 0)
+pub fn argument_result(word: &str) -> Option<(ArgumentResult, usize)> {
+	let word = unaliased(word);
+	let line = crate::ffi::typed_word_lines().find(|line| line.name == word)?;
+	let (how, parameter) = ARGUMENT_RESULTS
+		.iter()
+		.find_map(|(spelling, how)| line.result.strip_prefix(spelling).map(|parameter| (*how, parameter)))?;
+	Some((how, line.names().position(|name| name == parameter)?))
+}
+
 /// The result of a call of `arguments` values to a builtin the emitter expands, as its line declares it
 /// (`count(xs): int from emitter`; print's `nothing` a Node of no value)
 pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
@@ -247,6 +272,8 @@ pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
 		crate::words::SYMBOL_WORD => Some(Kind::Symbol),
 		// `number("2.5")` an int or a float, `any(xs, f)` a bool the emitter marks: decided where it is made
 		crate::words::NUMBER_WORD | crate::analyzer::BOOL_TYPE => None,
+		// a Node of any kind, decided at run time (`removed_value(x, k)`)
+		crate::words::ANY_TYPE => Some(Kind::Empty),
 		result => crate::analyzer::type_word_kind(result),
 	}
 }
@@ -337,7 +364,7 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 }
 
 /// The word a prelude alias names (`size` → count), else the name itself
-fn unaliased(name: &str) -> &str {
+pub(crate) fn unaliased(name: &str) -> &str {
 	let aliases = crate::modules::prelude_aliases();
 	aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str())
 }

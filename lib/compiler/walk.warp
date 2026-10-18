@@ -129,10 +129,13 @@ head_name(view: any) := {
 	""
 }
 
-# every list in a view, the view itself first: the parts a whole-program question walks
-views_in(n: any) := {
+# every list in a node's view, the view itself first: the parts a whole-program question walks
+views_in(n: any) := lists_in(view_of(n))
+
+# every list in a view, the view itself first
+lists_in(top: any) := {
 	views = []
-	unvisited = [view_of(n)]
+	unvisited = [top]
 	while #unvisited > 0 {
 		view = unvisited#(#unvisited)
 		unvisited = unvisited[0 ..< #unvisited - 1]
