@@ -530,9 +530,11 @@ impl WasmGcEmitter {
 			s.emit_require_list(f);
 			s.emit_codepoint_as_text(f, 1);
 			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
-			// pass 1: an upper bound of the bytes: every item, and a separator after it
+			// pass 1: an upper bound of the bytes: every item, and a separator after it; each item replaced by what it
+			// joins as
 			s.emit_item_walk(f, 0, walk, |f| {
 				next_element(f);
+				s.emit_item_replaced(f, walk, element);
 				is_kind(f, Kind::Text);
 				f.instruction(&I::If(BlockType::Result(ValType::I32)));
 				s.emit_text_field(f, element, 1);
@@ -551,8 +553,7 @@ impl WasmGcEmitter {
 				I32Const(0), I::LocalSet(position), I32Const(1), I::LocalSet(is_first),
 			]);
 			// pass 2: write
-			s.emit_item_walk(f, 0, walk, |f| {
-				next_element(f);
+			s.emit_items_again(f, walk, |f| {
 				Self::emit_list(f, &[I::LocalGet(is_first), I::I32Eqz, I::If(BlockType::Empty)]);
 				append_text(f, 1);
 				Self::emit_list(f, &[I::End, I32Const(0), I::LocalSet(is_first)]);

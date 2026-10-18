@@ -848,13 +848,24 @@ impl WasmGcEmitter {
 		walk: ItemWalk,
 		body: impl FnOnce(&mut Function),
 	) {
-		let list_type = self.type_manager.node_list_type;
-		let field = |field_index| I::StructGet { struct_type_index: list_type, field_index };
 		Self::emit_list(func, &[I::LocalGet(list)]);
 		self.call(func, super::list_dispatch::LIST_ITEMS);
+		func.instruction(&I::LocalSet(walk.items));
+		self.emit_items_again(func, walk, body);
+	}
+
+	/// `body` for each item in `walk.items` again (emit_item_walk set it), the item in local `walk.item`
+	pub(in crate::wasm_emitter) fn emit_items_again(
+		&self,
+		func: &mut Function,
+		walk: ItemWalk,
+		body: impl FnOnce(&mut Function),
+	) {
+		let list_type = self.type_manager.node_list_type;
+		let field = |field_index| I::StructGet { struct_type_index: list_type, field_index };
 		#[rustfmt::skip]
 		Self::emit_list(func, &[
-			I::LocalSet(walk.items), I::I32Const(0), I::LocalSet(walk.index),
+			I::I32Const(0), I::LocalSet(walk.index),
 			I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 				I::LocalGet(walk.index), I::LocalGet(walk.items), field(0), I::I32GeU, I::BrIf(1),
 				I::LocalGet(walk.items), field(1), I::LocalGet(walk.index), I::ArrayGet(self.type_manager.node_array_type),
@@ -863,6 +874,16 @@ impl WasmGcEmitter {
 		]);
 		body(func);
 		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
+	}
+
+	/// Store local `value` as the item the walk just took (list_items' array is the walk's own)
+	pub(in crate::wasm_emitter) fn emit_item_replaced(&self, func: &mut Function, walk: ItemWalk, value: u32) {
+		let field = I::StructGet { struct_type_index: self.type_manager.node_list_type, field_index: 1 };
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(walk.items), field, I::LocalGet(walk.index), I::I32Const(1), I::I32Sub, I::LocalGet(value),
+			I::ArraySet(self.type_manager.node_array_type),
+		]);
 	}
 
 	/// The number of items (i64) of the list node on the stack, as list_items finds them
