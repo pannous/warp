@@ -10,7 +10,7 @@ use crate::operators::Op;
 
 pub const DOC_KEY: &str = "doc";
 const COMMENT_KEY: &str = "comment";
-const WRITTEN_AT_KEY: &str = "written_at";
+pub(crate) const WRITTEN_AT_KEY: &str = "written_at";
 
 pub fn lower(node: Node) -> Node {
 	match node {

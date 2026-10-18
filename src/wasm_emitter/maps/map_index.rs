@@ -38,7 +38,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(in crate::wasm_emitter) fn emit_map_index_globals(&mut self) {
-		if !self.uses_map_lookups() {
+		if self.map_index_global.is_some() || !self.uses_map_lookups() {
 			return;
 		}
 		self.map_index_global = Some(self.next_global_idx);

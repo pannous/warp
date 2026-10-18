@@ -14,6 +14,8 @@ use crate::operators::Op;
 use crate::words::STYLE_WORD;
 use std::collections::HashSet;
 
+/// The element words lib/markup.warp reads as CSS: the inline transition and animation, the page's leave and starting style
+const TRANSITION_WORDS: [&str; 4] = ["transition", "animation", "leave", "starting-style"];
 const IMAGE: &str = "img";
 const LINK: &str = "a";
 const BUTTON: &str = "button";
@@ -376,7 +378,7 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 	{
 		let renders = crate::web::markup::names_attribute(name)
 			|| WARP_ELEMENT_WORDS.contains(&name.as_str())
-			|| crate::transitions::ELEMENT_WORDS.contains(&name.as_str())
+			|| TRANSITION_WORDS.contains(&name.as_str())
 			|| OWN_ATTRIBUTE_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
 		if !renders {
 			let fix = near(name, crate::web::markup::attribute_names().to_vec(), format!("data-{name}"));
@@ -425,7 +427,7 @@ fn is_unknown_tag(tag: &str) -> bool {
 	let known = crate::web::markup::is_element_tag(tag)
 		|| crate::web::markup::names_attribute(tag)
 		|| WARP_ELEMENT_WORDS.contains(&tag)
-		|| crate::transitions::ELEMENT_WORDS.contains(&tag)
+		|| TRANSITION_WORDS.contains(&tag)
 		|| crate::event_signals::is_element_event(tag)
 		// a custom element of the page's own (`my-card{…}`) is named with a dash
 		|| tag.contains('-');

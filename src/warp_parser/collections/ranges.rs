@@ -2,6 +2,14 @@
 use super::*;
 use crate::words::IN_WORD;
 
+/// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
+const UPTO: &str = "upto";
+/// `10 down to 1` is `reverse(1 to 10)`
+const DOWN_WORD: &str = "down";
+const EXCLUSIVE_DOTS: &str = "..";
+/// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
+const KOTLIN_RANGE: &str = "kotlin-range";
+
 /// `lhs op rhs`; a chained comparison `a<b<c` as `a<b and b<c` (`middle` is b), `a down to b` as the reversed `b to a`
 pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -> Node {
 	match middle {

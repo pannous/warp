@@ -3,9 +3,9 @@
 //! its head with the comment above it, a word's dump its definitions as written. A name known only at run time
 //! (`for trick in dir(sound): print help(trick)`) is looked up in a table of the words the program knows: those of the
 //! modules it uses and its own functions. `function trick` is the function named trick (P82), so a trick that is no
-//! function but a variable holding a name is read as that name. A program's own `help` wins
+//! function but a variable holding a name is read as that name. A program's own `help` wins. `help(x)` gives the
+//! text, a statement prints nothing: `print help(x)` (decision reflection-plain)
 
-use crate::words::PRINT_WORD;
 use std::collections::{BTreeMap, HashSet};
 
 use super::nodes::{filled, key, word_applied};
@@ -15,7 +15,6 @@ use crate::operators::Op;
 const HELP_WORD: &str = "help";
 const FUNCTION_WORD: &str = "function";
 const DUMP_WORD: &str = "dump";
-const LOOP_WORDS: [&str; 2] = [crate::words::FOR_WORD, "while"];
 /// The lookup of a name known at run time in a table of the words' texts
 const LOOKUP_TEMPLATE: &str = "if TABLE has NAME then TABLE[NAME] else error(\"no word named \" + NAME + \": dir(<module>) lists a module's words\")";
 
@@ -25,62 +24,18 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[HELP_WORD]) {
 		return node;
 	}
-	let defined = crate::library_words::defined_names(&node);
+	let defined = own_names(&node);
 	if defined.contains(HELP_WORD) {
 		return node;
 	}
-	answered_statically(printing_help_statements(node), &defined)
+	answered_statically(node, &defined)
 }
 
-/// User decision help-statement: a `help(x)` on its own line prints, as Python's help does; one whose text is used
-/// (`t = help(x)`, `print help(x)`, the value of a block or of the program) only gives it. A loop's body is no value
-fn printing_help_statements(node: Node) -> Node {
-	match node {
-		Node::List(items, bracket, separator) if is_loop(&items) => {
-			let mut items: Vec<Node> = items.into_iter().map(printing_help_statements).collect();
-			if let Some(body) = items.pop() {
-				items.push(match body {
-					Node::List(statements, Bracket::Curly, separator) => {
-						Node::List(printed_statements(statements, true), Bracket::Curly, separator)
-					}
-					single => printed_statement(single),
-				});
-			}
-			Node::List(items, bracket, separator)
-		}
-		Node::List(statements, bracket, separator) if separator.separates_statements() => {
-			Node::List(printed_statements(statements, false), bracket, separator)
-		}
-		other => other.map_children(printing_help_statements),
-	}
-}
-
-/// The statements with each help statement printing, the last one too when its value is not used
-fn printed_statements(statements: Vec<Node>, last_unused: bool) -> Vec<Node> {
-	let count = statements.len();
-	statements
-		.into_iter()
-		.enumerate()
-		.map(|(index, statement)| {
-			let statement = printing_help_statements(statement);
-			match index + 1 < count || last_unused {
-				true => printed_statement(statement),
-				false => statement,
-			}
-		})
-		.collect()
-}
-
-fn printed_statement(statement: Node) -> Node {
-	match help_subject(&statement) {
-		Some(_) => super::nodes::call(PRINT_WORD, vec![statement]),
-		None => statement,
-	}
-}
-
-/// `for x in xs …`, `while c …`: the body last
-fn is_loop(items: &[Node]) -> bool {
-	items.len() > 2 && items[0].symbol_name().is_some_and(|word| LOOP_WORDS.contains(&word))
+/// The names the program binds and the classes it declares: a program's own `class B` hides sound's note B
+fn own_names(node: &Node) -> HashSet<String> {
+	let mut names = crate::library_words::defined_names(node);
+	names.extend(crate::lowering::nodes::declared_class_names(node));
+	names
 }
 
 fn answered_statically(node: Node, defined: &HashSet<String>) -> Node {
@@ -108,7 +63,7 @@ pub fn lower_named_words(node: Node) -> Node {
 	if !node.mentions_any(&[HELP_WORD, DUMP_WORD]) {
 		return node;
 	}
-	let defined = crate::library_words::defined_names(&node);
+	let defined = own_names(&node);
 	let words = Words::of(&node, &defined);
 	words.answered(node)
 }
@@ -132,6 +87,9 @@ impl Words {
 		});
 		for module in used_modules {
 			for name in crate::modules::std_module_definitions(module).unwrap_or_default() {
+				if defined.contains(name) {
+					continue;
+				}
 				let docs = crate::modules::std_docs::word_help(module, name);
 				words.help.insert(name.clone(), docs.unwrap_or_else(|| name.clone()));
 				let definition = crate::modules::std_docs::word_definition(module, name);

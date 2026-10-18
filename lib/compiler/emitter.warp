@@ -31,10 +31,11 @@ names_subsections = {functions: 1, locals: 2, types: 4, globals: 7, fields: 10}
 mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
 # [storage type, mutable]. $text: the UTF-8 bytes; $list: a vector, its items boxed; $Node(kind i64, data anyref,
-# value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box
-gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5}
-gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0]]
-gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]]]
+# value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box; an exact
+# rational an Int $Node holding a $Ratio(numerator, denominator) of two $i64box (src/run/wasm_reader.rs read_payload)
+gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5, ratio: 6}
+gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0]]
+gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
 node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, bool: 257, list: 264}
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
@@ -46,12 +47,12 @@ no_value = 64
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i32_sub: 107, i32_and: 113, i32_or: 114,
-	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_neg: 154, i32_wrap_i64: 167, i64_extend_i32_u: 173,
-	f64_convert_i64_s: 185, ref_is_null: 209}
+	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
+	f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
-	array_set: 14, array_len: 15, array_copy: 17, ref_i31: 28, i31_get_u: 30}
+	array_set: 14, array_len: 15, array_copy: 17, ref_test: 20, ref_i31: 28, i31_get_u: 30}
 # the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate
 i31_type = 108
 ref_null = 208
@@ -254,14 +255,16 @@ list_value(body: Body, items: any) := {
 }
 # an int as an i32 index
 index_code(value: any) := converted(value, "int") + [op.i32_wrap_i64]
-# `#x`: the bytes of a text, the items of a list
+# `#x`: the characters of a text, the items of a list, either known only at run time
 length(value: any) := {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
 	if value#1 == "list" { return ["int", value#2 + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]] }
+	if value#1 == "node" { return runtime_call("node_length", [value]) }
 	refuse("the length of a " + value#1)
 }
 # `xs#i = v`: the i-th item becomes v, boxed; the assignment gives v
 element_assignment(body: Body, list: any, index: any, value: any) := {
+	if list#1 == "node" { return runtime_call("node_set_at", [list, index, value]) }
 	if list#1 != "list" { return refuse("an assignment to an element of a " + list#1) }
 	held = uleb(fresh_local(body, value#1))
 	items = list#2 + gc_code("struct_get", [gc.list, 1]) + index_code(index) + [op.i32_const, 1, op.i32_sub]
@@ -270,6 +273,7 @@ element_assignment(body: Body, list: any, index: any, value: any) := {
 }
 # `xs#i`: the i-th item, counted from 1
 element(list: any, index: any) := {
+	if list#1 == "node" { return runtime_call("node_at", [list, index]) }
 	if list#1 != "list" { return refuse("an element of a " + list#1) }
 	items = list#2 + gc_code("struct_get", [gc.list, 1])
 	["node", items + index_code(index) + [op.i32_const, 1, op.i32_sub] + gc_code("array_get", [gc.items])]
@@ -307,9 +311,21 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	}
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
+	if name == "is_ratio" { return ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]] }
+	if name == "ratio_of" {
+		box = v => converted(v, "int") + gc_code("struct_new", [gc.int_box])
+		return ["node", node(node_kind_codes.int, box(values#1) + box(values#2) + gc_code("struct_new", [gc.ratio]))]
+	}
+	if name == "ratio_numerator" { return ["int", ratio_part(values#1#2, 0)] }
+	if name == "ratio_denominator" { return ["int", ratio_part(values#1#2, 1)] }
 	if name == "unboxed_float" { return ["float", unboxed(values#1#2, gc.float_box)] }
 	if name == "int_quotient" { return ["int", values#1#2 + values#2#2 + [op.i64_div_s]] }
 	if name == "int_remainder" { return ["int", values#1#2 + values#2#2 + [op.i64_rem_s]] }
+	if name == "bits_of_float" { return ["int", converted(values#1, "float") + [op.i64_reinterpret_f64]] }
+	if name == "float_of_bits" { return ["float", values#1#2 + [op.f64_reinterpret_i64]] }
+	if name == "float_floor" { return ["float", converted(values#1, "float") + [op.f64_floor]] }
+	if name == "float_ceil" { return ["float", converted(values#1, "float") + [op.f64_ceil]] }
+	if name == "truncated" { return ["int", converted(values#1, "float") + [op.i64_trunc_f64_s]] }
 	if name == "code_of" { return ["int", values#1#2 + [op.i64_extend_i32_u]] }
 	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code("array_set", [gc.text])] }
 	if name == "output_byte" { return [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)] }
@@ -321,12 +337,16 @@ intrinsic(body: Body, name: text, arguments: any) := {
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2}
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
+	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, truncated: 1}
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
 kind_code_of(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and]
 payload(code: any, held: int) := as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [held])
 unboxed(code: any, box: int) := payload(code, box) + gc_code("struct_get", [box, 0])
+# whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
+ratio_test(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_test", [gc.ratio])
+ratio_part(code: any, field: int) := payload(code, gc.ratio) + gc_code("struct_get", [gc.ratio, field]) + gc_code("ref_cast_null", [gc.int_box]) + gc_code("struct_get", [gc.int_box, 0])
 # fd_write of the first `count` output bytes, its error code as an int
 write_output(count: any) := {
 	word = [op.i32_store, 2, 0]
@@ -379,7 +399,7 @@ local_value(body: Body, n: any) := {
 operation(body: Body, symbol: text, a: any, b: any) := {
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
-	if symbol == "#" and a#1 == "list" { return element(a, b) }
+	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(a, b) }
 	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, b]) }
 	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
 	textual = a#1 in characters or b#1 in characters
@@ -391,7 +411,7 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 	}
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
-	if symbol == "/" and kind == "int" { return refuse("int division, an exact rational") }
+	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
 	ops = if kind == "float" then float_ops else int_ops
 	if not (symbol in ops) { return refuse("the operator " + symbol + " on " + kind) }
 	result = if symbol in comparisons then "bool" else kind
@@ -399,7 +419,8 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 }
 
 # an operator on boxed values, by the kinds they hold at run time: `+` is the runtime word node_add; a comparison
-# between two texts or characters orders them as texts; two ints stay ints; any other two are floats
+# between two texts or characters orders them as texts; two ints stay ints; an exact rational with an int or another
+# stays exact; any other two are floats
 node_operation(body: Body, symbol: text, a: any, b: any) := {
 	if symbol == "+" { return runtime_call("node_add", [["node", a], ["node", b]]) }
 	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
@@ -407,12 +428,22 @@ node_operation(body: Body, symbol: text, a: any, b: any) := {
 	ints = operation(body, symbol, ["int", unboxed(left#2, gc.int_box)], ["int", unboxed(right#2, gc.int_box)])
 	floats = operation(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
 	kind = if ints#1 == "bool" then "bool" else "node"
-	numbers = both_of_kind(left#2, right#2, node_kind_codes.int) + chosen(kind, ints, floats)
+	exact = exact_operation(body, symbol, left, right, floats)
+	integers = ratio_test(left#2) + ratio_test(right#2) + [op.i32_or] + chosen(kind, exact, ints)
+	numbers = both_of_kind(left#2, right#2, node_kind_codes.int) + chosen(kind, [kind, integers], floats)
 	code = a + [op.local_set] + left#2[1..] + b + [op.local_set] + right#2[1..]
 	if not (symbol in comparisons) { return [kind, code + numbers] }
 	texts = operation(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + chosen(kind, texts, [kind, numbers])]
+}
+# an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
+# operators without one take the floats
+exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div"}
+exact_operation(body: Body, symbol: text, left: any, right: any, floats: any) := {
+	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
+	if symbol in comparisons { return operation(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
+	floats
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
 chosen(kind: text, a: any, b: any) := [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]
@@ -558,19 +589,23 @@ key_expression(body: Body, n: any) := {
 	}
 	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
-	if operator == "-" and left == ø { return negation(expression(body, right)) }
+	if operator == "-" and left == ø { return negation(body, expression(body, right)) }
 	if operator == "and" or operator == "or" { return logical(body, operator, left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
-	if operator == "as" and right == symbol("float") { return ["float", converted(expression(body, left), "float")] }
+	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
+		return [name_of(right), converted(expression(body, left), name_of(right))]
+	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø { return refuse("the operator " + operator) }
 	operation(body, operator, expression(body, left), expression(body, right))
 }
 right_of_if(n: any) := value_of(n)
 
-negation(value: any) := {
+# -value; a value known only at run time as 0 - value
+negation(body: Body, value: any) := {
 	if value#1 == "float" { return ["float", value#2 + [op.f64_neg]] }
+	if value#1 == "node" { return operation(body, "-", number_value(0), value) }
 	if value#1 != "int" { refuse("the negation of a " + value#1) }
 	["int", [op.i64_const, 0] + value#2 + [int_ops["-"]]]
 }
