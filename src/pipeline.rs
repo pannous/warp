@@ -6,7 +6,7 @@ use crate::compiler::compile_context;
 pub use crate::compiler::compile_mode::*;
 use crate::node::{Bracket, Node, Separator};
 use crate::warp_parser::WarpParser;
-use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
+use crate::wasm_emitter::{WasmGcEmitter, emit_module, find_struct_instantiation};
 #[cfg(feature = "native")]
 use log::warn;
 
@@ -182,8 +182,10 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::transitions::lower,
 	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after markup_tags read `p.note "hi"` as an element
 	crate::lowering::member_phrases::lower,
-	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
-	crate::lowering::introspection::lower,
+	// `meta(math)`, `meta(P)`: what the compiler knows of a module or class, as a map, and its views `dir(time)`,
+	// `methods(math)` (meta_values.rs), before any pass reads time as a value
+	crate::lowering::meta_values::lower,
+	crate::lowering::meta_values::with_table,
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
 	// `help(sound)`, `help(midi)`: a standard module's index, a word's head and comment (word_help.rs), before reflection.rs
 	// answers help(sound) with the signature of the word sound
@@ -398,10 +400,11 @@ const MEANING_PASSES: &[Pass] = &[
 /// A module's source after the passes the program ran before its `use` was resolved (MODULE_SOURCE_PHASES):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
-/// become calls) serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
+/// become calls), meta_values::with_table (the program's table of its classes and modules), serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let program_only: [Pass; 3] = [
+	let program_only: [Pass; 4] = [
 		crate::lowering::getters::lower,
+		crate::lowering::meta_values::with_table,
 		crate::lowering::serve::with_default_routes,
 		crate::lowering::serve::with_page_routes,
 	];
@@ -478,7 +481,7 @@ pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
-	use crate::analyzer::effects::{without_constraints, EffectReport};
+	use crate::analyzer::effects::{EffectReport, without_constraints};
 	// `rewrite p => t` rules of the program and of the standard modules it mentions (rewrites.rs, lib/channels.warp:
 	// `ch.send(v)` of `ch = channel()`) as written, before any check or pass reads a rule's line
 	let node = crate::modules::rewrites::lower(node);
@@ -737,7 +740,7 @@ fn checked_markup(result: Node) -> Node {
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
 pub fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
-	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
+	use crate::run::wasm_reader::{Imports, read_bytes_with_imports};
 	let result = crate::compiler::phase_times::timed("run (with wasmtime compile)", || {
 		if needs_ffi || needs_wasi || needs_host {
 			read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })

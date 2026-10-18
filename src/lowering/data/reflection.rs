@@ -10,7 +10,7 @@ use crate::words::{DIR_WORD, MAP_WORD};
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
-use crate::node::{symbol, text, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator, symbol, text};
 use crate::operators::Op;
 
 use crate::analyzer::effects::EFFECTS_WORD;
@@ -33,6 +33,8 @@ const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
 const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else OTHERWISE";
+/// A module known only at run time (`f(m) := dir(m); f(math)`): its words from its meta (meta_values.rs)
+const DIR_MODULE_TEMPLATE: &str = "if RECEIVER is symbol then meta_of(RECEIVER).words else []";
 pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
@@ -138,7 +140,9 @@ fn called_functions(
 		let written = format!("{word} {name}");
 		let warning = crate::errors::diagnostic::Diagnostic::at(
 			part,
-			format!("`{written}` calls {name}, a function without parameters; write `{word} function {name}` for the function itself"),
+			format!(
+				"`{written}` calls {name}, a function without parameters; write `{word} function {name}` for the function itself"
+			),
 		)
 		.offer("the function itself", &written, format!("{word} function {name}"));
 		if !crate::errors::diagnostic::warned_before(&warning) {
@@ -676,12 +680,7 @@ impl Objects {
 
 	/// Inherited names first, a name the class redeclares kept in its parent's place
 	fn names(&self, class: &str, own: fn(&ClassLayout) -> &Vec<String>) -> Vec<String> {
-		let Some(layout) = self.layouts.get(class) else {
-			return vec![];
-		};
-		let mut names = layout.parent.as_deref().map(|parent| self.names(parent, own)).unwrap_or_default();
-		names.extend(own(layout).iter().filter(|name| !names.contains(name)).cloned().collect::<Vec<_>>());
-		names
+		inherited_names(&self.layouts, class, own)
 	}
 
 	fn fields(&self, class: &str) -> Vec<String> {
@@ -836,6 +835,20 @@ impl Objects {
 	}
 }
 
+/// A class's names of one kind (fields or methods), inherited ones first
+pub(crate) fn inherited_names(
+	layouts: &HashMap<String, ClassLayout>,
+	class: &str,
+	own: fn(&ClassLayout) -> &Vec<String>,
+) -> Vec<String> {
+	let Some(layout) = layouts.get(class) else {
+		return vec![];
+	};
+	let mut names = layout.parent.as_deref().map(|parent| inherited_names(layouts, parent, own)).unwrap_or_default();
+	names.extend(own(layout).iter().filter(|name| !names.contains(name)).cloned().collect::<Vec<_>>());
+	names
+}
+
 /// `dir(x)` no earlier pass answered (no module, class, map, function or task it knows): a map's keys at run time, else
 /// no names, so `dir pi` answers instead of being "undefined: dir" (card error-undefined-dir)
 pub fn lower_unknown_dir(node: Node) -> Node {
@@ -866,10 +879,11 @@ fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> N
 }
 
 /// What `dir` lists of a value that is no instance of the program's classes: a map's keys, else its type's methods
-/// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), else none
+/// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), a module's
+/// words, else none
 fn dir_otherwise(subject: &Node) -> Node {
 	let methods = crate::modules::type_modules().into_iter().rev().filter(|(module, _)| *module != MAP_WORD).fold(
-		text_list(&[]),
+		super::nodes::filled(DIR_MODULE_TEMPLATE, [("RECEIVER", subject.clone())]),
 		|otherwise, (module, words)| {
 			type_dispatch(subject, module, text_list(&super::members::type_dir_names(module, words)), otherwise)
 		},
