@@ -26,10 +26,16 @@ is_round(view: any) := kind_of(view) == "list" and view#2 == "("
 # the parameters of a lambda's left side `(a, b)`, `a`, or of a head's items after its name; a group of them, `f (a b)`,
 # gives its items
 parameters_of(head: any) := {
-	if not is_round(head) { return [binding_name(head)] }
+	if not is_round(head) { return bound_names(head) }
 	names = []
-	for item in head[3 ..] { names += if is_round(item) then parameters_of(item) else [binding_name(item)] }
+	for item in head[3 ..] { names += if is_round(item) then parameters_of(item) else bound_names(item) }
 	names
+}
+
+# the name a parameter binds, none for a pattern without one: `f([]) := 0`
+bound_names(view: any) := {
+	name = binding_name(view)
+	if name == ø then [] else [name]
 }
 
 # `def f(a) {…}` arrives as `((f (a)) {…})`: the head `(f (a))`

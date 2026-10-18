@@ -1,19 +1,46 @@
 //! The compile through the warp-written compiler (card warp-pipeline-suite, notes/self_hosting.md): with
 //! WARP_SELF_HOSTED set, lib/compiler/parser.warp parses each program and every Rust pass with a warp twin in
-//! lib/compiler/passes.warp gives way to it; the passes without a twin and the emitter stay Rust. The suite run this
-//! way (tests/self_hosted.sh) counts how much of warp the warp compiler already compiles.
-//! A stage is passes.warp `stage(request)`, compiled once per worker thread: the compile of the stage program has
-//! thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
-use crate::compiler::node_views::{handled_plain_view, json_text, node_of_handled_view, view_json};
+//! lib/compiler/passes.warp gives way to it, and emitter.warp emits each program inside its core; the passes without
+//! a twin and the Rust emitter do the rest. The suite run this way (tests/self_hosted.sh) counts how much of warp the
+//! warp compiler already compiles.
+//! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
+//! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
+use crate::compiler::node_views::{handled_plain_view, json_text, node_of_handled_view, plain_view, view_json};
 use crate::node::Node;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
 const SWITCH: &str = "WARP_SELF_HOSTED";
-const STAGES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp");
+/// passes.warp `stage` of the request in the worker's input file
+const PASSES_PROGRAM: &str =
+	concat!("use \"", env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)))");
+/// analyzer.warp `kinds` of the view in the worker's input file, as JSON: a program of its own, as analyzer.warp's
+/// names clash with parser.warp's (its local `digits`, its field `.separator`)
+const ANALYSIS_PROGRAM: &str = concat!(
+	"use \"",
+	env!("CARGO_MANIFEST_DIR"),
+	"/lib/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(kinds(node_of(json(read(args#1)))))"
+);
+/// emitter.warp `wasm_module` of the lowered program's view in the worker's input file and the runtime words' view in
+/// its setup file: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
+const EMIT_PROGRAM: &str = concat!(
+	"use \"",
+	env!("CARGO_MANIFEST_DIR"),
+	"/lib/compiler/emitter.warp\"\nuse os\nwasm_module(node_of(json(read(args#1))), node_of(json(read(args#2))))"
+);
+/// The runtime words emitter.warp compiles into a module, lowered like a program
+const RUNTIME_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/runtime.warp");
+/// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
+const OUTSIDE_THE_CORE: &str = "outside the core: ";
+/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
+#[cfg(feature = "native")]
+const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
+/// The extension of a stage's setup JSON in the module cache
+#[cfg(feature = "native")]
+const SETUP_EXTENSION: &str = "json";
 /// The input files of the stage programs, one per worker
 const INPUT_FOLDER: &str = "warp-self-hosted";
 /// Stack of a worker: the stage program's compile recurses as deeply as a test thread's
@@ -40,8 +67,16 @@ thread_local! {
 /// One request to a worker: its JSON, and where the result's view goes as JSON
 type Request = (String, Sender<String>);
 
-/// The idle workers
-static WORKERS: Mutex<Vec<Sender<Request>>> = Mutex::new(Vec::new());
+/// A stage program, the JSON a worker writes once for it to read as `args#2`, and its idle workers
+struct Stage {
+	program: &'static str,
+	setup: Option<fn() -> String>,
+	workers: Mutex<Vec<Sender<Request>>>,
+}
+
+static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: None, workers: Mutex::new(Vec::new()) };
+static ANALYSIS: Stage = Stage { program: ANALYSIS_PROGRAM, setup: None, workers: Mutex::new(Vec::new()) };
+static EMIT: Stage = Stage { program: EMIT_PROGRAM, setup: Some(runtime_words), workers: Mutex::new(Vec::new()) };
 
 fn enabled() -> bool {
 	static SWITCHED_ON: OnceLock<bool> = OnceLock::new();
@@ -63,23 +98,86 @@ pub fn pass(pass: Pass, node: &Node) -> Option<Node> {
 	Some(stage(*index, &view_json(&view), &handles))
 }
 
+/// The kinds analyzer.warp finds in the program `view` shows: {functions: {f: {params: [kind…], result: kind}},
+/// variables: {x: kind}, value: kind}; None when not self-hosted, the failure when warp fails
+pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
+	enabled().then(|| kinds_of(view))
+}
+
+/// The kinds analyzer.warp finds in the program `view` shows, self-hosted or not
+pub fn kinds_of(view: &Node) -> Result<serde_json::Value, String> {
+	let kinds = answer(&ANALYSIS, view_json(view))?;
+	let failed = || format!("the self-hosted analysis failed: {kinds}");
+	let kinds: String = serde_json::from_str(&kinds).map_err(|_| failed())?;
+	serde_json::from_str(&kinds).map_err(|_| failed())
+}
+
+/// The module emitter.warp emits for the lowered `node`; None when not self-hosted or the program is outside its core,
+/// an error when emitter.warp fails
+pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
+	if !enabled() {
+		return None;
+	}
+	let module = answer(&EMIT, view_json(&plain_view(node))).and_then(|answer| module_of(&answer));
+	match module {
+		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
+			log::trace!("self-hosted emit: {refusal}");
+			None
+		}
+		Err(failure) => Some(Err(crate::node::error(&format!("the self-hosted emitter failed: {failure}")))),
+		Ok(bytes) => {
+			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host: false, needs_wasi: true, needs_ffi: false }))
+		}
+	}
+}
+
+/// The bytes of the module emitter.warp answers as a list of byte numbers, else its answer as the failure
+fn module_of(answer: &str) -> Result<Vec<u8>, String> {
+	match serde_json::from_str(answer) {
+		Ok(serde_json::Value::Array(items)) => {
+			let bytes: Option<Vec<u8>> =
+				items.iter().map(|item| item.as_u64().and_then(|byte| u8::try_from(byte).ok())).collect();
+			bytes.ok_or_else(|| format!("a module byte beyond 0..255: {answer}"))
+		}
+		Ok(serde_json::Value::String(refusal)) => Err(refusal),
+		_ => Err(answer.to_string()),
+	}
+}
+
+/// The view of lib/compiler/runtime.warp lowered, as JSON
+fn runtime_words() -> String {
+	let lowered = std::fs::read_to_string(RUNTIME_WORDS)
+		.map_err(|failure| crate::node::error(&failure.to_string()))
+		.and_then(|source| crate::pipeline::lower(&source));
+	match lowered {
+		Ok(lowered) => view_json(&plain_view(&lowered)),
+		Err(failure) => panic!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()),
+	}
+}
+
 /// The node of the view the stage gives, its data handles the nodes in `handles`; a warp failure is an error node, so the program fails as it should
 fn stage(index: usize, argument: &str, handles: &[Node]) -> Node {
-	let request = format!("[{index}, {argument}]");
-	let worker = WORKERS.lock().unwrap().pop().unwrap_or_else(spawn_worker);
-	let (reply_to, reply) = channel();
-	let answer = worker.send((request, reply_to)).ok().and_then(|_| reply.recv().ok());
-	let Some(answer) = answer else {
-		return crate::node::error("the self-hosted stage's worker died");
+	let answer = match answer(&PASSES, format!("[{index}, {argument}]")) {
+		Ok(answer) => answer,
+		Err(failure) => return crate::node::error(&failure),
 	};
-	WORKERS.lock().unwrap().push(worker);
 	match serde_json::from_str(&answer) {
 		Ok(view) => node_of_handled_view(&view_of_json(view), handles),
 		Err(_) => crate::node::error(&format!("self-hosted stage {index} failed: {answer}")),
 	}
 }
 
-fn spawn_worker() -> Sender<Request> {
+/// The JSON an idle worker of `stage` answers the request with, or the failure text when warp fails
+fn answer(stage: &'static Stage, request: String) -> Result<String, String> {
+	let worker = stage.workers.lock().unwrap().pop().unwrap_or_else(|| spawn_worker(stage));
+	let (reply_to, reply) = channel();
+	let answer = worker.send((request, reply_to)).ok().and_then(|_| reply.recv().ok());
+	let answer = answer.ok_or("the self-hosted stage's worker died")?;
+	stage.workers.lock().unwrap().push(worker);
+	Ok(answer)
+}
+
+fn spawn_worker(stage: &'static Stage) -> Sender<Request> {
 	static WORKERS_SPAWNED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 	let number = WORKERS_SPAWNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 	let folder = std::env::temp_dir().join(INPUT_FOLDER);
@@ -88,7 +186,7 @@ fn spawn_worker() -> Sender<Request> {
 	let work = move || {
 		IN_WORKER.with(|inside| inside.set(true));
 		let _ = std::fs::create_dir_all(&folder);
-		let stages = StageProgram::new(input);
+		let stages = StageProgram::new(stage, input);
 		for (request, reply_to) in incoming {
 			let _ = reply_to.send(stages.run(&request));
 		}
@@ -97,16 +195,27 @@ fn spawn_worker() -> Sender<Request> {
 	requests
 }
 
-/// passes.warp `stage` of the JSON its input file holds, compiled once
+/// A stage program answering the JSON its input file holds, compiled once per worker, and kept in the module cache across
+/// runs while warp, lib/ and the WARP_ settings stay as they are (a compile of it takes seconds)
 struct StageProgram {
 	module: Result<crate::pipeline::CompiledModule, Node>,
 	input: PathBuf,
+	setup: Option<PathBuf>,
 }
 
 impl StageProgram {
-	fn new(input: PathBuf) -> Self {
-		let program = format!("use \"{STAGES}\"\nstage(json(read(\"{}\")))", input.display());
-		StageProgram { module: crate::pipeline::compile(&program), input }
+	fn new(stage: &Stage, input: PathBuf) -> Self {
+		let setup = stage.setup.map(|setup| {
+			let file = input.with_extension("setup.json");
+			let _ = std::fs::write(&file, kept_setup(stage.program, setup));
+			file
+		});
+		// the files are the worker's arguments, so the program, and its kept module, is the same for every worker
+		#[cfg(feature = "native")]
+		crate::modules::std_adapters::set_program_arguments(
+			std::iter::once(&input).chain(&setup).map(|file| file.display().to_string()).collect(),
+		);
+		StageProgram { module: compiled_stages(stage.program), input, setup }
 	}
 
 	/// The view the stage gives as JSON, or the failure as a text that is no JSON
@@ -125,8 +234,82 @@ impl StageProgram {
 
 impl Drop for StageProgram {
 	fn drop(&mut self) {
-		let _ = std::fs::remove_file(&self.input);
+		std::iter::once(&self.input).chain(&self.setup).for_each(|file| {
+			let _ = std::fs::remove_file(file);
+		});
 	}
+}
+
+/// The setup JSON of the stage `program` made, or the one kept for it (lowering the runtime words takes seconds)
+#[cfg(feature = "native")]
+fn kept_setup(program: &str, setup: fn() -> String) -> String {
+	use crate::run::module_cache::{keep_bytes, kept_bytes};
+	let key = stage_key(&format!("{program}\nsetup"));
+	let kept = key.as_deref().and_then(|key| kept_bytes(key, SETUP_EXTENSION));
+	if let Some(json) = kept.and_then(|bytes| String::from_utf8(bytes).ok()) {
+		return json;
+	}
+	let json = setup();
+	if let Some(key) = key {
+		keep_bytes(&key, SETUP_EXTENSION, json.as_bytes());
+	}
+	json
+}
+
+/// The setup JSON of a stage program made; the browser build keeps nothing
+#[cfg(not(feature = "native"))]
+fn kept_setup(_program: &str, setup: fn() -> String) -> String {
+	setup()
+}
+
+/// The stage program compiled; the browser build keeps no modules
+#[cfg(not(feature = "native"))]
+fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Node> {
+	crate::pipeline::compile(program)
+}
+
+/// The stage program compiled, or the module kept for it
+#[cfg(feature = "native")]
+fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Node> {
+	use crate::run::program_cache::{keep_under, kept_under};
+	let key = stage_key(program);
+	if let Some(module) = key.as_deref().and_then(kept_under) {
+		return Ok(module);
+	}
+	let module = crate::pipeline::compile(program)?;
+	if let Some(key) = key {
+		keep_under(&key, &module);
+	}
+	Ok(module)
+}
+
+/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/; none
+/// when the binary has no path
+#[cfg(feature = "native")]
+fn stage_key(program: &str) -> Option<String> {
+	use sha2::{Digest, Sha256};
+	let binary = std::env::current_exe().ok()?;
+	let mut hasher = Sha256::new();
+	let settings = crate::run::program_cache::warp_settings();
+	hasher.update(format!(
+		"{}\n{:?}\n{settings:?}\n{program}\n",
+		binary.display(),
+		crate::run::program_cache::stamp(&binary)
+	));
+	let mut files: Vec<PathBuf> = files_below(PathBuf::from(LIBRARY));
+	files.sort();
+	for file in files {
+		hasher.update(format!("{}\n", file.display()));
+		hasher.update(std::fs::read(&file).unwrap_or_default());
+	}
+	Some(crate::extensions::hex_text(&hasher.finalize()))
+}
+
+/// The files below `folder`, at any depth
+#[cfg(feature = "native")]
+fn files_below(folder: PathBuf) -> Vec<PathBuf> {
+	let entries = std::fs::read_dir(&folder).into_iter().flatten().flatten().map(|entry| entry.path());
+	entries.flat_map(|path| if path.is_dir() { files_below(path) } else { vec![path] }).collect()
 }
 
 /// The view a JSON value writes: an array a list, null ø

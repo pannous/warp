@@ -155,6 +155,10 @@ b = a[i]
 b = a[1...3]
 simplify(code) := match code { data($a + 0) => a; _ => code }
 match data(g(y, y)) { data($f($x, $x)) => "twice"; _ => "no" }
+is_post(m: symbol) := m == :post
+is_post(:post)
+methods = [:get, :post]
+size([]) := 0
 func add1(x int) int { return x + 1 }
 scaled(int k, s Shape) := k
 tail_of(vararg xs) := xs
