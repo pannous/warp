@@ -1018,8 +1018,9 @@ impl Lowering {
 		}
 		let (word_node, name, arguments) = method_parts(method)?;
 		// `c.name` of a parameter `c: function`: what the function value answers at run time
-		let is_function_parameter =
-			receiver.symbol_name().is_some_and(|parameter| self.function_parameters.borrow().iter().any(|p| p == parameter));
+		let is_function_parameter = receiver
+			.symbol_name()
+			.is_some_and(|parameter| self.function_parameters.borrow().iter().any(|p| p == parameter));
 		let is_function_word = || crate::wasm_emitter::functions::function_words().any(|(word, _)| word == name);
 		if is_function_parameter && arguments.is_empty() && is_function_word() {
 			return Some(field_lookup(receiver, name, word_node));
