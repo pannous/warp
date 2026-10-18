@@ -690,10 +690,9 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 				Some((name.name(), (parameter.drop_meta().clone(), None)))
 			}
 			Node::Key(name, Op::Colon, _) => Some((name.name(), (Node::Symbol(name.name()), None))),
-			// `f: (float) -> float`, parsed `(f: (float)) -> float`: as untyped, a quantity reaching it in a branch not
-			// taken (play's tone) is no error here; function_types.rs typed the functions passed for it already
+			// `f: (float) -> float`, parsed `(f: (float)) -> float`: a function, no quantity
 			Node::Key(typed, Op::Arrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
-				Some((typed.name(), (Node::Symbol(typed.name()), None)))
+				Some((typed.name(), (parameter.drop_meta().clone(), None)))
 			}
 			// `t = 1s`: a call leaving t out gives the default
 			Node::Key(name, Op::Assign, default) => {
