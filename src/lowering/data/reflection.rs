@@ -51,8 +51,12 @@ const DOC_WORD: &str = "doc";
 /// `f.full`: what `print f` shows, the doc as comment lines above the definition (user, card module-methods)
 const FULL_WORD: &str = "full";
 /// Other names of a function's words (user, card module-methods): each read as its canonical word with a note
-pub(crate) const FUNCTION_WORD_ALIASES: [(&str, &str); 3] =
-	[("description", DOC_WORD), ("returns", RETURN_TYPE_WORD), ("representation", DUMP_WORD)];
+pub(crate) const FUNCTION_WORD_ALIASES: [(&str, &str); 4] = [
+	("description", DOC_WORD),
+	("returns", RETURN_TYPE_WORD),
+	("representation", DUMP_WORD),
+	(PARAMS_WORDS[1], PARAMS_WORDS[0]),
+];
 /// What `dir(f)` lists of a function: the words reflection answers for it
 const FUNCTION_WORDS: [&str; 4] = [PARAMS_WORDS[0], SIGNATURE_WORD, BODY_WORD, EFFECTS_WORD];
 /// `dir(sqrt)`: a library word has no body to show
@@ -211,22 +215,8 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				_ => word,
 			};
 			let reflected = match (word, function) {
-				(word, Some(function)) if PARAMS_WORDS.contains(&word) => {
-					Some(text_list(&function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>()))
-				}
-				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
-				(DUMP_WORD, Some(function)) => Some(Node::Text(definition(function))),
-				(DOC_WORD, Some(function)) => Some(Node::Text(function.doc.clone().unwrap_or_default())),
-				(FULL_WORD, Some(function)) => Some(Node::Text(printed(function))),
-				(NAME_WORD, Some(function)) => Some(Node::Text(function.name.clone())),
-				(RETURN_TYPE_WORD, Some(function)) => Some(Node::Text(result_type(function))),
-				(BODY_WORD, Some(function)) => Some(crate::blocks::quoted_code(function.body.as_ref().clone())),
-				(word, None) if PARAMS_WORDS.contains(&word) => library().map(|(params, _)| text_list(&params)),
-				(SIGNATURE_WORD, None) => library().map(|(_, signature)| Node::Text(signature)),
-				(NAME_WORD, None) => library().map(|_| Node::Text(name.to_string())),
-				(RETURN_TYPE_WORD, None) => library().map(|(_, signature)| Node::Text(return_type(&signature))),
-				// `use reflection`: what only the emitter knows (wasm index) is read off the function value at run time
-				(word, Some(_)) if is_run_time_word(word) => {
+				// the function value answers its words at run time (closures.rs FUNCTION_WORDS)
+				(word, _) if is_run_time_word(word) && (function.is_some() || library().is_some()) => {
 					Some(key(crate::closures::function_reference(name.to_string()), Op::Dot, symbol(word)))
 				}
 				_ => None,
@@ -239,10 +229,9 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 	node.map_children(|child| as_reflection_words(child, functions, defined))
 }
 
-/// A word a function value answers at run time only: the reflection mode's (function_words)
+/// A word a function value answers at run time (function_words)
 fn is_run_time_word(word: &str) -> bool {
 	crate::wasm_emitter::functions::function_words().any(|(answered, _)| answered == word)
-		&& ![NAME_WORD, DOC_WORD, FULL_WORD, SIGNATURE_WORD, RETURN_TYPE_WORD, DUMP_WORD].contains(&word)
 }
 
 /// The canonical word of an alias of a function's word: `doc` of `description`
@@ -286,11 +275,6 @@ pub(crate) fn builtin_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_tests::BUILTIN_TYPE))
 }
 
-/// `(a, b) -> int` → `int`
-fn return_type(signature: &str) -> String {
-	signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string()
-}
-
 /// A library word's parameter names and signature, unless the program defines that name itself
 fn library_signature(name: &str, functions: &Functions, defined: &HashSet<String>) -> Option<(Vec<String>, String)> {
 	if functions.contains_key(name) || defined.contains(name) {
@@ -330,7 +314,7 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 	}
 	match word {
 		DIR_WORD => Some(text_list(&FUNCTION_WORDS.map(String::from))),
-		crate::type_tests::TYPE_WORD => Some(function_type(&signature(&functions[name]))),
+		crate::type_tests::TYPE_WORD => Some(call(word, vec![crate::closures::function_reference(name.to_string())])),
 		HELP_WORD => Some(Node::Text(help_text(&functions[name]))),
 		_ => None,
 	}

@@ -81,7 +81,7 @@ impl WarpParser {
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
-			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
+			// `.card { … }`: a leading-dot name, a class selector in a style block (lib/markup.warp style)
 			'.' if self.is_identifier_start(1) => self.symbol_after(1, |name| Node::Symbol(format!(".{name}"))),
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'[' => {

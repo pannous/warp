@@ -125,6 +125,9 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::tag_entries::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::lowering::soft_keywords::lower,
+	// `fib(0) := 0; fib(n) := …`: clauses with pattern parameters are one function trying them in order
+	// (pattern_clauses.rs), before parameter_patterns reads a single clause's pattern
+	crate::lowering::pattern_clauses::lower,
 	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
 	crate::lowering::parameter_patterns::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
@@ -164,9 +167,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::references::lower,
 	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call
 	crate::lowering::serve::lower,
-	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
-	// reads `p.note{…}` as a tag
-	crate::lowering::style_rules::lower,
 	// `xs map f`: an iteration word between a list and its function is the method call (lambdas.rs)
 	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
@@ -407,8 +407,11 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 		.flat_map(|phase| phase.iter())
 		.enumerate()
 		.filter(|(_, pass)| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
+		// `style(sheet: data)` of lib/markup.warp: its data parameters typed any, as a program's (typed_block_arguments.rs)
 		.fold(
-			crate::lowering::for_loop::headers::lower(crate::modules::rewrites::lower(module)),
+			crate::lowering::typed_block_arguments::lower(crate::lowering::for_loop::headers::lower(
+				crate::modules::rewrites::lower(module),
+			)),
 			|module, (index, pass)| {
 				crate::compiler::phase_times::timed("module source passes", || {
 					crate::compiler::phase_times::timed_as(|| format!("module source pass {index}"), || pass(module))

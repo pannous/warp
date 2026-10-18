@@ -313,6 +313,9 @@ PASSED:
   ✓ control::test_function_objects::returns_is_return_type
   ✓ control::test_function_objects::the_type_of_a_function_names_its_signature
   ✓ control::test_function_objects::the_words_of_a_function_reference
+  ✓ control::test_function_value_words::a_functions_body_is_code_from_its_value
+  ✓ control::test_function_value_words::a_library_words_return_type_comes_from_its_signature
+  ✓ control::test_function_value_words::a_user_functions_words_come_from_its_value
   ✓ control::test_glued_block_words::a_glued_do_runs_its_block
   ✓ control::test_glued_block_words::a_glued_loop_runs_its_block
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
@@ -1433,8 +1436,10 @@ PASSED:
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
   ✓ functions::test_data_parameter::a_data_argument_is_its_code
+  ✓ functions::test_data_parameter::a_library_function_takes_data
   ✓ functions::test_data_parameter::a_tag_block_is_the_data_argument
   ✓ functions::test_data_parameter::bound_names_in_data_are_their_values
+  ✓ functions::test_data_parameter::names_assigned_in_data_stay_written
   ✓ functions::test_data_parameter::other_parameters_take_values
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_is_a_function
@@ -1823,6 +1828,13 @@ PASSED:
   ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
   ✓ functions::test_passed_through_functions::a_returned_parameter_is_called
   ✓ functions::test_passed_through_functions::a_variable_holds_the_returned_function
+  ✓ functions::test_pattern_clauses::a_parameter_name_leaves_a_global_of_the_same_name_alone
+  ✓ functions::test_pattern_clauses::a_value_no_clause_takes_is_no_case
+  ✓ functions::test_pattern_clauses::clauses_are_tried_in_order
+  ✓ functions::test_pattern_clauses::code_clauses_rewrite_code
+  ✓ functions::test_pattern_clauses::list_clauses_take_a_list_apart
+  ✓ functions::test_pattern_clauses::literal_clauses_come_before_the_general_one
+  ✓ functions::test_pattern_clauses::several_parameters_match_together
   ✓ functions::test_picked_calls::a_function_picked_from_a_list_is_called
   ✓ functions::test_ported_calls::every_ported_call_form_keeps_its_value
   ✓ functions::test_ported_calls::linq_methods_work_with_a_note_naming_warps_word
@@ -3776,7 +3788,6 @@ PASSED:
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
-  ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
@@ -5143,6 +5154,9 @@ PASSED:
   ✓ types::test_sum_types::variants_are_the_sum_type
   ✓ types::test_sum_types::variants_on_their_own_lines
   ✓ types::test_sum_types::variants_with_several_or_named_fields
+  ✓ types::test_symbol_parameters::a_symbol_parameter_refuses_a_number
+  ✓ types::test_symbol_parameters::a_symbol_parameter_takes_a_bare_word
+  ✓ types::test_symbol_parameters::a_symbol_parameter_takes_a_symbol
   ✓ types::test_symbolism_object::test_block_entry_runs_only_at_bang
   ✓ types::test_symbolism_object::test_markup_content_stays_an_element
   ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
@@ -6403,6 +6417,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_analyzer::matching_sources_keep_matching
 
 SUMMARY:
-16 ignored, 6400 passed, 0 failed, 6400 total tested
+16 ignored, 6414 passed, 1 failed, 6415 total tested

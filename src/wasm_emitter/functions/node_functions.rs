@@ -102,6 +102,7 @@ impl WasmGcEmitter {
 		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
 		self.emit_node_api(); // after text_of, text_concat and error_of, which it calls
+		self.emit_function_body(); // after node_at, which its quoted code calls
 	}
 
 	pub(in crate::wasm_emitter) fn emit_getters(&mut self) {
