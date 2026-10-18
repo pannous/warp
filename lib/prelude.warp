@@ -49,19 +49,27 @@ putl(n: int): int from emitter
 putf(x: float): int from emitter
 fetch(url: text, options...): text from emitter
 // the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
-map(xs, f: function) from emitter
-filter(xs, f: function) from emitter
-reduce(xs, f: function) from emitter
-fold(xs, start, f: function) from emitter
-any(xs, f: function): bool from emitter
+// over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
+map(xs: list, f: function): list from emitter
+map(t: text, f: function): list from emitter
+filter(xs: list, f: function): list from emitter
+filter(t: text, f: function): list from emitter
+reduce(xs: list, f: function): element of xs from emitter
+fold(xs: list, start, f: function): same as start from emitter
+any(xs: list, f: function): bool from emitter
+any(t: text, f: function): bool from emitter
+// all of any value: `f(all xs)` broadcasts (wiki/all.md), a typed `all` would nest as a call of two values
 all(xs, f: function): bool from emitter
-find(xs, f: function) from emitter
-each(xs, f: function) from emitter
-add(xs, x) from emitter
-insert(xs, x, at: int) from emitter
-remove(xs, x) from emitter
-pop(xs) from emitter
-clear(xs) from emitter
+find(xs: list, f: function): element of xs from emitter
+find(t: text, f: function): element of t from emitter
+each(xs: list, f: function) from emitter
+each(t: text, f: function) from emitter
+add(xs: list, x): same as xs from emitter
+insert(xs: list, x, at: int): same as xs from emitter
+remove(xs: list, x) from emitter
+remove(m: map, key) from emitter
+pop(xs: list): element of xs from emitter
+clear(xs: list): same as xs from emitter
 number(x): number from emitter
 // the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
 list_become(place, fresh): same as place from emitter

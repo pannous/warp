@@ -33,9 +33,9 @@ fn a_value_no_overload_is_typed_for_takes_the_first_line() {
 
 #[test]
 fn the_member_words_declare_their_signatures_in_the_prelude() {
-	is!("filter.signature", warp::Node::Text("(xs, f:function)".into()));
+	is!("filter.signature", warp::Node::Text("(xs:list, f:function) -> list".into()));
 	is!("insert.params", warp::texts(vec!["xs", "x", "at"]));
-	is!("any.signature", warp::Node::Text("(xs, f:function) -> bool".into()));
+	is!("any.signature", warp::Node::Text("(xs:list, f:function) -> bool".into()));
 }
 
 #[test]
@@ -75,4 +75,15 @@ fn the_map_and_membership_words_declare_their_kinds() {
 	is!("keys.signature", warp::Node::Text("(m:map) -> list".into()));
 	is!("\"abc\".contains(\"b\") and [1 2].contains(2) and {a: 1}.has(\"a\")", true);
 	is!("\"abc\".index_of(\"c\") == [5 6 7].index_of(7)", true);
+}
+
+#[test]
+fn the_member_words_declare_a_list_and_a_text_overload() {
+	is!("reduce.signature", warp::Node::Text("(xs:list, f:function) -> element of xs".into()));
+	is!("ys = filter(\"abc\", c => c != \"b\"); count(ys)", 2);
+	is!("find([1 2], x => x > 1) + fold([1 2], 0, (a, b) => a + b)", 5);
+	let program =
+		warp::pipeline::lower("xs = map([1 2], x => x * 2); cs = filter(\"ab\", c => c > \"a\")").expect("lowered");
+	let kinds = warp::analyzer::inferred_kinds(&program);
+	assert!(kinds.contains(&"xs: list".to_string()) && kinds.contains(&"cs: list".to_string()), "{kinds:?}");
 }
