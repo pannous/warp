@@ -82,5 +82,7 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
 - The runtime stub is built before the tests with the run's crate source, as test.sh does (WARP_TEST_STUBS_BUILT=1):
   in vendor mode the source replacement comes only from --config flags, so a test's own `cargo build --offline` met
   the VM's empty registry cache and all 22 executable tests failed (card cloud-stub-offline).
+- Failures listed in notes/known_failures.md (read in the tested checkout, as the gate reads it at the tested tip) are
+  listed apart as "known" and don't make a run red, like the environmental ones.
 - Cost: ~$0.30 per targeted run, ~$0.50 per full run (tokens, not VM time). A targeted run takes 5–6 min, mostly the
   cold build. A full run is ~25 min and ignores ~150 more tests than the Mac (tests that skip themselves off macOS).

@@ -9,7 +9,7 @@
 #       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will (--on <base>: into
 #       origin/<base>, e.g. a batch branch)
 #   scripts/cloud-test.sh --result [--card <card>] <branch> <tip>     wait for and collect a launched run's result
-#   scripts/cloud-test.sh --summarize <cargo test log> [environmental list]    the result's summary of any log
+#   scripts/cloud-test.sh --summarize <cargo test log> [environmental list] [known failures]    the result's summary of any log
 # The cloud session runs this same script from origin/main (the tip may predate it) with --job <job>, which reads the
 # job's arguments from the branch cloud-jobs/<job> and runs them as --run-here: it checks out
 # the tip, builds, tests with --no-fail-fast and pushes result.md + log.txt.gz to the branch cloud-results/<run>.
@@ -28,6 +28,7 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
+KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
 CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
 MAX_PARALLEL_RUNS=5           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
 PENDING_MINUTES=90             # a job older than this without a result: its session is dropped from the pool (a full run takes ~25)
@@ -134,7 +135,7 @@ run_tests_here() {
 	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
-	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" > "$HERE_WORK/summary.txt"
+	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" > "$HERE_WORK/summary.txt"
 	{
 		echo "run: $name"
 		echo "branch: $branch"
@@ -173,11 +174,15 @@ run_watched() {
 	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$log"
 }
 
-# Counts, failing tests with the first line of their panic, environmental ones apart; verdict green|red
+# Counts, failing tests with the first line of their panic, environmental and known ones (notes/known_failures.md,
+# which the gate accepts too) apart; verdict green|red
 summarize() {
-	local log=$1 environmental=$2
-	awk -v environmental="$environmental" '
-		BEGIN { while ((getline line < environmental) > 0) { sub(/[ \t]*#.*/, "", line); if (line != "") patterns[++count] = line } }
+	local log=$1 environmental=$2 known=${3:-/dev/null}
+	awk -v environmental="$environmental" -v known_list="$known" '
+		BEGIN {
+			while ((getline line < environmental) > 0) { sub(/[ \t]*#.*/, "", line); if (line != "") patterns[++count] = line }
+			while ((getline line < known_list) > 0) if (line ~ /^- [^ |]+ \|/) { split(line, field, " "); known[field[2]] = 1 }
+		}
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
 		/^ +(Running|Doc-tests) / { started++ }
 		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
@@ -191,15 +196,18 @@ summarize() {
 				name = order[i]; line = "  " name ": " (name in panic ? panic[name] : "(no panic line)")
 				is_environmental = 0
 				for (p = 1; p <= count; p++) if (name ~ patterns[p]) is_environmental = 1
-				if (is_environmental) environmental_lines = environmental_lines line "\n"; else { real_lines = real_lines line "\n"; real++ }
+				if (is_environmental) { environmental_lines = environmental_lines line "\n"; environmental_count++ }
+				else if (name in known) { known_lines = known_lines line "\n"; known_count++ }
+				else { real_lines = real_lines line "\n"; real++ }
 			}
 			real += incomplete
 			printf "verdict: %s\n", (real == 0 && started > 0) ? "green" : "red"
-			printf "passed: %d, failed: %d (%d environmental), ignored: %d\n", total["passed"], failures + incomplete, failures - (real - incomplete), total["ignored"]
+			printf "passed: %d, failed: %d (%d environmental, %d known), ignored: %d\n", total["passed"], failures + incomplete, environmental_count, known_count, total["ignored"]
 			if (incomplete) printf "crashed or killed test binaries (no result line): %d\n", incomplete
 			for (name in slow) if (!(name in finished_test)) printf "  never finished: %s\n", name
 			if (real_lines != "") printf "failures:\n%s", real_lines
 			if (environmental_lines != "") printf "environmental (Mac-only, %s):\n%s", "scripts/cloud-test-environmental.txt", environmental_lines
+			if (known_lines != "") printf "known (notes/known_failures.md at the tested tip):\n%s", known_lines
 		}' "$log"
 }
 
@@ -441,7 +449,7 @@ main() {
 		--job) run_job "$2"; exit ;;
 		--run-here) shift; run_here "$@"; exit ;;
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
-		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
+		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
 	card="" wait=1 result_only="" base=()
 	while [[ "${1:-}" == --* ]]; do
