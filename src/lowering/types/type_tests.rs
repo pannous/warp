@@ -475,13 +475,7 @@ pub fn with_compared_text(subject: Node, written: &str) -> Node {
 
 /// The written value a compared name carries (with_compared_text)
 pub fn compared_text(subject: &Node) -> Option<String> {
-	match subject {
-		Node::Meta { node, data } => match data.as_ref() {
-			Node::Key(key, _, value) if key.name() == COMPARED_WITH => Some(value.drop_meta().name()),
-			_ => compared_text(node),
-		},
-		_ => None,
-	}
+	subject.marked(COMPARED_WITH).map(|(_, value)| value.drop_meta().name())
 }
 
 pub fn is_equality_operand(node: &Node) -> bool {
