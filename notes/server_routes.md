@@ -92,8 +92,8 @@ A stored `Todo{title: text; done: bool}` table, a list page, a form POSTing a to
 (tests/web/test_served_forms.rs, probes/todo_app/check_served.sh).
 - An urlencoded body is the map of its fields (`request.body.title`). A browser's form (Accept text/html) gets 303
   back to its Referer (post/redirect/get), any other client the route's value.
-- `$title` in a route is the request's field: `request.query.title` of a get, `request.body.title` of the other
-  methods (serve.rs with_request_fields); `$1` stays positional.
+- A request's fields: `request.query.title` of a get, `request.body.title` of the other methods (the `$title`
+  shorthand was dropped, decision serve-plain).
 - `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags::lower_form_routes, first
   source pass); any method word of serve::METHODS, any path expression.
 - A bool column reads back as a bool; a one-character text is stored as its text (database.rs c_text).
@@ -137,7 +137,9 @@ Gaps (probed 2026-10-18 with the installed warp):
 - a closure in a map field: `r.answer(2)` works since card field-closure-call (a field given a parameter that a call
   feeds a lambda); probes/web/plain_router.warp runs a route list and dispatcher in plain warp. Open: `a = r.answer; a(2)`
 - path parameters bound into the block (`:id:int`): question Q2, card route-path-patterns (topic matching)
-- `$title` → request.body.title: question Q3; default routes of a hosted program: question Q4
+- decision serve-plain: `$title` dropped (done); path parameters wait for card route-path-patterns; a block to a
+  function parameter is its lazy body (card block-function-argument); default routes via `functions()` (card
+  functions-reflection)
 Stays Rust, for card module-passes (analysis/codegen, not sugar): server functions and their /rpc routes, the page's
 calls of them (asking_the_server, without_serving, prerender values), P221 route data (with_route_data), stored tables
 read anew per request (reading_tables), list answers (answers_a_list), hosted page answers (answered_page) and
