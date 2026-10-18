@@ -538,8 +538,6 @@ fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<
 	Some(parts)
 }
 
-/// The letters of a `$String(ptr, len)` in linear memory
-/// A text's bytes: a `$String` (ptr, len) in memory, or a GC byte array `(array i8)` (lib/compiler/emitter.warp)
 /// The text of a Text node: its bytes, after those of the texts before it when it is a rope (text_append: data the last
 /// piece, the value field the text before it)
 fn rope_text<T>(store: &mut StoreContextMut<'_, T>, data: Val, before: Val, memory: Option<wasmtime::Memory>) -> String {
@@ -553,6 +551,7 @@ fn rope_text<T>(store: &mut StoreContextMut<'_, T>, data: Val, before: Val, memo
 	pieces.into_iter().rev().collect()
 }
 
+/// A text's bytes: a GC byte array `$Text`, or a `$String` (ptr, len) in memory
 fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: Option<wasmtime::Memory>) -> String {
 	let read = |store: &mut StoreContextMut<'_, T>| -> Option<String> {
 		if let Ok(Some(bytes)) = data.unwrap_anyref()?.as_array(&*store) {
