@@ -1,6 +1,9 @@
 //! Data literals: structured data read as a value
 use super::*;
 
+/// `x = data a and b`: the prefix takes the whole expression after it (card data-quoting); `data class` is a modifier
+const DATA_KEYWORD: &str = "data";
+
 impl WarpParser {
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
 	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay

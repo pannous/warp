@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
+const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
+
 impl WarpParser {
 	/// The words up to the end of the line, one expression: the colon body `print i` of `for i in 1..3 : print i`
 	pub(super) fn rest_of_statement(&mut self) -> Node {

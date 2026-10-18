@@ -1,6 +1,35 @@
 //! Math notation: superscript powers `x²`, `xⁿ`, norm bars `‖v‖`
 use super::*;
 
+/// Superscript letters and the letters they raise: `2ⁿ` is 2^n
+const SUPERSCRIPT_LETTERS: [(char, char); 25] = [
+	('ᵃ', 'a'),
+	('ᵇ', 'b'),
+	('ᶜ', 'c'),
+	('ᵈ', 'd'),
+	('ᵉ', 'e'),
+	('ᶠ', 'f'),
+	('ᵍ', 'g'),
+	('ʰ', 'h'),
+	('ⁱ', 'i'),
+	('ʲ', 'j'),
+	('ᵏ', 'k'),
+	('ˡ', 'l'),
+	('ᵐ', 'm'),
+	('ⁿ', 'n'),
+	('ᵒ', 'o'),
+	('ᵖ', 'p'),
+	('ʳ', 'r'),
+	('ˢ', 's'),
+	('ᵗ', 't'),
+	('ᵘ', 'u'),
+	('ᵛ', 'v'),
+	('ʷ', 'w'),
+	('ˣ', 'x'),
+	('ʸ', 'y'),
+	('ᶻ', 'z'),
+];
+
 /// The sign of a superscript exponent: ⁺ is +1, ⁻ is -1
 pub(crate) fn superscript_sign(ch: char) -> Option<i64> {
 	match ch {

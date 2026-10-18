@@ -172,6 +172,12 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   {bench_higher_order,bench_hoisted}.warp, probes/functions/forward_param.warp, probes/generators/yield_from.warp,
   probes/ruby_yield/{do_block,twice}.warp, probes/self_hosting/readiness/ports/times_phrases.warp. Back: the warp flow
   joins a run-time number beside ints to data, as Rust's `joined` does.
+- Route lambdas (serve.rs route_entry, 2026-10-18): a route is `route_add(METHOD, path, request => {…})`, called by
+  lib/router.warp route_answer through closure_call_1; Rust types the never-annotated `request` from the closure call
+  (`closure_lambda_1(empty)`), warp keeps int. Same program output. Left the pinned list: probes/docs_sync/teapot.warp,
+  probes/hosting/oauth_demo.warp, probes/route_position.warp, probes/server_routes/{one_source,rpc_everywhere,
+  rpc_stub}.warp, probes/site/served.warp, probes/warp_serve/app.warp, samples/servers/route_headers.warp. Back: the
+  warp flow types a lambda parameter from the closure calls of its arity, as Rust's does.
 
 - Style sheets through lib/markup.warp's style (card style-sheets): a program with a `style{…}` block now carries the
   library's style_* functions, whose list helpers warp reads more generally: `length: empty |

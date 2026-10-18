@@ -2,6 +2,15 @@
 use super::*;
 use crate::warp_parser::context::Context;
 
+/// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
+const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
+/// `try X catch Y finally Z`: Z runs after either, the value stays X's or Y's
+const FINALLY_KEYWORD: &str = "finally";
+/// The hidden name `try X finally Z` binds X's Error to, to hand it on as the value
+const UNCAUGHT_ERROR: &str = "uncaught·error";
+/// `check C` is `assert C` (user, card check-assert)
+const GUARD_MARKERS: [(&str, &str); 3] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER), ("check", ASSERT_MARKER)];
+
 impl WarpParser {
 	/// `try` or `assert` followed by an operand: the words that guard a statement
 	pub(crate) fn peek_guard_word(&self) -> Option<&'static str> {
