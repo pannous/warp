@@ -512,6 +512,9 @@ PASSED:
   ✓ control::test_named_reflection::help_of_a_module_word_has_its_comment
   ✓ control::test_named_reflection::help_of_a_name_known_at_run_time
   ✓ control::test_named_reflection::help_of_a_standard_module_is_its_index
+  ✓ control::test_nested_block_calls::a_block_call_alone_in_a_branch_runs_the_function
+  ✓ control::test_nested_block_calls::a_block_call_in_a_loop_runs_each_time
+  ✓ control::test_nested_block_calls::a_call_before_the_block_is_the_value_argument
   ✓ control::test_not_condition_block::a_comparison_with_empty_in_a_group
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
@@ -1290,6 +1293,10 @@ PASSED:
   ✓ functions::test_bare_host_words::random_of_a_range
   ✓ functions::test_bare_host_words::random_of_a_type
   ✓ functions::test_bare_host_words::the_random_prelude_words
+  ✓ functions::test_block_function_argument::a_block_names_what_is_around_it
+  ✓ functions::test_block_function_argument::a_block_to_a_function_parameter_is_called
+  ✓ functions::test_block_function_argument::a_kept_block_is_called_later
+  ✓ functions::test_block_function_argument::a_lambda_or_function_still_passes_as_is
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
@@ -1416,6 +1423,9 @@ PASSED:
   ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
+  ✓ functions::test_data_parameter::a_data_argument_is_its_code
+  ✓ functions::test_data_parameter::a_tag_block_is_the_data_argument
+  ✓ functions::test_data_parameter::other_parameters_take_values
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_is_a_function
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_runs_its_statements
@@ -1483,6 +1493,8 @@ PASSED:
   ✓ functions::test_fail_effect::raising_and_dividing_by_a_variable_fail
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
+  ✓ functions::test_field_closure_call::a_field_given_a_lambda_parameter_is_called
+  ✓ functions::test_field_closure_call::records_in_a_list_call_their_fields
   ✓ functions::test_field_function_values::test_function_in_nested_object
   ✓ functions::test_field_function_values::test_function_in_object_field
   ✓ functions::test_field_function_values::test_function_list_in_object_field
@@ -5108,6 +5120,9 @@ PASSED:
   ✓ types::test_symbolism_object::test_block_entry_runs_only_at_bang
   ✓ types::test_symbolism_object::test_markup_content_stays_an_element
   ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
+  ✓ types::test_tag_entries::a_block_of_statements_stays_code
+  ✓ types::test_tag_entries::a_keyword_names_an_entry
+  ✓ types::test_tag_entries::an_assignment_beside_content_is_an_entry
   ✓ types::test_tagged_objects::a_field_of_a_tagged_object_is_read_from_its_fields
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_tagged_unions::arrow_arms_bind_the_variant_data
@@ -6363,4 +6378,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-16 ignored, 6358 passed, 0 failed, 6358 total tested
+16 ignored, 6373 passed, 0 failed, 6373 total tested

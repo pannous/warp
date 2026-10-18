@@ -257,8 +257,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - data-parameter (user 2026-10-18): a parameter typed `data` takes its argument as an unevaluated tree (`style(sheet: data) := css_of(sheet)`, `style{ ul > li { color: red } }`); any library can take a DSL block.
 - transitions-data (user 2026-10-18): markup tags take their body as `data`, so `li{ transition: opacity 200ms ease-out }` and the library kinds `fade/scale/slide 200ms` stay bare words, joined into CSS by the library; transitions.rs retires.
 - data-names (Interviewer's decision, as P92 and markup values): inside a data argument a name the program binds is its value, spliced in at the call site (`color: theme` → red, `p{ "count " + n }` shows n); an unbound word stays a word (`ul > li`); quote it (`"red"`) to keep a word that is also a variable.
-- same-as-result (user 2026-10-18): a result typed like an argument is spelled `same as <param>` (`shuffled(xs): same as xs`).
-- music-plain-details (user 2026-10-18): live loops take a function (`live_loop(drums, 4)`), a block once block-into-go lands; in-program redefinition dropped, the playground handover between runs stays. Sharps: constants `F♯4`, alias `Fs4`, note texts "F#4", and `F#4` itself by overloading the index of the note object F (no pass).
+- same-as-result (user 2026-10-18): a result typed like an argument is spelled `same as <param>` (`shuffled(xs): same as xs`); an element of an argument is `element of xs`, `value of m`, `key of m` in type position (`first(xs): element of xs`; Interviewer's decision, no type variables per P157).
+- music-plain-details (user 2026-10-18): live loops take a function (`live_loop(drums, 4)`), a block once block-into-go lands; in-program redefinition dropped, the playground handover between runs stays. Sharps: constants `F♯4`, alias `Fs4`, note texts "F#4", and `F#4` itself by overloading the index of the note object F (no pass). Block-wise sound functions: interim `play_blocks(hum, linear_address(hum_block), 0.1s)` with a linear array; goal: `play` picks the block filler by the function's parameter type (`hum(block: samples, t)`; Interviewer's decision).
 - P82 a function reference is `function add` or `&add`; a bare name that needs arguments is "add needs 1 argument". P83 an alias needs the reference; an argument to a function parameter stays bare.
 - arctan-allow: `arctan := arc_tangent` names the function; partial application only with a hole (`add(1, _)`).
 - P84 several juxtaposed arguments to a one-parameter function are one list (`f 1 2 3` = `f [1 2 3]`). `sum := fold +`.
@@ -317,7 +317,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   clauses tried in order (`simplify(data($a * 1)) := a; simplify(n) := n`); binding-alternatives: `|` branches bind when
   every branch binds the same names; whole-binding: `as` inside a pattern names the (sub)pattern
   (`data($f($inner) as call)`), outside it casts; text-patterns: `"0x" + rest`, at most one hole per side, plus
-  prefix/suffix and character classes.
+  prefix/suffix and character classes. A class is the type of a hole, like a typed hole that converts (`"0x" + h: hex`,
+  `"v" + n: digits`, `c: digit`, `"/users/" + id: int`); class words digit(s), letter(s), hex, space, word are hole
+  types only in a text pattern's hole position, nothing reserved (a variable `digits` stays plain; Interviewer's decision).
 
 ## Classes, objects and enums
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).

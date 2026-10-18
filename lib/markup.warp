@@ -45,7 +45,8 @@ html_is_element(value: any) := html_is_listed_element(value) or (value is pair a
 html_is_listed_element(value: any) := value is pair and contains(html_elements, keys(value)#1)
 
 // `my-card{…}`: a page's own element is named with a dash, unlike data-, aria- and the listed attributes (decision unknown-tag)
-html_is_custom_element(name: any) := name is text and contains(name, "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
+// str(name): a one-letter key (`"s": "small"`) is a Char, which contains refuses (card contains-fails)
+html_is_custom_element(name: any) := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
 	let items = html_items(content)
@@ -65,6 +66,7 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 		else if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
 		else if tag == "style" { children = children + html_style_rule(item, scope) + " " }
 		else if tag == "script" { children = children + html_plain(item) }
+		else if tag == "select" and not html_is_element(item) { children = children + html_options(item, own_chosen) }
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
 	// the option whose value, else text, is the select's
@@ -76,6 +78,17 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	// `</script>` inside a script would end it
 	if contains(html_raw_text_elements, tag) { children = replace(children, "</", "<\\/") }
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
+}
+
+// `select{ "apple" "pear" }`, `select{ ["apple" "pear"] }`, `select{ fruits }`: what a select holds besides elements
+// is its options, a pair `"s": "small"` an option's value and label (card select-shorthand)
+html_options(listed: any, chosen: any) := {
+	if html_is_element(listed) { return html_render(listed, ø, chosen) }
+	if listed is pair { return html_render(option{ value: keys(listed)#1; values(listed)#1 }, ø, chosen) }
+	if not html_is_group(listed) { return html_render(option{ listed }, ø, chosen) }
+	var out = ""
+	for item in listed { out = out + html_options(item, chosen) }
+	out
 }
 
 // `html{ title: "Shop" description: "…" meta: { author: "Ann" } }`: facts about the page, for its head (card html-meta)
