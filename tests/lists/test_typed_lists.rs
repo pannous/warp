@@ -231,3 +231,11 @@ fn test_float_written_into_exact_decimal_list() {
 	// the same for a plain variable read before its float write
 	assert_eq!(eval("x = 0.0; y = 0.0; for i in 0..3 { y = x * 2; x = sqrt(2.0) }; y"), eval("sqrt(2.0) * 2"));
 }
+
+#[test] // card list-parameter: `xs: list` declares no element type, so its elements are whatever each caller passes
+fn a_list_parameter_holds_elements_of_any_type() {
+	crate::is!("g(ls: list) := ls.map(p => p.n); g([{n: \"a\"}])", warp::texts(vec!["a"]));
+	crate::is!("g(ls: list) := ls.filter(p => p.n == \"a\"); #g([{n: \"a\"}, {n: \"b\"}])", 1);
+	crate::is!("g(ls: list) := { out = \"\"; for c in ls { out += c }; out }; g([\"a\" \"b\"])", "ab");
+	crate::is!("g(xs: list) := { s = 0; for x in xs { s += x }; s }; g([1 2 3]) + 1", 7);
+}
