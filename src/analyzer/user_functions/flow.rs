@@ -138,13 +138,13 @@ fn flows(
 
 /// The kind `value` passes on, if it tells one: an Int is what a value of unknown kind reads as, so only a literal one,
 /// or a literal variable's, tells; a name the scope doesn't bind reads as a symbol and tells nothing either, unless it
-/// names a type (`g int`); nor does a number of run-time kind made of more than told numbers (`unique(a + b)` of any
+/// names a type (`g int`); nor does a number of run-time kind without a told number in it (`unique(a + b)` of any
 /// values)
 fn told_kind(value: &Node, scope: &Scope, judge: &ArgumentJudge) -> Option<Kind> {
 	let kind = infer_type(value, scope);
 	let tells = match value.drop_meta() {
 		Node::Symbol(name) if kind == Kind::Symbol => builtin_type_kind(name).is_some(),
-		Node::Key(left, _, right) if kind == Kind::Data => [left, right].iter().all(|side| {
+		Node::Key(left, _, right) if kind == Kind::Data => [left, right].iter().any(|side| {
 			told_kind(side, scope, judge).is_some_and(|kind| kind.is_int() || kind.is_float() || kind == Kind::Data)
 		}),
 		_ => kind != Kind::Int || judge.kind(value) == Some(Kind::Int),
