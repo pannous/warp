@@ -425,6 +425,16 @@ float_of_node(n: any) := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
+# a boxed int where an int is needed; any other value traps, as Rust fails on it
+int_of_node(n: any) := {
+	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
+	unboxed_int(n)
+}
+# `n as int` of a boxed int or exact rational, truncated toward 0
+truncated_int(n: any) := {
+	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
+	int_quotient(exact_numerator(n), exact_denominator(n))
+}
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int) := {
 	sign = if n < 0 then 1 else 0

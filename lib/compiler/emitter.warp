@@ -148,6 +148,10 @@ definition(n: any) := {
 	ø
 }
 
+# `use math`, `import f from lib`: the Rust pipeline brought the module in already, so the statement has no code
+import_words = ["use", "require", "import", "include"]
+is_import(n: any) := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in import_words
+
 statements_of(n: any) := {
 	if is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
 	[n]
@@ -158,7 +162,7 @@ collect_functions(program: any, functions: any) := {
 	kept = []
 	for n in statements_of(program) {
 		head = definition(n)
-		if head == ø { kept += [n] } else {
+		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
 			parameters = head[1..].map(parameter_symbol)
 			annotations = head[1..].map(annotation_of)
 			functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
@@ -199,6 +203,8 @@ converted(value: any, to: text) := {
 	if to == "node" { return boxed(value) }
 	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
 	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
+	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
+	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
@@ -388,6 +394,7 @@ shown_text(value: any) := {
 	if kind == pending { return ["text", value#2] }
 	if kind == "list" { return runtime_call("list_text", [value]) }
 	if kind == "int" { return runtime_call("int_text", [value]) }
+	if kind == "float" { return runtime_call("float_text", [value]) }
 	if kind == "char" { return runtime_call("char_text", [value]) }
 	if kind == "node" { return runtime_call("node_text", [value]) }
 	if kind != "bool" { return refuse("the text of a " + kind) }
@@ -490,7 +497,6 @@ assignment(body: Body, target: any, value: any) := {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	kind = value#1
-	if kind == "bool" { return refuse("a yes/no variable") }
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		kind = body.kinds#(body.names[name] + 1)
@@ -601,6 +607,8 @@ key_expression(body: Body, n: any) := {
 	right = value_of(n)
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
+	# `c ? a : b`: the keys ?(c, :(a, b))
+	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right)) }
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left is symbol and name_of(left) == "global" and type(right) is key and op_of(right) == "=" and key_of(right) is symbol {
@@ -617,7 +625,10 @@ key_expression(body: Body, n: any) := {
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
-		return [name_of(right), converted(expression(body, left), name_of(right))]
+		value = expression(body, left)
+		# `7/2 as int`: an exact rational truncated toward 0
+		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
+		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø { return refuse("the operator " + operator) }

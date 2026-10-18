@@ -2194,7 +2194,6 @@ PASSED:
   ✓ lists::test_int_map::a_number_is_found_in_a_map
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
-  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -3811,6 +3810,11 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
+  ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
+  ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
+  ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
@@ -6449,8 +6453,9 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6446 passed, 2 failed, 6448 total tested
+16 ignored, 6450 passed, 3 failed, 6453 total tested
