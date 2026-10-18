@@ -321,9 +321,9 @@ fn fewest_arguments(word: &str) -> usize {
 	arity(word) - optional
 }
 
-/// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
+/// The spelling word lists name a library word by (`sorted` → sort, the alias `size` → count); any other name as it is
 pub fn canonical_spelling(name: &str) -> &str {
-	canonical_word(name).unwrap_or(name)
+	canonical_word(name).unwrap_or_else(|| unaliased(name))
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
