@@ -16,18 +16,17 @@ element_operator(word: any) := {
 }
 
 # xs.map(each_element -> each_element op operand)
-element_wise(list: any, op: text, operand: any) := {
+element_wise(list: Node, op: text, operand: Node): Node := {
 	item = symbol(each_element)
-	key(list, ".", call_of("map", [key(item, "->", key(item, op, operand))]))
+	Key(list, Op.Dot, call_of("map", [Key(item, Op.Arrow, Key(item, op as Op, operand))]))
 }
 
-element_wise_phrase(n: any) := {
-	if not is_group(n) or bracket_of(n) != "" or separator_of(n) != " " { return n }
-	parts = items_of(n)
-	if #parts != 3 { return n }
-	op = element_operator(parts#2)
-	if op == ø { return n }
-	element_wise(parts#1, op, parts#3)
+element_wise_phrase(n: Node): Node := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		op = if #parts == 3 then element_operator(parts#2) else ø
+		if op == ø then n else element_wise(parts#1, op, parts#3)
+	}
+	_: n
 }
 
 element_wise_operators_pass(program: any) := bottom_up(program, element_wise_phrase)

@@ -16,8 +16,11 @@ selecting_words = ["in", "from"]
 global selectors = []
 
 is_word(n: any, word: text) := n == symbol(word)
-is_bare_phrase(n: any) := is_group(n) and bracket_of(n) == "" and separator_of(n) == " "
-noun_phrase(words: any) := if #words == 1 then words#1 else separated(bracketed(words, ""), " ")
+is_bare_phrase(n: Node) := match n {
+	List(words, Bracket.None, Separator.Space): yes
+	_: no
+}
+noun_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
 
 # the words of a phrase that arrives grouped: `sum (of xs)`, `(((name of) q) with) a`
 flat_phrase(n: any) := {
@@ -39,15 +42,22 @@ as_one_phrase(n: any) := {
 # `name words… last = body`: the words through last, else ø
 spaced_words(parts: any) := {
 	if #parts < 2 { return ø }
-	last = parts#(#parts)
-	if type(last) is not key or (op_of(last) != "=" and op_of(last) != ":=") { return ø }
+	head = definition_head(parts#(#parts))
+	if head == ø { return ø }
 	words = []
 	for at in 1 ..< #parts {
-		word = if at == #parts - 1 then key_of(last) else parts[at]
+		word = if at == #parts - 1 then head else parts[at]
 		if word is not symbol { return ø }
 		words += [name_of(word)]
 	}
 	words
+}
+
+# the head of `head = body` and `head := body`, else ø
+definition_head(n: Node) := match n {
+	Key(head, Op.Assign, body): head
+	Key(head, Op.Define, body): head
+	_: ø
 }
 
 # `square of a number = …`, `f x = …`: a definition head; `width of p = 12` without a type word assigns the lookup
@@ -62,17 +72,16 @@ is_spaced_definition(parts: any) := {
 }
 
 # `list of int`, `x: list of int`: the word before `of` names a collection type
-is_type_head(n: any) := {
-	if n is symbol { return is_collection_head(name_of(n)) }
-	type(n) is key and op_of(n) == ":"
+is_type_head(n: Node) := match n {
+	Symbol(name): is_collection_head(name)
+	Key(name, Op.Colon, kind): yes
+	_: no
 }
 
 # `object.member`, through the left operands of an operator: `p + 1` gives `p.name + 1`
-member_of(object: any, member: any) := {
-	if type(object) is key and op_of(object) != "." and key_of(object) != ø {
-		return key(member_of(key_of(object), member), op_of(object), value_of(object))
-	}
-	key(object, ".", member)
+member_of(object: Node, member: Node): Node := match object {
+	Key(left, op, right): { if op != Op.Dot and left != ø then Key(member_of(left, member), op, right) else Key(object, Op.Dot, member) }
+	_: Key(object, Op.Dot, member)
 }
 
 # `of` after anything but a type head, `in` and `from` after a selector word: `words in t`
@@ -113,11 +122,11 @@ looked_up(parts: any) := {
 }
 
 # the body of `type of …`, which the parser reads as a declaration head, else ø; `none` when it has none
-type_of_body(n: any) := {
-	if type(n) is not key or key_of(n) != symbol(opaque_word) { return none_word }
-	view = value_of(n)
-	if kind_of(view) == "type" and view#2 == ["symbol", of_word] { return node_of(view#3) }
-	none_word
+type_of_body(n: Node) := match n {
+	Key(opaque, op, view): {
+		if opaque == symbol(opaque_word) and kind_of(view) == "type" and view#2 == ["symbol", of_word] then node_of(view#3) else none_word
+	}
+	_: none_word
 }
 none_word = symbol("of·none")
 
@@ -133,7 +142,10 @@ type_of_called(parts: any) := {
 	parts
 }
 
-is_phrase_group(n: any) := is_group(n) and ["", "(", "{"] contains bracket_of(n) and [" ", ""] contains separator_of(n)
+is_phrase_group(n: Node) := match n {
+	List(items, bracket, separator): [Bracket.None, Bracket.Round, Bracket.Curly] contains bracket and [Separator.Space, Separator.None] contains separator
+	_: no
+}
 
 rewrite(n: any) := {
 	n = children(as_one_phrase(n), rewrite)
