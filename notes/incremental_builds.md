@@ -35,3 +35,33 @@ So caching sound's parse + module source passes saves ~200 of ~430 ms; the ~2.5 
    the module's own `use`s). Check: every sample's wasm identical with a cold and a warm cache.
 2. The same for a project's file modules (key adds the file's path).
 3. The prelude reach look-ahead and the parse of lib/prelude.warp.
+
+## A prelude word against a Rust builtin (card prelude-word, 2026-10-18)
+Measure: `probes/cache/proxy_times.sh <warp> [runs] [phase pattern]`, each phase's minimum over runs of `print [1 2 N]`
+(Rust list_text) and `print to_base(N, 2)` (a warp prelude word), fresh literals so the program cache misses. At load
+30-140 only minima mean anything; compare CPU time (rusage of the child) for settings, interleaved runs.
+
+| step | `print [1 2 N]` lowering | `print to_base(N, 2)` lowering |
+|---|---|---|
+| main before (slice 2) | 3.9 ms | 15 ms |
+| per-definition analysis memo (analysis_memo::analysed_function: to_base was analysed 38× per compile) | 3.9 | 14.5 |
+| C header signatures on disk (ffi/header_cache.rs: libm 20 ms cold / libc 2 ms parsed at every run meeting `abs`, `/!`) | 3.9 | 13.3 |
+| library-signature indexes (library_signatures.rs, std_docs::module_index: math.warp and the prelude rescanned per word, quadratic) | 1.9 | 8.1 |
+
+What is left of to_base's extra 6 ms: resolve 2.4 (prelude look-ahead 1.0, replaced declarations 0.6, qualified names
+0.4), many whole-program passes at 0.2-0.5, emit +1.4.
+
+The wall time of a fresh program is mostly wasmtime compiling its module: 28-31 ms for `print [1 2 N]` (123 functions,
+nearly all runtime), 30-43 ms for to_base (196). A profile of `wasmtime compile` (xctrace Time Profiler, --launch, one
+process per sample set; `--all-processes` gets no samples without more rights): Cranelift codegen (regalloc, egraph,
+lowering) 60%, wasm→CLIF translation 15%, process start 10%. Hence:
+- wasmtime's incremental compilation cache (feature incremental-cache, run/function_cache.rs: one file per function in
+  the module cache) skips the codegen of every function another module compiled: a fresh `print [1 2 N]` adds 4
+  functions. CPU min: to_base 88 → 75 ms, print 62 → 60. Machine code from it still loads into the reference runtime.
+- parallel-compilation (was off: default-features = false): wall min to_base 111 → 70 ms with both, at load ~40.
+- Cache keys of the wasm functions are stable (`Config::emit_clif` dumps of two cold runs differ only in `main`), but
+  wasmtime's ~30 signature trampolines get new keys at every compile under parallel compilation (their pre-optimization
+  CLIF comes out in another instruction order; serially +1 per run). So even the same module recompiled adds ~7 files and
+  a new program ~30 small ones; module_cache's LRU prune at 1 GB bounds them. Dumps of cache hits show unoptimized CLIF,
+  so compare only cold runs.
+- opt-level none saves only 10-20% of a full compile, nothing on cache hits; Winch refuses function references.
