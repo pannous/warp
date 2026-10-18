@@ -347,8 +347,11 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I64ExtendI32U, I::I64GeU, I::If(BlockType::Empty)]);
 		self.emit_call(func, "index_out_of_range");
 		func.instruction(&I::End);
-		self.emit_text_field(func, held, 0);
-		Self::emit_list(func, &[I::LocalGet(at), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
+		self.emit_text_bytes(func, held);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(at), I::I32WrapI64, I::ArrayGetU(self.type_manager.text_type), I::I64ExtendI32U,
+		]);
 	}
 
 	/// `byte_at(text, offset)` and `is_error(x)` as raw i64
@@ -668,24 +671,28 @@ impl WasmGcEmitter {
 				s.emit_text_field(f, 0, 1);
 				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GeU]);
 				s.emit_fail_if(f, "index_out_of_range");
-				s.emit_text_field(f, 0, 0);
-				Self::emit_list(f, &[I::LocalGet(1), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
+				s.emit_text_bytes(f, 0);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(1), I::I32WrapI64, I::ArrayGetU(s.type_manager.text_type), I::I64ExtendI32U,
+				]);
 			});
 		}
 
-		// byte_slice(text, start, end): the bytes start…end-1, sharing the memory of text
+		// byte_slice(text, start, end): the bytes start…end-1
 		if self.should_emit_function(BYTE_SLICE) {
-			self.runtime_function(BYTE_SLICE, vec![node_ref, long, long], vec![node_ref], vec![], |s, f| {
+			let locals = vec![self.text_ref(), ValType::I32, ValType::I32];
+			self.runtime_function(BYTE_SLICE, vec![node_ref, long, long], vec![node_ref], locals, |s, f| {
+				let (bytes, start, stop) = (3, 4, 5);
 				Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64GtU, I::LocalGet(2)]);
-				s.emit_text_field(f, 0, 1);
-				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GtU, I::I32Or]);
+				s.emit_text_bytes(f, 0);
+				Self::emit_list(f, &[I::LocalTee(bytes), I::ArrayLen, I::I64ExtendI32U, I::I64GtU, I::I32Or]);
 				s.emit_fail_if(f, "index_out_of_range");
-				s.emit_text_field(f, 0, 0);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
-					I::LocalGet(1), I::I32WrapI64, I::I32Add, I::LocalGet(2), I::LocalGet(1), I::I64Sub, I::I32WrapI64,
+					I::LocalGet(1), I::I32WrapI64, I::LocalSet(start), I::LocalGet(2), I::I32WrapI64, I::LocalSet(stop),
 				]);
-				s.call(f, "new_text");
+				s.emit_text_piece(f, (bytes, start, stop));
 			});
 		}
 	}
@@ -701,34 +708,29 @@ impl WasmGcEmitter {
 				TEXT_MATCHES_AT,
 				vec![node_ref, node_ref, ValType::I32],
 				vec![ValType::I32],
-				vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+				vec![self.text_ref(), self.text_ref(), ValType::I32, ValType::I32],
 				|s, f| {
-					let (offset, text_address, part_address, part_length, index) = (2, 3, 4, 5, 6);
-					s.emit_text_field(f, 0, 0);
-					f.instruction(&I::LocalSet(text_address));
-					s.emit_text_field(f, 1, 0);
-					f.instruction(&I::LocalSet(part_address));
-					s.emit_text_field(f, 1, 1);
-					f.instruction(&I::LocalSet(part_length));
+					let (offset, text, part, part_length, index) = (2, 3, 4, 5, 6);
+					let text_type = s.type_manager.text_type;
+					s.emit_text_bytes(f, 0);
+					f.instruction(&I::LocalSet(text));
+					s.emit_text_bytes(f, 1);
+					Self::emit_list(f, &[I::LocalTee(part), I::ArrayLen, I::LocalSet(part_length)]);
 					// out of bounds: no match
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
 						I::LocalGet(offset), I::I32Const(0), I::I32LtS, I::LocalGet(offset), I::LocalGet(part_length),
-						I::I32Add,
+						I::I32Add, I::LocalGet(text), I::ArrayLen,
+						I::I32GtU, I::I32Or, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End,
 					]);
-					s.emit_text_field(f, 0, 1);
-					Self::emit_list(
-						f,
-						&[I::I32GtU, I::I32Or, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End],
-					);
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
 						I::Block(BlockType::Empty),
 							I::Loop(BlockType::Empty),
 								I::LocalGet(index), I::LocalGet(part_length), I::I32GeU, I::BrIf(1),
-								I::LocalGet(text_address), I::LocalGet(offset), I::I32Add, I::LocalGet(index),
-								I::I32Add, I::I32Load8U(BYTE), I::LocalGet(part_address), I::LocalGet(index), I::I32Add,
-								I::I32Load8U(BYTE), I::I32Ne, I::If(BlockType::Empty),
+								I::LocalGet(text), I::LocalGet(offset), I::LocalGet(index), I::I32Add,
+								I::ArrayGetU(text_type), I::LocalGet(part), I::LocalGet(index), I::ArrayGetU(text_type),
+								I::I32Ne, I::If(BlockType::Empty),
 									I::I32Const(0), I::Return,
 								I::End,
 								I::LocalGet(index), I::I32Const(1), I::I32Add, I::LocalSet(index),
@@ -778,7 +780,7 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// text_trim(text): the bytes between the whitespace at either end, sharing the memory of text
+		// text_trim(text): the bytes between the whitespace at either end
 		if self.should_emit_function(TEXT_TRIM) {
 			self.emit_trim(TEXT_TRIM, |f, byte| {
 				for (index, whitespace) in WHITESPACE_BYTES.iter().enumerate() {
@@ -804,20 +806,18 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// name(text): the bytes between the ones `is_trimmed` holds for (given the local of a byte) at either end, sharing
-	/// the memory of text
+	/// name(text): the bytes between the ones `is_trimmed` holds for (given the local of a byte) at either end
 	fn emit_trim(&mut self, name: &'static str, is_trimmed: impl Fn(&mut Function, u32)) {
 		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 4], |s, f| {
-			let (address, start, end, byte) = (1, 2, 3, 4);
-			s.emit_text_field(f, 0, 0);
-			f.instruction(&I::LocalSet(address));
-			s.emit_text_field(f, 0, 1);
-			f.instruction(&I::LocalSet(end));
+		let locals = vec![self.text_ref(), ValType::I32, ValType::I32, ValType::I32];
+		let text_type = self.type_manager.text_type;
+		self.runtime_function(name, vec![node_ref], vec![node_ref], locals, |s, f| {
+			let (bytes, start, end, byte) = (1, 2, 3, 4);
+			s.emit_text_bounds(f, (bytes, start, end));
 			let load = |f: &mut Function, offset: &[I<'static>]| {
-				f.instruction(&I::LocalGet(address));
+				f.instruction(&I::LocalGet(bytes));
 				Self::emit_list(f, offset);
-				Self::emit_list(f, &[I::I32Add, I::I32Load8U(BYTE), I::LocalSet(byte)]);
+				Self::emit_list(f, &[I::ArrayGetU(text_type), I::LocalSet(byte)]);
 			};
 			// leading: start moves right while it is before end and at a trimmed byte
 			#[rustfmt::skip]
@@ -853,11 +853,7 @@ impl WasmGcEmitter {
 				I::End,
 				I::End,
 			]);
-			Self::emit_list(
-				f,
-				&[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub],
-			);
-			s.call(f, "new_text");
+			s.emit_text_piece(f, (bytes, start, end));
 		});
 	}
 
