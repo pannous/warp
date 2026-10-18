@@ -61,6 +61,7 @@ anyhow = "1.0"
 #regex = "1.10.3" # removed: unused
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.1", default-features = false, features = ["alloc"] } # lowered modules kept on disk (lowered_modules.rs)
 serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"] } # objects keep the order of warp maps (and of JS JSON.stringify); a float read from JSON is the float written (the browser hands results over as JSON)
 #wast = "*"
 wasmparser = "0.259"

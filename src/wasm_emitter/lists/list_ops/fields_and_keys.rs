@@ -241,9 +241,13 @@ impl WasmGcEmitter {
 				I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
 					I::I64Const(Kind::Symbol as i64),
 			]);
-			s.emit_field(f, name, 1);
-			s.emit_field(f, name, 2);
-			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(name), I::RefAsNonNull, I::End]);
+			s.emit_text_bytes(f, name); // a rope (text_append) flattened, else only its last piece names the key
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::RefNull(HeapType::Concrete(node)), I::StructNew(node),
+				I::Else, I::LocalGet(name), I::RefAsNonNull,
+				I::End,
+			]);
 		});
 		self.runtime_function(
 			"map_entry_has_key",
