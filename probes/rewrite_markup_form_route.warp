@@ -1,0 +1,16 @@
+# markup_tags lower_form_routes as rewrite rules (card compiler-modules, markup slice): the target lines of lib/markup.warp.
+# Needs: a rule matching a run of words inside a longer phrase or list (`div{ form post "/x" {…} "tea" }`), and the
+# program's own `form` definition shadowing the rules (warp-self-passes, branch music-rules).
+rewrite form get $action { $body... } => form{ method: "get" action: $action $body... }
+rewrite form post $action { $body... } => form{ method: "post" action: $action $body... }
+rewrite form put $action { $body... } => form{ method: "put" action: $action $body... }
+rewrite form patch $action { $body... } => form{ method: "patch" action: $action $body... }
+rewrite form delete $action { $body... } => form{ method: "delete" action: $action $body... }
+use markup
+id = 2
+print to_html(form post "/todos" { button{ "add" } })
+# <form method="post" action="/todos"><button>add</button></form>
+print to_html(div{ form post "/todos" { button{ "add" } } })
+# <div><form method="post" action="/todos"><button>add</button></form></div>
+print to_html(li{ form post "/todos/\(id)/toggle" { button{ "x" } } "tea" })
+# <li><form method="post" action="/todos/2/toggle"><button>x</button></form>tea</li>

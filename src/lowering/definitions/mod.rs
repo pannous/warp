@@ -24,5 +24,6 @@ pub mod parameter_shapes;
 pub mod preposition_calls;
 pub mod references;
 pub mod specialising;
+pub mod typed_block_arguments;
 pub mod undo_history;
 pub mod variadic;

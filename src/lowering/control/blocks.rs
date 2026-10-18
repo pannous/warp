@@ -292,6 +292,18 @@ fn fitted_arguments(parameters: &[(String, Takes)], arguments: &[Node]) -> Optio
 		return Some(arguments.to_vec());
 	}
 	let last_is_block = parameters.last().is_some_and(|(_, takes)| *takes != Takes::Value);
+	// `at beats(2) { … }`, read as `at ((beats 2) {…})`: the block after the last value is the block argument
+	if last_is_block && arguments.len() + 1 == parameters.len() {
+		if let Some((Node::List(phrase, Bracket::None | Bracket::Round, separator), before)) =
+			arguments.split_last().map(|(last, before)| (last.drop_meta(), before))
+		{
+			if let [value, block] = phrase.as_slice() {
+				if !separator.separates_statements() && is_block(block) {
+					return Some([before, &[value.clone(), block.clone()]].concat());
+				}
+			}
+		}
+	}
 	if !last_is_block || arguments.len() < parameters.len() {
 		return None;
 	}
@@ -931,6 +943,12 @@ impl Blocks {
 		{
 			if let Some(expanded) = self.expand(items) {
 				return expanded;
+			}
+		}
+		// a body of the one call `{ f a {…} }`: `if c { repeats 3 { … } }`
+		if let Node::List(items, Bracket::Curly, Separator::Space) = node.drop_meta() {
+			if let Some(expanded) = self.expand(items) {
+				return Node::List(vec![expanded], Bracket::Curly, Separator::Newline);
 			}
 		}
 		if let Some(call) = self.method_call(&node) {

@@ -146,6 +146,7 @@ mod test_multiline_errors;
 mod test_named_broadcast;
 mod test_named_patterns; // card patterns-values
 mod test_named_reflection;
+mod test_nested_block_calls; // card block-call-nested
 mod test_not_condition_block;
 mod test_object_blocks;
 mod test_object_functions;
