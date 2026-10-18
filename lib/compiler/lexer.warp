@@ -1,6 +1,6 @@
 // The lexer written in warp (card self-lexer, notes/self_hosting.md step 5), each word next to its Rust twin
 // (tests/parser/test_self_lexer.rs); positions count code points, as the Rust parser does
-use "lib/compiler/positions.warp"
+use "positions.warp"
 
 // Where the comments and texts of a source start and end, in code points: [[start, end], …]
 // Rust twin: warp_parser comment_and_text_spans

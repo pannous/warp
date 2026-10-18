@@ -780,8 +780,10 @@ impl<'a> Loader<'a> {
 		if name.contains('/') {
 			crate::modules::reads_beyond_folders("a module of a subfolder");
 		}
-		let bases: Vec<PathBuf> =
-			self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
+		let beyond_working_directory =
+			crate::compiler::compile_context::read(|context| context.beyond_working_directory);
+		let working_directory = (!beyond_working_directory).then(PathBuf::new);
+		let bases: Vec<PathBuf> = self.including_directory.iter().cloned().chain(working_directory).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {

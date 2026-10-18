@@ -27,6 +27,8 @@ pub struct CompileContext {
 	pub serving_port: Option<u16>,
 	/// a sandboxed run on this thread (sandbox.rs)
 	pub sandboxed: bool,
+	/// a self-hosted stage program compiles (self_hosted.rs): no file of the working directory is one of its modules
+	pub beyond_working_directory: bool,
 	/// the source of the program, for excerpts and its `// got it` comments
 	pub source: String,
 	/// a line of the source says `use strict` (in_source_mode, the one reader of it)
@@ -100,6 +102,7 @@ impl Default for CompileContext {
 			server_values: vec![],
 			serving_port: None,
 			sandboxed: false,
+			beyond_working_directory: false,
 			source: String::new(),
 			says_strict: false,
 			warning_mode: WarningMode::default(),
@@ -190,10 +193,11 @@ pub fn scoped_flags<R>(flags: &[(Flag, bool)], run: impl FnOnce() -> R) -> R {
 pub fn lowering_inputs() -> String {
 	read(|context| {
 		format!(
-			"{:?}\n{:?}\n{} {} {} {} {} {}\n{:?}\n{:?}\n{:?}\n{}\n{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n{}",
+			"{:?}\n{:?}\n{} {} {} {} {} {} {}\n{:?}\n{:?}\n{:?}\n{}\n{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n{}",
 			context.mode,
 			context.granted,
 			context.sandboxed,
+			context.beyond_working_directory,
 			context.comments_as_meta,
 			context.reflection_mode,
 			context.counts_fuel,

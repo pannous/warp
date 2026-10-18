@@ -228,7 +228,10 @@ impl StageProgram {
 		crate::modules::std_adapters::set_program_arguments(
 			std::iter::once(&input).chain(&setup).map(|file| file.display().to_string()).collect(),
 		);
-		StageProgram { module: compiled_stages(stage.program), input, setup }
+		use crate::compiler::compile_context::scoped;
+		// the stage reads warp's lib/ alone, whatever folder warp runs in (a program's text.warp is no `text` of it)
+		let module = scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(stage.program));
+		StageProgram { module, input, setup }
 	}
 
 	/// The view the stage gives as JSON, or the failure as a text that is no JSON

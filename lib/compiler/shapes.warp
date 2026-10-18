@@ -1,5 +1,5 @@
 // The tree shapes parser.warp writes and the sugar pass reads, as node_view writes them (tests/common/twins.rs)
-use "lib/compiler/words.warp"
+use "words.warp"
 
 def listed(bracket, separator, nodes) := ["list", bracket, separator] + nodes
 def is_symbol(node) := node is list and node.length == 2 and node#1 == "symbol"
