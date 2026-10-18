@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 pub const CLOSURE_NEW: &str = "closure_new";
 /// The mark of `&add` / `function add`: the function itself, not its call (user decision P82)
-const FUNCTION_REFERENCE_MARK: &str = "function_reference";
+pub(crate) const FUNCTION_REFERENCE_MARK: &str = "function_reference";
 /// The class whose method a closure_new target is (class_method_target)
 const METHOD_CLASS_MARK: &str = "method_of";
 const BUILTIN_PREFIX: &str = "builtin·";
