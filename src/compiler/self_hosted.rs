@@ -12,6 +12,8 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
 const SWITCH: &str = "WARP_SELF_HOSTED";
+/// WARP_SELF_HOSTED=front: parser.warp and the pass twins, the Rust emitter (a suite count of the front end alone)
+const FRONT_END_ONLY: &str = "front";
 /// passes.warp `stage` of the request in the worker's input file
 const PASSES_PROGRAM: &str =
 	concat!("use \"", env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)))");
@@ -33,6 +35,11 @@ const EMIT_PROGRAM: &str = concat!(
 const RUNTIME_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/runtime.warp");
 /// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
 const OUTSIDE_THE_CORE: &str = "outside the core: ";
+/// The file each refusal of emitter.warp goes to as a line, when set
+const REFUSALS_FILE: &str = "WARP_EMIT_REFUSALS";
+/// The WARP_ settings that change no stage program's compile, so not its kept module either
+#[cfg(feature = "native")]
+const SETTINGS_BESIDE_STAGES: [&str; 2] = [SWITCH, REFUSALS_FILE];
 /// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
 #[cfg(feature = "native")]
 const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
@@ -78,9 +85,20 @@ static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: None, workers: Mu
 static ANALYSIS: Stage = Stage { program: ANALYSIS_PROGRAM, setup: None, workers: Mutex::new(Vec::new()) };
 static EMIT: Stage = Stage { program: EMIT_PROGRAM, setup: Some(runtime_words), workers: Mutex::new(Vec::new()) };
 
+/// The switch's value: None when off
+fn switch() -> Option<&'static str> {
+	static VALUE: OnceLock<Option<String>> = OnceLock::new();
+	let value = VALUE.get_or_init(|| std::env::var(SWITCH).ok()).as_deref();
+	value.filter(|_| !IN_WORKER.with(|inside| inside.get()))
+}
+
 fn enabled() -> bool {
-	static SWITCHED_ON: OnceLock<bool> = OnceLock::new();
-	*SWITCHED_ON.get_or_init(|| std::env::var_os(SWITCH).is_some()) && !IN_WORKER.with(|inside| inside.get())
+	switch().is_some()
+}
+
+/// emitter.warp emits too, unless the switch says FRONT_END_ONLY
+fn emits() -> bool {
+	switch().is_some_and(|value| value != FRONT_END_ONLY)
 }
 
 /// The program parser.warp parses from the source; None when not self-hosted
@@ -112,16 +130,18 @@ pub fn kinds_of(view: &Node) -> Result<serde_json::Value, String> {
 	serde_json::from_str(&kinds).map_err(|_| failed())
 }
 
-/// The module emitter.warp emits for the lowered `node`; None when not self-hosted or the program is outside its core,
+/// The module emitter.warp emits for the lowered `node`; None when it does not emit (not self-hosted, or the front end
+/// only) or the program is outside its core,
 /// an error when emitter.warp fails
 pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
-	if !enabled() {
+	if !emits() {
 		return None;
 	}
 	let module = answer(&EMIT, view_json(&plain_view(node))).and_then(|answer| module_of(&answer));
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
 			log::trace!("self-hosted emit: {refusal}");
+			record_refusal(&refusal);
 			None
 		}
 		Err(failure) => Some(Err(crate::node::error(&format!("the self-hosted emitter failed: {failure}")))),
@@ -129,6 +149,16 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host: false, needs_wasi: true, needs_ffi: false }))
 		}
 	}
+}
+
+/// The refusal as a line of the file REFUSALS_FILE names, when set: a run over many programs ranks what keeps them
+/// outside the core (`sort | uniq -c | sort -rn`)
+fn record_refusal(refusal: &str) {
+	use std::io::Write;
+	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
+	let line = refusal.lines().next().unwrap_or_default();
+	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
+	let _ = appended.and_then(|mut file| writeln!(file, "{line}"));
 }
 
 /// The bytes of the module emitter.warp answers as a list of byte numbers, else its answer as the failure
@@ -215,7 +245,10 @@ impl StageProgram {
 		crate::modules::std_adapters::set_program_arguments(
 			std::iter::once(&input).chain(&setup).map(|file| file.display().to_string()).collect(),
 		);
-		StageProgram { module: compiled_stages(stage.program), input, setup }
+		use crate::compiler::compile_context::scoped;
+		// the stage reads warp's lib/ alone, whatever folder warp runs in (a program's text.warp is no `text` of it)
+		let module = scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(stage.program));
+		StageProgram { module, input, setup }
 	}
 
 	/// The view the stage gives as JSON, or the failure as a text that is no JSON
@@ -290,7 +323,8 @@ fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let binary = std::env::current_exe().ok()?;
 	let mut hasher = Sha256::new();
-	let settings = crate::run::program_cache::warp_settings();
+	let mut settings = crate::run::program_cache::warp_settings();
+	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
 	hasher.update(format!(
 		"{}\n{:?}\n{settings:?}\n{program}\n",
 		binary.display(),

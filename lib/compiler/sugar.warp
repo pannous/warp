@@ -2,8 +2,8 @@
 // source says, `xs[i]`, `a /! b`, `a div b`, `x is in xs`, `loop {…}`; each arm of `sugared` rewrites one written form
 // into the tree the passes read, and a class body's fields get their types (card parser-typed-fields). Count words
 // (`twice {…}`) are rewritten by `counted`, which knows the program's names (card parser-scope-pass).
-use "lib/compiler/shapes.warp"
-use "lib/compiler/scope.warp"
+use "shapes.warp"
+use "scope.warp"
 
 COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
 
