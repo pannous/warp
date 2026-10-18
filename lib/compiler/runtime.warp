@@ -100,6 +100,20 @@ node_add(a: any, b: any) := {
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) + unboxed_int(b) }
 	float_of_node(a) + float_of_node(b)
 }
+# `a == b` of values known only at run time: ø equals only ø, lists equal item by item, texts and characters as
+# texts, numbers as numbers (an int and a float alike)
+node_equal(a: any, b: any) := {
+	if is_null(a) == 1 or is_null(b) == 1 { return is_null(a) == is_null(b) }
+	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
+	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
+	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
+	float_of_node(a) == float_of_node(b)
+}
+list_equal(a: list, b: list) := {
+	if #a != #b { return no }
+	for i in 1 to #a { if not node_equal(a#i, b#i) { return no } }
+	yes
+}
 # 1 for a boxed text or character, else 0
 textual_node(n: any) := if kind_code(n) == 3 or kind_code(n) == 4 then 1 else 0
 # the index-th character of t, counted from 1: past index - 1 lead bytes, then the code point its bytes spell

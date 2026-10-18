@@ -62,6 +62,7 @@ length_words = {length: yes, count: yes}
 # the kinds `+` joins as texts
 characters = {text: yes, char: yes}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
+equalities = {"==": yes, "!=": yes}
 compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}
 smallest_int = -9223372036854775808
@@ -206,7 +207,8 @@ condition(value: any) := {
 	kind = value#1
 	if kind == "int" { return value#2 + [op.i64_eqz, op.i32_eqz] }
 	if kind == "float" { return value#2 + [op.f64_const] + le64(0) + [float_ops["!="]] }
-	if kind != "bool" { refuse("a " + kind + " as a condition") }
+	# (a recursive call not yet known is taken as yes/no: wasm validation fails the module if it is not)
+	if kind != "bool" and kind != pending { refuse("a " + kind + " as a condition") }
 	value#2
 }
 
@@ -384,6 +386,8 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
 	textual = a#1 in characters or b#1 in characters
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
+	structured = a#1 == "list" or b#1 == "list" or a#1 == "node" or b#1 == "node"
+	if structured and symbol in equalities { return equality(body, symbol, a, b) }
 	if a#1 == "node" or b#1 == "node" { return node_operation(body, symbol, boxed(a), boxed(b)) }
 	if symbol in comparisons and a#1 == "char" and b#1 == "char" { return operation(body, symbol, code_point(a), code_point(b)) }
 	if symbol in comparisons and textual and a#1 in characters and b#1 in characters {
@@ -413,6 +417,12 @@ node_operation(body: Body, symbol: text, a: any, b: any) := {
 	texts = operation(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + chosen(kind, texts, [kind, numbers])]
+}
+# `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
+equality(body: Body, symbol: text, a: any, b: any) := {
+	equal = runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]])
+	if symbol == "==" { return equal }
+	["bool", equal#2 + [op.i32_eqz]]
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
 chosen(kind: text, a: any, b: any) := [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]
