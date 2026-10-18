@@ -528,6 +528,15 @@ impl Node {
 		}
 	}
 
+	/// The node the metadata entry `mark` marks, through any other Meta layers around it, and the entry's value
+	pub fn marked(&self, mark: &str) -> Option<(&Node, &Node)> {
+		let Meta { node, data } = self else { return None };
+		match data.as_ref() {
+			Key(key, _, value) if key.name() == mark => Some((node, value)),
+			_ => node.marked(mark),
+		}
+	}
+
 	/// `x` of `(x)` and `((x))`, under its meta like drop_meta
 	pub fn ungrouped(&self) -> &Node {
 		match self.drop_meta() {

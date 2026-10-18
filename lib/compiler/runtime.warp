@@ -58,10 +58,31 @@ node_text(n: any) := {
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
 node_code(n: any) := {
-	if is_null(n) == 0 and kind_code(n) == 3 { return "\"" + unboxed_text(n) + "\"" }
+	if is_null(n) == 0 and kind_code(n) == 3 { return quoted_text(unboxed_text(n)) }
 	if is_null(n) == 0 and kind_code(n) == 4 { return "'" + node_text(n) + "'" }
 	node_text(n)
 }
+# a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
+quoted_text(t: text) := {
+	escapes = 0
+	for i in 0..byte_count(t) { escapes += escaped_byte(byte_at(t, i)) }
+	out = new_text(byte_count(t) + escapes + 2)
+	set_byte(out, 0, 34)
+	at = 1
+	for i in 0..byte_count(t) {
+		b = byte_at(t, i)
+		if escaped_byte(b) == 1 {
+			set_byte(out, at, 92)
+			at += 1
+		}
+		set_byte(out, at, b)
+		at += 1
+	}
+	set_byte(out, at, 34)
+	out
+}
+# 1 for the bytes of `"` and `\`, which a quoted text escapes
+escaped_byte(b: int) := if b == 34 or b == 92 then 1 else 0
 list_text(xs: list) := {
 	inner = ""
 	for x in xs {

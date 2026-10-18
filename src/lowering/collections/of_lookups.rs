@@ -84,8 +84,7 @@ fn as_one_phrase(node: Node) -> Node {
 	if !matches!(node.drop_meta(), Node::List(_, Bracket::None, Separator::Space)) {
 		return node;
 	}
-	let mut words = vec![];
-	crate::lambdas::flatten_phrase(&node, &mut words);
+	let words = crate::lowering::nodes::phrase_words_of(&node);
 	match words.iter().any(|word| word.is_symbol(OF_WORD)) {
 		true => Node::List(words, Bracket::None, Separator::Space),
 		false => node,

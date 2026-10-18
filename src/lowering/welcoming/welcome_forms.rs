@@ -303,8 +303,7 @@ fn forms(node: Node) -> Node {
 fn ocaml_fun(node: &Node) -> Option<Node> {
 	let names = match node.drop_meta() {
 		Node::Key(head, Op::Arrow, _) => {
-			let mut words = vec![];
-			crate::lambdas::flatten_phrase(head, &mut words);
+			let words = crate::lowering::nodes::phrase_words_of(head);
 			match words.split_first() {
 				Some((keyword, names)) if keyword.is_symbol(OCAML_FUN) => names.to_vec(),
 				_ => return None,
@@ -315,9 +314,7 @@ fn ocaml_fun(node: &Node) -> Option<Node> {
 			let Node::Key(head, Op::Arrow, _) = arrow.drop_meta() else {
 				return None;
 			};
-			let mut words = vec![];
-			crate::lambdas::flatten_phrase(head, &mut words);
-			words
+			crate::lowering::nodes::phrase_words_of(head)
 		}
 		_ => return None,
 	};
