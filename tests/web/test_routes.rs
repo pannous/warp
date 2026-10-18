@@ -98,3 +98,14 @@ route "*" { p{ "not found" } }"#;
 	let misplaced = warp::wasm_emitter::eval("route \"/:part?/end\" { p{ \"x\" } }").serialize();
 	assert!(misplaced.contains("only the last part"), "{misplaced}");
 }
+
+// lib/router.warp's route_answer (serve.rs route_entry): the route of exactly the request's path answers before a pattern
+// matching it, as the host's route_at picks; a braced value's key (`name`) is no variable the route's lambda captures
+#[test]
+fn route_answer_prefers_the_exact_path() {
+	let program = "get \"/users/:id\" { \"user \" + id }
+get \"/users/new\" { {name: \"new\"} }
+answer = route_answer({method: \"GET\", path: \"/users/new\"})
+[answer.name, route_answer({method: \"GET\", path: \"/users/7\"})]";
+	assert_eq!(eval(program).serialize(), "[\"new\" \"user 7\"]");
+}
