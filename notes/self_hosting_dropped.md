@@ -84,7 +84,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 4 | of_lookups | 241 | 22 | keep `a of b` and `in`/`from` after a selector word; drop print walks, unit counts (decided, sugar-triage) |
 | 5 | set phrases | welcome_forms | 1 | dropped in both compilers (card set-set, rust-cleanup-drops) |
 | 6 | grouped_receivers | 69 | 1 | keep |
-| 7 | module_properties | 467 | 3 | library (graphics: window.width; decided) |
+| 7 | module_properties | 467 | 3 | core: the property accessors (definitions/property_accessors.rs, supervisor 2026-10-18); its graphics tables (display aliases, bare width) asked at warp-interviewer |
 | 8 | times_phrases | 57 | 26 | keep (ported) |
 | 9 | broadcasting | 1410 | 11 | keep, minimal port |
 | 10 | shader_holes | 250 | 11 | library (gpu; decided) |
@@ -193,3 +193,8 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   ("list cannot hold this item"); warp's gives ["hi" 420], because the lowered view the emitter reads carries no
   declaration. Sources: probes/variance/runtime_lax_alias.warp, probes/variance/runtime_unannotated_param.warp. Back: the lowered view keeps the declared element type
   of a list, the emitter checks adds against it.
+- A declared result type: `def half(x) -> int { x / 2 }; half(3)` fails in Rust ("an int must be a whole number",
+  card static-int); warp's module gives 3/2 shown as 1.5, because the lowered view drops `-> int` (the body becomes
+  `the result = x / 2; the result`). Source: probes/static_result.warp (accepted by the Integrator with
+  emitter-beyond-core). Back: the lowering keeps the result type as `(body) as int` or an annotation, and the emitter
+  checks a ratio against it.

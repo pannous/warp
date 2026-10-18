@@ -16,10 +16,14 @@ pub(crate) struct Variants {
 }
 
 impl Variants {
+	/// The names of the variants without payload, `Dot` of `enum Shape { Circle(r), Dot }`
+	pub(crate) fn bare_names(&self) -> impl Iterator<Item = String> + '_ {
+		self.bare.iter().map(|name| name.drop_meta().name())
+	}
+
 	/// The names of all variants, those with payload (classes) first, as declared
 	pub(crate) fn names(&self) -> Vec<String> {
-		let bare = self.bare.iter().map(|name| name.drop_meta().name());
-		self.classes.iter().cloned().chain(bare).collect()
+		self.classes.iter().cloned().chain(self.bare_names()).collect()
 	}
 
 	/// No variant carries a payload: a plain enum, whose case at an index is `n as Coin` (plain_enums.rs)
@@ -36,6 +40,31 @@ pub(crate) fn sum_type(type_name: String, bare_variants: Vec<Node>, declarations
 	let sum_type =
 		Node::Type { name: Box::new(name), body: Box::new(Node::List(vec![], Bracket::Curly, Separator::None)) };
 	Node::List([vec![sum_type], declarations].concat(), Bracket::None, Separator::Semicolon)
+}
+
+/// The cases of an enum body, a line of several cases `Add, Sub, Mul` among lines of cases each a case
+pub(crate) fn case_rows(cases: &[Node]) -> Vec<Node> {
+	cases
+		.iter()
+		.flat_map(|case| match case.drop_meta() {
+			Node::List(row, Bracket::None, Separator::Comma) => row.clone(),
+			_ => vec![case.clone()],
+		})
+		.collect()
+}
+
+/// `type @variants(…) Color`, an enum's sum type
+pub(crate) fn is_sum_type(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::Type { name, .. } if name.attribute(VARIANTS_MARK).is_some())
+}
+
+/// The program with the sum types these declarations declare lowered in it, those of a used module
+pub(crate) fn with_types_of(program: Node, declarations: &[Node]) -> Node {
+	let sum_types = sum_types(&Node::List(declarations.to_vec(), Bracket::None, Separator::Newline));
+	match sum_types.is_empty() {
+		true => program,
+		false => with_variant_tests(program, &sum_types),
+	}
 }
 
 pub fn lower(program: Node) -> Node {
@@ -77,8 +106,8 @@ pub(crate) fn sum_types(program: &Node) -> HashMap<String, Variants> {
 	sum_types
 }
 
-/// `x is Color` → `x is Color or x == red or x == green`; a literal variant `red is Color` is true; `Shape::Circle(2)` →
-/// `Circle(2)`
+/// `x is Color` → `x is Color or x == red or x == green`; a literal variant `red is Color` is true; `Shape::Circle(2)` and
+/// `Shape.Circle(2)` → `Circle(2)`
 fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node {
 	let bare_of = |right: &Node| match right.drop_meta() {
 		Node::Symbol(type_name) if !crate::type_tests::is_equality_operand(right) => {
@@ -87,8 +116,12 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 		_ => None,
 	};
 	match node {
-		Node::Key(sum_type, Op::Scope, variant) if is_variant_of(&sum_type, &variant, sum_types) => {
+		Node::Key(sum_type, Op::Scope | Op::Dot, variant) if is_variant_of(&sum_type, &variant, sum_types) => {
 			with_variant_tests(*variant, sum_types)
+		}
+		// `Node.Empty == x`: the variant by name first, so the comparison below sees it
+		Node::Key(left, Op::Eq, right) if is_qualified_variant(&left, sum_types) => {
+			with_variant_tests(Node::Key(Box::new(with_variant_tests(*left, sum_types)), Op::Eq, right), sum_types)
 		}
 		Node::Key(subject, Op::Eq, right)
 			if bare_of(&right).is_some() && matches!(subject.drop_meta(), Node::Symbol(_)) =>
@@ -123,6 +156,10 @@ fn is_bare_variant(node: &Node, sum_types: &HashMap<String, Variants>) -> bool {
 }
 
 /// `Shape::Circle(2)`, `Shape::Dot`: a variant of the sum type Shape, by its name or the head of its call
+fn is_qualified_variant(node: &Node, sum_types: &HashMap<String, Variants>) -> bool {
+	matches!(node.drop_meta(), Node::Key(sum_type, Op::Scope | Op::Dot, variant) if is_variant_of(sum_type, variant, sum_types))
+}
+
 fn is_variant_of(sum_type: &Node, variant: &Node, sum_types: &HashMap<String, Variants>) -> bool {
 	let Some(variants) = sum_types.get(&sum_type.drop_meta().name()) else {
 		return false;

@@ -1802,6 +1802,8 @@ PASSED:
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
+  ✓ functions::test_overloaded_function_values::a_signal_named_like_a_sound_word_plays
+  ✓ functions::test_overloaded_function_values::an_overloaded_function_passed_for_a_function_typed_parameter_is_the_fitting_variant
   ✓ functions::test_parameter_any::a_parameter_called_with_two_kinds_takes_any
   ✓ functions::test_parameter_any::a_parameter_tested_for_its_kind_takes_any
   ✓ functions::test_parameter_any::an_any_parameter_takes_every_kind
@@ -2385,6 +2387,7 @@ PASSED:
   ✓ lists::test_tuples::test_tuple_of_computed_items
   ✓ lists::test_type_word_items::a_type_word_variable_heads_a_list
   ✓ lists::test_typed_list_insert::insert_checks_declared_element_type
+  ✓ lists::test_typed_lists::a_list_parameter_holds_elements_of_any_type
   ✓ lists::test_typed_lists::test_appended_int_list_is_an_array
   ✓ lists::test_typed_lists::test_float_array_elements_are_numbers
   ✓ lists::test_typed_lists::test_float_list_is_a_float_array
@@ -2760,6 +2763,14 @@ PASSED:
   ✓ node::test_node_api::a_list_shows_its_bracket
   ✓ node::test_node_api::nodes_are_built_from_parts
   ✓ node::test_node_api::rebuilt_lists_equal_the_written_ones
+  ✓ node::test_node_cases::a_case_builds_the_node
+  ✓ node::test_node_cases::a_pattern_takes_the_node_apart
+  ✓ node::test_node_cases::a_programs_own_names_win
+  ✓ node::test_node_cases::an_enum_case_in_a_pattern_compares
+  ✓ node::test_node_cases::an_operator_case_is_spelled_as_the_node_carries_it
+  ✓ node::test_node_cases::node_is_the_type_of_any_node
+  ✓ node::test_node_cases::node_warp_declares_the_rust_node
+  ✓ node::test_node_cases::node_warp_spells_each_operator_bracket_and_separator
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -3809,7 +3820,11 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
+  ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
+  ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
+  ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
@@ -3831,6 +3846,8 @@ PASSED:
   ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
+  ✓ parser::test_self_signatures::module_source_is_the_embedded_standard_module
+  ✓ parser::test_self_signatures::the_signature_table_answers_as_rust
   ✓ parser::test_self_words::call_kinds_are_rusts
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
@@ -4170,6 +4187,7 @@ PASSED:
   ✓ programs::test_sound_filters::vibrato_bends_the_pitch
   ✓ programs::test_sound_handles::play_gives_the_sounds_handle
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
+  ✓ programs::test_sound_note_names::a_letter_indexed_by_an_octave_is_its_sharp_note
   ✓ programs::test_sound_note_names::every_note_name_is_its_midi_notes_frequency
   ✓ programs::test_sound_notes::a_note_inside_a_function_body_plays
   ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
@@ -5116,6 +5134,10 @@ PASSED:
   ✓ types::test_same_identity::maps_and_lists_are_the_same_only_when_one
   ✓ types::test_same_identity::same_is_the_word
   ✓ types::test_same_identity::scalars_stay_type_and_value
+  ✓ types::test_scoped_enum_cases::a_case_with_values_by_its_enum
+  ✓ types::test_scoped_enum_cases::a_constant_word_is_a_case_in_its_enum
+  ✓ types::test_scoped_enum_cases::a_used_files_enum
+  ✓ types::test_scoped_enum_cases::cases_in_rows
   ✓ types::test_self_typed_field::a_required_field_of_the_own_class_is_an_error
   ✓ types::test_self_typed_field::an_optional_field_of_the_own_class_holds_nothing
   ✓ types::test_self_typed_field::other_fields_stay_strict
@@ -6448,6 +6470,7 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6444 passed, 1 failed, 6445 total tested
+16 ignored, 6466 passed, 2 failed, 6468 total tested

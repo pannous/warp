@@ -1,13 +1,25 @@
 //! Destructuring and patterns of instances: `{x, y} = p`, `(a, b) = p`, `c#1` and `c.0`, `Point{x, y: b}` patterns
 use super::*;
+use crate::lowering::node_cases;
 use crate::lowering::nodes::assign;
 
 /// Destructuring (JS, Python, Rust, Kotlin): `{x, y} = p` and `{x: a} = p` by field name (maps too); `(a, b) = p` and
 /// `a, b = p` of an instance in field order; match arms `Point{x, y} => …` and `Point(x, y) => …` a type test binding
 /// the fields
 pub(super) fn destructurings(node: Node) -> Node {
-	with_value_classes(node, &taken_apart)
+	let cases = enum_cases(&node);
+	with_value_classes(node, &|node, fields, class_of| taken_apart(node, fields, class_of, &cases))
 }
+
+/// The cases of the program's enums without values, `Red` of `enum Color { Red, Green }`: a pattern compares them
+fn enum_cases(node: &Node) -> Cases {
+	crate::lowering::sum_variants::sum_types(node)
+		.values()
+		.flat_map(|variants| variants.bare_names().collect::<Vec<_>>())
+		.collect()
+}
+
+pub(super) type Cases = std::collections::HashSet<String>;
 
 /// P179: a field by its position, `c#1` 1-based and Rust's `c.0` 0-based, of an instance whose class is known
 /// (`c = rgb(1, 2, 3)`, `Some(4)#1`): the field by name, `c.value1`; `c#1` of a class defining `#` calls that method
@@ -96,15 +108,15 @@ fn by_position(
 	}
 }
 
-pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) -> Node {
-	let recurse = |child: Node| taken_apart(child, fields, class_of);
+pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf, cases: &Cases) -> Node {
+	let recurse = |child: Node| taken_apart(child, fields, class_of, cases);
 	let subject = symbol(PARTS_WORD);
 	match node {
 		// `{x, start: Point{x: a}} = l`: names only, no constant to test (a class in it is no test either)
 		Node::Key(target, Op::Assign, value)
-			if matched_fields(&target, &subject, fields).is_some_and(|matched| matched.tests.is_empty()) =>
+			if matched_fields(&target, &subject, fields, cases).is_some_and(|matched| matched.tests.is_empty()) =>
 		{
-			let matched = matched_fields(&target, &subject, fields).expect("guarded");
+			let matched = matched_fields(&target, &subject, fields, cases).expect("guarded");
 			bound_parts(recurse(*value), &matched.bindings, None)
 		}
 		Node::Key(target, Op::Assign, value) if positional_names(&target).is_some() && class_of(&value).is_some() => {
@@ -132,7 +144,7 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 			recurse(Node::Key(Box::new(target), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator) if is_match(&items) => {
-			let items = crate::welcome_forms::with_match_cases(items, |cases| class_arms(cases, fields));
+			let items = crate::welcome_forms::with_match_cases(items, |arms| class_arms(arms, fields, cases));
 			Node::List(items, bracket, separator).map_children(recurse)
 		}
 		other => other.map_children(recurse),
@@ -145,21 +157,21 @@ fn is_match(items: &[Node]) -> bool {
 
 /// The class arms of a match's cases, `Point{x, y: 0}: body` and `Circle(r): body`, as the guard
 /// `if parts·from is Point and parts·from.y == 0 then parts·from` and the body with the fields bound
-fn class_arms(cases: &Node, fields: &ClassFields) -> Node {
-	let Node::List(arms, Bracket::Curly, separator) = cases.drop_meta() else {
-		return cases.clone();
+fn class_arms(arms: &Node, fields: &ClassFields, cases: &Cases) -> Node {
+	let Node::List(arms, Bracket::Curly, separator) = arms.drop_meta() else {
+		return arms.clone();
 	};
-	let arms = arms.iter().map(|arm| class_arm(arm, fields).unwrap_or_else(|| arm.clone()));
+	let arms = arms.iter().map(|arm| class_arm(arm, fields, cases).unwrap_or_else(|| arm.clone()));
 	Node::List(arms.collect(), Bracket::Curly, separator.clone())
 }
 
-fn class_arm(arm: &Node, fields: &ClassFields) -> Option<Node> {
+fn class_arm(arm: &Node, fields: &ClassFields, cases: &Cases) -> Option<Node> {
 	let Node::Key(pattern, Op::Colon, body) = arm.drop_meta() else {
 		return None;
 	};
 	let (subject, mut matched) = (symbol(PARTS_WORD), Matched::default());
 	is_class_pattern(pattern, fields).then_some(())?;
-	matched_pattern(pattern, &subject, fields, &mut matched)?;
+	matched_pattern(pattern, &subject, fields, cases, &mut matched)?;
 	// `is` compares like ==, a class name tests the type
 	let test = matched.class_tests.into_iter().chain(matched.tests).reduce(|all, test| key(all, Op::And, test));
 	let guard = if_then(test.expect("a class pattern tests its class"), subject.clone());
@@ -187,24 +199,37 @@ pub(super) fn is_class_pattern(pattern: &Node, fields: &ClassFields) -> bool {
 			fields.contains_key(&class.drop_meta().name())
 				&& matches!(parts.drop_meta(), Node::List(_, Bracket::Curly, _))
 		}
-		Node::List(items, Bracket::Round, _) => items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()),
+		Node::List(items, Bracket::Round, _) => {
+			items.len() > 1
+				&& (fields.contains_key(&items[0].drop_meta().name()) || built_in_case(items, fields).is_some())
+		}
 		_ => false,
 	}
 }
 
 /// A pattern at `path`: `_` matches anything, a name binds, a number or text is compared, `Point{x, y: b}` and
 /// `Point(a, 0)` test the class and match each field; None for anything else (the arm stays as written)
-pub(super) fn matched_pattern(pattern: &Node, path: &Node, fields: &ClassFields, matched: &mut Matched) -> Option<()> {
+pub(super) fn matched_pattern(
+	pattern: &Node,
+	path: &Node,
+	fields: &ClassFields,
+	cases: &Cases,
+	matched: &mut Matched,
+) -> Option<()> {
 	let class_test = |class: &str| key(path.clone(), Op::Eq, symbol(class));
 	match pattern.drop_meta() {
 		Node::Symbol(name) if name == "_" => {}
+		// `Color.Red`, a case of an enum (Red by then), compares
+		Node::Symbol(name) if cases.contains(name) => {
+			matched.tests.push(key(path.clone(), Op::Eq, pattern.drop_meta().clone()))
+		}
 		Node::Symbol(name) if !fields.contains_key(name) => matched.bindings.push((path.clone(), name.clone())),
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => {
 			matched.tests.push(key(path.clone(), Op::Eq, pattern.drop_meta().clone()))
 		}
 		Node::Key(class, Op::Colon | Op::None, parts) if fields.contains_key(&class.drop_meta().name()) => {
 			matched.class_tests.push(class_test(&class.drop_meta().name()));
-			let inner = matched_fields(parts, path, fields)?;
+			let inner = matched_fields(parts, path, fields, cases)?;
 			matched.class_tests.extend(inner.class_tests);
 			matched.tests.extend(inner.tests);
 			matched.bindings.extend(inner.bindings);
@@ -226,7 +251,15 @@ pub(super) fn matched_pattern(pattern: &Node, path: &Node, fields: &ClassFields,
 			matched.class_tests.push(class_test(&class));
 			let last_fields = &class_fields[class_fields.len() - after.len()..];
 			for ((field, _), part) in class_fields.iter().zip(before).chain(last_fields.iter().zip(after)) {
-				matched_pattern(part, &field_of(path, field), fields, matched)?;
+				matched_pattern(part, &field_of(path, field), fields, cases, matched)?;
+			}
+		}
+		// `Key(left, op, right)` of the built-in node (node_cases.rs): its kind tested, its parts read
+		Node::List(items, Bracket::Round, _) if built_in_case(items, fields).is_some() => {
+			let case = built_in_case(items, fields).expect("guarded");
+			matched.class_tests.push(node_cases::kind_test(case, path));
+			for (part, pattern) in case.fields.iter().zip(&items[1..]) {
+				matched_pattern(pattern, &node_cases::field_at(part, path), fields, cases, matched)?;
 			}
 		}
 		_ => return None,
@@ -234,8 +267,16 @@ pub(super) fn matched_pattern(pattern: &Node, path: &Node, fields: &ClassFields,
 	Some(())
 }
 
+/// The built-in node's case a pattern `Key(left, op, right)` names, one field for each of its parts, when the program
+/// declares no class of that name
+fn built_in_case(items: &[Node], fields: &ClassFields) -> Option<&'static node_cases::NodeCase> {
+	let name = items.first()?.drop_meta().name();
+	let case = node_cases::node_case(&name).filter(|_| !fields.contains_key(&name))?;
+	(case.fields.len() == items.len() - 1).then_some(case)
+}
+
 /// `{x, y: b, from: Point{…}}` at `path`: each field by name, a field with a pattern after its colon matched by it
-pub(super) fn matched_fields(parts: &Node, path: &Node, fields: &ClassFields) -> Option<Matched> {
+pub(super) fn matched_fields(parts: &Node, path: &Node, fields: &ClassFields, cases: &Cases) -> Option<Matched> {
 	let Node::List(items, Bracket::Curly, _) = parts.drop_meta() else {
 		return None;
 	};
@@ -247,7 +288,7 @@ pub(super) fn matched_fields(parts: &Node, path: &Node, fields: &ClassFields) ->
 		match item.drop_meta() {
 			Node::Symbol(name) => matched.bindings.push((field_of(path, name), name.clone())),
 			Node::Key(field, Op::Colon, part) if matches!(field.drop_meta(), Node::Symbol(_)) => {
-				matched_pattern(part, &field_of(path, &field.drop_meta().name()), fields, &mut matched)?
+				matched_pattern(part, &field_of(path, &field.drop_meta().name()), fields, cases, &mut matched)?
 			}
 			// Rust's `Point{x, ..}`: the other fields left out
 			_ if super::super::switch::rest_pattern(item) == Some(None) => {}

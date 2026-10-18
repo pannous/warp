@@ -237,7 +237,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		if module.first_error().is_some() {
 			continue; // the loader reports it
 		}
-		let definitions = statements(module);
+		let definitions = module_statements(module);
 		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
 		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
 		for used in reexported {
@@ -275,10 +275,16 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let class_names: Vec<String> = std_classes.iter().filter_map(name_declared_by).collect();
 	let module_code = Node::List(std_definitions, Bracket::None, Separator::Newline);
 	let returned = crate::lowering::class_methods::returned_classes(&module_code, &class_names);
-	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
+	let instances = crate::lowering::class_methods::top_level_instances(&module_code, &class_names);
+	crate::compiler::compile_context::change(|context| {
+		context.module_returned_classes = returned;
+		context.module_instance_classes = instances;
+	});
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
 	let program = as_constructions(program, &inserted);
+	// `Node.True`, `x is Node` of a used file's enum, which sum_variants met before its declaration was in front
+	let program = crate::lowering::sum_variants::with_types_of(program, &file_classes);
 	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
 	with_statements_first(program, file_classes)
 }

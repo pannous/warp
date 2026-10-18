@@ -153,6 +153,7 @@ mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
 mod test_optional_words;
+mod test_overloaded_function_values;
 mod test_parameter_any;
 mod test_parameter_assignment;
 mod test_parameter_call_kinds;
