@@ -96,8 +96,24 @@ pub fn json_of<T>(node: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory
 	})
 }
 
-/// The items of a list of cons cells: each cell's first item, then its rest, a cell or a last single item
+/// The items of a list held as a vector, `$list (len i32, items (array anyref))` (lib/compiler/emitter.warp): its first
+/// field is the i32 length, where a cons cell's first item is a $Node, whose first field is the i64 kind
+pub fn vector_items<T>(data: &Val, store: &mut StoreContextMut<'_, T>) -> Option<Vec<Val>> {
+	let vector = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
+	let Val::I32(length) = vector.field(&mut *store, 0).ok()? else {
+		return None;
+	};
+	let items = vector.field(&mut *store, 1).ok()?.unwrap_anyref()?.as_array(&*store).ok()??;
+	let items: Vec<Val> = items.elems(&mut *store).ok()?.take(length as usize).collect();
+	Some(items)
+}
+
+/// The items of a list from its node's data and value: a vector's items, else those of its cons cells, each cell's
+/// first item, then its rest, a cell or a last single item
 pub fn items_of<T>(mut first: Val, mut rest: Val, store: &mut StoreContextMut<'_, T>) -> Result<Vec<Val>> {
+	if let Some(items) = vector_items(&first, store) {
+		return Ok(items);
+	}
 	let mut items = vec![];
 	loop {
 		if first.unwrap_anyref().is_some() {

@@ -253,15 +253,11 @@ impl Builders {
 				Ok(TaskValue::Closure(name, Box::new(captured)))
 			}
 			Some(crate::type_kinds::Kind::List) => {
-				let (mut items, mut cell) = (vec![], Some(node));
-				while let Some(current) = cell {
-					let first = current.field(&mut *store, DATA_FIELD)?;
-					if first.unwrap_anyref().is_some() {
-						items.push(self.read_value(&first, store)?);
-					}
-					let rest = current.field(&mut *store, VALUE_FIELD)?;
-					cell = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok());
-				}
+				let (first, rest) = (node.field(&mut *store, DATA_FIELD)?, node.field(&mut *store, VALUE_FIELD)?);
+				let items = warp_runtime::gc_values::items_of(first, rest, store)?
+					.iter()
+					.map(|item| self.read_value(item, store))
+					.collect::<Result<Vec<_>>>()?;
 				Ok(TaskValue::List(items, ((kind >> 8) & 0xFF) | ((kind & crate::type_kinds::SEPARATOR_MASK) >> 8)))
 			}
 			_ => self.read(value, store),
