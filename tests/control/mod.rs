@@ -135,6 +135,7 @@ mod test_match_item_patterns; // card list-pattern
 mod test_match_maps; // card map-patterns
 mod test_match_negative_subject; // card match-negative-subject
 mod test_match_other;
+mod test_match_rest_arm; // card match
 mod test_match_pattern_bindings; // card pattern-names
 mod test_match_ranges;
 mod test_match_tuples;
