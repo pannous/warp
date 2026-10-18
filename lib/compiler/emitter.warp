@@ -47,8 +47,8 @@ no_value = 64
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i32_sub: 107, i32_and: 113, i32_or: 114,
-	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_neg: 154, i32_wrap_i64: 167, i64_extend_i32_u: 173,
-	f64_convert_i64_s: 185, ref_is_null: 209}
+	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
+	f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -323,6 +323,11 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	if name == "unboxed_float" { return ["float", unboxed(values#1#2, gc.float_box)] }
 	if name == "int_quotient" { return ["int", values#1#2 + values#2#2 + [op.i64_div_s]] }
 	if name == "int_remainder" { return ["int", values#1#2 + values#2#2 + [op.i64_rem_s]] }
+	if name == "bits_of_float" { return ["int", converted(values#1, "float") + [op.i64_reinterpret_f64]] }
+	if name == "float_of_bits" { return ["float", values#1#2 + [op.f64_reinterpret_i64]] }
+	if name == "float_floor" { return ["float", converted(values#1, "float") + [op.f64_floor]] }
+	if name == "float_ceil" { return ["float", converted(values#1, "float") + [op.f64_ceil]] }
+	if name == "truncated" { return ["int", converted(values#1, "float") + [op.i64_trunc_f64_s]] }
 	if name == "code_of" { return ["int", values#1#2 + [op.i64_extend_i32_u]] }
 	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code("array_set", [gc.text])] }
 	if name == "output_byte" { return [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)] }
@@ -334,7 +339,8 @@ intrinsic(body: Body, name: text, arguments: any) := {
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1}
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
+	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, truncated: 1}
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
 kind_code_of(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and]
