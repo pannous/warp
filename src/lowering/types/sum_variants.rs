@@ -16,10 +16,14 @@ pub(crate) struct Variants {
 }
 
 impl Variants {
+	/// The names of the variants without payload, `Dot` of `enum Shape { Circle(r), Dot }`
+	pub(crate) fn bare_names(&self) -> impl Iterator<Item = String> + '_ {
+		self.bare.iter().map(|name| name.drop_meta().name())
+	}
+
 	/// The names of all variants, those with payload (classes) first, as declared
 	pub(crate) fn names(&self) -> Vec<String> {
-		let bare = self.bare.iter().map(|name| name.drop_meta().name());
-		self.classes.iter().cloned().chain(bare).collect()
+		self.classes.iter().cloned().chain(self.bare_names()).collect()
 	}
 
 	/// No variant carries a payload: a plain enum, whose case at an index is `n as Coin` (plain_enums.rs)
