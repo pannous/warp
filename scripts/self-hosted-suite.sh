@@ -84,6 +84,21 @@ local_run() {
 	echo "(log: $log)"
 }
 
+# The failed tests of a run's logs, sorted
+failed_tests() {
+	local log
+	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^test \([^ ]*\) \.\.\. FAILED$/\1/p' | LC_ALL=C sort -u
+}
+
+# The tests failing now that passed in the last recorded run (a regression check), from the logs both runs left
+newly_failed() {
+	local previous=$1; shift
+	local previous_logs=("$CLOUD_RESULTS/$SCRATCH_PREFIX-$previous"-*/log.txt.gz)
+	[ -e "${previous_logs[0]}" ] || return 0
+	echo "newly failing since $previous:"
+	LC_ALL=C comm -13 <(failed_tests "${previous_logs[@]}") <(failed_tests "$@")
+}
+
 # The tip with the switch on: a commit of its own per group, so each job has its own run name
 switched_on() {
 	local tip=$1 group=$2 index blob commit
@@ -119,6 +134,7 @@ cloud_run() {
 	mkdir -p "$REPORTS"
 	rank "${logs[@]}" | tee "$REPORTS/${tip:0:8}.txt"
 	mkdir -p "$(dirname "$COUNTS")"
+	[ -s "$COUNTS" ] && newly_failed "$(tail -1 "$COUNTS" | awk '{ print $2 }')" "${logs[@]}" | tee -a "$REPORTS/${tip:0:8}.txt"
 	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //; s/ passed//')" \
 		"data/self-hosted/${tip:0:8}.txt" >> "$COUNTS"
 	echo "(report: $REPORTS/${tip:0:8}.txt, logs: ${logs[*]})"
