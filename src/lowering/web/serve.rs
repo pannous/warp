@@ -1,6 +1,6 @@
-//! `serve 8080 { get "/api/users" { users } post "/echo" { request.body } }` (card web-server): each route becomes the
-//! function `route·N(request:any) := body` and the statement the host call `serve_routes(8080, [["GET",
-//! "/api/users", "route·0"] …])`, which serves until it is stopped (src/web/web_server.rs natively; the playground says
+//! `serve 8080 { get "/api/users" { users } post "/echo" { request.body } }` (card web-server): each route joins
+//! lib/router.warp's table (`route_add("GET", "/api/users", request => {users})`), then the host call
+//! `serve_routes(8080, [["GET", "/api/users"] …])` serves until it is stopped (src/web/web_server.rs natively; the playground says
 //! loudly that it cannot serve). `server def f(a, b) {…}` (typed RPC, notes/web_framework.md "Server and page") is f,
 //! and also the route POST /rpc/f calling it with the request's JSON array of arguments. A program file whose last line
 //! shows a page serves that page too, at / (src/web/site.rs); its page build leaves the serving out and asks the server
@@ -16,7 +16,6 @@ use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashSet;
 
 const SERVE_WORD: &str = "serve";
-const ROUTE_PREFIX: &str = "route·";
 /// lib/router.warp's table of routes answered without a server, and the answer of the route taking a request
 pub(crate) const ROUTE_ADD: &str = "route_add";
 const ROUTE_ANSWER: &str = "route_answer";
@@ -101,7 +100,7 @@ pub fn lower(program: Node) -> Node {
 				.collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
 			let server_data = ServerData::of(&statements);
-			let mut routes = 0;
+			let mut dispatching = statements.iter().any(defines_dispatcher);
 			let serves_itself = statements.iter().any(|statement| served(statement).is_some());
 			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements
 			let (top_level, statements): (Vec<Node>, Vec<Node>) = statements
@@ -112,20 +111,20 @@ pub fn lower(program: Node) -> Node {
 				.flat_map(|statement| match served(&statement) {
 					Some((port, mut routed)) => {
 						routed.extend(calls.iter().cloned());
-						serving(port, routed, &server_data, &mut routes)
+						serving(port, routed, &server_data, &mut dispatching)
 					}
 					None => vec![statement],
 				})
 				.collect();
 			if let (Some(port), false) = (port, serves_itself) {
 				let routed = top_level.iter().flat_map(top_level_routes).chain(calls).collect();
-				statements.extend(serving(Node::int(i64::from(port)), routed, &server_data, &mut routes));
+				statements.extend(serving(Node::int(i64::from(port)), routed, &server_data, &mut dispatching));
 			}
 			Node::List(statements, bracket, separator)
 		}
 		single if served(&single).is_some() => {
 			let (port, routed) = served(&single).expect("checked");
-			Node::List(serving(port, routed, &ServerData::default(), &mut 0), Bracket::None, Separator::Semicolon)
+			Node::List(serving(port, routed, &ServerData::default(), &mut false), Bracket::None, Separator::Semicolon)
 		}
 		other => other,
 	}
@@ -464,6 +463,8 @@ fn table_variable(statement: &Node) -> Option<(String, Node)> {
 struct ServerData {
 	tables: Vec<(String, Node)>,
 	list_words: Vec<String>,
+	/// the main-level variables a route may change, besides the tables it reads anew
+	page_variables: HashSet<String>,
 }
 
 impl ServerData {
@@ -480,7 +481,11 @@ impl ServerData {
 			})
 			.collect();
 		list_words.extend(giving_lists);
-		ServerData { tables, list_words }
+		let page_variables = crate::event_signals::main_level_variables(statements)
+			.into_iter()
+			.filter(|name| tables.iter().all(|(table, _)| table != name))
+			.collect();
+		ServerData { tables, list_words, page_variables }
 	}
 }
 
@@ -657,9 +662,8 @@ fn with_generated_names(node: Node) -> Node {
 }
 
 /// Without a server (`warp run`, the playground, WAGI): each top-level route (`post "/todos" {…}`) joins lib/router.warp's
-/// table, `route_add("POST", "/todos", request => {…})`, and page·submitted(request) asks route_answer for the one
-/// answering the request of a form of the page. Like an event handler, a route changes the page's variables: those it
-/// mentions are its globals
+/// table (route_entry), and page·submitted(request) asks route_answer for the one answering the request of a form of the
+/// page
 fn with_local_routes(program: Node) -> Node {
 	let (statements, bracket, separator) = match program {
 		// a program of routes only, one or several on a line, is one list of words (card deploy-single-route)
@@ -677,14 +681,9 @@ fn with_local_routes(program: Node) -> Node {
 	let mut functions: Vec<Node> = routed
 		.iter()
 		.flat_map(top_level_routes)
-		.map(|(method, path, body)| {
-			let globals =
-				page_variables.iter().filter(|name| body.mentions_any(&[name.as_str()])).map(|name| global(name));
-			let answer = key(symbol(REQUEST_WORD), Op::Arrow, prepended(globals.collect(), body));
-			call(ROUTE_ADD, vec![text(&method), path, answer])
-		})
+		.map(|(method, path, body)| route_entry(&method, path, body, &page_variables))
 		.collect();
-	functions.push(parse_named(&format!("{PAGE_SUBMITTED}(request:any) := {ROUTE_ANSWER}(request)")));
+	functions.push(dispatcher());
 	if crate::pipeline::compile_mode().for_wagi {
 		statements.push(parse_named(WAGI_ANSWER));
 	}
@@ -693,11 +692,24 @@ fn with_local_routes(program: Node) -> Node {
 	Node::List(statements, bracket, separator)
 }
 
-/// `route·N(request:any) := body`
-fn route_function(name: &str, body: Node) -> Node {
-	let request = key(symbol(REQUEST_WORD), Op::Colon, symbol(ANY_TYPE));
-	let head = call(name, vec![request]);
-	key(head, Op::Define, body)
+/// `route_add("POST", "/todos", request => {…})`: like an event handler, a route changes the page's variables, so those
+/// it mentions are its globals
+fn route_entry(method: &str, path: Node, body: Node, page_variables: &HashSet<String>) -> Node {
+	let globals = page_variables.iter().filter(|name| body.mentions_any(&[name.as_str()])).map(|name| global(name));
+	let answer = key(symbol(REQUEST_WORD), Op::Arrow, prepended(globals.collect(), body));
+	call(ROUTE_ADD, vec![text(method), path, answer])
+}
+
+/// `page·submitted(request:any) := route_answer(request)`: the routes' answer to a request, which the host (serve_routes),
+/// a page's form without a server (worker.js) and a WAGI build ask
+fn dispatcher() -> Node {
+	parse_named(&format!("{PAGE_SUBMITTED}(request:any) := {ROUTE_ANSWER}(request)"))
+}
+
+/// Whether a statement defines page·submitted (with_local_routes did): the served routes share it
+fn defines_dispatcher(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::Key(_, Op::Define, _))
+		&& defined_function(statement).is_some_and(|(name, _)| name == PAGE_SUBMITTED)
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
@@ -1053,19 +1065,23 @@ fn routes_in(items: &[Node]) -> Vec<Route> {
 		.collect()
 }
 
-/// The route functions, then the call that serves them
-fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut usize) -> Vec<Node> {
+/// The routes joining lib/router.warp's table, then the call that serves them: the host matches a request against
+/// `[[method, path] …]` (a list route marked `[method, path, serve::LIST_ANSWER]`) and answers it with page·submitted,
+/// defined once (`dispatching`) and only for routes: a page alone has no answer to call
+fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, dispatching: &mut bool) -> Vec<Node> {
 	let mut statements = vec![];
 	let mut table = vec![];
 	for (method, path, body) in routes {
-		let function = format!("{ROUTE_PREFIX}{count}");
-		*count += 1;
-		let mut entry = vec![Node::Text(method), path, Node::Text(function.clone())];
+		let mut entry = vec![Node::Text(method.clone()), path.clone()];
 		if answers_a_list(&body, &server_data.list_words) {
 			entry.push(text(LIST_ANSWER));
 		}
-		statements.push(route_function(&function, reading_tables(body, &server_data.tables)));
+		let body = reading_tables(body, &server_data.tables);
+		statements.push(route_entry(&method, path, body, &server_data.page_variables));
 		table.push(Node::List(entry, Bracket::Square, Separator::Comma));
+	}
+	if !table.is_empty() && !std::mem::replace(dispatching, true) {
+		statements.push(dispatcher());
 	}
 	let routes = Node::List(table, Bracket::Square, Separator::Comma);
 	statements.push(call(crate::host::SERVE_ROUTES, vec![port, routes]));
