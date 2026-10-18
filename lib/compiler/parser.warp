@@ -1119,6 +1119,7 @@ ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 // A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
 // Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call
 def named(p) {
+	before = word_before(p)
 	end = symbol_end(p.code, p.at, p.n)
 	word = p.code[p.at .. end]
 	p.at = end
@@ -1138,7 +1139,8 @@ def named(p) {
 	p.at = p.at + 1
 	arguments = items(p, ')', "(")
 	skip_spaces(p)
-	if is_at(p.code, p.at, '{', p.n) and not p.header {
+	// `match f(3, 4) {…}`: the block holds the cases, no body of a definition of f
+	if is_at(p.code, p.at, '{', p.n) and not p.header and not SWITCH_WORDS.contains(before) {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
 		// the head is the call f(x, y)
@@ -1146,6 +1148,9 @@ def named(p) {
 	}
 	listed("(", "", [name] + spread(arguments))
 }
+
+// Rust twin: words.rs SWITCH_WORDS
+SWITCH_WORDS = ["switch", "match"]
 
 // `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
 // follows: `map function square on xs`); `function add(x) {…}` defines it
