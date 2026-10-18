@@ -680,9 +680,12 @@ impl FunctionValues {
 	}
 
 	/// The parameters a call gives a function value: answer of `route(path, answer)` called `route("/x", q => q + 1)`,
-	/// whose `{answer: answer}` then holds it (card field-closure-call)
+	/// whose `{answer: answer}` then holds it (card field-closure-call), and those declared `answer: function`
 	fn function_parameters(&self, program: &Node, context: &Context) -> HashSet<String> {
-		let mut parameters = HashSet::new();
+		let declared = context.user_functions.values().flat_map(|function| &function.params).filter(|param| {
+			param.annotation.as_ref().is_some_and(crate::lowering::typed_block_arguments::is_function_type)
+		});
+		let mut parameters: HashSet<String> = declared.map(|param| param.name.clone()).collect();
 		program.visit(&mut |node| {
 			let Node::List(items, Bracket::Round, Separator::None) = node else { return };
 			let Some((head, arguments)) = items.split_first() else { return };

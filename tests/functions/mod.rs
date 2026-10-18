@@ -16,6 +16,7 @@ mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
 mod test_block_function;
+mod test_block_function_argument; // card block-function-argument
 mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
@@ -47,6 +48,7 @@ mod test_constant_free_variables;
 mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
+mod test_data_parameter; // card data-parameter
 mod test_deep_recursion;
 mod test_def_block_without_parentheses; // card def-hello
 mod test_def_bool_result;
