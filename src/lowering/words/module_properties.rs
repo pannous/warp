@@ -144,13 +144,13 @@ pub fn lower(program: Node) -> Node {
 	let original = program.clone();
 	collect(&crate::modules::statements(program.clone()), None, &mut own);
 	let program = if own.is_empty() { program } else { without_definitions(program) };
-	let bound = bound_names(&program);
+	let bound = crate::program_names::Bindings::of(&program).bound();
 	// a value (a variable, parameter or loop variable), not a function: `canvas() := Picture()` beside
 	// `canvas.width := …` is fine
 	// before tuples::lower the analyzer reads `[p, q] = …` as a definition of p: a destructured name is a value
 	let functions = crate::analyzer::function_definitions(&original).user_functions;
 	let destructured = destructured_variables(&original);
-	let values: HashSet<String> = bound_names(&original)
+	let values: HashSet<String> = crate::program_names::Bindings::of(&original).bound()
 		.into_iter()
 		.filter(|name| destructured.contains(name) || !functions.contains_key(name))
 		.collect();
@@ -293,13 +293,6 @@ fn without_definitions(node: Node) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(without_definitions(*node)), data },
 		other => other,
 	}
-}
-
-/// The names the program gives: variables, functions, their parameters (`def f(width) {…}` and the destructured
-/// `area({width, height})` too), loop variables; a field binds its name only inside its object or class
-/// (Rewrite::rewritten), a property written (`canvas.width = 3`) binds no name
-pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
-	crate::program_names::Bindings::of(program).bound()
 }
 
 /// The variables the program's destructurings bind: `a, b = …`, `[a, b] = …`, `{x, y} = …`, `{x: a} = …`

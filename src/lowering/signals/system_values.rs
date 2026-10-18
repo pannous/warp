@@ -42,7 +42,7 @@ const CLIPBOARD_WRITE: &str = "write";
 const TEXT_PLACEHOLDER: &str = "clipboard_text_written";
 
 pub fn name(program: Node) -> Node {
-	let bound = assigned_symbols(&program);
+	let bound = crate::program_names::Bindings::of(&program).bound();
 	let names: Vec<(&str, bool)> = SYSTEM_VALUES
 		.into_iter()
 		.chain([(CLIPBOARD, false), (NOW_WORD, false), (HELD_KEY, false)])
@@ -91,12 +91,6 @@ pub fn marked_names(node: &Node) -> HashSet<String> {
 		}
 	});
 	names
-}
-
-/// The names the program binds: assigned, defined, parameters of functions and lambdas, loop variables (`for now in
-/// times` reads its items, card library-word)
-pub(crate) fn assigned_symbols(program: &Node) -> HashSet<String> {
-	crate::program_names::Bindings::of(program).bound()
 }
 
 /// `held_key`: the name of the key held now, as `on key` names a press (system_signals.rs key_named)
