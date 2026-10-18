@@ -119,3 +119,25 @@ without_classes). An object's own entries (`address:{…}`) keep their names.
 - The single page answers every path a route matches, `route "*"` included, with 200; 404 only when no route matches
   (site.rs matches_no_route_at) or a matched route's lookup misses (`users#9`).
 - Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/servers/server.warp <port>`.
+
+## Toward a plain library (card compiler-modules, slice serve; decision domains-plain-libraries)
+Routes become ordinary warp definitions in lib/router.warp, no rewrite rules, no module pass. Moved so far:
+- `status 418` / `header "name" "value"`: router functions over the host's response_header; lib/wagi.warp defines
+  its own response_header, which wins over the host import in a WAGI build (serve.rs with_answer_headers is gone).
+
+Target shape (the host calls one exported dispatcher instead of route·N by name):
+```warp
+class Route { method: text, path: text, answer: function }
+routes = []
+get(path: text, answer: function) := { global routes; routes.add(Route{method: "GET", path, answer}) }
+answer(request) := for route in routes { if route.method == request.method and route_matches(route.path, request.path) { return route.answer(request) } }
+```
+Gaps (probed 2026-10-18 with the installed warp):
+- a `{…}` block to a `function` parameter is a List ("get needs a Function … got {1+2}"); question Q1 block-as-function
+- a closure in a map field can't be called (`r.answer(2)`, `a = r.answer; a(2)`): card field-closure-call
+- path parameters bound into the block (`:id:int`): question Q2, card route-path-patterns (topic matching)
+- `$title` → request.body.title: question Q3; default routes of a hosted program: question Q4
+Stays Rust, for card module-passes (analysis/codegen, not sugar): server functions and their /rpc routes, the page's
+calls of them (asking_the_server, without_serving, prerender values), P221 route data (with_route_data), stored tables
+read anew per request (reading_tables), list answers (answers_a_list), hosted page answers (answered_page) and
+default routes (with_default_routes, reflection over the program's functions).
