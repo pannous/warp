@@ -85,7 +85,8 @@ const EARLY_FAILURE: Duration = Duration::from_millis(300);
 const PLAYER_POLL: Duration = Duration::from_millis(50);
 /// The last characters of a failing player's error output that its report shows
 const FAILURE_TAIL: usize = 300;
-const SIGNAL_BLOCK: usize = crate::music_words::BLOCK_SAMPLES;
+/// The samples a signal computes at once (lib/sound.warp play_blocks: the program's linear block): 23 ms at 22050 Hz
+const SIGNAL_BLOCK: usize = 512;
 /// How far ahead of the speaker a signal is computed: its latency, and room for a slow block
 const SIGNAL_AHEAD: Duration = Duration::from_millis(100);
 const SIGNAL_POLL: Duration = Duration::from_millis(5);

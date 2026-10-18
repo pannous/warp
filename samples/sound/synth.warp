@@ -9,12 +9,12 @@ use sound
 	sustain = 0.4                   # to 40 % of the peak
 	release = 0.2                   # and fades out over its last 0.2 s
 	wave_shape = "sawtooth"         # sine, square, triangle, sawtooth or noise
-	loudness = -9 dB
-	melody([A3 C4 E4 A4 A0], 1 / 2 beat)
+	loudness = dB(-9)
+	melody([A3 C4 E4 A4 A0], beat(1/2))
 
 	wave_shape = "noise"            # a hi-hat: short noise
 	attack = 0.001
 	decay = 0.03
 	sustain = 0
-	melody([C4 C4 C4 C4 A0 A0], 1 / 4 beat)
+	melody([C4 C4 C4 C4 A0 A0], beat(1/4))
 }

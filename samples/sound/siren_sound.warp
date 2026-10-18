@@ -1,12 +1,13 @@
 #!/usr/bin/env warp
 # A signal computed while it plays (card real-time): warp calls siren for every sample, t its time in seconds, a
-# block ahead of the speaker. Its state between samples lives in globals (floats: `as float`).
+# block ahead of the speaker. Its state between samples lives in globals (floats: `as float`), the signal is a function
+# of floats to a float.
 use sound
 global phase = 0.0 as float
 # the pitch glides between 330 and 550 Hz twice a second; the phase adds up each sample's step, so the glide stays smooth
-siren(t) := {
+siren(t: float) := {
 	pitch = 440 + 110 * sin(2 * pi * 0.5 * t)
 	phase = phase + 2 * pi * pitch / sample_rate
-	0.3 * sin(phase)
+	(0.3 * sin(phase)) as float
 }
 play(siren, 4s)

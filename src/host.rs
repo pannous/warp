@@ -118,6 +118,19 @@ pub const PROGRAM_FILE_SECTION: &str = "warp.program_file";
 /// The custom section naming the program's named live loops, joined by USER_FUNCTIONS_SEPARATOR: the playground fades a
 /// loop of the run before that the new run lacks as soon as it is compiled (decision deleted-loop)
 pub const LIVE_LOOPS_SECTION: &str = "warp.live_loops";
+/// lib/sound.warp's `live_loop(drums, 4)`: its first argument names the loop
+const LIVE_LOOP_WORD: &str = "live_loop";
+
+/// The names of the program's live loops, the functions its `live_loop(drums, 4)` calls play (LIVE_LOOPS_SECTION)
+pub fn live_loop_names(program: &Node) -> std::collections::BTreeSet<String> {
+	let mut names = std::collections::BTreeSet::new();
+	program.visit(&mut |node| {
+		if let Some((LIVE_LOOP_WORD, [cycle, ..])) = node.call_parts() {
+			names.extend(cycle.symbol_name().map(str::to_string));
+		}
+	});
+	names
+}
 /// The custom section of a program saying `use fuel`: its runs count fuel steps instead of stopping at the time limit
 /// (decision fuel-metering)
 pub const FUEL_SECTION: &str = "warp.fuel";

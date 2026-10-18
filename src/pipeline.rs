@@ -164,7 +164,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::lowering::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
-	crate::lowering::music_words::lower_live_loops,
 	crate::lowering::go_blocks::lower,
 	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
 	crate::lowering::references::lower,
@@ -260,7 +259,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
-	crate::lowering::music_words::lower,
 	crate::lowering::routes::lower,
 	crate::lowering::page_html::use_markup,
 ];

@@ -1,6 +1,6 @@
 // card patterns-live: `pattern "c4 e4 [g4 b4]*2 ~"` (Tidal's mini-notation) is one cycle of steps sharing the cycle's
-// seconds, one sound; `live_loop 4 { … }` is a voice of its own repeating its block on the beat clock
-// (lib/sound.warp parse_pattern, pattern_events; src/lowering/music_words.rs live_loop; samples/patterns.warp)
+// seconds, one sound; `live_loop(drums, 4)` is a voice of its own repeating drums() on the beat clock
+// (lib/sound.warp parse_pattern, pattern_events, live_loop; samples/patterns.warp)
 #![cfg(feature = "native")]
 use super::test_sound_voices::rendered;
 
@@ -53,7 +53,7 @@ fn swing_holds_the_first_note_longer() {
 fn a_live_loop_is_a_voice_that_repeats() {
 	let (seconds, samples) = rendered(
 		"loop",
-		"use sound\ntempo = 120\nlive_loop 3 { pattern(\"c4 e4\", 1 beat) }\nawait live_voice\nsave sound as: \"SONG\"",
+		"use sound\ntempo = 120\ncycle() := pattern(\"c4 e4\", beat 1)\nvoice = live_loop(cycle, 3)\nawait voice\nsave sound as: \"SONG\"",
 	);
 	assert_eq!(seconds, "1.5");
 	assert_eq!(samples.len(), RATE * 3 / 2);
@@ -61,7 +61,7 @@ fn a_live_loop_is_a_voice_that_repeats() {
 
 #[test]
 fn live_loops_play_along() {
-	let program = "use sound\ntempo = 120\nlive_loop 2 { pattern(\"c4 e4\", 1 beat) }\nplay(G3, 1 bar)\nawait live_voice\nsave sound as: \"SONG\"";
+	let program = "use sound\ntempo = 120\ncycle() := pattern(\"c4 e4\", beat 1)\nvoice = live_loop(cycle, 2)\nplay(G3, bar 1)\nawait voice\nsave sound as: \"SONG\"";
 	let (seconds, _) = rendered("along", program);
 	assert_eq!(seconds, "2");
 }
@@ -122,7 +122,7 @@ fn chance_drops_some_cycles_the_same_each_run() {
 
 #[test]
 fn named_live_loops_are_awaited_each() {
-	let program = "use sound\ntempo = 120\nlive_loop bass 2 { pattern(\"c3\", 1 beat) }\nlive_loop lead 3 { pattern(\"e4\", 1 beat) }\nawait bass\nawait lead\nsave sound as: \"SONG\"";
+	let program = "use sound\ntempo = 120\nbass() := pattern(\"c3\", beat 1)\nlead() := pattern(\"e4\", beat 1)\nlow = live_loop(bass, 2)\nhigh = live_loop(lead, 3)\nawait low\nawait high\nsave sound as: \"SONG\"";
 	let (seconds, _) = rendered("named", program);
 	assert_eq!(seconds, "1.5");
 }

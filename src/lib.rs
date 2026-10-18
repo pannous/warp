@@ -29,7 +29,7 @@ pub use lowering::{
 	comprehensions, database_tables, declaration_forms, declarations, element_events, event_signals, fetch_signals,
 	field_elements, filled_lists, folding, for_loop, foreign_modules, function_values, getters, glued_attributes,
 	go_blocks, gpu_maps, inline_unions, inlining, introspection, kebab_names, key_names, lambdas, late_binding,
-	lazy_ranges, library_words, list_mutations, markup_tags, members, memoization, meta_entries, min_max, music_words,
+	lazy_ranges, library_words, list_mutations, markup_tags, members, memoization, meta_entries, min_max,
 	mutation, named_arguments, negated_calls, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps,
 	optional_casts, overloads, page_html, parallel, parameter_shapes, phrase_words, picked_calls, pipes, printable,
 	program_names, references, reflection, result_word, routes, run_time_blocks, scoped_handlers, select_options,
