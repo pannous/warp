@@ -404,10 +404,9 @@ fn language_of(node: &Node) -> Option<Language> {
 
 /// `"…"` or `("…")`; anything computed is refused
 pub(crate) fn literal_text(node: &Node) -> Option<String> {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Text(text) => Some(text.clone()),
 		Node::Char(c) => Some(c.to_string()),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => literal_text(&items[0]),
 		_ => None,
 	}
 }

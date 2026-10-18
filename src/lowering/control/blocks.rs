@@ -380,9 +380,8 @@ fn value_entry(entry: &Node) -> Option<(&Node, &Node)> {
 /// parameters and body
 fn function_entry(entry: &Node) -> Option<(String, Vec<Node>, Node)> {
 	fn lambda(value: &Node) -> Option<(Node, Node)> {
-		match value.drop_meta() {
+		match value.ungrouped() {
 			Node::Key(parameters, Op::Arrow, body) => Some((parameters.as_ref().clone(), body.as_ref().clone())),
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => lambda(&items[0]), // `f: (x => x * 2)`
 			_ => None,
 		}
 	}
