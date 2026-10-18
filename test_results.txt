@@ -1406,6 +1406,8 @@ PASSED:
   ✓ functions::test_closures::test_map_and_reduce_with_a_closure_variable
   ✓ functions::test_closures::test_not_a_function_stays_loud
   ✓ functions::test_closures::test_returned_closure
+  ✓ functions::test_collection_result_types::a_list_or_map_result_type_defines_the_function
+  ✓ functions::test_collection_result_types::a_value_of_another_type_fails_the_declared_collection
   ✓ functions::test_comma_calls::an_output_word_takes_a_prefix_call
   ✓ functions::test_comma_calls::comma_arguments_of_a_short_call
   ✓ functions::test_concatenated_text_argument::concatenated_text_fills_a_counted_parameter
@@ -1425,6 +1427,7 @@ PASSED:
   ✓ functions::test_csharp_functions::an_expression_bodied_method
   ✓ functions::test_data_parameter::a_data_argument_is_its_code
   ✓ functions::test_data_parameter::a_tag_block_is_the_data_argument
+  ✓ functions::test_data_parameter::bound_names_in_data_are_their_values
   ✓ functions::test_data_parameter::other_parameters_take_values
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_is_a_function
@@ -2505,6 +2508,13 @@ PASSED:
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
   ✓ modules::test_replaced_module_function::a_program_function_replacing_a_module_function_warns
+  ✓ modules::test_rewrites::a_phrase_rule_rewrites_runs_inside_phrases
+  ✓ modules::test_rewrites::a_program_rewrites_its_own_phrases
+  ✓ modules::test_rewrites::a_rule_of_several_statements_takes_the_statements_place
+  ✓ modules::test_rewrites::a_rule_with_an_origin_rewrites_only_its_variables
+  ✓ modules::test_rewrites::a_statement_rule_keeps_a_block
+  ✓ modules::test_rewrites::a_typed_hole_takes_only_code_of_its_kind
+  ✓ modules::test_rewrites::own_definitions_shadow_standard_rules
   ✓ modules::test_runtime_word_lines::a_left_out_parameter_takes_its_default
   ✓ modules::test_runtime_word_lines::a_signature_is_its_line
   ✓ modules::test_runtime_word_lines::the_runtime_words_are_callable_by_name
@@ -5528,8 +5538,6 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
-  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
-  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -6376,6 +6384,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✗ web::test_app_keys::on_key_hears_the_app_pages_key_presses
 
 SUMMARY:
-16 ignored, 6373 passed, 0 failed, 6373 total tested
+16 ignored, 6381 passed, 2 failed, 6383 total tested
