@@ -1,5 +1,5 @@
-//! card words-glue: an attribute's value followed by a text, a list or an element ends there, the rest is the element's
-//! content: `label{ for: name "Name" }` is for="name" with the text Name, not for="name Name"
+//! card words-glue, decided plain since (decisions.md markup-plain-library): `;` ends an attribute's value before the
+//! element's content, `label{ for: name; "Name" }` is for="name" with the text Name
 use warp::wasm_emitter::eval;
 use warp::web::markup::to_html;
 
@@ -9,19 +9,19 @@ fn html_of(code: &str) -> String {
 
 #[test]
 fn a_text_after_a_value_is_content() {
-	assert_eq!(html_of("label{ for: missing \"L\" }"), "<label for=\"missing\">L</label>");
-	assert_eq!(html_of("label{ for: email \"Email\" b{ \"!\" } }"), "<label for=\"email\">Email<b>!</b></label>");
+	assert_eq!(html_of("label{ for: missing; \"L\" }"), "<label for=\"missing\">L</label>");
+	assert_eq!(html_of("label{ for: email; \"Email\" b{ \"!\" } }"), "<label for=\"email\">Email<b>!</b></label>");
 }
 
 #[test]
 fn a_bound_value_ends_before_a_text() {
 	assert_eq!(
-		html_of("name = \"a\"\nbutton{ bind: name \"x\" }"),
+		html_of("name = \"a\"\nbutton{ bind: name; \"x\" }"),
 		"<button value=\"a\" data-warp-input=\"1\">x</button>"
 	);
 }
 
 #[test]
 fn a_text_value_ends_before_a_text() {
-	assert_eq!(html_of("p{ title: \"a b\" \"hi\" }"), "<p title=\"a b\">hi</p>");
+	assert_eq!(html_of("p{ title: \"a b\"; \"hi\" }"), "<p title=\"a b\">hi</p>");
 }
