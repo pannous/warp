@@ -81,7 +81,7 @@ bytes(t: text) := (0..byte_size(t)).map(offset => byte_at(t, offset))
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
 infix operator ↓(x: number, b: number) := log(x, b)
-replace(t, old, new) := join(split(t, old), new)
+replace(t, old, with new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
 is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')

@@ -144,3 +144,9 @@
 - Apply the standard-library-wide rule there, without hiding hints from the user's program.
 - Run the focused test before and after, then formatting, clippy, and the wasm32 check.
 - Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.
+
+# like-tea
+
+- Reproduce the labelled method-call form with one focused regression before changing the prelude.
+- Reuse the general preposition-label machinery by declaring `with new`; keep positional calls working.
+- Update the existing sample and call guide, then run targeted tests and the worker gates.
