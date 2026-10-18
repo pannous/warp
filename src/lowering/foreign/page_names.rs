@@ -12,8 +12,8 @@
 
 use crate::errors::diagnostic::Diagnostic;
 use crate::lowering::blocks::DATA_WORD;
+use crate::lowering::nodes::with_statements_first;
 use crate::lowering::nodes::{arguments_rewritten, key, word_headed};
-use crate::modules::needed_definitions::with_statements_first;
 use crate::node::Node;
 use crate::operators::Op;
 use std::collections::{BTreeMap, BTreeSet, HashSet};

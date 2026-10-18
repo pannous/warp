@@ -39,6 +39,7 @@ pub(crate) use declarations::*;
 mod implicit_modules;
 pub use implicit_modules::*;
 pub(crate) mod needed_definitions;
+use crate::lowering::nodes::with_statements_first;
 use needed_definitions::*;
 mod program_file;
 pub use program_file::*;
@@ -259,6 +260,6 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
 	let program = as_constructions(program, &inserted);
-	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
-	with_statements_in_front(program, file_classes)
+	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
+	with_statements_first(program, file_classes)
 }

@@ -26,8 +26,7 @@ const PLAIN_VALUE_KINDS: [Kind; 9] = [
 ];
 
 /// Runtime functions called from lowered code with their node arguments, and how many those are
-const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
-	(crate::list_mutations::LIST_DROP_LAST, 1),
+const NODE_ARGUMENT_CALLS: [(&str, usize); 3] = [
 	(crate::list_mutations::LIST_BECOME, 2),
 	(super::super::lists::list_ops::LIST_EXTEND, 2),
 	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),

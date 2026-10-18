@@ -220,7 +220,7 @@ pub fn is_field_update_of(name: &str, value: &Node) -> bool {
 	let [word, map, _, _] = items.as_slice() else {
 		return false;
 	};
-	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
+	word.name() == FIELD_WITH && map.is_symbol(name)
 }
 
 pub fn is_runtime_word(name: &str) -> bool {
@@ -392,7 +392,7 @@ fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 /// The field and step of `x++` / `x--` after a dot
 fn field_step(method: &Node) -> Option<(Node, Op)> {
 	match method.drop_meta() {
-		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => {
+		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if field.symbol_name().is_some() => {
 			Some((field.as_ref().clone(), *op))
 		}
 		_ => None,
@@ -403,7 +403,7 @@ fn field_step(method: &Node) -> Option<(Node, Op)> {
 /// `bags#1.n`, `xs#1#2`
 fn is_nested_place(place: &Node) -> bool {
 	match place.drop_meta() {
-		Node::Key(base, Op::Dot | Op::Hash, _) => !matches!(base.drop_meta(), Node::Symbol(_)),
+		Node::Key(base, Op::Dot | Op::Hash, _) => base.symbol_name().is_none(),
 		_ => false,
 	}
 }
@@ -793,12 +793,9 @@ impl Lowering {
 		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
 			return Some(raised);
 		}
-		let head = match items.first()?.drop_meta() {
-			Node::Symbol(name) => name,
-			_ => return None,
-		};
+		let head = items.first()?.symbol_name()?;
 		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument (unless the program defines its own log)
-		if let (LOG_WORD, [_, value, base]) = (head.as_str(), items) {
+		if let (LOG_WORD, [_, value, base]) = (head, items) {
 			if self.shadows(LOG_WORD) {
 				return None;
 			}
@@ -816,12 +813,12 @@ impl Lowering {
 			{
 				// a synonym calls its library word: `sorted xs` is sort(xs)
 				let word = canonical_spelling(head);
-				let function = if word == head { function.clone() } else { Node::Symbol(word.to_string()) };
+				let function = if word == head { function.clone() } else { symbol(word) };
 				return Some(word_call(&function, argument, vec![]));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
-		if let (NUMBER_WORD, [_, value]) = (head.as_str(), items) {
+		if let (NUMBER_WORD, [_, value]) = (head, items) {
 			if !self.shadows(NUMBER_WORD) && call_name(items, bracket, separator).is_some() {
 				return Some(key(value.clone(), Op::As, symbol(NUMBER_WORD)));
 			}
@@ -844,7 +841,7 @@ impl Lowering {
 		let is_prefix = is_words_call(bracket, separator) && items.len() > 1;
 		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
 		// (a bare word that names no variable keeps the list data: `[first last]`)
-		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadows(name));
+		let is_value = |argument: &Node| argument.symbol_name().is_none_or(|name| self.shadows(name));
 		let is_element = *bracket == Bracket::Square
 			&& *separator == Separator::Space
 			&& items.len() == arity(word) + 1
@@ -873,7 +870,7 @@ impl Lowering {
 		let (key, value) = match names.drop_meta() {
 			Node::Symbol(_) => (names.clone(), None),
 			Node::List(parts, Bracket::Round | Bracket::None, _) => match parts.as_slice() {
-				[key, value] if [key, value].iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => {
+				[key, value] if [key, value].iter().all(|name| name.symbol_name().is_some()) => {
 					(key.clone(), Some(value.clone()))
 				}
 				_ => return None,
@@ -1111,8 +1108,7 @@ impl Lowering {
 
 	/// A receiver known to be an object: a field lookup, a parameter, a call's result, or one of a declared field name
 	fn is_object(&self, receiver: &Node, name: &str) -> bool {
-		let is_call_result =
-			matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
+		let is_call_result = receiver.symbol_name().is_some_and(|variable| self.call_results.contains(variable));
 		is_field_lookup(receiver)
 			|| self.is_parameter(receiver)
 			|| is_call_result
@@ -1140,9 +1136,7 @@ impl Lowering {
 		// object: its field is looked up at run time
 		// a parenthesized receiver is what it holds: `(x#2).name` is `x#2.name` (card name-quoted); `f()` stays a call
 		let inner = match receiver.drop_meta() {
-			Node::List(items, Bracket::Round, _)
-				if items.len() == 1 && !matches!(items[0].drop_meta(), Node::Symbol(_)) =>
-			{
+			Node::List(items, Bracket::Round, _) if items.len() == 1 && items[0].symbol_name().is_none() => {
 				items[0].drop_meta()
 			}
 			other => other,
@@ -1202,12 +1196,8 @@ impl Lowering {
 				call(&qualified, crate::modules::prelude_arguments(word, arguments))
 			}
 			None => {
-				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) {
-					head.clone()
-				} else {
-					// the written spelling's position: `warn "x"` errs where warn is
-					symbol(word).with_meta_of(head)
-				};
+				// else the written spelling's position: `warn "x"` errs where warn is
+				let name = if head.is_symbol(word) { head.clone() } else { symbol(word).with_meta_of(head) };
 				parens([vec![name], arguments].concat())
 			}
 		}
@@ -1221,7 +1211,7 @@ impl Lowering {
 			return arguments;
 		}
 		let (kept, rest) = arguments.split_at(wanted - 1);
-		let heads_with_word = matches!(rest[0].drop_meta(), Node::Symbol(name) if self.library_word(name).is_some());
+		let heads_with_word = rest[0].symbol_name().is_some_and(|name| self.library_word(name).is_some());
 		let phrase = heads_with_word.then(|| self.word_call(rest, &Bracket::None, &Separator::Space)).flatten();
 		let phrase = phrase.unwrap_or_else(|| crate::lowering::ambiguous_forms::spaced_phrase(rest.to_vec()));
 		[kept.to_vec(), vec![phrase]].concat()

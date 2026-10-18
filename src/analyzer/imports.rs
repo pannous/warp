@@ -248,7 +248,6 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			crate::wasm_emitter::time::times::ZONE_NAMES,
 			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
-		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		crate::list_mutations::LIST_BECOME => &[crate::list_mutations::LIST_BECOME],
 		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => {
 			&[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY]
