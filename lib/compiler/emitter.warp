@@ -173,7 +173,8 @@ collect_functions(program: any, functions: any) := {
 ## one function's locals while its body is read
 # a runtime word's body may use the intrinsics
 # function: the one compiled, returned: the kinds its `return`s give
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any }
+# depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; depth: int; exits: any }
 
 local_index(body: Body, name: text, kind: text) := {
 	if name in body.names { return body.names[name] }
@@ -487,18 +488,35 @@ call_values(f: Function, values: any) := {
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
 conditional(body: Body, test: any, yes_branch: any, no_branch: any) := {
 	c = condition(expression(body, test))
-	a = expression(body, yes_branch)
+	a = nested(body, yes_branch, 1)
 	if no_branch == ø { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.end]] }
-	b = expression(body, no_branch)
+	b = nested(body, no_branch, 1)
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
 	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
 	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
 }
-# `while c do body`: block { loop { exit unless c; body; again } }
+# `while c do body`: block { loop { exit unless c; body; again } }; a `break` in body branches to the block's end
 loop_of(body: Body, test: any, block: any) := {
-	exit_unless = condition(expression(body, test)) + [op.i32_eqz, op.br_if, 1]
-	[no_kind, [op.block, no_value, op.loop, no_value] + exit_unless + dropped(expression(body, block)) + [op.br, 0, op.end, op.end]]
+	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
+	body.exits += [body.depth + 1]
+	looped = nested(body, block, 2)
+	body.exits = body.exits[0..<(#body.exits - 1)]
+	[no_kind, [op.block, no_value, op.loop, no_value] + exit_unless + dropped(looped) + [op.br, 0, op.end, op.end]]
+}
+
+# the code of n read inside `blocks` more blocks, loops or ifs
+nested(body: Body, n: any, blocks: int) := {
+	body.depth += blocks
+	code = expression(body, n)
+	body.depth -= blocks
+	code
+}
+
+# `break`: to the end of the innermost loop's block
+loop_exit(body: Body) := {
+	if #body.exits == 0 { return refuse("a break outside a loop") }
+	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits))]
 }
 
 # a statement's code, its value dropped
@@ -518,6 +536,7 @@ expression(body: Body, n: any) := {
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
 	if n is ø { return ["node", [ref_null, gc.node]] }
+	if n == symbol("break") { return loop_exit(body) }
 	if n is symbol { return local_value(body, n) }
 	if type(n) is key { return key_expression(body, n) }
 	if not is_group(n) { refuse("the value " + form_of(n)) }
@@ -580,7 +599,7 @@ negation(value: any) := {
 # `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
 logical(body: Body, symbol: text, left: any, right: any) := {
 	a = condition(expression(body, left))
-	b = condition(expression(body, right))
+	b = condition(nested(body, right, 1))
 	if symbol == "and" { return ["bool", a + [op.if, type_bytes.bool] + b + [op.else, op.i64_const, 0, op.i64_eqz, op.i32_eqz, op.end]] }
 	["bool", a + [op.if, type_bytes.bool, op.i64_const, 1, op.i64_eqz, op.i32_eqz, op.else] + b + [op.end]]
 }
@@ -589,7 +608,7 @@ logical(body: Body, symbol: text, left: any, right: any) := {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function) := {
-	scope = Body({}, [], [], 0, f.is_runtime, f, [])
+	scope = Body({}, [], [], 0, f.is_runtime, f, [], 0, [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }
