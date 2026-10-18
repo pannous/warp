@@ -592,7 +592,10 @@ key_expression(body: Body, n: any) := {
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
-		return [name_of(right), converted(expression(body, left), name_of(right))]
+		value = expression(body, left)
+		# `7/2 as int`: an exact rational truncated toward 0
+		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
+		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø { return refuse("the operator " + operator) }
