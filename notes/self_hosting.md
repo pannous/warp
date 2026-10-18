@@ -368,8 +368,9 @@ no total saving, loses self-contained files, and a .cwasm only runs on the exact
 `scripts/self-hosted-suite.sh [<pushed tip>]` runs the whole suite on the cloud lane with WARP_SELF_HOSTED=1 and
 prints "self-hosted: N passed / M" plus the failures grouped by cause (an assertion's left side, digits as #), the most
 frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank <log>` ranks any test log,
-`--tests <cause regex> <log…>` lists the failed tests of a cause. `--stage <name>=<VAR>` turns a later stage's switch on too (run `<tip>+<name>`, compared with the
-last run of the same stages): the per-stage counts of "Back-end focus". A cloud run appends its count to
+`--tests <cause regex> <log…>` lists the failed tests of a cause. Plain runs set WARP_SELF_HOSTED=front (front end only, emit-families);
+`--stage <name>=<VAR>[=<value>]` sets a later stage's switch too (run `<tip>+<name>`, compared with the last run of
+the same stages): `--stage emitter=WARP_SELF_HOSTED=1` is + emitter, the per-stage counts of "Back-end focus". A cloud run appends its count to
 data/self_hosting/suite_counts.txt (warp-steward reruns after each batch touching lib/compiler or the pipeline, and
 nightly). The failure groups are cards suite-* in topic self-hosted-2, each naming its stage owner.
 - src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
