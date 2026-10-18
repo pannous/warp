@@ -1,8 +1,88 @@
 // The sugar pass (card parser-desugar-pass, notes/self_hosting.md "Parser restructuring"): parser.warp writes what the
 // source says, `xs[i]`, `a /! b`, `a div b`, `x is in xs`, `loop {…}`; each arm of `sugared` rewrites one written form
 // into the tree the passes read, and a class body's fields get their types (card parser-typed-fields). Count words
-// (`twice {…}`) wait for the scope pass, which knows a program's own `twice`.
+// (`twice {…}`) are rewritten by `counted`, which knows the program's names (card parser-scope-pass).
 use "lib/compiler/shapes.warp"
+use "lib/compiler/scope.warp"
+
+COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
+
+// `thrice {…}`, `twice "ab"`, `once [0]` as `3 times {…}` unless the program gives the word a meaning of its own: a
+// function anywhere (`twice(x) := …`, in `scope`), a variable once assigned (`once = [5]`, statements in order, in
+// `bound`), a parameter inside its definition
+// Rust twin: control/loops.rs try_parse_count_word
+counted(node: any, scope: any, bound: list) := {
+	if node === ø or not (node is list) { return node }
+	match node {
+		["key", "=" | ":=", target, value] => ["key", node#2, target, counted(value, scope, bound + parameter_names(target))]
+		["list", _, _, ...] => count_phrase(counted_items(node, scope, bound), scope, bound)
+		_ => node.map(child => counted(child, scope, bound))
+	}
+}
+
+// A list's items in order, each seeing the names the items before it assigned
+counted_items(node: any, scope: any, bound: list) := {
+	result = node[0:3]
+	for item in node[3:] {
+		result = result + [counted(item, scope, bound)]
+		bound = bound + assigned_names(item)
+	}
+	result
+}
+
+// `3 times body` of a count word the program leaves alone, else the list as it is
+count_phrase(node: any, scope: any, bound: list) := match node {
+	["list", "", " ", ["symbol", word], body] if counts(body) and is_count_word(word, scope, bound) => listed("", " ", [count_of(word), ["symbol", "times"], body])
+	_ => node
+}
+
+is_count_word(word: text, scope: any, bound: list) := {
+	if count_of(word) == ø or (bound contains word) { return false }
+	not binds_as(scope, word, "function")
+}
+
+// The name `x = …` or `f(a) := …` binds
+assigned_names(item: any) := match item {
+	["key", "=" | ":=", ["symbol", name], _] => [name]
+	["key", "=" | ":=", ["list", "(", _, ["symbol", name], ...], _] => [name]
+	_ => []
+}
+
+// The parameters of `f(a, b: int) := …`: a and b
+parameter_names(target: any) := {
+	names = []
+	if not is_call_head(target) { return names }
+	for parameter in target[4:] {
+		if parameter is list and parameter#1 == "key" { parameter = parameter#3 }
+		if is_symbol(parameter) { names = names + [parameter#2] }
+	}
+	names
+}
+
+// What a count word repeats: a block of code, a list or a text; `twice {a: 1}` passes an object, it stays the call
+counts(body: any) := match body {
+	["list", "{", ...] => not counts_pairs(body)
+	["list", "[", ...] => true
+	["text" | "char", _] => true
+	_ => false
+}
+
+// A block of `key: value` entries only, an object rather than code
+counts_pairs(node: any) := {
+	if not is_block(node) or node.length < 4 { return false }
+	for entry in node[3:] {
+		if not (entry is list and entry.length > 1 and entry#1 == "key" and entry#2 == ":") { return false }
+	}
+	true
+}
+
+// How often a count word repeats, else ø
+count_of(word: text) := {
+	for pair in COUNT_WORDS {
+		if pair#1 == word { return pair#2 }
+	}
+	ø
+}
 
 // The tree with every written form rewritten, deepest first
 sugared(node: any) := {

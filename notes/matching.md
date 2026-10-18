@@ -157,6 +157,16 @@ probes/matching/tree_patterns.warp. Built:
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).
 
+## Pattern clauses
+Definitions of one name and arity, one of them with a pattern parameter, are one function trying them in order
+(src/lowering/definitions/pattern_clauses.rs, a SUGAR pass before parameter_patterns): `fib(0) := 0; fib(n) := …` is
+`fib(n·1) := match n·1 { 0: 0; _: … }`; several parameters match as one list `[x·1, y·2]`. A plain name is `_` in its
+arm and its body reads the numbered parameter, so a global of that name never turns the arm into a comparison (a
+bare `n` arm compares when n is a global). A clause of plain names only is the `_` arm; clauses after it are never
+reached and dropped (match puts `_` last wherever it stands). Typed parameters (`f(x: int)`) keep overloading by type:
+a group holding one is not joined. All-wildcard list arms `[_, _]` read as a partial application, hence the bare `_`.
+Test tests/functions/test_pattern_clauses.rs.
+
 ## Roadmap: compiler-grade patterns (for the second, pattern-based pass over the self-hosted compiler)
 Goal: parser, passes, analyzer and emitter written in warp read as rule sets over node shapes, more elegant than the
 Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps in order; ★ = a language decision
@@ -168,10 +178,23 @@ Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps 
 | 2 | typed-holes | conditions on holes: `$r: int`, `$n: > 0`, `$s: symbol`, `$b: block` | no match |
 | 3 | patterns-as-values | `n matches p` → bindings or nothing; `p: pattern` parameters; `find`/`replace` as lib warp (notes/pattern_values.md route B) | parse error |
 | 4 | rewrite-rules | a rule set as a value, `rules { data($a * 1) => a; data($a + 0) => a }`, applied bottom-up or to a fixpoint, keeping positions: the vocabulary of a lowering pass | single `replace … with` only |
-| 5 ★ | pattern-clauses | a function defined by pattern clauses `simplify(data($a * 1)) := a` … tried in order (decided; today the last definition wins) | last wins |
+| 5 ★ | pattern-clauses | a function defined by pattern clauses `simplify(data($a * 1)) := a` … tried in order (decided) | done (pattern_clauses.rs) |
 | 6 ★ | binding-alternatives | alternatives that bind the same names `data($k: int + $x) \| data($x + $k: int) => x` | error "alternatives bind no names" |
 | 7 ★ | whole-binding | `as` binds a (sub)pattern: `data($f($inner) as call)` | parse error |
-| 8 ★ | text-patterns | text patterns for the lexer: `"0x" + rest`, prefix/suffix, character classes | parse error |
+| 8 ★ | text-patterns | text patterns for the lexer: `"0x" + rest`, prefix/suffix, character classes | done (Text patterns below) |
 | 9 | node-exhaustive | exhaustiveness over the Node kinds and sealed key ops, so a pass's match misses no shape | runtime "no case" |
 | 10 | pattern-dispatch-speed | many-arm matches compiled to one decision tree (switch on kind/op first); measured on the passes | arm by arm |
 | 11 | patterns-second-pass | rewrite lib/compiler (passes first, then parser, analyzer, emitter) as rule sets with 1–10; judged by the warp-pipeline-suite count and line count | — |
+
+## Text patterns (card text-patterns, step 8)
+A sum of text pieces and holes is a pattern in `match`/`switch` arms and after `is`: `"0x" + rest`, `name + ".txt"`,
+`"/users/" + u + "/posts/" + p`. A hole is a name defined nowhere or `_`; a name the program defines stays a value
+(`p + "ff"` compares). Between two holes a piece must stand (loud error otherwise), so the cut is unambiguous: the
+prefix and suffix first, then each middle piece at its first occurrence.
+A hole's type: a reading converts the text (`id: int`, `integer`, `number`, `float`; no match when the text isn't
+one), a class tests its characters (`digit`, `letter` one character; `digits`, `letters`, `hex`, `space`, `word` one
+or more; interviewer's decision A). These words are hole types only in that position, never reserved type words.
+Rust: src/lowering/control/text_patterns.rs builds `count(text_holes(s, pieces, types)) > 0` and binds
+`id = int(text_holes(…)#1)`; the cutting and class tests are warp, lib/prelude.warp text_holes / fits_text_type, loaded
+through needed_definitions IMPLIED_WORDS. A non-text subject simply doesn't match.
+

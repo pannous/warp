@@ -1,0 +1,25 @@
+#!/usr/bin/env warp
+# Pattern clauses: a function written as several definitions whose parameters are patterns tries them in order
+
+# literals first, the general case last
+fib(0) := 0
+fib(1) := 1
+fib(n) := fib(n - 1) + fib(n - 2)
+print fib(10)                                             # 55
+
+# a list taken apart
+total([]) := 0
+total([first, rest...]) := first + total(rest)
+print total([1, 2, 3])                                    # 6
+
+# code rewritten by its shape
+simplify(data($a * 1)) := a
+simplify(data($a + 0)) := a
+simplify(code) := code
+print simplify(data(x * 1))                               # x
+
+# several parameters match together
+mul(0, y) := 0
+mul(x, 1) := x
+mul(x, y) := x * y
+print mul(0, 9) + mul(5, 1) + mul(2, 3)                   # 11

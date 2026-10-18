@@ -106,7 +106,7 @@ pub fn task_engine() -> Engine {
 /// program's task table advances while it runs (a shared engine's ticks would reach every store)
 #[cfg(feature = "native")]
 pub fn metered_task_engine(fuel: bool) -> Engine {
-	Engine::new(&warp_runtime::engine::metered_config(fuel)).expect("Failed to create WASM engine")
+	Engine::new(&compiling_config(fuel)).expect("Failed to create WASM engine")
 }
 
 /// The WASM engine with GC, function references and epoch interruption, one per process: every run shares it, so a
@@ -123,11 +123,21 @@ pub fn shared_engine(fuel: bool) -> Engine {
 	use std::sync::OnceLock;
 	static TIMED: OnceLock<Engine> = OnceLock::new();
 	static FUELED: OnceLock<Engine> = OnceLock::new();
-	let new_engine = || Engine::new(&warp_runtime::engine::metered_config(fuel)).expect("Failed to create WASM engine");
+	let new_engine = || Engine::new(&compiling_config(fuel)).expect("Failed to create WASM engine");
 	match fuel {
 		true => FUELED.get_or_init(new_engine).clone(),
 		false => TIMED.get_or_init(|| warp_runtime::engine::ticking(new_engine())).clone(),
 	}
+}
+
+/// metered_config compiling each function once: its machine code kept on disk (run/function_cache.rs)
+#[cfg(feature = "native")]
+fn compiling_config(fuel: bool) -> wasmtime::Config {
+	let mut config = warp_runtime::engine::metered_config(fuel);
+	config
+		.enable_incremental_compilation(std::sync::Arc::new(crate::run::function_cache::FunctionCache))
+		.expect("an engine with a compiler");
+	config
 }
 
 pub fn show_type_name<T>(_: &T) {

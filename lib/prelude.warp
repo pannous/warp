@@ -20,14 +20,14 @@ map_keys(m): list from warp
 map_values(m): list from warp
 map_entries(m): list from warp
 map_without(m, key): list from warp
-map_of_entry(entry) from warp
-map_get_or(m, key, default = ø) from warp
+map_of_entry(entry): same as entry from warp
+map_get_or(m, key, default = ø): value of m from warp
 collection_contains(xs, x) from warp
 collection_position(xs, x) from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
-field_with(object, name, value) from warp
-instance_copy(x, shallow) from warp
+field_with(object, name, value): same as object from warp
+instance_copy(x, shallow): same as x from warp
 wasi_environment(): text from warp
 kind_mark(x: any): int from warp
 
@@ -57,6 +57,10 @@ remove(xs, x) from emitter
 pop(xs) from emitter
 clear(xs) from emitter
 number(x): number from emitter
+// the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
+list_become(place, fresh): same as place from emitter
+removed_value(x, k): any from emitter
+list_sorted_by(xs, keys): any from emitter
 string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
@@ -123,6 +127,45 @@ is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
+is_word_char(c) := is_alphanumeric(c) or c == '_'
+// at least one character, each passing is_class: consists_of("42", is_digit)
+consists_of(t: text, is_class) := { if t == "" { return false }; for c in t { if not is_class(c) { return false } }; true }
+// a whole number, optionally signed: "-3"
+is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
+// a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`
+fits_text_type(t: text, type: text) := match type {
+	"int" | "integer" => is_integer(t)
+	"number" | "float" => { parts = split(t, "."); count(parts) <= 2 and is_integer(parts#1) and (count(parts) == 1 or consists_of(parts#2, is_digit)) }
+	"digit" => count(t) == 1 and is_digit(t)
+	"digits" => consists_of(t, is_digit)
+	"letter" => count(t) == 1 and is_alpha(t)
+	"letters" => consists_of(t, is_alpha)
+	"hex" => consists_of(t, is_hex_digit)
+	"space" => consists_of(t, is_space)
+	"word" => consists_of(t, is_word_char)
+	_ => true
+}
+// text patterns (notes/matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
+// match (also when t is no text); the first piece is the prefix, the last the suffix, "" where the pattern starts or
+// ends with a hole; each hole's text fits its type, "" for any text
+text_holes(t, pieces: [text], types: [text]) := {
+	if not (t is text) { return [] }
+	prefix = first(pieces)
+	suffix = last(pieces)
+	if count(t) < count(prefix) + count(suffix) or not starts_with(t, prefix) or not ends_with(t, suffix) { return [] }
+	rest = t[count(prefix): count(t) - count(suffix)]
+	holes = []
+	for piece in pieces[1: count(pieces) - 1] {
+		at = index_of(rest, piece)
+		if at == 0 { return [] }
+		holes = holes + [rest[0: at - 1]]
+		rest = rest[at - 1 + count(piece):]
+	}
+	holes = holes + [rest]
+	for i in 1 to count(holes) { if not fits_text_type(holes#i, types#i) { return [] } }
+	holes
+}
 // the digits of n in a base up to 36, letters past 9 (upper: true capitals): to_base(255, 16) is "ff",
 // from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
 // symbols, which needs the grapheme runtime
@@ -227,7 +270,7 @@ popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x
 cleared(x) := if x is map then {} else []
 // xs.insert(v, at: i) (list_mutations inserted_in_place): the list with v at the 0-based position i, past the end or
 // before 0 at the end
-inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs[0:i] + [v] + xs[i:]
+inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs[0: i] + [v] + xs[i:]
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
 // pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
