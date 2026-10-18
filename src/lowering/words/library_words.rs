@@ -243,6 +243,8 @@ pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
 		NOTHING_RESULT => Some(Kind::Empty),
 		// a type's name (`type(3)` is int), held as no other value is
 		crate::words::SYMBOL_WORD => Some(Kind::Symbol),
+		// `number("2.5")` an int or a float, `any(xs, f)` a bool the emitter marks: decided where it is made
+		crate::words::NUMBER_WORD | crate::analyzer::BOOL_TYPE => None,
 		result => crate::analyzer::type_word_kind(result),
 	}
 }

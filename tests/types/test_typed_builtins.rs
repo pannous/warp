@@ -30,3 +30,16 @@ fn a_value_no_overload_is_typed_for_takes_the_first_line() {
 	let kinds = warp::analyzer::inferred_kinds(&program);
 	assert!(kinds.contains(&"b: list".to_string()), "{kinds:?}");
 }
+
+#[test]
+fn the_member_words_declare_their_signatures_in_the_prelude() {
+	is!("filter.signature", warp::Node::Text("(xs, f:function)".into()));
+	is!("insert.params", warp::texts(vec!["xs", "x", "at"]));
+	is!("any.signature", warp::Node::Text("(xs, f:function) -> bool".into()));
+}
+
+#[test]
+fn a_member_words_number_or_bool_result_is_decided_where_it_is_made() {
+	is!("x = number(\"2.5\"); x + 1", 3.5);
+	is!("any([1 2], x => x > 1)", true);
+}
