@@ -90,8 +90,6 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 pub const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
-	// `if let Some(v) = o`, a match of `Some(v) =>` and `None =>` arms (rust_options.rs), before the arms below
-	crate::lowering::rust_options::lower,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
 	// a bare `return` as the phrase `return ø` (welcome_forms.rs), before any pass reads a return
@@ -100,8 +98,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
-	// `set x to 5` is `x = 5`, after of_lookups: `set width of p to 12` is `p.width = 12` (welcome_forms.rs)
-	crate::lowering::welcome_forms::lower_set_phrases,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
 	crate::lowering::grouped_receivers::lower,
 	// `window.width = 800`, `canvas.height`, a bare width (module_properties.rs): getters and setters, before any pass
@@ -118,8 +114,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// `cbrt(x: float): float from 'm'` (foreign_lines.rs) as the import it declares, before any pass reads it as a call
 	crate::lowering::foreign_lines::lower,
 	crate::lowering::inline_unions::lower_inline_unions,
-	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
-	crate::lowering::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::lowering::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
@@ -417,8 +411,13 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 	MODULE_SOURCE_PHASES
 		.iter()
 		.flat_map(|phase| phase.iter())
-		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(crate::lowering::for_loop::headers::lower(module), |module, pass| pass(module))
+		.enumerate()
+		.filter(|(_, pass)| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
+		.fold(crate::lowering::for_loop::headers::lower(module), |module, (index, pass)| {
+			crate::compiler::phase_times::timed("module source passes", || {
+				crate::compiler::phase_times::timed_as(|| format!("module source pass {index}"), || pass(module))
+			})
+		})
 }
 
 /// The program just before and just after the source pass `pass`, the earlier passes run as compiling runs them: what
@@ -458,17 +457,24 @@ fn run_passes(node: Node, passes: &[Pass]) -> Node {
 }
 
 /// `run_passes` with each pass's warp twin in its place when self-hosted (WARP_SELF_HOSTED, self_hosted.rs)
-fn run_program_passes(node: Node, passes: &[Pass]) -> Node {
-	passes
-		.iter()
-		.fold(node, |node, pass| crate::compiler::self_hosted::pass(*pass, &node).unwrap_or_else(|| pass(node)))
+fn run_program_passes(node: Node, (phase, passes): (usize, &&[Pass])) -> Node {
+	passes.iter().enumerate().fold(node, |node, (index, pass)| {
+		crate::compiler::phase_times::timed_as(
+			|| format!("program pass {phase}.{index}"),
+			|| crate::compiler::self_hosted::pass(*pass, &node).unwrap_or_else(|| pass(node)),
+		)
+	})
 }
 
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
 /// (a constant answer, an error, a denied capability).
 pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::lowering::blocks::unsealed;
-	crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node)).map(unsealed).map_err(unsealed)
+	crate::compiler::phase_times::timed("lowering, all", || {
+		crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node))
+	})
+	.map(unsealed)
+	.map_err(unsealed)
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
@@ -495,7 +501,10 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	crate::errors::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = without_located_errors(SOURCE_PHASES.iter().fold(node, |node, phase| run_program_passes(node, phase)))?;
+	let node = crate::compiler::phase_times::timed("program source passes", || {
+		SOURCE_PHASES.iter().enumerate().fold(node, run_program_passes)
+	});
+	let node = without_located_errors(node)?;
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
 	}
@@ -515,7 +524,9 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::numbers::real::answer(&node) {
 		return Err(crate::numbers::units::static_units::with_answer_units(answer));
 	}
-	let node = without_located_errors(run_passes(node, MEANING_PASSES))?;
+	let node = without_located_errors(crate::compiler::phase_times::timed("meaning passes", || {
+		run_passes(node, MEANING_PASSES)
+	}))?;
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
@@ -531,11 +542,11 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
 		without_constraints(node),
 	)?)?;
-	if let Some(error) = crate::analyzer::diagnose(&node) {
+	if let Some(error) = crate::compiler::phase_times::timed("diagnose", || crate::analyzer::diagnose(&node)) {
 		return Err(error);
 	}
 	// the standard modules' code warns no program using it (nearest's exact float stop)
-	let mut warnings = crate::analyzer::lint(&node);
+	let mut warnings = crate::compiler::phase_times::timed("lint", || crate::analyzer::lint(&node));
 	warnings.retain(|warning| !warning.file.as_deref().is_some_and(crate::modules::is_std_source));
 	crate::errors::diagnostic::report(&warnings)?;
 	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(crate::lowering::inlining::lower(
@@ -721,11 +732,13 @@ fn checked_markup(result: Node) -> Node {
 #[cfg(feature = "native")]
 pub fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
 	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
-	let result = if needs_ffi || needs_wasi || needs_host {
-		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
-	} else {
-		read_bytes(&bytes)
-	};
+	let result = crate::compiler::phase_times::timed("run (with wasmtime compile)", || {
+		if needs_ffi || needs_wasi || needs_host {
+			read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
+		} else {
+			read_bytes(&bytes)
+		}
+	});
 	result.unwrap_or_else(failed_run)
 }
 

@@ -31,6 +31,34 @@ instance_copy(x, shallow) from warp
 wasi_environment(): text from warp
 kind_mark(x: any): int from warp
 
+// The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
+// results, as the analyzer reads them
+count(xs): int from emitter
+byte_size(x): int from emitter
+type(x): symbol from emitter
+print(values...): nothing from emitter
+puts(t: text): int from emitter
+puti(n: int): int from emitter
+putl(n: int): int from emitter
+putf(x: float): int from emitter
+fetch(url: text, options...): text from emitter
+// the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
+map(xs, f: function) from emitter
+filter(xs, f: function) from emitter
+reduce(xs, f: function) from emitter
+fold(xs, start, f: function) from emitter
+any(xs, f: function): bool from emitter
+all(xs, f: function): bool from emitter
+find(xs, f: function) from emitter
+each(xs, f: function) from emitter
+add(xs, x) from emitter
+insert(xs, x, at: int) from emitter
+remove(xs, x) from emitter
+pop(xs) from emitter
+clear(xs) from emitter
+number(x): number from emitter
+string(x): text from emitter
+
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
 alias tuple = list
@@ -53,6 +81,9 @@ alias lowercase = lower
 // the text builtin trim, Python's strip
 alias strip = trim
 alias reversed = reverse
+alias size = count
+alias len = count
+alias length = count
 alias sorted = sort
 alias clone = copy
 alias ordinal = ord

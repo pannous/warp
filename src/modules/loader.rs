@@ -570,12 +570,15 @@ impl<'a> Loader<'a> {
 		// a program's own `first(xs) := …` takes its calls from the prelude's: a hint, as a used module's is a warning
 		let replaced: Vec<&str> =
 			prelude.iter().filter(|word| self.program_words.contains(word)).map(String::as_str).collect();
-		let replaced = prelude_declarations_of(&replaced);
+		let replaced = crate::compiler::phase_times::timed("prelude: replaced declarations", || {
+			prelude_declarations_of(&replaced)
+		});
 		warn_replaced(&replaced, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
 		let reached = reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat());
 		let module = sequence(reached);
-		let definitions =
-			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))?;
+		let definitions = crate::compiler::phase_times::timed("prelude: load reached", || {
+			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))
+		})?;
 		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
 		// n: int)` overloads it by parameter type (card easy-add)
 		let qualified_words: Vec<&String> =
@@ -592,7 +595,10 @@ impl<'a> Loader<'a> {
 				)
 			})
 		};
-		self.std_definitions.extend(definitions.into_iter().map(qualified));
+		let qualified: Vec<Node> = crate::compiler::phase_times::timed("prelude: qualified names", || {
+			definitions.into_iter().map(qualified).collect()
+		});
+		self.std_definitions.extend(qualified);
 		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
 			qualified_words.iter().for_each(|word| {
@@ -643,11 +649,19 @@ impl<'a> Loader<'a> {
 			return Ok(vec![]);
 		}
 		let shown = shown_path(&path);
-		let module = crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
-		if let Some(failure) = module.first_error() {
-			return Err(crate::errors::diagnostic::located_in_file(failure, &shown));
-		}
-		self.load_parsed(import, path, file, module)
+		let classes_early = classes_early(import, &file);
+		let lower = || {
+			let module = crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
+			match module.first_error() {
+				Some(failure) => Err(crate::errors::diagnostic::located_in_file(failure, &shown)),
+				None => lowered_source(&path, module, classes_early),
+			}
+		};
+		let module = match is_std_source(&shown.to_string_lossy()) {
+			true => lowered_std_module(source, classes_early, lower)?,
+			false => lower()?,
+		};
+		self.join_lowered(import, path, file, module)
 	}
 
 	/// lib/prelude.warp's definitions the program reaches, already parsed (use_prelude)
@@ -660,19 +674,19 @@ impl<'a> Loader<'a> {
 	}
 
 	fn load_parsed(&mut self, import: Import, path: PathBuf, file: PathBuf, module: Node) -> Result<Vec<Node>, Node> {
-		let shown = shown_path(&path);
-		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
-		let classes_early = import == Import::Use
-			&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(&file));
-		// alias lines are the loader's (modules::resolve), no code of the module
-		let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
-		let module = sequence(statements(module).into_iter().filter(kept).collect());
+		let classes_early = classes_early(import, &file);
+		let module = match is_std_source(&shown_path(&path).to_string_lossy()) {
+			true => lowered_std_definitions(&module, classes_early, || {
+				lowered_source(&path, module.clone(), classes_early)
+			})?,
+			false => lowered_source(&path, module, classes_early)?,
+		};
+		self.join_lowered(import, path, file, module)
+	}
+
+	/// A module's lowered source joins the program: its own `use`s resolved, its declarations the program's words
+	fn join_lowered(&mut self, import: Import, path: PathBuf, file: PathBuf, module: Node) -> Result<Vec<Node>, Node> {
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = crate::pipeline::lower_module_source(module);
-		// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
-		if let Node::Error(_) = module.drop_meta() {
-			return Err(crate::errors::diagnostic::located_in_file(&module, &shown));
-		}
 		let module = with_module_directory(module, &directory);
 		let outer_directory = self.including_directory.replace(directory);
 		let (module, fast) = without_fast_pragma(module);
@@ -873,6 +887,30 @@ impl<'a> Loader<'a> {
 }
 
 /// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
+/// Whether insert_module_classes put the module's classes in front of the program already
+fn classes_early(import: Import, file: &PathBuf) -> bool {
+	import == Import::Use
+		&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(file))
+}
+
+/// A parsed module after the passes it runs before joining the program (pipeline::lower_module_source)
+fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node, Node> {
+	let shown = shown_path(path);
+	// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
+	// alias lines are the loader's (modules::resolve), no code of the module
+	let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
+	let module = sequence(statements(module).into_iter().filter(kept).collect());
+	let module = crate::compiler::phase_times::timed_as(
+		|| format!("module source passes of {}", shown.display()),
+		|| crate::pipeline::lower_module_source(module),
+	);
+	// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
+	match module.drop_meta() {
+		Node::Error(_) => Err(crate::errors::diagnostic::located_in_file(&module, &shown)),
+		_ => Ok(module),
+	}
+}
+
 pub(crate) fn shown_path(path: &Path) -> PathBuf {
 	path.components().filter(|component| !matches!(component, std::path::Component::CurDir)).collect()
 }
@@ -906,22 +944,27 @@ fn imported_statements(node: &Node) -> Option<Vec<Node>> {
 /// write a call of another prelude word): lowering all of lib/prelude.warp for each program cost more than compiling
 /// a small one (card cache-lowered)
 fn reached_prelude_definitions(program: &[Node]) -> Vec<Node> {
+	crate::compiler::phase_times::timed("prelude reach look-ahead", || reached_prelude_definitions_untimed(program))
+}
+
+fn reached_prelude_definitions_untimed(program: &[Node]) -> Vec<Node> {
 	let reachable = |callers: &Node| {
 		needed_definitions(callers, &prelude_declarations_reached(&called_names(statements_of(callers))))
 	};
 	let mut reached = reachable(&sequence(program.to_vec()));
 	// a look ahead: the program's own fresh names and hints are not this lowering's
-	let lowered_aside = |definitions: Vec<Node>| {
+	// each definition lowered alone, so a kept one serves every program reaching it; what the lowerings write in the
+	// compile context is put back after
+	let lowered_aside = |definitions: Vec<Node>| -> Vec<Node> {
 		let fresh_number = crate::compiler::compile_context::read(|context| context.fresh_number);
-		crate::compiler::compile_context::scoped(
+		let effects = crate::compiler::compile_context::LoweredEffects::now();
+		let lowered: Vec<Node> = crate::compiler::compile_context::scoped(
 			|context| &mut context.fresh_number,
 			fresh_number,
-			|| {
-				crate::normalize::without_hints(|| {
-					statements(crate::pipeline::lower_module_source(sequence(definitions)))
-				})
-			},
-		)
+			|| crate::normalize::without_hints(|| definitions.iter().flat_map(lowered_prelude_definition).collect()),
+		);
+		effects.apply();
+		lowered
 	};
 	loop {
 		let lowered = lowered_aside(reached.clone());

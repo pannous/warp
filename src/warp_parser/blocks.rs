@@ -3,6 +3,7 @@
 use super::expressions::BODY_ENDS;
 use super::*;
 use crate::node::children_rewritten;
+use crate::warp_parser::context::Context;
 use crate::words::IN_WORD;
 
 /// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
@@ -115,7 +116,7 @@ impl WarpParser {
 	pub(in crate::warp_parser) fn skip_end_line(&mut self) {
 		let before = self.mark();
 		let (_, indent) = self.skip_whitespace();
-		if indent != self.base_indent || !self.matches_keyword(END_KEYWORD) {
+		if indent != self.context.base_indent || !self.matches_keyword(END_KEYWORD) {
 			self.rewind(before);
 			return;
 		}
@@ -128,18 +129,16 @@ impl WarpParser {
 		let next_line = self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').skip(1);
 		let indented_by_spaces = next_line.take_while(|ch| matches!(ch, ' ' | '\t')).any(|ch| *ch == ' ');
 		let before_block = self.mark();
-		let outer_counts_spaces = self.indent_counts_spaces;
-		self.indent_counts_spaces |= indented_by_spaces;
-		let (_, indent) = self.skip_whitespace();
-		if indent <= self.base_indent {
-			self.indent_counts_spaces = outer_counts_spaces;
+		let spaced =
+			Context { indent_counts_spaces: self.context.indent_counts_spaces || indented_by_spaces, ..self.context };
+		let (_, indent) = self.within(spaced, Self::skip_whitespace);
+		if indent <= self.context.base_indent {
 			self.rewind(before_block);
 			return None;
 		}
-		let outer_indent = std::mem::replace(&mut self.base_indent, indent);
-		let block = self.parse_list_with_separators(None, Bracket::None);
-		self.base_indent = outer_indent;
-		self.indent_counts_spaces = outer_counts_spaces;
+		let block = self.within(Context { base_indent: indent, ..spaced }, |parser| {
+			parser.parse_list_with_separators(None, Bracket::None)
+		});
 		self.seek_back_over_whitespace(); // the newline after the block still separates the next statement
 		Some(curly_block(block))
 	}
@@ -152,17 +151,14 @@ impl WarpParser {
 
 	/// The statements up to the closing `end` (consumed) as a `{…}` block; a `then` block also ends at its `else`
 	pub(in crate::warp_parser) fn parse_end_block(&mut self, stops_at_else: bool) -> Node {
-		let outer_else = std::mem::replace(&mut self.stops_at_else, stops_at_else);
-		let outer_end = std::mem::replace(&mut self.stops_at_end, true);
-		let outer_indent = self.base_indent;
 		let before_first_line = self.mark();
 		let (_, indent) = self.skip_whitespace();
 		self.rewind(before_first_line);
-		self.base_indent = self.base_indent.max(indent); // its lines may be indented, the `end` line not
-		let block = self.parse_list_with_separators(None, Bracket::None);
-		self.base_indent = outer_indent;
-		self.stops_at_else = outer_else;
-		self.stops_at_end = outer_end;
+		// its lines may be indented, the `end` line not
+		let base_indent = self.context.base_indent.max(indent);
+		let block = self.within(Context { stops_at_else, stops_at_end: true, base_indent, ..self.context }, |parser| {
+			parser.parse_list_with_separators(None, Bracket::None)
+		});
 		self.skip_whitespace();
 		if self.matches_keyword(END_KEYWORD) {
 			self.advance_by(END_KEYWORD.len());
@@ -172,8 +168,8 @@ impl WarpParser {
 
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
 	pub(in crate::warp_parser) fn at_block_close(&self) -> bool {
-		self.stops_at_end
-			&& (self.matches_keyword(END_KEYWORD) || (self.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
+		self.context.stops_at_end
+			&& (self.matches_keyword(END_KEYWORD) || (self.context.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
 	}
 }
 

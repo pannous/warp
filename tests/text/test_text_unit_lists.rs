@@ -18,7 +18,6 @@ fn counting_phrases_count_the_unit_lists() {
 		"number of codepoints in t",
 		"#codepoints in t",
 		"count codepoints in t",
-		"codepoint count of t",
 		"size of t in codepoints",
 	];
 	for six in codepoint_counts {
@@ -39,4 +38,10 @@ fn bytes_are_the_byte_list_and_count_as_the_byte_size() {
 	for twenty_four in ["pixels.bytecount", "count pixels.bytes", "pixels.bytes.count", "number of bytes in pixels"] {
 		is!(&format!("pixels = [1 2 4]; {twenty_four}"), 24);
 	}
+}
+
+#[test]
+#[ignore = "dropped: rust-cleanup-drops: the unit count codepoint count of t; warp writes number of codepoints in t"]
+fn a_unit_count_of_a_text() {
+	is!("t = \"שָלוֹם\"; codepoint count of t", 6);
 }
