@@ -136,7 +136,8 @@ impl Lowering<'_> {
 				.collect(),
 			false => cases,
 		};
-		let (default, cases): (Vec<Case>, Vec<Case>) = cases.into_iter().partition(|case| is_default(case, &self.names));
+		let (default, cases): (Vec<Case>, Vec<Case>) =
+			cases.into_iter().partition(|case| is_default(case, &self.names));
 		let miss = match default.into_iter().next() {
 			Some(default) => default.body,
 			None => no_case(subject, &subject_value),
