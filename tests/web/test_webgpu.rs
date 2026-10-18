@@ -329,3 +329,22 @@ fn a_fragment_shader_reads_lists_of_vectors() {
 	}
 	assert_eq!(rendered.serialize(), format!("[{}]", 0xFFFFFFFFu32));
 }
+
+// card gpu-multipass: `waves = render(f, width, height)` is an image f's shader draws first, which a shader reads as
+// warp_image_waves(at), the nearest pixel
+const READS_AN_IMAGE: &str = "gradient(x, y) := x / 4
+waves = render(gradient, 4, 1)
+shader = \"@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	return vec4f(warp_image_waves(at.xy + vec2f(1.0, 0.0)).x, 0.0, 0.0, 1.0);
+}\"
+gpu_render(shader, 4, 1, {waves: waves})";
+
+#[test]
+fn a_fragment_shader_reads_an_image_rendered_before() {
+	let rendered = eval(READS_AN_IMAGE);
+	if matches!(&rendered, Node::Error(message) if message.to_string().contains("no WebGPU adapter")) {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	let reds = [0x40, 0x80, 0xBF, 0xBF].map(|red: u32| (0xFF000000 | red << 16).to_string());
+	assert_eq!(rendered.serialize(), format!("[{}]", reds.join(" ")));
+}
