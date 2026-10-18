@@ -453,13 +453,16 @@ fn shader_image(value: &Node) -> Result<Option<crate::graphics::gpu::ShaderImage
 			_ => None,
 		})
 	};
-	use crate::graphics::gpu::{IMAGE_SHADER, IMAGE_VALUES};
+	use warp_runtime::host_words::{IMAGE_SHADER, IMAGE_VALUES};
 	let (Node::List(..), Some(Node::Text(shader))) = (value.drop_meta(), field(IMAGE_SHADER)) else {
 		return Ok(None);
 	};
 	let side = |name: &str| match field(name) {
 		Some(Node::Number(number)) if f64::from(number) >= 1.0 => Ok(f64::from(number) as u32),
-		other => Err(format!("render's image is a whole number of pixels {name}, got {}", other.unwrap_or(Node::Empty).serialize())),
+		other => Err(format!(
+			"render's image is a whole number of pixels {name}, got {}",
+			other.unwrap_or(Node::Empty).serialize()
+		)),
 	};
 	let values = shader_values(&field(IMAGE_VALUES).unwrap_or(Node::Empty))?;
 	Ok(Some(crate::graphics::gpu::ShaderImage { shader, width: side("width")?, height: side("height")?, values }))

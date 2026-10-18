@@ -78,6 +78,12 @@ pub const KEY_PRESSED: &str = "key_pressed";
 /// fragment shader, else paints f on the CPU (card paint-function, src/lowering/foreign/gpu_maps/kernels.rs); not a value
 /// a program names
 pub const GPU_PAINTS: &str = "gpu paints";
+/// `waves(at)` of `waves = render(f, width, height)` reads `warp_image_waves(at)` in WGSL (card gpu-multipass): the
+/// function the host declares for each image a shader reads (src/graphics/gpu.rs image_declarations)
+pub const IMAGE_FUNCTION_PREFIX: &str = "warp_image_";
+/// The fields of the map `render(f, width, height)` gives: `{shader: …, width: …, height: …, values: {…}}`
+pub const IMAGE_SHADER: &str = "shader";
+pub const IMAGE_VALUES: &str = "values";
 /// Read once as a program naming the Escape key starts (`key == ESC`): Escape over the paint window is then its key,
 /// else it ends the run (card escape-window, src/graphics/paint_window.rs); not a value a program names
 pub const ESCAPE_KEPT: &str = "escape kept";

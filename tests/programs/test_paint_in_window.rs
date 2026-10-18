@@ -13,7 +13,7 @@ const FULL_HD: (u32, u32) = (1920, 1080);
 const MOST_MESSAGE_BYTES: usize = 1024;
 
 fn values() -> Vec<ShaderValue> {
-	let value = |name: &str, floats: Vec<f32>, array| ShaderValue { name: name.into(), floats, array };
+	let value = |name: &str, floats: Vec<f32>, array| ShaderValue::numbers(name.into(), floats, array);
 	vec![
 		value("width", vec![64.0], false),
 		value("tone", vec![0.25], false),

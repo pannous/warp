@@ -74,6 +74,8 @@ const VECTOR_FUNCTIONS: [(&str, &str, usize, usize); 18] = [
 ];
 /// A vector's components as `p#1` … `p#4` read them: p.x … p.w
 const COMPONENTS: [&str; 4] = ["x", "y", "z", "w"];
+/// A color's width, a vec4f: red, green, blue and alpha
+const COLOR_WIDTH: usize = COMPONENTS.len();
 const BREAK_WORD: &str = "break";
 /// The math words that cost the CPU tens of nanoseconds an item, so a lambda with one is worth the GPU
 const HEAVY_FUNCTIONS: [&str; 12] =
@@ -90,6 +92,9 @@ const PARAMETER_PREFIX: &str = "a_";
 const PAINT_WORD: &str = "paint";
 /// `shader_of(f)`: the WGSL that `paint(f, width, height)` compiles f to (kernels.rs shader_of)
 const SHADER_OF_WORD: &str = "shader_of";
+/// `waves = render(f, width, height)`, alias `texture` (card gpu-multipass): f's image, drawn on the GPU before a paint
+/// whose function reads it as `waves(at)`; on the CPU `waves(at)` is f at the nearest pixel
+const RENDER_WORDS: [&str; 2] = ["render", "texture"];
 const RGB_WORD: &str = "rgb";
 /// The prelude's pixel of a painted function on the CPU: a vector of 3 numbers is that color
 const PIXEL_COLOR: &str = "pixel_color";

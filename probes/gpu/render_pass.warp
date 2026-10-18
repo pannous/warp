@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+// card gpu-multipass: an image rendered on the GPU first (render, alias texture), read by the painted function
+// as waves(at); on the CPU waves(at) is the function at the nearest pixel. WARP_GPU=off paints the same
+size = 8
+gradient(x, y) := [x / size, y / size]
+waves = render(gradient, size, size)
+shifted(x, y) := {
+	at = [x + 2, y]
+	[waves(at).x, waves(x, y + 1).y, 0]
+}
+paint(shifted, size, size)

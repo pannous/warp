@@ -2,7 +2,7 @@
 use super::*;
 use crate::lowering::nodes::{is_binding, is_return};
 use std::collections::{HashMap, HashSet};
-use warp_runtime::host_words::GPU_PAINTS;
+use warp_runtime::host_words::{GPU_PAINTS, IMAGE_FUNCTION_PREFIX, IMAGE_SHADER, IMAGE_VALUES};
 
 /// A lambda as a WGSL compute kernel: the item it computes in WGSL, the program's numbers it reads (`outer`, appended
 /// to `data` after the items, in this order) and whether it is worth the GPU (math words, powers: `heavy`)
@@ -483,6 +483,9 @@ impl Translation {
 			.or_else(|| KERNEL_FUNCTIONS.contains(&name).then_some((name, 1, 0)))
 			.or_else(|| KERNEL_FUNCTIONS_OF_TWO.contains(&name).then_some((name, 2, 0)));
 		let Some((wgsl, arity, result)) = builtin else {
+			if let Some(image) = program_value(name).as_ref().and_then(render_call) {
+				return self.image_read(name, &image, arguments);
+			}
 			let called = program_function(name)?;
 			return self.call(name, &called, arguments, false);
 		};
@@ -491,6 +494,38 @@ impl Translation {
 		let width = common_width(&arguments.iter().map(|(_, width)| *width).collect::<Vec<_>>())?;
 		let codes: Vec<String> = arguments.into_iter().map(|argument| splat(argument, width)).collect();
 		Some((format!("{wgsl}({})", codes.join(", ")), if result == 0 { width } else { result }))
+	}
+
+	/// `waves(at)` of `waves = render(f, width, height)`: the value f gave at that pixel of its image, which the host
+	/// draws first and binds; `at` a vector of 2 or two numbers
+	fn image_read(&mut self, name: &str, image: &RenderCall, arguments: &[Node]) -> Option<Typed> {
+		if !self.uniforms {
+			self.refusal.get_or_insert(format!("`{name}`: a kernel reads no images, only a paint does"));
+			return None;
+		}
+		let width = match pixel_shader(&image.function, &image.painted, false) {
+			Ok(shader) => shader.width,
+			Err(reason) => {
+				self.refusal.get_or_insert(format!("`{name}`: WGSL cannot render {} ({reason})", image.function));
+				return None;
+			}
+		};
+		let at = match self.typed_all(arguments)?.as_slice() {
+			[(at, 2)] => at.clone(),
+			[(x, 1), (y, 1)] => format!("vec2f({x}, {y})"),
+			_ => {
+				self.refusal.get_or_insert(format!("`{name}`: an image is read at a position, 2 numbers"));
+				return None;
+			}
+		};
+		if !self.outer.iter().any(|known| known == name) {
+			self.outer.push(name.to_string());
+		}
+		let read = format!("{IMAGE_FUNCTION_PREFIX}{name}({at})");
+		match width {
+			COLOR_WIDTH => Some((read, width)),
+			_ => Some((format!("{read}.{}", COMPONENTS[..width].concat()), width)),
+		}
 	}
 
 	fn call_without_arguments(&mut self, name: &str) -> Option<Typed> {
@@ -933,10 +968,102 @@ pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
 /// Every `paint(f, width, height)` of a warp function f(x, y): a fragment shader of f where WGSL can compute it, the
 /// program's numbers it reads as the shader's values; otherwise f of every pixel on the CPU, row by row
 pub(crate) fn painted_functions(node: Node) -> Node {
+	painted_or_rendered(images_read_on_cpu(node))
+}
+
+fn painted_or_rendered(node: Node) -> Node {
 	if let Some(painted) = painted_function(&node) {
 		return painted;
 	}
-	node.map_children(painted_functions)
+	node.map_children(painted_or_rendered)
+}
+
+/// `render(f, width, height)` or `texture(…)` of a program function f(x, y)
+struct RenderCall {
+	function: String,
+	painted: ProgramFunction,
+	width: Node,
+	height: Node,
+}
+
+fn render_call(node: &Node) -> Option<RenderCall> {
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return None;
+	};
+	let [word, arguments @ ..] = items.as_slice() else {
+		return None;
+	};
+	if !RENDER_WORDS.iter().any(|render| word.is_symbol(render)) {
+		return None;
+	}
+	let [function, width, height] = spread_arguments(arguments, 3)? else {
+		return None;
+	};
+	let name = function.drop_meta().symbol_name()?.to_string();
+	let painted = program_function(&name).filter(|called| called.parameters.len() == 2)?;
+	Some(RenderCall { function: name, painted, width: width.clone(), height: height.clone() })
+}
+
+/// The map `render(f, width, height)` gives: f's shader and the program's numbers it reads, which the host draws into
+/// an image before the paint reading it; only the size where WGSL cannot compute f (the CPU then reads f itself,
+/// images_read_on_cpu)
+fn rendered_image(image: &RenderCall, on_cpu: bool) -> Node {
+	let size = format!("width: {}, height: {}", image.width.serialize(), image.height.serialize());
+	let shader = match on_cpu {
+		true => None,
+		false => pixel_shader(&image.function, &image.painted, false).ok(),
+	};
+	let fields = match shader {
+		Some(PixelShader { shader, entries, .. }) => format!(
+			"{IMAGE_SHADER}: {}, {size}, {IMAGE_VALUES}: {{{}}}",
+			Node::Text(shader).serialize(),
+			entries.join(", ")
+		),
+		None => size,
+	};
+	parsed_statement(&format!("{{{fields}}}"))
+}
+
+/// Every `waves(at)` of `waves = render(f, width, height)` as f at the nearest pixel of the image, for the CPU: a
+/// painted function computed there reads the image the way the GPU's textureLoad does
+fn images_read_on_cpu(node: Node) -> Node {
+	let read = match node.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[image, arguments @ ..] => image
+				.symbol_name()
+				.and_then(program_value)
+				.as_ref()
+				.and_then(render_call)
+				.and_then(|image| nearest_pixel(&image, arguments)),
+			_ => None,
+		},
+		_ => None,
+	};
+	read.unwrap_or_else(|| node.map_children(images_read_on_cpu))
+}
+
+fn nearest_pixel(image: &RenderCall, arguments: &[Node]) -> Option<Node> {
+	let at: Vec<Node> = match (spread_arguments(arguments, 2), arguments) {
+		(Some(at), _) => at.to_vec(),
+		(None, [at]) => (1..=2)
+			.map(|index| {
+				let component = parsed_statement(&format!("warp_at#{index}"));
+				crate::law::substitute(&component, &HashMap::from([("warp_at".to_string(), at.clone())]))
+			})
+			.collect(),
+		_ => return None,
+	};
+	let template = parsed_statement(&format!(
+		"{}(floor(min(max(warp_x, 0), warp_width - 1)), floor(min(max(warp_y, 0), warp_height - 1)))",
+		image.function
+	));
+	let bindings = HashMap::from([
+		("warp_x".to_string(), at[0].clone()),
+		("warp_y".to_string(), at[1].clone()),
+		("warp_width".to_string(), image.width.clone()),
+		("warp_height".to_string(), image.height.clone()),
+	]);
+	Some(crate::law::substitute(&template, &bindings))
 }
 
 fn painted_function(node: &Node) -> Option<Node> {
@@ -950,6 +1077,9 @@ fn painted_function(node: &Node) -> Option<Node> {
 		switched_off() || crate::parallel::is_annotated(node, CPU_ATTRIBUTE) || node.attribute(CPU_ATTRIBUTE).is_some();
 	if paint.is_symbol(SHADER_OF_WORD) {
 		return shader_of(arguments);
+	}
+	if let Some(image) = render_call(node) {
+		return Some(rendered_image(&image, on_cpu));
 	}
 	if !paint.is_symbol(PAINT_WORD) {
 		return None;
@@ -1056,10 +1186,27 @@ fn shader_of(arguments: &[Node]) -> Option<Node> {
 /// the program's numbers it reads, a list it reads item by item as a list of one-number lists (one vec4f per item);
 /// where WGSL cannot compute the function, the construct it cannot (card kernel-refusal-reason)
 fn fragment_shader(name: &str, function: &ProgramFunction) -> Result<(String, Vec<String>), String> {
+	pixel_shader(name, function, true).map(|PixelShader { shader, entries, .. }| (shader, entries))
+}
+
+/// A fragment shader of a function of the pixel, the entries of its values and the width of the function's value
+struct PixelShader {
+	shader: String,
+	entries: Vec<String>,
+	width: usize,
+}
+
+/// The fragment shader of `function` at each pixel: its color, or (an image another shader reads, render) its
+/// number or vector as it is, in the first channels
+fn pixel_shader(name: &str, function: &ProgramFunction, color: bool) -> Result<PixelShader, String> {
 	let mut translation = Translation { uniforms: true, ..Translation::default() };
 	let pixel = vec![("floor(at.x)".to_string(), 1), ("floor(at.y)".to_string(), 1)];
-	let Some((painted, _)) = translation.call_translated(name, function, pixel, true) else {
+	let Some((painted, width)) = translation.call_translated(name, function, pixel, color) else {
 		return Err(translation.refusal.unwrap_or_else(|| "a construct outside the shader subset".to_string()));
+	};
+	let painted = match color {
+		true => painted,
+		false => padded_to_color(painted, width),
 	};
 	let functions: String = translation.functions.iter().map(|function| format!("{function}\n")).collect();
 	let shader = format!(
@@ -1069,7 +1216,15 @@ fn fragment_shader(name: &str, function: &ProgramFunction) -> Result<(String, Ve
 		true => format!("{name}: [[item] for item in {name}]"),
 		false => format!("{name}: {name}"),
 	});
-	Ok((shader, entries.collect()))
+	Ok(PixelShader { shader, entries: entries.collect(), width })
+}
+
+/// A number or vector as the vec4f of an image's pixel, zeros after it
+fn padded_to_color(value: String, width: usize) -> String {
+	match width {
+		COLOR_WIDTH => value,
+		_ => format!("vec4f({value}{})", ", 0.0".repeat(COLOR_WIDTH - width)),
+	}
 }
 
 /// The WGSL comparison of a warp operator

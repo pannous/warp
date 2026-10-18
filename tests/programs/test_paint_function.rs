@@ -35,11 +35,11 @@ const MOST_FLIPPED_SHARE: f64 = 0.03;
 /// A channel the GPU rounds from f32 may differ by one from the CPU's
 const CHANNEL_TOLERANCE: u8 = 1;
 
-fn has_gpu() -> bool {
+pub(super) fn has_gpu() -> bool {
 	warp::graphics::gpu::with_device(|_, _| ()).is_ok()
 }
 
-fn lowered(program: &str) -> String {
+pub(super) fn lowered(program: &str) -> String {
 	warp::pipeline::lower(program).expect("a program").serialize()
 }
 
@@ -128,7 +128,12 @@ fn a_painted_function_of_vectors_becomes_a_fragment_shader() {
 }
 
 /// `function` painted on the GPU and on the CPU: the same colors, up to a channel's rounding
-fn assert_same_colors_both_ways(program: &str, function: &str, (width, height): (usize, usize), folder: &str) {
+pub(super) fn assert_same_colors_both_ways(
+	program: &str,
+	function: &str,
+	(width, height): (usize, usize),
+	folder: &str,
+) {
 	let (gpu, cpu) = painted_both_ways(program, function, width, folder);
 	assert_eq!(gpu.len(), width * height);
 	for (pixel, (a, b)) in gpu.iter().zip(&cpu).enumerate() {

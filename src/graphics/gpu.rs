@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, OnceLock};
+use warp_runtime::host_words::IMAGE_FUNCTION_PREFIX;
 use wgpu::util::DeviceExt;
 
 const ENTRY_POINT: &str = "main";
@@ -43,10 +44,6 @@ fn warp_previous(at: vec2f) -> vec4f {
 /// `waves(at)` of `waves = render(f, width, height)` (card gpu-multipass, notes/gpu.md "Several passes"): the value f
 /// gave at pixel `at` of its image, drawn on the GPU before the shader reading it, bound after the previous frame
 const FIRST_IMAGE_BINDING: u32 = 2;
-const IMAGE_FUNCTION_PREFIX: &str = "warp_image_";
-/// The fields of the map `render(f, width, height)` gives: `{shader: …, width: …, height: …, values: {…}}`
-pub const IMAGE_SHADER: &str = "shader";
-pub const IMAGE_VALUES: &str = "values";
 /// An image another shader reads keeps f's numbers as they are: negative heights, values above 1
 const PASS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// A uniform struct is a whole number of 16-byte rows
@@ -506,7 +503,8 @@ fn prepared(
 		),
 		false => format!("{shader}{FULL_IMAGE_VERTICES}{declarations}{images}"),
 	};
-	let layout = BindingsLayout { values: !bytes.is_empty(), previous: reads_previous, images: images_of(values).count() };
+	let layout =
+		BindingsLayout { values: !bytes.is_empty(), previous: reads_previous, images: images_of(values).count() };
 	let painter = painter(device, source, layout, format)?;
 	Ok((painter, bytes))
 }
@@ -671,7 +669,14 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 }
 
 /// The values with the built-in holes the shader reads, an image's own among its values
-fn filled_values(shader: &str, width: u32, height: u32, values: &[ShaderValue], frame: f32, time: f32) -> Vec<ShaderValue> {
+fn filled_values(
+	shader: &str,
+	width: u32,
+	height: u32,
+	values: &[ShaderValue],
+	frame: f32,
+	time: f32,
+) -> Vec<ShaderValue> {
 	let size = [width as f32, height as f32];
 	let [mouse_x, mouse_y, mouse_down, key] = warp_runtime::system_values::window_input();
 	let wheel = warp_runtime::system_values::wheel() as f32;
@@ -775,7 +780,7 @@ fn painter(
 	}
 	let BindingsLayout { values: takes_values, previous: reads_previous, images } = layout;
 	let source = &key.0;
-	let module = compiled(device, &source)?;
+	let module = compiled(device, source)?;
 	// explicit, so a shader that leaves `values` unread still binds them
 	let values = takes_values.then_some(wgpu::BindGroupLayoutEntry {
 		binding: VALUES_BINDING,
