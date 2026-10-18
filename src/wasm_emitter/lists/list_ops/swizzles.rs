@@ -23,40 +23,32 @@ impl WasmGcEmitter {
 		}
 		let node = self.type_manager.node_type;
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
-		let most_items = crate::words::SWIZZLE_LETTERS.len() as u32;
-		let mut locals = vec![nullable; 1 + most_items as usize];
-		locals.extend([ValType::I64, ValType::I64, ValType::I64, nullable]);
+		let most_items = crate::words::SWIZZLE_LETTERS.len() as i64;
+		let locals =
+			[self.item_walk_locals().to_vec(), vec![ValType::I64, ValType::I64, ValType::I64, nullable]].concat();
 		self.runtime_function(SWIZZLED, vec![node_ref, ValType::I64], vec![nullable], locals, |s, f| {
-			let (list, picks, cell, first_item) = (0, 1, 2, 3);
-			let count = first_item + most_items;
-			let (at, component, made) = (count + 1, count + 2, count + 3);
+			let (list, picks, walk, count, at, component, made) = (0, 1, ItemWalk::at(2), 5, 6, 7, 8);
 			let none = [I::RefNull(HeapType::Concrete(node)), I::Return];
 			s.emit_field(f, list, 0);
 			Self::emit_kind_test(f, Kind::List as i64, I::I64Ne);
 			Self::emit_list(f, &[I::If(BlockType::Empty), none[0].clone(), none[1].clone(), I::End]);
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::Block(BlockType::Empty)]);
-			// the items, each a number (not a bool), into their locals
-			for item in first_item..first_item + most_items {
+			// the items, each a number (not a bool)
+			s.emit_item_walk(f, list, walk, |f| {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
-					I::LocalGet(cell), I::RefIsNull, I::BrIf(0),
-					I::LocalGet(cell), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 1 },
-					I::RefCastNonNull(HeapType::Concrete(node)), I::LocalTee(item),
-					I::StructGet { struct_type_index: node, field_index: 0 }, I::I64Const(UNMARKED_KIND), I::I64And,
-					I::LocalTee(component),
+					I::LocalGet(walk.item), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 0 },
+					I::I64Const(UNMARKED_KIND), I::I64And, I::LocalTee(component),
 					I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq,
 					I::LocalGet(component), I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Int as i64), I::I64Eq,
 					I::LocalGet(component), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Ne, I::I32And,
 					I::I32Or, I::I32Eqz, I::If(BlockType::Empty), none[0].clone(), none[1].clone(), I::End,
-					I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count),
-					I::LocalGet(cell), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 2 },
-					I::LocalSet(cell),
 				]);
-			}
+			});
+			let items = |field_index| I::StructGet { struct_type_index: s.type_manager.node_list_type, field_index };
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::End,
-				I::LocalGet(cell), I::RefIsNull, I::I32Eqz, I::LocalGet(count), I::I64Const(2), I::I64LtS, I::I32Or,
+				I::LocalGet(walk.items), items(0), I::I64ExtendI32U, I::LocalTee(count), I::I64Const(2), I::I64LtS,
+				I::LocalGet(count), I::I64Const(most_items), I::I64GtS, I::I32Or,
 				I::If(BlockType::Empty), none[0].clone(), none[1].clone(), I::End,
 				I::LocalGet(picks), I::I64Const((1 << PICKS_COUNT_BITS) - 1), I::I64And, I::LocalSet(at),
 				// the picked items from the last, each consed onto the ones after it
@@ -68,19 +60,9 @@ impl WasmGcEmitter {
 					I::LocalTee(component), I::LocalGet(count), I::I64GeS,
 					I::If(BlockType::Empty), none[0].clone(), none[1].clone(), I::End,
 					I::I64Const(SQUARE_LIST_KIND),
+					I::LocalGet(walk.items), items(1), I::LocalGet(component), I::I32WrapI64,
+					I::ArrayGet(s.type_manager.node_array_type),
 			]);
-			// the item at `component`: nested choices of the item locals
-			for item in first_item..first_item + most_items - 1 {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(component), I::I64Const((item - first_item) as i64), I::I64Eq,
-					I::If(BlockType::Result(nullable)), I::LocalGet(item), I::Else,
-				]);
-			}
-			f.instruction(&I::LocalGet(first_item + most_items - 1));
-			for _ in 1..most_items {
-				f.instruction(&I::End);
-			}
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 					I::LocalGet(made), I::StructNew(node), I::LocalSet(made),

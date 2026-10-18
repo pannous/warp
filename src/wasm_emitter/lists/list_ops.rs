@@ -131,10 +131,24 @@ impl CopyCells {
 	}
 }
 
+/// The locals of a walk over a list's items (emit_item_walk), consecutive from `items`: the $NodeList, the next index, the
+/// item
+#[derive(Clone, Copy)]
+pub(in crate::wasm_emitter) struct ItemWalk {
+	pub(in crate::wasm_emitter) items: u32,
+	pub(in crate::wasm_emitter) index: u32,
+	pub(in crate::wasm_emitter) item: u32,
+}
+
+impl ItemWalk {
+	pub(in crate::wasm_emitter) fn at(first: u32) -> Self {
+		ItemWalk { items: first, index: first + 1, item: first + 2 }
+	}
+}
+
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
-		self.emit_is_meta_entry();
 		if TEXT_UNIT_USERS.iter().chain(&CODE_POINT_READERS).any(|name| self.should_emit_function(name)) {
 			self.emit_utf8_steps();
 		}
@@ -569,7 +583,6 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_node_counting(&mut self) {
-		let node_ref_nullable = self.node_ref(true);
 		let node_ref = self.node_ref(false);
 		// node_count(node) -> i64: the items of a list or block, the characters of a text
 		if self.should_emit_function("node_count") {
@@ -577,7 +590,7 @@ impl WasmGcEmitter {
 				"node_count",
 				vec![Ref(node_ref)],
 				vec![ValType::I64],
-				vec![ValType::I64, Ref(node_ref_nullable)],
+				vec![ValType::I64],
 				|s, func| {
 					s.emit_fail_if_error(func, 0); // `(try 10/0).count` is the Error, not 1 (card error-field)
 									// a text counts its user-perceived characters (grapheme clusters)
@@ -613,15 +626,10 @@ impl WasmGcEmitter {
 						]);
 					}
 
-					// the cells along the value chain, a meta entry `@name:value` counting none
-					let (count, current) = (1, 2);
-					Self::emit_list(func, &[I::I64Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(current)]);
-					s.emit_cell_walk(func, current, |func| {
-						func.instruction(&I::LocalGet(count));
-						s.emit_field(func, current, 1);
-						s.call(func, super::super::reflection::equality::IS_META_ENTRY);
-						Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64Add, I::LocalSet(count)]);
-					});
+					// the items, a meta entry `@name:value` counting none
+					func.instruction(&I::LocalGet(0));
+					s.emit_items_length(func);
+					func.instruction(&I::LocalSet(1));
 
 					if let (Some(counted), Some(count)) =
 						(s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count))
@@ -829,6 +837,44 @@ impl WasmGcEmitter {
 		body(func);
 		self.emit_field(func, cell, 2);
 		Self::emit_list(func, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+	}
+
+	/// `body` for each item of the list node in local `list` (list_items), the item in local `walk.item`; `BrIf(1)` in the
+	/// body ends the walk
+	pub(in crate::wasm_emitter) fn emit_item_walk(
+		&self,
+		func: &mut Function,
+		list: u32,
+		walk: ItemWalk,
+		body: impl FnOnce(&mut Function),
+	) {
+		let list_type = self.type_manager.node_list_type;
+		let field = |field_index| I::StructGet { struct_type_index: list_type, field_index };
+		Self::emit_list(func, &[I::LocalGet(list)]);
+		self.call(func, super::list_dispatch::LIST_ITEMS);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalSet(walk.items), I::I32Const(0), I::LocalSet(walk.index),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(walk.index), I::LocalGet(walk.items), field(0), I::I32GeU, I::BrIf(1),
+				I::LocalGet(walk.items), field(1), I::LocalGet(walk.index), I::ArrayGet(self.type_manager.node_array_type),
+				I::LocalSet(walk.item),
+				I::LocalGet(walk.index), I::I32Const(1), I::I32Add, I::LocalSet(walk.index),
+		]);
+		body(func);
+		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
+	}
+
+	/// The number of items (i64) of the list node on the stack, as list_items finds them
+	pub(in crate::wasm_emitter) fn emit_items_length(&self, func: &mut Function) {
+		self.call(func, super::list_dispatch::LIST_ITEMS);
+		let length = I::StructGet { struct_type_index: self.type_manager.node_list_type, field_index: 0 };
+		Self::emit_list(func, &[length, I::I64ExtendI32U]);
+	}
+
+	/// The locals of an item walk, in the order of ItemWalk::at
+	pub(in crate::wasm_emitter) fn item_walk_locals(&self) -> [ValType; 3] {
+		[self.node_list_type(), ValType::I32, Ref(self.node_ref(true))]
 	}
 
 	/// Push the address (0) of a copy in memory or the byte length (1) of the text in node `local`
