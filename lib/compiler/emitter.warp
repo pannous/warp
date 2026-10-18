@@ -371,6 +371,7 @@ shown_text(value: any) := {
 	if kind == pending { return ["text", value#2] }
 	if kind == "list" { return runtime_call("list_text", [value]) }
 	if kind == "int" { return runtime_call("int_text", [value]) }
+	if kind == "float" { return runtime_call("float_text", [value]) }
 	if kind == "char" { return runtime_call("char_text", [value]) }
 	if kind == "node" { return runtime_call("node_text", [value]) }
 	if kind != "bool" { return refuse("the text of a " + kind) }
