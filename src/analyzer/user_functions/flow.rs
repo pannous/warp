@@ -79,9 +79,6 @@ fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages, held: &
 			let kind = match passed {
 				Some(Kind::Int) => usage().or_else(|| agreed().filter(|kind| *kind != Kind::Empty)),
 				None => usage().or_else(agreed),
-				// given only Nodes of unknown kind, it too keeps what its use suggests (`out(signal)` passing a Node to
-				// the list `clamped_samples(amplitudes)` iterates)
-				Some(Kind::Empty) => usage().or(passed),
 				// passed keys (quoted code `data (n * 1)`) where indexing guessed a list: a Node, which `c#1` indexes as
 				// it is (card alias-indexed-param)
 				Some(Kind::Key) if usages[&key] == Some(Kind::List) => Some(Kind::Empty),
