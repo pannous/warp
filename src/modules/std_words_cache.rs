@@ -83,5 +83,5 @@ fn words_key() -> Option<String> {
 	hasher.update(format!("{}\n{}\n{:?}\n", binary.display(), metadata.len(), metadata.modified().ok()?));
 	STD_MODULES.iter().for_each(|(_, source)| hasher.update(source));
 	hasher.update(std_module(PRELUDE_MODULE).unwrap_or_default());
-	Some(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
+	Some(crate::extensions::hex_text(&hasher.finalize()))
 }

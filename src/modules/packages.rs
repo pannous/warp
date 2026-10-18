@@ -95,10 +95,7 @@ pub fn registry_entries(registry: &str) -> Vec<(String, Result<Registered, Strin
 		.iter()
 		.filter_map(|entry| match entry.drop_meta() {
 			Node::Symbol(name) => Some((name.clone(), Ok(in_default_registry(name)))),
-			Node::Key(key, _, value) => match key.drop_meta() {
-				Node::Symbol(name) => Some((name.clone(), registry_entry(name, value))),
-				_ => None,
-			},
+			Node::Key(key, _, value) => key.symbol_name().map(|name| (name.to_string(), registry_entry(name, value))),
 			_ => None,
 		})
 		.collect()

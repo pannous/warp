@@ -91,7 +91,7 @@ fn key(code: &str) -> Option<String> {
 		hasher.update(format!("{}\n{:?}\n", folder.display(), listing(&folder)));
 	}
 	hasher.update(code);
-	Some(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
+	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
 /// Whether a module found in `folder` lies in a folder the key lists

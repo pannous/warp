@@ -116,8 +116,13 @@ pub(super) fn std_module_words(index: usize) -> &'static [String] {
 	})[index]
 }
 
-fn parsed_words(source: &str) -> Vec<String> {
+/// A standard module's statements, parsed without style hints
+fn parsed_statements(source: &str) -> Vec<Node> {
 	statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+}
+
+fn parsed_words(source: &str) -> Vec<String> {
+	parsed_statements(source)
 		.iter()
 		.filter(|statement| used_module(statement).is_none())
 		.filter_map(name_declared_by)
@@ -248,12 +253,16 @@ pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
 }
 
 pub(super) fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
-	prelude_heads()?.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
+	prelude_head(word).map(|(_, arity, defaults)| (*arity, *defaults))
 }
 
 /// The prelude word `word` names, spelled as the prelude defines it; None for no prelude word
 pub fn prelude_word(word: &str) -> Option<&'static str> {
-	prelude_heads()?.iter().find(|(name, _, _)| name == word).map(|(name, _, _)| name.as_str())
+	prelude_head(word).map(|(name, _, _)| name.as_str())
+}
+
+fn prelude_head(word: &str) -> Option<&'static (String, usize, usize)> {
+	prelude_heads()?.iter().find(|(name, _, _)| name == word)
 }
 
 /// Each prelude word with its number of parameters and of those with a default; None while the prelude is being read
@@ -271,18 +280,13 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		}
 		READING_PRELUDE.set(true);
 		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
-		let has_default = |parameter: &Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));
-		let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+		let parameters = parsed_statements(source)
 			.iter()
 			.filter_map(|statement| match statement.drop_meta() {
-				Node::Key(head, Op::Define, _) => match head.drop_meta() {
-					Node::List(items, _, _) => Some((
-						leftmost_symbol(head)?,
-						items.len() - 1,
-						items[1..].iter().filter(|item| has_default(item)).count(),
-					)),
-					_ => None,
-				},
+				Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
+					let (fewest, most) = head_arities(head);
+					Some((leftmost_symbol(head)?, most, most - fewest))
+				}
 				_ => None,
 			})
 			.collect();
@@ -302,7 +306,7 @@ pub fn prelude_name(word: &str) -> Option<String> {
 /// Only that statement is parsed: markup's lists are read by every program calling a function (is_element_tag)
 pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 	let source = std_module(module).and_then(|source| list_statement(source, list)).unwrap_or_default();
-	statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+	parsed_statements(source)
 		.iter()
 		.find_map(|statement| match statement.drop_meta() {
 			Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {

@@ -268,6 +268,17 @@ pub fn named_or_plural<'a>(names: &[&'a str], word: &str) -> Option<&'a str> {
 		.copied()
 }
 
+/// The bytes as lowercase hexadecimal digits, two per byte
+pub fn hex_text(bytes: &[u8]) -> String {
+	bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// The SHA-256 digest of the bytes in hexadecimal
+pub fn sha256_hex(bytes: &[u8]) -> String {
+	use sha2::Digest;
+	hex_text(&sha2::Sha256::digest(bytes))
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
