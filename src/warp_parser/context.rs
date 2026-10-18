@@ -41,6 +41,13 @@ pub(crate) struct Context {
 	pub(crate) in_capture: bool,
 }
 
+impl Context {
+	/// The head of `for`, `if` or `while`: a block after it is the body, never an argument
+	pub(crate) fn in_header(&self) -> bool {
+		self.in_for_header || self.equals_compares
+	}
+}
+
 impl WarpParser {
 	/// `parse` run in `context`, the enclosing context back afterwards
 	pub(crate) fn within<T>(&mut self, context: Context, parse: impl FnOnce(&mut Self) -> T) -> T {
