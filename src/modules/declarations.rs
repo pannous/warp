@@ -39,9 +39,9 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 		Node::Type { .. } => true,
 		Node::Key(_, Op::Assign | Op::Define, _) => true,
 		Node::Key(scope, Op::Colon, _) => scope.symbol_name().is_some_and(is_declaration_keyword),
-		Node::List(items, _, _) if items.len() >= 2 => {
-			items[0].symbol_name().is_some_and(|keyword| is_function_keyword(keyword) || is_declaration_keyword(keyword))
-		}
+		Node::List(items, _, _) if items.len() >= 2 => items[0]
+			.symbol_name()
+			.is_some_and(|keyword| is_function_keyword(keyword) || is_declaration_keyword(keyword)),
 		_ => false,
 	}
 }

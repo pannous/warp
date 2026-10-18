@@ -274,6 +274,7 @@ pub fn hex_text(bytes: &[u8]) -> String {
 }
 
 /// The SHA-256 digest of the bytes in hexadecimal
+#[cfg(feature = "native")]
 pub fn sha256_hex(bytes: &[u8]) -> String {
 	use sha2::Digest;
 	hex_text(&sha2::Sha256::digest(bytes))
