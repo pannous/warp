@@ -11,7 +11,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
-		let (text, text_type) = (self.text_ref_nullable(), self.type_manager.text_type);
+		let (text, text_type) = (self.text_ref(), self.type_manager.text_type);
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable];
 		locals.extend([ValType::I32; 8]);
@@ -160,47 +160,43 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let (text, text_type) = (self.text_ref_nullable(), self.type_manager.text_type);
+		let (text, text_type) = (self.text_ref(), self.type_manager.text_type);
 		let mut locals = vec![ValType::I32; 7];
 		locals[3] = text;
 		locals.push(text);
 		self.runtime_function(TEXT_QUOTED, vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (pointer, end, capacity, destination, out, byte, quote, bytes) = (1, 2, 3, 4, 5, 6, 7, 8);
-			let write = |f: &mut Function, value: I<'static>| {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(destination), I::LocalGet(out), value, I::ArraySet(text_type),
-					I::LocalGet(out), I32Const(1), I::I32Add, I::LocalSet(out),
-				]);
-			};
 			s.emit_text_bounds(f, (bytes, pointer, end));
 			Self::emit_list(f, &[I32Const(CHARACTER_QUOTE_BYTE), I32Const(QUOTE_BYTE)]);
 			s.emit_is_one_character(f, (bytes, pointer, end), byte);
-			Self::emit_list(f, &[I::Select, I::LocalSet(quote)]);
 			// at worst every byte is escaped, plus the two quotes
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
+				I::Select, I::LocalSet(quote),
 				I::LocalGet(end), I32Const(2), I::I32Mul, I32Const(2), I::I32Add, I::ArrayNewDefault(text_type),
 				I::LocalSet(destination),
+				// from the opening quote at -1 to the closing one at end; a byte written after a backslash that stays
+				// only when it escapes: one write site each keeps the machine code small (executable size)
+				I32Const(-1), I::LocalSet(pointer),
+				I::Loop(BlockType::Empty),
+					I::LocalGet(pointer), I32Const(0), I::I32GeS, I::LocalGet(pointer), I::LocalGet(end), I::I32LtS,
+					I::I32And, I::LocalTee(capacity), I::If(BlockType::Result(ValType::I32)),
+						I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(text_type),
+					I::Else,
+						I::LocalGet(quote),
+					I::End,
+					I::LocalSet(byte),
+					I::LocalGet(destination), I::LocalGet(out), I32Const(BACKSLASH_BYTE), I::ArraySet(text_type),
+					I::LocalGet(out), I::LocalGet(capacity), I::LocalGet(byte), I::LocalGet(quote), I::I32Eq,
+					I::LocalGet(byte), I32Const(BACKSLASH_BYTE), I::I32Eq, I::I32Or, I::I32And, I::I32Add,
+					I::LocalTee(out),
+					I::LocalGet(destination), I::LocalGet(out), I::LocalGet(byte), I::ArraySet(text_type),
+					I32Const(1), I::I32Add, I::LocalSet(out),
+					I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalTee(pointer), I::LocalGet(end), I::I32LeS,
+					I::BrIf(0),
+				I::End,
+				I32Const(0), I::LocalSet(capacity),
 			]);
-			write(f, I::LocalGet(quote));
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-						I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
-						I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(text_type), I::LocalTee(byte), I::LocalGet(quote), I::I32Eq,
-						I::LocalGet(byte), I32Const(BACKSLASH_BYTE), I::I32Eq, I::I32Or, I::If(BlockType::Empty),
-			]);
-			write(f, I32Const(BACKSLASH_BYTE));
-			f.instruction(&I::End);
-			write(f, I::LocalGet(byte));
-			Self::emit_list(
-				f,
-				&[I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer), I::Br(0), I::End, I::End],
-			);
-			write(f, I::LocalGet(quote));
-			Self::emit_list(f, &[I32Const(0), I::LocalSet(capacity)]);
 			s.emit_text_piece(f, (destination, capacity, out));
 		});
 	}
@@ -287,7 +283,7 @@ impl WasmGcEmitter {
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
 		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
-		let (text, text_type) = (self.text_ref_nullable(), self.type_manager.text_type);
+		let (text, text_type) = (self.text_ref(), self.type_manager.text_type);
 		locals.extend([text, text]);
 		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		let radix_texts = self.radix_text_calls();

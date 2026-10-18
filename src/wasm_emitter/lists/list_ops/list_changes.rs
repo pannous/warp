@@ -496,7 +496,7 @@ impl WasmGcEmitter {
 		// text_with_char_at(text, index, value): a fresh copy with the grapheme at index replaced by the UTF-8 of value
 		let text_with_char_at = next_index(self);
 		let params = vec![node_ref, ValType::I64, ValType::I64];
-		let text = self.text_ref_nullable();
+		let text = self.text_ref();
 		let text_type = self.type_manager.text_type;
 		let mut locals = vec![ValType::I32; 8];
 		locals[6] = text;
@@ -532,7 +532,7 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 0);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(copy), I::RefAsNonNull, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+				I::LocalGet(copy), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
 			]);
 		});
 

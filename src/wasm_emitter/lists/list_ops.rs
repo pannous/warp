@@ -447,7 +447,7 @@ impl WasmGcEmitter {
 			crate::type_tests::NODE_TYPE_NAME,
 			vec![Ref(node_ref)],
 			vec![Ref(node_ref)],
-			vec![ValType::I64, ValType::I32, ValType::I32, ValType::I32, Ref(self.node_ref(true)), self.text_ref_nullable()],
+			vec![ValType::I64, ValType::I32, ValType::I32, ValType::I32, Ref(self.node_ref(true)), self.text_ref()],
 			|s, f| {
 				// a function value: its kind and signature (function_type is ø for any other value)
 				if s.types_functions() {
@@ -811,7 +811,7 @@ impl WasmGcEmitter {
 	fn emit_string_char_at(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
 		let params = vec![node_ref, ValType::I64];
-		let locals = vec![ValType::I32, ValType::I32, ValType::I32, self.text_ref_nullable()];
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, self.text_ref()];
 		self.runtime_function("string_char_at", params, vec![node_ref], locals, |s, f| {
 			let (start, end, stop, bytes) = (2, 3, 4, 5);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
@@ -861,7 +861,7 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let (int, long) = (ValType::I32, ValType::I64);
 		let params = vec![node_ref, long, long];
-		let locals = vec![int, int, int, long, self.text_ref_nullable()];
+		let locals = vec![int, int, int, long, self.text_ref()];
 		self.runtime_function(TEXT_SLICE, params, vec![node_ref], locals, |s, f| {
 			let (from, to, start, end, stop, count, bytes) = (1, 2, 3, 4, 5, 6, 7);
 			s.emit_text_bounds(f, (bytes, start, end));

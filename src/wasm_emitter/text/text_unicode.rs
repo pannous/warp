@@ -107,7 +107,7 @@ impl WasmGcEmitter {
 		let case_table = cached_case_table(mapping);
 		let entries = (case_table.len() as u32 / ENTRY_BYTES) as i32;
 		let table = self.allocate_bytes(name, case_table) as i32;
-		let (node_ref, text) = (Ref(self.node_ref(false)), self.text_ref_nullable());
+		let (node_ref, text) = (Ref(self.node_ref(false)), self.text_ref());
 		let text_type = self.type_manager.text_type;
 		let mut locals = vec![ValType::I32; 16];
 		locals[3] = text;
@@ -230,7 +230,7 @@ impl WasmGcEmitter {
 		if !["list_reverse", "text_reverse", "text_split"].iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
-		let (node_ref, text) = (Ref(self.node_ref(false)), self.text_ref_nullable());
+		let (node_ref, text) = (Ref(self.node_ref(false)), self.text_ref());
 		let text_type = self.type_manager.text_type;
 		let locals = vec![ValType::I32, ValType::I32, text, ValType::I32, ValType::I32, text];
 		self.runtime_function("text_reverse", vec![node_ref], vec![node_ref], locals, |s, f| {
@@ -256,7 +256,7 @@ impl WasmGcEmitter {
 						I::Br(0),
 					I::End,
 				I::End,
-				I::LocalGet(destination), I::RefAsNonNull,
+				I::LocalGet(destination),
 			]);
 			s.call(f, crate::wasm_emitter::NEW_TEXT_OF);
 		});
@@ -278,7 +278,7 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable];
 		locals.extend([ValType::I32; 3]);
-		locals.push(self.text_ref_nullable());
+		locals.push(self.text_ref());
 		self.runtime_function(name, vec![node_ref], vec![node_ref], locals, |s, f| {
 			// code_point holds the grapheme's end when walking by grapheme
 			let (characters, pointer, end, code_point, bytes) = (1, 2, 3, 4, 5);

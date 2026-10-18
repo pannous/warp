@@ -54,7 +54,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64, self.text_ref_nullable()];
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64, self.text_ref()];
 		let text_type = self.type_manager.text_type;
 		self.runtime_function(TEXT_AS_INT, vec![node_ref], vec![ValType::I64], locals, |s, f| {
 			let (pointer, end, negative, digit, value, bytes) = (1, 2, 3, 4, 5, 6);
@@ -357,7 +357,7 @@ impl WasmGcEmitter {
 		locals.push(ValType::F64);
 		locals.extend([ValType::I32; 4]);
 		locals.push(ValType::F64);
-		locals.push(self.text_ref_nullable());
+		locals.push(self.text_ref());
 		let text_type = self.type_manager.text_type;
 		self.runtime_function(TEXT_AS_FLOAT, vec![node_ref], vec![ValType::F64], locals, |s, f| {
 			let (pointer, end, negative, digit, value, scale_digits, digits, exponent, exponent_negative, power) =

@@ -5,7 +5,7 @@ use super::*;
 impl WasmGcEmitter {
 	/// utf8_next and utf8_decode: every reader of text code point by code point steps with these two
 	pub(super) fn emit_utf8_steps(&mut self) {
-		let (int, bytes_type) = (ValType::I32, self.text_ref_nullable());
+		let (int, bytes_type) = (ValType::I32, self.text_ref());
 		let text_type = self.type_manager.text_type;
 		let params = vec![bytes_type, int, int];
 		let (bytes, at, end) = (0, 1, 2);
@@ -44,7 +44,7 @@ impl WasmGcEmitter {
 	/// `#`, `count`, `length` and `.graphemes` user-perceived characters (grapheme clusters, see GRAPHEME_EXTEND)
 	pub(super) fn emit_text_units(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
-		let (int, long, bytes_type) = (ValType::I32, ValType::I64, self.text_ref_nullable());
+		let (int, long, bytes_type) = (ValType::I32, ValType::I64, self.text_ref());
 		let text_type = self.type_manager.text_type;
 
 		// grapheme_end(bytes, at, end): past the grapheme cluster starting at `at`, like strings::grapheme_clusters
@@ -517,15 +517,14 @@ impl WasmGcEmitter {
 				I::LocalGet(joined), I::RefAsNonNull,
 			]);
 		});
-		let nullable_text = self.text_ref_nullable();
-		self.runtime_function(TEXT_PIECE, vec![nullable_text, int, int], vec![text], vec![nullable_text], |_, f| {
+		self.runtime_function(TEXT_PIECE, vec![text, int, int], vec![text], vec![text], |_, f| {
 			let (bytes, start, length, piece) = (0, 1, 2, 3);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(length), I::ArrayNewDefault(text_type), I::LocalTee(piece),
 				I32Const(0), I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(length),
 				I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
-				I::LocalGet(piece), I::RefAsNonNull,
+				I::LocalGet(piece),
 			]);
 		});
 		self.emit_text_bytes_equal();

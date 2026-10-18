@@ -570,7 +570,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64, self.text_ref_nullable()];
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64, self.text_ref()];
 		self.runtime_function(TEXT_AS_NUMBER, vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (start, end, slash, bits, bytes) = (1, 2, 3, 4, 5);
 			// a number (any node but a text or character) as it is
