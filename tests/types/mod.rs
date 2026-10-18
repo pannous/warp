@@ -37,6 +37,7 @@ mod test_class_method_changes;
 mod test_class_methods;
 mod test_class_mixins;
 mod test_class_operators;
+mod test_class_index_operator;
 mod test_class_properties;
 mod test_class_witnesses;
 mod test_code_type;
