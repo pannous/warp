@@ -167,9 +167,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::references::lower,
 	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call
 	crate::lowering::serve::lower,
-	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
-	// reads `p.note{…}` as a tag
-	crate::lowering::style_rules::lower,
 	// `xs map f`: an iteration word between a list and its function is the method call (lambdas.rs)
 	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
@@ -410,8 +407,11 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 		.flat_map(|phase| phase.iter())
 		.enumerate()
 		.filter(|(_, pass)| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
+		// `style(sheet: data)` of lib/markup.warp: its data parameters typed any, as a program's (typed_block_arguments.rs)
 		.fold(
-			crate::lowering::for_loop::headers::lower(crate::modules::rewrites::lower(module)),
+			crate::lowering::typed_block_arguments::lower(crate::lowering::for_loop::headers::lower(
+				crate::modules::rewrites::lower(module),
+			)),
 			|module, (index, pass)| {
 				crate::compiler::phase_times::timed("module source passes", || {
 					crate::compiler::phase_times::timed_as(|| format!("module source pass {index}"), || pass(module))

@@ -2,6 +2,8 @@
 use super::*;
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
+/// `sheet: data` in a definition's head
+const DATA_PARAMETER: &str = ": data";
 pub(crate) const STD_MODULES: [(&str, &str); 30] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
@@ -141,6 +143,28 @@ pub(crate) fn prelude_aliases() -> &'static [(String, String)] {
 		};
 		std_module(PRELUDE_MODULE).unwrap_or_default().lines().filter_map(alias).collect()
 	})
+}
+
+/// The standard modules' functions with a parameter typed data, each as its module and its definition's line
+/// (`style(sheet: data) := …` of lib/markup.warp): a tag or call of one takes its argument as written and needs no `use`
+/// (lowering/definitions/typed_block_arguments.rs, loader.rs implicit_std_modules)
+pub fn std_data_functions() -> &'static [(&'static str, &'static str)] {
+	static FUNCTIONS: std::sync::OnceLock<Vec<(&str, &str)>> = std::sync::OnceLock::new();
+	FUNCTIONS.get_or_init(|| {
+		let defines_data_function = |line: &&str| {
+			let head = line.split(":=").next().unwrap_or_default();
+			line.contains(":=") && head.contains('(') && head.contains(DATA_PARAMETER)
+		};
+		STD_MODULES
+			.iter()
+			.flat_map(|(module, source)| source.lines().filter(defines_data_function).map(|line| (*module, line)))
+			.collect()
+	})
+}
+
+/// The name a standard function's definition line defines: `style` of `style(sheet: data) := …`
+pub fn defined_function_name(line: &str) -> &str {
+	line.split('(').next().unwrap_or_default().trim()
 }
 
 /// The names the standard modules define with parameters (`ls(folder:any = ".") := …`), read from their text: the

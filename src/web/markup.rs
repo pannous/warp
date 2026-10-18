@@ -301,12 +301,19 @@ fn is_literal(node: &Node) -> bool {
 	}
 }
 
-/// `style{ ".card": { … } }`: a style sheet among an element's items (not the inline `style: { color: … }`)
+/// `style{ ".card": { … } }`: a style sheet among an element's items (not the inline `style: { color: … }`), also as
+/// the call of lib/markup.warp's style it becomes (lowering/definitions/typed_block_arguments.rs)
 pub fn is_style_sheet(node: &Node) -> bool {
-	let Node::Key(name, Op::Colon, value) = node.drop_meta() else {
-		return false;
-	};
-	name.drop_meta().name() == STYLE_WORD && !is_declarations(value)
+	match node.drop_meta() {
+		Node::Key(name, Op::Colon, value) => name.drop_meta().name() == STYLE_WORD && !is_declarations(value),
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[callee, sheet] if callee.is_symbol(STYLE_WORD) => {
+				crate::lowering::blocks::quoted_data(sheet).is_some_and(|sheet| !is_declarations(sheet))
+			}
+			_ => false,
+		},
+		_ => false,
+	}
 }
 
 /// `{ color: theme padding: 8 }`: CSS properties with plain values
