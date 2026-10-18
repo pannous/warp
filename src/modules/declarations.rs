@@ -38,12 +38,10 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Type { .. } => true,
 		Node::Key(_, Op::Assign | Op::Define, _) => true,
-		Node::Key(scope, Op::Colon, _) => {
-			matches!(scope.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword))
-		}
-		Node::List(items, _, _) if items.len() >= 2 => {
-			matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword) || is_declaration_keyword(keyword))
-		}
+		Node::Key(scope, Op::Colon, _) => scope.symbol_name().is_some_and(is_declaration_keyword),
+		Node::List(items, _, _) if items.len() >= 2 => items[0]
+			.symbol_name()
+			.is_some_and(|keyword| is_function_keyword(keyword) || is_declaration_keyword(keyword)),
 		_ => false,
 	}
 }
@@ -57,7 +55,7 @@ pub(crate) fn name_declared_by(statement: &Node) -> Option<String> {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
 		// `global x = 0`, as the parser reads it: `global: (x = 0)`
-		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => {
+		Node::Key(keyword, Op::Colon, declared) if keyword.symbol_name().is_some_and(is_declaration_keyword) => {
 			name_declared_by(declared)
 		}
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
@@ -122,7 +120,7 @@ pub(crate) fn program_bound_names(node: &Node, names: &mut HashSet<String>) {
 		}
 		Node::List(items, _, _) => {
 			if let [keyword, bound, ..] = items.as_slice() {
-				if matches!(keyword.drop_meta(), Node::Symbol(word) if binds_names(word)) {
+				if keyword.symbol_name().is_some_and(binds_names) {
 					names.extend(mentioned_names(std::slice::from_ref(header(bound))));
 				}
 			}

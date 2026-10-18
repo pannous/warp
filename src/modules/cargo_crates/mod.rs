@@ -109,7 +109,7 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 	let url = asset["browser_download_url"].as_str().unwrap_or_default();
 	let expected = asset["digest"].as_str().and_then(|digest| digest.strip_prefix(SHA256_PREFIX));
 	let bytes = download_bytes(url)?;
-	let actual = hex_digest(&bytes);
+	let actual = crate::extensions::sha256_hex(&bytes);
 	if expected != Some(actual.as_str()) {
 		return Err(format!("{url}: SHA-256 {actual} is not the published {expected:?}"));
 	}
@@ -117,11 +117,6 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 	write_atomically(&path, &bytes)?;
 	eprintln!("use cargo {name}: downloaded the prebuilt component of {name} {version}");
 	Ok(path)
-}
-
-fn hex_digest(bytes: &[u8]) -> String {
-	use sha2::Digest;
-	sha2::Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// A wrapper that failed leaves the workspace (an unresolvable dependency would break every other wrapper's build),

@@ -250,27 +250,15 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// index_out_of_range_in(list, index): index_out_of_range_of with the count of the list's cells
+	/// index_out_of_range_in(list, index): index_out_of_range_of with the count of the list's items
 	pub(super) fn emit_index_out_of_range_in(&mut self) {
 		self.ensure_index_out_of_range_of();
-		let (node_ref, node_ref_nullable) = (self.node_ref(false), self.node_ref(true));
-		self.runtime_function(
-			INDEX_OUT_OF_RANGE_IN,
-			vec![Ref(node_ref), ValType::I64],
-			vec![],
-			vec![ValType::I64, Ref(node_ref_nullable)],
-			|s, f| {
-				let (count, current) = (2, 3);
-				s.emit_field(f, 0, 0);
-				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Ne);
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0), I::LocalSet(current)]);
-				s.emit_cell_walk(f, current, |f| {
-					Self::emit_list(f, &[I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count)])
-				});
-				Self::emit_list(f, &[I::End, I::LocalGet(1), I::LocalGet(count)]);
-				s.call(f, INDEX_OUT_OF_RANGE_OF);
-			},
-		);
+		let node_ref = self.node_ref(false);
+		self.runtime_function(INDEX_OUT_OF_RANGE_IN, vec![Ref(node_ref), ValType::I64], vec![], vec![], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(0)]);
+			s.emit_items_length(f);
+			s.call(f, INDEX_OUT_OF_RANGE_OF);
+		});
 	}
 
 	/// Fail with index_out_of_range_in when the i32 condition on the stack is true (list local 0, index asked for `asked`)

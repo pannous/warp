@@ -241,9 +241,13 @@ impl WasmGcEmitter {
 				I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
 					I::I64Const(Kind::Symbol as i64),
 			]);
-			s.emit_field(f, name, 1);
-			s.emit_field(f, name, 2);
-			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(name), I::RefAsNonNull, I::End]);
+			s.emit_text_bytes(f, name); // a rope (text_append) flattened, else only its last piece names the key
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::RefNull(HeapType::Concrete(node)), I::StructNew(node),
+				I::Else, I::LocalGet(name), I::RefAsNonNull,
+				I::End,
+			]);
 		});
 		self.runtime_function(
 			"map_entry_has_key",
@@ -647,9 +651,9 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let nullable = Ref(self.node_ref(true));
 		let has_struct_body = !self.ctx.type_registry.types().is_empty();
-		let locals = vec![nullable, nullable, nullable, nullable, nullable, nullable];
+		let locals = [vec![nullable; 5], self.item_walk_locals().to_vec()].concat();
 		self.runtime_function(ELEMENTS_FIELD, vec![node_ref, node_ref], vec![nullable], locals, |s, f| {
-			let (cell, element, value, head, last, made) = (2, 3, 4, 5, 6, 7);
+			let (element, value, head, last, made, walk) = (2, 3, 4, 5, 6, ItemWalk::at(7));
 			let null = I::RefNull(HeapType::Concrete(node));
 			// only a list has elements, a `{…}` map has entries; an empty list has no field to show
 			s.emit_field(f, 0, 0);
@@ -666,11 +670,9 @@ impl WasmGcEmitter {
 				I::RefIsNull, I::I32Or, I::If(BlockType::Empty),
 					null.clone(), I::Return,
 				I::End,
-				I::LocalGet(0), I::LocalSet(cell),
 			]);
-			s.emit_cell_walk(f, cell, |f| {
-				s.emit_field(f, cell, 1);
-				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node))]);
+			s.emit_item_walk(f, 0, walk, |f| {
+				Self::emit_list(f, &[I::LocalGet(walk.item), I::RefAsNonNull]);
 				if has_struct_body {
 					s.call(f, STRUCT_BODY);
 				}
@@ -775,19 +777,15 @@ impl WasmGcEmitter {
 			MAP_COLUMN_CELLS,
 			vec![nullable, ValType::I32],
 			vec![nullable],
-			vec![nullable, nullable, nullable],
+			[vec![nullable; 3], self.item_walk_locals().to_vec()].concat(),
 			|s, f| {
-				let (cell, part, head, last, made) = (0, 1, 2, 3, 4);
-				s.emit_cell_walk(f, cell, |f| {
-					// a meta entry `@name:value` is no key, value or entry of the map
-					s.emit_field(f, cell, 1);
-					s.call(f, super::super::super::reflection::equality::IS_META_ENTRY);
-					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
-					s.emit_field(f, cell, 1);
-					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
+				let (map, part, head, last, made, walk) = (0, 1, 2, 3, 4, ItemWalk::at(5));
+				// a meta entry `@name:value` is no key, value or entry of the map: list_items ends before them
+				s.emit_item_walk(f, map, walk, |f| {
+					Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(walk.item), I::RefAsNonNull]);
+					f.instruction(&I::LocalGet(part));
 					s.call(f, MAP_PART);
 					s.emit_appended_cell(f, CellAppend { made, head, last });
-					f.instruction(&I::End);
 				});
 				f.instruction(&I::LocalGet(head));
 			},
@@ -839,9 +837,9 @@ impl WasmGcEmitter {
 				name,
 				vec![node_ref, node_ref],
 				vec![node_ref],
-				vec![nullable, ValType::I64, ValType::I64],
+				[vec![ValType::I64; 2], self.item_walk_locals().to_vec()].concat(),
 				|s, f| {
-					let (wanted, cell, kind, position) = (1, 2, 3, 4);
+					let (wanted, kind, position, walk) = (1, 2, 3, ItemWalk::at(4));
 					let answer = |f: &mut Function, s: &Self, value: i64| {
 						f.instruction(&if positional && value == 1 {
 							I::LocalGet(position)
@@ -886,11 +884,9 @@ impl WasmGcEmitter {
 						I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And,
 					]);
 					s.emit_fail_if(f, "not_a_list");
-					Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell)]);
-					s.emit_cell_walk(f, cell, |f| {
+					s.emit_item_walk(f, 0, walk, |f| {
 						Self::emit_list(f, &[I::LocalGet(position), I::I64Const(1), I::I64Add, I::LocalSet(position)]);
-						s.emit_field(f, cell, 1);
-						f.instruction(&I::LocalGet(wanted));
+						Self::emit_list(f, &[I::LocalGet(walk.item), I::LocalGet(wanted)]);
 						s.call(f, VALUES_EQUAL);
 						f.instruction(&I::If(BlockType::Empty));
 						answer(f, s, 1);

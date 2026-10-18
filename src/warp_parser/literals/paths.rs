@@ -3,7 +3,7 @@ use super::*;
 
 /// A text written as a path without quotes (`~/notes.txt`, `./a.wav`, `/tmp`): a call of a word with a method for the
 /// class Path passes it as a Path (lib/shell.warp, `sort ./names.txt`; traits generics.rs path_arguments)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PathLiteral;
 
 /// The node is a path written without quotes

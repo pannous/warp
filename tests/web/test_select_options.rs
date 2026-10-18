@@ -22,7 +22,7 @@ fn a_list_gives_the_options() {
 #[test]
 fn a_list_after_the_bound_variable_is_no_part_of_it() {
 	assert_eq!(
-		html_of("fruit = \"pear\"\nselect{ aria-label: \"fruit\" bind: fruit [\"apple\" \"pear\"] }"),
+		html_of("fruit = \"pear\"\nselect{ aria-label: \"fruit\" bind: fruit; [\"apple\" \"pear\"] }"),
 		"<select aria-label=\"fruit\" value=\"pear\" data-warp-input=\"1\"><option>apple</option><option selected>pear</option></select>"
 	);
 }

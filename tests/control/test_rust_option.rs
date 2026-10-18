@@ -13,6 +13,7 @@ fn error_text(code: &str) -> String {
 }
 
 #[test]
+#[ignore = "dropped: rust-cleanup-drops: Rust's Option forms (Some, if let Some, unwrap_or, is_some); warp writes o != ø, o ?? d"]
 fn some_is_the_value_none_is_nothing() {
 	is!("let o = Some(3); o.unwrap()", 3);
 	is!("let o: Option<i32> = None; o.unwrap_or(0)", 0);
@@ -24,6 +25,7 @@ fn some_is_the_value_none_is_nothing() {
 }
 
 #[test]
+#[ignore = "dropped: rust-cleanup-drops: Rust's Option forms (Some, if let Some, unwrap_or, is_some); warp writes o != ø, o ?? d"]
 fn if_let_some_binds_the_value() {
 	is!("let o = Some(3); if let Some(v) = o { v * 2 } else { 0 }", 6);
 	is!("let o: Option<i32> = None; if let Some(v) = o { v * 2 } else { 0 }", 0);
@@ -31,6 +33,7 @@ fn if_let_some_binds_the_value() {
 }
 
 #[test]
+#[ignore = "dropped: rust-cleanup-drops: Rust's Option forms (Some, if let Some, unwrap_or, is_some); warp writes o != ø, o ?? d"]
 fn a_match_of_some_and_none() {
 	is!("let o = Some(3); match o { Some(v) => v + 1, None => 0 }", 4);
 	is!("let o: Option<i32> = None; match o { Some(v) => v + 1, None => 0 }", 0);
@@ -38,6 +41,7 @@ fn a_match_of_some_and_none() {
 }
 
 #[test]
+#[ignore = "dropped: rust-cleanup-drops: Rust's Option forms (Some, if let Some, unwrap_or, is_some); warp writes o != ø, o ?? d"]
 fn a_function_returns_an_option() {
 	is!("fn half(x: i32) { if x % 2 == 0 { Some(x / 2) } else { None } } half(4).unwrap_or(0)", 2);
 	is!("fn half(x: i32) { if x % 2 == 0 { Some(x / 2) } else { None } } half(3).unwrap_or(0)", 0);
@@ -56,7 +60,12 @@ fn loop_runs_until_break() {
 #[test]
 fn a_programs_own_option_method_keeps_its_meaning() {
 	is!("expect(x, y) := x + y; o = 3; o.expect(5)", 8);
-	is!("unwrap_or(x, y) := x * y; o = Some(3); o.unwrap_or(5)", 15);
 	// a sum type's own Some is a class with a payload field
 	is!("type Option[T] = Some(T) | None; s = Some(4); s#1 + s.value", 8);
+}
+
+#[test]
+#[ignore = "dropped: rust-cleanup-drops: Rust's Option forms (Some, if let Some, unwrap_or, is_some); warp writes o != ø, o ?? d"]
+fn a_programs_own_unwrap_or_beside_a_rust_some() {
+	is!("unwrap_or(x, y) := x * y; o = Some(3); o.unwrap_or(5)", 15);
 }

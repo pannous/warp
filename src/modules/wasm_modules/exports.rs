@@ -449,20 +449,21 @@ pub(crate) fn node_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encod
 		.iter()
 		.map(|value_type| match value_type {
 			wasmparser::ValType::Ref(_) => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
-			number => number_types(std::slice::from_ref(number)).map(|mut types| types.remove(0)),
+			number => number_type(number),
 		})
 		.collect()
 }
 
 pub(crate) fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValType>> {
-	types
-		.iter()
-		.map(|value_type| match value_type {
-			wasmparser::ValType::I32 => Some(wasm_encoder::ValType::I32),
-			wasmparser::ValType::I64 => Some(wasm_encoder::ValType::I64),
-			wasmparser::ValType::F32 => Some(wasm_encoder::ValType::F32),
-			wasmparser::ValType::F64 => Some(wasm_encoder::ValType::F64),
-			_ => None,
-		})
-		.collect()
+	types.iter().map(number_type).collect()
+}
+
+fn number_type(value_type: &wasmparser::ValType) -> Option<wasm_encoder::ValType> {
+	match value_type {
+		wasmparser::ValType::I32 => Some(wasm_encoder::ValType::I32),
+		wasmparser::ValType::I64 => Some(wasm_encoder::ValType::I64),
+		wasmparser::ValType::F32 => Some(wasm_encoder::ValType::F32),
+		wasmparser::ValType::F64 => Some(wasm_encoder::ValType::F64),
+		_ => None,
+	}
 }

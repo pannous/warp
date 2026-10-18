@@ -1,6 +1,7 @@
 //! Lists: bracketed groups, separators and grouping by them, signed numbers starting a list, arrow bodies in lists
 use super::*;
 use crate::lowering::nodes::is_block;
+use crate::warp_parser::context::Context;
 
 /// A statement of these Rust items ends at its closing `}`: `impl P {…} P { x: 1 }.f()` is two statements
 const ITEM_WORDS: [&str; 4] = ["struct", "enum", "impl", "trait"];
@@ -33,7 +34,7 @@ impl WarpParser {
 		if self.signed_list_element == Some(self.pos) {
 			return Ok(true); // answered for the operand inside
 		}
-		if self.in_spaced_list && self.prev_char().is_whitespace() && self.sign_glued_to_operand() {
+		if self.context.in_spaced_list && self.prev_char().is_whitespace() && self.sign_glued_to_operand() {
 			self.signed_list_element = Some(self.pos);
 			return Ok(true);
 		}
@@ -88,8 +89,7 @@ impl WarpParser {
 			'<' => ('>', Bracket::Round),
 			_ => panic!("Invalid bracket: {}", open),
 		};
-		let start = self.get_position();
-		let outer_start = std::mem::replace(&mut self.group_start, start);
+		let group_start = self.get_position();
 		// `def area(w, h) { w /h }`: the head's parameters are in scope inside its block (card path-parameter-scope)
 		let outer_scope = self.parameters_in_scope.len();
 		if bracket_type == Bracket::Curly {
@@ -97,18 +97,17 @@ impl WarpParser {
 			self.parameters_in_scope.extend(parameters);
 		}
 		self.advance(); // skip opening bracket
-		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
-																		 // `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
-		let inner_header = self.in_for_header && bracket_type == Bracket::Round;
-		let outer_header = std::mem::replace(&mut self.in_for_header, inner_header);
-		let spaced_list = bracket_type == Bracket::Square && !self.group_holds_comma();
-		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, spaced_list);
-		let list =
-			self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
+		let group = Context {
+			group_start,
+			// a block is not the condition
+			equals_compares: self.context.equals_compares && bracket_type != Bracket::Curly,
+			// `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
+			in_for_header: self.context.in_for_header && bracket_type == Bracket::Round,
+			in_spaced_list: bracket_type == Bracket::Square && !self.group_holds_comma(),
+			..self.context
+		};
+		let list = self.within(group, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
 		self.parameters_in_scope.truncate(outer_scope);
-		self.in_spaced_list = outer_spaced_list;
-		self.in_for_header = outer_header;
-		self.group_start = outer_start;
 		list
 	}
 
@@ -127,14 +126,14 @@ impl WarpParser {
 			let (had_newline, line_indent) = self.skip_whitespace();
 
 			// Check for dedent - exit this block if we're back to lower indent
-			if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
+			if had_newline && line_indent < self.context.base_indent && bracket == Bracket::None {
 				break;
 			}
 
 			// Check for end condition (also check for end-of-input to avoid infinite loop)
 			let ch = self.current_char();
 			if let Some(closer) = close.filter(|&closer| ch != closer && matches!(ch, ')' | ']' | '}')) {
-				let (line, column) = self.group_start;
+				let (line, column) = self.context.group_start;
 				let message = format!("`{ch}` closes the group opened at {line}:{column}, which needs `{closer}`");
 				let at = self.get_position();
 				self.advance();
@@ -143,7 +142,7 @@ impl WarpParser {
 			let at_end = self.at_group_end(close);
 			if at_end {
 				if let Some(closer) = close.filter(|_| ch == '\0') {
-					let (line, column) = self.group_start;
+					let (line, column) = self.context.group_start;
 					let message = format!(
 						"`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input"
 					);
@@ -156,7 +155,7 @@ impl WarpParser {
 			}
 			let stray_closer = close.is_none() && matches!(ch, ')' | ']' | '}');
 			// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
-			if stray_closer && self.group_start != (0, 0) {
+			if stray_closer && self.context.group_start != (0, 0) {
 				break;
 			}
 
@@ -168,12 +167,10 @@ impl WarpParser {
 				.map_or(0, |last| last + 1);
 			let in_command =
 				items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(_)));
-			let outer_command = std::mem::replace(&mut self.in_command, in_command);
 			// `square xs |> sum` is `sum(square xs)`: the call of a function on its one argument is the piped value
 			let calls_function = in_command
 				&& items_with_seps.len() == statement_start + 1
 				&& matches!(items_with_seps[statement_start].0.drop_meta(), Symbol(name) if crate::type_name_matching::names_a_function(name));
-			let outer_pipe = std::mem::replace(&mut self.pipe_takes_call, calls_function);
 			// `ul { li: "a" li: "b" }`: a block after a name and a blank is that tag's block
 			self.tag_block = ch == '{'
 				&& matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
@@ -182,11 +179,9 @@ impl WarpParser {
 				self.advance();
 				error(&format!("`{ch}` closes no group"))
 			} else {
-				self.parse_value()
+				self.within(Context { in_command, pipe_takes_call: calls_function, ..self.context }, Self::parse_value)
 			};
 			self.tag_block = false;
-			self.pipe_takes_call = outer_pipe;
-			self.in_command = outer_command;
 			let item = if calls_function && {
 				self.skip_spaces_and_inline_comments();
 				self.at_pipeline()
@@ -231,12 +226,11 @@ impl WarpParser {
 			self.pending_comment = comment;
 
 			// Handle indentation-based blocks
-			let item = if had_newline && line_indent > self.base_indent && bracket == Bracket::None {
+			let item = if had_newline && line_indent > self.context.base_indent && bracket == Bracket::None {
 				// Indented block follows - parse it as body of current item
-				let old_indent = self.base_indent;
-				self.base_indent = line_indent;
-				let body = self.parse_list_with_separators(None, Bracket::None);
-				self.base_indent = old_indent;
+				let body = self.within(Context { base_indent: line_indent, ..self.context }, |parser| {
+					parser.parse_list_with_separators(None, Bracket::None)
+				});
 				// Combine item with indented body as Key; a call keeps its parameters (Ruby's `def f(x)` and its lines)
 				let head = match item.drop_meta() {
 					Node::List(call, Bracket::Round, _)
@@ -247,7 +241,7 @@ impl WarpParser {
 					_ => Symbol(item.name()),
 				};
 				Node::Key(Box::new(head), Op::Colon, Box::new(body))
-			} else if had_newline && line_indent < self.base_indent && bracket == Bracket::None {
+			} else if had_newline && line_indent < self.context.base_indent && bracket == Bracket::None {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
 				break;

@@ -15,6 +15,7 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::Kind;
 use crate::warp_parser::{parse_template, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 use crate::words::COPY_WORD;
@@ -63,6 +64,8 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
 /// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
+/// The result type of a builtin that gives no value (`print(values...): nothing from emitter`)
+const NOTHING_RESULT: &str = "nothing";
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
@@ -200,15 +203,57 @@ const SAFE_BASE: &str = "safe";
 
 /// A library word's result when it is always a text or a list: its signature's (upper, split, map_keys), a text
 /// builtin's (trim), list_extend's (`xs + ys` of lists)
-pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
-	use crate::type_kinds::Kind;
+pub fn result_kind(word: &str) -> Option<Kind> {
+	call_result_kind(word, || None)
+}
+
+/// A library word's result for a first argument of the kind `argument` gives: the result of its overload for that
+/// kind (`reverse(t: text): text`, card typed-builtins), else the one all its overloads share. When the overloads
+/// differ, a Node of run-time kind gives a Node and any other value no overload is typed for (a name, a range) the
+/// first line's result, a list's. The argument is inferred only then
+pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> Option<Kind> {
 	let word = canonical_spelling(word);
-	match runtime_word(word).map(|line| line.result) {
-		Some("text") => Some(Kind::Text),
-		Some(result) if result.starts_with(LIST_WORD) => Some(Kind::List),
-		Some(_) => None,
-		None if word == crate::wasm_emitter::lists::list_ops::LIST_EXTEND => Some(Kind::List),
-		None => crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, 1).filter(|kind| *kind == Kind::Text),
+	let overloads: Vec<_> = crate::ffi::runtime_word_lines().iter().filter(|line| line.name == word).collect();
+	let Some(first) = overloads.first() else {
+		return match word {
+			crate::wasm_emitter::lists::list_ops::LIST_EXTEND => Some(Kind::List),
+			_ => {
+				crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, 1).filter(|kind| *kind == Kind::Text)
+			}
+		};
+	};
+	if overloads.iter().all(|line| line_result_kind(line) == line_result_kind(first)) {
+		return line_result_kind(first);
+	}
+	let fitting = match argument()? {
+		Kind::Empty => return Some(Kind::Empty),
+		Kind::Codepoint => Kind::Text,
+		kind => kind,
+	};
+	let typed_for = |line: &&&crate::ffi::ForeignLine| line.first_type().and_then(crate::analyzer::type_word_kind);
+	line_result_kind(overloads.iter().find(|line| typed_for(line) == Some(fitting)).unwrap_or(first))
+}
+
+/// The result of a call of `arguments` values to a builtin the emitter expands, as its line declares it
+/// (`count(xs): int from emitter`; print's `nothing` a Node of no value)
+pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
+	let word = unaliased(word);
+	let line = crate::ffi::emitter_word_lines().iter().find(|line| line.name == word && line.takes(arguments))?;
+	match line.result {
+		NOTHING_RESULT => Some(Kind::Empty),
+		// a type's name (`type(3)` is int), held as no other value is
+		crate::words::SYMBOL_WORD => Some(Kind::Symbol),
+		// `number("2.5")` an int or a float, `any(xs, f)` a bool the emitter marks: decided where it is made
+		crate::words::NUMBER_WORD | crate::analyzer::BOOL_TYPE => None,
+		result => crate::analyzer::type_word_kind(result),
+	}
+}
+
+fn line_result_kind(line: &crate::ffi::ForeignLine) -> Option<Kind> {
+	match line.result {
+		"text" => Some(Kind::Text),
+		result if result.starts_with(LIST_WORD) => Some(Kind::List),
+		_ => None,
 	}
 }
 
@@ -245,7 +290,7 @@ pub fn is_standard_function(name: &str) -> bool {
 /// (`count sorted xs`, `max sorted xs`, `print sorted xs`)
 pub fn is_calling_word(name: &str) -> bool {
 	is_standard_function(name)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 		|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name)
 }
 
@@ -268,7 +313,7 @@ pub fn needs_one_value(name: &str) -> bool {
 pub fn is_one_value_function(name: &str) -> bool {
 	needs_one_value(name)
 		|| crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 }
 
 fn fewest_arguments(word: &str) -> usize {
@@ -282,12 +327,17 @@ pub fn canonical_spelling(name: &str) -> &str {
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
-	let aliases = crate::modules::prelude_aliases();
-	let name = aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str());
+	let name = unaliased(name);
 	let runtime = crate::ffi::runtime_word_lines().iter().map(|line| line.name);
 	let expanded = EXPANDED_WORDS.into_iter().map(|(word, _, _)| word);
 	let built_in = runtime.chain(expanded).chain(OTHER_LIBRARY_WORDS).find(|word| *word == name);
 	built_in.or_else(|| crate::modules::prelude_word(name))
+}
+
+/// The word a prelude alias names (`size` → count), else the name itself
+fn unaliased(name: &str) -> &str {
+	let aliases = crate::modules::prelude_aliases();
+	aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str())
 }
 
 pub(crate) fn arity(word: &str) -> usize {

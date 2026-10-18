@@ -187,8 +187,9 @@ const NODE_RUNTIME: ElementRuntime = ElementRuntime {
 	sum: "",
 	new_node: "",
 };
-/// node_list_of(node) -> $NodeList: the items of a Node list in an array, what a Node list variable starts from
-const NODE_LIST_OF: &str = "node_list_of";
+/// list_items(node) -> $NodeList: the items of a Node list in a fresh array (emit_list_items), what a Node list variable
+/// starts from
+pub(in crate::wasm_emitter) const LIST_ITEMS: &str = "list_items";
 
 impl ElementType {
 	const ALL: [ElementType; 2] = [ElementType::Int, ElementType::Float];
@@ -641,7 +642,7 @@ impl WasmGcEmitter {
 			// a Node list (a call's result, a list parameter): its items once into the array
 			_ if list.element == ElementType::Node => {
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, NODE_LIST_OF);
+				self.emit_call(func, LIST_ITEMS);
 			}
 			other => unreachable!("find_typed_lists admits no {other:?}"),
 		}

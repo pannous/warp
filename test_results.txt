@@ -512,6 +512,9 @@ PASSED:
   ✓ control::test_named_reflection::help_of_a_module_word_has_its_comment
   ✓ control::test_named_reflection::help_of_a_name_known_at_run_time
   ✓ control::test_named_reflection::help_of_a_standard_module_is_its_index
+  ✓ control::test_nested_block_calls::a_block_call_alone_in_a_branch_runs_the_function
+  ✓ control::test_nested_block_calls::a_block_call_in_a_loop_runs_each_time
+  ✓ control::test_nested_block_calls::a_call_before_the_block_is_the_value_argument
   ✓ control::test_not_condition_block::a_comparison_with_empty_in_a_group
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
@@ -662,13 +665,9 @@ PASSED:
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_for_header
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_match_arm
   ✓ control::test_rust_inclusive_range::an_inclusive_range_is_the_range_to_its_end
-  ✓ control::test_rust_option::a_function_returns_an_option
-  ✓ control::test_rust_option::a_match_of_some_and_none
   ✓ control::test_rust_option::a_programs_own_option_method_keeps_its_meaning
-  ✓ control::test_rust_option::if_let_some_binds_the_value
   ✓ control::test_rust_option::loop_runs_until_break
   ✓ control::test_rust_option::option_type_is_optional
-  ✓ control::test_rust_option::some_is_the_value_none_is_nothing
   ✓ control::test_schema_cast::a_field_that_does_not_convert_is_named
   ✓ control::test_schema_cast::a_fitting_value_is_itself
   ✓ control::test_schema_cast::a_missing_optional_field_stays_missing
@@ -1294,6 +1293,10 @@ PASSED:
   ✓ functions::test_bare_host_words::random_of_a_range
   ✓ functions::test_bare_host_words::random_of_a_type
   ✓ functions::test_bare_host_words::the_random_prelude_words
+  ✓ functions::test_block_function_argument::a_block_names_what_is_around_it
+  ✓ functions::test_block_function_argument::a_block_to_a_function_parameter_is_called
+  ✓ functions::test_block_function_argument::a_kept_block_is_called_later
+  ✓ functions::test_block_function_argument::a_lambda_or_function_still_passes_as_is
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
@@ -1420,6 +1423,9 @@ PASSED:
   ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
+  ✓ functions::test_data_parameter::a_data_argument_is_its_code
+  ✓ functions::test_data_parameter::a_tag_block_is_the_data_argument
+  ✓ functions::test_data_parameter::other_parameters_take_values
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_is_a_function
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_runs_its_statements
@@ -1487,6 +1493,8 @@ PASSED:
   ✓ functions::test_fail_effect::raising_and_dividing_by_a_variable_fail
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
+  ✓ functions::test_field_closure_call::a_field_given_a_lambda_parameter_is_called
+  ✓ functions::test_field_closure_call::records_in_a_list_call_their_fields
   ✓ functions::test_field_function_values::test_function_in_nested_object
   ✓ functions::test_field_function_values::test_function_in_object_field
   ✓ functions::test_field_function_values::test_function_list_in_object_field
@@ -1838,7 +1846,6 @@ PASSED:
   ✓ functions::test_property_access::test_of_and_possessive
   ✓ functions::test_property_access::test_of_lookup_is_an_assignment_target
   ✓ functions::test_property_access::test_print_of_lookup_prints_the_field
-  ✓ functions::test_property_access::test_set_to_hints_the_assignment
   ✓ functions::test_property_assign::test_a_one_entry_object_counts_one_pair
   ✓ functions::test_property_assign::test_assign_a_field
   ✓ functions::test_property_assign::test_assign_a_nested_field
@@ -2439,6 +2446,7 @@ PASSED:
   ✓ modules::test_json5::json_of_warp_data_is_that_data
   ✓ modules::test_json5::json_parse_reads_json5
   ✓ modules::test_json5::strict_json_and_warp_literals_read_alike
+  ✓ modules::test_lowered_modules::a_kept_lowered_module_compiles_to_the_same_module
   ✓ modules::test_module_cache::test_different_modules_not_cached
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
@@ -4384,7 +4392,6 @@ PASSED:
   ✓ text::test_nested_list_text::an_index_is_an_atom_so_a_method_applies_to_the_element
   ✓ text::test_one_character_argument::a_one_character_argument_is_a_text
   ✓ text::test_one_character_argument::ord_of_a_one_character_text_is_its_code_point
-  ✓ text::test_print_all_characters::print_all_characters_prints_each
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
   ✓ text::test_print_arguments::print_of_a_braceless_call_gives_nothing
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
@@ -4418,6 +4425,7 @@ PASSED:
   ✓ text::test_repeat_typed::repeated_text_does_not_fit_int
   ✓ text::test_repeat_typed::repeated_text_fits_text
   ✓ text::test_reverse_characters::reverse_keeps_each_character_whole
+  ✓ text::test_rope_keys::a_rope_key_names_the_whole_text
   ✓ text::test_runtime_kind_texts::two_texts_of_run_time_kind_concatenate
   ✓ text::test_runtime_text_as_int::a_text_beyond_i64_parses_unbounded
   ✓ text::test_runtime_text_as_int::a_text_variable_converts_to_int
@@ -4428,7 +4436,6 @@ PASSED:
   ✓ text::test_selector_prepositions::characters_is_the_word_chars
   ✓ text::test_selector_prepositions::in_stays_membership_elsewhere
   ✓ text::test_selector_prepositions::letters_are_the_alphabetic_characters
-  ✓ text::test_selector_prepositions::printing_a_selection_prints_each_part
   ✓ text::test_selector_prepositions::selectors_chain_to_the_right
   ✓ text::test_shalom_units::a_glyph_is_a_character
   ✓ text::test_shalom_units::a_loop_by_character_walks_the_characters
@@ -5113,6 +5120,9 @@ PASSED:
   ✓ types::test_symbolism_object::test_block_entry_runs_only_at_bang
   ✓ types::test_symbolism_object::test_markup_content_stays_an_element
   ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
+  ✓ types::test_tag_entries::a_block_of_statements_stays_code
+  ✓ types::test_tag_entries::a_keyword_names_an_entry
+  ✓ types::test_tag_entries::an_assignment_beside_content_is_an_entry
   ✓ types::test_tagged_objects::a_field_of_a_tagged_object_is_read_from_its_fields
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_tagged_unions::arrow_arms_bind_the_variant_data
@@ -5277,6 +5287,12 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
+  ✓ types::test_typed_builtins::a_member_words_number_or_bool_result_is_decided_where_it_is_made
+  ✓ types::test_typed_builtins::a_value_known_at_run_time_takes_its_overload_then
+  ✓ types::test_typed_builtins::a_value_no_overload_is_typed_for_takes_the_first_line
+  ✓ types::test_typed_builtins::each_overload_type_is_the_librarys
+  ✓ types::test_typed_builtins::the_member_words_declare_their_signatures_in_the_prelude
+  ✓ types::test_typed_builtins::the_overload_of_the_argument_type_gives_the_result
   ✓ types::test_typed_list_elements::a_bracketed_list_parameter_holds_its_element_type
   ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
   ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
@@ -5381,8 +5397,10 @@ PASSED:
   ✓ wasm::test_executable_size::test_executable_keeps_its_handlers
   ✓ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken
   ✓ wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
+  ✓ wasm::test_gc_struct::test_class_instance_raw
   ✓ wasm::test_gc_struct::test_gc_object_index_access
   ✓ wasm::test_gc_struct::test_gc_struct_macro
+  ✓ wasm::test_gc_struct::test_raw_person_struct
   ✓ wasm::test_memory_cap::linear_memory_stops_at_the_memory_cap
   ✓ wasm::test_memory_cap::the_gc_heap_stops_at_the_memory_cap
   ✓ wasm::test_name_subsection_order::name_subsections_ascend_in_compiled_programs
@@ -6358,8 +6376,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ wasm::test_gc_struct::test_class_instance_raw
-  ✗ wasm::test_gc_struct::test_raw_person_struct
 
 SUMMARY:
-16 ignored, 6355 passed, 2 failed, 6357 total tested
+16 ignored, 6373 passed, 0 failed, 6373 total tested

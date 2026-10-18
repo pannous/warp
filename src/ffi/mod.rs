@@ -44,6 +44,8 @@ const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
 const PRELUDE_SOURCE: &str = include_str!("../../lib/prelude.warp");
 /// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
 pub const BUILTIN_LIBRARY: &str = "warp";
+/// `count(xs): int from emitter`: a builtin the emitter expands in place, without a runtime function
+pub const EMITTER_LIBRARY: &str = "emitter";
 
 /// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
 #[derive(Clone, Copy)]
@@ -58,11 +60,25 @@ impl<'a> ForeignLine<'a> {
 		self.defaults().count()
 	}
 
+	/// Whether a call of `arguments` values fits: the parameters without a default at least, a rest parameter
+	/// (`values...`) any number more
+	pub fn takes(&self, arguments: usize) -> bool {
+		let required = self.defaults().filter(Option::is_none).count();
+		let rest = self.parameters.contains("...");
+		arguments >= required - usize::from(rest) && (rest || arguments <= self.arity())
+	}
+
 	/// Each parameter's default as written, `" "` of `separator: text = " "`; None for one without
 	pub fn defaults(&self) -> impl Iterator<Item = Option<&'a str>> {
 		let parameters = self.parameters.trim();
 		let parameters = (!parameters.is_empty()).then_some(parameters).into_iter().flat_map(|all| all.split(','));
 		parameters.map(|parameter| parameter.split_once('=').map(|(_, default)| default.trim()))
+	}
+
+	/// The type of the first parameter, `text` of `t: text`; None for one of any value
+	pub fn first_type(&self) -> Option<&'a str> {
+		let first = self.parameters.split(',').next()?.split('=').next()?;
+		first.split_once(':').map(|(_, type_name)| type_name.trim())
 	}
 
 	/// `(x:number) -> int`, as a signature reads
@@ -79,6 +95,17 @@ impl<'a> ForeignLine<'a> {
 pub fn runtime_word_lines() -> &'static [ForeignLine<'static>] {
 	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
 	LINES.get_or_init(|| PRELUDE_SOURCE.lines().filter_map(|line| foreign_line(line, BUILTIN_LIBRARY)).collect())
+}
+
+/// lib/prelude.warp's `from emitter` lines: the builtins the emitter expands in place (count, print, fetch …)
+pub fn emitter_word_lines() -> &'static [ForeignLine<'static>] {
+	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
+	LINES.get_or_init(|| PRELUDE_SOURCE.lines().filter_map(|line| foreign_line(line, EMITTER_LIBRARY)).collect())
+}
+
+/// Every typed builtin line of the prelude, runtime functions and words the emitter expands
+pub fn typed_word_lines() -> impl Iterator<Item = &'static ForeignLine<'static>> {
+	runtime_word_lines().iter().chain(emitter_word_lines())
 }
 
 /// lib/math.warp's foreign lines of one library: `'m'` (libm) or warp itself (BUILTIN_LIBRARY)
