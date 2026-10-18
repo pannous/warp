@@ -11,20 +11,24 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 /// The extension of a kept lowered module in the module cache
+#[cfg(feature = "native")]
 const LOWERED_EXTENSION: &str = "lowered";
+
+/// A module name looked up and the file found then (its path, size and time), none for a standard module
+type Lookup = (String, Option<String>);
 
 /// A lowered module and what its lowering left in the compile context
 #[derive(Serialize, Deserialize)]
 struct Kept {
-	/// each module name the lowering looked up and the file found then (its path, size and time), none for a std module
-	lookups: Vec<(String, Option<String>)>,
+	/// each module name the lowering looked up
+	lookups: Vec<Lookup>,
 	module: Node,
 	effects: LoweredEffects,
 }
 
 thread_local! {
 	/// The module lookups of the lowering being kept, none when no lowering is
-	static LOOKUPS: RefCell<Option<Vec<(String, Option<String>)>>> = const { RefCell::new(None) };
+	static LOOKUPS: RefCell<Option<Vec<Lookup>>> = const { RefCell::new(None) };
 }
 
 /// insert_module_classes looked `name` up: a kept lowering is valid only while it finds the same file
