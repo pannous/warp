@@ -938,9 +938,7 @@ impl WasmGcEmitter {
 				Miss::Null => {
 					f.instruction(&I::RefNull(HeapType::Concrete(node)));
 				}
-				Miss::KindName => {
-					s.emit_text_node(f, crate::type_kinds::Kind::Function.to_string().as_str())
-				}
+				Miss::KindName => s.emit_text_node(f, crate::type_kinds::Kind::Function.to_string().as_str()),
 			};
 			if miss == Miss::Null {
 				Self::field(f, 0, node, 0);

@@ -360,7 +360,11 @@ impl WasmGcEmitter {
 	}
 
 	/// Local `bytes` set to the $Text of text node local 0, `pointer` to 0 and `end` to its length
-	pub(in crate::wasm_emitter) fn emit_text_bounds(&self, func: &mut Function, (bytes, pointer, end): (u32, u32, u32)) {
+	pub(in crate::wasm_emitter) fn emit_text_bounds(
+		&self,
+		func: &mut Function,
+		(bytes, pointer, end): (u32, u32, u32),
+	) {
 		self.emit_text_bytes(func, 0);
 		Self::emit_list(func, &[I::LocalTee(bytes), I::ArrayLen, I::LocalSet(end), I32Const(0), I::LocalSet(pointer)]);
 	}
@@ -560,61 +564,67 @@ impl WasmGcEmitter {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let (text, int) = (self.text_ref(), ValType::I32);
 		let nullable_text = self.text_ref_nullable();
-		self.runtime_function(TEXT_FLAT, vec![node_ref], vec![text], vec![nullable, int, nullable_text, int], |s, f| {
-			let (rope, piece, length, flat, piece_length) = (0, 1, 2, 3, 4);
-			let data = |f: &mut Function, local: u32| {
-				Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
-				Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 1 }]);
-				f.instruction(&I::RefCastNonNull(HeapType::Concrete(text_type)));
-			};
-			let rest = |f: &mut Function, local: u32| {
-				Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
-				Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 2 }, I::LocalSet(local)]);
-			};
-			s.emit_field(f, rope, 2);
-			Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
-			data(f, rope);
-			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(rope), I::LocalSet(piece)]);
-			let walk = |f: &mut Function, body: &dyn Fn(&mut Function)| {
-				let condition = [I::LocalGet(piece), I::RefIsNull, I::I32Eqz];
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-				Self::emit_list(f, &condition);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1)]);
-				body(f);
-				rest(f, piece);
-				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			};
-			walk(f, &|f| {
-				data(f, piece);
-				Self::emit_list(f, &[I::ArrayLen, I::LocalGet(length), I::I32Add, I::LocalSet(length)]);
-			});
-			#[rustfmt::skip]
+		self.runtime_function(
+			TEXT_FLAT,
+			vec![node_ref],
+			vec![text],
+			vec![nullable, int, nullable_text, int],
+			|s, f| {
+				let (rope, piece, length, flat, piece_length) = (0, 1, 2, 3, 4);
+				let data = |f: &mut Function, local: u32| {
+					Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+					Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 1 }]);
+					f.instruction(&I::RefCastNonNull(HeapType::Concrete(text_type)));
+				};
+				let rest = |f: &mut Function, local: u32| {
+					Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+					Self::emit_list(f, &[I::StructGet { struct_type_index: node, field_index: 2 }, I::LocalSet(local)]);
+				};
+				s.emit_field(f, rope, 2);
+				Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
+				data(f, rope);
+				Self::emit_list(f, &[I::Return, I::End, I::LocalGet(rope), I::LocalSet(piece)]);
+				let walk = |f: &mut Function, body: &dyn Fn(&mut Function)| {
+					let condition = [I::LocalGet(piece), I::RefIsNull, I::I32Eqz];
+					Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+					Self::emit_list(f, &condition);
+					Self::emit_list(f, &[I::I32Eqz, I::BrIf(1)]);
+					body(f);
+					rest(f, piece);
+					Self::emit_list(f, &[I::Br(0), I::End, I::End]);
+				};
+				walk(f, &|f| {
+					data(f, piece);
+					Self::emit_list(f, &[I::ArrayLen, I::LocalGet(length), I::I32Add, I::LocalSet(length)]);
+				});
+				#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(length), I::ArrayNewDefault(text_type), I::LocalSet(flat),
 				I::LocalGet(rope), I::LocalSet(piece),
 			]);
-			walk(f, &|f| {
-				data(f, piece);
-				#[rustfmt::skip]
+				walk(f, &|f| {
+					data(f, piece);
+					#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::ArrayLen, I::LocalTee(piece_length), I::LocalGet(length), I::LocalGet(piece_length), I::I32Sub,
 					I::LocalSet(length), I::Drop,
 					I::LocalGet(flat), I::LocalGet(length),
 				]);
-				data(f, piece);
-				#[rustfmt::skip]
+					data(f, piece);
+					#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I32Const(0), I::LocalGet(piece_length),
 					I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type },
 				]);
-			});
-			#[rustfmt::skip]
+				});
+				#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(rope), I::LocalGet(flat), I::StructSet { struct_type_index: node, field_index: 1 },
 				I::LocalGet(rope), I::RefNull(HeapType::Concrete(node)), I::StructSet { struct_type_index: node, field_index: 2 },
 				I::LocalGet(flat), I::RefAsNonNull,
 			]);
-		});
+			},
+		);
 	}
 
 	/// Push the $Text of the Text or Symbol node in local `node`
@@ -656,7 +666,10 @@ impl WasmGcEmitter {
 
 	/// Push a new Text node of the bytes of local `bytes` from byte index local `start` to `stop`
 	pub(in crate::wasm_emitter) fn emit_text_piece(&self, func: &mut Function, (bytes, start, stop): (u32, u32, u32)) {
-		Self::emit_list(func, &[I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
+		Self::emit_list(
+			func,
+			&[I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub],
+		);
 		self.call(func, TEXT_PIECE);
 		self.call(func, NEW_TEXT_OF);
 	}

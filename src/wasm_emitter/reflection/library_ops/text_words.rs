@@ -260,10 +260,8 @@ impl WasmGcEmitter {
 			(info, open, self.memory_string(&bracket.closing().to_string()))
 		});
 		let no_bracket = self.memory_string("");
-		let separator_texts =
-			[Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab].map(|separator| {
-				(crate::wasm_emitter::separator_code(&separator), self.memory_string(&separator.joint()))
-			});
+		let separator_texts = [Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab]
+			.map(|separator| (crate::wasm_emitter::separator_code(&separator), self.memory_string(&separator.joint())));
 		let space = self.memory_string(" ");
 		// only a program whose Keys hold operators beyond `:` carries their texts (web::test_bundle_budget)
 		let operator_texts =
@@ -591,7 +589,13 @@ impl WasmGcEmitter {
 			append_text(f, element);
 			Self::emit_list(f, &[I::Else, I::LocalGet(address), I::LocalGet(address)]);
 			s.emit_int_value_of(f, element);
-			Self::emit_list(f, &[I::Call(s.func_index("int_to_decimal")), I::Call(s.func_index(crate::wasm_emitter::TEXT_FROM_MEMORY))]);
+			Self::emit_list(
+				f,
+				&[
+					I::Call(s.func_index("int_to_decimal")),
+					I::Call(s.func_index(crate::wasm_emitter::TEXT_FROM_MEMORY)),
+				],
+			);
 			append_bytes(f);
 			f.instruction(&I::End);
 			end_loop(f);

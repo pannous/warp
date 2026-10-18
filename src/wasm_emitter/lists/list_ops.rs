@@ -6,7 +6,10 @@ use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::wasm_emitter::lists::list_dispatch::Slot;
-use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_LITERAL, TEXT_PIECE, TEXT_SEGMENT, VALUES_EQUAL, NEW_TEXT_OF};
+use crate::wasm_emitter::{
+	WasmGcEmitter, NEW_BOOL, NEW_TEXT_OF, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY,
+	TEXT_LITERAL, TEXT_PIECE, TEXT_SEGMENT, VALUES_EQUAL,
+};
 use crate::words::MAP_WORD;
 use wasm_encoder::*;
 use Instruction as I;
@@ -201,8 +204,10 @@ impl WasmGcEmitter {
 			"at" => (ValType::I32, ConstExpr::i32_const(0)),
 			_ => (ValType::I64, ConstExpr::i64_const(0)),
 		};
-		let cursors = (0..TEXT_CURSORS).flat_map(|slot| TEXT_CURSOR_PARTS.map(|part| (format!("text_cursor_{slot}_{part}"), global_of(part))));
-		let counted = (0..TEXT_COUNTS).flat_map(|slot| TEXT_COUNTED_PARTS.map(|part| (format!("text_counted_{slot}_{part}"), global_of(part))));
+		let cursors = (0..TEXT_CURSORS)
+			.flat_map(|slot| TEXT_CURSOR_PARTS.map(|part| (format!("text_cursor_{slot}_{part}"), global_of(part))));
+		let counted = (0..TEXT_COUNTS)
+			.flat_map(|slot| TEXT_COUNTED_PARTS.map(|part| (format!("text_counted_{slot}_{part}"), global_of(part))));
 		let globals: Vec<_> = cursors.chain(counted).collect();
 		self.text_cursor_global = Some(self.next_global_idx);
 		for (name, (val_type, initial)) in globals {

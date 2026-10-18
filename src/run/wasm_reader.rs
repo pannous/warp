@@ -540,7 +540,12 @@ fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<
 
 /// The text of a Text node: its bytes, after those of the texts before it when it is a rope (text_append: data the last
 /// piece, the value field the text before it)
-fn rope_text<T>(store: &mut StoreContextMut<'_, T>, data: Val, before: Val, memory: Option<wasmtime::Memory>) -> String {
+fn rope_text<T>(
+	store: &mut StoreContextMut<'_, T>,
+	data: Val,
+	before: Val,
+	memory: Option<wasmtime::Memory>,
+) -> String {
 	let mut pieces = vec![text_of(store, &data, memory)];
 	let mut before = before;
 	while let Some(structref) = before.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) {
