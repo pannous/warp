@@ -43,3 +43,14 @@ its bridge takes 25 s CPU (41 s wall), the compiled module is 228 KB, and one ru
 program) 0.6 s. A pass at compile time would need the module built ahead and embedded (build.rs would need a warp
 compiler: the bootstrap problem) and still costs ~0.5 s per pass and program. So the Rust twins stay for now; this
 comes back with AOT-embedded compiler modules (cwasm) and the prelude caching work.
+
+## Lowering: helper dedup (warp-self-passes, 2026-10-18)
+Landed or Ready: rust-scope (program_names::Bindings, one walk for the names a program gives, -31) and rust-dedup
+(-60): Node::written_names (`x` of every `x = …`/`x := …`), Node::ungrouped (`(x)` → x under its meta; word_help keeps
+its own because a non-group keeps its position there), `node.symbol_name().and_then(…)` for two-arm symbol matches.
+What a duplicate scan of src/ found: no two functions with identical bodies; the near-twins left are deliberate
+(serve.rs and broadcasting.rs `replaced` compare by serialize vs by node). Functions that recurse into `(x)` themselves
+convert to `match x.ungrouped()` only when no arm reads the parameter again (guards or bodies would see `(x)` instead
+of x); the ~8 left (type_names, law expressions, for_loop, time holds_time, equality, control_flow) need a reading of
+each arm's meta use first. The lowering is otherwise well factored: the remaining line gains are the repair-pass
+drops after parser S2/S3 and the word-phrase pass, not helpers.
