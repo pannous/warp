@@ -8,6 +8,8 @@ use crate::lowering::nodes::{function_head, DefinitionForm};
 use crate::lowering::soft_keywords::{HARD_KEYWORDS, HIGHLIGHTED_WORDS};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::web::markup::names_attribute;
+use crate::words::{IMPLICIT_PARAMETER, ON_WORD};
 use std::collections::HashSet;
 
 pub fn lower(program: Node) -> Node {
@@ -16,18 +18,39 @@ pub fn lower(program: Node) -> Node {
 }
 
 fn with_entries(node: Node, functions: &HashSet<String>) -> Node {
-	let node = node.map_children(|child| with_entries(child, functions));
 	match node {
+		Node::Meta { .. } => node.under_meta(|inner| with_entries(inner, functions)),
+		Node::List(items, bracket, separator) => {
+			// `label(for="pwd")`, `p {class="note"}`: an element's parentheses, or its block spaced from it
+			let is_element_group = items.first().is_some_and(is_element_name) && items.len() > 1;
+			let mut after_on = false;
+			let items = items.into_iter().enumerate().map(|(index, item)| {
+				// `on change { saved = event.value }`: a handler's block is code
+				let is_handler = std::mem::replace(&mut after_on, item.is_symbol(ON_WORD));
+				let item = match is_handler {
+					true => item.under_meta(|handler| handler.map_children(|child| with_entries(child, functions))),
+					false => with_entries(item, functions),
+				};
+				match index > 0 && is_element_group {
+					true => element_part(item),
+					false => item,
+				}
+			});
+			Node::List(items.collect(), bracket, separator)
+		}
 		Node::Key(tag, Op::Colon, body) if is_data_tag(&tag, &body, functions) => {
-			Node::Key(tag, Op::Colon, Box::new(entries_of(*body)))
+			Node::Key(tag, Op::Colon, Box::new(entries_of(with_entries(*body, functions))))
 		}
-		// `label(for="pwd")`, `p {class="note"}`: an element's parentheses, or its block spaced from it
-		Node::List(items, bracket, separator) if items.first().is_some_and(is_element_name) && items.len() > 1 => {
-			let mut items = items.into_iter();
-			let tag = items.next().into_iter();
-			Node::List(tag.chain(items.map(entries_of)).collect(), bracket, separator)
-		}
-		other => other,
+		other => other.map_children(|child| with_entries(child, functions)),
+	}
+}
+
+/// A part after an element's name: its `(…)` or `{…}` with entries, an attribute `for = "pwd"` as `for: "pwd"`; a
+/// `b = …` naming no attribute stays as written (`a, b = [1, 2]` destructures)
+fn element_part(part: Node) -> Node {
+	match part.drop_meta() {
+		Node::Key(name, Op::Assign, _) if !name.drop_meta().symbol_name().is_some_and(names_attribute) => part,
+		_ => entries_of(part),
 	}
 }
 
@@ -48,6 +71,18 @@ fn is_data_tag(tag: &Node, body: &Node, functions: &HashSet<String>) -> bool {
 		&& !is_word(&HIGHLIGHTED_WORDS)
 		&& !functions.contains(word)
 		&& !items.iter().any(is_statement)
+		&& !is_lambda_body(body)
+}
+
+/// `{ parent = $1 }`, `{ total = it * 2 }`: a block naming its parameters `it` or `$0`, `$1` … is a lambda
+fn is_lambda_body(body: &Node) -> bool {
+	let is_parameter = |name: &str| {
+		name == IMPLICIT_PARAMETER
+			|| name.strip_prefix('$').is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+	};
+	let mut named = false;
+	body.visit(&mut |part| named |= matches!(part, Node::Symbol(name) if is_parameter(name)));
+	named
 }
 
 fn is_element_name(node: &Node) -> bool {
