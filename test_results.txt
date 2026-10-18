@@ -3747,7 +3747,6 @@ PASSED:
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
-  ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
@@ -5277,6 +5276,9 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
+  ✓ types::test_typed_builtins::a_value_known_at_run_time_takes_its_overload_then
+  ✓ types::test_typed_builtins::each_overload_type_is_the_librarys
+  ✓ types::test_typed_builtins::the_overload_of_the_argument_type_gives_the_result
   ✓ types::test_typed_list_elements::a_bracketed_list_parameter_holds_its_element_type
   ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
   ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
@@ -5381,8 +5383,10 @@ PASSED:
   ✓ wasm::test_executable_size::test_executable_keeps_its_handlers
   ✓ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken
   ✓ wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
+  ✓ wasm::test_gc_struct::test_class_instance_raw
   ✓ wasm::test_gc_struct::test_gc_object_index_access
   ✓ wasm::test_gc_struct::test_gc_struct_macro
+  ✓ wasm::test_gc_struct::test_raw_person_struct
   ✓ wasm::test_memory_cap::linear_memory_stops_at_the_memory_cap
   ✓ wasm::test_memory_cap::the_gc_heap_stops_at_the_memory_cap
   ✓ wasm::test_name_subsection_order::name_subsections_ascend_in_compiled_programs
@@ -5510,8 +5514,6 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
-  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
-  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -6358,8 +6360,9 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ wasm::test_gc_struct::test_class_instance_raw
-  ✗ wasm::test_gc_struct::test_raw_person_struct
+  ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✗ web::test_app_keys::on_key_hears_the_app_pages_key_presses
 
 SUMMARY:
-16 ignored, 6355 passed, 2 failed, 6357 total tested
+16 ignored, 6357 passed, 3 failed, 6360 total tested
