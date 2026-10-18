@@ -136,7 +136,8 @@ fn compiling_config(fuel: bool) -> wasmtime::Config {
 	let mut config = warp_runtime::engine::metered_config(fuel);
 	config
 		.enable_incremental_compilation(std::sync::Arc::new(crate::run::function_cache::FunctionCache))
-		.expect("an engine with a compiler");	config
+		.expect("an engine with a compiler");
+	config
 }
 
 pub fn show_type_name<T>(_: &T) {

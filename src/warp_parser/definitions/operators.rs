@@ -142,7 +142,8 @@ pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 		}
 	}
 	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
-	for statement in source.lines().flat_map(|line| line.split(';')).filter(|statement| statement.contains(PRECEDENCE)) {
+	for statement in source.lines().flat_map(|line| line.split(';')).filter(|statement| statement.contains(PRECEDENCE))
+	{
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		if let Ok(Some((glyph, level))) = precedence_declaration(&words, &found) {
 			found
