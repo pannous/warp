@@ -242,10 +242,10 @@ fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 	walking_loop(&element, entries, parts.chain(body).collect())
 }
 
-/// `for iterable {body}` binds the implicit `it`: `for 1..4 {x+=it}`
+/// `for iterable {body}` and `for iterable: body` bind the implicit `it`: `for 1..4 {x+=it}`
 fn for_it(items: &[Node]) -> Option<Node> {
 	let [keyword, iterable, body] = items else { return None };
-	if !keyword.is_symbol(FOR_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_WORD) {
 		return None;
 	}
 	for_in(&[keyword.clone(), symbol(IMPLICIT_PARAMETER), symbol(IN_WORD), iterable.clone(), body.clone()])

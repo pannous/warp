@@ -5,8 +5,11 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
-- rust-texts (card rust-emitter, defaults in place): (a) `t += x` builds a rope (text_append: the new piece and the text before it), flattened once when read, so appending in a loop stays linear; (b) tests/wasm/test_gc_struct.rs reads a raw struct's text as `$String(ptr, len)`: update read_string_field to read the `$Text` byte array (implied by the byte-array layout)? Meanwhile listed in notes/known_failures.md.
-- rust-cleanup-drops (warp-self-passes): the warp compiler drops Rust Option forms (rust_options.rs, 160 lines: `if let Some(v) = o`, `match o {Some/None}`, `unwrap_or`), the `set x to y` phrase pass, scoped_handlers, the walk `print words in t` and the unit count `byte count of t` (decisions sugar-twins-drops, sugar-triage, cleanup-cuts; the last two have tests and wiki/in.md text; patch ready: data/patches/rust-of-drops-print-walk.patch, -47 lines). Drop them from the Rust compiler too in the cleanup phase (recommended: same language on both compilers, their tests retired), or keep them Rust-only? Default until answered: kept; the cleanup goes on elsewhere.
+- rewrite-syntax (card compiler-modules, warp-self-passes): how a module extends the compiler. Default built: a line
+  `rewrite PATTERN => TEMPLATE`, optionally `where $c = SHAPE`; holes `$x`, `$xs...` as in code patterns; any program
+  or module may declare them, a standard module's rules apply wherever their words appear. Example (lib/channels.warp):
+  `rewrite $c.send($v) => channel_put($c, $v) where $c = channel()`. Alternatives: the keyword `macro`/`syntax`;
+  `data(…)` around both sides; `rules { … }` blocks (matching roadmap step 4).
 
 ## Parked
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.

@@ -371,12 +371,17 @@ pub fn parse(input: &str) -> Node {
 /// Code a lowering pass writes, placed where `at` was written: an error inside it names that position, not the
 /// template's own column (card template-positions: `sum 1` said 'not a list at 1:78', now 'at 1:5', the 1 it walks)
 pub fn parse_template(template: &str, at: &Node) -> Node {
-	placed(parse(template), crate::errors::diagnostic::line_info(at).as_ref())
+	generated(template, crate::errors::diagnostic::line_info(at).as_ref())
 }
 
 /// Code a lowering pass writes, without positions: an error inside it names the nearest written position around it
 pub fn parse_generated(code: &str) -> Node {
-	placed(parse(code), None)
+	generated(code, None)
+}
+
+/// Generated code joins the tree after the sugar passes: `{ return ø }` is given the phrase they would give it
+fn generated(code: &str, position: Option<&LineInfo>) -> Node {
+	crate::lowering::welcome_forms::lower_bare_returns(placed(parse(code), position))
 }
 
 /// Every position in `node` replaced by `position`, or dropped without one
