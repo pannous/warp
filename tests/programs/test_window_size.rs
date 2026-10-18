@@ -15,6 +15,11 @@ fn canvas_size_is_a_property() {
 	is!("use draw\ncanvas(10, 10)\ncanvas.width += 5\ncanvas.width", 15);
 	// draw comes along without `use draw`
 	is!("canvas.width = 30\ncanvas.width", 30);
+}
+
+#[test]
+#[ignore = "dropped: rust-cleanup-drops: the set x to y phrase; warp writes x = y (set x of y to z may come back as library code)"]
+fn canvas_size_by_a_set_phrase() {
 	is!("set width of canvas to 120\ncanvas.width", 120); // card english-setter
 }
 
