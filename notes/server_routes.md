@@ -134,7 +134,8 @@ answer(request) := for route in routes { if route.method == request.method and r
 ```
 Gaps (probed 2026-10-18 with the installed warp):
 - a `{…}` block to a `function` parameter is a List ("get needs a Function … got {1+2}"); question Q1 block-as-function
-- a closure in a map field can't be called (`r.answer(2)`, `a = r.answer; a(2)`): card field-closure-call
+- a closure in a map field: `r.answer(2)` works since card field-closure-call (a field given a parameter that a call
+  feeds a lambda); probes/web/plain_router.warp runs a route list and dispatcher in plain warp. Open: `a = r.answer; a(2)`
 - path parameters bound into the block (`:id:int`): question Q2, card route-path-patterns (topic matching)
 - `$title` → request.body.title: question Q3; default routes of a hosted program: question Q4
 Stays Rust, for card module-passes (analysis/codegen, not sugar): server functions and their /rpc routes, the page's
