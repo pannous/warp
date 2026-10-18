@@ -41,13 +41,6 @@ impl WarpParser {
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
 		}
 
-		if let Some((condition, then_block)) = split_trailing_block(&rhs, false) {
-			self.skip_spaces();
-			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-			return self.parse_optional_else(if_then, ElseParseMode::Atom);
-		}
-
 		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
 		let is_grouped = matches!(rhs.drop_meta(), Node::List(_, Bracket::Round, _));
 		if is_grouped && self.at_body_start() && !self.matches_keyword("then") && !self.matches_keyword("else") {
