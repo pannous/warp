@@ -64,4 +64,14 @@ lowering) 60%, wasm→CLIF translation 15%, process start 10%. Hence:
   CLIF comes out in another instruction order; serially +1 per run). So even the same module recompiled adds ~7 files and
   a new program ~30 small ones; module_cache's LRU prune at 1 GB bounds them. Dumps of cache hits show unoptimized CLIF,
   so compare only cold runs.
+
+Then parse and resolve (quick-release, minima, `probes/cache/proxy_times.sh`; time phases with the debug build
+and the numbers are 3-7× off):
+- parse 4.3 → 1.6 ms for any program: building the parser's user-operator table read every standard module line through
+  alias_line(code_only(..)) once per process (library_glyph_operators). Now only lines with `:=` are looked at and the
+  alias check runs only on a declared operator. 0.8 ms of that scan remains (~700 `:=` lines).
+- prelude: qualified names 0.35 → 0.0 ms: renamed_words renames every word in one walk over a map (it was two walks
+  per prelude word over each definition).
+- What is left of resolve for to_base (~2 ms): the look-ahead parses its reached prelude slices anew in each process
+  (0.3 ms per call, twice), needed_definitions 0.15. Keeping parsed slices on disk would save ~0.5 ms.
 - opt-level none saves only 10-20% of a full compile, nothing on cache hits; Winch refuses function references.
