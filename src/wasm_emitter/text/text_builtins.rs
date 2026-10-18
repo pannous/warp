@@ -75,9 +75,13 @@ pub(in crate::wasm_emitter) const HOST_WARN: &str = "host_warn";
 const CHARACTER_ENCODER: &str = "node_with_at";
 /// `text_form(x)`: the text of a value, what an interpolation hole `"\(x)"` becomes (interpolation.rs)
 pub const TEXT_FORM: &str = "text_form";
+/// `kind_mark(x)`: x's whole kind field as an Int, its Kind and the marks above it (type_kinds.rs), which lib words
+/// read a value's form by (card kind-reflection, lib/prelude.warp kind marks)
+const KIND_MARK: &str = "kind_mark";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 24] = [
+	(KIND_MARK, 1, Kind::Int),
 	(MEMORY_BYTE, 1, Kind::Int),
 	(MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int),
@@ -274,6 +278,7 @@ impl WasmGcEmitter {
 				| MEMORY_BYTE
 				| MEMORY_SET_BYTE
 				| IS_ERROR_WORD
+				| KIND_MARK
 				| RAN_WITHOUT_ERROR
 				| STARTS_WITH
 				| ENDS_WITH
@@ -397,6 +402,10 @@ impl WasmGcEmitter {
 				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
 				Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 				Self::emit_list(func, &[I::I64ExtendI32U]);
+			}
+			(KIND_MARK, [value]) => {
+				self.emit_node_instructions(func, value);
+				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
 			(crate::numbers::uncertain::CERTAINLY | crate::numbers::uncertain::POSSIBLY, [comparison]) => {
