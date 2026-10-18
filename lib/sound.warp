@@ -250,7 +250,7 @@ out(signal, b: Bus) := sent_back(sent_to(b), out(signal))
 // a bus applied to a signal plays it through the bus: `osc(C4, 1s) |> room`, `room(signal)` (trait Callable)
 call(b: Bus, signal) := out(signal, b)
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
-added(a: list, b: list) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
+added(a: [float], b: [float]) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))
 // the sound's handle: its number in the run, for stop_sound(handle)
 
