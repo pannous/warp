@@ -819,7 +819,7 @@ samples/lists/sieve_idiomatic.warp
 samples/lists/sieve.warp
 samples/signals/signal_fields.warp
 samples/sound/signal_graph.warp
-samples/advanced/simple.warp
+samples/numbers/simple.warp
 samples/text/sort_words.warp
 samples/lists/sorting_idiomatic.warp
 samples/sound/sound_patterns.warp

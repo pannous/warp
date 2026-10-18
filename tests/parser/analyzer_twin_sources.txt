@@ -904,7 +904,7 @@ probes/webgpu/double.warp
 probes/welcoming/relaxed_pragma.warp
 probes/window_size/sizes.warp
 probes/words_glue.warp
-samples/advanced/simple.warp
+samples/numbers/simple.warp
 samples/advanced/test.warp
 samples/conditions/control_flow.warp
 samples/conditions/fizzbuzz.warp

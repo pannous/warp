@@ -94,7 +94,7 @@ Numbers can have units.
 2h + 30min
 ```
 
-Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits
+Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits
 
 ## Text
 
@@ -806,4 +806,4 @@ Examples: "kitchen sink"; samples: laws, kitchensink
 
 Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
 
-Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test, simple
+Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test
