@@ -1,0 +1,38 @@
+# The tree the warp compiler works on: the Rust Node enum (src/node/mod.rs) as a warp enum, case for case, with its
+# operator, bracket and separator enums (decision compiler-node-enum). Each case is named in its enum's scope:
+# `Node.True` is the case, a bare `True` stays the constant yes.
+
+# Rust twin: src/operators/mod.rs Op
+enum Op {
+	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, FatArrow, ArrowUp, ArrowDown
+	Add, Sub, Mul, Div, FloorDiv, Mod, Rem, Pow, LogBase, LogOf, Shl, Shr
+	AddAssign, SubAssign, MulAssign, DivAssign, FloorDivAssign, ModAssign, PowAssign, AndAssign, OrAssign, XorAssign
+	Lt, Gt, Le, Ge, Eq, Ne, Identical, NotIdentical, Similar, Rough
+	And, Or, Xor, Not, BitAnd, BitOr
+	Neg, Sqrt, Cbrt, Abs, Inc, Dec, Question
+	If, Then, Else, While, Do
+	Hash, Subscript, Range, To, As, PlusMinus, Pipe, In
+}
+
+# Rust twin: src/node/mod.rs Bracket (Other(open, close) for any other pair)
+enum Bracket { Curly, Square, Round, Less, None, Other(open: codepoint, close: codepoint) }
+
+# Rust twin: src/node/mod.rs Separator
+enum Separator { Space, Comma, Semicolon, Newline, Tab, None }
+
+# Rust twin: src/node/mod.rs Node
+enum Node {
+	True
+	False
+	Empty
+	Number(value: number)
+	Char(value: codepoint)
+	Text(value: text)
+	Symbol(name: text)
+	Error(node: Node)
+	Key(left: Node, op: Op, right: Node)
+	List(items: list, bracket: Bracket, separator: Separator)
+	Data(value: any)
+	Meta(node: Node, data: Node)
+	Type(name: Node, body: Node)
+}

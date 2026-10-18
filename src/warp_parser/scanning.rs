@@ -139,9 +139,10 @@ impl WarpParser {
 	/// a member, no operator or constant
 	pub(super) fn at_member_name(&self, length: usize) -> bool {
 		let start = self.pos.saturating_sub(length);
-		start > 0
-			&& self.chars.get(start - 1) == Some(&'.')
-			&& self.chars.get(start).is_some_and(|first| first.is_alphabetic())
+		let after_dot = start > 0 && self.chars.get(start - 1) == Some(&'.');
+		// `Node::True`: a case of the enum Node (card node-enum)
+		let after_scope = start > 1 && self.chars[start - 2..start] == [':', ':'];
+		(after_dot || after_scope) && self.chars.get(start).is_some_and(|first| first.is_alphabetic())
 	}
 
 	pub(super) fn prev_char(&self) -> char {

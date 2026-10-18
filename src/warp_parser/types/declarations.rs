@@ -408,12 +408,18 @@ impl WarpParser {
 		self.skip_spaces();
 		let type_name = or_return_error!(self.parse_symbol());
 		self.skip_whitespace();
-		let Node::List(cases, _, _) = self.parse_bracketed('{').drop_meta().clone() else {
+		let cases = self.within(Context { in_enum_cases: true, ..self.context }, |parser| parser.parse_bracketed('{'));
+		let Node::List(cases, _, _) = cases.drop_meta().clone() else {
 			return error(&format!("enum {type_name} needs its cases in braces"));
 		};
+		// a line of several cases, `Add, Sub, Mul`, among lines of cases: each a case
+		let cases = cases.into_iter().flat_map(|case| match case.drop_meta() {
+			Node::List(row, Bracket::None, Separator::Comma) => row.clone(),
+			_ => vec![case],
+		});
 		let mut bare_variants = vec![];
 		let mut declarations = vec![];
-		for case in cases.iter().map(without_case_keyword) {
+		for case in cases.map(|case| without_case_keyword(&case)) {
 			match case.drop_meta() {
 				Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
 					declarations.push(self.variant_class(

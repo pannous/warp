@@ -77,8 +77,8 @@ pub(crate) fn sum_types(program: &Node) -> HashMap<String, Variants> {
 	sum_types
 }
 
-/// `x is Color` → `x is Color or x == red or x == green`; a literal variant `red is Color` is true; `Shape::Circle(2)` →
-/// `Circle(2)`
+/// `x is Color` → `x is Color or x == red or x == green`; a literal variant `red is Color` is true; `Shape::Circle(2)` and
+/// `Shape.Circle(2)` → `Circle(2)`
 fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node {
 	let bare_of = |right: &Node| match right.drop_meta() {
 		Node::Symbol(type_name) if !crate::type_tests::is_equality_operand(right) => {
@@ -87,7 +87,7 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 		_ => None,
 	};
 	match node {
-		Node::Key(sum_type, Op::Scope, variant) if is_variant_of(&sum_type, &variant, sum_types) => {
+		Node::Key(sum_type, Op::Scope | Op::Dot, variant) if is_variant_of(&sum_type, &variant, sum_types) => {
 			with_variant_tests(*variant, sum_types)
 		}
 		Node::Key(subject, Op::Eq, right)
