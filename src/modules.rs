@@ -15,6 +15,8 @@ mod std_modules;
 pub use std_modules::*;
 mod std_words_cache;
 use std_words_cache::*;
+mod lowered_modules;
+use lowered_modules::*;
 mod prelude_slices;
 use prelude_slices::*;
 pub mod binaryen;
@@ -137,6 +139,11 @@ fn modules_used_by(statements: &[Node]) -> Vec<String> {
 }
 
 /// The WebAssembly module a used name finds, when no warp source of that name exists
+/// The file a `use name` finds: a warp module, else a WebAssembly module
+fn module_file(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
+	loader.find(name).or_else(|| loader.find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
+}
+
 fn wasm_module_path(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
 	loader
 		.find(name)
@@ -191,6 +198,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let mut index = 0;
 	while let Some(name) = modules.get(index).cloned() {
 		index += 1;
+		note_lookup(&name, || module_file(&loader, &name));
 		if let Some(module) = wasm_module_path(&loader, &name) {
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);

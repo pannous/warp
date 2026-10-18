@@ -642,11 +642,19 @@ impl<'a> Loader<'a> {
 			return Ok(vec![]);
 		}
 		let shown = shown_path(&path);
-		let module = crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
-		if let Some(failure) = module.first_error() {
-			return Err(crate::errors::diagnostic::located_in_file(failure, &shown));
-		}
-		self.load_parsed(import, path, file, module)
+		let classes_early = classes_early(import, &file);
+		let lower = || {
+			let module = crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
+			match module.first_error() {
+				Some(failure) => Err(crate::errors::diagnostic::located_in_file(failure, &shown)),
+				None => lowered_source(&path, module, classes_early),
+			}
+		};
+		let module = match is_std_source(&shown.to_string_lossy()) {
+			true => lowered_std_module(source, classes_early, lower)?,
+			false => lower()?,
+		};
+		self.join_lowered(import, path, file, module)
 	}
 
 	/// lib/prelude.warp's definitions the program reaches, already parsed (use_prelude)
@@ -659,23 +667,13 @@ impl<'a> Loader<'a> {
 	}
 
 	fn load_parsed(&mut self, import: Import, path: PathBuf, file: PathBuf, module: Node) -> Result<Vec<Node>, Node> {
-		let shown = shown_path(&path);
-		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
-		let classes_early = import == Import::Use
-			&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(&file));
-		// alias lines are the loader's (modules::resolve), no code of the module
-		let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
-		let module =
-			Node::List(statements(module).into_iter().filter(kept).collect(), Bracket::None, Separator::Semicolon);
+		let module = lowered_source(&path, module, classes_early(import, &file))?;
+		self.join_lowered(import, path, file, module)
+	}
+
+	/// A module's lowered source joins the program: its own `use`s resolved, its declarations the program's words
+	fn join_lowered(&mut self, import: Import, path: PathBuf, file: PathBuf, module: Node) -> Result<Vec<Node>, Node> {
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = crate::compiler::phase_times::timed_as(
-			|| format!("module source passes of {}", shown.display()),
-			|| crate::pipeline::lower_module_source(module),
-		);
-		// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
-		if let Node::Error(_) = module.drop_meta() {
-			return Err(crate::errors::diagnostic::located_in_file(&module, &shown));
-		}
 		let module = with_module_directory(module, &directory);
 		let outer_directory = self.including_directory.replace(directory);
 		let (module, fast) = without_fast_pragma(module);
@@ -876,6 +874,30 @@ impl<'a> Loader<'a> {
 }
 
 /// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
+/// Whether insert_module_classes put the module's classes in front of the program already
+fn classes_early(import: Import, file: &PathBuf) -> bool {
+	import == Import::Use
+		&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(file))
+}
+
+/// A parsed module after the passes it runs before joining the program (pipeline::lower_module_source)
+fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node, Node> {
+	let shown = shown_path(path);
+	// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
+	// alias lines are the loader's (modules::resolve), no code of the module
+	let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
+	let module = Node::List(statements(module).into_iter().filter(kept).collect(), Bracket::None, Separator::Semicolon);
+	let module = crate::compiler::phase_times::timed_as(
+		|| format!("module source passes of {}", shown.display()),
+		|| crate::pipeline::lower_module_source(module),
+	);
+	// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
+	match module.drop_meta() {
+		Node::Error(_) => Err(crate::errors::diagnostic::located_in_file(&module, &shown)),
+		_ => Ok(module),
+	}
+}
+
 pub(crate) fn shown_path(path: &Path) -> PathBuf {
 	path.components().filter(|component| !matches!(component, std::path::Component::CurDir)).collect()
 }

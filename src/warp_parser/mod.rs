@@ -54,7 +54,7 @@ mod expressions;
 mod literals;
 pub(crate) use expressions::*;
 pub(crate) use literals::*;
-pub use literals::{shader_blocks, without_shader_texts};
+pub use literals::{shader_blocks, without_shader_texts, PathLiteral};
 use lookahead::*;
 pub use scanning::read_atoms;
 use scanning::*;

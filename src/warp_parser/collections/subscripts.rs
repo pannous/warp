@@ -6,17 +6,17 @@ const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("
 
 /// The name before a minus written apart, `f - 2`: the subtraction, where `f -2` applies a callable f to -2, as the
 /// math words do (`abs - 2`, `abs -2`; negated_calls::lower_negated_calls)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SpacedMinus;
 
 /// The number a subscript was written with, `1` of `d[1]`, kept on its shifted index `d#2`: a map keyed by numbers
 /// reads it (number_keys.rs, P34)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrittenIndex(pub Number);
 
 /// The `1` a subscript adds to its index, `xs[i]` read `xs#(i+1)`: unlike a `+ 1` written by hand, a position meeting
 /// the brackets drops it (index_positions.rs, card index-position)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SubscriptOffset;
 
 /// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time.
