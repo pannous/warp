@@ -177,12 +177,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
 	crate::lowering::lambdas::lower_member_lambdas,
-	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options
-	// of a select are read
-	crate::lowering::glued_attributes::lower,
-	// `select{ bind: fruit; ["apple" "pear"] }`: its options spelled out (select_options.rs), before markup_tags makes the
-	// loop over a list variable's options a comprehension and any pass reads the bind
-	crate::lowering::select_options::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::lowering::markup_tags::lower,
