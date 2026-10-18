@@ -49,6 +49,9 @@ alias lowercase = lower
 // the text builtin trim, Python's strip
 alias strip = trim
 alias reversed = reverse
+alias size = count
+alias len = count
+alias length = count
 alias sorted = sort
 alias clone = copy
 alias ordinal = ord
