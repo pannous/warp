@@ -484,7 +484,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
 		return Err(misread.into_error());
 	}
-	if let Some(unfillable) = crate::lowering::class_methods::check_self_typed_fields(&node) {
+	if let Some(unfillable) = crate::analyzer::self_typed_fields::check_self_typed_fields(&node) {
 		return Err(unfillable.into_error());
 	}
 	crate::errors::diagnostic::report(&crate::web::accessibility::warnings(&node))?;
