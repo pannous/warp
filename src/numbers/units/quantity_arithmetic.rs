@@ -32,7 +32,7 @@ pub(super) fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
 
 /// Products, quotients and powers of what `leaf` reads: units (`km/h`) or dimensions (`length/duration`)
 pub(super) fn factor_expression(node: &Node, leaf: &dyn Fn(&Node) -> Option<Vec<Factor>>) -> Option<Vec<Factor>> {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Key(base, Op::Pow, exponent) => Some(powered(factor_expression(base, leaf)?, whole_exponent(exponent)?)),
 		Node::Key(left, Op::Mul, right) => {
 			Some([factor_expression(left, leaf)?, factor_expression(right, leaf)?].concat())
@@ -40,7 +40,6 @@ pub(super) fn factor_expression(node: &Node, leaf: &dyn Fn(&Node) -> Option<Vec<
 		Node::Key(left, Op::Div, right) => {
 			Some([factor_expression(left, leaf)?, inverse(&factor_expression(right, leaf)?)].concat())
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => factor_expression(&items[0], leaf),
 		other => leaf(other),
 	}
 }

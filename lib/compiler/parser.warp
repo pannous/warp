@@ -45,7 +45,7 @@ def items(p, closer, bracket) {
 		// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
 		if stray and p.grouped { break }
 		before = p.at
-		item = if stray then stray_closer(p, c) else expression(p, 0)
+		item = if stray then stray_closer(p, c) else if follows_clause_word(found) then header_expression(p, 0) else expression(p, 0)
 		newline = skip_blanks(p)
 		if bracket == "" and newline and line_indent(p) > p.indent {
 			body = lines_below(p)
@@ -62,6 +62,16 @@ def items(p, closer, bracket) {
 	p.grouped = outer_grouped
 	grouped(found, bracket)
 }
+
+// `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
+// Rust twin: conditions.rs ends_with_clause_word
+def follows_clause_word(found) {
+	if found.length == 0 { return false }
+	last = found#(found.length)#1
+	last is list and last.length == 2 and last#1 == "symbol" and CLAUSE_WORDS.contains(last#2)
+}
+
+CLAUSE_WORDS = ["where", "match", "switch"]
 
 def stray_closer(p, c) {
 	p.at = p.at + 1
@@ -277,6 +287,11 @@ def continued(p, left, min_power) {
 			op = p.code[p.at .. p.at + 2]
 			p.at = p.at + 2
 			left = ["key", op, left, ø]
+		} else if c == '!' and SUFFIX_POWER >= min_power and bang_suffix_at(p) {
+			p.at = p.at + 1
+			fully = is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n)
+			if fully { p.at = p.at + 1 }
+			left = forced(left, fully)
 		} else if c == '[' and p.at > 0 and not is_blank(p.code[p.at - 1]) and INDEX_POWER >= min_power {
 			p.at = p.at + 1
 			skip_blanks(p)
@@ -303,6 +318,13 @@ def continued(p, left, min_power) {
 			p.at = p.at + word.length
 			skip_blanks(p)
 			left = listed("", " ", [left, ["symbol", word], expression(p, 116)])
+		} else if down_to_at(p) > 0 {
+			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
+			powers = binding_powers("to")
+			if powers#1 < min_power { break }
+			p.at = p.at + down_to_at(p)
+			skip_blanks(p)
+			left = listed("(", "", [["symbol", "reverse"], ["key", "to", expression(p, powers#2), left]])
 		} else {
 			op = operator_at(p)
 			if op.length == 0 {
@@ -593,8 +615,42 @@ def slice_from_start(p) {
 	ø
 }
 
-// Below member access and indexing: `xs#1++`
+// Below member access and indexing: `xs#1++`, `xs#2!`
 SUFFIX_POWER = 165
+
+// The `!` at the parser's position is the suffix `x!`, not a `!=` nor a prefix `!` of the operand after it: glued to
+// its operand and followed by a blank, an infix operator or `)` (`name! email?`, `x!+1`), or no operand follows
+// Rust twin: suffixes.rs try_parse_evaluate_bang
+def bang_suffix_at(p) {
+	next = peek(p.code, p.at + 1, p.n)
+	if next == '=' { return false }
+	glued = p.at > 0 and not is_blank(p.code[p.at - 1]) and " \t!+-*/%^<>)".contains(next)
+	glued or not operand_follows(p, 1)
+}
+
+// `left!` (`left!!` when fully): `x.upper!` and `upper x!` mark their name for mutation.rs, `upper(x)!` assigns the
+// result back to x, `{…}!` runs the block anyway, `ø!` unwraps
+// Rust twin: suffixes.rs try_parse_evaluate_bang
+def forced(left, fully) {
+	if left == ø { return listed("(", "", [["symbol", "unwrap"], ø]) }
+	variable = mutated_variable(left)
+	dotted = left is list and left#1 == "key" and left#2 == "."
+	if variable != ø and not dotted { return ["key", "=", variable, left] }
+	if left is list and left#1 == "list" and left#2 == "{" { return left }
+	["attribute", "mutated", if fully then 2 else true, left]
+}
+
+// The variable a call written before `!` changes: x in `x.upper`, `x.upper()` and `upper(x)`
+// Rust twin: mutation.rs mutated_variable
+def mutated_variable(call) {
+	if not (call is list) { return ø }
+	if call#1 == "key" and call#2 == "." and is_name(call#3) and is_method(call#4) { return call#3 }
+	if call#1 == "list" and call#2 == "(" and call.length == 5 and is_name(call#4) and is_name(call#5) { return call#5 }
+	ø
+}
+
+def is_name(view) := view is list and view.length == 2 and view#1 == "symbol"
+def is_method(view) := is_name(view) or (view is list and view#1 == "list" and view.length > 3 and is_name(view#4))
 // The left power of `#`, which a glued `[` indexes with
 INDEX_POWER = 170
 
@@ -634,6 +690,14 @@ def operand_follows(p, width) {
 
 // `word` at the parser's position as a whole word
 def keyword_at(p, word) := keyword_at_position(p, word, p.at)
+
+// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), else 0
+// Rust twin: ranges.rs down_to_length
+def down_to_at(p) {
+	if not keyword_at(p, "down") { return 0 }
+	at = blank_end(p, p.at + 4)
+	if at > p.at + 4 and keyword_at_position(p, "to", at) then at + 2 - p.at else 0
+}
 
 // Left and right binding power of an operator
 // Rust twin: operators.rs Op::binding_power

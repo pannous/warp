@@ -6,6 +6,7 @@
 //! of `mk = () => …`, and the functions of an imported module
 
 use crate::lowering::nodes::key;
+use crate::program_names::Meaning;
 use std::collections::HashSet;
 
 use crate::node::{Bracket, Node};
@@ -25,19 +26,10 @@ pub fn lower(node: Node) -> Node {
 
 /// The names assigned a value that is no function, and the loop variables
 fn bound_variables(program: &Node) -> HashSet<String> {
-	let functions = crate::analyzer::function_definitions(program).user_functions;
-	let mut variables: HashSet<String> = crate::lowering::for_loop::loop_variables(program).into_iter().collect();
-	program.visit(&mut |part| {
-		if let Node::Key(target, Op::Assign, value) = part {
-			let is_function = crate::lowering::lambdas::arrow_lambda(value).is_some()
-				|| crate::closures::referenced_function(value).is_some();
-			if let Some(name) = target.symbol_name().filter(|_| !is_function) {
-				variables.insert(name.to_string());
-			}
-		}
-	});
-	variables.retain(|name| !functions.contains_key(name));
-	variables
+	let bindings = crate::program_names::Bindings::of(program);
+	let is_value = |(_, meaning): &(&str, Meaning)| matches!(meaning, Meaning::Variable | Meaning::Loop);
+	let values = bindings.meanings().filter(is_value).map(|(name, _)| name);
+	values.filter(|name| !bindings.binds_as(name, Meaning::Function)).map(String::from).collect()
 }
 
 fn ungrouped_receivers(node: Node, variables: &HashSet<String>) -> Node {

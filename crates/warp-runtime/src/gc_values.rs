@@ -82,7 +82,7 @@ pub fn json_of<T>(node: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory
 			let code = data.unwrap_anyref().and_then(|reference| reference.unwrap_i31(&*store).ok());
 			Value::String(code.and_then(|code| char::from_u32(code.get_u32())).unwrap_or('\0').to_string())
 		}
-		TEXT | SYMBOL | ERROR => Value::String(text_of(&data, store, memory)?),
+		TEXT | SYMBOL | ERROR => Value::String(text_of(&data, value, store, memory)?),
 		KEY => Value::Object(Map::from_iter([entry_of(&data, &value, store, memory)?])),
 		BLOCK => object_of(items_of(data, value, store)?, store, memory)?,
 		LIST if high_bits == CURLY => object_of(items_of(data, value, store)?, store, memory)?,
@@ -96,8 +96,24 @@ pub fn json_of<T>(node: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory
 	})
 }
 
-/// The items of a list of cons cells: each cell's first item, then its rest, a cell or a last single item
+/// The items of a list held as a vector, `$list (len i32, items (array anyref))` (lib/compiler/emitter.warp): its first
+/// field is the i32 length, where a cons cell's first item is a $Node, whose first field is the i64 kind
+pub fn vector_items<T>(data: &Val, store: &mut StoreContextMut<'_, T>) -> Option<Vec<Val>> {
+	let vector = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
+	let Val::I32(length) = vector.field(&mut *store, 0).ok()? else {
+		return None;
+	};
+	let items = vector.field(&mut *store, 1).ok()?.unwrap_anyref()?.as_array(&*store).ok()??;
+	let items: Vec<Val> = items.elems(&mut *store).ok()?.take(length as usize).collect();
+	Some(items)
+}
+
+/// The items of a list from its node's data and value: a vector's items, else those of its cons cells, each cell's
+/// first item, then its rest, a cell or a last single item
 pub fn items_of<T>(mut first: Val, mut rest: Val, store: &mut StoreContextMut<'_, T>) -> Result<Vec<Val>> {
+	if let Some(items) = vector_items(&first, store) {
+		return Ok(items);
+	}
 	let mut items = vec![];
 	loop {
 		if first.unwrap_anyref().is_some() {
@@ -186,10 +202,25 @@ fn integer_of<T>(payload: &Val, store: &mut StoreContextMut<'_, T>) -> Result<f6
 	})
 }
 
-/// The letters of a `$String(ptr, len)` in linear memory
-fn text_of<T>(string: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory) -> Result<String> {
+/// The text of a Text node from its data, after the texts before it when it is a rope (text_append: data the last
+/// piece, the value field the text before it)
+fn text_of<T>(data: &Val, before: Val, store: &mut StoreContextMut<'_, T>, memory: Memory) -> Result<String> {
+	let mut pieces = vec![bytes_of(data, store, memory)?];
+	let mut before = before;
+	while let Some((_, data, earlier)) = fields(&before, store) {
+		pieces.push(bytes_of(&data, store, memory)?);
+		before = earlier;
+	}
+	Ok(String::from_utf8_lossy(&pieces.into_iter().rev().flatten().collect::<Vec<u8>>()).into_owned())
+}
+
+/// The bytes of a text: a GC byte array `$Text`, or a `$String(ptr, len)` in linear memory
+fn bytes_of<T>(string: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory) -> Result<Vec<u8>> {
+	if let Some(Ok(array)) = string.unwrap_anyref().map(|reference| reference.unwrap_array(&*store)) {
+		return Ok(array.elems(&mut *store)?.map(|byte| byte.unwrap_i32() as u8).collect());
+	}
 	let Some(string) = as_struct(string, store) else {
-		return Ok(String::new());
+		return Ok(vec![]);
 	};
 	let pointer = string.field(&mut *store, 0)?.unwrap_i32() as u32 as usize;
 	let length = string.field(&mut *store, 1)?.unwrap_i32() as u32 as usize;
@@ -197,7 +228,7 @@ fn text_of<T>(string: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory) 
 		.data(&*store)
 		.get(pointer..pointer + length)
 		.ok_or_else(|| wasmtime::Error::msg("a text beyond memory"))?;
-	Ok(String::from_utf8_lossy(bytes).into_owned())
+	Ok(bytes.to_vec())
 }
 
 /// The constructors, memory and text heap of the program: what JSON is built into a node with

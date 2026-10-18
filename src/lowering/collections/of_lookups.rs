@@ -15,7 +15,6 @@ use crate::lowering::comprehensions::{WHERE_KEYWORD, WITHOUT_WORD, WITH_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, FROM_WORD, IN_WORD, OF_WORD, PRINT_WORD};
-use std::collections::HashSet;
 
 /// The words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t`
 pub const SELECTOR_WORDS: [&str; 11] = [
@@ -44,8 +43,7 @@ pub fn lower(node: Node) -> Node {
 	if !has_type_of && !has_selection && !node.mentions_any(&[OF_WORD]) {
 		return node;
 	}
-	let mut defined = crate::library_words::defined_names(&node);
-	defined.extend(loop_variables(&node));
+	let defined = crate::program_names::Bindings::of(&node).bound();
 	let selectors: Vec<&str> = SELECTOR_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
 	rewrite(node, &selectors)
 }
@@ -86,8 +84,7 @@ fn as_one_phrase(node: Node) -> Node {
 	if !matches!(node.drop_meta(), Node::List(_, Bracket::None, Separator::Space)) {
 		return node;
 	}
-	let mut words = vec![];
-	crate::lambdas::flatten_phrase(&node, &mut words);
+	let words = crate::lowering::nodes::phrase_words_of(&node);
 	match words.iter().any(|word| word.is_symbol(OF_WORD)) {
 		true => Node::List(words, Bracket::None, Separator::Space),
 		false => node,
@@ -123,19 +120,6 @@ fn print_walk(node: &Node, selectors: &[&str]) -> Option<Node> {
 	let body = Node::List(vec![print.clone(), part.clone()], Bracket::Curly, Separator::Space);
 	let words = [Node::Symbol(FOR_WORD.to_string()), part, Node::Symbol(IN_WORD.to_string()), selected, body];
 	Some(Node::List(words.to_vec(), Bracket::None, Separator::Space))
-}
-
-/// The names a loop binds, `for words in xs`: a selector word bound so is the program's name
-fn loop_variables(node: &Node) -> HashSet<String> {
-	let mut bound = HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::List(items, _, _) = part {
-			for pair in items.windows(2).filter(|pair| pair[0].is_symbol(FOR_WORD)) {
-				bound.extend(pair[1].symbol_name().map(str::to_string));
-			}
-		}
-	});
-	bound
 }
 
 /// `of` after anything but a type head, `in` and `from` after a selector word: `words in t`

@@ -718,7 +718,7 @@ fn run_time_tolerance(value: &Node, spread: &Node) -> Result<Node, String> {
 
 /// `5 m/s` as its amount and unit text: a number times units, then more units multiplied or divided
 fn unit_literal(node: &Node) -> Option<(Node, String)> {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Key(amount, Op::Mul, unit) if matches!(amount.drop_meta(), Node::Number(_)) => {
 			Some((amount.drop_meta().clone(), unit_text(unit)?))
 		}
@@ -727,7 +727,6 @@ fn unit_literal(node: &Node) -> Option<(Node, String)> {
 			let joint = if *op == Op::Mul { "·" } else { "/" };
 			Some((amount, format!("{written}{joint}{}", unit_text(unit)?)))
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => unit_literal(&items[0]),
 		_ => None,
 	}
 }
@@ -937,7 +936,7 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 	if !(needs_quantities(&program) || program.mentions_any(&[NOW_WORD, TIME_WORD])) {
 		return program;
 	}
-	let bound = crate::system_values::assigned_symbols(&program);
+	let bound = crate::program_names::Bindings::of(&program).bound();
 	let constants = constant_quantities(&program);
 	let clock = !bound.contains(NOW_WORD);
 	let time_is_the_type = !bound.contains(TIME_WORD);

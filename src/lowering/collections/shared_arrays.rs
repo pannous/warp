@@ -994,10 +994,7 @@ fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap
 
 /// What a shared array named by `node` holds, if it is one
 fn shared(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
-	match node.drop_meta() {
-		Node::Symbol(name) => names.get(name).copied().filter(|kind| !kind.value),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| names.get(name).copied().filter(|kind| !kind.value))
 }
 
 /// `(xs·list = float[count(xs)]; for xs·index in 1 to count(xs) { xs·list#xs·index = get(xs, xs·index) }; xs·list)`
@@ -1021,10 +1018,7 @@ fn collected(array: &Node, kind: Shared) -> Node {
 
 /// The type of a shared value named by `node`, if it is one
 fn shared_value(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
-	match node.drop_meta() {
-		Node::Symbol(name) => names.get(name).copied().filter(|kind| kind.value),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| names.get(name).copied().filter(|kind| kind.value))
 }
 
 /// `n + v` or `n - v` as the value of `n`: the compound operator and v

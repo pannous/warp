@@ -51,9 +51,7 @@ const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEM
 /// parameter are one list, `sum 1 2 3` is `sum [1 2 3]`, and a scalar function broadcasts over it (`square 1 2 3`).
 /// After the lambda passes, which make `sum := fold +` a function of one parameter; `f(1, 2, 3)` stays an arity error.
 pub fn lower_several_arguments(program: Node) -> Node {
-	let mut found = Vec::new();
-	definitions(&program, &mut found);
-	implicit_definitions(&program, &mut found);
+	let found = program_definitions(&program);
 	let single: HashSet<String> = found
 		.iter()
 		.filter(|definition| definition.params.len() == 1)
@@ -77,9 +75,7 @@ pub fn lower_several_arguments(program: Node) -> Node {
 /// A call short of arguments takes the items after its comma, as in Ruby: `add 1, 2` → `add(1, 2)`, `x = add 1, 2`
 pub fn lower_prefix_calls(program: Node) -> Node {
 	let program = all_calls(program);
-	let mut found = Vec::new();
-	definitions(&program, &mut found);
-	implicit_definitions(&program, &mut found); // `square := it*it` and `f = x => …` take arguments too (P143)
+	let found = program_definitions(&program); // `square := it*it` and `f = x => …` take arguments too (P143)
 	let library_calls = LibraryCalls::of(&program, &found);
 	let program = nest_library_calls(program, &library_calls);
 	let mut arities: HashMap<String, Arity> = HashMap::new();
@@ -89,44 +85,32 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 		let typed = definition.params.first().is_some_and(|first| {
 			rules_out_a_truth_value(first) || is_arithmetic_operand(&definition.body, &first.name())
 		});
-		let arity = arities.entry(definition.name.clone()).or_insert(Arity {
-			fewest: count,
-			most: count,
-			typed_first: typed,
-			converts: false,
-			library: false,
-		});
-		*arity = Arity {
-			fewest: arity.fewest.min(count),
-			most: arity.most.max(count),
-			typed_first: arity.typed_first && typed,
-			converts: false,
-			library: false,
-		};
+		arities
+			.entry(definition.name.clone())
+			.and_modify(|known| {
+				known.fewest = known.fewest.min(count);
+				known.most = known.most.max(count);
+				known.typed_first &= typed;
+			})
+			.or_insert(Arity { library: false, ..Arity::library(count, count, typed) });
 	}
 	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter.
 	// Next to a comparison it follows the user functions' rule: its value is typed as the type itself, `int 3 == 3` is
 	// `(int 3) == 3` like `f(x: int)`; a truth type (`bool 3 == 3`) takes anything and is ambiguous like `same(x) := x`
 	for name in used_words(&program, |name| crate::analyzer::is_type_call_word(name).then_some(())).into_keys() {
 		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
-		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true, library: true });
+		arities.entry(name).or_insert(Arity { converts: true, ..Arity::library(1, 1, typed) });
 	}
 	// `round(floor x)`, `upper(lower t)`: a library word of a typed value nests like a function of its parameters
 	for (name, (fewest, most)) in used_words(&program, crate::lowering::library_signatures::typed_first_parameters) {
-		arities.entry(name).or_insert(Arity { fewest, most, typed_first: true, converts: false, library: true });
+		arities.entry(name).or_insert(Arity::library(fewest, most, true));
 	}
 	if arities.is_empty() {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
-		arities.entry(word.to_string()).or_insert(Arity {
-			fewest: 1,
-			most: 1,
-			typed_first: false,
-			converts: false,
-			library: true,
-		});
+		arities.entry(word.to_string()).or_insert(Arity::library(1, 1, false));
 	}
 	nest_prefix_calls(program, &arities)
 }
@@ -171,22 +155,18 @@ pub(crate) fn all_marked(argument: &Node) -> Option<&Node> {
 
 /// The function and the list of `f all xs`, also as the parser nests a known function's argument, `f (all xs)`
 pub(crate) fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
-	let is_all = |node: &Node| node.is_symbol(ALL_WORD);
 	match items {
-		[function, all, list] if is_all(all) => Some((function, list)),
+		[function, all, list] if all.is_symbol(ALL_WORD) => Some((function, list)),
 		// `square (all xs)` as the parser nests a known function's argument, `(square all) xs` as a value
-		[first, second] => match (first.drop_meta(), second.drop_meta()) {
-			(_, Node::List(words, Bracket::None, Separator::Space)) if words.len() == 2 && is_all(&words[0]) => {
-				Some((first, &words[1]))
-			}
-			(Node::List(words, Bracket::None, Separator::Space), _) if words.len() == 2 && is_all(&words[1]) => {
+		[first, second] => all_marked(second).map(|list| (first, list)).or_else(|| match first.drop_meta() {
+			Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[1].is_symbol(ALL_WORD) => {
 				Some((&words[0], second))
 			}
 			_ => None,
-		},
+		}),
 		_ => None,
 	}
-	.filter(|(function, _)| matches!(function.drop_meta(), Node::Symbol(_)))
+	.filter(|(function, _)| function.symbol_name().is_some())
 }
 
 /// The fewest and the most parameters of a function's definitions
@@ -202,6 +182,12 @@ struct Arity {
 	library: bool,
 }
 
+impl Arity {
+	fn library(fewest: usize, most: usize, typed_first: bool) -> Arity {
+		Arity { fewest, most, typed_first, converts: false, library: true }
+	}
+}
+
 /// The words the program calls and does not name itself that `known` recognises, with what it says about each
 fn used_words<V>(program: &Node, known: impl Fn(&str) -> Option<V>) -> HashMap<String, V> {
 	let mut used = HashMap::new();
@@ -212,7 +198,7 @@ fn used_words<V>(program: &Node, known: impl Fn(&str) -> Option<V>) -> HashMap<S
 			}
 		}
 	});
-	let names = crate::soft_keywords::names_given(program);
+	let names = crate::program_names::Bindings::of(program).given();
 	used.retain(|name, _| !names.contains(name));
 	used
 }
@@ -233,14 +219,11 @@ fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
 	let is_word = |name: &str| {
 		crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name) || name == COUNT_WORD
 	};
-	matches!(node.drop_meta(), Node::Symbol(name) if arities.get(name).is_none_or(|takes| takes.library) && is_word(name))
+	node.symbol_name().is_some_and(|name| arities.get(name).is_none_or(|takes| takes.library) && is_word(name))
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
-	match node.drop_meta() {
-		Node::Symbol(name) => arities.get(name).copied(),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| arities.get(name).copied())
 }
 
 /// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading; in a
@@ -356,32 +339,29 @@ impl LibraryCalls {
 	fn of(program: &Node, found: &[Definition]) -> LibraryCalls {
 		let functions = found.iter().map(|definition| definition.name.clone()).collect();
 		let function_parameters = crate::function_values::higher_order_parameters(found);
-		LibraryCalls { functions, named: crate::soft_keywords::names_given(program), function_parameters }
+		LibraryCalls { functions, named: crate::program_names::Bindings::of(program).given(), function_parameters }
 	}
 
 	/// The library word at item `at` of a call calls the value after it: the caller takes no function there
 	/// (`map reverse xs`, `twice(upper, "hi")` pass the word on)
 	fn is_value_call(&self, items: &[Node], at: usize) -> bool {
-		let takes_function = match items[0].drop_meta() {
-			Node::Symbol(name) => match self.function_parameters.get(name) {
-				Some(indexes) => indexes.contains(&(at - 1)),
-				None => at == 1 && crate::lowering::lambdas::takes_a_function_first(&items[0]),
-			},
-			_ => false,
-		};
+		let takes_function = items[0].symbol_name().is_some_and(|name| match self.function_parameters.get(name) {
+			Some(indexes) => indexes.contains(&(at - 1)),
+			None => at == 1 && crate::lowering::lambdas::takes_a_function_first(&items[0]),
+		});
 		self.is_library_call(&items[at]) && !takes_function
 	}
 
 	/// A call taking values: the program's function, or a standard function or output word it does not name itself
 	fn is_caller(&self, node: &Node) -> bool {
-		let Node::Symbol(name) = node.drop_meta() else { return false };
-		self.functions.contains(name) || (crate::library_words::is_calling_word(name) && !self.named.contains(name))
+		node.symbol_name().is_some_and(|name| {
+			self.functions.contains(name) || (crate::library_words::is_calling_word(name) && !self.named.contains(name))
+		})
 	}
 
 	/// A library word of one value the program does not name itself: `reverse`, `sorted`, `first`, `split`
 	fn is_library_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name)
-			if crate::library_words::needs_one_value(name) && !self.named.contains(name))
+		node.symbol_name().is_some_and(|name| crate::library_words::needs_one_value(name) && !self.named.contains(name))
 	}
 }
 
@@ -476,7 +456,7 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::Space)
-			if items.len() > 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if single.contains(name)) =>
+			if items.len() > 2 && items[0].symbol_name().is_some_and(|name| single.contains(name)) =>
 		{
 			*gathered = true;
 			let mut items: Vec<Node> = items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect();
@@ -645,14 +625,14 @@ fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 		let Node::Key(target, op @ (Op::Define | Op::Assign), body) = part else {
 			return;
 		};
-		let Node::Symbol(name) = target.drop_meta() else { return };
+		let Some(name) = target.symbol_name() else { return };
 		// `f = x => x + 1`: lambdas.rs makes it the definition f(x) later
 		if let Some(lambda) = crate::lambdas::arrow_lambda(body) {
-			let params = lambda.params.iter().map(|param| Node::Symbol(param.clone())).collect();
-			found.push(Definition { name: name.clone(), params, body: lambda.body });
+			let params = lambda.params.iter().map(|param| symbol(param)).collect();
+			found.push(Definition { name: name.to_string(), params, body: lambda.body });
 		} else if *op == Op::Define {
 			let params = vec![symbol(IMPLICIT_PARAMETER)];
-			found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
+			found.push(Definition { name: name.to_string(), params, body: body.as_ref().clone() });
 		}
 	});
 }
@@ -701,7 +681,7 @@ fn tests_kind_of(body: &Node, name: &str) -> bool {
 }
 
 fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
-	let is_param = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	let is_param = |node: &Node| node.is_symbol(name);
 	let is_list_literal = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Square, _));
 	let mut found = false;
 	without_element_wise(body.clone()).visit(&mut |node| {
@@ -730,13 +710,17 @@ fn broadcasting_call<'a>(
 	separator: &Separator,
 	functions: &HashSet<String>,
 ) -> Option<(&'a str, &'a Node)> {
-	let is_call = matches!(
-		(bracket, separator),
-		(Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)
-	); // also `(f [1 2])`
 	let [head, argument] = items else { return None };
 	let name = head.symbol_name()?;
-	(is_call && functions.contains(name)).then_some((name, argument))
+	(is_call_shape(bracket, separator) && functions.contains(name)).then_some((name, argument))
+}
+
+/// `f(x)`, `f x`, also `(f [1 2])`
+fn is_call_shape(bracket: &Bracket, separator: &Separator) -> bool {
+	matches!(
+		(bracket, separator),
+		(Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)
+	)
 }
 
 /// Variable → whether every value assigned to it is a list literal that is no object; a broadcast over the variable itself
@@ -753,7 +737,7 @@ fn collect_list_variables(
 	let mut variables: HashSet<String> = HashSet::new();
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, _) = part {
-			variables.extend(assigned_variable(target).map(|(name, _)| name.clone()));
+			variables.extend(assigned_variable(target).map(|(name, _)| name.to_string()));
 		}
 	});
 	node.visit(&mut |part| match part {
@@ -797,13 +781,13 @@ fn collect_list_variables(
 						Node::List(items, bracket, separator) => {
 							let is_list_argument = |argument: &Node| {
 								is_list_literal(argument)
-									|| matches!(argument.drop_meta(), Node::Symbol(list) if assigned.get(list) == Some(&true))
+									|| argument.symbol_name().is_some_and(|list| assigned.get(list) == Some(&true))
 							};
 							broadcasts_a_list(items, bracket, separator, functions, scalar_parameters, is_list_argument)
 						}
 						_ => appends_literal(value, name),
 					};
-				*assigned.entry(name.clone()).or_insert(true) &= is_list;
+				*assigned.entry(name.to_string()).or_insert(true) &= is_list;
 			}
 		}
 	});
@@ -816,14 +800,10 @@ fn appends_literal(value: &Node, name: &str) -> bool {
 }
 
 /// The variable `x = …` or `x: type = …` assigns, and its declared type
-fn assigned_variable(target: &Node) -> Option<(&String, Option<&Node>)> {
+fn assigned_variable(target: &Node) -> Option<(&str, Option<&Node>)> {
 	match target.drop_meta() {
-		Node::Symbol(name) => Some((name, None)),
-		Node::Key(name, Op::Colon, declared_type) => match name.drop_meta() {
-			Node::Symbol(name) => Some((name, Some(declared_type))),
-			_ => None,
-		},
-		_ => None,
+		Node::Key(name, Op::Colon, declared_type) => Some((name.symbol_name()?, Some(declared_type))),
+		other => Some((other.symbol_name()?, None)),
 	}
 }
 
@@ -873,8 +853,7 @@ fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) 
 	let Node::List(items, bracket, separator) = value.drop_meta() else {
 		return false;
 	};
-	broadcasting_call(items, bracket, separator, functions)
-		.is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == variable))
+	broadcasting_call(items, bracket, separator, functions).is_some_and(|(_, argument)| argument.is_symbol(variable))
 }
 
 struct Broadcast {
@@ -983,21 +962,11 @@ impl Broadcast {
 	/// `names.upper`, `names.upper()`: the method form of a broadcasting function maps over the list as `upper names`
 	/// does (card method-broadcast, default pending the user's decision)
 	fn broadcast_method(&self, receiver: &Node, method: &Node) -> Option<Node> {
-		let name = match method.drop_meta() {
-			Node::Symbol(name) => name,
-			Node::List(items, Bracket::Round, _) => match items.as_slice() {
-				[only] => match only.drop_meta() {
-					Node::Symbol(name) => name,
-					_ => return None,
-				},
-				_ => return None,
-			},
-			_ => return None,
-		};
+		let name = method.ungrouped().symbol_name()?;
 		if !self.is_list(receiver) {
 			return None;
 		}
-		self.broadcast_call(&[Node::Symbol(name.clone()), receiver.clone()], &Bracket::Round, &Separator::None)
+		self.broadcast_call(&[symbol(name), receiver.clone()], &Bracket::Round, &Separator::None)
 	}
 
 	/// `people.name` of a list of instances whose type declares the field name: `map(people, item => item.name)`; a list's
@@ -1018,18 +987,16 @@ impl Broadcast {
 	fn is_list_value(&self, node: &Node) -> bool {
 		is_range(node)
 			|| is_broadcast(node)
-			|| matches!(node.drop_meta(), Node::Symbol(variable) if self.list_variables.contains(variable) && !self.shadowed.borrow().contains(variable))
+			|| node.symbol_name().is_some_and(|variable| {
+				self.list_variables.contains(variable) && !self.shadowed.borrow().iter().any(|name| name == variable)
+			})
 	}
 
 	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
 	/// parameter of one value (or is marked `all`, wiki/all.md) maps over that list, the other arguments as they are
 	fn broadcast_one_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let is_call = matches!(
-			(bracket, separator),
-			(Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)
-		);
 		let (name, arguments) = word_headed(items)?;
-		if !is_call || arguments.is_empty() {
+		if !is_call_shape(bracket, separator) || arguments.is_empty() {
 			return None;
 		}
 		let marked: Vec<usize> =
@@ -1067,7 +1034,7 @@ impl Broadcast {
 		if is_dispatched(node) && is_scalar_operand(&operand, &[]) {
 			return None;
 		}
-		let [left, right] = ELEMENT_WISE_SIDES.map(|side| Node::Symbol(side.to_string()));
+		let [left, right] = ELEMENT_WISE_SIDES.map(symbol);
 		let item = element_wise_item(node, left.clone(), right.clone())?;
 		// a dispatch's right side is an item, never the list the analyzer sees passed (`p .- c()`): of any kind, so the
 		// class's method is not compiled for a list
@@ -1106,7 +1073,7 @@ impl Broadcast {
 		if self.defines_sum || *bracket != Bracket::Round || head.name() != SUM_WORD {
 			return None;
 		}
-		let (receiver, op, operand) = element_wise_parts(ungrouped(argument))?;
+		let (receiver, op, operand) = element_wise_parts(argument.ungrouped())?;
 		if !self.is_list_expression(&receiver) {
 			return None;
 		}
@@ -1115,19 +1082,15 @@ impl Broadcast {
 			return Some(self.paired(receiver, op, operand, PAIRED_SUM_TEMPLATE));
 		}
 		let named = self.namer();
-		let item = key(Node::Symbol(named("ITEM")), op, operand);
+		let item = key(symbol(&named("ITEM")), op, operand);
 		Some(super::nodes::filled(&named(FUSED_SUM_TEMPLATE), [("fused_list", receiver), ("fused_item", item)]))
 	}
 
 	/// A list, or an element-wise expression giving one: `xs`, `[1 2]`, `(xs .* 2)`
 	fn is_list_expression(&self, node: &Node) -> bool {
-		match node.drop_meta() {
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_list_expression(&items[0]),
-			_ => {
-				self.is_list(node)
-					|| element_wise_parts(node).is_some_and(|(receiver, _, _)| self.is_list_expression(&receiver))
-			}
-		}
+		let node = node.ungrouped();
+		self.is_list(node)
+			|| element_wise_parts(node).is_some_and(|(receiver, _, _)| self.is_list_expression(&receiver))
 	}
 
 	/// `dot(xs, ys)`: `sum(xs .* ys)`
@@ -1154,7 +1117,7 @@ impl Broadcast {
 	/// `abs [-1 2]`, `sqrt([4, 9])`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable
 	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
 		let applied = |element: Node| key(Node::Empty, op, element);
-		let argument = ungrouped(argument);
+		let argument = argument.ungrouped();
 		match argument {
 			Node::List(elements, Bracket::Square, separator)
 				if !elements.is_empty() && !elements.iter().any(is_colon_pair) =>
@@ -1221,22 +1184,13 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 
 /// A number, a parameter used only as an operand, or arithmetic of them: no list can be there
 fn is_scalar_operand(node: &Node, parameters: &[String]) -> bool {
-	match ungrouped(node) {
+	match node.ungrouped() {
 		Node::Number(_) => true,
 		Node::Symbol(name) => parameters.contains(name),
 		Node::Key(left, op, right) if ARITHMETIC.contains(op) || *op == Op::Neg => {
 			(left.is_empty_node() || is_scalar_operand(left, parameters)) && is_scalar_operand(right, parameters)
 		}
 		_ => false,
-	}
-}
-
-/// `x.map(each_element => each_element op operand)`: x, op, operand
-/// `(x)` → x
-fn ungrouped(node: &Node) -> &Node {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),
-		other => other,
 	}
 }
 
@@ -1271,7 +1225,7 @@ pub const EACH_ELEMENT: &str = "each_element";
 
 /// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
-	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
+	let element = || Box::new(symbol(EACH_ELEMENT));
 	let lambda = Node::Key(element(), Op::Arrow, Box::new(Node::Key(element(), op, Box::new(operand))));
 	key(list, Op::Dot, call("map", vec![lambda]))
 }
@@ -1292,6 +1246,7 @@ pub fn lower_element_wise_operators(node: Node) -> Node {
 	}
 }
 
+/// `x.map(each_element => each_element op operand)`: x, op, operand
 pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 	let (receiver, item) = element_wise_map(node)?;
 	let Node::Key(left, op, operand) = instance_dispatch(item).unwrap_or(item).drop_meta() else {
@@ -1316,7 +1271,7 @@ fn element_wise_map(node: &Node) -> Option<(&Node, &Node)> {
 }
 
 fn is_each_element(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if name == EACH_ELEMENT)
+	node.is_symbol(EACH_ELEMENT)
 }
 
 /// An element-wise item of a program whose class defines the operator (`use sound`: Note.plus) as class_methods
@@ -1387,7 +1342,7 @@ fn untyped_parameters(head: &Node, op: Op) -> Vec<String> {
 
 /// Whether `name` appears in body only as an operand of arithmetic or as an element-wise receiver
 fn only_operand(body: &Node, name: &str) -> bool {
-	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	let is_name = |node: &Node| node.is_symbol(name);
 	if let Some((receiver, _, operand)) = element_wise_parts(body) {
 		return (is_name(&receiver) || only_operand(&receiver, name)) && only_operand(&operand, name);
 	}

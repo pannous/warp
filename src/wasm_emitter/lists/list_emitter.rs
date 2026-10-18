@@ -26,8 +26,7 @@ const PLAIN_VALUE_KINDS: [Kind; 9] = [
 ];
 
 /// Runtime functions called from lowered code with their node arguments, and how many those are
-const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
-	(crate::list_mutations::LIST_DROP_LAST, 1),
+const NODE_ARGUMENT_CALLS: [(&str, usize); 3] = [
 	(crate::list_mutations::LIST_BECOME, 2),
 	(super::super::lists::list_ops::LIST_EXTEND, 2),
 	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),
@@ -946,7 +945,7 @@ impl WasmGcEmitter {
 		]);
 		self.emit_field(func, instance_local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-		let (pointer, length) = self.allocate_string(type_name);
+		let (pointer, length) = self.memory_string(type_name);
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_symbol");
 		self.emit_call(func, super::super::VALUES_EQUAL);

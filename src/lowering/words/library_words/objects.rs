@@ -53,12 +53,11 @@ pub(super) fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 /// A field read by name (`p.x`, `p["x"]`), an element of one (`company.employees#2`), or either in parentheses: the
 /// value may be an object
 pub(super) fn is_field_lookup(node: &Node) -> bool {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Key(_, Op::Hash, index) if crate::warp_parser::subscript_key(index).and_then(field_name).is_some() => {
 			true
 		}
 		Node::Key(list, Op::Hash, _) => is_field_lookup(list),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_field_lookup(&items[0]),
 		_ => false,
 	}
 }
@@ -228,22 +227,11 @@ pub(super) fn bind_read_data_objects(program: Node) -> Node {
 /// The names the program defines or binds, as variables, functions, parameters or loop variables: an alias or library
 /// word never shadows one (P142, card library-word)
 pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
-	let mut defined: HashSet<String> = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
-	collect_assigned_names(node, &mut defined);
-	let context = crate::analyzer::function_definitions(node);
-	defined.extend(context.parameter_names());
-	defined.extend(context.user_functions.into_keys());
-	// a method lowered from a class or Go's `func (p Point) Sum()`: `(Sum self:Point) := …`
-	node.visit(&mut |part| {
-		if let Node::Key(head, Op::Define, _) = part {
-			defined.insert(crate::node::leading_name(head));
-		}
-	});
-	defined
+	crate::program_names::Bindings::of(node).bound()
 }
 
 pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
-	names.extend(node.assigned_names::<Vec<String>>(|op| matches!(op, Op::Assign | Op::Define)));
+	names.extend(node.written_names::<Vec<String>>());
 }
 
 impl Lowering {

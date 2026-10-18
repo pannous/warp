@@ -485,7 +485,7 @@ pub fn field_def_to_val_type(field: &FieldDef, emitter: &WasmGcEmitter) -> ValTy
 		FieldStorage::F64 => ValType::F64,
 		FieldStorage::I32 => ValType::I32,
 		FieldStorage::F32 => ValType::F32,
-		FieldStorage::Text => reference(HeapType::Concrete(emitter.type_manager.string_type)),
+		FieldStorage::Text => reference(HeapType::Concrete(emitter.type_manager.text_type)),
 		FieldStorage::Node => reference(HeapType::Concrete(emitter.type_manager.node_type)),
 		FieldStorage::Named => match emitter.ctx.user_type_indices.get(named_field_type(&field.type_name)) {
 			Some(&type_idx) => reference(HeapType::Concrete(type_idx)),

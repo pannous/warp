@@ -15,7 +15,7 @@ impl WasmGcEmitter {
 		if self.is_runtime_text(url_node) {
 			self.emit_string_ptr_len(func, url_node);
 		} else {
-			let (url_ptr, url_len) = self.allocate_string(&url);
+			let (url_ptr, url_len) = self.memory_string(&url);
 			Self::emit_list(func, &[I32Const(url_ptr as i32), I32Const(url_len as i32)]);
 		}
 		let import = match timeout {
@@ -32,7 +32,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::Drop);
 			}
 			let reason = format!("fetch {url} failed: host imports are not available");
-			let (ptr, len) = self.allocate_string(&reason);
+			let (ptr, len) = self.memory_string(&reason);
 			Self::emit_list(func, &[I32Const(ptr as i32), I32Const(-(len as i32))]);
 		}
 		let (len, ptr) = (self.scratch(0), self.scratch(1));

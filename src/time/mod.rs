@@ -524,8 +524,7 @@ fn only_time_words(node: &Node) -> bool {
 
 /// `2 hours in minutes`, `d as h`: a duration converted to a unit, a quantity
 fn is_unit_conversion(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_unit_conversion(&items[0]),
+	match node.ungrouped() {
 		Node::List(items, _, _) => converted_to_unit(items),
 		Node::Key(_, Op::As, unit) => {
 			matches!(unit.drop_meta(), Node::Symbol(word) if crate::numbers::units::names_unit(word))

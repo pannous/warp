@@ -347,7 +347,7 @@ impl WasmGcEmitter {
 
 	/// A return area in the module's data, aligned for the pointer and length a text result leaves there
 	fn static_return_area(&mut self) -> i32 {
-		let (address, _) = self.allocate_string(&"\0".repeat((RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT - 1) as usize));
+		let (address, _) = self.memory_string(&"\0".repeat((RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT - 1) as usize));
 		(address as i32 + RETURN_AREA_ALIGNMENT - 1) & -RETURN_AREA_ALIGNMENT
 	}
 }

@@ -394,7 +394,7 @@ impl WasmGcEmitter {
 	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b
 	pub(super) fn emit_literal(&mut self, func: &mut Function, node: &Node) {
 		match node.drop_meta() {
-			Node::Symbol(name) => self.emit_string_call(func, name, "new_symbol"),
+			Node::Symbol(name) => self.emit_symbol_node(func, name),
 			Node::Key(left, op, right) => {
 				self.emit_literal(func, left);
 				self.emit_literal(func, right);

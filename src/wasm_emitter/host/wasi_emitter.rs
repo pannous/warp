@@ -58,13 +58,13 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_wasi_puts(&mut self, func: &mut Function, arg: &Node) {
 		// Get string data pointer and length
 		let (str_ptr, str_len) = match arg.drop_meta() {
-			Node::Text(s) => self.allocate_string(s),
+			Node::Text(s) => self.memory_string(s),
 			Node::Symbol(var_name) => match self.scope.lookup(var_name) {
 				// a text variable with its stored data
 				Some(local) if local.data_pointer > 0 => (local.data_pointer, local.data_length),
 				// any other variable: its value at run time (writing the name, or nothing, was a silent wrong answer)
 				Some(_) => return self.emit_runtime_puts(func, arg),
-				None => self.allocate_string(var_name),
+				None => self.memory_string(var_name),
 			},
 			_ => return self.emit_runtime_puts(func, arg),
 		};
@@ -213,8 +213,7 @@ impl WasmGcEmitter {
 		}
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let (empty, _) = self.allocate_string("");
-		let newline = self.allocate_string(PRINT_TERMINATOR);
+		let newline = self.string_table.literal(PRINT_TERMINATOR);
 		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
 			let (value, text) = (0, 1);
 			let write =
@@ -232,17 +231,14 @@ impl WasmGcEmitter {
 			// [x] or [x, "\n"] joined: a printed line is one write, so lines of concurrent tasks do not interleave
 			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value)]);
 			if ends_line {
-				Self::emit_list(
-					f,
-					&[I::I64Const(SQUARE_LIST_KIND), I::I32Const(newline.0 as i32), I::I32Const(newline.1 as i32)],
-				);
-				s.call(f, "new_text");
+				f.instruction(&I::I64Const(SQUARE_LIST_KIND));
+				s.emit_constant_text(f, newline);
 				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 			} else {
 				f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
 			}
-			Self::emit_list(f, &[I::StructNew(node_type), I::I32Const(empty as i32), I::I32Const(0)]);
-			s.call(f, "new_text");
+			f.instruction(&I::StructNew(node_type));
+			s.emit_empty_text(f);
 			s.call(f, "list_join");
 			f.instruction(&I::LocalSet(text));
 			write(f, &|f| s.emit_text_field(f, text, 0), &|f| s.emit_text_field(f, text, 1));
@@ -253,7 +249,7 @@ impl WasmGcEmitter {
 	/// Emit WASI puti, putl and putf: write a number to stdout, without a newline; a run-time value through put_value
 	pub(in crate::wasm_emitter) fn emit_wasi_put_number(&mut self, func: &mut Function, arg: &Node) {
 		if let Node::Number(n) = arg.drop_meta() {
-			let (str_ptr, str_len) = self.allocate_string(&n.to_string());
+			let (str_ptr, str_len) = self.memory_string(&n.to_string());
 			if self.emit_stdout_write(func, str_ptr, str_len) {
 				func.instruction(&I::Drop);
 			}

@@ -120,7 +120,7 @@ fn lowering(node: Node, strict: bool) -> Node {
 	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
 	let path_variables = crate::warp_parser::path_variables(&node);
-	let bound = crate::lowering::module_properties::bound_names(&node);
+	let bound = crate::program_names::Bindings::of(&node).bound();
 	Lowering { context, classes, path_variables, bound, counter: Counter::starting_at(first_fresh), strict }
 		.expand(node)
 }
@@ -525,17 +525,17 @@ fn member_of(node: &Node) -> Option<&str> {
 	name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))
 }
 
-/// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
-/// `find`, `map`, `filter`, … under any spelling: a class's method of that name keeps them for other values
 /// `by` of `sort by: f`, `key` of `sort(key=f)`
 pub(crate) fn is_sort_label(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()))
 }
 
+/// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
 pub(crate) fn is_iteration_word(name: &str) -> bool {
 	iteration_word(&Node::Symbol(name.to_string())).is_some()
 }
 
+/// `find`, `map`, `filter`, … under any spelling: a class's method of that name keeps them for other values
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	let name = word.symbol_name()?;
 	let canonical =
@@ -769,21 +769,12 @@ fn c_style_parameters(head: &Node) -> Node {
 
 /// `fun a b` (as `(fun a) b`): the names after the function keyword
 fn keyword_and_names(head: &Node) -> Option<Vec<Node>> {
-	let mut words = vec![];
-	flatten_phrase(head, &mut words);
+	let words = crate::lowering::nodes::phrase_words_of(head);
 	let (keyword, names) = words.split_first()?;
 	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word));
 	(is_keyword && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_)))).then(|| names.to_vec())
 }
 
-pub(crate) fn flatten_phrase(node: &Node, words: &mut Vec<Node>) {
-	match node.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Space) => items.iter().for_each(|item| flatten_phrase(item, words)),
-		other => words.push(other.clone()),
-	}
-}
-
-/// `{it*it}`: a block that is no object; its parameter is `it` when the body uses it
 /// Swift's `{ $0 * 2 }`; a block without a `$` name is no lambda, and is not copied to find that out (closures::tail
 /// asks for every block)
 fn shorthand_block_lambda(node: &Node, items: &[Node]) -> Option<Lambda> {
@@ -792,6 +783,7 @@ fn shorthand_block_lambda(node: &Node, items: &[Node]) -> Option<Lambda> {
 	block_lambda(node).filter(|lambda| lambda.params.first().is_some_and(|param| param.starts_with(SHORTHAND_MARK)))
 }
 
+/// `{it*it}`: a block that is no object; its parameter is `it` when the body uses it
 fn block_lambda(node: &Node) -> Option<Lambda> {
 	let Node::List(items, Bracket::Curly, separator) = node.drop_meta() else {
 		return None;
@@ -978,7 +970,7 @@ struct Lowering {
 	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
 	classes: HashSet<String>,
 	path_variables: HashSet<String>,
-	/// the names the program gives (module_properties::bound_names): a function value may be any of them
+	/// the names the program gives (program_names::Bindings::bound): a function value may be any of them
 	bound: HashSet<String>,
 	counter: Counter,
 	strict: bool,
@@ -1000,21 +992,11 @@ impl Lowering {
 
 	fn expand(&self, node: Node) -> Node {
 		match node {
-			// the parser already reads `f = {it*2}` as the definition `f := {it*2}`
 			Node::Key(target, Op::Assign | Op::Define, value)
-				if matches!(target.drop_meta(), Node::Symbol(_)) && arrow_lambda(&value).is_some() =>
+				if target.symbol_name().is_some() && self.assigned_function(&value).is_some() =>
 			{
-				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
-				let lambda = arrow_lambda(&value).expect("guarded");
-				definition(name, Lambda { body: self.expand(lambda.body), ..lambda })
-			}
-			// `sum := fold +`: the iteration word with only its function is a function of the list
-			Node::Key(target, Op::Assign | Op::Define, value)
-				if matches!(target.drop_meta(), Node::Symbol(_)) && self.partial_application(&value).is_some() =>
-			{
-				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
-				let body = self.partial_application(&value).expect("guarded");
-				definition(name, Lambda::new(vec![PARTIAL_LIST.to_string()], self.expand(body)))
+				let lambda = self.assigned_function(&value).expect("guarded");
+				definition(target.symbol_name().expect("guarded"), Lambda { body: self.expand(lambda.body), ..lambda })
 			}
 			// a function head `find(folder:Path, pattern:text) := …` is no call: a class's method may share an iteration's word
 			Node::Key(head, Op::Define, body) if !matches!(head.drop_meta(), Node::Symbol(_)) => {
@@ -1150,8 +1132,9 @@ impl Lowering {
 		}
 		let (head, rest) = items.split_first()?;
 		if let Some(iteration) = self.iteration_of(head) {
-			// `map square on xs` of a known `square`: the parser applied it, `map (square (on xs))`
-			let rest = spliced_applications(rest.to_vec());
+			// `map square on xs` of a known `square`: the parser applied it, `map (square (on xs))`;
+			// `[square, [on, xs]]`, `[[square, on], xs]` → `[square, on, xs]`
+			let rest = super::nodes::phrase_words(rest);
 			// `map square on xs`, `map &square xs`: the function may come first
 			let rest: Vec<Node> = rest.iter().filter(|item| !item.is_symbol(ON_WORD)).cloned().collect();
 			let rest = labeled_list_first(rest);
@@ -1190,6 +1173,15 @@ impl Lowering {
 		}
 	}
 
+	/// The function an assignment defines: the parser already reads `f = {it*2}` as the definition `f := {it*2}`;
+	/// `sum := fold +`: the iteration word with only its function is a function of the list
+	fn assigned_function(&self, value: &Node) -> Option<Lambda> {
+		arrow_lambda(value).or_else(|| {
+			let body = self.partial_application(value)?;
+			Some(Lambda::new(vec![PARTIAL_LIST.to_string()], body))
+		})
+	}
+
 	/// `fold +`, `map square`, `reduce (a b)->a+b`: the call of the iteration word over the parameter `partial_list`
 	fn partial_application(&self, value: &Node) -> Option<Node> {
 		let (word, function) = match dangling_operator(value) {
@@ -1207,12 +1199,9 @@ impl Lowering {
 			return None;
 		}
 		let list = symbol(PARTIAL_LIST);
-		let identity = match function.drop_meta() {
-			Node::Symbol(text) => {
-				OPERATOR_IDENTITIES.iter().find(|(known, _)| known == text).map(|(_, identity)| Node::int(*identity))
-			}
-			_ => None,
-		};
+		let identity = function.symbol_name().and_then(|text| {
+			OPERATOR_IDENTITIES.iter().find(|(known, _)| *known == text).map(|(_, identity)| Node::int(*identity))
+		});
 		Some(match (iteration.extra_arguments, identity) {
 			(0, _) => call(iteration.word, vec![list, function]),
 			// a fold without a start: the identity of its operator, else the first item starts (reduce)
@@ -1306,16 +1295,14 @@ impl Lowering {
 	fn parameter_count(&self, function: &Node) -> Option<usize> {
 		match literal_function(function) {
 			Some(lambda) => Some(lambda.params.len()),
-			None => match function.drop_meta() {
-				// `sort(xs, by: count)`: a library word of one value is a key
-				Node::Symbol(name) => self
-					.context
+			// `sort(xs, by: count)`: a library word of one value is a key
+			None => function.symbol_name().and_then(|name| {
+				self.context
 					.user_functions
 					.get(name)
 					.map(|defined| defined.params.len())
-					.or_else(|| crate::library_words::is_one_value_function(name).then_some(1)),
-				_ => None,
-			},
+					.or_else(|| crate::library_words::is_one_value_function(name).then_some(1))
+			}),
 		}
 	}
 
@@ -1323,12 +1310,10 @@ impl Lowering {
 	fn compares(&self, function: &Node) -> bool {
 		match literal_function(function) {
 			Some(lambda) => is_boolean_body(&lambda.body),
-			None => match function.drop_meta() {
-				Node::Symbol(name) => {
-					self.context.user_functions.get(name).is_some_and(|defined| is_boolean_body(&defined.body))
-				}
-				_ => false,
-			},
+			None => function
+				.symbol_name()
+				.and_then(|name| self.context.user_functions.get(name))
+				.is_some_and(|defined| is_boolean_body(&defined.body)),
 		}
 	}
 
@@ -1377,17 +1362,6 @@ impl Lowering {
 }
 
 /// `map xs f` with names only is read as `(map xs) f`: a braceless application whose head is a braceless application continues it
-/// `[square, [on, xs]]`, `[[square, on], xs]` → `[square, on, xs]`: juxtapositions nested in the items, spliced in
-fn spliced_applications(items: Vec<Node>) -> Vec<Node> {
-	items
-		.into_iter()
-		.flat_map(|item| match item.drop_meta() {
-			Node::List(inner, Bracket::None, Separator::Space) => spliced_applications(inner.clone()),
-			_ => vec![item],
-		})
-		.collect()
-}
-
 fn flatten_prefix_application(items: Vec<Node>, bracket: &Bracket, separator: &Separator) -> Vec<Node> {
 	if *bracket != Bracket::None || *separator != Separator::Space {
 		return items;

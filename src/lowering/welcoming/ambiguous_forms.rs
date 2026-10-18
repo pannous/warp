@@ -207,9 +207,7 @@ fn function_position(items: &[Node], words: &SuffixWords) -> usize {
 /// program assigns is its variable, never a suffix word (`solved = solve(x); return solved`)
 fn suffix_words(node: &Node) -> SuffixWords {
 	// loop variables and parameters too: `for ord in xs { x = ord }` reads the item (card codepoint-loop-variable)
-	let mut variables: HashSet<String> = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
-	crate::library_words::collect_assigned_names(node, &mut variables);
-	variables.extend(crate::analyzer::function_definitions(node).parameter_names());
+	let variables = crate::program_names::Bindings::of(node).bound();
 	let mut functions = crate::analyzer::applicable_function_names(node);
 	// `trim(x) := x-1` is the program's trim·any beside the library's trim: `4 trimmed` chooses between them
 	let own_library_words: Vec<String> =

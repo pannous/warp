@@ -70,7 +70,8 @@ Per form: the form, the sources showing it, why it is left out, how to bring it 
 - `(function f).dump` in grouped_receivers: a function reference in parentheses keeps its group. The bridge's plain
   view drops the function-reference mark (an attribute layer), so the twin sees `(f)` and ungroups it when f is a
   loop variable. Sources: probes/joinable_error.warp. Back: keep the function-reference mark in plain views (twins.rs
-  plain, walk.warp plain).
+  plain, walk.warp plain). The self-hosted bridge keeps attribute layers since card suite-sort-bang (walk.warp
+  bridged, node_views handled_plain_view); the twin comparisons still use plain.
 
 ## Passes: SUGAR_PASSES triage
 Sources changed = probes and samples whose program the pass changes (tests/parser/test_sugar_survey.rs,

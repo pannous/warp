@@ -121,12 +121,11 @@ pub(crate) fn union_type_name(node: &Node) -> Option<String> {
 /// The type name of an inline union whose parts may also be declared classes: `Circle | Square` is `Circle or Square`
 pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) -> Option<String> {
 	pub(super) fn collect_parts(node: &Node, parts: &mut Vec<String>) -> Option<()> {
-		match node.drop_meta() {
+		match node.ungrouped() {
 			Node::Key(left, Op::Or, right) => {
 				collect_parts(left, parts)?;
 				collect_parts(right, parts)
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => collect_parts(&items[0], parts),
 			Node::Symbol(word) => {
 				parts.push(word.clone());
 				Some(())
@@ -138,7 +137,7 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 			_ => None,
 		}
 	}
-	let Node::Key(_, Op::Or, _) = strip_round(node).drop_meta() else {
+	let Node::Key(_, Op::Or, _) = node.ungrouped() else {
 		return None;
 	};
 	let mut parts = vec![];
@@ -169,13 +168,6 @@ pub(crate) fn union_of_types(node: &Node, is_declared: &dyn Fn(&str) -> bool) ->
 /// A builtin type or an inline union of builtin types: `int`, `int or text`
 pub(super) fn is_builtin_or_union(type_name: &str) -> bool {
 	union_parts(type_name).unwrap_or_else(|| vec![type_name]).iter().all(|part| builtin_type_kind(part).is_some())
-}
-
-pub(super) fn strip_round(node: &Node) -> &Node {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => strip_round(&items[0]),
-		other => other,
-	}
 }
 
 /// The local a checked result passes through (type_name_matching, `-> int`, `-> int or text`): errors read "the
@@ -356,7 +348,7 @@ pub(super) fn with_parameters_declared(head: &Node, declared: &HashMap<String, S
 pub(super) fn destructured_mismatch(node: &Node, declared: &HashMap<String, String>) -> Option<Diagnostic> {
 	let (names, values) = crate::tuples::destructuring(node)?;
 	let values = match values {
-		[one] => match strip_round(one) {
+		[one] => match one.ungrouped() {
 			Node::List(items, Bracket::Square | Bracket::Round, _) => items.as_slice(),
 			_ => return None,
 		},

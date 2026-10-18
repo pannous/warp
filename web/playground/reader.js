@@ -16,6 +16,12 @@ function readText(module, pointer, length) {
 	return utf8Decoder.decode(new Uint8Array(module.memory.buffer, pointer, length));
 }
 
+// a text payload is a GC byte array: read byte by byte through reflect_text_byte
+function readTextBytes(module, text) {
+	const bytes = Uint8Array.from({ length: module.reflect_text_len(text) }, (_, index) => module.reflect_text_byte(text, index));
+	return utf8Decoder.decode(bytes);
+}
+
 // JSON has no NaN, Infinity or -0: those travel as text
 function floatPayload(value) {
 	return Number.isFinite(value) && !Object.is(value, -0) ? value : String(Object.is(value, -0) ? "-0" : value);
@@ -26,7 +32,7 @@ function readPayload(module, payload, path) {
 		case "node": return { node: readNode(module, payload, path) };
 		case "int": return { int: String(module.reflect_i64(payload)) };
 		case "float": return { float: floatPayload(module.reflect_f64(payload)) };
-		case "string": return { text: readText(module, module.reflect_text_ptr(payload), module.reflect_text_len(payload)) };
+		case "string": return { text: readTextBytes(module, payload) };
 		case "i31": return { i31: module.reflect_i31(payload) };
 		case "big_int": {
 			const limbs = Array.from({ length: module.reflect_limb_count(payload) }, (_, index) => module.reflect_limb(payload, index) >>> 0);

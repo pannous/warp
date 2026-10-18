@@ -7,7 +7,6 @@ use super::*;
 pub mod blocks;
 pub mod for_loop;
 pub mod go_blocks;
-pub mod match_exhaustive;
 pub mod parallel;
 pub mod quasi_quote;
 pub mod result_word;

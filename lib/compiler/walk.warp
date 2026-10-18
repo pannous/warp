@@ -11,13 +11,24 @@ kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
 is_group(n: any) := bracket_of(n) != ø
 
+# an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
+# walks into
+attribute_word = "view·attribute"
+
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
 # (decision empty-group-node); Rust twin: tests/common/twins.rs plain
-plain(view: any) := {
+plain(view: any) := without_layers(view, no)
+
+# the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
+# (mutation.rs reads the mark of `x!`); Rust twin: src/compiler/node_views.rs handled_plain_view
+bridged(view: any) := without_layers(view, yes)
+
+# the view without literal layers, without attribute layers unless `attributes`, an empty group as ø
+without_layers(view: any, attributes: any) := {
 	kind = kind_of(view)
-	if kind == "literal" or kind == "attribute" { return plain(view#(#view)) }
+	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
 	if kind == "list" and #view == 3 { return ø }
-	if view is list { return view.map(plain) }
+	if view is list { return view.map(part => without_layers(part, attributes)) }
 	view
 }
 
@@ -29,6 +40,7 @@ node_of(view: any) := {
 	if kind == "key" { return key(node_of(view#3), view#2, node_of(view#4)) }
 	if kind == "list" { return separated(bracketed(view[3..].map(node_of), view#2), view#3) }
 	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
+	if kind == "attribute" { return key(symbol(attribute_word), ":", [view#2, node_of(view#3), node_of(view#4)]) }
 	if kind == "" { return view }
 	key(symbol(opaque_word), ":", view)
 }
@@ -37,6 +49,10 @@ node_of(view: any) := {
 view_of(n: any) := {
 	if type(n) is key {
 		if key_of(n) == symbol(opaque_word) { return value_of(n) }
+		if key_of(n) == symbol(attribute_word) {
+			layer = value_of(n)
+			return ["attribute", layer#1, view_of(layer#2), view_of(layer#3)]
+		}
 		return ["key", op_of(n), view_of(key_of(n)), view_of(value_of(n))]
 	}
 	if n is symbol { return ["symbol", name_of(n)] }

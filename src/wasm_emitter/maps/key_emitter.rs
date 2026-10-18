@@ -335,7 +335,7 @@ impl WasmGcEmitter {
 			// `{x: x}`: the name of an entry is its name, also when a variable or parameter is called so; an instance's
 			// `Point{…}` its class's name, no type value (TYPE_VALUE_MARK)
 			Node::Symbol(name) if *op == Op::Colon || self.names_a_type_value(name) => {
-				self.emit_string_call(func, name, "new_symbol")
+				self.emit_symbol_node(func, name)
 			}
 			_ => self.emit_node_instructions(func, left),
 		}
