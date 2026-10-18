@@ -205,10 +205,9 @@ channel, so small fades round: subtract a step (≥ 1/255) rather than multiply 
 ## Several passes (card gpu-multipass, design, not built)
 web-ocean renders its sea in passes (FFT spectra, a height-field texture, then the sea that samples it); one fragment
 shader per paint covers only the last pass. The plan, in warp's words, with $previous as the model:
-- **A pass is a painted function whose image stays on the GPU.** `waves = render(height_field, 256, 256)` (word
-  pending, warp-interviewer: render / image / texture) gives an image value: a texture handle, no readback, never
-  shown. Calling it again each frame renders into the same texture (kept by name like PREVIOUS_FRAMES).
-- **Another painted function reads it** as a function of a position: `waves(p.xz)` (or `sample(waves, uv)`) in
+- **A pass is a painted function whose image stays on the GPU.** `waves = render(height_field, 256, 256)` (decision
+  gpu-multipass: render, alias texture) gives an image value: a texture handle, no readback, never shown. Calling it again each frame renders into the same texture (kept by name like PREVIOUS_FRAMES).
+- **Another painted function reads it** as a function of a position (decision gpu-multipass): `waves(p.xz)` in
   `ocean(x, y)`. The kernel translation sees a program value that is an image (as it sees program vectors today,
   program_values) and makes it a texture binding: `@group(0) @binding(2 + k) var warp_image_k: texture_2d<f32>` plus a
   sampler, the call `textureSampleLevel(warp_image_k, warp_sampler, uv / size, 0.0)`; ints sample with textureLoad.
