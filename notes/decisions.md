@@ -317,7 +317,9 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   clauses tried in order (`simplify(data($a * 1)) := a; simplify(n) := n`); binding-alternatives: `|` branches bind when
   every branch binds the same names; whole-binding: `as` inside a pattern names the (sub)pattern
   (`data($f($inner) as call)`), outside it casts; text-patterns: `"0x" + rest`, at most one hole per side, plus
-  prefix/suffix and character classes.
+  prefix/suffix and character classes. A class is the type of a hole, like a typed hole that converts (`"0x" + h: hex`,
+  `"v" + n: digits`, `c: digit`, `"/users/" + id: int`); class words digit(s), letter(s), hex, space, word are type
+  words (Interviewer's decision).
 
 ## Classes, objects and enums
 - property-accessors: accessors are overloads by arity: getter `canvas.width := canvas_width`, setter `canvas.width(new_width) := …` or with `it`; a getter without setter is read-only (assigning is a loud error).
