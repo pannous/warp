@@ -216,12 +216,8 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 			};
 			let reflected = match (word, function) {
 				(BODY_WORD, Some(function)) => Some(crate::blocks::quoted_code(function.body.as_ref().clone())),
-				(word, None) if PARAMS_WORDS.contains(&word) => library().map(|(params, _)| text_list(&params)),
-				(SIGNATURE_WORD, None) => library().map(|(_, signature)| Node::Text(signature)),
-				(NAME_WORD, None) => library().map(|_| Node::Text(name.to_string())),
-				(RETURN_TYPE_WORD, None) => library().map(|(_, signature)| Node::Text(return_type(&signature))),
 				// the function value answers its words at run time (closures.rs FUNCTION_WORDS)
-				(word, Some(_)) if is_run_time_word(word) => {
+				(word, _) if is_run_time_word(word) && (function.is_some() || library().is_some()) => {
 					Some(key(crate::closures::function_reference(name.to_string()), Op::Dot, symbol(word)))
 				}
 				_ => None,
@@ -278,11 +274,6 @@ pub(crate) fn function_type(signature: &str) -> Node {
 /// `type(function floor)`: `builtin: (x:number) -> int` (decision dir-lists)
 pub(crate) fn builtin_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_tests::BUILTIN_TYPE))
-}
-
-/// `(a, b) -> int` → `int`
-fn return_type(signature: &str) -> String {
-	signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string()
 }
 
 /// A library word's parameter names and signature, unless the program defines that name itself

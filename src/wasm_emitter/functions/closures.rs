@@ -884,6 +884,10 @@ impl WasmGcEmitter {
 		let text = |text: String| Node::Text(text);
 		match (table, function, builtin_signature(target)) {
 			(FUNCTION_SIGNATURE, _, Some((_, signature))) => text(signature),
+			// `(x:number) -> int` → `int`
+			(FUNCTION_RETURN_TYPE, _, Some((_, signature))) => {
+				text(signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string())
+			}
 			(FUNCTION_PARAMS, _, Some((word, _))) => {
 				let params = crate::lowering::library_signatures::library_signature(word).map(|(params, _)| params);
 				crate::lowering::reflection::text_list(&params.unwrap_or_default())
