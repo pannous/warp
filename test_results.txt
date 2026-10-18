@@ -1436,8 +1436,10 @@ PASSED:
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
   ✓ functions::test_data_parameter::a_data_argument_is_its_code
+  ✓ functions::test_data_parameter::a_library_function_takes_data
   ✓ functions::test_data_parameter::a_tag_block_is_the_data_argument
   ✓ functions::test_data_parameter::bound_names_in_data_are_their_values
+  ✓ functions::test_data_parameter::names_assigned_in_data_stay_written
   ✓ functions::test_data_parameter::other_parameters_take_values
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_is_a_function
@@ -3786,7 +3788,6 @@ PASSED:
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
-  ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
@@ -6416,6 +6417,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_analyzer::matching_sources_keep_matching
 
 SUMMARY:
-16 ignored, 6413 passed, 0 failed, 6413 total tested
+16 ignored, 6414 passed, 1 failed, 6415 total tested

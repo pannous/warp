@@ -13,5 +13,4 @@ pub mod markup_tags;
 pub mod page_html;
 pub mod routes;
 pub mod serve;
-pub mod style_rules;
 pub mod transitions;

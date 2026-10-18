@@ -28,3 +28,17 @@ fn bound_names_in_data_are_their_values() {
 	is!("n = 2\nwritten(code: data) := str(code)\nwritten(\"count \" + n)", "count 2");
 	is!("written(code: data) := str(code)\nshown(x) := written(color: x)\nshown('blue')", "{color:\"blue\"}");
 }
+
+// a name assigned inside a data argument is not bound by the program: it stays as written
+#[test]
+fn names_assigned_in_data_stay_written() {
+	is!("written(code: data) := str(code)\nwritten{ x = 1 }", "{x=1}");
+}
+
+// a standard function with a data parameter (lib/markup.warp's style) takes its tag's block without `use`; a function
+// of the program's own of that name wins
+#[test]
+fn a_library_function_takes_data() {
+	is!("str(div{ style{ ul > li { margin: 0 } } })", "{div:style{\"ul > li\":{margin:0}}}");
+	is!("style(n) := n * 2\nstyle(4)", 8);
+}

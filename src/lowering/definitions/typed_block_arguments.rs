@@ -42,7 +42,9 @@ pub fn lower(program: Node) -> Node {
 	if functions.is_empty() {
 		return program;
 	}
-	let scope = Scope { functions: &functions, bound: program_names(&program) };
+	// the names bound outside the data arguments: `.done = "red"` in a style sheet binds nothing
+	let unspliced = taken_arguments(program.clone(), &Scope { functions: &functions, bound: HashSet::new() });
+	let scope = Scope { functions: &functions, bound: program_names(&unspliced) };
 	taken_arguments(program, &scope)
 }
 
@@ -52,7 +54,30 @@ fn program_names(program: &Node) -> HashSet<String> {
 	names
 }
 
+/// The program's functions taking data or a function, and the standard ones taking data it does not define
 fn taking_functions(program: &Node) -> Positions {
+	let mut functions = Positions::new();
+	functions.extend(std_functions_taking());
+	// a function of the program's own wins
+	program.visit(&mut |node| {
+		if let Some(head) = function_head(node) {
+			functions.remove(head.name);
+		}
+	});
+	functions.extend(functions_taking(program));
+	functions
+}
+
+/// The standard functions taking data, their definitions parsed once per thread and quietly: no hint about library code
+fn std_functions_taking() -> Positions {
+	thread_local!(static FUNCTIONS: Positions = crate::normalize::without_hints(|| {
+		let functions = crate::modules::std_data_functions().iter();
+		functions.flat_map(|(_, line)| functions_taking(&crate::warp_parser::parse(line))).collect()
+	}));
+	FUNCTIONS.with(Clone::clone)
+}
+
+fn functions_taking(program: &Node) -> Positions {
 	let mut functions = Positions::new();
 	program.visit(&mut |node| {
 		let Some(head) = function_head(node) else {

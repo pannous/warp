@@ -47,6 +47,8 @@ impl KnownTypes {
 		type_word_kind(name).is_some()
 			|| crate::type_tests::builtin_type_name(name).is_some()
 			|| name == ANY_TYPE
+			// `sheet: data`: the argument as an unevaluated tree (lowering/definitions/typed_block_arguments.rs)
+			|| name == crate::lowering::blocks::DATA_WORD
 			|| crate::lowering::declarations::is_collection_type_word(name)
 			|| self.user_types.get_by_name(name).is_some()
 			|| self.traits.is_trait(name)
