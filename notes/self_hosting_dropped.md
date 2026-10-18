@@ -166,6 +166,12 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Element types flow through function results (`r = f(); r#1` is int when f gives a list of ints), where Rust says
   any value: probes/algo/dijkstra/12c_implicit_return_list.warp, probes/algo/sorting/69_return_list_noreturn.warp,
   probes/module_scope/mytext.warp and four more left the pinned list for it.
+- Closure parameters given a run-time number: Rust's flow (card src-analyzer, 2026-10-18) says a number decided at
+  run time (`apply(function, data) -> data`, `closure_lambda_1(data)`), warp keeps int / any value
+  (`apply(function, int) -> empty`). Same program output. Left the pinned list: probes/cleanup/lambdas/
+  {bench_higher_order,bench_hoisted}.warp, probes/functions/forward_param.warp, probes/generators/yield_from.warp,
+  probes/ruby_yield/{do_block,twice}.warp, probes/self_hosting/readiness/ports/times_phrases.warp. Back: the warp flow
+  joins a run-time number beside ints to data, as Rust's `joined` does.
 
 ## Emitter: deviations
 - Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors
