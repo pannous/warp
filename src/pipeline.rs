@@ -90,9 +90,6 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 pub const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
-	// `rewrite p => t` rules of the program and of the standard modules it mentions (rewrites.rs, lib/channels.warp:
-	// `ch.send(v)` of `ch = channel()`), before go_blocks renames ch in a go block and system_signals reads the send
-	crate::modules::rewrites::lower,
 	// `if let Some(v) = o`, a match of `Some(v) =>` and `None =>` arms (rust_options.rs), before the arms below
 	crate::lowering::rust_options::lower,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
@@ -419,7 +416,9 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 		.iter()
 		.flat_map(|phase| phase.iter())
 		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(crate::lowering::for_loop::headers::lower(module), |module, pass| pass(module))
+		.fold(crate::lowering::for_loop::headers::lower(crate::modules::rewrites::lower(module)), |module, pass| {
+			pass(module)
+		})
 }
 
 /// The program just before and just after the source pass `pass`, the earlier passes run as compiling runs them: what
@@ -440,7 +439,7 @@ pub fn around_source_pass_reporting(
 	let program = lawful_program(code).ok()?;
 	crate::errors::diagnostic::in_program_mode(program, |program| {
 		crate::lowering::nodes::numbering_fresh_names(|| {
-			let program = crate::lowering::for_loop::headers::lower(program);
+			let program = crate::lowering::for_loop::headers::lower(crate::modules::rewrites::lower(program));
 			let program = crate::lowering::data_items::lower(crate::lowering::blocks::seal_quoted(program));
 			let passes: Vec<Pass> = SOURCE_PHASES.iter().flat_map(|phase| phase.iter().copied()).collect();
 			let index = passes.iter().position(|each| std::ptr::fn_addr_eq(*each, pass))?;
@@ -474,6 +473,9 @@ pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	use crate::analyzer::effects::{without_constraints, EffectReport};
+	// `rewrite p => t` rules of the program and of the standard modules it mentions (rewrites.rs, lib/channels.warp:
+	// `ch.send(v)` of `ch = channel()`) as written, before any check or pass reads a rule's line
+	let node = crate::modules::rewrites::lower(node);
 	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
 	let node = crate::lowering::for_loop::headers::lower(node);
 	// `data e` as written: no sugar pass rewrites inside e

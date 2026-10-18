@@ -1,10 +1,13 @@
 //! `rewrite PATTERN => TEMPLATE` (card compiler-modules): code extending the compiler. A pattern's holes `$a` and
 //! `$xs...` bind as in a code pattern of a match (switch.rs code_tests), the template splices them as a data template
 //! (quasi_quote.rs). `where $c = channel()` holds where the hole binds a variable assigned code of that shape, or a
-//! parameter of a function called with one. A statement pattern also matches a block of just that statement. Rules go
-//! bottom-up, children first, each node rewritten once. A program's own rules apply to it; a standard module's rules
-//! apply to every program mentioning their words, and one that fires brings its module along with `use`
-//! (lib/channels.warp).
+//! parameter of a function called with one; `$x: text` (also symbol, list, block, int, number) only code of that kind.
+//! A phrase pattern (`$n beat`) matches each run of those words in a longer phrase or call (of `x = 2 beats`, which the
+//! parser keeps as `(x = 2) beats`, the value), a statement pattern also a block of just that statement, and a
+//! template of several statements `($a; $b)` takes the statement's place. Rules go bottom-up, children first, each node
+//! rewritten once. A program's own rules apply to it; a standard module's rules apply to every program mentioning
+//! their words but binding none itself, and one that fires brings its module along with `use` (lib/channels.warp,
+//! lib/sound.warp).
 use super::*;
 use crate::lowering::nodes::block;
 use crate::lowering::switch::{hole_name, rest_hole};
@@ -14,6 +17,8 @@ const REWRITE_LINE_START: &str = "rewrite ";
 const ARROW: &str = "=>";
 const WHERE_CLAUSE: &str = " where ";
 const WHERE_WORD: &str = "where";
+/// The kinds a typed hole `$x: text` names
+const HOLE_KINDS: [&str; 6] = ["text", "symbol", "list", "block", "int", "number"];
 
 #[derive(Clone)]
 struct Rule {
@@ -36,15 +41,22 @@ pub fn lower(program: Node) -> Node {
 			rules.extend(standard_rules(module).into_iter().filter(|rule| mentioned.contains(needed_word(rule))));
 		}
 	}
+	if rules.iter().any(|rule| rule.module.is_some()) {
+		let bound = crate::program_names::Bindings::of(&program).bound();
+		rules.retain(|rule| {
+			rule.module.is_none() || !literal_words(&rule.pattern).iter().any(|word| bound.contains(*word))
+		});
+	}
 	if rules.is_empty() {
 		return program;
 	}
-	let origins: Vec<HashSet<String>> = rules
+	let origins = rules
 		.iter()
 		.map(|rule| rule.origin.as_ref().map(|(_, shape)| assigned(&program, shape)).unwrap_or_default())
 		.collect();
-	let mut fired = vec![];
-	let program = rewritten(program, &rules, &origins, &mut fired);
+	let mut rewrite = Rewrite { rules: &rules, origins, fired: vec![] };
+	let program = rewrite.rewritten(program);
+	let mut fired = rewrite.fired;
 	fired.sort();
 	fired.dedup();
 	let uses = fired.iter().map(|module| crate::warp_parser::parse_generated(&format!("use {module}"))).collect();
@@ -110,6 +122,13 @@ fn rule_of(statement: &Node, module: Option<&'static str>) -> Option<Rule> {
 		Some((template, hole, shape)) => (template, Some((hole_name(&hole)?.to_string(), shape))),
 		None => (right.as_ref().clone(), None),
 	};
+	// `($a; $b)`: statements that take the rewritten statement's place
+	let template = match template.drop_meta() {
+		Node::List(statements, Bracket::Round, separator) if separator.separates_statements() => {
+			Node::List(statements.clone(), Bracket::None, separator.clone())
+		}
+		_ => template,
+	};
 	Some(Rule { pattern, template, origin, module })
 }
 
@@ -158,6 +177,13 @@ fn words(phrase: &Node) -> Vec<Node> {
 	}
 }
 
+/// The pattern's words that are no holes
+fn literal_words(pattern: &Node) -> Vec<&str> {
+	let mut found = vec![];
+	pattern.visit(&mut |part| found.extend(part.symbol_name().filter(|_| hole_name(part).is_none())));
+	found
+}
+
 fn first_word_of(pattern: &Node) -> Option<&str> {
 	match pattern.drop_meta() {
 		Node::Key(left, _, right) => first_word_of(left).or_else(|| first_word_of(right)),
@@ -176,18 +202,97 @@ fn symbols(program: &Node) -> HashSet<&str> {
 	names
 }
 
-fn rewritten(node: Node, rules: &[Rule], origins: &[HashSet<String>], fired: &mut Vec<&'static str>) -> Node {
-	let node = node.map_children(|child| rewritten(child, rules, origins, fired));
-	for (rule, origin) in rules.iter().zip(origins) {
-		if let Some(result) = applied(rule, origin, &node) {
-			fired.extend(rule.module);
-			return result.with_meta_of(&node);
-		}
-	}
-	node
+struct Rewrite<'a> {
+	rules: &'a [Rule],
+	origins: Vec<HashSet<String>>,
+	/// The standard modules whose rules fired
+	fired: Vec<&'static str>,
 }
 
-/// The rule's template for the node, a block's single statement kept a block
+impl Rewrite<'_> {
+	fn rewritten(&mut self, node: Node) -> Node {
+		let node = node.map_children(|child| self.rewritten(child));
+		let node = match node.drop_meta() {
+			Node::List(items, bracket, separator) if separator.separates_statements() => {
+				let statements = items.iter().flat_map(|statement| match statement.drop_meta() {
+					Node::List(inner, Bracket::None, made) if made.separates_statements() => inner.clone(),
+					_ => vec![statement.clone()],
+				});
+				Node::List(statements.collect(), bracket.clone(), separator.clone()).with_meta_of(&node)
+			}
+			Node::List(items, bracket, separator) => {
+				Node::List(self.with_runs(items), bracket.clone(), separator.clone()).with_meta_of(&node)
+			}
+			_ => node,
+		};
+		for (rule, origin) in self.rules.iter().zip(&self.origins) {
+			if is_run_pattern(&rule.pattern) {
+				continue;
+			}
+			if let Some(result) = applied(rule, origin, &node) {
+				self.fired.extend(rule.module);
+				return result.with_meta_of(&node);
+			}
+		}
+		node
+	}
+
+	/// The items with each run a phrase rule matches rewritten, left to right
+	fn with_runs(&mut self, items: &[Node]) -> Vec<Node> {
+		let mut items = items.to_vec();
+		let mut at = 0;
+		while at < items.len() {
+			match self.run_at(&items[at..]) {
+				Some((length, replacement)) => {
+					let replaced = words(&replacement);
+					let count = replaced.len();
+					items.splice(at..at + length, replaced);
+					at += count;
+				}
+				None => at += 1,
+			}
+		}
+		items
+	}
+
+	/// The length of a run starting the items that a phrase rule matches, and its rewrite; a run starting with `x = v`
+	/// or `x: v` rewrites v
+	fn run_at(&mut self, items: &[Node]) -> Option<(usize, Node)> {
+		for (rule, origin) in self.rules.iter().zip(&self.origins) {
+			let Node::List(words, Bracket::None, Separator::Space) = rule.pattern.drop_meta() else {
+				continue;
+			};
+			if !is_run_pattern(&rule.pattern) || items.len() < words.len() {
+				continue;
+			}
+			let mut run = items[..words.len()].to_vec();
+			let assigned = match run[0].drop_meta().clone() {
+				Node::Key(target, op @ (Op::Assign | Op::Colon), value) => {
+					run[0] = *value;
+					Some((target, op))
+				}
+				_ => None,
+			};
+			let Some(result) = applied(rule, origin, &phrase(run)) else {
+				continue;
+			};
+			self.fired.extend(rule.module);
+			let result = match assigned {
+				Some((target, op)) => Node::Key(target, op, Box::new(result)),
+				None => result,
+			};
+			return Some((words.len(), result));
+		}
+		None
+	}
+}
+
+/// A pattern of words without a rest: it matches runs of a phrase
+fn is_run_pattern(pattern: &Node) -> bool {
+	matches!(pattern.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if !words.iter().any(|word| rest_hole(word).is_some()))
+}
+
+/// The rule's template for the node; a block's single statement keeps its block
 fn applied(rule: &Rule, origin: &HashSet<String>, node: &Node) -> Option<Node> {
 	let holds = |bindings: &Bindings| match &rule.origin {
 		Some((hole, _)) => bindings.get(hole).and_then(Node::symbol_name).is_some_and(|name| origin.contains(name)),
@@ -205,7 +310,7 @@ fn applied(rule: &Rule, origin: &HashSet<String>, node: &Node) -> Option<Node> {
 	let mut bindings = Bindings::new();
 	let unbracketed = Node::List(statement.clone(), Bracket::None, separator.clone());
 	(matches(&rule.pattern, &unbracketed, &mut bindings) && holds(&bindings))
-		.then(|| block(vec![spliced(&rule.template, &bindings)]))
+		.then(|| block(spliced(&rule.template, &bindings).sequence_statements().to_vec()))
 }
 
 /// The code has the pattern's shape: a hole binds the subtree there, a repeated hole must be the same subtree, a key has
@@ -213,6 +318,9 @@ fn applied(rule: &Rule, origin: &HashSet<String>, node: &Node) -> Option<Node> {
 fn matches(pattern: &Node, code: &Node, bindings: &mut Bindings) -> bool {
 	if let Some(name) = hole_name(pattern) {
 		return bound(name, code.clone(), bindings);
+	}
+	if let Some((name, kind)) = typed_hole(pattern) {
+		return is_kind(code, kind) && bound(name, code.clone(), bindings);
 	}
 	match (pattern.drop_meta(), code.drop_meta()) {
 		(Node::Key(left, op, right), Node::Key(code_left, code_op, code_right)) => {
@@ -223,6 +331,23 @@ fn matches(pattern: &Node, code: &Node, bindings: &mut Bindings) -> bool {
 		}
 		(Node::List(..) | Node::Key(..), _) | (_, Node::List(..) | Node::Key(..)) => false,
 		(part, code_part) => part == code_part,
+	}
+}
+
+/// `$x: text`: the hole and the kind of code it takes
+fn typed_hole(pattern: &Node) -> Option<(&str, &str)> {
+	let Node::Key(hole, Op::Colon, kind) = pattern.drop_meta() else {
+		return None;
+	};
+	Some((hole_name(hole)?, kind.symbol_name().filter(|kind| HOLE_KINDS.contains(kind))?))
+}
+
+fn is_kind(code: &Node, kind: &str) -> bool {
+	match (kind, code.drop_meta()) {
+		("text", Node::Text(_)) | ("number", Node::Number(_)) | ("int", Node::Number(crate::Number::Int(_))) => true,
+		("list", Node::List(_, Bracket::Square, _)) | ("block", Node::List(_, Bracket::Curly, _)) => true,
+		("symbol", part @ Node::Symbol(_)) => hole_name(part).is_none(),
+		_ => false,
 	}
 }
 
@@ -263,6 +388,7 @@ fn spliced(template: &Node, bindings: &Bindings) -> Node {
 		}
 		Node::List(items, bracket, separator) => {
 			let items = items.iter().flat_map(|item| match rest_hole(item).and_then(|name| bindings.get(name)) {
+				Some(rest) if separator.separates_statements() => rest.body_statements(),
 				Some(Node::List(rest, _, _)) => rest.clone(),
 				_ => vec![spliced(item, bindings)],
 			});
