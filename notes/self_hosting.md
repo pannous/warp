@@ -154,7 +154,7 @@ shows the progress. Every compiler function typed (generic ones generically), wr
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
 | warp-list-result-type | the builtins' typed lines as the analyzer's signature table (analyzer.warp reads them); types on every lib/compiler function |
 | warp-self-emitter | emitter.warp beyond the core (int `/`, exact rationals, big ints, `#`, `==`, slices, errors, memo calls); the switch hands emission to it |
-| warp-self-passes | runtime.warp: the text, list and number runtime functions of src/wasm_emitter in warp |
+| warp-runtime (was self-passes) | runtime.warp: the text, list and number runtime functions of src/wasm_emitter in warp |
 | warp-clicking-guide (markup) | maps, classes/objects and equality: their layout in emitter.warp and their runtime words (coordinate emitter.warp hunks with warp-self-emitter) |
 | warp-parsing | twins for the source and meaning passes still without one, in target-shape order |
 | warp-cache | the end-to-end switch (each stage compiled once, speed), then caching emitted specialisations |
