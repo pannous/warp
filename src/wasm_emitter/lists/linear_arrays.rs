@@ -57,7 +57,7 @@ const PAIR_ALIGNED: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 
 /// Whether `body` is float arithmetic of the parameter and number literals, which a kernel computes lane by lane
 pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
-	match ungrouped(body) {
+	match body.ungrouped() {
 		Node::Symbol(name) => name == parameter,
 		Node::Number(number) => !matches!(number, crate::extensions::numbers::Number::Complex(..)),
 		Node::Key(left, op, right) if KERNEL_BINARY.iter().any(|(known, _, _)| known == op) => {
@@ -69,14 +69,6 @@ pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
 			is_float_kernel(parameter, operand)
 		}
 		_ => false,
-	}
-}
-
-/// The body without the parentheses around it: `sqrt(x)` and `(x + 1) * 2` group a single operand
-fn ungrouped(body: &Node) -> &Node {
-	match body.drop_meta() {
-		Node::List(items, crate::node::Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),
-		bare => bare,
 	}
 }
 
@@ -314,7 +306,7 @@ impl WasmGcEmitter {
 /// The kernel's body on the parameter in local `value`: an f64, or two in f64x2 lanes
 fn emit_kernel(func: &mut Function, parameter: &str, body: &Node, value: u32, lanes: bool) {
 	let pick = |(_, scalar, vector): &(Op, I<'static>, I<'static>)| if lanes { vector.clone() } else { scalar.clone() };
-	match ungrouped(body) {
+	match body.ungrouped() {
 		Node::Symbol(name) if name == parameter => {
 			func.instruction(&I::LocalGet(value));
 		}

@@ -232,7 +232,7 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 }
 
 pub(crate) fn collect_assigned_names(node: &Node, names: &mut HashSet<String>) {
-	names.extend(node.assigned_names::<Vec<String>>(|op| matches!(op, Op::Assign | Op::Define)));
+	names.extend(node.written_names::<Vec<String>>());
 }
 
 impl Lowering {

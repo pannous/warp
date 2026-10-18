@@ -237,10 +237,7 @@ fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
-	match node.drop_meta() {
-		Node::Symbol(name) => arities.get(name).copied(),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| arities.get(name).copied())
 }
 
 /// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading; in a
@@ -1106,7 +1103,7 @@ impl Broadcast {
 		if self.defines_sum || *bracket != Bracket::Round || head.name() != SUM_WORD {
 			return None;
 		}
-		let (receiver, op, operand) = element_wise_parts(ungrouped(argument))?;
+		let (receiver, op, operand) = element_wise_parts(argument.ungrouped())?;
 		if !self.is_list_expression(&receiver) {
 			return None;
 		}
@@ -1154,7 +1151,7 @@ impl Broadcast {
 	/// `abs [-1 2]`, `sqrt([4, 9])`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable
 	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
 		let applied = |element: Node| key(Node::Empty, op, element);
-		let argument = ungrouped(argument);
+		let argument = argument.ungrouped();
 		match argument {
 			Node::List(elements, Bracket::Square, separator)
 				if !elements.is_empty() && !elements.iter().any(is_colon_pair) =>
@@ -1221,7 +1218,7 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 
 /// A number, a parameter used only as an operand, or arithmetic of them: no list can be there
 fn is_scalar_operand(node: &Node, parameters: &[String]) -> bool {
-	match ungrouped(node) {
+	match node.ungrouped() {
 		Node::Number(_) => true,
 		Node::Symbol(name) => parameters.contains(name),
 		Node::Key(left, op, right) if ARITHMETIC.contains(op) || *op == Op::Neg => {
@@ -1232,14 +1229,6 @@ fn is_scalar_operand(node: &Node, parameters: &[String]) -> bool {
 }
 
 /// `x.map(each_element => each_element op operand)`: x, op, operand
-/// `(x)` → x
-fn ungrouped(node: &Node) -> &Node {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),
-		other => other,
-	}
-}
-
 /// Two lists, their items paired by index in `template`: a list of `left op right`, or their sum; `named` makes the
 /// template's names the rewrite's own
 pub(crate) fn paired_by(receiver: Node, op: Op, operand: Node, template: &str, named: impl Fn(&str) -> String) -> Node {

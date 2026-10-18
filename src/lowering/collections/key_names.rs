@@ -147,7 +147,7 @@ fn with_key_names(node: Node, keys: &KeyScope, warnings: &mut Vec<Diagnostic>) -
 			};
 			let body = &items[index];
 			let mut known = keys.own.clone();
-			known.extend(body.assigned_names::<Vec<String>>(|op| matches!(op, Op::Assign | Op::Define)));
+			known.extend(body.written_names::<Vec<String>>());
 			unbound_comparisons(body, &known, &keys.bound, warnings);
 			items[index] = named(body.clone(), keys);
 			Node::List(items, bracket, separator)

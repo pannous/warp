@@ -387,17 +387,11 @@ fn lowered_template(language: Language, tag: &Node, argument: &Node) -> Result<N
 }
 
 fn tag_of(node: &Node) -> Option<Language> {
-	match node.drop_meta() {
-		Node::Symbol(tag) => Language::tagged(tag),
-		_ => None,
-	}
+	node.symbol_name().and_then(Language::tagged)
 }
 
 fn runner_of(node: &Node) -> Option<Language> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Language::runs(name),
-		_ => None,
-	}
+	node.symbol_name().and_then(Language::runs)
 }
 
 /// The language of a template expression before lowering: `sql "…"`, or the bare tag of a flat `execute sql "…"`
