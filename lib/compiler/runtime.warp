@@ -50,7 +50,7 @@ node_text(n: any) := {
 		if unboxed_int(n) == 0 { return "no" }
 		return "yes"
 	}
-	if kind_code(n) == 1 { return int_text(unboxed_int(n)) }
+	if kind_code(n) == 1 { return exact_text(n) }
 	if kind_code(n) == 3 { return unboxed_text(n) }
 	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
 	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
@@ -97,6 +97,7 @@ node_add(a: any, b: any) := {
 	if is_null(b) == 1 { return a }
 	if kind_code(a) == 8 and kind_code(b) == 8 { return list_join(unboxed_list(a), unboxed_list(b)) }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return node_text(a) + node_text(b) }
+	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_add(a, b) }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) + unboxed_int(b) }
 	float_of_node(a) + float_of_node(b)
 }
@@ -196,8 +197,11 @@ text_trim(t: text) := {
 }
 # a space, a tab, a line feed or a carriage return
 is_space_byte(b: int) := b == 32 or b == 9 or b == 10 or b == 13
-# a boxed int (kind code 1) or float as a float
-float_of_node(n: any) := if kind_code(n) == 1 then unboxed_int(n) else unboxed_float(n)
+# a boxed int (kind code 1), exact rational or float as a float
+float_of_node(n: any) := {
+	if kind_code(n) != 1 { return unboxed_float(n) }
+	float(exact_numerator(n)) / float(exact_denominator(n))
+}
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int) := {
 	sign = if n < 0 then 1 else 0
@@ -229,5 +233,83 @@ char_text(c: char) := {
 	}
 	lead = if count == 1 then 0 else if count == 2 then 192 else if count == 3 then 224 else 240
 	set_byte(out, 0, lead + n)
+	out
+}
+
+## exact rationals: int `/` gives one, an int over a positive int in lowest terms (the Rust twin's Number::Quotient),
+## held in an Int $Node as a $Ratio (intrinsics is_ratio, ratio_of, ratio_numerator, ratio_denominator)
+int_gcd(a: int, b: int) := {
+	if a < 0 { a = -a }
+	if b < 0 { b = -b }
+	while b != 0 {
+		rest = int_remainder(a, b)
+		a = b
+		b = rest
+	}
+	a
+}
+# n/d in lowest terms, an int when d divides n; d 0 traps, as Rust's divide by zero fails
+exact_ratio(n: int, d: int) := {
+	if d == 0 { fail() }
+	divisor = int_gcd(n, d)
+	if d < 0 { divisor = -divisor }
+	n = int_quotient(n, divisor)
+	d = int_quotient(d, divisor)
+	if d == 1 { return n }
+	ratio_of(n, d)
+}
+# the numerator and denominator of an Int $Node, an int its own numerator over 1
+exact_numerator(n: any) := if is_ratio(n) == 1 then ratio_numerator(n) else unboxed_int(n)
+exact_denominator(n: any) := if is_ratio(n) == 1 then ratio_denominator(n) else 1
+exact_add(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_sub(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_mul(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
+exact_div(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_denominator(b), exact_denominator(a) * exact_numerator(b))
+# -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
+exact_order(a: any, b: any) := {
+	left = exact_numerator(a) * exact_denominator(b)
+	right = exact_numerator(b) * exact_denominator(a)
+	if left < right then -1 else if left > right then 1 else 0
+}
+# an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
+# any other as n/d
+exact_text(n: any) := {
+	if is_ratio(n) == 0 { return int_text(unboxed_int(n)) }
+	numerator = ratio_numerator(n)
+	denominator = ratio_denominator(n)
+	twos = factor_count(denominator, 2)
+	fives = factor_count(denominator, 5)
+	if denominator != power(2, twos) * power(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
+	digits = max_int(twos, fives)
+	scaled = int_quotient(numerator * power(10, digits), denominator)
+	magnitude = int_text(if scaled < 0 then -scaled else scaled)
+	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
+	whole = byte_count(padded) - digits
+	out = new_text(byte_count(padded) + 1)
+	copy_text(out, 0, padded, 0, whole)
+	set_byte(out, whole, 46)
+	copy_text(out, whole + 1, padded, whole, digits)
+	if numerator < 0 { return "-" + out }
+	out
+}
+# how often factor divides n
+factor_count(n: int, factor: int) := {
+	count = 0
+	while n != 0 and int_remainder(n, factor) == 0 {
+		n = int_quotient(n, factor)
+		count += 1
+	}
+	count
+}
+power(base: int, exponent: int) := {
+	out = 1
+	for i in 0..exponent { out = out * base }
+	out
+}
+max_int(a: int, b: int) := if a > b then a else b
+# a text of count zero digits
+zeros(count: int) := {
+	out = new_text(if count > 0 then count else 0)
+	for i in 0..count { set_byte(out, i, 48) }
 	out
 }

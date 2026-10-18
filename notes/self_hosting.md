@@ -214,9 +214,13 @@ function and local names.
   its value (3.5 * 2 is 7.0 here, 7 in Rust). probes/self_hosting/emitter/core/ holds one program per form, all inside
   the core; the checked share of every sample and probe must have at least a floor of programs inside.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
-- Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
-  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no variable, a loop's value, operators on texts and
-  lists beyond `+` on texts, `#` and `xs#i` (`==`, slices, a list's `+`), error values (a run-time error traps, without
+- Int `/` gives an exact rational (runtime word exact_ratio): an Int `$Node` holding a `$Ratio` of two `$i64box`, as
+  the Rust reader reads it; exact again with ints and ratios (exact_add/sub/mul/div/order), shown as Rust shows it
+  (exact_text: 3.5, 1/3); `%` on one and a ratio with a float go through floats. `#`, `x#i` and `x#i = v` on a value
+  known only at run time call node_length / node_at / node_set_at.
+- Not in the core yet (outside, not dropped): decimals as exact rationals (the core reads a decimal as f64, so
+  `1/3 + 0.5` is a float where Rust gives 5/6), ints beyond 64 bits (Rust promotes; a ratio's parts overflow
+  silently), a yes/no variable, a loop's value, slices, error values (a run-time error traps, without
   Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
 - Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
