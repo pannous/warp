@@ -24,12 +24,17 @@ haze = 1.0
 cloud_cover = 0.4
 exposure = 1.0
 
-# the camera: 2.4 m above the water looking toward the sun, as docs/front.jpg of web-ocean
-camera_height = 2.4
-yaw = 0
-pitch = -3 # degrees
+# the camera: 2.4 m above the water looking toward the sun, as docs/front.jpg of web-ocean; it flies as there:
+# W A S D move, Space or E up, Q or C down, drag the mouse to look around, Escape ends
+global camera_x = 0.0
+global camera_z = 0.0
+global camera_height = 2.4
+global yaw = 0.0 # degrees to the right
+global pitch = -3.0 # degrees up
 field_of_view = 60
-seconds = 6
+flying_speed = 6 # m/s
+looking_speed = 0.2 # degrees per pixel the mouse moves
+lowest = 0.8 # metres above the calm sea
 
 geometry_waves = 12
 detail_waves = 32
@@ -44,7 +49,7 @@ direction_of(elevation, azimuth) := {
 }
 # functions, not program lists: a shader reads a program list only item by item yet (card kernel-global-lists)
 sun() := direction_of(sun_elevation, sun_azimuth)
-eye() := [0, camera_height, 0]
+eye() := [camera_x, camera_height, camera_z]
 sun_light() := [1.0, 0.78, 0.55] .* 9
 zenith_blue() := [0.09, 0.13, 0.22]
 horizon_gold() := [1.0, 0.58, 0.2]
@@ -135,8 +140,8 @@ cloud_layer(direction, altitude, scale, stretch, cover, octaves) := {
 	opacity = smoothstep(1 - cover, 1.15 - cover, density) * smoothstep(0.015, 0.09, direction.y)
 	thickness = clouds_noise(spot .+ [0.05 * sun().x, 0.05 * sun().z], octaves)
 	toward_sun = max(dot(direction, sun()), 0)
-	lit = clamp(1.4 - 2.2 * (thickness - density) - density, 0.2, 1.2)
-	color = mix([0.45, 0.36, 0.3], [1.4, 0.98, 0.5], lit) .+ [1.0, 0.7, 0.4] .* (2.5 * toward_sun ^ 12)
+	lit = clamp(1.2 - 3 * (thickness - density) - 0.8 * density, 0.1, 1.1)
+	color = mix([0.5, 0.36, 0.24], [1.5, 0.95, 0.4], lit) .+ [1.0, 0.7, 0.4] .* (2.5 * toward_sun ^ 12)
 	[color.x, color.y, color.z, opacity]
 }
 
@@ -259,8 +264,34 @@ ocean(x, y) := {
 	film(color, x, y)
 }
 
+# the free camera, one step of seconds long
+fly(seconds) := {
+	turn = to_radians(yaw)
+	way = flying_speed * seconds
+	if held_key == "w" { camera_x += sine(turn) * way; camera_z += cosine(turn) * way }
+	if held_key == "s" { camera_x -= sine(turn) * way; camera_z -= cosine(turn) * way }
+	if held_key == "d" { camera_x += cosine(turn) * way; camera_z -= sine(turn) * way }
+	if held_key == "a" { camera_x -= cosine(turn) * way; camera_z += sine(turn) * way }
+	if held_key == space or held_key == "e" { camera_height += way }
+	if held_key == "q" or held_key == "c" { camera_height = max(camera_height - way, lowest) }
+}
+
 started = clock()
-while time < seconds {
+last_frame = started
+last_x = mouse_x
+last_y = mouse_y
+# each frame of the window, until it closes (headless: one frame, as a PNG)
+on frame {
+	if held_key == ESC: exit()
+	now = clock()
+	time = float(now - started) / 1000
+	fly(float(now - last_frame) / 1000)
+	last_frame = now
+	if mouse_down {
+		yaw += (mouse_x - last_x) * looking_speed
+		pitch = clamp(pitch - (mouse_y - last_y) * looking_speed, -89, 89)
+	}
+	last_x = mouse_x
+	last_y = mouse_y
 	paint(ocean, width, height)
-	time = float(clock() - started) / 1000
 }
