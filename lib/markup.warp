@@ -283,6 +283,13 @@ html_elements_in(item: any) := {
 // with its selectors and lengths as the texts CSS writes, the tree as the parser read it (decisions.md data-parameter)
 style(sheet: data) := key(symbol("style"), ":", if sheet is text then sheet else style_body(sheet))
 
+// `form post "/todos" { button{ "add" } }`: a form named by the route it sends to, as the route is written
+// (decisions.md markup-plain-library); `form{ method: "post" action: "/todos" … }` spells the attributes
+form(method: symbol, action: text, body: any) := {
+	let route = [key(symbol("method"), ":", str(method)), key(symbol("action"), ":", action)]
+	key(symbol("form"), ":", bracketed(route + html_items(body), "{"))
+}
+
 // lengths CSS writes with a unit, where warp reads `8px` as 8 * px
 style_units = ["px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm"]
 // how a selector joins the parts the parser read as operators: `ul > li`, `a:hover`, `div.card`, `#main`

@@ -8,7 +8,7 @@ runs it too), so most forms are a meaning the renderer gives that data, not a re
 |---|---|---|---|
 | select_options (81) | `select{ ["apple" "pear"] }`, `select{ fruits }`, `"s": "small"` | renderer: what a select holds besides elements is its options (html_options) | done |
 | glued_attributes (43) | `label{ for: name "Name" }` | dropped (user): `label{ for: name; "Name" }` | done |
-| markup_tags form routes | `form post "/t" {…}` | a library function `form(method: symbol, action: text, body)` (user); the call form waits for card function-words-consume | next |
+| markup_tags form routes | `form post "/t" {…}` | `form(method: symbol, action: text, body)` in lib/markup.warp (user), loaded without `use` (implicit_modules.rs); among an element's children a function word takes as many children as it has parameters (markup_tags.rs calls_among, decision function-words-consume) | done (branch form-routes) |
 | markup_tags html attributes | `input{type="text"}` | core rule (user): `name = value` inside any data block is a key: lowering/data/tag_entries.rs | done |
 | markup_tags tags | `div(class:"x")`, spaced `ul { … }`, `li all xs`, a loop among children | one by one | open |
 | style_rules (220) | unquoted selectors `.card {…}`, `ul > li`, lengths `8px` | `style(sheet: data)` in lib/markup.warp (decision data-parameter): the sheet as the parser read it, selectors and lengths as texts, then the renderer as before | done (branch style-data) |

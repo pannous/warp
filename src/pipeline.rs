@@ -117,9 +117,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::lowering::component_worlds::lower,
 	// `input{type="text"}`: HTML's attribute form is the attribute (markup_tags.rs), before soft_keywords refuses `class = …`
-	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
-	// `post "/todos" { … }` as a route
-	crate::lowering::markup_tags::lower_form_routes,
 	// `a{ href="/about" "About" }`, `Person{ class = "a" }`: `=` in a data block is an entry (tag_entries.rs), before
 	// soft_keywords reads `class = …` as a definition
 	crate::lowering::tag_entries::lower,

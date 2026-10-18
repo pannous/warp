@@ -9,6 +9,8 @@ pub(crate) const QUANTITY: &str = "quantity";
 pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/router.warp: a route's `status 418` and `header "name" "value"`
 const ANSWER_PARTS: [&str; 2] = ["status", "header"];
+/// lib/markup.warp: `form post "/todos" { … }`, a form named by its route
+const FORM_ROUTE: &str = "form";
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 pub(crate) const AGENT_MODULE: &str = "agent";
 /// lib/fast_math.warp: sin cos exp pow atan2 as wasm polynomials, `use fast_math` or for every program `warp fast <file>`
@@ -50,7 +52,9 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 9] = [
 	("file", mentions_file_url),
 	("markup", |program| {
 		let mode = crate::pipeline::compile_mode();
-		mode.renders_itself() || mode.for_hosting && calls_undefined(program, crate::page_html::TO_HTML)
+		mode.renders_itself()
+			|| mode.for_hosting && calls_undefined(program, crate::page_html::TO_HTML)
+			|| calls_undefined(program, FORM_ROUTE)
 	}),
 	("router", |program| {
 		defined(program, crate::routes::PAGE_ROUTES).is_some()
