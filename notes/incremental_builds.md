@@ -152,3 +152,7 @@ reached library function, for every program that reaches them (pages, routes, so
   otherwise it's a wrong cache hit.
 - Step 1 touches every pass (skip marked definitions), while step 2 is local to the emitter. Step 2 alone gives
   ~30 ms, step 1 alone ~85 ms.
+
+### Order (supervisor, 2026-10-18; open until the user decides otherwise)
+Step 2 first. Step 1 waits until the plain-library and parser cleanup has settled, because it would audit ~100
+passes that those cleanups are still merging and removing.
