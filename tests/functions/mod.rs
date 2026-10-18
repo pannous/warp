@@ -40,6 +40,7 @@ mod test_charged_getters;
 mod test_closure_float_arguments; // card if-list
 mod test_closure_value_arguments;
 mod test_closures;
+mod test_collection_result_types;
 mod test_comma_calls;
 mod test_concatenated_text_argument;
 mod test_concatenating_parameter;
