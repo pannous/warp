@@ -1,0 +1,14 @@
+# glued_attributes.rs as a rewrite rule (card compiler-modules, markup slice): in an element an attribute's value ends
+# before a text, a list or an element: `label{ for: name "Name" }` is for="name" and the text Name.
+# Needs (warp-self-passes): typed holes ($c: text), a splice template (one item → several siblings), a guard that $tag
+# is an element (html_elements membership: a module pass, option A), a lazy rest hole ($value... up to the first content)
+# and a rule firing on any item of a list, several times per element.
+rewrite $tag{ $before... $name: ($value... $content: text $after...) $rest... } => $tag{ $before... $name: $value... $content $after... $rest... } where $tag is element
+rewrite $tag{ $before... $name: ($value... $content: list $after...) $rest... } => $tag{ $before... $name: $value... $content $after... $rest... } where $tag is element
+use markup
+print to_html(label{ for: missing "L" })
+# <label for="missing">L</label>
+print to_html(label{ for: email "Email" b{ "!" } })
+# <label for="email">Email<b>!</b></label>
+print to_html(p{ title: "a b" "hi" })
+# <p title="a b">hi</p>

@@ -64,6 +64,7 @@ pub fn lower_binds(program: Node) -> Node {
 fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
 	let node = node.map_children(|child| with_binds(child, declared));
 	with_element_items(node, |items| {
+		let items: Vec<Node> = items.into_iter().flat_map(line_pairs).collect();
 		let checks: Vec<Node> = (0..items.len())
 			.filter_map(|index| bound_at(&items, index))
 			.flat_map(|variable| type_checks(&variable, declared, &items))
@@ -81,6 +82,18 @@ fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
 			})
 			.collect()
 	})
+}
+
+/// `bind: fruit aria-label: "f"` on a line before more items: its pairs as items of their own, as markup renders them
+fn line_pairs(item: Node) -> Vec<Node> {
+	match item.drop_meta() {
+		Node::List(pairs, Bracket::None, _)
+			if pairs.iter().all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
+			pairs.clone()
+		}
+		_ => vec![item],
+	}
 }
 
 /// `age: int = 30`: each variable's declared type; none for a name declared with two types
