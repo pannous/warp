@@ -61,6 +61,8 @@ impl WasmGcEmitter {
 		self.emit_map_index_globals();
 		self.emit_text_foundation();
 		constructors::emit_all_constructors(self);
+		self.emit_is_meta_entry();
+		self.emit_list_items(); // before every function walking a list's items
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_text_address();
 		self.emit_int_runtime();

@@ -29,13 +29,13 @@ impl Person {
 }
 
 /// Read a Person from a GcObject (WASM GC struct)
-fn person_from_gc(val: &Val, store: &mut Store<()>, instance: &Instance) -> Result<Person> {
+fn person_from_gc(val: &Val, store: &mut Store<()>) -> Result<Person> {
 	let anyref = val.unwrap_anyref().ok_or_else(|| anyhow::anyhow!("not anyref"))?;
 	let structref = anyref.unwrap_struct(&*store)?;
 
-	// Field 0: name (ref $String -> ptr, len)
+	// Field 0: name (ref $Text)
 	let name_val = structref.field(&mut *store, 0)?;
-	let name = read_string_field(&name_val, store, instance)?;
+	let name = read_string_field(&name_val, store)?;
 
 	// Field 1: age (i64)
 	let age_val = structref.field(&mut *store, 1)?;
@@ -44,22 +44,9 @@ fn person_from_gc(val: &Val, store: &mut Store<()>, instance: &Instance) -> Resu
 	Ok(Person { name, age })
 }
 
-/// Read string from $String struct (ptr, len) in linear memory
-fn read_string_field(val: &Val, store: &mut Store<()>, instance: &Instance) -> Result<String> {
-	let anyref = val.unwrap_anyref().ok_or_else(|| anyhow::anyhow!("not anyref"))?;
-	let structref = anyref.unwrap_struct(&*store)?;
-
-	let ptr = structref.field(&mut *store, 0)?.unwrap_i32();
-	let len = structref.field(&mut *store, 1)?.unwrap_i32();
-
-	if len == 0 {
-		return Ok(String::new());
-	}
-
-	let memory = instance.get_memory(&mut *store, "memory").ok_or_else(|| anyhow::anyhow!("no memory"))?;
-	let mut buf = vec![0u8; len as usize];
-	memory.read(&*store, ptr as usize, &mut buf)?;
-	Ok(String::from_utf8(buf)?)
+/// Read a text field: a $Text GC byte array
+fn read_string_field(val: &Val, store: &mut Store<()>) -> Result<String> {
+	warp::gc_traits::GcString::from_val(store, *val)?.to_string(store)
 }
 
 /// Create TypeDef for Person struct
@@ -117,10 +104,10 @@ fn test_raw_person_struct() -> Result<()> {
 	let wasm_bytes =
 		WasmGcEmitter::emit_raw_struct(&person_type_def(), &[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)]);
 
-	let (mut store, instance, result) = run_wasm_gc(&wasm_bytes)?;
+	let (mut store, _instance, result) = run_wasm_gc(&wasm_bytes)?;
 
 	// Convert GC struct to Person
-	let person = person_from_gc(&result, &mut store, &instance)?;
+	let person = person_from_gc(&result, &mut store)?;
 
 	assert_eq!(person, expected);
 	println!("Raw Person struct roundtrip works: {:?}", person);
@@ -136,8 +123,8 @@ fn test_class_instance_raw() -> Result<()> {
 	let wasm_bytes =
 		WasmGcEmitter::emit_raw_struct(&person_type_def(), &[RawFieldValue::from("Alice"), RawFieldValue::from(30i64)]);
 
-	let (mut store, instance, result) = run_wasm_gc(&wasm_bytes)?;
-	let person = person_from_gc(&result, &mut store, &instance)?;
+	let (mut store, _instance, result) = run_wasm_gc(&wasm_bytes)?;
+	let person = person_from_gc(&result, &mut store)?;
 
 	assert_eq!(person, alice);
 

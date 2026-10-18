@@ -7,6 +7,7 @@
 //! A lookup it cannot answer (a missing key, a key no name) takes the generic way on that copy, with its errors.
 
 use super::super::lists::list_dispatch::Slot;
+use super::super::lists::list_ops::ItemWalk;
 use super::super::WasmGcEmitter;
 use crate::compiler::context::UserFunctionDef;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
@@ -266,6 +267,7 @@ impl WasmGcEmitter {
 		let (map, array, slots) =
 			(self.type_manager.node_map_type, self.type_manager.node_array_type, self.type_manager.limbs_type);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_list = self.node_list_type();
 		let map_ref = Ref(self.node_map_ref());
 		let slots_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(slots) });
 		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
@@ -506,9 +508,10 @@ impl WasmGcEmitter {
 			NODE_MAP_OF,
 			vec![node_ref],
 			vec![map_ref],
-			vec![map_ref, nullable, nullable, ValType::I64],
+			vec![map_ref, nullable, ValType::I64, node_list, ValType::I32],
 			|s, f| {
-				let (table, cell, entry, kind) = (1, 2, 3, 4);
+				let (table, entry, kind) = (1, 2, 3);
+				let walk = ItemWalk { items: 4, index: 5, item: entry };
 				let add_entry = |s: &Self, f: &mut Function| {
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
@@ -558,33 +561,15 @@ impl WasmGcEmitter {
 					I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty),
 				]);
 				s.call(f, "not_an_object");
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::End,
-					I::LocalGet(0), I::LocalSet(cell),
-					I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-							I::LocalGet(cell), I::RefIsNull, I::BrIf(1),
-							I::LocalGet(cell), I::RefAsNonNull,
-							I::StructGet { struct_type_index: node, field_index: 1 },
-							I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(entry), I::RefIsNull, I::I32Eqz,
-							I::If(BlockType::Empty),
-				]);
-				kind_is(f, entry, Kind::Key as i64);
-				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
-				s.call(f, "not_an_object");
 				f.instruction(&I::End);
-				add_entry(s, f);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::End,
-					I::LocalGet(cell), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 2 },
-					I::LocalSet(cell),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(table),
-				]);
+				s.emit_item_walk(f, 0, walk, |f| {
+					kind_is(f, entry, Kind::Key as i64);
+					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+					s.call(f, "not_an_object");
+					f.instruction(&I::End);
+					add_entry(s, f);
+				});
+				f.instruction(&I::LocalGet(table));
 			},
 		);
 

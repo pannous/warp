@@ -246,7 +246,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		self.emit_node_instructions(func, value);
-		self.emit_call(func, "node_list_of");
+		self.emit_call(func, super::list_dispatch::LIST_ITEMS);
 	}
 }
 
