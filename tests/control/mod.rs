@@ -10,6 +10,7 @@ mod test_await_go;
 mod test_bare_try; // card failed-raised
 mod test_block_assigns_outer;
 mod test_block_parameter_calls; // card repeats-loop
+mod test_nested_block_calls; // card block-call-nested
 mod test_block_parameters;
 mod test_block_statements;
 mod test_blocks;
