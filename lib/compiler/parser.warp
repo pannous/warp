@@ -2,6 +2,7 @@
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
 use "lib/compiler/lexer.warp"
 use "lib/compiler/shapes.warp"
+use "lib/compiler/words.warp"
 use "lib/compiler/sugar.warp"
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; resumes: list; breaks: list }
@@ -1104,7 +1105,7 @@ def named(p) {
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
-	arguments = items(p, ')', "(")
+	arguments = typed_parameters(items(p, ')', "("))
 	skip_spaces(p)
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
@@ -1144,6 +1145,46 @@ def spread(arguments) {
 	if arguments is list and arguments#1 == "list" and not labeled_parameter(arguments) { return arguments[3 .. arguments.length] }
 	[arguments]
 }
+
+// Every argument of `f(int x, float y)` as its typed parameter
+// Rust twin: definitions/functions.rs typed_parameters
+def typed_parameters(arguments) {
+	if not (is_list_view(arguments) and arguments#3 == ",") { return typed_parameter(arguments) }
+	listed(arguments#2, ",", [typed_parameter(argument) for argument in arguments[3 ..]])
+}
+
+// `f(int x)`, Go's `f(x int)`, `f(s Shape)` and `f(x of int)` as the typed parameter x:int; `f(vararg xs)`,
+// `f(params int[] xs)` the rest parameter *xs; `f(int b = 2)` as b:int = 2; any other argument as it is
+// Rust twin: definitions/functions.rs typed_parameter
+def typed_parameter(argument) {
+	if not (is_list_view(argument) and argument#3 == " " and argument#2 != "[") { return argument }
+	words = argument[3 ..]
+	first = words#1
+	last = words#(words.length)
+	if words.length == 2 and is_type_symbol(first) and is_symbol(last) { return ["key", ":", last, first] }
+	if words.length == 2 and is_symbol(first) and not is_type_symbol(first) and (is_type_symbol(last) or (is_symbol(last) and last#2[0].upper() == last#2[0] and last#2[0].lower() != last#2[0])) {
+		return ["key", ":", first, last]
+	}
+	if words.length == 3 and words#2 == ["symbol", "of"] and is_type_symbol(last) and is_symbol(first) and not is_type_symbol(first) {
+		return ["key", ":", first, last]
+	}
+	if is_symbol(first) and REST_MARKERS.contains(first#2) {
+		if is_symbol(last) { return ["symbol", "*" + last#2] }
+		if last is list and last.length == 4 and last#1 == "key" and last#2 == ":" { return ["symbol", "*" + last#3#2] }
+		return argument
+	}
+	if words.length == 2 and is_type_symbol(first) and last is list and last.length == 4 and last#1 == "key" and last#2 == "=" and is_symbol(last#3) {
+		return ["key", "=", ["key", ":", last#3, first], last#4]
+	}
+	argument
+}
+
+// The rest-parameter markers: Kotlin's `vararg xs`, C#'s `params int[] xs`
+// Rust twin: warp_parser/definitions/functions.rs REST_MARKERS
+REST_MARKERS = ["vararg", "params"]
+
+def is_list_view(view) := view !== ø and view is list and view.length > 3 and view#1 == "list"
+def is_type_symbol(view) := is_symbol(view) and is_type_word(view#2)
 
 // `person name: String`: a label, then the typed parameter
 def labeled_parameter(words) {
