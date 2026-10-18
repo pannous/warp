@@ -209,6 +209,7 @@ mod test_statement_blocks; // card statement-block
 mod test_suffix_word_spellings;
 mod test_suffix_words;
 mod test_swift_closures;
+mod test_symbol_flow; // card regression-module
 mod test_text_joined_parameter;
 mod test_to_definition;
 mod test_tuple_function_values;
