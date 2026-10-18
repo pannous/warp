@@ -90,6 +90,9 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 pub const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
+	// `rewrite p => t` rules of the program and of the standard modules it mentions (rewrites.rs, lib/channels.warp:
+	// `ch.send(v)` of `ch = channel()`), before go_blocks renames ch in a go block and system_signals reads the send
+	crate::modules::rewrites::lower,
 	// `if let Some(v) = o`, a match of `Some(v) =>` and `None =>` arms (rust_options.rs), before the arms below
 	crate::lowering::rust_options::lower,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
@@ -120,8 +123,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::lowering::component_worlds::lower,
-	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
-	crate::lowering::channel_words::lower,
 	// `input{type="text"}`: HTML's attribute form is the attribute (markup_tags.rs), before soft_keywords refuses `class = …`
 	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
 	// `post "/todos" { … }` as a route

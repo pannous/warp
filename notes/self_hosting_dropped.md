@@ -97,7 +97,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 13 | inline_unions | 30 | 0 | keep |
 | 14 | scoped_handlers | 38 | 1 | drop (only the error for a form dropped earlier; decided) |
 | 15 | component_worlds | 285 | 2 | library (wasm build; decided) |
-| 16 | channel_words | 189 | 3 | library (tasks; decided) |
+| 16 | channel_words | 189 | 3 | library (tasks; decided): done, lib/channels.warp rewrite rules (card compiler-modules) |
 | 17, 18, 45 | markup_tags (form routes, html attributes, tags) | 357 | 1, 1, 14 | library (markup), one pass (decided) |
 | 19 | soft_keywords | 239 | 3 | keep |
 | 20 | parameter_patterns | 68 | 2 | keep |

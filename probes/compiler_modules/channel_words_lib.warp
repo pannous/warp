@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// probe (card compiler-modules): what lib/channels.warp's rewrites make of channel programs, run with the installed warp
+global next_listener = 1048576
+machine_channel(name) := { next_listener += 1; channel_listen(next_listener, name); [name, next_listener] }
+machine_receive(id) := { while channel_pending(id) == 0 { sleep(5 ms) }; channel_next(id) }
+ch = channel_new()
+go { for i in 1 to 3 { channel_put(ch, i) }; channel_close(ch) }
+total = 0
+while channel_more(ch) { v = channel_take(ch); total += v }
+chat = machine_channel("warp-probe-compiler-modules")
+channel_send(chat#1, "hi")
+print [total, machine_receive(chat#2)]
