@@ -100,7 +100,10 @@ pub(in crate::analyzer) fn register_user_function(
 	if let Some(parent) = enclosing {
 		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
 	}
-	ctx.user_functions.insert(name.clone(), user_function(&name, params, body));
+	let function = crate::compiler::analysis_memo::analysed_function(&name, &params, &body, || {
+		user_function(&name, params.clone(), body.clone())
+	});
+	ctx.user_functions.insert(name.clone(), function);
 }
 
 /// Nested function definitions in `body` become UserFunctionDefs named `parent·short`; their statements stay (emit skips

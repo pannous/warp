@@ -11,6 +11,7 @@ use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{
 	assign, block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
 };
+use super::text_patterns::TextPattern;
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{error, text, Bracket, Node, Separator};
@@ -346,6 +347,9 @@ impl<'a> Matched<'a> {
 		if let Some(code) = code_pattern(pattern) {
 			return code_tests(&code, path, &mut self.tests, &mut self.bindings);
 		}
+		if let Some(text_pattern) = TextPattern::of(pattern, &|name| self.names.contains(name)) {
+			return text_pattern.matched(&path, &mut self.tests, &mut self.bindings);
+		}
 		if let Some(test) = condition(&path, pattern, self.names) {
 			self.tests.push(test);
 			return;
@@ -618,7 +622,10 @@ pub(crate) fn pattern_test(
 /// nowhere is a pattern, its names bound as the test holds; a list of known values stays a comparison
 pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Option<Node> {
 	let is_structural = (is_list_pattern(pattern) || is_map_pattern(pattern)) && has_open_part(pattern, names);
-	if !is_structural && code_pattern(pattern).is_none() {
+	if !is_structural
+		&& code_pattern(pattern).is_none()
+		&& TextPattern::of(pattern, &|name| names.contains(name)).is_none()
+	{
 		return None;
 	}
 	let Matched { mut tests, bindings, .. } = Matched::of(pattern, subject.clone(), names);
@@ -663,7 +670,8 @@ fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Name
 	if let Some(test) = condition(subject, pattern, names) {
 		return (vec![test], vec![]);
 	}
-	if !guarded && !is_list_pattern(pattern) && !is_map_pattern(pattern) && code_pattern(pattern).is_none() {
+	let is_structural = is_list_pattern(pattern) || is_map_pattern(pattern) || code_pattern(pattern).is_some();
+	if !guarded && !is_structural && TextPattern::of(pattern, &|name| names.contains(name)).is_none() {
 		return (vec![key(subject.clone(), Op::Eq, pattern.clone())], vec![]);
 	}
 	let matched = Matched::of(pattern, subject.clone(), names);

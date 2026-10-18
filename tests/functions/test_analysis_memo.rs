@@ -43,3 +43,32 @@ fn test_a_changed_tree_is_analysed_anew() {
 	assert!(!context.user_functions.contains_key("g"));
 	assert!(changed.user_functions.contains_key("g"));
 }
+
+/// One definition's analysis (analysis_memo::analysed_function): the passes analyse the prelude's words again for each
+/// program state, the words themselves unchanged (card prelude-cache-runs)
+fn function_runs(definitions: &[(&str, &str)], bool_functions: &[&str]) -> usize {
+	use warp::compiler::analysis_memo::analysed_function;
+	use warp::compiler::context::{Param, UserFunctionDef};
+	let runs = Cell::new(0);
+	warp::compiler::compile_context::change(|context| {
+		context.bool_functions = bool_functions.iter().map(|name| name.to_string()).collect()
+	});
+	for (name, body) in definitions {
+		let (params, body) = (vec![Param::untyped("x")], parse(body));
+		analysed_function(name, &params, &body, || {
+			runs.set(runs.get() + 1);
+			let (name, params, body) = (name.to_string(), params.clone(), Box::new(body.clone()));
+			let return_kind = warp::type_kinds::Kind::Int;
+			UserFunctionDef { name, params, body, return_kind, tuple_kinds: vec![], func_index: None, doc: None }
+		});
+	}
+	runs.get()
+}
+
+#[test]
+fn test_the_same_definition_is_analysed_once() {
+	let same = ("memo_probe_three", "x + 1");
+	assert_eq!(function_runs(&[same, same, same], &[]), 1);
+	assert_eq!(function_runs(&[same, ("memo_probe_three", "x + 2")], &[]), 1, "a changed body is analysed anew");
+	assert_eq!(function_runs(&[same], &["memo_probe_three"]), 1, "other bool functions: analysed anew");
+}

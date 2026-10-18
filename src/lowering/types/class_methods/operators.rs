@@ -351,6 +351,9 @@ fn operator_call(left: Node, op: Op, right: Node, operands: &Operands) -> (Node,
 		.as_ref()
 		.and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op))
 	{
+		// an item is no instance of its container's class, and `xs#2` of a value of unknown class stays an index
+		Some((_, _, method)) if op == Op::Hash => (method_call(left, method, vec![right]), None),
+		None if op == Op::Hash => (key(left, op, right), None),
 		Some((_, _, method)) => (method_call(left, method, vec![right]), class),
 		None if class.is_none() && may_hold_instance(&left, operands) => {
 			(dispatched_operator(left, op, right, operands), None)

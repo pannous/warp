@@ -125,6 +125,9 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::tag_entries::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::lowering::soft_keywords::lower,
+	// `fib(0) := 0; fib(n) := …`: clauses with pattern parameters are one function trying them in order
+	// (pattern_clauses.rs), before parameter_patterns reads a single clause's pattern
+	crate::lowering::pattern_clauses::lower,
 	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
 	crate::lowering::parameter_patterns::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
@@ -523,7 +526,9 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(crate::numbers::units::static_units::with_answer_units(answer));
 	}
 	let node = without_located_errors(crate::compiler::phase_times::timed("meaning passes", || {
-		run_passes(node, MEANING_PASSES)
+		MEANING_PASSES.iter().enumerate().fold(node, |node, (index, pass)| {
+			crate::compiler::phase_times::timed_as(|| format!("meaning pass {index}"), || pass(node))
+		})
 	}))?;
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {

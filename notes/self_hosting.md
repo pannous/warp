@@ -56,10 +56,13 @@ parser-keyword-table. Target shapes:
   `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
   each; the twin compares after that pass.
   Done (lib/compiler/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
-  `loop {…}`. Count words wait for parser-scope-pass (a program's own `twice`); `1e3`, `2x`, `x⁻¹`, `global int n`
+  `loop {…}`, count words (`twice {…}`, with the scope: `counted`); `1e3`, `2x`, `x⁻¹`, `global int n`
   already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
-  knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
+  knows the scope makes calls of them. applies/word_begins_item and trailing_block go.
+  Done (parser-scope-pass): parser.warp keeps no names (program_functions, its line scan and p.bound are gone); it
+  writes `twice {…}` as written and sugar.warp `counted(tree, scope_of_view(written))` makes it `2 times {…}` unless
+  the program binds the word (scope.warp, one scope for the whole program: a parameter `once` keeps the word anywhere).
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
   Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and

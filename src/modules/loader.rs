@@ -224,13 +224,10 @@ impl<'a> Loader<'a> {
 				names.insert(format!("{SHADOWED_WORD_PREFIX}{word}"));
 			});
 		});
+		let renames = shadowed_renames(hidden.iter().map(|word| word.as_str()));
 		crate::lowering::word_operators::lower_call_forms_in(self.std_definitions.clone())
 			.into_iter()
-			.map(|definition| {
-				hidden
-					.iter()
-					.fold(definition, |node, word| renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}")))
-			})
+			.map(|definition| renamed_words(definition, &renames))
 			.collect()
 	}
 
@@ -592,16 +589,14 @@ impl<'a> Loader<'a> {
 			prelude.iter().filter(|word| !word.starts_with(crate::operators::OPERATOR_FUNCTION_PREFIX)).collect();
 		// a word the program defines too came back `lib·round_to` (shadowed_apart): the prelude's is qualified all the
 		// same, so the library's spellings (`round(x, 2)`) keep calling it while the program's calls reach its own
-		let qualified = |definition: Node| {
-			qualified_words.iter().fold(definition, |node, word| {
+		let renames: HashMap<String, String> = qualified_words
+			.iter()
+			.flat_map(|word| {
 				let prelude_word = prelude_name(word).unwrap_or_default();
-				renamed_word(
-					renamed_word(node, word, &prelude_word),
-					&format!("{SHADOWED_WORD_PREFIX}{word}"),
-					&prelude_word,
-				)
+				[(word.to_string(), prelude_word.clone()), (format!("{SHADOWED_WORD_PREFIX}{word}"), prelude_word)]
 			})
-		};
+			.collect();
+		let qualified = |definition: Node| renamed_words(definition, &renames);
 		let qualified: Vec<Node> = crate::compiler::phase_times::timed("prelude: qualified names", || {
 			definitions.into_iter().map(qualified).collect()
 		});
