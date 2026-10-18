@@ -90,7 +90,6 @@
 			<select id="examples" aria-label="example"></select>
 			<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
 			<label><input id="auto" type="checkbox" checked> auto </label>
-			<label title="diagnostic level">warn<select id="shown-from"><option value="hint" selected>all hints</option><option value="weak">weak warnings</option><option value="normal">warnings</option><option value="severe">severe warnings</option></select></label>
 			<a id="guide-link" class="guide-link" hidden></a>
 			<button id="ask" type="button" title="chat with Claude about this program (needs the API key in the ⋯ menu)">Ask ✦</button>
 			<button id="report" type="button" hidden title="draft a GitHub issue with this program, its output and the version">Report ⚑</button>
@@ -104,6 +103,7 @@
 					<button title="⌘ Enter">send</button> <span id="bug-status" role="status"></span>
 				</form>
 			</details>
+			<button id="clear-code" class="clear-code" type="button" title="clear the program (Ctrl/Cmd-Z brings it back)" aria-label="clear the program">✕</button>
 		</nav>
 		<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
 		<div id="editor-resizer" class="resizer rows" role="separator" aria-orientation="horizontal" aria-label="editor height" tabindex="0" title="drag to resize, double-click to reset"></div>
@@ -119,6 +119,8 @@
 				<button id="full-screen" class="full-screen" hidden title="full screen (Esc leaves)" aria-label="full screen"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 6V1h5M10 1h5v5M15 10v5h-5M6 15H1v-5"/></svg></button>
 				<div id="paintings" class="paintings"></div>
 			</div>
+			<!-- the level beside the hints and warnings it filters (card put-warn) -->
+			<label id="diagnostics-level" class="diagnostics-level" title="diagnostic level" hidden>warn<select id="shown-from"><option value="hint" selected>all hints</option><option value="weak">weak warnings</option><option value="normal">warnings</option><option value="severe">severe warnings</option></select></label>
 			<ul id="diagnostics" class="diagnostics"></ul>
 		</section>
 		<section id="assistant" class="assistant-pane" hidden>
