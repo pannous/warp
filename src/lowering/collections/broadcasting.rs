@@ -536,12 +536,17 @@ pub fn lower(program: Node) -> Node {
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
 	let extrema = EXTREMUM_WORDS.into_iter().filter(|word| !defined.contains(&word.to_string())).collect();
 	let instances = element_shapes(&program);
+	let list_functions = super::vector_parameters::list_functions(&found);
 	let is_list = |node: &Node| {
-		is_list_literal(node) || is_range(node) || node.symbol_name().is_some_and(|name| list_variables.contains(name))
+		is_list_literal(node)
+			|| is_range(node)
+			|| super::vector_parameters::is_list_result(node, &list_functions)
+			|| node.symbol_name().is_some_and(|name| list_variables.contains(name))
 	};
 	let vector_parameters = super::vector_parameters::vector_parameters(&found, &program, is_list, &broadcasting);
 	Broadcast {
 		vector_parameters,
+		list_functions,
 		functions: broadcasting,
 		list_variables,
 		other_variables,
@@ -674,7 +679,10 @@ fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 			annotated_kind(type_node).is_some_and(|kind| SCALAR_KINDS.contains(&kind))
 		}
 		Node::Symbol(name) => {
-			(is_arithmetic_operand(body, name) || is_scalar_word_argument(body, name)) && !tests_kind_of(body, name)
+			// `blend.x`, `p#2`: a vector parameter, the call passes the list whole (card vector-params-cpu)
+			(is_arithmetic_operand(body, name) || is_scalar_word_argument(body, name))
+				&& !tests_kind_of(body, name)
+				&& !super::vector_parameters::reads_components(body, name)
 		}
 		_ => false,
 	}
@@ -791,12 +799,14 @@ fn collect_list_variables(
 				}
 				let declared_list =
 					declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
+				let is_list_variable = |node: &Node| node.symbol_name().is_some_and(|list| assigned.get(list) == Some(&true));
 				let is_list = declared_list
 					|| is_list_literal(value)
 					|| match value.drop_meta() {
 						Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 						_ if is_range(value) => true,
-						_ if element_wise_parts(value).is_some() => true,
+						// `inside = p .- cell` of a parameter p: a list or a number, as the call passes (card vector-params-cpu)
+						_ if element_wise_parts(value).is_some() => is_element_wise_of_list(value, &is_list_variable),
 						_ if crate::filled_lists::typed_array_value(value, &variables).is_some() => true,
 						Node::Empty => appended.contains(name),
 						// `x = floor [1.5 2.5]`, `ys = log(xs, 3)`: a broadcast over a list literal or a list variable
@@ -813,6 +823,15 @@ fn collect_list_variables(
 			}
 		}
 	});
+}
+
+/// `xs .* 2`, `[1, 2] .+ k`, `(xs .* 2) .- 1`: an element-wise expression with a side known to be a list
+fn is_element_wise_of_list(node: &Node, is_list_variable: &dyn Fn(&Node) -> bool) -> bool {
+	let Some((receiver, _, operand)) = element_wise_parts(node.ungrouped()) else { return false };
+	[receiver, operand].iter().any(|side| {
+		let side = side.ungrouped();
+		is_list_literal(side) || is_range(side) || is_list_variable(side) || is_element_wise_of_list(side, is_list_variable)
+	})
 }
 
 /// `xs + [i]` of the variable xs
@@ -898,6 +917,8 @@ struct Broadcast {
 	shadowed: std::cell::RefCell<Vec<(String, bool)>>,
 	/// Per function, the parameters a list may reach at run time
 	vector_parameters: HashMap<String, HashSet<String>>,
+	/// The functions whose result is a list
+	list_functions: HashSet<String>,
 }
 
 impl Broadcast {
@@ -923,6 +944,15 @@ impl Broadcast {
 	fn is_vector_parameter(&self, node: &Node) -> bool {
 		let Some(variable) = node.ungrouped().symbol_name() else { return false };
 		self.shadowed.borrow().iter().rev().find(|(name, _)| name == variable).is_some_and(|(_, vector)| *vector)
+	}
+
+	/// A value that may be a list at run time, where a scalar word decides how it applies (each_any, vector_extremum):
+	/// a list, a parameter a list reaches, an element-wise result, the call of a function returning a list
+	fn may_be_list(&self, node: &Node) -> bool {
+		self.is_list_expression(node)
+			|| self.is_vector_parameter(node)
+			|| is_element_wise_call(node)
+			|| super::vector_parameters::is_list_result(node, &self.list_functions)
 	}
 
 	/// `if p is list then map(p, broadcast_item => applied(broadcast_item)) else applied(p)`: decided at run time
@@ -1005,7 +1035,7 @@ impl Broadcast {
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, vec![item]))),
-			_ if self.is_vector_parameter(argument) => Some(self.each_any(argument, |item| call(name, vec![item]))),
+			_ if self.may_be_list(argument) => Some(self.each_any(argument, |item| call(name, vec![item]))),
 			_ => None,
 		}
 	}
@@ -1101,10 +1131,8 @@ impl Broadcast {
 	fn vector_extremum(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 		let (name, arguments) = word_headed(items)?;
 		let [first, second] = arguments else { return None };
-		let may_be_list =
-			|side: &Node| self.is_list_expression(side) || self.is_vector_parameter(side) || is_element_wise_call(side);
 		let is_extremum = is_call_shape(bracket, separator) && self.extrema.contains(&name);
-		if !is_extremum || ![first, second].into_iter().any(may_be_list) {
+		if !is_extremum || ![first, second].into_iter().any(|side| self.may_be_list(side)) {
 			return None;
 		}
 		// items of any kind: the extremum compares them as their Nodes
@@ -1191,7 +1219,7 @@ impl Broadcast {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
-			_ if self.is_vector_parameter(argument) => Some(self.each_any(argument, applied)),
+			_ if self.may_be_list(argument) => Some(self.each_any(argument, applied)),
 			_ => None,
 		}
 	}

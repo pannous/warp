@@ -4,9 +4,9 @@
 //! serves numbers and vectors, as its shader does; a parameter no list reaches keeps the plain call.
 
 use super::broadcasting::element_wise_parts;
-use super::nodes::word_headed;
+use super::nodes::{any_part, word_headed};
 use crate::function_values::Definition;
-use crate::node::Node;
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -42,27 +42,74 @@ pub(crate) fn vector_parameters(
 	}
 }
 
+/// The functions whose result is a list: a list literal, an element-wise expression or the call of another such
+/// function (`agx_display(c) := { …; [dot(look, r), dot(look, g), dot(look, b)] }`)
+pub(crate) fn list_functions(definitions: &[Definition]) -> HashSet<String> {
+	let mut found = HashSet::new();
+	loop {
+		let before = found.len();
+		for definition in definitions {
+			let result = crate::analyzer::block_result(&definition.body).unwrap_or_else(|| definition.body.clone());
+			if is_list_result(&result, &found) {
+				found.insert(definition.name.clone());
+			}
+		}
+		if found.len() == before {
+			return found;
+		}
+	}
+}
+
+/// `[a, b]`, `a .* b`, `f(x)` of a function in `lists`
+pub(crate) fn is_list_result(node: &Node, lists: &HashSet<String>) -> bool {
+	let node = node.ungrouped();
+	matches!(node, Node::List(items, Bracket::Square, _) if !items.is_empty())
+		|| element_wise_parts(node).is_some()
+		|| matches!(node, Node::List(items, _, _) if word_headed(items).is_some_and(|(name, _)| lists.contains(name)))
+}
+
 fn untyped_names(definition: &Definition) -> impl Iterator<Item = String> + '_ {
 	definition.params.iter().filter_map(|param| param.symbol_name().map(String::from))
 }
 
 /// `name .* 2`, `2 .- name`, `name#2`, `name.xy`: the body reads name as a vector
 fn used_as_vector(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |part| {
-		let is_name = |side: &Node| side.ungrouped().is_symbol(name);
-		found |= match element_wise_parts(part) {
-			Some((receiver, _, operand)) => is_name(&receiver) || is_name(&operand),
-			None => match part {
-				Node::Key(indexed, Op::Hash, _) => is_name(indexed),
-				Node::Key(vector, Op::Dot, field) => {
-					is_name(vector) && field.symbol_name().and_then(crate::words::swizzle_components).is_some()
-				}
-				_ => false,
-			},
+	let element_wise_operand = |part: &Node| {
+		element_wise_parts(part).is_some_and(|(receiver, _, operand)| [receiver, operand].iter().any(|side| side.ungrouped().is_symbol(name)))
+	};
+	reads_components(body, name) || any_part(body, element_wise_operand)
+}
+
+/// `name#2`, `name.x`, `name.xy`: the body reads components of name, a vector, never one number; also of a variable
+/// computed element-wise from it (`inside = p .- cell; blend = inside .* inside; blend.x`)
+pub(crate) fn reads_components(body: &Node, name: &str) -> bool {
+	let vectors = element_wise_from(body, name);
+	let is_vector = |node: &Node| node.ungrouped().symbol_name().is_some_and(|variable| vectors.contains(variable));
+	any_part(body, |part| match part {
+		Node::Key(indexed, Op::Hash, _) => is_vector(indexed),
+		Node::Key(vector, Op::Dot, field) => {
+			is_vector(vector) && field.symbol_name().and_then(crate::words::swizzle_components).is_some()
 		}
-	});
-	found
+		_ => false,
+	})
+}
+
+/// name and the variables of body assigned an element-wise expression of one of them
+fn element_wise_from(body: &Node, name: &str) -> HashSet<String> {
+	let mut found = HashSet::from([name.to_string()]);
+	loop {
+		let before = found.len();
+		body.visit(&mut |part| {
+			let Node::Key(target, Op::Assign | Op::Define, value) = part else { return };
+			let derived = element_wise_parts(value).is_some() && value.mentions_where(|word| found.contains(word));
+			if let Some(variable) = target.symbol_name().filter(|_| derived) {
+				found.insert(variable.to_string());
+			}
+		});
+		if found.len() == before {
+			return found;
+		}
+	}
 }
 
 /// The (function, parameter) pairs that the calls in `node` pass a list `reaching` says is one
