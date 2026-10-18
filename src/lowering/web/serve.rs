@@ -17,6 +17,9 @@ use std::collections::HashSet;
 
 const SERVE_WORD: &str = "serve";
 const ROUTE_PREFIX: &str = "route·";
+/// lib/router.warp's table of routes answered without a server, and the answer of the route taking a request
+pub(crate) const ROUTE_ADD: &str = "route_add";
+const ROUTE_ANSWER: &str = "route_answer";
 const REQUEST_WORD: &str = "request";
 const ANY_TYPE: &str = "any";
 pub(crate) const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
@@ -653,9 +656,10 @@ fn with_generated_names(node: Node) -> Node {
 	}
 }
 
-/// Without a server (`warp run`, the playground): each top-level route (`post "/todos" {…}`) is the function
-/// route·N(request), as served, and page·submitted(request) calls the one answering the request of a form of the page.
-/// Like an event handler, a route changes the page's variables: those it mentions are its globals
+/// Without a server (`warp run`, the playground, WAGI): each top-level route (`post "/todos" {…}`) joins lib/router.warp's
+/// table, `route_add("POST", "/todos", request => {…})`, and page·submitted(request) asks route_answer for the one
+/// answering the request of a form of the page. Like an event handler, a route changes the page's variables: those it
+/// mentions are its globals
 fn with_local_routes(program: Node) -> Node {
 	let (statements, bracket, separator) = match program {
 		// a program of routes only, one or several on a line, is one list of words (card deploy-single-route)
@@ -670,21 +674,17 @@ fn with_local_routes(program: Node) -> Node {
 		statements.into_iter().partition(|statement| !top_level_routes(statement).is_empty());
 	let mut page_variables = crate::event_signals::main_level_variables(&statements);
 	page_variables.extend(statements.iter().filter_map(server_variable));
-	let mut functions = vec![];
-	let mut answers = vec![];
-	for (index, (method, path, body)) in routed.iter().flat_map(top_level_routes).enumerate() {
-		let function = format!("{ROUTE_PREFIX}{index}");
-		let globals =
-			page_variables.iter().filter(|name| body.mentions_any(&[name.as_str()])).map(|name| global(name)).collect();
-		functions.push(route_function(&function, prepended(globals, body)));
-		answers.push(format!(
-			"if request.method == {method:?} and route_matches({}, request.path) {{ return {function}(request) }}",
-			path.serialize()
-		));
-	}
-	let unanswered = "throw \"no route answers \" + request.method + \" \" + request.path";
-	functions
-		.push(parse_named(&format!("{PAGE_SUBMITTED}(request:any) := {{\n{}\n{unanswered}\n}}", answers.join("\n"))));
+	let mut functions: Vec<Node> = routed
+		.iter()
+		.flat_map(top_level_routes)
+		.map(|(method, path, body)| {
+			let globals =
+				page_variables.iter().filter(|name| body.mentions_any(&[name.as_str()])).map(|name| global(name));
+			let answer = key(symbol(REQUEST_WORD), Op::Arrow, prepended(globals.collect(), body));
+			call(ROUTE_ADD, vec![text(&method), path, answer])
+		})
+		.collect();
+	functions.push(parse_named(&format!("{PAGE_SUBMITTED}(request:any) := {ROUTE_ANSWER}(request)")));
 	if crate::pipeline::compile_mode().for_wagi {
 		statements.push(parse_named(WAGI_ANSWER));
 	}

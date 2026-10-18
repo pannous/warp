@@ -99,3 +99,14 @@ route_fits(kind: any, segment: any) := {
 // adds a header; the next request starts without them. Through the host's response_header, lib/wagi.warp's in a WAGI build
 status(code: int) := response_header("Status", code)
 header(name: text, value: any) := response_header(name, value)
+
+// without a server (`warp run`, the playground, WAGI) the program's routes answer its page's forms: each route is a
+// table entry (lowering/web/serve.rs with_local_routes), the first one matching a request answers it
+global route_table = []
+route_add(method: text, path: any, answer: function) := { route_table.add({method: method, path: path, answer: answer}) }
+route_answer(request: any) := {
+	for route in route_table {
+		if route.method == request.method and route_matches(route.path, request.path) { return route.answer(request) }
+	}
+	throw "no route answers " + request.method + " " + request.path
+}
