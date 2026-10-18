@@ -534,6 +534,7 @@ pub fn lower(program: Node) -> Node {
 	let program = each_singular(program, &list_variables, &names);
 	let other_variables = names.difference(&list_variables).cloned().collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
+	let extrema = EXTREMUM_WORDS.into_iter().filter(|word| !defined.contains(&word.to_string())).collect();
 	let instances = element_shapes(&program);
 	let is_list = |node: &Node| {
 		is_list_literal(node) || is_range(node) || node.symbol_name().is_some_and(|name| list_variables.contains(name))
@@ -547,6 +548,7 @@ pub fn lower(program: Node) -> Node {
 		scalar_parameters,
 		defines_dot,
 		defines_sum,
+		extrema,
 		instances,
 		paired: Default::default(),
 		shadowed: Default::default(),
@@ -613,6 +615,19 @@ fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
 	let item = symbol(BROADCAST_ITEM);
 	let each = key(item.clone(), Op::Arrow, applied(item));
 	call(MAP_WORD, vec![list, each])
+}
+
+/// `element_wise_any(receiver, operand, combined)`: `combined`, a lambda of two items, of each pair at run time
+fn element_wise_call(receiver: Node, operand: Node, combined: Node) -> Node {
+	// the prelude's name for it: library_words, which names prelude words so, runs after this pass
+	let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
+	call(&word, vec![receiver, operand, combined])
+}
+
+/// A call element_wise_call built, a list or a number at run time: `min(max(x, low), high)` of a vector x
+fn is_element_wise_call(node: &Node) -> bool {
+	let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
+	matches!(node.ungrouped(), Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(&word)))
 }
 
 /// A list each_item built: `map(xs, broadcast_item => …)`
@@ -871,6 +886,8 @@ struct Broadcast {
 	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
 	scalar_parameters: HashMap<String, Vec<bool>>,
 	defines_dot: bool,
+	/// min and max, unless the program defines them
+	extrema: Vec<&'static str>,
 	defines_sum: bool,
 	/// The shapes of the program's variables: which field reads map over a list of instances
 	instances: Option<InstanceTypes>,
@@ -944,6 +961,7 @@ impl Broadcast {
 					.collect();
 				self.broadcast_call(&items, &bracket, &separator)
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
+					.or_else(|| self.vector_extremum(&items, &bracket, &separator))
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if left.is_empty_node() && SCALAR_OPERATORS.contains(&op) => {
@@ -1075,10 +1093,25 @@ impl Broadcast {
 			true => key(right, Op::Colon, symbol(crate::words::ANY_TYPE)),
 			false => right,
 		};
-		let combined = key(parens(vec![left, right]), Op::Arrow, item);
-		// the prelude's name for it: library_words, which names prelude words so, runs after this pass
-		let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
-		Some(call(&word, vec![receiver, operand, combined]))
+		Some(element_wise_call(receiver, operand, key(parens(vec![left, right]), Op::Arrow, item)))
+	}
+
+	/// `max(p, 0)`, `min(a, b)` where a side is a list or a parameter a list may reach: the extremum of each pair of
+	/// items, as a shader's min and max of vectors, decided at run time by element_wise_any (card min-max)
+	fn vector_extremum(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let (name, arguments) = word_headed(items)?;
+		let [first, second] = arguments else { return None };
+		let may_be_list =
+			|side: &Node| self.is_list_expression(side) || self.is_vector_parameter(side) || is_element_wise_call(side);
+		let is_extremum = is_call_shape(bracket, separator) && self.extrema.contains(&name);
+		if !is_extremum || ![first, second].into_iter().any(may_be_list) {
+			return None;
+		}
+		// items of any kind: the extremum compares them as their Nodes
+		let [left, right] = ELEMENT_WISE_SIDES.map(symbol);
+		let typed = [&left, &right].map(|side| key(side.clone(), Op::Colon, symbol(crate::words::ANY_TYPE)));
+		let combined = key(parens(typed.to_vec()), Op::Arrow, call(name, vec![left, right]));
+		Some(element_wise_call(first.clone(), second.clone(), combined))
 	}
 
 	/// `xs .op ys` with both sides lists: the items paired by index (lists of different lengths are an error)
@@ -1179,10 +1212,11 @@ impl Broadcast {
 }
 
 /// The prelude word this pass may call where the program writes none (modules IMPLIED_WORDS): element_wise_any, of
-/// any element-wise operator (the parser wrote it as a map whose lambda parameter no module scan counts) or `dot`
-/// (`sum(a .* b)`)
+/// any element-wise operator (the parser wrote it as a map whose lambda parameter no module scan counts), `dot`
+/// (`sum(a .* b)`) or min and max (of vectors, vector_extremum)
 pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
-	(element_wise_parts(node).is_some() || node.is_symbol(DOT_WORD)).then_some(ELEMENT_WISE_ANY)
+	let implying = [DOT_WORD].into_iter().chain(EXTREMUM_WORDS);
+	(element_wise_parts(node).is_some() || implying.into_iter().any(|word| node.is_symbol(word))).then_some(ELEMENT_WISE_ANY)
 }
 
 /// P166 (user): an element-wise operator on a plain number is the plain operator, `6 ./ 2` is 3. The parser wrote
