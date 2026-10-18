@@ -116,13 +116,13 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::lowering::component_worlds::lower,
-	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
-	crate::lowering::channel_words::lower,
 	// `input{type="text"}`: HTML's attribute form is the attribute (markup_tags.rs), before soft_keywords refuses `class = …`
 	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
 	// `post "/todos" { … }` as a route
 	crate::lowering::markup_tags::lower_form_routes,
-	crate::lowering::markup_tags::lower_html_attributes,
+	// `a{ href="/about" "About" }`, `Person{ class = "a" }`: `=` in a data block is an entry (tag_entries.rs), before
+	// soft_keywords reads `class = …` as a definition
+	crate::lowering::tag_entries::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::lowering::soft_keywords::lower,
 	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
@@ -171,12 +171,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
 	crate::lowering::lambdas::lower_member_lambdas,
-	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options
-	// of a select are read
-	crate::lowering::glued_attributes::lower,
-	// `select{ bind: fruit; ["apple" "pear"] }`: its options spelled out (select_options.rs), before markup_tags makes the
-	// loop over a list variable's options a comprehension and any pass reads the bind
-	crate::lowering::select_options::lower,
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::lowering::markup_tags::lower,
@@ -413,11 +407,14 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 		.flat_map(|phase| phase.iter())
 		.enumerate()
 		.filter(|(_, pass)| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(crate::lowering::for_loop::headers::lower(module), |module, (index, pass)| {
-			crate::compiler::phase_times::timed("module source passes", || {
-				crate::compiler::phase_times::timed_as(|| format!("module source pass {index}"), || pass(module))
-			})
-		})
+		.fold(
+			crate::lowering::for_loop::headers::lower(crate::modules::rewrites::lower(module)),
+			|module, (index, pass)| {
+				crate::compiler::phase_times::timed("module source passes", || {
+					crate::compiler::phase_times::timed_as(|| format!("module source pass {index}"), || pass(module))
+				})
+			},
+		)
 }
 
 /// The program just before and just after the source pass `pass`, the earlier passes run as compiling runs them: what
@@ -438,7 +435,7 @@ pub fn around_source_pass_reporting(
 	let program = lawful_program(code).ok()?;
 	crate::errors::diagnostic::in_program_mode(program, |program| {
 		crate::lowering::nodes::numbering_fresh_names(|| {
-			let program = crate::lowering::for_loop::headers::lower(program);
+			let program = crate::lowering::for_loop::headers::lower(crate::modules::rewrites::lower(program));
 			let program = crate::lowering::data_items::lower(crate::lowering::blocks::seal_quoted(program));
 			let passes: Vec<Pass> = SOURCE_PHASES.iter().flat_map(|phase| phase.iter().copied()).collect();
 			let index = passes.iter().position(|each| std::ptr::fn_addr_eq(*each, pass))?;
@@ -479,6 +476,9 @@ pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	use crate::analyzer::effects::{without_constraints, EffectReport};
+	// `rewrite p => t` rules of the program and of the standard modules it mentions (rewrites.rs, lib/channels.warp:
+	// `ch.send(v)` of `ch = channel()`) as written, before any check or pass reads a rule's line
+	let node = crate::modules::rewrites::lower(node);
 	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
 	let node = crate::lowering::for_loop::headers::lower(node);
 	// `shape(a + b)` of `shape(code: data)`: the argument quoted, `run { n + 1 }` of `run(f: function)` its lambda

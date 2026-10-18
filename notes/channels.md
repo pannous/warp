@@ -21,14 +21,16 @@ Semantics (Go's unbuffered channel): `send` waits until a receiver took the valu
   empty), channel_more(id) waits until a value is offered (1) or the channel closed (0), channel_close(id). The program
   waiting with no task left is an error ("ch.receive() waits forever: no task is left to answer it"); tasks still
   waiting stop when the program ends.
-- Lowering src/lowering/words/channel_words.rs, FIRST of SOURCE_PHASES (go_blocks renames what a go block reads,
-  system_signals takes `send v to "chat"`): `channel()` → channel_new(); `ch.send(v)` / `send v to ch` →
-  channel_put(ch, v); `ch.receive()` → channel_take(ch); `ch.close()` → channel_close(ch); `for v in ch {…}` →
-  `while channel_more(ch) { v = channel_take(ch); … }`. Channels are the variables assigned `channel()` plus the
-  parameters of functions called with one (fixed point). A go block gets the id, the same channel in every task.
-- Machine channels `chat = channel "chat"`: `chat = "chat"; channel_listen(ID, "chat")` (ID from 1<<20 up, apart from
-  system_signals' listener ids), `.send(v)` / `send v to chat` → channel_send(chat, v), `.receive()` polls
-  channel_pending every 5 ms, then channel_next. A program hears its own sends.
+- The words are rewrite rules in lib/channels.warp (card compiler-modules, src/modules/rewrites.rs), the first of the
+  source passes after interpolation (go_blocks renames what a go block reads, system_signals takes
+  `send v to "chat"`): `channel()` → channel_new(); `ch.send(v)` / `send v to ch` → channel_put(ch, v); `ch.receive()` →
+  channel_take(ch); `ch.close()` → channel_close(ch); `for v in ch {…}` → `while channel_more(ch) { v = channel_take(ch);
+  … }`. `where $c = channel()`: channels are the variables assigned `channel()` plus the parameters of functions called
+  with one (fixed point). A go block gets the id, the same channel in every task.
+- Machine channels `chat = channel "chat"`: `chat = machine_channel("chat")`, the name and a listener id (from 1<<20 up,
+  apart from system_signals' listener ids) after channel_listen; `.send(v)` / `send v to chat` → channel_send(chat#1, v),
+  `.receive()` → machine_receive(chat#2), polling channel_pending every 5 ms, then channel_next. A program hears its own
+  sends.
 - Tests: tests/control/test_channels.rs.
 
 ## Browser
