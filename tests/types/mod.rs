@@ -31,6 +31,7 @@ mod test_class_field_names;
 mod test_class_field_type_phrases;
 mod test_class_fields_checked;
 mod test_class_forms_ported;
+mod test_class_index_operator;
 mod test_class_interfaces;
 mod test_class_json;
 mod test_class_method_changes;

@@ -48,7 +48,7 @@ call_kinds = {"string": "text", "count": "int", "is_type": "int", "collection_co
 	"response_header": "empty", "random_below": "int", "exp": "float", "DrawCircle": "int", "exit": "empty",
 	"warning": "text", "key_held": "int", "chars": "list", "bracket_of": "empty", "atan2": "float",
 	"signal_listeners": "empty", "DrawText": "int", "task_status": "int", "parse_code": "empty",
-	"empty_extremum": "int", "name_of": "empty", "InitWindow": "int", "map_of_entry": "int", "serve_routes": "empty",
+	"empty_extremum": "int", "name_of": "empty", "InitWindow": "int", "map_of_entry": "empty", "serve_routes": "empty",
 	"gpu_render": "empty", "caught_error": "error", "memo_known": "int", "memo_value": "int", "memo_store": "int",
 	"byte_size": "int", "cell_set": "empty", "BeginDrawing": "int", "ClearBackground": "int", "EndDrawing": "int",
 	"map_get_or": "empty", "uniscript_error": "int", "uniscript_warnings": "int", "uniscript_to_unicode": "int",

@@ -3,7 +3,10 @@
 //! there, a prelude word by its head in lib/prelude.warp; any other library word is read off its table (libm, text
 //! builtins, runtime words): its number of parameters with positional names, and the result kind where the table has one
 
+use crate::ffi::ForeignLine;
 use crate::type_kinds::Kind;
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 /// print, which no line or table names; the words warp computes itself are lib/math.warp's and lib/prelude.warp's
 /// `from warp` lines (builtin_signature)
@@ -104,6 +107,7 @@ pub fn library_arity(word: &str) -> Option<(usize, usize)> {
 /// The library words of one typed value with a signature here or in libm: `floor`, `sin`, `upper`, `log10`
 pub fn one_value_words() -> impl Iterator<Item = &'static str> {
 	builtin_lines()
+		.iter()
 		.map(|line| line.name)
 		.chain(crate::ffi::libm_f64_functions().iter().map(|(name, _)| *name))
 		.filter(|name| typed_first_arity(name) == Some(1))
@@ -112,7 +116,15 @@ pub fn one_value_words() -> impl Iterator<Item = &'static str> {
 /// `floor(x: number): int from warp` → `(x:number) -> int`: a word warp computes itself, as lib/math.warp or
 /// lib/prelude.warp writes it
 fn builtin_signature(word: &str) -> Option<String> {
-	builtin_lines().find(|line| line.name == word).map(|line| line.signature())
+	static BY_NAME: OnceLock<HashMap<&'static str, &'static ForeignLine<'static>>> = OnceLock::new();
+	let by_name = BY_NAME.get_or_init(|| {
+		let mut by_name = HashMap::new();
+		for line in builtin_lines() {
+			by_name.entry(line.name).or_insert(line); // the first line of a name, math.warp's before the prelude's
+		}
+		by_name
+	});
+	by_name.get(word).map(|line| line.signature())
 }
 
 /// `map(xs, f: function) from emitter` → `(xs, f:function)`: a builtin the emitter expands, as lib/prelude.warp writes it
@@ -120,8 +132,13 @@ fn emitter_signature(word: &str) -> Option<String> {
 	crate::ffi::emitter_word_lines().iter().find(|line| line.name == word).map(|line| line.signature())
 }
 
-fn builtin_lines() -> impl Iterator<Item = crate::ffi::ForeignLine<'static>> {
-	crate::ffi::math_foreign_lines(crate::ffi::BUILTIN_LIBRARY).chain(crate::ffi::runtime_word_lines().iter().copied())
+/// The `from warp` lines, read once: every library signature looks a word up in them
+fn builtin_lines() -> &'static [ForeignLine<'static>] {
+	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
+	LINES.get_or_init(|| {
+		let math = crate::ffi::math_foreign_lines(crate::ffi::BUILTIN_LIBRARY);
+		math.chain(crate::ffi::runtime_word_lines().iter().copied()).collect()
+	})
 }
 
 /// `replace(t, old, new) := …` → `(t, old, new)`

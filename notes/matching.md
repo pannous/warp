@@ -171,7 +171,20 @@ Rust compiler. Probe of the gaps: probes/self_hosting/code_patterns.warp. Steps 
 | 5 ★ | pattern-clauses | a function defined by pattern clauses `simplify(data($a * 1)) := a` … tried in order (decided; today the last definition wins) | last wins |
 | 6 ★ | binding-alternatives | alternatives that bind the same names `data($k: int + $x) \| data($x + $k: int) => x` | error "alternatives bind no names" |
 | 7 ★ | whole-binding | `as` binds a (sub)pattern: `data($f($inner) as call)` | parse error |
-| 8 ★ | text-patterns | text patterns for the lexer: `"0x" + rest`, prefix/suffix, character classes | parse error |
+| 8 ★ | text-patterns | text patterns for the lexer: `"0x" + rest`, prefix/suffix, character classes | done (Text patterns below) |
 | 9 | node-exhaustive | exhaustiveness over the Node kinds and sealed key ops, so a pass's match misses no shape | runtime "no case" |
 | 10 | pattern-dispatch-speed | many-arm matches compiled to one decision tree (switch on kind/op first); measured on the passes | arm by arm |
 | 11 | patterns-second-pass | rewrite lib/compiler (passes first, then parser, analyzer, emitter) as rule sets with 1–10; judged by the warp-pipeline-suite count and line count | — |
+
+## Text patterns (card text-patterns, step 8)
+A sum of text pieces and holes is a pattern in `match`/`switch` arms and after `is`: `"0x" + rest`, `name + ".txt"`,
+`"/users/" + u + "/posts/" + p`. A hole is a name defined nowhere or `_`; a name the program defines stays a value
+(`p + "ff"` compares). Between two holes a piece must stand (loud error otherwise), so the cut is unambiguous: the
+prefix and suffix first, then each middle piece at its first occurrence.
+A hole's type: a reading converts the text (`id: int`, `integer`, `number`, `float`; no match when the text isn't
+one), a class tests its characters (`digit`, `letter` one character; `digits`, `letters`, `hex`, `space`, `word` one
+or more; interviewer's decision A). These words are hole types only in that position, never reserved type words.
+Rust: src/lowering/control/text_patterns.rs builds `count(text_holes(s, pieces, types)) > 0` and binds
+`id = int(text_holes(…)#1)`; the cutting and class tests are warp, lib/prelude.warp text_holes / fits_text_type, loaded
+through needed_definitions IMPLIED_WORDS. A non-text subject simply doesn't match.
+

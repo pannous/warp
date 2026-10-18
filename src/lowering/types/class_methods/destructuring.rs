@@ -6,18 +6,36 @@ use crate::lowering::nodes::assign;
 /// `a, b = p` of an instance in field order; match arms `Point{x, y} => …` and `Point(x, y) => …` a type test binding
 /// the fields
 pub(super) fn destructurings(node: Node) -> Node {
-	with_value_classes(node, taken_apart)
+	with_value_classes(node, &taken_apart)
 }
 
 /// P179: a field by its position, `c#1` 1-based and Rust's `c.0` 0-based, of an instance whose class is known
-/// (`c = rgb(1, 2, 3)`, `Some(4)#1`): the field by name, `c.value1`
+/// (`c = rgb(1, 2, 3)`, `Some(4)#1`): the field by name, `c.value1`; `c#1` of a class defining `#` calls that method
 pub(super) fn positional_fields(node: Node) -> Node {
-	with_value_classes(node, by_position)
+	let indexing = indexing_classes(&node);
+	with_value_classes(node, &|node, fields, class_of| by_position(node, fields, class_of, &indexing))
+}
+
+/// The classes that define the index operator `#` as a method (`index(n) := …`)
+fn indexing_classes(node: &Node) -> std::collections::HashSet<String> {
+	let mut classes = std::collections::HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::Type { name, body } = part {
+			if class_items(body)
+				.iter()
+				.filter_map(method_parts)
+				.any(|(method, _, _)| Some(method.as_str()) == operator_method(Op::Hash))
+			{
+				classes.insert(name.drop_meta().name());
+			}
+		}
+	});
+	classes
 }
 
 /// `lower` of the program with each class's fields and the class of a value: a variable's instance class or the class
 /// a construction makes
-pub(super) fn with_value_classes(node: Node, lower: fn(Node, &ClassFields, &ClassOf) -> Node) -> Node {
+pub(super) fn with_value_classes(node: Node, lower: &dyn Fn(Node, &ClassFields, &ClassOf) -> Node) -> Node {
 	let fields = class_fields(&node);
 	let classes: Vec<String> = fields.keys().cloned().collect();
 	let instances = instance_classes(&node, &classes);
@@ -28,7 +46,13 @@ pub(super) fn with_value_classes(node: Node, lower: fn(Node, &ClassFields, &Clas
 	lower(node, &fields, &class_of)
 }
 
-pub(super) fn by_position(node: Node, fields: &ClassFields, class_of: &ClassOf) -> Node {
+fn by_position(
+	node: Node,
+	fields: &ClassFields,
+	class_of: &ClassOf,
+	indexing: &std::collections::HashSet<String>,
+) -> Node {
+	let recurse = |child: Node| by_position(child, fields, class_of, indexing);
 	let position = |op: Op, index: &Node| match (op, index.drop_meta()) {
 		(Op::Hash, Node::Number(crate::Number::Int(number))) => Some(number - 1),
 		(Op::Dot, Node::Number(crate::Number::Int(number))) => Some(*number),
@@ -49,14 +73,15 @@ pub(super) fn by_position(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 	match node {
 		Node::Key(declared, Op::Assign, value) if unwrapped_field(&declared, &value).is_some() => {
 			let field = unwrapped_field(&declared, &value).expect("guarded");
-			Node::Key(declared, Op::Assign, Box::new(field_of(&by_position(*value, fields, class_of), &field)))
+			Node::Key(declared, Op::Assign, Box::new(field_of(&recurse(*value), &field)))
 		}
 		Node::Key(instance, op @ (Op::Hash | Op::Dot), index)
-			if position(op, &index).is_some() && class_of(&instance).is_some() =>
+			if position(op, &index).is_some()
+				&& class_of(&instance).is_some_and(|class| op == Op::Dot || !indexing.contains(&class)) =>
 		{
 			let class = class_of(&instance).expect("guarded");
 			let class_fields = &fields[&class];
-			let instance = by_position(*instance, fields, class_of);
+			let instance = recurse(*instance);
 			match usize::try_from(position(op, &index).expect("guarded")).ok().and_then(|at| class_fields.get(at)) {
 				Some((field, _)) => field_of(&instance, field),
 				None => crate::node::error(&format!(
@@ -67,7 +92,7 @@ pub(super) fn by_position(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 				)),
 			}
 		}
-		other => other.map_children(|child| by_position(child, fields, class_of)),
+		other => other.map_children(recurse),
 	}
 }
 
