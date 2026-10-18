@@ -16,6 +16,7 @@ mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
 mod test_block_function;
+mod test_block_function_argument; // card block-function-argument
 mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
@@ -72,6 +73,7 @@ mod test_empty_function_bodies;
 mod test_event_effects;
 mod test_fail_effect;
 mod test_failed_word;
+mod test_field_closure_call; // card field-closure-call
 mod test_field_function_values;
 mod test_float_list_parameters; // card untyped-parameters
 mod test_float_to_int_parameter;
