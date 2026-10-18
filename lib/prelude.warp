@@ -20,14 +20,14 @@ map_keys(m): list from warp
 map_values(m): list from warp
 map_entries(m): list from warp
 map_without(m, key): list from warp
-map_of_entry(entry) from warp
-map_get_or(m, key, default = ø) from warp
+map_of_entry(entry): same as entry from warp
+map_get_or(m, key, default = ø): value of m from warp
 collection_contains(xs, x) from warp
 collection_position(xs, x) from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
-field_with(object, name, value) from warp
-instance_copy(x, shallow) from warp
+field_with(object, name, value): same as object from warp
+instance_copy(x, shallow): same as x from warp
 wasi_environment(): text from warp
 kind_mark(x: any): int from warp
 
@@ -57,6 +57,10 @@ remove(xs, x) from emitter
 pop(xs) from emitter
 clear(xs) from emitter
 number(x): number from emitter
+// the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
+list_become(place, fresh): same as place from emitter
+removed_value(x, k): any from emitter
+list_sorted_by(xs, keys): any from emitter
 string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
