@@ -4,16 +4,19 @@ use "lib/compiler/lexer.warp"
 use "lib/compiler/shapes.warp"
 use "lib/compiler/sugar.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; resumes: list; breaks: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; resumes: list; breaks: list }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
-def tree(source) := sugared(written_tree(source))
+def tree(source) {
+	written = written_tree(source)
+	counted(sugared(written), scope_of_view(written), [])
+}
 
 // The tree as the source writes it, before the sugar pass (lib/compiler/sugar.warp)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, resumes: found.resumes, breaks: found.breaks}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, resumes: found.resumes, breaks: found.breaks}
 	items(p, ' ', "")
 }
 
@@ -347,99 +350,12 @@ def continued(p, left, min_power) {
 			if ELEMENT_WISE_OPERATORS contains op#1 {
 				left = listed("", " ", [left, ["symbol", op#1], expression(p, powers#2)])
 			} else {
-				left = if op#2 == "then" or op#2 == "else" then ["key", op#2, left, branch(p, powers#2)] else bound_key(p, op#2, left, powers#2)
+				left = if op#2 == "then" or op#2 == "else" then ["key", op#2, left, branch(p, powers#2)] else ["key", op#2, left, expression(p, powers#2)]
 			}
 		}
 	}
 	left
 }
-
-// `left op right`; `x = …` and `f(a) := …` bind x and f for the rest of the source, a only inside the definition
-// Rust twin: variables.rs note_variable, functions.rs parameters_in_scope
-def bound_key(p, op, left, right_power) {
-	binding = op == "=" or op == ":="
-	outer = p.bound
-	if binding { p.bound = p.bound + parameter_names(left) }
-	right = expression(p, right_power)
-	p.bound = outer
-	if binding and bound_name(left) != ø { p.bound = p.bound + [bound_name(left)] }
-	["key", op, left, right]
-}
-
-// The functions a source defines anywhere, `f(x) := …`, `def f(x) {…}`, `f = x => …`: their names stay their own
-// before their definition too (`x = twice "ab"` calls a twice defined below)
-// Rust twin: declaration_scan.rs scan_function_names
-def program_functions(source) {
-	names = []
-	for line in split(code_only(source), "\n") {
-		for statement in split(line, ";") {
-			name = definition_in(statement)
-			if name != ø and not (names contains name) { names = names + [name] }
-		}
-	}
-	names
-}
-
-// The name of the function `statement` defines: `def f(x)`, `f(x) := …`, `f = x => …`, else ø
-// Rust twin: declaration_scan.rs definition_in, starts_as_function
-def definition_in(statement) {
-	n = statement.length
-	start = text_blank_end(statement, 0, n)
-	first_end = start
-	while first_end < n and not is_blank(statement[first_end]) { first_end = first_end + 1 }
-	if start == first_end { return ø }
-	if FUNCTION_KEYWORDS contains statement[start .. first_end] { return leading_name(statement, first_end, n) }
-	define = index_of(statement, ":=", 0, n)
-	if define < n { return leading_name(statement, 0, define) }
-	assign = index_of(statement, "=", 0, n)
-	if assign >= n { return ø }
-	head = leading_name(statement, 0, assign)
-	if head == ø or text_blank_end(statement, start + head.length, assign) < assign { return ø }
-	if starts_as_function(statement, text_blank_end(statement, assign + 1, n), n) then head else ø
-}
-
-// The plain name after the blanks from `from`, ending before `end`, else ø
-def leading_name(text, from, end) {
-	start = text_blank_end(text, from, end)
-	stop = name_end(text, start, end)
-	if stop == start then ø else text[start .. stop]
-}
-
-def text_blank_end(text, from, end) {
-	at = from
-	while at < end and is_blank(text[at]) { at = at + 1 }
-	at
-}
-
-// A value from `at` that starts as a function: `x => …`, `(a, b) -> …`, `function (a) {…}`
-def starts_as_function(text, at, n) {
-	word_end = name_end(text, at, n)
-	if FUNCTION_KEYWORDS contains text[at .. word_end] { return true }
-	head_end = word_end
-	if is_at(text, at, '(', n) { head_end = index_of(text, ")", at, n) + 1 }
-	if head_end <= at or head_end > n { return false }
-	arrow = text_blank_end(text, head_end, n)
-	starts_at(text, "=>", arrow) or starts_at(text, "->", arrow)
-}
-
-// The name `x = …` or `f(a) := …` binds, else ø
-def bound_name(left) {
-	if is_symbol(left) { return left#2 }
-	if is_call_head(left) and is_symbol(left#4) { return left#4#2 }
-	ø
-}
-
-// The parameters of `f(a, b:int) := …`: a and b
-def parameter_names(left) {
-	names = []
-	if not is_call_head(left) { return names }
-	for parameter in left[4:] {
-		if parameter is list and parameter#1 == "key" { parameter = parameter#3 }
-		if is_symbol(parameter) { names = names + [parameter#2] }
-	}
-	names
-}
-
 
 // `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
 // Rust twin: suffixes.rs try_parse_control_suffix
@@ -462,16 +378,15 @@ def repeated(p) {
 	atom(p)
 }
 
-COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
-
-// `thrice {…}`, `twice "ab"`: the count word and what follows, as `3 times {…}`, else ø; `twice {a: 1}` stays the call,
-// `def twice {…}` the definition; a program's own `once`, bound before, stays its own (card parser-warp-scope)
+// `thrice {…}`, `twice "ab"`: the count word and what follows as written, else ø; `twice {a: 1}` stays the call,
+// `def twice {…}` the definition; the scope pass (sugar.warp counted) makes it `3 times {…}` unless the program
+// gives the word a meaning of its own (card parser-scope-pass)
 // Rust twin: control/loops.rs try_parse_count_word
 def count_worded(p) {
 	if p.at > 0 and p.code[p.at - 1] == '.' { return ø }
 	if FUNCTION_KEYWORDS contains word_before(p) { return ø }
 	for word in COUNT_WORDS {
-		if keyword_at(p, word#1) and not (p.bound contains word#1) {
+		if keyword_at(p, word#1) {
 			at = blank_end(p, p.at + word#1.length)
 			c = peek(p.code, at, p.n)
 			if c != '{' and c != '[' and c != '"' and c != '\'' { return ø }
@@ -482,7 +397,7 @@ def count_worded(p) {
 				p.at = start
 				return ø
 			}
-			return listed("", " ", [word#2, ["symbol", "times"], body])
+			return listed("", " ", [["symbol", word#1], body])
 		}
 	}
 	ø
@@ -496,15 +411,6 @@ def word_before(p) {
 	start = end
 	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
 	p.code[start .. end]
-}
-
-// A block of `key: value` entries only, an object rather than code
-def counts_pairs(node) {
-	if not is_block(node) or node.length < 4 { return false }
-	for entry in node[3:] {
-		if not (entry is list and entry.length > 1 and entry#1 == "key" and entry#2 == ":") { return false }
-	}
-	true
 }
 
 // `7 /! 2`, `x /!= 2`, `7 div 2`: the floor division written at the parser's position, else ""; `//` is a comment
