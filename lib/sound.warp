@@ -43,7 +43,7 @@ global tuning = 440.0 as float
 midi_hertz(n) := round(tuning * 2 ^ ((n - 69) / 12) * 100) / 100
 // the note names (decision music-plain-details): a letter, a sharp (♯ or s) or flat (b or ♭) and an octave 0–8 is its MIDI
 // note's frequency at the tuning, `play F♯4`, `melody [C4 Eb4 G4]`; charged, so `tuning = 432` retunes them; the text
-// "F#4" names a note too (note_hertz)
+// "F#4" names a note too (note_hertz), and so does F#4 itself (PitchClass)
 C0 := midi_hertz(12)
 D0 := midi_hertz(14)
 E0 := midi_hertz(16)
@@ -320,6 +320,18 @@ class Note {
 	minus(semitones) := plus(-semitones)
 	equals(o) := o is Note and key == o.key and cents == o.cents
 }
+// `F#4` (decision music-plain-details): a letter is its pitch class, indexed by an octave its sharp note there, F♯4
+class PitchClass {
+	key: int
+	index(octave) := midi_hertz(12 * (octave + 1) + key + 1)
+}
+C = PitchClass(0)
+D = PitchClass(2)
+E = PitchClass(4)
+F = PitchClass(5)
+G = PitchClass(7)
+A = PitchClass(9)
+B = PitchClass(11)
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
 note(pitch) := nearest_note(hertz_of(pitch))
 nearest_note(frequency) := {
