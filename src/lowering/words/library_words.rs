@@ -273,7 +273,7 @@ pub fn is_standard_function(name: &str) -> bool {
 /// (`count sorted xs`, `max sorted xs`, `print sorted xs`)
 pub fn is_calling_word(name: &str) -> bool {
 	is_standard_function(name)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 		|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name)
 }
 
@@ -296,7 +296,7 @@ pub fn needs_one_value(name: &str) -> bool {
 pub fn is_one_value_function(name: &str) -> bool {
 	needs_one_value(name)
 		|| crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 }
 
 fn fewest_arguments(word: &str) -> usize {
