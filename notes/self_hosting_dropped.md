@@ -26,7 +26,7 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 | Form | Example | What it takes |
 |------|---------|---------------|
 | Music `go {…}` blocks | `go { c4 e4 g4 }` | a sound library function taking data, `tune d:data := play d`, so `tune { c4 e4 g4 }` plays plain data; note names are constants of the music/sound library (card music-data-dsl) |
-| CSS in style blocks | `style { td#x { color: red } }` | `style` reads the block as data: selectors as keys, declarations as pairs (card style-data-dsl) |
+| CSS in style blocks | `style { td#x { color: red } }` | done: lib/markup.warp `style(sheet: data)` reads the block as data (card style-sheets) |
 
 ## Parser: forms to restore later
 | Form | Example | Why dropped | What it would take |
@@ -169,6 +169,11 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   {bench_higher_order,bench_hoisted}.warp, probes/functions/forward_param.warp, probes/generators/yield_from.warp,
   probes/ruby_yield/{do_block,twice}.warp, probes/self_hosting/readiness/ports/times_phrases.warp. Back: the warp flow
   joins a run-time number beside ints to data, as Rust's `joined` does.
+
+- Style sheets through lib/markup.warp's style (card style-sheets): a program with a `style{…}` block now carries the
+  library's style_* functions, whose list helpers warp reads more generally: `length: empty |
+  prelude·popped_item(list, …)` where Rust says `prelude·popped_item(empty, int) -> empty` (9 sources, first
+  probes/markup/css_hash.warp). Same output; accepted by the Integrator at 549700f08.
 
 ## Emitter: deviations
 - Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors
