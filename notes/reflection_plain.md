@@ -40,3 +40,15 @@ warp-self-analyzer. One small branch per step, each with its net src/ delta.
 ## Status
 - step 2a (printing pass) and step 1 (meta core, introspection.rs gone): branch reflection-plain
 - next: move class reflection (fields/methods/dir of instances and classes) onto `meta` in lib, then help
+
+## Step 3 design (class reflection onto meta)
+- First bite: reflection.rs `Objects::dispatched` (the run-time type test over every class for `f(o) := o.fields`,
+  `make().class`) becomes `meta_of(type(o)).fields` / `.methods`: the table already holds every class under
+  `class P`. The compile-time answers (known class, own member wins: `has_member`) stay until the library has typed
+  overloads for instances.
+- `meta(P).methods` holds method values; calling one read out of a map fails with an instance argument (card
+  method-value), so `methods(o)#1(o)` through meta waits for that card.
+- `help(P)` / `help(p)` (Objects::help) is text built from fields, methods and parent: a library
+  `help(c) := "class " + meta(c).name + …` once help has typed overloads (function, module, class).
+- Traps: a module symbol through two untyped functions reads as an int on main (card regression-module, one ignored
+  test in test_meta_values); `(if … then map else …).field` fails (card field-parenthesized).
