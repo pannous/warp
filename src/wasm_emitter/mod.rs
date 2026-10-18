@@ -69,6 +69,9 @@ const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 const NODE_SCRATCH_LOCALS: u32 = 2;
 /// The name section's name of the start function, which installs witness tables and late calls in each instance
 const START_FUNCTION: &str = "install";
+/// The first stand-in call index of a runtime function the analysis did not foresee, far above any real one
+/// (emit_call); the module's finish puts in the real index
+const UNFORESEEN_CALL_BASE: u32 = 1 << 30;
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
 pub const MEMORY_ENTITY: &str = "memory";
 pub const TABLE_ENTITY: &str = "table";
@@ -193,6 +196,15 @@ pub struct WasmGcEmitter {
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
+	/// Runtime functions called that the analysis did not require: the stand-in index their calls name until
+	/// emit_unforeseen_functions emits them after main (emit_call)
+	unforeseen_calls: HashMap<&'static str, u32>,
+	/// Functions emitted code was compiled without: should_emit_function said no inside a function or outside the
+	/// runtime emitters' own gates. Adding one of them later would change that code, which takes a rerun
+	compiled_without: std::cell::RefCell<HashSet<String>>,
+	gating_runtime: bool, // the runtime emitters decide which functions to emit (emit_constructors)
+	body_depth: u32,      // functions being emitted inside each other (function_body)
+	makes_floats: bool,   // the program or the emitted code makes a Float (new_float), which list_join shows by float_text
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
 	inherited_needs: std::collections::HashSet<Need>,
 	/// The highest operator code the needs ask list_text to write as written (see written_operator_bound)
@@ -309,10 +321,10 @@ impl WasmGcEmitter {
 
 	/// Register a code function
 	fn register_func(&mut self, name: &'static str) -> u32 {
-		let func = FuncDef::builtin(name);
-		let idx = self.ctx.func_registry.register(func);
-		self.next_func_idx = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
-		idx
+		let index = self.next_func_idx;
+		self.ctx.func_registry.register_at(FuncDef::builtin(name), index);
+		self.next_func_idx += 1;
+		index
 	}
 
 	/// The index of the runtime function or import `name`, else of the program's function: a program word named like a
@@ -441,7 +453,12 @@ impl WasmGcEmitter {
 	}
 
 	fn should_emit_function(&self, name: &str) -> bool {
-		self.config.emit_all_functions || self.ctx.required_functions.contains(name)
+		let emits = self.config.emit_all_functions || self.ctx.required_functions.contains(name);
+		// a runtime emitter's own gate only decides whether to emit; any other answer shapes the code being emitted
+		if !emits && (self.body_depth > 0 || !self.gating_runtime) && !self.compiled_without.borrow().contains(name) {
+			self.compiled_without.borrow_mut().insert(name.to_string());
+		}
+		emits
 	}
 
 	/// Generate all type definitions and functions
@@ -543,6 +560,7 @@ impl WasmGcEmitter {
 			self.highest_key_operator = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
+			self.makes_floats = true;
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
 		}
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
@@ -578,18 +596,83 @@ impl WasmGcEmitter {
 		self.emit_compare_dispatcher();
 		self.emit_text_dispatcher();
 		self.emit_node_main(node);
-		let missing: Vec<Need> = self.discovered_needs.iter().filter(|need| !self.is_provided(need)).copied().collect();
-		if let Some(unprovidable) = missing.iter().find(|need| self.inherited_needs.contains(need)) {
-			self.type_errors.push(format!("the compiler found it needs {unprovidable:?} but cannot provide it"));
-		} else if !missing.is_empty() {
-			let mut rerun = Self::new();
-			rerun.config = self.config.clone();
-			rerun.ratio_division = self.ratio_division;
-			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
-			rerun.inherited_needs = rerun.discovered_needs.clone();
-			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
-			*self = rerun;
+		self.emit_unforeseen_functions(node);
+	}
+
+	/// The runtime functions main and the others called without the analysis requiring them, emitted after them by the
+	/// runtime emitters running again; a function some emitted code was compiled without, or a need no function
+	/// meets, takes a rerun of the whole emission instead
+	fn emit_unforeseen_functions(&mut self, node: &Node) {
+		loop {
+			let unforeseen = self.unforeseen_functions();
+			let mut missing: Vec<Need> =
+				self.discovered_needs.iter().filter(|need| !self.is_provided(need)).copied().collect();
+			if unforeseen.is_empty() && missing.is_empty() {
+				return;
+			}
+			let compiled_without = unforeseen.iter().any(|name| self.compiled_without.borrow().contains(*name));
+			if missing.is_empty() && !compiled_without {
+				trace!("emitting the unforeseen functions {unforeseen:?} after main");
+				self.ctx.required_functions.extend(&unforeseen);
+				let installed = self.installed_at_start();
+				self.emit_constructors();
+				// a witness table or late call the start function would have installed came too late for it
+				let all_emitted = unforeseen.iter().all(|name| self.ctx.func_registry.contains(name));
+				if all_emitted && self.installed_at_start() == installed {
+					continue;
+				}
+			}
+			missing.extend(unforeseen.into_iter().map(Need::Function));
+			return self.rerun_with(missing, node);
 		}
+	}
+
+	/// What the start function installs and main reads (emit_installation_start): the witness tables, the late calls
+	fn installed_at_start(&self) -> (bool, bool, usize) {
+		(self.compare_witness.is_some(), self.text_witness.is_some(), self.late_calls.len())
+	}
+
+	/// The functions the calls emitted so far need beyond the required ones, with what those need in turn
+	fn unforeseen_functions(&self) -> Vec<&'static str> {
+		let mut wanted = self.ctx.required_functions.clone();
+		wanted.extend(self.unforeseen_calls.keys().filter(|name| !self.ctx.func_registry.contains(name)));
+		let dependencies: Vec<_> =
+			runtime_dependencies::every_dependency().into_iter().chain(self.function_text_dependency()).collect();
+		runtime_dependencies::require_dependencies(&mut wanted, &dependencies);
+		text::text_builtins::require_float_text(&mut wanted);
+		// a float made by the program or the emitted code may be shown
+		if self.makes_floats && wanted.contains("list_join") {
+			wanted.insert(numbers::float_text::FLOAT_TEXT);
+		}
+		wanted.retain(|name| !self.ctx.required_functions.contains(name));
+		wanted.into_iter().collect()
+	}
+
+	/// The whole emission again, the needs found required from the start; a need found again cannot be provided
+	fn rerun_with(&mut self, needs: Vec<Need>, node: &Node) {
+		if let Some(unprovidable) = needs.iter().find(|need| self.inherited_needs.contains(need)) {
+			let message = format!("the compiler found it needs {unprovidable:?} but cannot provide it");
+			return self.type_errors.push(message);
+		}
+		let mut rerun = Self::new();
+		rerun.config = self.config.clone();
+		rerun.ratio_division = self.ratio_division;
+		rerun.discovered_needs = needs.into_iter().chain(self.discovered_needs.drain()).collect();
+		rerun.inherited_needs = rerun.discovered_needs.clone();
+		trace!("emitting again for {:?}", rerun.discovered_needs);
+		let emit_again = || crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass hinted it
+		crate::compiler::phase_times::timed("emit rerun", emit_again);
+		*self = rerun;
+	}
+
+	/// Each stand-in call index (emit_call) with the index of the function emitted for it
+	fn unforeseen_call_indices(&self) -> HashMap<u32, u32> {
+		let emitted = |name: &str| self.ctx.func_registry.get(name).map(|function| function.call_index as u32);
+		(self.unforeseen_calls.iter())
+			.map(|(name, &stand_in)| {
+				(stand_in, emitted(name).unwrap_or_else(|| panic!("{name} called but never emitted")))
+			})
+			.collect()
 	}
 
 	fn is_provided(&self, need: &Need) -> bool {
@@ -789,20 +872,16 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
+		self.ctx.used_functions.insert(name);
 		if !self.ctx.func_registry.contains(name) && !self.ctx.user_functions.contains_key(name) {
-			assert!(!self.ctx.required_functions.contains(name), "Unknown function: {}", name);
-			self.discovered_needs.insert(Need::Function(name));
-			func.instruction(&I::Unreachable);
+			let stand_in = UNFORESEEN_CALL_BASE + self.unforeseen_calls.len() as u32;
+			if !self.unforeseen_calls.contains_key(name) {
+				assert!(!self.ctx.required_functions.contains(name), "Unknown function: {}", name);
+			}
+			func.instruction(&I::Call(*self.unforeseen_calls.entry(name).or_insert(stand_in)));
 			return;
 		}
-		// a float the analyzer did not foresee (makes_floats) may be shown: rerun with float_text
-		if name == "new_float"
-			&& self.should_emit_function("list_join")
-			&& !self.should_emit_function(numbers::float_text::FLOAT_TEXT)
-		{
-			self.discovered_needs.insert(Need::Function(numbers::float_text::FLOAT_TEXT));
-		}
-		self.ctx.used_functions.insert(name);
+		self.makes_floats |= name == "new_float";
 		func.instruction(&I::Call(self.func_index(name)));
 	}
 
@@ -986,6 +1065,9 @@ fn last_statement_items(program: &Node) -> usize {
 /// The module of `node`; `%` and `//` use the small int_* runtime unless the module makes ratios, which takes a
 /// second emission with the ratio-aware exact_* one (card int-i64)
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
+	if let Some(module) = crate::compiler::self_hosted::emit(node) {
+		return module;
+	}
 	let (compiled, int_division) = crate::compiler::phase_times::timed("emit", || emit_module_with(node, false))?;
 	if int_division && makes_ratios(&compiled.bytes) {
 		// the first emission already hinted the same program

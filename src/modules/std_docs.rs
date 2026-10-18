@@ -154,6 +154,12 @@ pub fn module_help(module: &str) -> Option<String> {
 	Some(std::iter::once(format!("{module}: {summary}")).chain(lines).collect::<Vec<_>>().join("\n"))
 }
 
+/// The comment lines a standard module starts with, its `meta(m).doc` (meta_values.rs)
+pub fn module_summary(module: &str) -> Option<String> {
+	crate::modules::std_module_source(module)?;
+	Some(module_index(module).0.clone())
+}
+
 /// `warp help`: the modules there are
 pub fn modules_overview() -> String {
 	let names: Vec<&str> = crate::modules::std_module_names().collect();

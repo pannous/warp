@@ -192,7 +192,8 @@ fn flows(
 
 /// The kind `value` passes on, if it tells one: an Int is what a value of unknown kind reads as, so only a literal one,
 /// or a literal variable's, tells; a name the scope doesn't bind reads as a symbol, which tells only of a free name
-/// (`f ↯`, `weekend(Sunday)`, `g int`), not of a parameter or global out of the scope's sight; nor does a number
+/// (`f ↯`, `weekend(Sunday)`, `g int`) or a bound one holding a symbol, not of a parameter or global out of the scope's
+/// sight; nor does a number
 /// of run-time kind without a told number in it (`unique(a + b)` of any values)
 fn told_kind(value: &Node, scope: &Scope, judge: &ArgumentJudge, is_free: &dyn Fn(&str) -> bool) -> Option<Kind> {
 	// a literal says what it is (`1s` a float), whatever its scope reads it as
@@ -201,7 +202,8 @@ fn told_kind(value: &Node, scope: &Scope, judge: &ArgumentJudge, is_free: &dyn F
 	}
 	let kind = infer_type(value, scope);
 	let tells = match value.drop_meta() {
-		Node::Symbol(name) if kind == Kind::Symbol => is_free(name),
+		// a parameter holding a symbol (`f(m) := look(m)` of `f(math)`) tells as a free name does
+		Node::Symbol(name) if kind == Kind::Symbol => is_free(name) || scope.binding(name).is_some(),
 		Node::Key(left, _, right) if kind == Kind::Data => [left, right].iter().any(|side| {
 			told_kind(side, scope, judge, is_free)
 				.is_some_and(|kind| kind.is_int() || kind.is_float() || kind == Kind::Data)

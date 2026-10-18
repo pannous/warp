@@ -101,8 +101,8 @@ A stored `Todo{title: text; done: bool}` table, a list page, a form POSTing a to
 - The page build leaves the table out but keeps `id` on its class (database_tables.rs with_row_ids). A served
   instance arrives as JSON `{"Todo": {…}}` and decodes to a one-entry object read as its class (STRUCT_BODY).
 - Without a server (`warp run`, the playground), top-level get/post routes are local routes (serve.rs
-  with_local_routes): `route·N(request)`, with `global` for the page variables it mentions; `page·submitted(request)`
-  calls the matching one, or throws "no route answers …". The playground listens for submit on the shadow root
+  with_local_routes): `route_add(METHOD, path, request => {…})`, with `global` for the page variables it mentions;
+  `page·submitted(request)` (lib/router.warp route_answer) calls the matching one, or throws "no route answers …". The playground listens for submit on the shadow root
   (playground.js submitForm), the Worker runs the route and shows the page anew (worker.js handleSubmit).
 - Left: card where-assigned (`waiting = xs where not it` fails to parse).
 
@@ -124,8 +124,15 @@ without_classes). An object's own entries (`address:{…}`) keep their names.
 Routes become ordinary warp definitions in lib/router.warp, no rewrite rules, no module pass. Moved so far:
 - `status 418` / `header "name" "value"`: router functions over the host's response_header; lib/wagi.warp defines
   its own response_header, which wins over the host import in a WAGI build (serve.rs with_answer_headers is gone).
+- route dispatch (serve.rs route_entry, served and serverless alike): each route is
+  `route_add(METHOD, path, request => {globals…; body})` and `page·submitted(request) := route_answer(request)`, the table
+  and dispatcher in lib/router.warp; no route·N functions any more. A server's host still matches the request against
+  `serve_routes(port, [[method, path, list?] …])` (web_server.rs route_at: site fallback, failure status by path, a list
+  route's ø as []) and then asks page·submitted; route_answer picks the same route (exact path first, then pattern).
+  Next: the built-in `get "/x" {…}` sugar intercepts a user function named get: the swap to lib functions get/post/… is
+  one step.
 
-Target shape (the host calls one exported dispatcher instead of route·N by name):
+Target shape:
 ```warp
 class Route { method: text, path: text, answer: function }
 routes = []

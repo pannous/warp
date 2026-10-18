@@ -53,7 +53,7 @@ parameter_names(target: any) := {
 	names = []
 	if not is_call_head(target) { return names }
 	for parameter in target[4:] {
-		if parameter is list and parameter#1 == "key" { parameter = parameter#3 }
+		if parameter !== ø and parameter is list and parameter#1 == "key" { parameter = parameter#3 }
 		if is_symbol(parameter) { names = names + [parameter#2] }
 	}
 	names
@@ -125,7 +125,7 @@ one_based(index: any) := if index is number then index + 1 else ["key", "+", ind
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 // Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
-CODE_MEMBER_WORDS = FUNCTION_KEYWORDS + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]
+CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "public", "private", "protected", "internal", "fileprivate", "open", "final", "async", "operator"]
 
 // A class body's fields with their types, `x: int` holding the type int; a method keeps its code
 // Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type

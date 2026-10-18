@@ -23,6 +23,7 @@ pub mod parameter_patterns;
 pub mod parameter_shapes;
 pub mod pattern_clauses;
 pub mod preposition_calls;
+pub mod property_accessors;
 pub mod references;
 pub mod specialising;
 pub mod typed_block_arguments;

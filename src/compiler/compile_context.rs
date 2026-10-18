@@ -60,6 +60,9 @@ pub struct CompileContext {
 	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
 	/// class_methods reads `n + 2` of `n = note_value(C4)` as Note's plus before the module joins the program
 	pub module_returned_classes: HashMap<String, String>,
+	/// those modules' variables holding such an instance (sound's `F = PitchClass(5)`), with its class: `F#4` of the
+	/// program is PitchClass's index
+	pub module_instance_classes: HashMap<String, String>,
 	/// the unit words the program being lowered defines itself (`m = 2`): no units while it is lowered
 	pub shadowed_units: HashSet<String>,
 	/// the program's own unit lines (`unit furlong := 201.168 m`, units/definitions.rs), set before it is parsed and kept
@@ -118,6 +121,7 @@ impl Default for CompileContext {
 			fast_functions: HashSet::new(),
 			early_class_modules: HashSet::new(),
 			module_returned_classes: HashMap::new(),
+			module_instance_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
 			program_unit_lines: String::new(),
 			field_unit_words: HashMap::new(),
@@ -219,6 +223,7 @@ pub fn lowering_inputs() -> String {
 pub struct LoweredEffects {
 	early_class_modules: Vec<PathBuf>,
 	module_returned_classes: Vec<(String, String)>,
+	module_instance_classes: Vec<(String, String)>,
 	field_unit_words: Vec<(String, String)>,
 	bool_functions: Vec<String>,
 }
@@ -228,6 +233,7 @@ impl LoweredEffects {
 		read(|context| LoweredEffects {
 			early_class_modules: sorted(&context.early_class_modules).into_iter().cloned().collect(),
 			module_returned_classes: sorted_entries(&context.module_returned_classes),
+			module_instance_classes: sorted_entries(&context.module_instance_classes),
 			field_unit_words: sorted_entries(&context.field_unit_words),
 			bool_functions: sorted(&context.bool_functions).into_iter().cloned().collect(),
 		})
@@ -237,6 +243,7 @@ impl LoweredEffects {
 		change(|context| {
 			context.early_class_modules = self.early_class_modules.into_iter().collect();
 			context.module_returned_classes = self.module_returned_classes.into_iter().collect();
+			context.module_instance_classes = self.module_instance_classes.into_iter().collect();
 			context.field_unit_words = self.field_unit_words.into_iter().collect();
 			context.bool_functions = self.bool_functions.into_iter().collect();
 		});

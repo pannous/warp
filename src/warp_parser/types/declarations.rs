@@ -2,6 +2,13 @@
 use super::*;
 use crate::words::ANY_TYPE;
 
+/// Swift's `enum Shape { case circle(radius: Double) }`
+const CASE_KEYWORD: &str = "case";
+/// Python's root class `class Point(object):`, no parent of its own
+const PYTHON_ROOT_CLASS: &str = "object";
+/// The field of a sum type's variant with one unnamed payload, `Some(T)`: `Some(3).value`; several are value1, value2…
+const VARIANT_FIELD: &str = "value";
+
 /// What follows the name of a lowercase type declaration: `type point {…}`, `type size = u32`, `type pair<T>`
 pub(crate) const TYPE_BODY_STARTS: [char; 4] = ['{', '=', ':', '<'];
 

@@ -4,6 +4,14 @@ use super::*;
 use crate::words::RETURN_WORD;
 use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
+/// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
+const AWAIT_KEYWORD: &str = "await";
+/// `await all jobs`: every task of a list (P47)
+const AWAIT_ALL_WORD: &str = "all";
+/// `await x` binds its operand like unary minus
+const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
+const AFTER_KEYWORD: &str = "after";
+
 impl WarpParser {
 	/// `await a + await b`: `await` takes its operand like a unary minus, so each task is awaited before the sum.
 	/// `await(x)` (a call or a definition of a function `await`) and `await = …` stay as they are
