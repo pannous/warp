@@ -130,7 +130,6 @@ mod test_passed_list_identity; // card xs-xs
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
 mod test_plain_enum; // card plain-enum
-mod test_scoped_enum_cases; // card node-enum
 mod test_printable;
 mod test_printable_items; // card list-printable-items
 mod test_program_conversions;
@@ -145,6 +144,7 @@ mod test_returned_instances; // card units-dynamic
 mod test_returned_list_alias; // card identity-copies-list
 mod test_runtime_text_ratio;
 mod test_same_identity;
+mod test_scoped_enum_cases; // card node-enum
 mod test_self_typed_field; // card empty-field
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists

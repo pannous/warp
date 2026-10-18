@@ -296,9 +296,8 @@ impl WarpParser {
 		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
 			return error(NONE_CALL_ERROR);
 		}
-		if let Some(constant) =
-			check_constants(&symbol, self.options.data_mode)
-				.filter(|_| !self.at_member_name(symbol.chars().count()) && !self.context.in_enum_cases)
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode)
+			.filter(|_| !self.at_member_name(symbol.chars().count()) && !self.context.in_enum_cases)
 		{
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
