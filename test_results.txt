@@ -2495,6 +2495,9 @@ PASSED:
   ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
   ✓ modules::test_replaced_module_function::a_program_function_replacing_a_module_function_warns
+  ✓ modules::test_runtime_word_lines::a_left_out_parameter_takes_its_default
+  ✓ modules::test_runtime_word_lines::a_signature_is_its_line
+  ✓ modules::test_runtime_word_lines::the_runtime_words_are_callable_by_name
   ✓ modules::test_selective_package::a_registry_package_passes_on_its_chosen_words
   ✓ modules::test_selective_package::a_word_one_package_file_imports_from_another_stays_inside
   ✓ modules::test_selective_package::the_main_file_passes_on_the_named_words
@@ -3746,12 +3749,10 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
-  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
   ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
   ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
@@ -3765,9 +3766,7 @@ PASSED:
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
   ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
-  ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
-  ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -6350,6 +6349,10 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust
+  ✗ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
+  ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
 
 SUMMARY:
-16 ignored, 6347 passed, 0 failed, 6347 total tested
+16 ignored, 6346 passed, 4 failed, 6350 total tested
