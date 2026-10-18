@@ -212,7 +212,7 @@ fn used_words<V>(program: &Node, known: impl Fn(&str) -> Option<V>) -> HashMap<S
 			}
 		}
 	});
-	let names = crate::soft_keywords::names_given(program);
+	let names = crate::program_names::Bindings::of(program).given();
 	used.retain(|name, _| !names.contains(name));
 	used
 }
@@ -356,7 +356,7 @@ impl LibraryCalls {
 	fn of(program: &Node, found: &[Definition]) -> LibraryCalls {
 		let functions = found.iter().map(|definition| definition.name.clone()).collect();
 		let function_parameters = crate::function_values::higher_order_parameters(found);
-		LibraryCalls { functions, named: crate::soft_keywords::names_given(program), function_parameters }
+		LibraryCalls { functions, named: crate::program_names::Bindings::of(program).given(), function_parameters }
 	}
 
 	/// The library word at item `at` of a call calls the value after it: the caller takes no function there

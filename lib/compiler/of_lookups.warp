@@ -6,6 +6,7 @@
 # Left out (notes/self_hosting_dropped.md): the walk `print words in t`, the unit count `byte count of t`.
 use "walk.warp"
 use "words.warp"
+use "scope.warp"
 
 of_word = "of"
 type_call_word = "type"
@@ -41,12 +42,10 @@ spaced_words(parts: any) := {
 	last = parts#(#parts)
 	if type(last) is not key or (op_of(last) != "=" and op_of(last) != ":=") { return ø }
 	words = []
-	at = 1
-	while at < #parts {
+	for at in 1 ..< #parts {
 		word = if at == #parts - 1 then key_of(last) else parts[at]
 		if word is not symbol { return ø }
 		words += [name_of(word)]
-		at += 1
 	}
 	words
 }
@@ -159,7 +158,7 @@ has_type_of(n: any) := view_has(view_of(n), part => kind_of(part) == "type" and 
 of_lookups(program: any) := {
 	selecting = mentions_any(program, selector_words) and mentions_any(program, selecting_words)
 	if not mentions(program, of_word) and not selecting and not has_type_of(program) { return program }
-	bound = defined_names(program)
-	selectors = selector_words.filter(word => not (bound contains word))
+	scope = scope_of(program)
+	selectors = selector_words.filter(word => not binds(scope, word))
 	rewrite(program)
 }

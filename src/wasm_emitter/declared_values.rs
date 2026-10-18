@@ -265,7 +265,7 @@ pub(super) const LIST_ITEMS_CHECK: &str = "list_items_check";
 pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
 /// The in-place writers of a list, which check their items against its element mark
 const MARK_CHECKING_WRITERS: [&str; 3] =
-	[super::lists::list_ops::LIST_EXTEND, crate::list_mutations::INSERT_AT_CALL, "node_with_at"];
+	[super::lists::list_ops::LIST_EXTEND, crate::list_mutations::LIST_BECOME, "node_with_at"];
 
 /// Whether the program declares a list type anywhere (`names: texts`, its lowered form the type as the target's Meta, a
 /// field `items: [text]`); a program without one emits no element marks and no item checks

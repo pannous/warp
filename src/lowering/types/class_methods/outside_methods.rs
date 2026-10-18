@@ -53,13 +53,7 @@ pub(super) fn first_parameter(head: &Node) -> Option<(String, String)> {
 fn parameter_names(head: &Node) -> Vec<String> {
 	match head.drop_meta() {
 		Node::Key(call, Op::Colon, _) => parameter_names(call),
-		Node::List(items, Bracket::Round, _) => items[1..]
-			.iter()
-			.map(|parameter| match parameter.drop_meta() {
-				Node::Key(name, Op::Colon | Op::Assign, _) => name.drop_meta().name(),
-				other => other.name(),
-			})
-			.collect(),
+		Node::List(items, Bracket::Round, _) => items[1..].iter().map(crate::lowering::nodes::parameter_word).collect(),
 		_ => vec![],
 	}
 }

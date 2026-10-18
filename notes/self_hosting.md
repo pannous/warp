@@ -32,7 +32,7 @@ Decision self-hosting:
 - Matching Rust is a check, not the goal: the twins must not copy Rust's imperfections. Where the warp part's clean
   result differs because the Rust result is a quirk or bug (an odd tree shape, a wrong kind, a lost position), the
   warp part keeps the clean result, the difference goes into the expected-deviations list the differential reads
-  (notes/self_hosting_dropped.md, section Deviations, with an example each), and the Rust side gets a bug card or,
+  (notes/self_hosting_dropped.md, the component's "deviations" section, with an example each), and the Rust side gets a bug card or,
   when it is a design question, a warp-interviewer question. A twin that matches 100% gets a quick review for copied
   quirks before its Rust part is removed.
 - The same holds for structurally unsound decisions, not only bugs: special cases for single words, passes that undo
@@ -55,9 +55,13 @@ parser-keyword-table. Target shapes:
 - parser-desugar-pass: the tree keeps what is written: `xs[i]` an index, `xs[a:b]` a slice, `loop {…}`, `/!`, `/!=`,
   `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
   each; the twin compares after that pass.
+  Done (lib/compiler/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
+  `loop {…}`. Count words wait for parser-scope-pass (a program's own `twice`); `1e3`, `2x`, `x⁻¹`, `global int n`
+  already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
   knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
+  Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
   restoring by hand.
 - parser-keyword-table: one table, word → shape, for the word forms (print, times, count words, function references,
@@ -227,11 +231,16 @@ Readers of the layout (each place a module's result or a value crossing the boun
   before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
   a chunk at a time (iovec at 0, written count at 8, bytes from 16). That is the one edge helper; nothing else
   touches memory. Done (card emitter-prints); the emitter twin compares stdout too (host::with_captured_stdout).
-Runtime words are warp: `runtime = data { … }` in emitter.warp, written over a handful of intrinsics (new_text,
-copy_text, byte_count, byte_at, set_byte, int_quotient, int_remainder (truncating), code_of, output_byte, write_output; one or
-two instructions each, usable only inside the runtime) and compiled on their first call like the program's own
-functions: text_join (`+` on texts), text_count (`#` on a text: code points), print_line, int_text, char_text (print of
-an int, a character; a yes/no prints yes or no, a float is not printed yet).
+Runtime words are warp: lib/compiler/runtime.warp, written in idiomatic warp (for loops and all sugar) and lowered by
+the same pipeline as any program before emitter.warp sees them (`wasm_module(program, runtime)`; the twin harness
+lowers it with pipeline::lower). emitter.warp handles only lowered forms, never hand-lowered source. The words use a
+handful of intrinsics, one or two instructions each and callable only from runtime words: texts (new_text, copy_text,
+byte_count, byte_at, set_byte), lists (new_list, copy_items, adopt_items), numbers (int_quotient, int_remainder,
+truncating; code_of, char_of), boxed values (kind_code, marked_kind, unboxed_int/float/text/char, is_null), output
+(output_byte, write_output) and fail (a trap). Each word is compiled on its first call like the program's own
+functions: text_join and list_join (`+`), list_append (`+=` on a list, in place, so aliases see it), text_count (`#`
+on a text: code points), text_char (`t#i`), text_order (text comparisons), print_line, int_text, char_text, node_text
+(print and `+` of a value known only at run time; a float is not printed yet).
 
 ## Runtime calls into prelude words
 Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written word
@@ -328,3 +337,27 @@ wasmtime stays bundled in every executable: even with the program precompiled (.
 the trap handling. Replacing it (WAMR's wamrc AOT with its own GC; wasm2c lacks GC) is not on the table.
 Shared runtime library (`warp build --shared`, libwarp-runtime.dylib): only an option, card exe-shared-runtime (Later):
 no total saving, loses self-contained files, and a .cwasm only runs on the exact wasmtime that compiled it.
+
+## The suite through the warp pipeline (card warp-pipeline-suite)
+`scripts/self-hosted-suite.sh [<pushed tip>]` runs the whole suite on the cloud lane with WARP_SELF_HOSTED=1 and
+prints "self-hosted: N passed / M" plus the failures grouped by cause (an assertion's left side, digits as #), the most
+frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank <log>` ranks any test log,
+`--tests <cause regex> <log…>` lists the failed tests of a cause. A cloud run appends its count to
+data/self_hosting/suite_counts.txt (warp-steward reruns after each batch touching lib/compiler or the pipeline, and
+nightly). The failure groups are cards suite-* in topic self-hosted-2, each naming its stage owner.
+- src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
+  [0, source]) and `run_program_passes` hands every source pass with a warp twin (TWINNED_PASSES, the order of
+  passes.warp `passes`) to it ([i, view]); the passes without a twin, the analyzer and the emitter stay Rust.
+- Each stage call crosses src/compiler/node_views.rs: the plain view as JSON in, the view back to a node
+  (node_of_handled_view). Data nodes (times, quantities) travel as handles ["data", "#i"]. Lost on the way: source
+  positions and literal layers (a plain view has none), so position-checking tests fail by design.
+- The stage program compiles once per worker thread (its compile has thread-local state the outer compile keeps);
+  the twin tests parser::test_self_* are skipped (they compare warp with Rust themselves).
+- The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
+  warp-lang at opt-level 2, as test.sh), in three jobs at once (TEST_GROUPS: self-hosted, the whole suite outlasts the
+  lane's 2400 s limit), branches self-hosted/<tip>-<n>, deleted after the run.
+- First count (2026-10-17, aa7a536a, data/self-hosted/aa7a536a.txt): 4529 passed / 6421 (70.5%). Top families:
+  parser.warp's `Unexpected character` 344 (π @ > . $ & = * ⊕ : σ, a space before a trailing block), `undefined
+  variable` 184 (try 52, T# 22: forms parser.warp reads otherwise), a bare `#` left side 76 (a wrong number), `cannot
+  extract a numeric value from ø` 46, database `may be ø` hints 50, `not a number` 33, hints pointing into
+  lib/compiler/parser.warp (its own warnings leak into the program's output) 41.

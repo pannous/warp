@@ -14,7 +14,6 @@
 use super::nodes::{call, key};
 use crate::errors::diagnostic::Diagnostic;
 use crate::event_signals::{main_level_variables, EVENT_WORD};
-use crate::lowering::module_properties::bound_names;
 use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -79,7 +78,11 @@ struct KeyScope {
 
 impl KeyScope {
 	fn of(program: &Node, statements: &[Node]) -> Self {
-		KeyScope { own: main_level_variables(statements), bound: bound_names(program), escape: Cell::new(false) }
+		KeyScope {
+			own: main_level_variables(statements),
+			bound: crate::program_names::Bindings::of(program).bound(),
+			escape: Cell::new(false),
+		}
 	}
 
 	/// The key a comparison names, Escape noted

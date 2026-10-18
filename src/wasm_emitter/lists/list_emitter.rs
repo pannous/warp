@@ -35,7 +35,7 @@ const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 
 /// Names the emitter resolves itself, besides user functions, imports, type words, counting functions and the
 /// NODE_ARGUMENT_CALLS
-const BUILTIN_CALLS: [&str; 24] = [
+const BUILTIN_CALLS: [&str; 23] = [
 	crate::words::RETURN_WORD,
 	crate::words::AS_CODE,
 	crate::host::FETCH_WORD,
@@ -50,7 +50,6 @@ const BUILTIN_CALLS: [&str; 24] = [
 	crate::min_max::EMPTY_EXTREMUM_CALL,
 	crate::switch::NO_CASE_CALL,
 	crate::filled_lists::ZERO_FILL_CALL,
-	crate::list_mutations::INSERT_AT_CALL,
 	crate::list_mutations::INSERT_EITHER_CALL,
 	crate::library_words::LIST_SUM,
 	crate::words::INSTANCE_OF,
@@ -524,14 +523,12 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(call), list, first, second] = items {
-			if call == crate::list_mutations::INSERT_AT_CALL || call == crate::list_mutations::INSERT_EITHER_CALL {
-				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else {
+			if call == crate::list_mutations::INSERT_EITHER_CALL {
+				let Some((position, value)) = self.insert_position_and_value(func, first, second) else {
 					return;
 				};
-				self.emit_node_instructions(func, list);
-				self.emit_numeric_value(func, position);
-				self.emit_node_instructions(func, value);
-				self.emit_call(func, crate::list_mutations::INSERT_AT_CALL);
+				let inserted = crate::list_mutations::inserted_in_place(list, position.clone(), value.clone());
+				self.emit_node_instructions(func, &inserted);
 				return;
 			}
 		}
@@ -1047,19 +1044,15 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;
+	/// The (position, value) of an insert: the one Int among the two arguments is the position;
 	/// two Ints are ambiguous (Python `insert(i, x)` vs warp `insert(x, i)`): the user is asked, unanswered it is an error
 	fn insert_position_and_value<'a>(
 		&mut self,
 		func: &mut Function,
-		call: &str,
 		first: &'a Node,
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
 		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-		if call == crate::list_mutations::INSERT_AT_CALL {
-			return Some((first, second));
-		}
 		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
 		let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
 		match (is_int(self.get_type(first)), is_int(self.get_type(second))) {

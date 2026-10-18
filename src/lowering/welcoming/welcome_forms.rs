@@ -86,11 +86,8 @@ pub fn lower(node: Node) -> Node {
 		return error;
 	}
 	// the program's own names keep their meaning: a field `Count`, Go's method `Sum()`
-	let own: HashSet<String> = crate::library_words::defined_names(&node)
-		.into_iter()
-		.chain(crate::soft_keywords::names_given(&node))
-		.chain(type_fields(&node))
-		.collect();
+	let mut own = crate::program_names::Bindings::of(&node).given();
+	own.extend(type_fields(&node));
 	let node = qualified_module_calls(module_aliases(node));
 	let node = event_aliases(forms(method_aliases(node, &own)), &own);
 	let mut lambda_names = HashSet::new();
@@ -809,7 +806,7 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
 /// word itself, with a note (a program's own variable `text` keeps its methods)
 fn qualified_module_calls(node: Node) -> Node {
-	let names = crate::soft_keywords::names_given(&node);
+	let names = crate::program_names::Bindings::of(&node).given();
 	let modules: Vec<&str> =
 		crate::modules::std_module_names().chain(FOREIGN_MODULES).filter(|module| !names.contains(*module)).collect();
 	module_calls(node, &modules)

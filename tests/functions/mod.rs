@@ -121,6 +121,7 @@ mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_list_fields; // card field-list
 mod test_map_phrase;
 mod test_map_real_function; // card map-sin
+mod test_match_subject_not_called; // card compiler-patterns
 mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert
 mod test_memoization;

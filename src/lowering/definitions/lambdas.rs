@@ -120,7 +120,7 @@ fn lowering(node: Node, strict: bool) -> Node {
 	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
 	let path_variables = crate::warp_parser::path_variables(&node);
-	let bound = crate::lowering::module_properties::bound_names(&node);
+	let bound = crate::program_names::Bindings::of(&node).bound();
 	Lowering { context, classes, path_variables, bound, counter: Counter::starting_at(first_fresh), strict }
 		.expand(node)
 }
@@ -978,7 +978,7 @@ struct Lowering {
 	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
 	classes: HashSet<String>,
 	path_variables: HashSet<String>,
-	/// the names the program gives (module_properties::bound_names): a function value may be any of them
+	/// the names the program gives (program_names::Bindings::bound): a function value may be any of them
 	bound: HashSet<String>,
 	counter: Counter,
 	strict: bool,
