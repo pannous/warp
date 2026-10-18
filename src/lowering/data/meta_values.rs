@@ -7,7 +7,7 @@
 
 use super::nodes::{filled, key};
 use crate::class_methods::ClassLayout;
-use crate::node::{Bracket, Node, Separator, text};
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 

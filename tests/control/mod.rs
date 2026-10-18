@@ -141,12 +141,12 @@ mod test_match_tuples;
 mod test_match_type_arms;
 mod test_match_whole_value;
 mod test_member_completion;
+mod test_meta_values;
 mod test_method_let_shadows_field; // card receiver-field-assign
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;
 mod test_named_patterns; // card patterns-values
-mod test_meta_values;
 mod test_named_reflection;
 mod test_nested_block_calls; // card block-call-nested
 mod test_not_condition_block;

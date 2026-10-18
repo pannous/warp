@@ -6,7 +6,7 @@ use crate::compiler::compile_context;
 pub use crate::compiler::compile_mode::*;
 use crate::node::{Bracket, Node, Separator};
 use crate::warp_parser::WarpParser;
-use crate::wasm_emitter::{WasmGcEmitter, emit_module, find_struct_instantiation};
+use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
 #[cfg(feature = "native")]
 use log::warn;
 
@@ -481,7 +481,7 @@ pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
-	use crate::analyzer::effects::{EffectReport, without_constraints};
+	use crate::analyzer::effects::{without_constraints, EffectReport};
 	// `rewrite p => t` rules of the program and of the standard modules it mentions (rewrites.rs, lib/channels.warp:
 	// `ch.send(v)` of `ch = channel()`) as written, before any check or pass reads a rule's line
 	let node = crate::modules::rewrites::lower(node);
@@ -740,7 +740,7 @@ fn checked_markup(result: Node) -> Node {
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
 pub fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
-	use crate::run::wasm_reader::{Imports, read_bytes_with_imports};
+	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
 	let result = crate::compiler::phase_times::timed("run (with wasmtime compile)", || {
 		if needs_ffi || needs_wasi || needs_host {
 			read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })

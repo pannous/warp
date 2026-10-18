@@ -10,7 +10,7 @@ use crate::words::{DIR_WORD, MAP_WORD};
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
-use crate::node::{Bracket, Node, Separator, symbol, text};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
 use crate::analyzer::effects::EFFECTS_WORD;

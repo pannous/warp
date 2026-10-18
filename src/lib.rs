@@ -65,7 +65,7 @@ pub mod web;
 // ==================== Core Re-exports ====================
 // Node AST - the heart of warp
 pub use node::{Bracket, Node, Separator};
-pub use operators::{FUNCTION_KEYWORDS, Op, is_function_keyword};
+pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
 // Node convenience constructors
 pub use node::{
 	block, codepoint, data, error, float, floats, int, ints, key, key_ops, list, parens, symbol, symbols, text, texts,
@@ -73,11 +73,11 @@ pub use node::{
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
-pub use formats::wisp_parser::{WispEmitter, WispParser, emit_wisp, parse_wisp};
-pub use warp_parser::{WarpParser, parse, parse_data, parse_file, parse_xml};
+pub use formats::wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
+pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 // Type system
 pub use type_kinds::{
-	FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry, USER_TYPE_TAG_START, extract_instance_values,
+	extract_instance_values, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry, USER_TYPE_TAG_START,
 };
 // Metadata
 pub use compiler::meta::{DataType, DataValue, LineInfo};
@@ -85,7 +85,7 @@ pub use compiler::meta::{DataType, DataValue, LineInfo};
 pub use wasm_emitter::WasmGcEmitter;
 // Host functions
 #[cfg(feature = "native")]
-pub use host::{HostState, create_host_linker, link_host_functions};
+pub use host::{create_host_linker, link_host_functions, HostState};
 // Functions
 pub use compiler::function::{Function, FunctionRegistry};
 // Local (unified struct for variables)
@@ -93,4 +93,4 @@ pub use compiler::local::Local;
 // New gc_traits module with rasm-style ergonomic GC struct access
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]
-pub use gc_traits::{FieldIndex, FromVal, GcReadable, GcStructWrapper, ToVal, register_gc_types_from_wasm};
+pub use gc_traits::{register_gc_types_from_wasm, FieldIndex, FromVal, GcReadable, GcStructWrapper, ToVal};
