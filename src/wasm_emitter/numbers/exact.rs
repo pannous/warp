@@ -12,7 +12,7 @@
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
-use super::super::WasmGcEmitter;
+use super::super::{WasmGcEmitter, NEW_TEXT_OF, TEXT_PIECE};
 use crate::wasm_emitter::layout::BYTE;
 use num_bigint::BigInt;
 use num_traits::One;
@@ -1000,11 +1000,12 @@ impl WasmGcEmitter {
 				s.call(f, "int_add");
 				s.call(f, INT_TEXT);
 				f.instruction(&I::LocalSet(fraction));
-				s.emit_text_field(f, fraction, 0);
-				Self::emit_list(f, &[I::I32Const(1), I::I32Add]);
-				s.emit_text_field(f, fraction, 1);
-				Self::emit_list(f, &[I::I32Const(1), I::I32Sub]);
-				s.call(f, "new_text");
+				s.emit_text_bytes(f, fraction);
+				f.instruction(&I::I32Const(1));
+				s.emit_text_bytes(f, fraction);
+				Self::emit_list(f, &[I::ArrayLen, I::I32Const(1), I::I32Sub]);
+				s.call(f, TEXT_PIECE);
+				s.call(f, NEW_TEXT_OF);
 				concat(f);
 			},
 		);
