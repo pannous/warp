@@ -755,12 +755,8 @@ def endless_loop(p) {
 // Rust twin: expressions.rs finish_if_prefix, finish_while_prefix
 def conditioned(word, condition, p) {
 	skip_spaces(p)
-	split = trailing_block(condition, word == "while")
 	body = ø
-	if split.length > 0 {
-		condition = split#1
-		body = split#2
-	} else if is_at(p.code, p.at, ':', p.n) {
+	if is_at(p.code, p.at, ':', p.n) {
 		// `if c: x = 1 else: x = 2`: the body ends before the else
 		outer = p.branch
 		p.branch = word == "if"
@@ -893,28 +889,7 @@ def ranged_loop(p) {
 	listed("", " ", [["symbol", "for"], iterable, body])
 }
 
-// A condition that took the block after it as an argument, `if x in xs {…}`: [the condition, the block], else []
-// Rust twin: warp_parser split_trailing_block
-def trailing_block(node, empty_is_block) {
-	if not (node is list and node.length > 2) { return [] }
-	if node#1 == "list" and node.length == 5 and (is_block(node#5) or (empty_is_block and node#5 == ø)) { return [node#4, node#5] }
-	if node#1 == "list" and node.length == 6 and node#5 == ["symbol", "in"] {
-		split = trailing_block(node#6, empty_is_block)
-		if split.length == 0 { return [] }
-		return [listed(node#2, node#3, [node#4, node#5, split#1]), split#2]
-	}
-	if node#1 == "key" and SPLIT_OPERATORS.contains(node#2) {
-		split = trailing_block(node#4, empty_is_block)
-		if split.length == 0 { return [] }
-		return [["key", node#2, node#3, split#1], split#2]
-	}
-	[]
-}
-
 def is_block(node) := node is list and node.length > 2 and node#1 == "list" and node#2 == "{"
-
-// The comparison, arithmetic, logical and prefix operators whose right operand may end in the branch
-SPLIT_OPERATORS = ["==", "!=", "===", "!==", "<", ">", "<=", ">=", "+", "-", "*", "/", "%", "rem", "^", "and", "or", "xor", "not", "√"]
 
 // A loop's body: `{…}`, `: words`, `do words`
 // Rust twin: statements.rs for_iterable_and_body_word, colon_body

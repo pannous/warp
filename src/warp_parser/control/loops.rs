@@ -291,11 +291,6 @@ impl WarpParser {
 			return while_do(rhs, body);
 		}
 
-		if let Some((condition, body)) = split_trailing_block(&rhs, true) {
-			// `{}` parses as ø
-			return while_do(condition, body);
-		}
-
 		if let Some(body) = self.indented_lines_below() {
 			self.skip_end_line(); // Ruby's `while c` … `end`
 			return while_do(rhs, body);
