@@ -57,9 +57,7 @@ fn program_names(program: &Node) -> HashSet<String> {
 /// The program's functions taking data or a function, and the standard ones taking data it does not define
 fn taking_functions(program: &Node) -> Positions {
 	let mut functions = Positions::new();
-	for (_, line) in crate::modules::std_data_functions() {
-		functions.extend(functions_taking(&crate::warp_parser::parse(line)));
-	}
+	functions.extend(std_functions_taking());
 	// a function of the program's own wins
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
@@ -68,6 +66,15 @@ fn taking_functions(program: &Node) -> Positions {
 	});
 	functions.extend(functions_taking(program));
 	functions
+}
+
+/// The standard functions taking data, their definitions parsed once per thread and quietly: no hint about library code
+fn std_functions_taking() -> Positions {
+	thread_local!(static FUNCTIONS: Positions = crate::normalize::without_hints(|| {
+		let parse = |line: &&str| functions_taking(&crate::warp_parser::parse(line));
+		crate::modules::std_data_functions().iter().map(|(_, line)| line).flat_map(|line| parse(&line)).collect()
+	}));
+	FUNCTIONS.with(Clone::clone)
 }
 
 fn functions_taking(program: &Node) -> Positions {
