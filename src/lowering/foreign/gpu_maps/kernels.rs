@@ -503,7 +503,7 @@ impl Translation {
 			self.refusal.get_or_insert(format!("`{name}`: a kernel reads no images, only a paint does"));
 			return None;
 		}
-		let width = match pixel_shader(&image.function, &image.painted, false) {
+		let width = match pixel_shader(&image.function, &image.painted, false, &self.in_progress) {
 			Ok(shader) => shader.width,
 			Err(reason) => {
 				self.refusal.get_or_insert(format!("`{name}`: WGSL cannot render {} ({reason})", image.function));
@@ -1006,12 +1006,13 @@ fn render_call(node: &Node) -> Option<RenderCall> {
 
 /// The map `render(f, width, height)` gives: f's shader and the program's numbers it reads, which the host draws into
 /// an image before the paint reading it; only the size where WGSL cannot compute f (the CPU then reads f itself,
-/// images_read_on_cpu)
-fn rendered_image(image: &RenderCall, on_cpu: bool) -> Node {
+/// images_read_on_cpu). A paint reading the image gets this map in its values, so f's numbers are each frame's;
+/// `rendering`: the functions whose images are being translated (an image reading itself is refused)
+fn image_map(image: &RenderCall, on_cpu: bool, rendering: &[String]) -> String {
 	let size = format!("width: {}, height: {}", image.width.serialize(), image.height.serialize());
 	let shader = match on_cpu {
 		true => None,
-		false => pixel_shader(&image.function, &image.painted, false).ok(),
+		false => pixel_shader(&image.function, &image.painted, false, rendering).ok(),
 	};
 	let fields = match shader {
 		Some(PixelShader { shader, entries, .. }) => format!(
@@ -1021,7 +1022,7 @@ fn rendered_image(image: &RenderCall, on_cpu: bool) -> Node {
 		),
 		None => size,
 	};
-	parsed_statement(&format!("{{{fields}}}"))
+	format!("{{{fields}}}")
 }
 
 /// Every `waves(at)` of `waves = render(f, width, height)` as f at the nearest pixel of the image, for the CPU: a
@@ -1079,7 +1080,7 @@ fn painted_function(node: &Node) -> Option<Node> {
 		return shader_of(arguments);
 	}
 	if let Some(image) = render_call(node) {
-		return Some(rendered_image(&image, on_cpu));
+		return Some(parsed_statement(&image_map(&image, on_cpu, &[])));
 	}
 	if !paint.is_symbol(PAINT_WORD) {
 		return None;
@@ -1186,7 +1187,7 @@ fn shader_of(arguments: &[Node]) -> Option<Node> {
 /// the program's numbers it reads, a list it reads item by item as a list of one-number lists (one vec4f per item);
 /// where WGSL cannot compute the function, the construct it cannot (card kernel-refusal-reason)
 fn fragment_shader(name: &str, function: &ProgramFunction) -> Result<(String, Vec<String>), String> {
-	pixel_shader(name, function, true).map(|PixelShader { shader, entries, .. }| (shader, entries))
+	pixel_shader(name, function, true, &[]).map(|PixelShader { shader, entries, .. }| (shader, entries))
 }
 
 /// A fragment shader of a function of the pixel, the entries of its values and the width of the function's value
@@ -1198,8 +1199,13 @@ struct PixelShader {
 
 /// The fragment shader of `function` at each pixel: its color, or (an image another shader reads, render) its
 /// number or vector as it is, in the first channels
-fn pixel_shader(name: &str, function: &ProgramFunction, color: bool) -> Result<PixelShader, String> {
-	let mut translation = Translation { uniforms: true, ..Translation::default() };
+fn pixel_shader(
+	name: &str,
+	function: &ProgramFunction,
+	color: bool,
+	rendering: &[String],
+) -> Result<PixelShader, String> {
+	let mut translation = Translation { uniforms: true, in_progress: rendering.to_vec(), ..Translation::default() };
 	let pixel = vec![("floor(at.x)".to_string(), 1), ("floor(at.y)".to_string(), 1)];
 	let Some((painted, width)) = translation.call_translated(name, function, pixel, color) else {
 		return Err(translation.refusal.unwrap_or_else(|| "a construct outside the shader subset".to_string()));
@@ -1212,9 +1218,14 @@ fn pixel_shader(name: &str, function: &ProgramFunction, color: bool) -> Result<P
 	let shader = format!(
 		"{functions}@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {{\n\treturn {painted};\n}}"
 	);
-	let entries = translation.outer.iter().map(|name| match translation.item_lists.contains(name) {
-		true => format!("{name}: [[item] for item in {name}]"),
-		false => format!("{name}: {name}"),
+	let rendering = [rendering, &[name.to_string()]].concat();
+	let entries = translation.outer.iter().map(|value| {
+		let image = program_value(value).as_ref().and_then(render_call);
+		match (translation.item_lists.contains(value), image) {
+			(true, _) => format!("{value}: [[item] for item in {value}]"),
+			(false, Some(image)) => format!("{value}: {}", image_map(&image, false, &rendering)),
+			(false, None) => format!("{value}: {value}"),
+		}
 	});
 	Ok(PixelShader { shader, entries: entries.collect(), width })
 }
