@@ -179,6 +179,8 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		any(&[ELEMENT_BODY], &[ELEMENT_CHILDREN]),
 		any(&[ELEMENTS_FIELD], &["map_find", TAGGED_FIELD, STRUCT_BODY]),
 		any(&[NODE_AT_KEY], &["node_index_at", "map_get"]),
+		// a function's body is quoted code, which keeps its positions
+		any(&[crate::wasm_emitter::functions::closures::FUNCTION_BODY], &[crate::wasm_emitter::NODE_AT]),
 		// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
 		any(&[INSTANCE_COPY], &[FIELD_WITH, IS_TRUTHY]),
 		any(&[FIELD_WITH], &[STRUCT_BODY]), // an instance keeps its type

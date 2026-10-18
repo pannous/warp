@@ -26,7 +26,7 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 | Form | Example | What it takes |
 |------|---------|---------------|
 | Music `go {…}` blocks | `go { c4 e4 g4 }` | a sound library function taking data, `tune d:data := play d`, so `tune { c4 e4 g4 }` plays plain data; note names are constants of the music/sound library (card music-data-dsl) |
-| CSS in style blocks | `style { td#x { color: red } }` | `style` reads the block as data: selectors as keys, declarations as pairs (card style-data-dsl) |
+| CSS in style blocks | `style { td#x { color: red } }` | done: lib/markup.warp `style(sheet: data)` reads the block as data (card style-sheets) |
 
 ## Parser: forms to restore later
 | Form | Example | Why dropped | What it would take |
@@ -112,7 +112,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 36 | music_words live loops | 636 | 1 | library (sound; decided) |
 | 37 | go_blocks | 259 | 24 | keep (decided) |
 | 38 | references | 193 | 0 | keep |
-| 40 | style_rules | 220 | 6 | library (markup; decided) |
+| 40 | style_rules | 220 | 6 | library: lib/markup.warp style(sheet: data), done |
 | 41, 42 | lambdas infix iterations, member lambdas | lambdas.rs | 5, 0 | keep, merge |
 | 43, 44, 46 | glued_attributes, select_options, transitions | 43, 81, 242 | 1, 1, 3 | library (markup; decided) |
 | 47 | member_phrases | 31 | 1 | keep |
@@ -175,6 +175,11 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   probes/hosting/oauth_demo.warp, probes/route_position.warp, probes/server_routes/{one_source,rpc_everywhere,
   rpc_stub}.warp, probes/site/served.warp, probes/warp_serve/app.warp, samples/servers/route_headers.warp. Back: the
   warp flow types a lambda parameter from the closure calls of its arity, as Rust's does.
+
+- Style sheets through lib/markup.warp's style (card style-sheets): a program with a `style{…}` block now carries the
+  library's style_* functions, whose list helpers warp reads more generally: `length: empty |
+  prelude·popped_item(list, …)` where Rust says `prelude·popped_item(empty, int) -> empty` (9 sources, first
+  probes/markup/css_hash.warp). Same output; accepted by the Integrator at 549700f08.
 
 ## Emitter: deviations
 - Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors

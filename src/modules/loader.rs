@@ -533,6 +533,13 @@ impl<'a> Loader<'a> {
 				self.use_std_module(module, std_module(module).expect("an implicit module is embedded"))?;
 			}
 		}
+		// `style{ … }`: a standard function taking its argument as data, called or as a tag
+		for (module, line) in std_data_functions() {
+			let name = defined_function_name(line);
+			if tags_or_calls(program, name) && defined(program, name).is_none() {
+				self.use_std_module(module, std_module(module).expect("a standard module is embedded"))?;
+			}
+		}
 		let mut mentioned = HashSet::new();
 		program.visit(&mut |node| {
 			if let Node::Symbol(name) = node {

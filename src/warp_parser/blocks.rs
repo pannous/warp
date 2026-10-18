@@ -4,7 +4,6 @@ use super::expressions::BODY_ENDS;
 use super::*;
 use crate::node::children_rewritten;
 use crate::warp_parser::context::Context;
-use crate::words::IN_WORD;
 
 /// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
 pub(super) fn statement_block(block: Node) -> Node {
@@ -299,36 +298,6 @@ pub(super) fn with_trailing_block(assignment: Node, block: Node) -> Node {
 			Node::Key(target, op, Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)))
 		}
 		other => other,
-	}
-}
-
-/// The body block at the end of an `if`/`while` header: `c {b}` is the pair [c {b}], and in `i < n {b}` the
-/// block juxtaposes only with the rightmost operand `n`, so it is split off the right spine of the comparison
-pub(super) fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, Node)> {
-	match header.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 => match items[1].drop_meta() {
-			Node::List(_, Bracket::Curly, _) => Some((items[0].clone(), items[1].clone())),
-			Empty if empty_is_block => Some((items[0].clone(), items[1].clone())),
-			_ => None,
-		},
-		// `if x in xs {…}`: the block after the collection is the body
-		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_WORD) => {
-			split_trailing_block(&items[2], empty_is_block).map(|(collection, block)| {
-				(
-					Node::List(
-						vec![items[0].clone(), items[1].clone(), collection],
-						bracket.clone(),
-						separator.clone(),
-					),
-					block,
-				)
-			})
-		}
-		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => {
-			split_trailing_block(right, empty_is_block)
-				.map(|(operand, block)| (Node::Key(left.clone(), *op, Box::new(operand)), block))
-		}
-		_ => None,
 	}
 }
 
