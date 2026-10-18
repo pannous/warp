@@ -31,6 +31,7 @@ mod test_class_field_names;
 mod test_class_field_type_phrases;
 mod test_class_fields_checked;
 mod test_class_forms_ported;
+mod test_class_index_operator;
 mod test_class_interfaces;
 mod test_class_json;
 mod test_class_method_changes;
@@ -154,6 +155,7 @@ mod test_struct_instances;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
 mod test_sum_types;
+mod test_symbol_parameters; // card symbol-parameters
 mod test_symbolism_object; // card symbolism-object
 mod test_tag_entries; // decision markup-plain-library
 mod test_tagged_objects;

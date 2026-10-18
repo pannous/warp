@@ -41,19 +41,22 @@ const FUNCTION_SIGNATURE: &str = "function_signature";
 const FUNCTION_PARAMS: &str = "function_params";
 const FUNCTION_RETURN_TYPE: &str = "function_return_type";
 const FUNCTION_DEFINITION: &str = "function_definition";
+/// `f.body` of a function value: its body as quoted code, which keeps its positions (node_at)
+pub(in crate::wasm_emitter) const FUNCTION_BODY: &str = "function_body";
 const FUNCTION_FULL: &str = "function_full";
 /// function_type(f): `type(f)` of a function value known only at run time, its kind and signature as the type of a
 /// named function says it (`function: (x) -> int`, `builtin: (x:number) -> int`; card type-function); ø for no function
 pub const FUNCTION_TYPE: &str = "function_type";
 /// The reflection words a function value answers at run time (`fs#1.doc`, `methods(math) map .doc`; card
 /// module-methods), each a field read's fallback (fields_and_keys.rs FIELD_FALLBACKS): word → its table
-pub const FUNCTION_WORDS: [(&str, &str); 7] = [
+pub const FUNCTION_WORDS: [(&str, &str); 8] = [
 	("name", FUNCTION_NAME),
 	(crate::lowering::reflection::PARAMS_WORDS[0], FUNCTION_PARAMS),
 	("doc", FUNCTION_DOC),
 	("signature", FUNCTION_SIGNATURE),
 	("return_type", FUNCTION_RETURN_TYPE),
 	("dump", FUNCTION_DEFINITION),
+	("body", FUNCTION_BODY),
 	("full", FUNCTION_FULL),
 ];
 const FUNCTION_FILE: &str = "function_file";
@@ -827,12 +830,21 @@ impl WasmGcEmitter {
 			let typed = |emitter: &Self, target: &str, _: usize| emitter.function_type(target);
 			self.emit_function_table(FUNCTION_TYPE, typed, Miss::Null);
 		}
-		for (_, table) in function_words() {
-			if self.should_emit_function(table) {
-				let word =
-					move |emitter: &Self, target: &str, captured: usize| emitter.function_word(table, target, captured);
-				self.emit_function_table(table, word, Miss::Null);
-			}
+		for (_, table) in function_words().filter(|(_, table)| *table != FUNCTION_BODY) {
+			self.emit_function_word_table(table);
+		}
+	}
+
+	/// `f.body`'s table, after the node functions its quoted code calls (node_at)
+	pub(in crate::wasm_emitter) fn emit_function_body(&mut self) {
+		self.emit_function_word_table(FUNCTION_BODY);
+	}
+
+	fn emit_function_word_table(&mut self, table: &'static str) {
+		if self.should_emit_function(table) {
+			let word =
+				move |emitter: &Self, target: &str, captured: usize| emitter.function_word(table, target, captured);
+			self.emit_function_table(table, word, Miss::Null);
 		}
 	}
 
@@ -884,6 +896,10 @@ impl WasmGcEmitter {
 		let text = |text: String| Node::Text(text);
 		match (table, function, builtin_signature(target)) {
 			(FUNCTION_SIGNATURE, _, Some((_, signature))) => text(signature),
+			// `(x:number) -> int` → `int`
+			(FUNCTION_RETURN_TYPE, _, Some((_, signature))) => {
+				text(signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string())
+			}
 			(FUNCTION_PARAMS, _, Some((word, _))) => {
 				let params = crate::lowering::library_signatures::library_signature(word).map(|(params, _)| params);
 				crate::lowering::reflection::text_list(&params.unwrap_or_default())
@@ -895,6 +911,7 @@ impl WasmGcEmitter {
 			(FUNCTION_SIGNATURE, Some(function), _) => text(crate::lowering::reflection::signature(function)),
 			(FUNCTION_RETURN_TYPE, Some(function), _) => text(crate::lowering::reflection::result_type(function)),
 			(FUNCTION_DEFINITION, Some(function), _) => text(crate::lowering::reflection::definition(function)),
+			(FUNCTION_BODY, Some(function), _) => crate::blocks::quoted_code(function.body.as_ref().clone()),
 			(FUNCTION_FULL, ..) => text(self.printed_function(target, captured)),
 			(FUNCTION_FILE, ..) => text(written_in(at.as_ref()).unwrap_or_default()),
 			(FUNCTION_LINE, ..) => Node::int(at.as_ref().map_or(0, |at| at.line_nr) as i64),
