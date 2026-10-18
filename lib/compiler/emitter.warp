@@ -47,7 +47,7 @@ no_value = 64
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i32_sub: 107, i32_and: 113, i32_or: 114,
-	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
+	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209}
 # GC instructions, after their prefix 251
 gc_prefix = 251
@@ -329,6 +329,7 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	if name == "float_of_bits" { return ["float", values#1#2 + [op.f64_reinterpret_i64]] }
 	if name == "float_floor" { return ["float", converted(values#1, "float") + [op.f64_floor]] }
 	if name == "float_ceil" { return ["float", converted(values#1, "float") + [op.f64_ceil]] }
+	if name == "float_nearest" { return ["float", converted(values#1, "float") + [op.f64_nearest]] }
 	if name == "truncated" { return ["int", converted(values#1, "float") + [op.i64_trunc_f64_s]] }
 	if name == "code_of" { return ["int", values#1#2 + [op.i64_extend_i32_u]] }
 	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code("array_set", [gc.text])] }
@@ -342,7 +343,10 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
-	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, truncated: 1}
+	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1}
+# the words a program calls that runtime.warp gives, by the runtime word's name
+library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
+	text_form: "node_text"}
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
 kind_code_of(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and]
@@ -564,6 +568,9 @@ group_expression(body: Body, n: any) := {
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.runtime and body.intrinsics {
 		return call(body, module.runtime[name_of(n#1)], n[1..].map(x => x))
+	}
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
+		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
 	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(expression(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words { return length(expression(body, n#2)) }
