@@ -208,8 +208,9 @@ pub fn result_kind(word: &str) -> Option<Kind> {
 }
 
 /// A library word's result for a first argument of the kind `argument` gives: the result of its overload for that
-/// kind (`reverse(t: text): text`, card typed-builtins), else the one all its overloads share; a value no overload is
-/// typed for (a Node of run-time kind) is a Node when the overloads differ. The argument is inferred only then
+/// kind (`reverse(t: text): text`, card typed-builtins), else the one all its overloads share. When the overloads
+/// differ, a Node of run-time kind gives a Node and any other value no overload is typed for (a name, a range) the
+/// first line's result, a list's. The argument is inferred only then
 pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> Option<Kind> {
 	let word = canonical_spelling(word);
 	let overloads: Vec<_> = crate::ffi::runtime_word_lines().iter().filter(|line| line.name == word).collect();
@@ -224,14 +225,13 @@ pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> 
 	if overloads.iter().all(|line| line_result_kind(line) == line_result_kind(first)) {
 		return line_result_kind(first);
 	}
-	let argument = argument().map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind });
-	let fitting = argument.and_then(|kind| {
-		overloads.iter().find(|line| line.first_type().and_then(crate::analyzer::type_word_kind) == Some(kind))
-	});
-	match fitting {
-		Some(line) => line_result_kind(line),
-		None => argument.map(|_| Kind::Empty),
-	}
+	let fitting = match argument()? {
+		Kind::Empty => return Some(Kind::Empty),
+		Kind::Codepoint => Kind::Text,
+		kind => kind,
+	};
+	let typed_for = |line: &&&crate::ffi::ForeignLine| line.first_type().and_then(crate::analyzer::type_word_kind);
+	line_result_kind(overloads.iter().find(|line| typed_for(line) == Some(fitting)).unwrap_or(first))
 }
 
 /// The result of a call of `arguments` values to a builtin the emitter expands, as its line declares it
