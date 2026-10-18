@@ -13,7 +13,6 @@ use super::nodes::{
 };
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
-use crate::errors::diagnostic::Diagnostic;
 use crate::node::{error, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::optional_field;
@@ -613,51 +612,6 @@ pub(crate) fn pattern_test(
 		matches.push(joined(tests, Op::And));
 	}
 	Ok((joined(matches, Op::Or), vec![]))
-}
-
-/// `x is {host: h}` compares host with the unit hour and binds nothing: a weak warning naming the way to bind, `$h`
-/// or another name (card pattern-unit-name)
-pub fn check_unit_names(program: Node) -> Node {
-	let mut warnings = vec![];
-	program.visit(&mut |node| {
-		if let Node::Key(_, Op::Eq, pattern) = node.drop_meta() {
-			unit_names(pattern, &program, &mut warnings);
-		}
-	});
-	match crate::errors::diagnostic::report(&warnings) {
-		Err(error) => error,
-		Ok(()) => program,
-	}
-}
-
-/// The unit words that are field values of a map pattern, at any depth; a list item `[_, h]` binds h
-fn unit_names(pattern: &Node, program: &Node, warnings: &mut Vec<Diagnostic>) {
-	match pattern.drop_meta() {
-		Node::List(items, _, _) if is_list_pattern(pattern) => {
-			items.iter().for_each(|item| unit_names(item, program, warnings))
-		}
-		Node::List(fields, _, _) if is_map_pattern(pattern) => {
-			// a shorthand `{h}` binds the field h
-			let values =
-				fields.iter().filter_map(map_field).filter(|(name, part)| part.symbol_name() != Some(name.as_str()));
-			for (_, part) in values {
-				let unit = part
-					.symbol_name()
-					.and_then(|name| Some((name, crate::numbers::units::unit_long_name(name, program)?)));
-				match unit {
-					Some((name, unit)) => warnings.push(
-						Diagnostic::at(
-							part,
-							format!("{name} is the unit {unit}: this compares; bind with ${name} or another name"),
-						)
-						.weak(),
-					),
-					None => unit_names(part, program, warnings),
-				}
-			}
-		}
-		_ => {}
-	}
 }
 
 /// `xs is [_, 2]` and `if xs is [a, b] then b` (card is-pattern): a list or tuple holding `_`, a rest or a name defined

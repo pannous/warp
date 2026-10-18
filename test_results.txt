@@ -3755,6 +3755,7 @@ PASSED:
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
+  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
   ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
   ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
@@ -3768,7 +3769,9 @@ PASSED:
   ✓ parser::test_self_passes::number_words_match_their_rust_twin
   ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
   ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
+  ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
+  ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_self_words::call_kinds_are_rusts
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
@@ -6353,9 +6356,6 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust
-  ✗ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
-  ✗ parser::test_self_serializer::serialize_matches_its_rust_twin
 
 SUMMARY:
-16 ignored, 6349 passed, 4 failed, 6353 total tested
+16 ignored, 6352 passed, 1 failed, 6353 total tested
