@@ -23,3 +23,10 @@ fn each_overload_type_is_the_librarys() {
 	crate::common::fails_with("reverse(t: text) := 1; reverse(\"ab\")", "reverse of a text is the library's word");
 	crate::common::fails_with("sort(xs: list) := 1; sort([2 1])", "sort of a list is the library's word");
 }
+
+#[test]
+fn a_value_no_overload_is_typed_for_takes_the_first_line() {
+	let program = warp::pipeline::lower("a=[3,1,2,7]; b=a[0:2]; len(b)").expect("lowered");
+	let kinds = warp::analyzer::inferred_kinds(&program);
+	assert!(kinds.contains(&"b: list".to_string()), "{kinds:?}");
+}
