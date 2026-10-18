@@ -15,8 +15,8 @@ midi_on(E4, 64, 2)
 midi_off(E4, 2)
 
 # messages keep time like sounds: a note of a length, the next one after it, and `at` places one in the bar
-play(C3, 1 beat)                 # the message waits for this sound to end
-midi_note(C4, 1 / 2 beat)          # on now, off half a beat later
-midi_note(E4, 1 / 2 beat, 90)
-at 3 beats midi_note(G4, 1 beat)
+play(C3, beat 1)                 # the message waits for this sound to end
+midi_note(C4, beat(1/2))          # on now, off half a beat later
+midi_note(E4, beat(1/2), 90)
+at beats(3) { midi_note(G4, beat 1) }
 wait_sound()

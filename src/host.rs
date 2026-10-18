@@ -118,6 +118,27 @@ pub const PROGRAM_FILE_SECTION: &str = "warp.program_file";
 /// The custom section naming the program's named live loops, joined by USER_FUNCTIONS_SEPARATOR: the playground fades a
 /// loop of the run before that the new run lacks as soon as it is compiled (decision deleted-loop)
 pub const LIVE_LOOPS_SECTION: &str = "warp.live_loops";
+/// lib/sound.warp's `live_loop(drums, 4)`: its first argument names the loop
+const LIVE_LOOP_WORD: &str = "live_loop";
+
+/// The names of the program's live loops, the functions its `live_loop(drums, 4)` calls play (LIVE_LOOPS_SECTION), as
+/// lowered: `live_loop·2(closure_new(drums), 4)`
+pub fn live_loop_names(program: &Node) -> std::collections::BTreeSet<String> {
+	use crate::analyzer::TEMPORARY_SEPARATOR;
+	let function_named = |cycle: &Node| match cycle.call_parts() {
+		Some((crate::closures::CLOSURE_NEW, [function])) => function.symbol_name().map(str::to_string),
+		_ => cycle.symbol_name().map(str::to_string),
+	};
+	let mut names = std::collections::BTreeSet::new();
+	program.visit(&mut |node| {
+		if let Some((word, [cycle, ..])) = node.call_parts() {
+			if word.split(TEMPORARY_SEPARATOR).next() == Some(LIVE_LOOP_WORD) {
+				names.extend(function_named(cycle));
+			}
+		}
+	});
+	names
+}
 /// The custom section of a program saying `use fuel`: its runs count fuel steps instead of stopping at the time limit
 /// (decision fuel-metering)
 pub const FUEL_SECTION: &str = "warp.fuel";

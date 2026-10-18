@@ -62,6 +62,7 @@ mod test_sound_files; // card sound-library
 mod test_sound_filters; // card synth-filters
 mod test_sound_handles; // card sound-pro
 mod test_sound_notes; // card sound-pro
+mod test_sound_note_names; // card music-plain
 mod test_sound_pan; // card stereo-pan
 mod test_sound_patterns; // card patterns-live
 mod test_sound_pipes; // card sound-pipe-graph

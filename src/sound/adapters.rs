@@ -38,7 +38,6 @@ pub(crate) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),
 		("last", []) => return Ok(Node::int(crate::sound::last_handle() as i64)),
-		("moment", []) => return Ok(Node::float(crate::sound::moment_seconds())),
 		// a live loop's cycle starts (lib live_cycle_started): only the playground hands loops over between runs
 		("live_cycle", [_]) => {}
 		("queued", []) => return Ok(Node::float(crate::sound::queued_seconds())),
