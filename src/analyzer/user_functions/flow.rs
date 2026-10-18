@@ -18,6 +18,8 @@ type Usages = HashMap<(String, usize), Option<Kind>>;
 struct ProgramFlows {
 	strong: Flows,
 	weak: Flows,
+	/// the kinds of the parameters a parameter is passed on to: `osc(p, d) := osc(p, d, shape)` with a float d there
+	forwarded: Flows,
 }
 
 /// Parameters, results and the globals functions widen, settled together
@@ -32,6 +34,7 @@ pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<St
 	let judge = ArgumentJudge::of(ctx, program);
 	let slots: usize = ctx.user_functions.values().map(|function| function.params.len() + 1).sum();
 	assume_int_results(ctx);
+	let mut held = Flows::new();
 	for _ in 0..=slots {
 		let results_changed = step_result_kinds(ctx, &all_function_kinds(ctx), globals);
 		let kinds = all_function_kinds(ctx);
@@ -41,15 +44,16 @@ pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<St
 			widen_globals(globals, &declared_globals_in(Scope::with_function_kinds(kinds.clone()), program));
 		let widened = widened_by_main
 			| widen_globals_by_functions(globals, ctx.user_functions.values(), &kinds, &ctx.closure_variable_targets);
-		if !(given_flows(ctx, &flows, &usages) | widened | results_changed) {
+		if !(given_flows(ctx, &flows, &usages, &mut held) | widened | results_changed) {
 			return;
 		}
 	}
 }
 
 /// Each undeclared parameter its flows joined, else its usage kind, else what the closure calls agree on; whether one
-/// changed
-fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages) -> bool {
+/// changed. A parameter turning back to a kind it `held` before cycles (`out(signal) := sound(clamped_samples(signal))`
+/// feeding a list and a Node back and forth): it settles on all of them joined.
+fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages, held: &mut Flows) -> bool {
 	let mut changed = false;
 	// a closure call's helper takes Nodes, or the numbers type_closure_calls gives both it and its entries
 	let functions =
@@ -57,7 +61,7 @@ fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages) -> bool
 	for (name, function) in functions {
 		for (index, param) in function.params.iter_mut().enumerate() {
 			let key = (name.clone(), index);
-			let passed = flows.strong.get(&key).and_then(|kinds| joined(kinds));
+			let passed = flows.strong.get(&key).and_then(|kinds| joined_known(kinds));
 			// `number sine(number x)` called with `π / 2`: a number parameter given a float holds floats
 			if passed == Some(Kind::Float)
 				&& param.annotation.as_ref().is_some_and(|declared| declared.name() == NUMBER_WORD)
@@ -69,15 +73,28 @@ fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages) -> bool
 				continue;
 			}
 			let agreed = || flows.weak.get(&key).and_then(|kinds| joined(kinds));
+			let usage = || usages[&key].or_else(|| flows.forwarded.get(&key).and_then(|kinds| joined(kinds)));
 			// given only ints, it keeps what its use suggests (a list for `xs#1`); given nothing else, the Nodes closure
 			// calls pass (`go xs.map(x => f(x))` maps the elements as Nodes) make it any value
 			let kind = match passed {
-				Some(Kind::Int) => usages[&key].or_else(|| agreed().filter(|kind| *kind != Kind::Empty)),
-				None => usages[&key].or_else(agreed),
+				Some(Kind::Int) => usage().or_else(|| agreed().filter(|kind| *kind != Kind::Empty)),
+				None => usage().or_else(agreed),
+				// given only Nodes of unknown kind, it too keeps what its use suggests (`out(signal)` passing a Node to
+				// the list `clamped_samples(amplitudes)` iterates)
+				Some(Kind::Empty) => usage().or(passed),
 				// passed keys (quoted code `data (n * 1)`) where indexing guessed a list: a Node, which `c#1` indexes as
 				// it is (card alias-indexed-param)
 				Some(Kind::Key) if usages[&key] == Some(Kind::List) => Some(Kind::Empty),
 				passed => passed,
+			};
+			if param.used_as == kind {
+				continue;
+			}
+			let history = held.entry(key).or_default();
+			history.extend(param.used_as);
+			let kind = match kind {
+				Some(cycled) if history.contains(&cycled) => joined(history),
+				kind => kind,
 			};
 			if param.used_as != kind {
 				param.used_as = kind;
@@ -99,6 +116,15 @@ fn joined(kinds: &[Kind]) -> Option<Kind> {
 	})
 }
 
+/// The kinds joined, a Node of unknown kind beside known kinds leaving them standing (`added(xs, ys)` given a list and
+/// a map value)
+fn joined_known(kinds: &[Kind]) -> Option<Kind> {
+	let floats = kinds.contains(&Kind::Float);
+	let known: Vec<Kind> =
+		kinds.iter().copied().filter(|kind| *kind != Kind::Empty && !(floats && *kind == Kind::Data)).collect();
+	joined(if known.is_empty() { kinds } else { &known })
+}
+
 /// The kinds every call, closure and assignment of the program passes the parameters, in the scopes of the last round
 fn flows(
 	ctx: &Context,
@@ -111,6 +137,16 @@ fn flows(
 	let mut flows = ProgramFlows::default();
 	let mut main = Scope::with_function_kinds(kinds.clone()).with_closure_targets(ctx.closure_variable_targets.clone());
 	collect_variables(program, &mut main);
+	// the names something binds: a parameter, a global, a variable assigned anywhere (a lowered loop's item)
+	let bound: HashSet<String> = (ctx.user_functions.values().flat_map(|function| &function.params))
+		.map(|param| param.name.clone())
+		.chain(globals.keys().cloned())
+		.chain(
+			std::iter::once(program)
+				.chain(ctx.user_functions.values().map(|function| function.body.as_ref()))
+				.flat_map(|body| body.assigned_names::<Vec<String>>(|op| matches!(op, Op::Assign | Op::Define))),
+		)
+		.collect();
 	let bodies = ctx.user_functions.iter().map(|(name, function)| {
 		let scope =
 			function_body_scope(&function.params, &function.body, kinds, globals, &ctx.closure_variable_targets);
@@ -120,11 +156,22 @@ fn flows(
 			.filter(|(index, param)| param.used_as.is_some() && param.used_as == usages[&(name.clone(), *index)])
 			.map(|(_, param)| param.name.as_str())
 			.collect();
-		(function.body.as_ref(), scope, guessed)
+		(function.body.as_ref(), scope, guessed, Some((name, function)))
 	});
-	for (body, scope, guessed) in std::iter::once((program, main, HashSet::new())).chain(bodies) {
-		let told = |value: &Node| told_kind(value, &scope, judge);
+	for (body, scope, guessed, owner) in std::iter::once((program, main, HashSet::new(), None)).chain(bodies) {
+		let is_free = |name: &str| !bound.contains(name);
+		let told = |value: &Node| told_kind(value, &scope, judge, &is_free);
 		visit_arguments(body, ctx, &mut |name, index, argument| {
+			if let Some((owner, function)) = owner {
+				let own = argument
+					.drop_meta()
+					.symbol_name()
+					.and_then(|passed| function.params.iter().position(|param| param.name == passed));
+				let kind = param_kind(&ctx.user_functions[name].params[index]);
+				if let Some(own) = own.filter(|_| kind != Kind::Int) {
+					flows.forwarded.entry((owner.clone(), own)).or_default().push(kind);
+				}
+			}
 			let guess = argument.drop_meta().symbol_name().is_some_and(|name| guessed.contains(name));
 			let flowing = if guess { &mut flows.weak } else { &mut flows.strong };
 			flowing.entry((name.to_string(), index)).or_default().extend(told(argument));
@@ -141,15 +188,22 @@ fn flows(
 }
 
 /// The kind `value` passes on, if it tells one: an Int is what a value of unknown kind reads as, so only a literal one,
-/// or a literal variable's, tells (a free name, `f ↯`, `weekend(Sunday)`, `g int`, is a symbol and tells one); nor does
-/// a number of run-time kind without a told number in it (`unique(a + b)` of any values)
-fn told_kind(value: &Node, scope: &Scope, judge: &ArgumentJudge) -> Option<Kind> {
+/// or a literal variable's, tells; a name the scope doesn't bind reads as a symbol, which tells only of a free name
+/// (`f ↯`, `weekend(Sunday)`, `g int`), not of a parameter or global out of the scope's sight; nor does a number
+/// of run-time kind without a told number in it (`unique(a + b)` of any values)
+fn told_kind(value: &Node, scope: &Scope, judge: &ArgumentJudge, is_free: &dyn Fn(&str) -> bool) -> Option<Kind> {
+	// a literal says what it is (`1s` a float), whatever its scope reads it as
+	if let Some(kind) = judge.kind(value) {
+		return Some(kind);
+	}
 	let kind = infer_type(value, scope);
 	let tells = match value.drop_meta() {
+		Node::Symbol(name) if kind == Kind::Symbol => is_free(name),
 		Node::Key(left, _, right) if kind == Kind::Data => [left, right].iter().any(|side| {
-			told_kind(side, scope, judge).is_some_and(|kind| kind.is_int() || kind.is_float() || kind == Kind::Data)
+			told_kind(side, scope, judge, is_free)
+				.is_some_and(|kind| kind.is_int() || kind.is_float() || kind == Kind::Data)
 		}),
-		_ => kind != Kind::Int || judge.kind(value) == Some(Kind::Int),
+		_ => kind != Kind::Int,
 	};
 	tells.then_some(kind)
 }
