@@ -1556,6 +1556,10 @@ PASSED:
   ✓ functions::test_function_values::test_operators_as_values
   ✓ functions::test_function_values::test_ordinary_calls_are_untouched
   ✓ functions::test_function_values::test_partial_application_of_an_iteration_word
+  ✓ functions::test_function_words_consume::a_comparison_fits_a_truth_parameter_so_it_is_the_argument
+  ✓ functions::test_function_words_consume::a_comparison_is_no_list_so_a_word_of_a_list_stops_before_it
+  ✓ functions::test_function_words_consume::an_argument_reaches_right_while_it_fits_the_parameter
+  ✓ functions::test_function_words_consume::function_words_take_their_arguments_by_their_parameters
   ✓ functions::test_functions_passed_by_name::a_function_parameter_passed_on_in_a_method_call
   ✓ functions::test_functions_passed_by_name::a_function_passed_by_name_is_called_by_name
   ✓ functions::test_functions_passed_by_name::recursive_passed_on_and_several_functions_by_name
@@ -4951,6 +4955,8 @@ PASSED:
   ✓ types::test_method_bodies::units_in_a_method
   ✓ types::test_method_result_text::an_interpolated_method_result_uses_its_text
   ✓ types::test_mixed_list_parameter_kinds::a_parameter_in_a_mixed_list_literal_takes_any_value
+  ✓ types::test_mixed_results::a_number_or_a_list_is_known_at_run_time
+  ✓ types::test_mixed_results::a_number_or_a_text_is_known_at_run_time
   ✓ types::test_multi_word_class::a_class_of_several_words_is_its_kebab_name
   ✓ types::test_multi_word_class::a_kebab_class_constructs
   ✓ types::test_multi_word_class::a_phrase_slot_matches_the_class_as_a_whole
@@ -5538,6 +5544,8 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
+  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
+  ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
@@ -6384,8 +6392,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
-  ✗ web::test_app_keys::on_key_hears_the_app_pages_key_presses
 
 SUMMARY:
-16 ignored, 6381 passed, 2 failed, 6383 total tested
+16 ignored, 6389 passed, 0 failed, 6389 total tested
