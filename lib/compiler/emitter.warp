@@ -574,6 +574,8 @@ key_expression(body: Body, n: any) := {
 	right = value_of(n)
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
+	# `c ? a : b`: the keys ?(c, :(a, b))
+	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right)) }
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left is symbol and name_of(left) == "global" and type(right) is key and op_of(right) == "=" and key_of(right) is symbol {
