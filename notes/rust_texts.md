@@ -15,12 +15,21 @@
 ## Stages
 - A (rust-texts, 2a85fcd0b): readers on arrays; some builders still write memory and end in `text_from_memory`;
   host edges keep (ptr, len) through `text_address` / `text_from_memory`.
-- B: the remaining memory builders (`emit_new_text_to`, `emit_text_allocation` users: float/time/exact texts,
-  int_to_decimal, list_text pieces) write `$Text`; then the text heap global and the bridges go where only texts used them.
+- B (rust-texts-builders): float, time, duration and big-int texts and list_join's Int digits write a `$Text`
+  (`int_to_decimal(bytes, position, value)`, `emit_text_prefix` / `emit_text_piece` at the end); constant texts are
+  literals through one `constant_text(offset, len)` call (`emit_constant_text`, `emit_text_node`), the empty text is
+  `emit_empty_text`. `new_text` / `new_symbol` / `text_from_memory` stay for hosts only (exported builders, WASI
+  reads, FFI); `text_address` stays for print's fd_write and C strings.
+- Next: hand `$Text` to the host for print (drops `text_address` from every printing program), host reads and FFI.
 
 ## Traps
 - `AnyRef::unwrap_struct` panics on an array in wasmtime 49: test `as_array` first (gc_traits, readers).
 - An empty text has no first byte: guard array reads (`emit_is_one_character`).
 - Machine code, not wasm size, is the executable budget (tests/wasm/test_executable_size.rs): compare with
   `wasmtime compile` + `wasmtime objdump --addresses` per function.
+- A constant text inline (`text_literal` + `new_text_of`) costs ~30 B of machine code per site more than one call:
+  list_text has ~20 such sites (quicksort budget). Measure the carried program: probes/rust_texts/carried.py
+  (decompresses an exe's machine code) + probes/rust_texts/fsizes.py (bytes per function).
+- Runtime functions emitted inside emit_constructors (the text foundation) run before the constructors: one calling
+  `new_text_of` belongs after it (constructors.rs, as `constant_text`).
 - Fuel cost per ASCII index (tests/text/test_ascii_index_costs.rs): a one-byte grapheme is its byte (emit_grapheme_node).
