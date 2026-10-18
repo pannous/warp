@@ -173,3 +173,26 @@ emit is the rerun.
   indices come first.
 - Step 2 can cut part of it: a cached body carries the needs it discovered, so seeding them up front makes the
   library functions' share of reruns disappear (main's own needs, such as print_value, remain).
+
+### Unforeseen runtime functions emitted after main (card takes-next, 2026-10-18)
+emit_call gives a runtime function nothing required a stand-in index (UNFORESEEN_CALL_BASE + k); after main,
+emit_unforeseen_functions requires it (with runtime_dependencies and the float rule) and runs emit_constructors again:
+runtime_function returns the index of a function emitted already, Exports ignores the same export again, the global
+groups (int heap, list/text cursors, map indexes) are made once. relocated_without_dead_functions puts in the real
+indices. No name → emitter table was needed: the gates stay, re-evaluated with the larger required set.
+It falls back to the full rerun when
+- the function is in `compiled_without`: should_emit_function answered no inside a function body or outside the
+  runtime emitters' own gates (body_depth, gating_runtime), so emitted code depends on its absence;
+- a witness table or late call appears in the late round (the start function and main were made without it);
+- a Need of another kind (MathImport, KeyOperator) is missing, or a function stays unemitted.
+Pitfall found: require_float_text drops float_text while list_join is absent, so the analyzer's makes_floats has to be
+kept (`makes_floats`) for the late round (python floats printed as "not a joinable int").
+Result (quick-release, `probes/cache/same_output.sh`): 178 samples print the same, 31 unstable by nature (time,
+random), 0 different; 33 of 210 still emit twice (sound, matching, web: mostly compiled_without). Emit time: snake
+22→5.5 ms, raytracer 28→9, web/html 112→73, sudoku unchanged (it reruns).
+
+### Found too: a second emission for every `%` program (int-i64)
+emit_module emits again with the ratio-aware exact_* runtime when the module "makes ratios", i.e. ratio_new is live.
+But any Int addition's overflow path calls exact_add, which reaches ratio_new, so 75 of 218 samples (every golf one
+with `%`) emit twice anyway: `for n in 1 to 100` with `n % 3`. A precise test would ask whether ratio_new is reachable
+without passing through the exact arithmetic that only keeps a ratio it is given (CallGraph::reached has `blocked`).
