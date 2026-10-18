@@ -60,6 +60,11 @@ parser-keyword-table. Target shapes:
   already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
   knows the scope makes calls of them. applies/word_begins_item and trailing_block go.
+  Done (parser-application, part 1): the head of `for`, `if` and `while` is one context in both parsers (Rust
+  Context::in_header = in_for_header or equals_compares; parser.warp p.header): a `{` there is the body, never an
+  argument, so the repair that split the body off a condition's right spine (Rust split_trailing_block, warp
+  trailing_block) is gone. Left: applies' power windows (OPERAND_POWERS minus ARGUMENT_POWER, ≤ 60, the branch
+  power) and word_begins_item still decide application in both twins alike.
   Done (parser-scope-pass): parser.warp keeps no names (program_functions, its line scan and p.bound are gone); it
   writes `twice {…}` as written and sugar.warp `counted(tree, scope_of_view(written))` makes it `2 times {…}` unless
   the program binds the word (scope.warp, one scope for the whole program: a parameter `once` keeps the word anywhere).
