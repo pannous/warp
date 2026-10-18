@@ -100,8 +100,12 @@ pub(super) fn instances_of(list: Node, class: &str, fields: &ClassFields) -> Nod
 pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let finder = InstanceFinder { classes, returned: returned_classes(node, classes) };
 	let mut instances: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+	let mut assigned = std::collections::HashSet::new();
 	node.visit(&mut |part| {
 		let Node::Key(target, op, value) = part else { return };
+		if let (Some(variable), Op::Assign) = (target.symbol_name(), op) {
+			assigned.insert(variable.to_string());
+		}
 		// `p:Point = …`: the annotation says it
 		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
 			// `p:Point`, not a list of them `ps:[Point]`
@@ -118,7 +122,27 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 		}
 	});
 	finder.iterated(node, &mut instances);
+	let module_instances = crate::compiler::compile_context::read(|context| context.module_instance_classes.clone());
+	for (variable, class) in module_instances {
+		if classes.contains(&class) && !assigned.contains(&variable) {
+			instances.entry(variable).or_insert(class);
+		}
+	}
 	instances
+}
+
+/// The variables a program's top level assigns an instance of one of `classes`, with its class: `F = PitchClass(5)`
+pub(crate) fn top_level_instances(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
+	node.as_items()
+		.iter()
+		.filter_map(|statement| match statement.drop_meta() {
+			Node::Key(variable, Op::Assign, value) => {
+				let class = constructed_class(value).filter(|class| classes.contains(class))?;
+				Some((variable.symbol_name()?.to_string(), class))
+			}
+			_ => None,
+		})
+		.collect()
 }
 
 struct InstanceFinder<'a> {
