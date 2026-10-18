@@ -34,3 +34,16 @@ kind switches they stand for. Done in slices per word family, each with its net 
   kind; a list argument reaches it only as call_result_kind's first-line fallback.
 - PRINT_SIGNATURE `(x)` beside print's `(values...)` line: dropping it makes print variadic for library_arity.
 - The untyped single signatures still to type per kind: listed on the card (audit note 2026-10-18).
+
+## The warp analyzer's signature table (Back-end focus, branch signature-table)
+- lib/compiler/signatures.warp parses the prelude's `from warp` / `from emitter` lines (overloads, aliases) from
+  `module_source("prelude")`, a compile-time word (library_words.rs word_call) that becomes the embedded std module
+  text, so the stage reads it from any working directory and in the browser. It answers emitted_call_kind,
+  argument_result and overload_kind (call_result_kind) as Rust does: tests/parser/test_self_signatures.rs compares
+  every word, arity 0–4 and first-argument kind.
+- analyzer.warp typed_call_kind asks it after the call_kinds table; words.warp call_kinds keeps the non-prelude words.
+- Member words (map, filter, find, reduce, fold, add, pop, …) declare list and text overloads; `all` stays untyped:
+  as `f(all xs)` it is the broadcast marker, and a typed first parameter makes the nesting pass bind it to two values.
+- Traps: `.type` of an instance is reflection (class Parameter's field is `type_name`); a user function with a
+  declared result passed by name fails (card function-declared); an apostrophe-heavy # comment broke
+  analyzer.warp's parse (card comment-three).
