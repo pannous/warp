@@ -28,6 +28,7 @@ fn the_stage_program_is_compiled_once() {
 #[test]
 fn the_warp_emitter_emits_inside_its_core() {
 	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
+	self_hosted_run(&cache, "3 + 4"); // the stage programs compile with the Rust emitter, once
 	let (inside, phases) = self_hosted_run(&cache, "square(x: int) := x * x; print(square(5)); square(3)");
 	assert!(inside.contains("25") && inside.contains('9'), "{inside}");
 	assert!(!phases.contains("emit ("), "the Rust emitter ran: {phases}");
