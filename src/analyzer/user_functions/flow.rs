@@ -36,8 +36,11 @@ pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<St
 		let results_changed = step_result_kinds(ctx, &all_function_kinds(ctx), globals);
 		let kinds = all_function_kinds(ctx);
 		let flows = flows(ctx, program, &kinds, globals, &judge, &usages);
-		let widened =
-			widen_globals_by_functions(globals, ctx.user_functions.values(), &kinds, &ctx.closure_variable_targets);
+		// `global g = 0.3; g = f(-9)` with an f that returns a Node: only the results tell that main's g holds one
+		let widened_by_main =
+			widen_globals(globals, &declared_globals_in(Scope::with_function_kinds(kinds.clone()), program));
+		let widened = widened_by_main
+			| widen_globals_by_functions(globals, ctx.user_functions.values(), &kinds, &ctx.closure_variable_targets);
 		if !(given_flows(ctx, &flows, &usages) | widened | results_changed) {
 			return;
 		}
@@ -138,13 +141,11 @@ fn flows(
 }
 
 /// The kind `value` passes on, if it tells one: an Int is what a value of unknown kind reads as, so only a literal one,
-/// or a literal variable's, tells; a name the scope doesn't bind reads as a symbol and tells nothing either, unless it
-/// names a type (`g int`); nor does a number of run-time kind without a told number in it (`unique(a + b)` of any
-/// values)
+/// or a literal variable's, tells (a free name, `f ↯`, `weekend(Sunday)`, `g int`, is a symbol and tells one); nor does
+/// a number of run-time kind without a told number in it (`unique(a + b)` of any values)
 fn told_kind(value: &Node, scope: &Scope, judge: &ArgumentJudge) -> Option<Kind> {
 	let kind = infer_type(value, scope);
 	let tells = match value.drop_meta() {
-		Node::Symbol(name) if kind == Kind::Symbol => builtin_type_kind(name).is_some(),
 		Node::Key(left, _, right) if kind == Kind::Data => [left, right].iter().any(|side| {
 			told_kind(side, scope, judge).is_some_and(|kind| kind.is_int() || kind.is_float() || kind == Kind::Data)
 		}),

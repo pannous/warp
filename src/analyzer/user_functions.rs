@@ -45,7 +45,7 @@ pub fn widen_globals_by_functions<'a>(
 }
 
 /// The known globals that `seen` holds wider: as a Node, or as an f64 where they were exact. True when one was widened.
-fn widen_globals(globals: &mut HashMap<String, Local>, seen: &HashMap<String, Local>) -> bool {
+pub(super) fn widen_globals(globals: &mut HashMap<String, Local>, seen: &HashMap<String, Local>) -> bool {
 	let wider =
 		|kind: Kind, than: Kind| kind != than && (kind == Kind::Empty || kind == Kind::Float && than != Kind::Empty);
 	let mut widened_any = false;
@@ -621,7 +621,7 @@ pub(crate) fn declared_globals(program: &Node) -> HashMap<String, Local> {
 	declared_globals_in(Scope::new(), program)
 }
 
-fn declared_globals_in(mut scope: Scope, program: &Node) -> HashMap<String, Local> {
+pub(super) fn declared_globals_in(mut scope: Scope, program: &Node) -> HashMap<String, Local> {
 	collect_variables(program, &mut scope);
 	scope.globals
 }
