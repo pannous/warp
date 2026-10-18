@@ -53,9 +53,14 @@ fn taking_functions(program: &Node) -> Positions {
 fn takes(parameter: &Node) -> Takes {
 	match parameter.drop_meta() {
 		Node::Key(_, Op::Colon, kind) if kind.is_symbol(DATA_WORD) => Takes::Data,
-		Node::Key(_, Op::Colon, kind) if kind.is_symbol(FUNCTION_TYPE) => Takes::Function,
+		Node::Key(_, Op::Colon, kind) if is_function_type(kind) => Takes::Function,
 		_ => Takes::Value,
 	}
+}
+
+/// `function` or its alias `closure`
+pub(crate) fn is_function_type(kind: &Node) -> bool {
+	kind.symbol_name().and_then(crate::type_tests::builtin_type_name) == Some(FUNCTION_TYPE)
 }
 
 /// The argument as the parameter takes it
@@ -84,7 +89,9 @@ fn taken_arguments(node: Node, functions: &Positions) -> Node {
 	}
 	let node = node.map_children(|child| taken_arguments(child, functions));
 	match node {
-		Node::List(items, bracket @ Bracket::Round, separator) => with_taken(items, bracket, separator, functions, |_| true),
+		Node::List(items, bracket @ Bracket::Round, separator) => {
+			with_taken(items, bracket, separator, functions, |_| true)
+		}
 		// `get "/echo" { it.body }`: a spaced call's blocks
 		Node::List(items, bracket @ Bracket::None, separator @ Separator::Space) => {
 			with_taken(items, bracket, separator, functions, is_block)
@@ -92,7 +99,9 @@ fn taken_arguments(node: Node, functions: &Positions) -> Node {
 		// `style{ … }`, `run{ … }`: the block is the one argument
 		Node::Key(tag, Op::Colon, block)
 			if is_block(&block)
-				&& functions.get(&tag.name()).is_some_and(|positions| positions.len() == 1 && positions[0] != Takes::Value) =>
+				&& functions
+					.get(&tag.name())
+					.is_some_and(|positions| positions.len() == 1 && positions[0] != Takes::Value) =>
 		{
 			crate::node::call(&tag.name(), vec![taken(*block, functions[&tag.name()][0])])
 		}

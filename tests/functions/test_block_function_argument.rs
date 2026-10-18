@@ -18,7 +18,7 @@ fn a_block_names_what_is_around_it() {
 #[test]
 fn a_kept_block_is_called_later() {
 	is!(
-		"answers = []\nget(path: text, answer: function) := { global answers; answers.add({path: path, answer: answer}) }\nget \"/a\" { it + 1 }\nget \"/b\" { it * 3 }\nfor a in answers { if a.path == \"/b\" { return a.answer(5) } }\n0",
+		"answers = []\nhandle(path: text, answer: function) := { global answers; answers.add({path: path, answer: answer}) }\nhandle \"/a\" { it + 1 }\nhandle \"/b\" { it * 3 }\nfor a in answers { if a.path == \"/b\" { return a.answer(5) } }\n0",
 		15
 	);
 }
