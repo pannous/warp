@@ -124,7 +124,8 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 	finder.iterated(node, &mut instances);
 	let module_instances = crate::compiler::compile_context::read(|context| context.module_instance_classes.clone());
 	for (variable, class) in module_instances {
-		if classes.contains(&class) && !assigned.contains(&variable) {
+		// a program's own `class B` or `B = …` hides sound's note B
+		if classes.contains(&class) && !assigned.contains(&variable) && !classes.contains(&variable) {
 			instances.entry(variable).or_insert(class);
 		}
 	}

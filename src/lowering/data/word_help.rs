@@ -25,11 +25,18 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[HELP_WORD]) {
 		return node;
 	}
-	let defined = crate::library_words::defined_names(&node);
+	let defined = own_names(&node);
 	if defined.contains(HELP_WORD) {
 		return node;
 	}
 	answered_statically(printing_help_statements(node), &defined)
+}
+
+/// The names the program binds and the classes it declares: a program's own `class B` hides sound's note B
+fn own_names(node: &Node) -> HashSet<String> {
+	let mut names = crate::library_words::defined_names(node);
+	names.extend(crate::lowering::nodes::declared_class_names(node));
+	names
 }
 
 /// User decision help-statement: a `help(x)` on its own line prints, as Python's help does; one whose text is used
@@ -108,7 +115,7 @@ pub fn lower_named_words(node: Node) -> Node {
 	if !node.mentions_any(&[HELP_WORD, DUMP_WORD]) {
 		return node;
 	}
-	let defined = crate::library_words::defined_names(&node);
+	let defined = own_names(&node);
 	let words = Words::of(&node, &defined);
 	words.answered(node)
 }
@@ -132,6 +139,9 @@ impl Words {
 		});
 		for module in used_modules {
 			for name in crate::modules::std_module_definitions(module).unwrap_or_default() {
+				if defined.contains(name) {
+					continue;
+				}
 				let docs = crate::modules::std_docs::word_help(module, name);
 				words.help.insert(name.clone(), docs.unwrap_or_else(|| name.clone()));
 				let definition = crate::modules::std_docs::word_definition(module, name);
