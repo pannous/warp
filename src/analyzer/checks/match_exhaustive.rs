@@ -156,9 +156,8 @@ fn subject_and_arms(node: &Node) -> Option<(&Node, String, &[Node])> {
 
 /// `s`, or Kotlin's `(s)`
 fn subject_name(subject: &Node) -> Option<String> {
-	match subject.drop_meta() {
+	match subject.ungrouped() {
 		Node::Symbol(name) => Some(name.clone()),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => subject_name(&items[0]),
 		_ => None,
 	}
 }

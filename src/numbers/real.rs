@@ -65,10 +65,7 @@ fn mentions_generator(node: &Node) -> bool {
 }
 
 fn is_function_name(node: &Node) -> Option<&'static str> {
-	match node.drop_meta() {
-		Node::Symbol(name) => FUNCTIONS.iter().find(|f| *f == name).copied(),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| FUNCTIONS.iter().find(|f| **f == name).copied())
 }
 
 /// Programs that were not evaluated exactly see exact reals as their f64 value (as before), except their constant
