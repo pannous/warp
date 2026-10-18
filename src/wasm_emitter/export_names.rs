@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use wasm_encoder::{ExportKind, ExportSection};
 
 /// The export section with the names it holds. A program's function is exported last and only under a name still
@@ -7,13 +7,19 @@ use wasm_encoder::{ExportKind, ExportSection};
 #[derive(Default)]
 pub(super) struct Exports {
 	section: ExportSection,
-	taken: HashSet<String>,
+	taken: HashMap<String, (ExportKind, u32)>,
 	program_functions: Vec<(String, u32)>,
 }
 
 impl Exports {
+	/// Exports `index` as `name`; the same export again is no new one (the runtime emitters run again for the
+	/// functions main called, emit_unforeseen_functions), another one under a taken name is a compiler error
 	pub(super) fn export(&mut self, name: &str, kind: ExportKind, index: u32) {
-		self.taken.insert(name.to_string());
+		if let Some(&taken) = self.taken.get(name) {
+			assert!(taken == (kind, index), "{name} exported twice: as {taken:?} and as {:?}", (kind, index));
+			return;
+		}
+		self.taken.insert(name.to_string(), (kind, index));
 		self.section.export(name, kind, index);
 	}
 
@@ -24,7 +30,7 @@ impl Exports {
 	/// The finished section, the program's functions added under the names left free
 	pub(super) fn section(&mut self) -> &ExportSection {
 		for (name, index) in std::mem::take(&mut self.program_functions) {
-			if !self.taken.contains(&name) {
+			if !self.taken.contains_key(&name) {
 				self.export(&name, ExportKind::Func, index);
 			}
 		}

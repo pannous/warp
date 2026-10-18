@@ -127,8 +127,10 @@ impl WasmGcEmitter {
 		self.emit_names();
 		self.module.section(&self.names);
 
-		let bytes = crate::compiler::dead_functions::without_dead_functions(&self.module.finish())
-			.map_err(|message| format!("internal error: dropping dead functions failed: {message}"))?;
+		let relocated = self.unforeseen_call_indices();
+		let bytes =
+			crate::compiler::dead_functions::relocated_without_dead_functions(&self.module.finish(), &relocated)
+				.map_err(|message| format!("internal error: dropping dead functions failed: {message}"))?;
 		write_debug_module(&bytes);
 		Self::try_validate_wasm(&bytes)
 			.map_err(|message| format!("internal error: WASM validation failed: {message}"))?;

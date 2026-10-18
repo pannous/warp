@@ -54,6 +54,7 @@ impl WasmGcEmitter {
 
 	/// Emit constructor functions for the compact Node
 	pub(in crate::wasm_emitter) fn emit_constructors(&mut self) {
+		self.gating_runtime = true;
 		// Emit basic Node constructors using macros
 		self.emit_int_heap_globals();
 		self.emit_list_cursor_globals();
@@ -103,6 +104,7 @@ impl WasmGcEmitter {
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
 		self.emit_node_api(); // after text_of, text_concat and error_of, which it calls
 		self.emit_function_body(); // after node_at, which its quoted code calls
+		self.gating_runtime = false;
 	}
 
 	pub(in crate::wasm_emitter) fn emit_getters(&mut self) {
