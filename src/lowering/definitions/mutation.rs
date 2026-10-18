@@ -138,15 +138,8 @@ const FULLY: i64 = 2;
 
 /// What a `!` or `!!` follows (a name or a field `o.s1`), and whether it was `!!`
 pub(crate) fn bang_target(node: &Node) -> Option<(Node, bool)> {
-	let Node::Meta { node: inner, data } = node else {
-		return None;
-	};
-	match data.as_ref() {
-		Node::Key(key, _, value) if key.name() == MUTATED_MARK => {
-			Some((inner.drop_meta().clone(), matches!(value.drop_meta(), Node::Number(n) if *n == FULLY)))
-		}
-		_ => bang_target(inner),
-	}
+	let (target, value) = node.marked(MUTATED_MARK)?;
+	Some((target.drop_meta().clone(), matches!(value.drop_meta(), Node::Number(n) if *n == FULLY)))
 }
 
 /// `delete xs[i]`, `delete xs#i`, `delete m["k"]`, `delete m.k` remove the entry as Python's `del`: `xs.pop(k)` of a
