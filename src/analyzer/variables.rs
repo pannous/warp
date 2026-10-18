@@ -252,8 +252,15 @@ fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 		Node::Key(list, Op::Hash, _) => widen_element_type(scope, list, right),
 		// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 		Node::Key(var_name, Op::Colon, type_node) => {
-			if let Some(name) = var_name.symbol_name().filter(|name| scope.lookup(name).is_none()) {
-				let kind = declared_kind(type_node).unwrap_or(Kind::Int);
+			let Some(name) = var_name.symbol_name().filter(|name| scope.lookup(name).is_none()) else {
+				return;
+			};
+			let kind = declared_kind(type_node).unwrap_or(Kind::Int);
+			// `global todos` in a function, `todos:[Todo] = ø` in main (a lowered `stored todos`): the global takes the type
+			if let Some(global) = scope.globals.get_mut(name) {
+				global.kind = kind;
+				global.type_node = Some(type_node.clone());
+			} else if !scope.is_global(name) {
 				scope.define(name.to_string(), Some(type_node.clone()), kind);
 			}
 		}

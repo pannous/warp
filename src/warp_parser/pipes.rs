@@ -2,6 +2,9 @@
 use super::expressions::BODY_ENDS;
 use super::*;
 
+/// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
+const PIPE_GLYPH: &str = "|";
+
 /// `f.(xs, a)` → `map(xs, broadcast_item => f(broadcast_item, a))`
 pub(super) fn dot_call(function: Node, arguments: Node) -> Node {
 	let mut arguments = match arguments.drop_meta() {

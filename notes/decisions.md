@@ -18,7 +18,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   language parts there, or should macros or a cheaper feature come first so the warp compiler doesn't bloat).
 - self-hosting-back-end (user 2026-10-18 night): the fleet's only focus is the analyzer, the emitter and the runtime in warp (lib/compiler), wired into the WARP_SELF_HOSTED pipeline; other cards wait in Soon, except important bug fixes (crashes, regressions on main) and the final Rust cleanup. Owners: notes/self_hosting.md "Back-end focus".
 - compiler-typed (user 2026-10-18): every function of the warp-written compiler and runtime declares its parameter and result types; generic helpers are typed generically (T, element of xs), not left untyped. Untyped functions stay a language feature for scripts.
-- compiler-node-enum (user 2026-10-18): the warp compiler's tree is an `enum Node` very close to, if not identical with, src/node/mod.rs Node (same cases and payloads, Op/Bracket/Separator enums), in lib/compiler/node.warp (card node-enum).
+- compiler-node-enum (user 2026-10-18): the warp compiler uses the built-in node, no parallel class: the language declares the built-in node's cases as in src/node/mod.rs (True, False, Empty, Number, Char, Text, Symbol, Error, Key, List, Data, Meta, Type; Op, Bracket, Separator as enums), so `Node` works as a type and in `match n { Key(left, op, right): … }` (cards node-enum, node-rewrite).
 - compiler-high-level (user 2026-10-18): the warp compiler is written at the highest level the language has (classes, enums, match, for, comprehensions); a missing or weak feature is fixed in the language, not worked around with low-level code. Only runtime.warp's intrinsics stay instruction-level.
 - self-hosting-minimal: the warp compiler is no blind copy of the Rust one; it drops experimental
   bloat and inelegant passes, cleanest minimal implementation first. Failing fringe/edge forms are fine if each dropped
@@ -238,7 +238,6 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Functions and calls
 - reflection: function objects have .name, .signature, .return_type, .parameters, .doc; printing one shows its doc above its typed .dump; `methods(x)` returns the function objects; `use reflection` adds compilation unit, compiler, origin, wasm index, effects. A bare parameterless function inside print/help/dump/type is called, with a warning and hint `function now`.
 - function-in-list: in a list or text a function prints as its name; only alone it shows doc + definition.
-- help-prints (also help-statement): a statement-level `help(x)` prints; inside an expression it returns the text.
 - dir-lists: built-ins are function values of type `builtin` (a subtype of function); methods(x) lists them.
 - one-method-form: methods are functions: a class-body `def x()` is `def x(_:P)`, `p.x() == x(p)`; `methods(P)` = every function whose first parameter is P, an ancestor or a trait P implements; `dir(p)` = fields + methods(P); where a function is declared is only metadata (`.declared_in`).
 - default-methods: `x.word` ≡ `x.word()`, resolved by multi-dispatch on the receiver's type; a member or method of the object's own class is more specific and wins.
