@@ -3773,6 +3773,7 @@ PASSED:
   ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
+  ✓ parser::test_self_words::call_kinds_are_rusts
   ✓ parser::test_self_words::copied_tables_are_their_rust_constants
   ✓ parser::test_self_words::type_words_are_the_rust_type_words
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -3914,6 +3915,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_live_redefine::a_loop_defined_once_is_unchanged
   ✓ programs::test_live_redefine::a_named_loop_announcing_its_cycles_still_runs
+  ✓ programs::test_live_redefine::a_redefined_loop_plays_its_new_block_from_the_next_cycle
   ✓ programs::test_midi::a_broken_file_fails_loudly
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
   ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
@@ -6354,8 +6356,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_words::call_kinds_are_rusts
-  ✗ programs::test_live_redefine::a_redefined_loop_plays_its_new_block_from_the_next_cycle
 
 SUMMARY:
-16 ignored, 6351 passed, 2 failed, 6353 total tested
+16 ignored, 6353 passed, 0 failed, 6353 total tested
