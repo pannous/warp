@@ -402,7 +402,7 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   | 14 | `break` | warp-cache |
   | 12+8 | a yes/no variable; `global` | warp-cache |
   | 12+6+5+4+8 | maps: map_entries, map_of_entry, field_with, key, collection_contains | warp-clicking-guide |
-  | 26+12+6+6+5+5+4+8 | runtime words not yet in runtime.warp: join, zero_fill, times·text, text_form, len, random_below, round, as_code | warp-self-passes |
+  | 26+12+6+6+5+5+4+8 | runtime words not yet in runtime.warp: join, zero_fill, times·text, text_form, len, round (in: emitter.warp library_words, card program-join); left: random_below (host), as_code (code values) | warp-self-passes |
   | 10 | `try` | warp-self-emitter (errors) |
   | 11+14+6+5 | sound/signals/tasks: midi_hertz, signal_new/listen, task_spawn_values, linear_new | later |
 - The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
