@@ -45,6 +45,8 @@ pub(crate) const PAIRED_COUNT: &str =
 	"(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
 pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
+/// A scalar word of a parameter a list may reach, decided at run time (each_any)
+const EACH_ANY_TEMPLATE: &str = "if TESTED then LISTED else SCALAR";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
 
 /// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
@@ -533,7 +535,12 @@ pub fn lower(program: Node) -> Node {
 	let other_variables = names.difference(&list_variables).cloned().collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
 	let instances = element_shapes(&program);
+	let is_list = |node: &Node| {
+		is_list_literal(node) || is_range(node) || node.symbol_name().is_some_and(|name| list_variables.contains(name))
+	};
+	let vector_parameters = super::vector_parameters::vector_parameters(&found, &program, is_list, &broadcasting);
 	Broadcast {
+		vector_parameters,
 		functions: broadcasting,
 		list_variables,
 		other_variables,
@@ -870,18 +877,42 @@ struct Broadcast {
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
 	paired: Counter,
 	/// The untyped parameters of the functions being rewritten: their own values, not the program's list variables of
-	/// the same names (card param-named-like-global)
-	shadowed: std::cell::RefCell<Vec<String>>,
+	/// the same names (card param-named-like-global); each marked when a list may reach it (vector_parameters)
+	shadowed: std::cell::RefCell<Vec<(String, bool)>>,
+	/// Per function, the parameters a list may reach at run time
+	vector_parameters: HashMap<String, HashSet<String>>,
 }
 
 impl Broadcast {
-	/// `run` with a function's `parameters` among the shadowed names: its own values inside its body
-	fn with_parameters<T>(&self, parameters: Vec<String>, run: impl FnOnce() -> T) -> T {
+	/// `run` with the `parameters` of `function` among the shadowed names: its own values inside its body
+	fn with_parameters<T>(&self, function: Option<&str>, parameters: Vec<String>, run: impl FnOnce() -> T) -> T {
+		let vectors = function.and_then(|name| self.vector_parameters.get(name));
+		let marked = parameters.into_iter().map(|name| {
+			let is_vector = vectors.is_some_and(|vectors| vectors.contains(&name));
+			(name, is_vector)
+		});
 		let outer = self.shadowed.borrow().len();
-		self.shadowed.borrow_mut().extend(parameters);
+		self.shadowed.borrow_mut().extend(marked);
 		let result = run();
 		self.shadowed.borrow_mut().truncate(outer);
 		result
+	}
+
+	fn is_shadowed(&self, variable: &str) -> bool {
+		self.shadowed.borrow().iter().any(|(name, _)| name == variable)
+	}
+
+	/// A parameter a list may reach at run time, the innermost of its name
+	fn is_vector_parameter(&self, node: &Node) -> bool {
+		let Some(variable) = node.ungrouped().symbol_name() else { return false };
+		self.shadowed.borrow().iter().rev().find(|(name, _)| name == variable).is_some_and(|(_, vector)| *vector)
+	}
+
+	/// `if p is list then map(p, broadcast_item => applied(broadcast_item)) else applied(p)`: decided at run time
+	fn each_any(&self, value: &Node, applied: impl Fn(Node) -> Node) -> Node {
+		let tested = call(crate::words::IS_TYPE, vec![value.clone(), Node::Text(crate::words::LIST_WORD.to_string())]);
+		let bindings = [("TESTED", tested), ("LISTED", each_item(value.clone(), &applied)), ("SCALAR", applied(value.clone()))];
+		super::nodes::filled(EACH_ANY_TEMPLATE, bindings)
 	}
 
 	fn rewrite(&self, node: Node) -> Node {
@@ -921,7 +952,8 @@ impl Broadcast {
 			}
 			// a definition head names parameters, it calls nothing
 			Node::Key(head, op @ (Op::Define | Op::Assign | Op::Arrow), body) if is_function_head(&head, op) => {
-				let body = self.with_parameters(untyped_parameters(&head, op), || self.rewrite(*body));
+				let function = (op != Op::Arrow).then(|| super::nodes::head_symbol(&head)).flatten();
+				let body = self.with_parameters(function, untyped_parameters(&head, op), || self.rewrite(*body));
 				Node::Key(head, op, Box::new(body))
 			}
 			Node::Key(left, op, right) => {
@@ -955,6 +987,7 @@ impl Broadcast {
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, vec![item]))),
+			_ if self.is_vector_parameter(argument) => Some(self.each_any(argument, |item| call(name, vec![item]))),
 			_ => None,
 		}
 	}
@@ -973,9 +1006,7 @@ impl Broadcast {
 	/// own words (`people.count`) and a parameter of the same name as the list stay as they are
 	fn element_fields(&self, list: &Node, field: &Node) -> Option<Node> {
 		let name = field.symbol_name()?;
-		let shadowed = list
-			.symbol_name()
-			.is_some_and(|variable| self.shadowed.borrow().iter().any(|parameter| parameter == variable));
+		let shadowed = list.symbol_name().is_some_and(|variable| self.is_shadowed(variable));
 		if shadowed || crate::library_words::is_library_word(name) {
 			return None;
 		}
@@ -990,7 +1021,7 @@ impl Broadcast {
 			|| is_broadcast(node)
 			|| element_wise_parts(node.ungrouped()).is_some_and(|(receiver, _, _)| self.is_list(receiver.ungrouped()))
 			|| node.symbol_name().is_some_and(|variable| {
-				self.list_variables.contains(variable) && !self.shadowed.borrow().iter().any(|name| name == variable)
+				self.list_variables.contains(variable) && !self.is_shadowed(variable)
 			})
 	}
 
@@ -1127,6 +1158,7 @@ impl Broadcast {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
+			_ if self.is_vector_parameter(argument) => Some(self.each_any(argument, applied)),
 			_ => None,
 		}
 	}
