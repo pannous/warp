@@ -11,9 +11,13 @@ fn self_hosted_run(cache: &std::path::Path, code: &str) -> (String, String) {
 }
 
 fn self_hosted_run_in(folder: &str, cache: &std::path::Path, code: &str) -> (String, String) {
+	run_switched("1", folder, cache, code)
+}
+
+fn run_switched(switch: &str, folder: &str, cache: &std::path::Path, code: &str) -> (String, String) {
 	let run = crate::common::warp_command()
 		.current_dir(folder)
-		.env("WARP_SELF_HOSTED", "1")
+		.env("WARP_SELF_HOSTED", switch)
 		.env("WARP_MODULE_CACHE", cache)
 		.env("WARP_PHASE_TIMES", "1")
 		.arg(code)
@@ -53,4 +57,14 @@ fn the_stage_programs_ignore_the_working_folder() {
 	let _ = std::fs::remove_dir_all(&cache);
 	let (value, phases) = self_hosted_run_in(SHADOWING_FOLDER, &cache, "area(side: int) := side * side; area(3) + 4");
 	assert!(value.contains("13"), "{value} {phases}");
+}
+
+/// WARP_SELF_HOSTED=front: the warp front end with the Rust emitter, for a count of the front end alone
+#[test]
+fn the_front_end_alone_leaves_emitting_to_rust() {
+	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
+	self_hosted_run(&cache, "3 + 4"); // the stage programs compile with the Rust emitter, once
+	let (value, phases) = run_switched("front", ".", &cache, "square(x: int) := x * x; square(3)");
+	assert!(value.contains('9'), "{value}");
+	assert!(phases.contains("emit ("), "the Rust emitter emits: {phases}");
 }
