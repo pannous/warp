@@ -843,6 +843,12 @@ PASSED:
   ✓ control::test_text_loop_value::a_text_loop_that_never_ran_is_empty
   ✓ control::test_text_loop_value::a_text_loop_value_stays_a_text_nested_assigned_and_returned
   ✓ control::test_text_loop_value::numeric_loops_keep_their_values
+  ✓ control::test_text_patterns::a_class_hole_tests_its_characters
+  ✓ control::test_text_patterns::a_known_name_in_a_sum_is_a_value
+  ✓ control::test_text_patterns::a_prefix_or_suffix_binds_the_rest
+  ✓ control::test_text_patterns::a_text_pattern_needs_a_piece_between_holes
+  ✓ control::test_text_patterns::a_typed_hole_reads_its_text
+  ✓ control::test_text_patterns::pieces_and_holes_alternate
   ✓ control::test_threads::a_finish_handler_runs_after_the_statement_that_saw_the_task_finish
   ✓ control::test_threads::a_paused_task_waits_for_resume
   ✓ control::test_threads::a_stop_handler_runs_once_the_task_stopped
@@ -1239,6 +1245,7 @@ PASSED:
   ✓ functions::test_all_calls::print_each_friend
   ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
   ✓ functions::test_analysis_memo::test_an_analysis_that_says_something_runs_again
+  ✓ functions::test_analysis_memo::test_the_same_definition_is_analysed_once
   ✓ functions::test_analysis_memo::test_the_same_tree_is_analysed_once
   ✓ functions::test_anonymous_application::test_a_block_applied_to_a_juxtaposed_argument
   ✓ functions::test_anonymous_application::test_a_data_block_is_not_applied
@@ -3921,6 +3928,7 @@ PASSED:
   ✓ programs::test_file_spectrum::a_files_tone_fills_its_own_band
   ✓ programs::test_file_spectrum::shader_of_is_the_wgsl_a_function_paints_with
   ✓ programs::test_file_spectrum::the_compiled_shader_demo_compiles_to_one_fragment_shader
+  ✓ programs::test_function_cache::a_new_program_compiles_only_its_own_functions
   ✓ programs::test_gpu_draw::an_unknown_draw_choice_warns
   ✓ programs::test_gpu_draw::gpu_draws_what_cpu_draws
   ✓ programs::test_gpu_draw::shapes_cross_to_the_paint_window_whole
@@ -4676,6 +4684,8 @@ PASSED:
   ✓ types::test_class_forms_ported::a_typescript_class_with_typed_members
   ✓ types::test_class_forms_ported::csharp_auto_properties_and_an_object_initializer
   ✓ types::test_class_forms_ported::ruby_endless_methods
+  ✓ types::test_class_index_operator::a_class_defines_the_index_operator
+  ✓ types::test_class_index_operator::an_index_of_a_class_without_the_operator_is_its_field
   ✓ types::test_class_interfaces::a_class_method_satisfies_a_trait_operation
   ✓ types::test_class_interfaces::interfaces_as_other_languages_write_them
   ✓ types::test_class_json::a_named_instance_from_json_is_of_its_class
@@ -5304,6 +5314,7 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
   ✓ types::test_typed_builtins::a_member_words_number_or_bool_result_is_decided_where_it_is_made
+  ✓ types::test_typed_builtins::a_result_read_off_an_argument_is_spelled_same_as_or_value_of
   ✓ types::test_typed_builtins::a_value_known_at_run_time_takes_its_overload_then
   ✓ types::test_typed_builtins::a_value_no_overload_is_typed_for_takes_the_first_line
   ✓ types::test_typed_builtins::each_overload_type_is_the_librarys
@@ -6394,4 +6405,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-16 ignored, 6389 passed, 0 failed, 6389 total tested
+16 ignored, 6400 passed, 0 failed, 6400 total tested
