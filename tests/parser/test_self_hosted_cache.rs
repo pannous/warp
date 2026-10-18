@@ -47,9 +47,9 @@ fn the_warp_emitter_emits_inside_its_core() {
 	let (class, phases) = self_hosted_run(&cache, "class Point { x: int }; p = Point(3); p.x + 4");
 	assert!(class.contains('7'), "{class}");
 	assert!(!phases.contains("emit ("), "a class instance is inside the core: {phases}");
-	let (beyond, phases) = self_hosted_run(&cache, "#([\"ab\", \"cd\"].join(\"\")) + 3");
+	let (beyond, phases) = self_hosted_run(&cache, "x = 3; f = y => x + y; f(4)");
 	assert!(beyond.contains('7'), "{beyond}");
-	assert!(phases.contains("emit ("), "join is beyond the core: {phases}");
+	assert!(phases.contains("emit ("), "a closure over a variable is beyond the core: {phases}");
 }
 
 /// The stage programs compile from warp's lib/ alone: a folder whose text.warp and list.warp would shadow the standard
