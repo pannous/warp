@@ -14,7 +14,7 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let node_heap = HeapType::Concrete(node_type);
 		let has_instances = !self.ctx.type_registry.types().is_empty();
-		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
+		let next_index = |s: &Self| s.next_func_idx;
 		// is the node in `local` an entry or cell (a Key or List), else leave the function giving it back
 		let return_unless_structure = |f: &mut Function, local: u32, kind: u32| {
 			#[rustfmt::skip]
@@ -73,7 +73,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Call(spine), I::StructNew(node_type)]);
 			},
 		);
-		assert_eq!(self.func_index("copy_spine"), spine, "recursive call index");
+		let spine = self.func_index("copy_spine"); // the copy_spine emitted before, when the runtime emitters run again
 
 		// deep_copy(node, memo): memo.value lists `original:copy` pairs, so a part held twice is copied once
 		let deep = next_index(self);
@@ -138,7 +138,7 @@ impl WasmGcEmitter {
 				]);
 			},
 		);
-		assert_eq!(self.func_index("deep_copy"), deep, "recursive call index");
+		let deep = self.func_index("deep_copy");
 
 		self.runtime_function(
 			crate::library_words::INSTANCE_COPY,

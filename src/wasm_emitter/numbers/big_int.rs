@@ -868,7 +868,8 @@ impl WasmGcEmitter {
 
 	/// Globals behind handles; call before any function that touches them
 	pub(crate) fn emit_int_heap_globals(&mut self) {
-		if !self.int_runtime() {
+		let emitted = self.int_count_global != 0; // declared after the heap, so never global 0
+		if emitted || !self.int_runtime() {
 			return;
 		}
 		let heap = RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.big_heap_type) };

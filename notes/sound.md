@@ -80,9 +80,11 @@ Each layer keeps the ones above working and lowers to them. Order of value: 1 + 
    - `fade_sound(handle, gain, seconds)` ramps a playing sound's gain linearly (0 = all handles), natively, in the
      browser (a GainNode per sound) and in render_sound (tests/programs/test_sound_fades.rs).
 2. **Music values** (built, tests/programs/test_sound_notes.rs, test_music_values.rs, test_note_values.rs).
-   - Note names are parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9, when the program uses sound
-     and doesn't define that name; `F#4` parses as `F # 4`. A name lowers to `midi_hertz(midi)`, so `tuning = 442`
-     tunes every note. Bare names stay frequencies (`C4` is 261.63).
+   - Note names are constants of lib/sound.warp (decision music-plain-details): a letter A–G, `♯`/`s` or `b`/`♭`, an
+     octave 0–8, each `midi_hertz(midi)` charged, so `tuning = 442` tunes every note. They are frequencies (`C4` is
+     261.63). `F#4` parses as `F # 4`: the letter F is a PitchClass whose index operator `#` is its sharp in that
+     octave (a class's `index(n)`, tests/types/test_class_index_operator.rs; a used module's variables keep their
+     class for it, compile_context module_instance_classes).
    - `midi(pitch)`, `note_name(pitch)`, `transpose(pitch or list, semitones)` (keeps a note a note, multiplies any
      other frequency), `chord(root, kind)`, `scale(root, kind)` (kinds in lib chord_intervals / scale_intervals, as an
      undefined word directly in the call or a text), `interval(low, high)`.

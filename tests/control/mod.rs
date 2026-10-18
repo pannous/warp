@@ -137,6 +137,7 @@ mod test_match_negative_subject; // card match-negative-subject
 mod test_match_other;
 mod test_match_pattern_bindings; // card pattern-names
 mod test_match_ranges;
+mod test_match_rest_arm; // card match
 mod test_match_tuples;
 mod test_match_type_arms;
 mod test_match_whole_value;
@@ -159,6 +160,7 @@ mod test_or_error_type;
 mod test_page_events;
 mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;
+mod test_parenthesized_tuple;
 mod test_parsed_code_patterns; // card tree-patterns step 7
 mod test_pattern_unit_name; // card pattern-unit-name
 mod test_plural_field_of_elements; // card plural-of

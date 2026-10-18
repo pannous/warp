@@ -389,11 +389,9 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
 		// list_with_at(list, index, value node): the cell at index takes the value in place, so every holder of the list sees
 		// it (P200b); the list itself is given back
-		let list_with_at = next_index(self);
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
 		let locals = vec![node_ref_nullable, ValType::I64];
 		self.runtime_function("list_with_at", params, vec![node_ref], locals, |s, f| {
@@ -436,10 +434,8 @@ impl WasmGcEmitter {
 				I::LocalGet(list), I::RefAsNonNull,
 			]);
 		});
-		assert_eq!(self.func_index("list_with_at"), list_with_at, "node_with_at forwards to this index");
 
 		// text_with_char_at(text, index, value): a fresh copy with the grapheme at index replaced by the UTF-8 of value
-		let text_with_char_at = next_index(self);
 		let params = vec![node_ref, ValType::I64, ValType::I64];
 		let text = self.text_ref();
 		let text_type = self.type_manager.text_type;
@@ -482,6 +478,7 @@ impl WasmGcEmitter {
 		});
 
 		// node_with_at(node, index, value): texts and symbols by grapheme, everything else as list
+		let (list_with_at, text_with_char_at) = (self.func_index("list_with_at"), self.func_index("text_with_char_at"));
 		self.runtime_function("node_with_at", params, vec![node_ref], vec![], |s, f| {
 			s.emit_is_text(f);
 			f.instruction(&I::If(BlockType::Result(node_ref)));

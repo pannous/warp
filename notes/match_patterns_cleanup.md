@@ -17,7 +17,7 @@ type_tests::lower (5), switch::lower (28, the real matcher, `Matched`).
 - D3 four catch-all tables: switch::DEFAULT_KEYS, match_exhaustive::CATCH_ALLS, welcome_forms WILDCARD/ELSE_WORD/
   DEFAULT_CASE, rust_options::WILDCARD (+ literal "_" in destructuring.rs).
 - D4 three binding-name listers: switch::pattern_bindings, tuples::pattern_names/is_pattern,
-  module_properties::destructured_names.
+  property_accessors::destructured_names.
 - D5 Kotlin `when(x)` lowered by its own when_chain (no ranges, bindings, `is T`); match_exhaustive special-cases it.
 - D6 inside switch.rs: alternatives twice (condition / pattern_test), type_named re-inlined, item_pattern duplicated
   in named_patterns::is_open_part.
@@ -27,7 +27,7 @@ type_tests::lower (5), switch::lower (28, the real matcher, `Matched`).
 ## Steps, lowest risk first (estimated src/ lines saved)
 1. one CATCH_ALLS + is_catch_all in src/words.rs (~8)
 2. switch.rs internal: type_named everywhere, item_pattern shared, pattern_test via condition, fix comment :572 (~15)
-3. tuples::pattern_names over switch::pattern_bindings, drop module_properties::destructured_names (~25)
+3. tuples::pattern_names over switch::pattern_bindings, drop property_accessors::destructured_names (~25)
 4. nodes::match_parts(items) -> (head, subject, cases) + with_cases, replacing the six recognisers (~50)
 5. check_unit_names folded into named_patterns::lower; optional shared pattern_positions visitor (one pass, ~20)
 6. Kotlin `when(s)` with a subject → nodes::matched(s, arms via colon_case) in DECLARATION (~35, gains ranges)
