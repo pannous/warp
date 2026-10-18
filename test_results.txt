@@ -1802,6 +1802,8 @@ PASSED:
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
+  ✓ functions::test_overloaded_function_values::a_signal_named_like_a_sound_word_plays
+  ✓ functions::test_overloaded_function_values::an_overloaded_function_passed_for_a_function_typed_parameter_is_the_fitting_variant
   ✓ functions::test_parameter_any::a_parameter_called_with_two_kinds_takes_any
   ✓ functions::test_parameter_any::a_parameter_tested_for_its_kind_takes_any
   ✓ functions::test_parameter_any::an_any_parameter_takes_every_kind
@@ -3809,7 +3811,6 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
@@ -4170,6 +4171,7 @@ PASSED:
   ✓ programs::test_sound_filters::vibrato_bends_the_pitch
   ✓ programs::test_sound_handles::play_gives_the_sounds_handle
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
+  ✓ programs::test_sound_note_names::a_letter_indexed_by_an_octave_is_its_sharp_note
   ✓ programs::test_sound_note_names::every_note_name_is_its_midi_notes_frequency
   ✓ programs::test_sound_notes::a_note_inside_a_function_body_plays
   ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
@@ -6448,6 +6450,7 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6444 passed, 1 failed, 6445 total tested
+16 ignored, 6446 passed, 2 failed, 6448 total tested
