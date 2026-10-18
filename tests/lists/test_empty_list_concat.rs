@@ -23,5 +23,5 @@ fn two_empty_lists_concatenate_to_the_empty_list() {
 #[cfg(feature = "native")]
 #[test]
 fn a_melody_too_fast_for_any_sample_plays_nothing() {
-	is!("use sound\ntempo=1000000\nmelody([C5, G5], 1/8 beat)\n7", 7);
+	is!("use sound\ntempo=1000000\nmelody([C5, G5], beat(1/8))\n7", 7);
 }

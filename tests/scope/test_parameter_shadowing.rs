@@ -23,11 +23,13 @@ siren(t) := {
 	0.3 * sin(2 * pi * pitch * t)
 }
 play(siren, 0.1s)
-chord(left, right, t) := for i in 1 to #left {
+linear left = float[512]
+linear right = float[512]
+strum(t) := for i in 1 to #left {
 	left#i = 0.4 * sin(2 * pi * 262 * t)
 	right#i = 0.4 * sin(2 * pi * 392 * t)
 }
-play(chord, 0.1s)
+play_blocks(strum, [linear_address(left), linear_address(right)], 0.1s)
 save sound as: \"SONG\"",
 	);
 	assert_eq!(seconds, "0.2");

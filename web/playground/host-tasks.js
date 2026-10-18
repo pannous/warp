@@ -101,7 +101,7 @@ self.voiceAt = seconds => {
 	voice = { loop: voice.loop, end: origin + seconds, seconds, origin };
 };
 self.insideAt = () => voicesBeforeAt.length > 0;
-// where this voice's next sound would start: its queued sounds' end, never before now (sound_moment)
+// where this voice's next sound would start: its queued sounds' end, never before now
 self.voiceMoment = () => Math.max(voice.end ?? 0, soundClock());
 // card playground-live: a named live loop's cycle starts (lib live_cycle_started). The voice is that loop's from now on,
 // its sounds tagged with its name for the page; a loop the page handed over from the run before (liveHandover: name →

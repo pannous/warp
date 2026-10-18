@@ -233,6 +233,24 @@ impl Inference {
 		Ok((specialised, result))
 	}
 
+	/// `drums() := play(C4, 1s)` passed as a value: `drums() := drums·u0()`, its specialisation for arguments without
+	/// units under its own name; none where that one fails
+	pub(super) fn plain_forward(&mut self, name: &str, definition: &Definition) -> Node {
+		let plain = vec![Signature::plain(); definition.parameters.len()];
+		let Ok((specialised, _)) = self.specialise(name, definition, plain) else {
+			return Node::Empty;
+		};
+		let call = |head: &str, arguments: Vec<Node>| {
+			Node::List([vec![Node::Symbol(head.to_string())], arguments].concat(), Bracket::Round, Separator::None)
+		};
+		let parameters = definition.parameters.iter().map(|parameter| Node::Symbol(parameter.clone())).collect();
+		Node::Key(
+			Box::new(call(name, definition.declared.clone())),
+			Op::Define,
+			Box::new(call(&specialised, parameters)),
+		)
+	}
+
 	/// A function with unit literals in its body or defaults, or reading a global that holds a quantity
 	pub(super) fn has_units(&self, definition: &Definition) -> bool {
 		let body = &definition.body;

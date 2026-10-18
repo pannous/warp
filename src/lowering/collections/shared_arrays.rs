@@ -98,7 +98,7 @@ fn lower_knowing_functions(node: Node) -> Node {
 	let node = crate::gpu_maps::kept_on_gpu(node);
 	// the first array the program itself declares linear, before the compiler picks any
 	let mut first_linear: Option<(Node, String, Element)> = None;
-	// the compiler's own (a name with TEMPORARY_SEPARATOR, as music_words' blocks) are not the program's
+	// the compiler's own (a name with TEMPORARY_SEPARATOR) are not the program's
 	node.visit(&mut |part| {
 		if let Some((name, _, shared)) = declaration(part).filter(|(name, _, shared)| {
 			shared.storage == Storage::Linear && !name.contains(crate::analyzer::TEMPORARY_SEPARATOR)

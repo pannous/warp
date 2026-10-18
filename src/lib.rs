@@ -28,14 +28,14 @@ pub use lowering::{
 	ambiguous_forms, blocks, broadcasting, class_methods, closures, component_state, component_worlds, comprehensions,
 	database_tables, declaration_forms, declarations, element_events, event_signals, fetch_signals, field_elements,
 	filled_lists, folding, for_loop, foreign_modules, function_values, getters, go_blocks, gpu_maps, inline_unions,
-	inlining, kebab_names, key_names, lambdas, late_binding, lazy_ranges, library_words, list_mutations,
-	markup_tags, members, memoization, meta_entries, min_max, music_words, mutation, named_arguments, negated_calls,
-	nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps, optional_casts, overloads, page_html,
-	parallel, parameter_shapes, phrase_words, picked_calls, pipes, printable, program_names, references, reflection,
-	result_word, routes, run_time_blocks, serve, shared_arrays, signal_values, soft_keywords, std_aliases,
-	stored_values, switch, system_signals, system_values, traits, transitions, tuples, type_aliases, type_constructor,
-	type_name_matching, type_tests, typed_library_words, undo_history, variable_signals, variadic, versions,
-	welcome_forms, word_help, word_operators,
+	inlining, kebab_names, key_names, lambdas, late_binding, lazy_ranges, library_words, list_mutations, markup_tags,
+	members, memoization, meta_entries, min_max, mutation, named_arguments, negated_calls, nested_index,
+	nonlocal_cells, number_keys, object_groups, one_entry_maps, optional_casts, overloads, page_html, parallel,
+	parameter_shapes, phrase_words, picked_calls, pipes, printable, program_names, references, reflection, result_word,
+	routes, run_time_blocks, serve, shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, switch,
+	system_signals, system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching,
+	type_tests, typed_library_words, undo_history, variable_signals, variadic, versions, welcome_forms, word_help,
+	word_operators,
 };
 pub mod errors;
 pub mod ffi;
@@ -65,7 +65,7 @@ pub mod web;
 // ==================== Core Re-exports ====================
 // Node AST - the heart of warp
 pub use node::{Bracket, Node, Separator};
-pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
+pub use operators::{FUNCTION_KEYWORDS, Op, is_function_keyword};
 // Node convenience constructors
 pub use node::{
 	block, codepoint, data, error, float, floats, int, ints, key, key_ops, list, parens, symbol, symbols, text, texts,
@@ -73,11 +73,11 @@ pub use node::{
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
-pub use formats::wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
-pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
+pub use formats::wisp_parser::{WispEmitter, WispParser, emit_wisp, parse_wisp};
+pub use warp_parser::{WarpParser, parse, parse_data, parse_file, parse_xml};
 // Type system
 pub use type_kinds::{
-	extract_instance_values, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry, USER_TYPE_TAG_START,
+	FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry, USER_TYPE_TAG_START, extract_instance_values,
 };
 // Metadata
 pub use compiler::meta::{DataType, DataValue, LineInfo};
@@ -85,7 +85,7 @@ pub use compiler::meta::{DataType, DataValue, LineInfo};
 pub use wasm_emitter::WasmGcEmitter;
 // Host functions
 #[cfg(feature = "native")]
-pub use host::{create_host_linker, link_host_functions, HostState};
+pub use host::{HostState, create_host_linker, link_host_functions};
 // Functions
 pub use compiler::function::{Function, FunctionRegistry};
 // Local (unified struct for variables)
@@ -93,4 +93,4 @@ pub use compiler::local::Local;
 // New gc_traits module with rasm-style ergonomic GC struct access
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]
-pub use gc_traits::{register_gc_types_from_wasm, FieldIndex, FromVal, GcReadable, GcStructWrapper, ToVal};
+pub use gc_traits::{FieldIndex, FromVal, GcReadable, GcStructWrapper, ToVal, register_gc_types_from_wasm};
