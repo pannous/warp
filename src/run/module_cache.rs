@@ -72,6 +72,10 @@ pub enum Origin {
 /// `bytes` (a binary module or WAT text) compiled for `engine`: from this process's modules or the cache when they
 /// hold it, else compiled and added to both
 pub fn compiled_module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+	crate::compiler::phase_times::timed("wasmtime compile", || compiled_module_untimed(engine, bytes))
+}
+
+fn compiled_module_untimed(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 	if is_precompiled(bytes) {
 		// SAFETY: compiled code runs as it is, so a .cwasm file is trusted like a native executable: the user runs it
 		return unsafe { Module::deserialize(engine, bytes) };
@@ -167,8 +171,9 @@ fn cache_directory() -> Option<PathBuf> {
 fn cache_key(engine: &Engine, bytes: &[u8]) -> String {
 	let mut engine_hasher = std::collections::hash_map::DefaultHasher::new();
 	engine.precompile_compatibility_hash().hash(&mut engine_hasher);
-	let digest = Sha256::new().chain_update(engine_hasher.finish().to_le_bytes()).chain_update(bytes).finalize();
-	digest.iter().map(|byte| format!("{byte:02x}")).collect()
+	crate::extensions::hex_text(
+		&Sha256::new().chain_update(engine_hasher.finish().to_le_bytes()).chain_update(bytes).finalize(),
+	)
 }
 
 /// The module at `path`, when there is one wasmtime accepts for `engine`; a hit counts as a use for pruning

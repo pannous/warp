@@ -3,11 +3,14 @@
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
 
 // The words warp computes itself, the emitter's runtime functions, with their signatures (decision
-// foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces)
+// foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces). A word
+// of several lines is overloaded by its first parameter's type, whose line gives the call's result (card typed-builtins)
 upper(t: text): text from warp
 lower(t: text): text from warp
-reverse(xs) from warp
+reverse(xs: list): list from warp
+reverse(t: text): text from warp
 sort(xs: list): list from warp
+sort(t: text): text from warp
 split(t: text, separator: text = " "): list of text from warp
 join(xs: list, separator: text): text from warp
 chars(t: text): list of text from warp
@@ -21,11 +24,40 @@ map_of_entry(entry) from warp
 map_get_or(m, key, default = ø) from warp
 collection_contains(xs, x) from warp
 collection_position(xs, x) from warp
-slice(xs, start, end = ø) from warp
+slice(xs: list, start, end = ø): list from warp
+slice(t: text, start, end = ø): text from warp
 field_with(object, name, value) from warp
 instance_copy(x, shallow) from warp
 wasi_environment(): text from warp
 kind_mark(x: any): int from warp
+
+// The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
+// results, as the analyzer reads them
+count(xs): int from emitter
+byte_size(x): int from emitter
+type(x): symbol from emitter
+print(values...): nothing from emitter
+puts(t: text): int from emitter
+puti(n: int): int from emitter
+putl(n: int): int from emitter
+putf(x: float): int from emitter
+fetch(url: text, options...): text from emitter
+// the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
+map(xs, f: function) from emitter
+filter(xs, f: function) from emitter
+reduce(xs, f: function) from emitter
+fold(xs, start, f: function) from emitter
+any(xs, f: function): bool from emitter
+all(xs, f: function): bool from emitter
+find(xs, f: function) from emitter
+each(xs, f: function) from emitter
+add(xs, x) from emitter
+insert(xs, x, at: int) from emitter
+remove(xs, x) from emitter
+pop(xs) from emitter
+clear(xs) from emitter
+number(x): number from emitter
+string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
@@ -49,6 +81,9 @@ alias lowercase = lower
 // the text builtin trim, Python's strip
 alias strip = trim
 alias reversed = reverse
+alias size = count
+alias len = count
+alias length = count
 alias sorted = sort
 alias clone = copy
 alias ordinal = ord

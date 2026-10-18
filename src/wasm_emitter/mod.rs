@@ -986,7 +986,7 @@ fn last_statement_items(program: &Node) -> usize {
 /// The module of `node`; `%` and `//` use the small int_* runtime unless the module makes ratios, which takes a
 /// second emission with the ratio-aware exact_* one (card int-i64)
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
-	let (compiled, int_division) = emit_module_with(node, false)?;
+	let (compiled, int_division) = crate::compiler::phase_times::timed("emit", || emit_module_with(node, false))?;
 	if int_division && makes_ratios(&compiled.bytes) {
 		// the first emission already hinted the same program
 		return Ok(crate::normalize::without_hints(|| emit_module_with(node, true))?.0);

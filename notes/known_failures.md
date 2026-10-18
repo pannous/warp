@@ -8,5 +8,3 @@ the lines into cards for the stage's worker.
 
 Format: `- <module::path::test_name> | <card> | <reason>`
 
-- wasm::test_gc_struct::test_raw_person_struct | rust-emitter | the test reads a raw struct's text field as `$String(ptr, len)`; texts are `$Text` GC byte arrays now (test edit implied by the layout: read the array)
-- wasm::test_gc_struct::test_class_instance_raw | rust-emitter | same: reads the raw text field as `$String(ptr, len)`, now a `$Text` byte array

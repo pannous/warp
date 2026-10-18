@@ -215,7 +215,7 @@ impl WarpParser {
 		let ruby_definition = self.closing_end_follows(&RUBY_END_OPENERS);
 		// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
 		// would make each line the block of the one before)
-		let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
+		let tab_indented_ruby = ruby_definition && self.context.base_indent == 0 && self.next_line_starts_with_tab();
 		if (ruby_definition && !tab_indented_ruby) || !self.only_blanks_before_newline() {
 			return definition;
 		}
@@ -269,7 +269,7 @@ impl WarpParser {
 				let reference_to_value = next == '&'
 					|| next == '(' && !self.starts_capture()
 					|| next == '[' || next == '"'
-					|| next.is_ascii_digit() && !self.in_capture;
+					|| next.is_ascii_digit() && !self.context.in_capture;
 				reference_to_value || self.mutable_reference_follows()
 			}
 			'*' => {
