@@ -976,7 +976,7 @@ fn is_listing_word(word: &Node) -> bool {
 
 /// What a reflection word lists of a class: its methods themselves, `function sq` for each (decision reflection,
 /// card module-methods), its fields and dir's names as texts
-fn word_list(word: &str, class: &str, names: &[String]) -> Node {
+pub(crate) fn word_list(word: &str, class: &str, names: &[String]) -> Node {
 	match word {
 		_ if METHODS_WORDS.contains(&word) => Node::List(
 			names.iter().map(|name| crate::closures::method_reference(name.clone(), class)).collect(),

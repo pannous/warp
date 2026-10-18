@@ -1,7 +1,7 @@
 //! `meta(x)`, the one core reflection builtin (decision reflection-plain): what the compiler knows of a module or a
 //! class, as a map. `meta(math)` is `{name: "math", words: […], doc: "…"}`, `meta(P)` of a class
-//! `{name: "P", fields: […], methods: […], parent: …}`. The library builds the typed views on it (`dir`, `fields`,
-//! `help`); only it reads the map. A value known only at run time (`f(m) := meta(m)`, `meta(type(o))`, the library's
+//! `{name: "P", fields: […], methods: […], parent: …}`, its methods the functions themselves. The library builds the
+//! typed views on it (`dir`, `fields`, `help`); only it reads the map. A value known only at run time (`f(m) := meta(m)`, `meta(type(o))`, the library's
 //! `meta(m)`) is `meta_of(m)`, which the program defines (with_table): a lookup by the value's text (`math`, `class P`)
 //! in a table of the modules the program names and its classes. A program's own `meta` wins
 
@@ -92,15 +92,15 @@ impl Known {
 		}
 	}
 
+	/// A class's fields as texts, its methods as the functions themselves (decision reflection)
 	fn class_meta(&self, class: &str) -> Node {
-		let names = |own: fn(&ClassLayout) -> &Vec<String>| {
-			crate::reflection::text_list(&crate::reflection::inherited_names(&self.layouts, class, own))
-		};
+		let names =
+			|own: fn(&ClassLayout) -> &Vec<String>| crate::reflection::inherited_names(&self.layouts, class, own);
 		let parent = self.layouts[class].parent.as_deref().map_or(Node::Empty, text);
 		map(vec![
 			("name", text(class)),
-			("fields", names(|layout| &layout.fields)),
-			("methods", names(|layout| &layout.methods)),
+			("fields", crate::reflection::text_list(&names(|layout| &layout.fields))),
+			("methods", crate::reflection::word_list(METHODS_WORD, class, &names(|layout| &layout.methods))),
 			("parent", parent),
 		])
 	}

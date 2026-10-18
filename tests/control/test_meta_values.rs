@@ -13,7 +13,7 @@ fn a_modules_meta() {
 #[test]
 fn a_classes_meta() {
 	is!(&format!("{CLASSES}meta(P).fields == [\"a\" \"x\"]"), true);
-	is!(&format!("{CLASSES}meta(P).methods == [\"length\"]"), true);
+	is!(&format!("{CLASSES}meta(P).methods#1.name"), "length");
 	is!(&format!("{CLASSES}meta(P).parent"), "A");
 }
 
