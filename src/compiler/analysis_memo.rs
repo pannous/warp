@@ -5,7 +5,7 @@
 //! fresh analysis gives. An analysis that says something (a warning, a hint) is not remembered, so a repeat still says
 //! it. `WARP_ANALYSIS_CACHE=off` turns it off (A/B measurements).
 
-use crate::compiler::context::{Context, UserFunctionDef};
+use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::ffi::FfiSignature;
 use crate::node::Node;
 use std::cell::RefCell;
@@ -16,6 +16,8 @@ use std::hash::{Hash, Hasher};
 const SWITCH_VARIABLE: &str = "WARP_ANALYSIS_CACHE";
 /// Program states remembered per thread: the passes of one compile alternate between few of them
 const REMEMBERED: usize = 256;
+/// Definitions remembered per thread: the prelude's and the used modules' words of the programs it compiles
+const REMEMBERED_DEFINITIONS: usize = 4096;
 
 /// What extract_user_functions writes into a fresh Context
 #[derive(Clone)]
@@ -55,6 +57,7 @@ impl Analysis {
 
 thread_local! {
 	static REMEMBERED_ANALYSES: RefCell<Vec<(u64, Analysis)>> = const { RefCell::new(Vec::new()) };
+	static REMEMBERED_FUNCTIONS: RefCell<HashMap<u64, UserFunctionDef>> = RefCell::new(HashMap::new());
 }
 
 /// `analyse(context, program)` into a fresh `context`, or what it gave for the same tree before
@@ -86,6 +89,50 @@ pub fn analysed(context: &mut Context, program: &Node, analyse: impl FnOnce(&mut
 	});
 }
 
+/// `analyse()`'s answer for one definition (user_function: its parameters' and result's kinds from its body), or what it
+/// gave for the same definition before: the passes analyse each program state anew, the prelude's words in it unchanged
+/// (card prelude-cache-runs). The key adds the bool functions so far, the one part of the compile the analysis reads.
+pub fn analysed_function(
+	name: &str,
+	params: &[Param],
+	body: &Node,
+	analyse: impl FnOnce() -> UserFunctionDef,
+) -> UserFunctionDef {
+	let key =
+		(std::env::var(SWITCH_VARIABLE).as_deref() != Ok("off")).then(|| function_fingerprint(name, params, body));
+	let Some(key) = key.flatten() else { return analyse() };
+	if let Some(function) = REMEMBERED_FUNCTIONS.with_borrow(|remembered| remembered.get(&key).cloned()) {
+		return function;
+	}
+	let said = crate::errors::diagnostic::said();
+	let function = analyse();
+	if crate::errors::diagnostic::said() == said {
+		REMEMBERED_FUNCTIONS.with_borrow_mut(|remembered| {
+			if remembered.len() == REMEMBERED_DEFINITIONS {
+				remembered.clear();
+			}
+			remembered.insert(key, function.clone());
+		});
+	}
+	function
+}
+
+fn function_fingerprint(name: &str, params: &[Param], body: &Node) -> Option<u64> {
+	let mut hasher = DefaultHasher::new();
+	name.hash(&mut hasher);
+	let mut bool_functions: Vec<String> =
+		crate::compiler::compile_context::read(|context| context.bool_functions.iter().cloned().collect());
+	bool_functions.sort();
+	bool_functions.hash(&mut hasher);
+	let hash_optional =
+		|node: &Option<Node>, hasher: &mut DefaultHasher| node.as_ref().is_none_or(|node| hash_node(node, hasher));
+	let params_hashed = params.iter().all(|param| {
+		(&param.name, param.used_as).hash(&mut hasher);
+		hash_optional(&param.annotation, &mut hasher) && hash_optional(&param.default, &mut hasher)
+	});
+	(params_hashed && hash_node(body, &mut hasher)).then(|| hasher.finish())
+}
+
 /// A Context nothing was put in yet: the analysis depends only on the program
 fn is_fresh(context: &Context) -> bool {
 	context.user_functions.is_empty()
@@ -113,7 +160,7 @@ fn hash_node(node: &Node, hasher: &mut DefaultHasher) -> bool {
 	match node {
 		Node::True | Node::False | Node::Empty => true,
 		Node::Number(number) => {
-			format!("{number:?}").hash(hasher);
+			hash_number(number, hasher);
 			true
 		}
 		Node::Char(character) => {
@@ -126,7 +173,7 @@ fn hash_node(node: &Node, hasher: &mut DefaultHasher) -> bool {
 		}
 		Node::Error(inner) => hash_node(inner, hasher),
 		Node::Key(left, op, right) => {
-			format!("{op:?}").hash(hasher);
+			op.hash(hasher);
 			hash_node(left, hasher) && hash_node(right, hasher)
 		}
 		Node::List(items, bracket, separator) => {
@@ -134,7 +181,7 @@ fn hash_node(node: &Node, hasher: &mut DefaultHasher) -> bool {
 			if let crate::node::Bracket::Other(open, close) = bracket {
 				(open, close).hash(hasher);
 			}
-			format!("{separator:?}").hash(hasher);
+			std::mem::discriminant(separator).hash(hasher);
 			items.len().hash(hasher);
 			items.iter().all(|item| hash_node(item, hasher))
 		}
@@ -143,10 +190,21 @@ fn hash_node(node: &Node, hasher: &mut DefaultHasher) -> bool {
 		// a position (Meta data): the only Rust data a parsed program holds; any other makes the tree unremembered
 		Node::Data(dada) => match dada.downcast_ref::<crate::compiler::meta::LineInfo>() {
 			Some(position) => {
-				format!("{position:?}").hash(hasher);
+				(position.line_nr, position.column, &position.file, position.after_number).hash(hasher);
 				true
 			}
 			None => false,
 		},
+	}
+}
+
+/// The common numbers without formatting them: the fingerprint walks every node of each program state
+fn hash_number(number: &crate::extensions::numbers::Number, hasher: &mut DefaultHasher) {
+	use crate::extensions::numbers::Number;
+	std::mem::discriminant(number).hash(hasher);
+	match number {
+		Number::Int(int) => int.hash(hasher),
+		Number::Float(float) => float.to_bits().hash(hasher),
+		other => format!("{other:?}").hash(hasher),
 	}
 }
