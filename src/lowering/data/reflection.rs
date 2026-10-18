@@ -215,7 +215,6 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				_ => word,
 			};
 			let reflected = match (word, function) {
-				(BODY_WORD, Some(function)) => Some(crate::blocks::quoted_code(function.body.as_ref().clone())),
 				// the function value answers its words at run time (closures.rs FUNCTION_WORDS)
 				(word, _) if is_run_time_word(word) && (function.is_some() || library().is_some()) => {
 					Some(key(crate::closures::function_reference(name.to_string()), Op::Dot, symbol(word)))

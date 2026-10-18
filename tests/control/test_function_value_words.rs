@@ -14,3 +14,9 @@ fn a_user_functions_words_come_from_its_value() {
 	is!("sq(x) := x * x\ntype(sq)", "function: (x) -> int");
 	is!("sq(x) := x * x\nh(f: function) := f.signature\nh(sq) == sq.signature", true);
 }
+
+#[test]
+fn a_functions_body_is_code_from_its_value() {
+	is!("sq(x) := x * x\nh(f: function) := f.body\nh(sq) is code", true);
+	is!("f(x) := { y = x + 1; y * 2 }\nf.body is code", true);
+}
