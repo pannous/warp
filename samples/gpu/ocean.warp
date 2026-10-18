@@ -47,12 +47,10 @@ direction_of(elevation, azimuth) := {
 	around = to_radians(azimuth)
 	[sine(around) * cosine(up), sine(up), cosine(around) * cosine(up)]
 }
-# functions, not program lists: a shader reads a program list only item by item yet (card kernel-global-lists)
-sun() := direction_of(sun_elevation, sun_azimuth)
-eye() := [camera_x, camera_height, camera_z]
-sun_light() := [1.0, 0.78, 0.55] .* 9
-zenith_blue() := [0.09, 0.13, 0.22]
-horizon_gold() := [1.0, 0.58, 0.2]
+sun = direction_of(sun_elevation, sun_azimuth)
+sun_light = [1.0, 0.78, 0.55] .* 9
+zenith_blue = [0.09, 0.13, 0.22]
+horizon_gold = [1.0, 0.58, 0.2]
 
 # a number in 0 … 1 per lattice point: sin-hashes stripe in f32 for big arguments, so the point is wrapped first
 hash(p) := fract(sine(dot(p .- 289 .* floor(p ./ 289), [127.1, 311.7])) * 43758.547)
@@ -124,13 +122,13 @@ surface_height(p) := {
 # the sky's color in a direction: the air's gradient, the glow around the sun, the sun itself, then the clouds
 air(direction) := {
 	up = max(direction.y, 0)
-	toward_sun = max(dot(direction, sun()), 0)
-	gradient = mix(horizon_gold(), zenith_blue(), smoothstep(0, 0.5, up) ^ 0.6)
+	toward_sun = max(dot(direction, sun), 0)
+	gradient = mix(horizon_gold, zenith_blue, smoothstep(0, 0.5, up) ^ 0.6)
 	glow = [1.0, 0.55, 0.25] .* (0.4 * toward_sun ^ 8 + 2.0 * toward_sun ^ 120 + 6 * toward_sun ^ 2000) .* (1 - up) ^ 3
 	gradient .+ glow .* haze
 }
 
-sun_disc(direction) := sun_light() .* (40 * smoothstep(0.99996, 0.99999, dot(direction, sun())))
+sun_disc(direction) := sun_light .* (40 * smoothstep(0.99996, 0.99999, dot(direction, sun)))
 
 # one flat cloud layer at altitude metres: coverage cuts the fractal noise, the side facing the sun is lit
 cloud_layer(direction, altitude, scale, stretch, cover, octaves) := {
@@ -138,8 +136,8 @@ cloud_layer(direction, altitude, scale, stretch, cover, octaves) := {
 	spot = direction.xz .* (distance / scale) .* [1, stretch] .+ [time * 0.004, 0.3]
 	density = clouds_noise(spot, octaves)
 	opacity = smoothstep(1 - cover, 1.15 - cover, density) * smoothstep(0.015, 0.09, direction.y)
-	thickness = clouds_noise(spot .+ [0.05 * sun().x, 0.05 * sun().z], octaves)
-	toward_sun = max(dot(direction, sun()), 0)
+	thickness = clouds_noise(spot .+ [0.05 * sun.x, 0.05 * sun.z], octaves)
+	toward_sun = max(dot(direction, sun), 0)
 	lit = clamp(1.2 - 3 * (thickness - density) - 0.8 * density, 0.1, 1.1)
 	color = mix([0.5, 0.36, 0.24], [1.5, 0.95, 0.4], lit) .+ [1.0, 0.7, 0.4] .* (2.5 * toward_sun ^ 12)
 	[color.x, color.y, color.z, opacity]
@@ -179,7 +177,7 @@ water_normal(p, distance) := {
 
 # the sea where the ray hit it: the sky mirrored by Fresnel, the sun's glitter, the turbid water below, whitecaps
 water(ray, distance) := {
-	p = eye() .+ ray .* distance
+	p = [camera_x, camera_height, camera_z] .+ ray .* distance
 	n = water_normal(p, distance)
 	view = ray .* -1
 	# Fresnel of a partly smoothed normal: at grazing angles the finer facets the eye sees stay mirror-like
@@ -189,18 +187,18 @@ water(ray, distance) := {
 	lifted = normalize([mirrored.x, abs(mirrored.y) * 0.4 + max(mirrored.y, 0) * 0.6, mirrored.z])
 	reflection = sky(lifted)
 	# glitter: a Gaussian distribution of facet slopes, rougher far away where many waves share a pixel
-	halfway = normalize(sun() .+ view)
+	halfway = normalize(sun .+ view)
 	along = max(dot(n, halfway), 0.001)
 	roughness = 0.09 + distance * 0.00002
 	tilt = (1 - along * along) / (along * along * roughness * roughness)
-	glitter = sun_light() .* (exponential(-tilt) / (pi * roughness * roughness * along ^ 4) * fresnel * 0.05)
+	glitter = sun_light .* (exponential(-tilt) / (pi * roughness * roughness * along ^ 4) * fresnel * 0.05)
 	# the water body: light scattered up from below, and a green glow where the sun shines through a thin crest
-	sky_light = air([0, 1, 0]) .* 1.6 .+ sun_light() .* (max(sun().y, 0) * 0.8)
+	sky_light = air([0, 1, 0]) .* 1.6 .+ sun_light .* (max(sun.y, 0) * 0.8)
 	body = [0.018, 0.085, 0.072] .* turbidity .* sky_light
 	crest = clamp((p.y + 0.2) / 0.9, 0, 1)
-	toward_sun = max(dot(sun(), view .* -1), 0)
-	thin = clamp(0.5 - 0.5 * dot(sun(), n), 0, 1) ^ 3
-	body = body .+ [0.035, 0.12, 0.085] .* sun_light() .* (0.4 * crest * crest * toward_sun ^ 4 * thin * exponential(-distance / 600))
+	toward_sun = max(dot(sun, view .* -1), 0)
+	thin = clamp(0.5 - 0.5 * dot(sun, n), 0, 1) ^ 3
+	body = body .+ [0.035, 0.12, 0.085] .* sun_light .* (0.4 * crest * crest * toward_sun ^ 4 * thin * exponential(-distance / 600))
 	# whitecaps on the highest crests, broken into patches, gone where they would be smaller than a pixel
 	foam_line = p.y + 0.3 * noise(p.xz .* 0.5) + 0.15 * foam_amount
 	patches = smoothstep(0.4, 0.8, noise(p.xz .* 3) * noise(p.xz .* 0.7 .+ 5))
@@ -209,17 +207,12 @@ water(ray, distance) := {
 	mix(sea, [0.82, 0.87, 0.92] .* sky_light .* 0.5, clamp(foam, 0, 0.95))
 }
 
-# min, max and clamp of a color channel by channel (card min-max: the words don't take vectors yet)
-at_least(color, low) := [max(color.x, low), max(color.y, low), max(color.z, low)]
-within(color, low, high) := [clamp(color.x, low, high), clamp(color.y, low, high), clamp(color.z, low, high)]
-
 # AgX tone mapping (Troy Sobotka's, in Benjamin Wrensch's fit): log encoding, then a sigmoid polynomial
-# (binary_log isn't a shader word yet, card kernel-binary-log)
 agx(color) := {
 	inset = [dot(color, [0.842479, 0.0784336, 0.0792237]), dot(color, [0.042328, 0.878469, 0.0791661]), dot(color, [0.0423756, 0.0784336, 0.879142])]
 	low = -12.47393
 	high = 4.026069
-	x = within((ln(at_least(inset, 0.0000000001)) ./ ln(2) .- low) ./ (high - low), 0, 1)
+	x = clamp((binary_log(max(inset, 0.0000000001)) .- low) ./ (high - low), 0, 1)
 	x2 = x .* x
 	x4 = x2 .* x2
 	15.5 .* x4 .* x2 .- 40.14 .* x4 .* x .+ 31.96 .* x4 .- 6.868 .* x2 .* x .+ 0.4298 .* x2 .+ 0.1191 .* x .- 0.00232
@@ -228,7 +221,7 @@ agx(color) := {
 # back from AgX's space, a touch more saturated and contrasty as web-ocean's look
 agx_display(curve) := {
 	luminance = dot(curve, [0.2126, 0.7152, 0.0722])
-	look = (at_least(curve, 0) .^ 1.06 .- luminance) .* 1.05 .+ luminance
+	look = (max(curve, 0) .^ 1.06 .- luminance) .* 1.05 .+ luminance
 	[dot(look, [1.19687900512017, -0.0980208811401368, -0.0990297440797205]), dot(look, [-0.0528968517574562, 1.15190312990417, -0.0989611768448433]), dot(look, [-0.0529716355144438, -0.0980434501171241, 1.15107367264116])]
 }
 
@@ -238,7 +231,7 @@ film(color, x, y) := {
 	exposed = color .* (exposure * (1 - 0.1 * dot(off_center, off_center))) .* [0.81, 1, 1.19]
 	luminance = dot(exposed, [0.2126, 0.7152, 0.0722])
 	bleached = mix(exposed, [luminance, luminance, luminance], smoothstep(0.7, 6, luminance) * 0.55)
-	within(agx_display(agx(bleached)), 0, 1)
+	clamp(agx_display(agx(bleached)), 0, 1)
 }
 
 # the camera's ray through the pixel at column x, row y
@@ -256,7 +249,7 @@ ocean(x, y) := {
 	ray = ray_through(x, y)
 	color = sky(ray)
 	if ray.y < -0.0005 {
-		distance = hit_distance(eye(), ray)
+		distance = hit_distance([camera_x, camera_height, camera_z], ray)
 		# aerial perspective: the far sea fades into the haze of the horizon
 		hazy = 1 - exponential(-distance * 0.00004 * haze)
 		color = mix(water(ray, distance), air([ray.x, 0.02, ray.z]), hazy)
