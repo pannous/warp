@@ -109,7 +109,7 @@ pub(crate) fn program_words(program: &Node) -> ProgramWords {
 }
 
 /// The arguments a definition head takes, fewest and most: `mix(a, b, c = [])` takes 2 or 3
-fn head_arities(head: &Node) -> (usize, usize) {
+pub(super) fn head_arities(head: &Node) -> (usize, usize) {
 	let parameters = parameters_of(head);
 	let defaulted = parameters.iter().filter(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _)));
 	(parameters.len() - defaulted.count(), parameters.len())

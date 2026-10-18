@@ -23,13 +23,8 @@ pub fn c_calls<'a>(imports: impl Iterator<Item = &'a FfiSignature>) -> String {
 		let pairs = crate::ffi::string_pair_count(import.name);
 		let parameters = (0..import.params.len())
 			.map(|index| match index {
-				index if index < 2 * pairs => {
-					if index % 2 == 0 {
-						't'
-					} else {
-						'l'
-					}
-				}
+				index if index < 2 * pairs && index % 2 == 0 => 't',
+				index if index < 2 * pairs => 'l',
 				index if texts.get(index - pairs).copied().unwrap_or(false) => 't',
 				_ => 'n',
 			})

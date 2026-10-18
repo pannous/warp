@@ -167,8 +167,9 @@ fn cache_directory() -> Option<PathBuf> {
 fn cache_key(engine: &Engine, bytes: &[u8]) -> String {
 	let mut engine_hasher = std::collections::hash_map::DefaultHasher::new();
 	engine.precompile_compatibility_hash().hash(&mut engine_hasher);
-	let digest = Sha256::new().chain_update(engine_hasher.finish().to_le_bytes()).chain_update(bytes).finalize();
-	digest.iter().map(|byte| format!("{byte:02x}")).collect()
+	crate::extensions::hex_text(
+		&Sha256::new().chain_update(engine_hasher.finish().to_le_bytes()).chain_update(bytes).finalize(),
+	)
 }
 
 /// The module at `path`, when there is one wasmtime accepts for `engine`; a hit counts as a use for pruning
