@@ -42,6 +42,8 @@ mod test_foreign_python;
 #[cfg(feature = "native")] // a python3 child process: not in the browser build
 mod test_foreign_type_tests; // card int-bool
 mod test_glibc_math_header;
+#[cfg(feature = "native")] // the C headers and the warp binary: not in the browser build
+mod test_headless_windows;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
 mod test_host_words;

@@ -35,9 +35,14 @@ pub fn shade(value: u64) -> [u8; 3] {
 	}
 }
 
+/// Whether WARP_NO_WINDOW or CI forbids any window: tests, agents and headless machines
+pub fn headless() -> bool {
+	[NO_WINDOW_VARIABLE, CI_VARIABLE].iter().any(|variable| std::env::var_os(variable).is_some())
+}
+
 /// The warp binary's paint calls show windows, unless WARP_NO_WINDOW or CI is set (main.rs)
 pub fn allow_windows() {
-	let headless = [NO_WINDOW_VARIABLE, CI_VARIABLE].iter().any(|variable| std::env::var_os(variable).is_some());
+	let headless = headless();
 	WINDOWS.store(!headless, Ordering::Relaxed);
 	let chosen = std::env::var(DRAW_VARIABLE).ok().filter(|choice| !choice.is_empty());
 	if let Some(unknown) = chosen.as_ref().filter(|choice| !DRAW_CHOICES.contains(&choice.as_str())) {
