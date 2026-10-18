@@ -7,10 +7,11 @@
 #                                                      commit switching self-hosting on (.cargo/config.toml [env]), one
 #                                                      job per TEST_GROUPS entry at once, each on its own branch
 #                                                      SCRATCH_PREFIX/<tip>-<group>, deleted after the run
-#   scripts/self-hosted-suite.sh --stage <name>=<VAR>… [<tip>]   the same with a later stage's switch on too (VAR=1 beside
-#                                                      the front end's), counted apart as run <tip>+<name>; e.g.
-#                                                      --stage analyzer=WARP_SELF_HOSTED_ANALYZER (notes/self_hosting.md
-#                                                      "Back-end focus": front end only, + analyzer, + emitter)
+#   scripts/self-hosted-suite.sh --stage <name>[=<VAR>]… [<tip>]   the same with a later stage's switch on too (VAR=1 beside
+#                                                      the front end's), counted apart as run <tip>+<name>; a bare
+#                                                      name labels a stage WARP_SELF_HOSTED itself runs (emitter.warp
+#                                                      since self-switch 56b8d56d: --stage emitter); notes/self_hosting.md
+#                                                      "Back-end focus": front end only, + analyzer, + emitter
 #   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
@@ -169,11 +170,12 @@ case "${1:-}" in
 	--tests) shift; LISTED=$1; shift; rank "$@" ;;
 	--stage)
 		while [ "${1:-}" = --stage ]; do
-			STAGE=${STAGE:+$STAGE+}${2%%=*} STAGE_SWITCHES+=("${2#*=}")
+			STAGE=${STAGE:+$STAGE+}${2%%=*}
+			[[ "$2" == *=* ]] && STAGE_SWITCHES+=("${2#*=}")   # a bare name: a stage WARP_SELF_HOSTED itself turns on
 			shift 2
 		done
 		cloud_run "$@" ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,16p' "$0"; exit 2 ;;
+	--*) sed -n '2,17p' "$0"; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac
