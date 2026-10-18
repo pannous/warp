@@ -7,8 +7,8 @@ fn function_words_take_their_arguments_by_their_parameters() {
 	is!("def show(a, b) = a + b; show 1, 2", 3);
 	is!("def add(a: int, b: int) = a + b; add 1 2", 3);
 	is!("c = 'c'; print ord c", 99);
-	is!("def twice(x: int) = 2*x; [twice 1, twice 2]", [2, 4]);
-	is!("def square(x: int) = x*x; xs = [1, 2, 3]; map square xs", [1, 4, 9]);
+	is!("def twice(x: int) = 2*x; [twice 1, twice 2]", warp::ints(vec![2, 4]));
+	is!("def square(x: int) = x*x; xs = [1, 2, 3]; map square xs", warp::ints(vec![1, 4, 9]));
 }
 
 #[test]
