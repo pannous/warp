@@ -197,7 +197,7 @@ Each step is useful on its own and is what the next ones stand on.
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
   sheet of rules (lib/markup.warp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
-- CSS as CSS (classes-42, src/lowering/web/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
+- CSS as CSS (classes-42, lib/markup.warp `style(sheet: data)`, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
   lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
   solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. In a style sheet a blank before
