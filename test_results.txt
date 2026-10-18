@@ -1483,6 +1483,8 @@ PASSED:
   ✓ functions::test_fail_effect::raising_and_dividing_by_a_variable_fail
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
+  ✓ functions::test_field_closure_call::a_field_given_a_lambda_parameter_is_called
+  ✓ functions::test_field_closure_call::records_in_a_list_call_their_fields
   ✓ functions::test_field_function_values::test_function_in_nested_object
   ✓ functions::test_field_function_values::test_function_in_object_field
   ✓ functions::test_field_function_values::test_function_list_in_object_field
@@ -6363,4 +6365,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-16 ignored, 6358 passed, 0 failed, 6358 total tested
+16 ignored, 6360 passed, 0 failed, 6360 total tested
