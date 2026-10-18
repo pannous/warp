@@ -129,6 +129,7 @@ impl FfiSignature {
 pub use crate::host::HostState as FfiState;
 
 mod header;
+mod header_cache;
 #[cfg(feature = "native")]
 mod link;
 pub use header::*;
@@ -331,10 +332,13 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 }
 
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
-	// all headers first: their struct types decide how pointers cross (is_struct_type)
-	let header_sigs: Vec<FfiHeaderSignature> =
-		get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library)).collect();
-	header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
+	let headers = get_library_header_paths(library);
+	header_cache::header_signatures(library, &headers, || {
+		// all headers first: their struct types decide how pointers cross (is_struct_type)
+		let header_sigs: Vec<FfiHeaderSignature> =
+			headers.iter().flat_map(|path| parse_header_file(path, library)).collect();
+		header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
+	})
 }
 
 /// The signatures warp links by hand, once per process: the libc functions it adapts (strcmp of two texts), libm's f64

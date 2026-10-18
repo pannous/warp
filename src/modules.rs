@@ -14,6 +14,8 @@ use loader::*;
 mod std_modules;
 pub use std_modules::*;
 mod std_words_cache;
+#[cfg(feature = "native")]
+pub(crate) use std_words_cache::binary_stamp;
 use std_words_cache::*;
 mod lowered_modules;
 use lowered_modules::*;

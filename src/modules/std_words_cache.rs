@@ -86,7 +86,7 @@ fn words_key() -> Option<String> {
 
 /// The running warp binary: its path, size and time
 #[cfg(feature = "native")]
-pub(super) fn binary_stamp() -> Option<String> {
+pub(crate) fn binary_stamp() -> Option<String> {
 	let binary = std::env::current_exe().ok()?;
 	let metadata = std::fs::metadata(&binary).ok()?;
 	Some(format!("{}\n{}\n{:?}\n", binary.display(), metadata.len(), metadata.modified().ok()?))
