@@ -586,7 +586,10 @@ impl WarpParser {
 fn function_call(symbol: String, args_node: Node) -> Node {
 	let mut items = vec![Symbol(symbol)];
 	match typed_parameters(args_node) {
-		Node::List(args, _, _) => items.extend(args),
+		// `f(a, b)` takes two arguments, `f(person name: String)` one phrase (Swift's labeled parameter)
+		Node::List(args, _, separator) if args.len() < 2 || !matches!(separator, Separator::Space) => {
+			items.extend(args)
+		}
 		Node::Empty => {}
 		other => items.push(other),
 	}

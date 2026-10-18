@@ -1190,10 +1190,11 @@ TRUE_WORDS = ["true", "yes"]
 FALSE_WORDS = ["false", "no"]
 EMPTY_WORDS = ["null", "nul", "none", "nil", "nill", "nix", "nada", "nothing", "empty", "void"]
 
-// The items of an argument list: none for ø, the list's items, else the one argument
+// The items of an argument list: none for ø, the list's items, else the one argument; words side by side are one
+// phrase, `f(person name: String)` (Swift's labeled parameter)
 def spread(arguments) {
 	if arguments == ø { return [] }
-	if arguments is list and arguments#1 == "list" { return arguments[3 .. arguments.length] }
+	if arguments is list and arguments#1 == "list" and (arguments#3 != " " or arguments.length < 5) { return arguments[3 .. arguments.length] }
 	[arguments]
 }
 

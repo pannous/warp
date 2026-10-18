@@ -656,7 +656,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (name, arguments) = head_items.split_first()?;
 	let _ = name.symbol_name()?;
 	let mut labeled_names = vec![];
-	let parameters = written_parameters(arguments, keyword.is_symbol(SWIFT_FUNCTION_KEYWORD), &mut labeled_names);
+	let parameters = written_parameters(arguments, &mut labeled_names);
 	let body = with_label_names(body, labeled_names);
 	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
 	let op = if parameters.is_empty() { op } else { Op::Define };
@@ -742,15 +742,7 @@ fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
 }
 
 /// The parameters of a keyword's definition as written, their labels collected into `labeled_names`
-fn written_parameters(arguments: &[Node], is_swift: bool, labeled_names: &mut Vec<Node>) -> Vec<Node> {
-	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
-	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
-	let arguments = match arguments {
-		[label, typed] if is_swift && argument_label(label, typed).is_some() => {
-			vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)]
-		}
-		_ => arguments.to_vec(),
-	};
+fn written_parameters(arguments: &[Node], labeled_names: &mut Vec<Node>) -> Vec<Node> {
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Space) if matches!(group.as_slice(), [label, typed] if argument_label(label, typed).is_some()) => vec![argument.clone()],
@@ -981,7 +973,6 @@ fn lower_definition_head(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> 
 /// Swift's label for an argument without a label
 const WILDCARD_LABEL: &str = "_";
 const DART_REQUIRED: &str = "required";
-const SWIFT_FUNCTION_KEYWORD: &str = "func";
 
 /// `real f(real x) { … }`: the definition `f(x:real): real := { … }` (the parser reads the type word, then the call and
 /// its block); `void f() {…}` declares no result type
