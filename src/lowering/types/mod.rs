@@ -10,6 +10,7 @@ pub mod conversions;
 pub mod function_types;
 pub mod inline_unions;
 pub mod named_patterns;
+pub mod node_cases;
 pub mod object_groups;
 pub mod optional_casts;
 pub mod plain_enums;

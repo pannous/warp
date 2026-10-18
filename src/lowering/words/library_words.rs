@@ -196,6 +196,7 @@ const AS_LIST: &str = "as_list";
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
 const LOWERED_TO_PRELUDE: [(&str, &[&str]); 4] =
 	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"]), ("insert", &["inserted"])];
+const MODULE_SOURCE_WORD: &str = "module_source";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand";
@@ -904,6 +905,12 @@ impl Lowering {
 				let call = word_call(&function, argument, vec![]);
 				let Node::List(call_items, call_bracket, call_separator) = &call else { unreachable!("a call") };
 				return Some(self.word_call(call_items, call_bracket, call_separator).unwrap_or(call));
+			}
+		}
+		// `module_source("prelude")`: a standard module's text, written out at compile time, so it is read from anywhere
+		if let (MODULE_SOURCE_WORD, [_, name]) = (head, items) {
+			if let Some(source) = name.text_value().as_deref().and_then(crate::modules::std_module) {
+				return Some(Node::Text(source.to_string()));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time

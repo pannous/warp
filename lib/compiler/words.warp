@@ -60,3 +60,9 @@ call_kinds = {"string": "text", "count": "int", "is_type": "int", "collection_co
 	"linear_dotf": "float", "task_forks": "int", "list_sorted_by": "empty", "set_system_value": "empty",
 	"SetTargetFPS": "int", "CloseWindow": "int", "DrawRectangle": "int", "shared_add": "int", "strlen": "int",
 	"fmin": "float", "atoi": "int", "size": "int", "fetch": "text", "fetch_reply": "empty"}
+
+# the built-in type words (Rust twin: analyzer type_word_kind) and the kind a value declared so is held as
+type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
+	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
+	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
+	bool: "int", boolean: "int", function: "function", closure: "function", real: "empty", exact: "empty"}
