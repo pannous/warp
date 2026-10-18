@@ -164,6 +164,7 @@ mod test_parameter_shapes;
 mod test_parens_getter_warning;
 mod test_partial_application;
 mod test_passed_through_functions;
+mod test_pattern_clauses; // card pattern-clauses
 mod test_phrase_calls;
 mod test_phrase_colon_body;
 mod test_phrase_each; // card phrase-each
