@@ -31,6 +31,18 @@ instance_copy(x, shallow) from warp
 wasi_environment(): text from warp
 kind_mark(x: any): int from warp
 
+// The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
+// results, as the analyzer reads them
+count(xs): int from emitter
+byte_size(x): int from emitter
+type(x): symbol from emitter
+print(values...): nothing from emitter
+puts(t: text): int from emitter
+puti(n: int): int from emitter
+putl(n: int): int from emitter
+putf(x: float): int from emitter
+fetch(url: text, options...): text from emitter
+
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
 alias tuple = list

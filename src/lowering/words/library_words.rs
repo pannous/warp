@@ -64,6 +64,8 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
 /// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
+/// The result type of a builtin that gives no value (`print(values...): nothing from emitter`)
+const NOTHING_RESULT: &str = "nothing";
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
@@ -232,6 +234,19 @@ pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> 
 	}
 }
 
+/// The result of a call of `arguments` values to a builtin the emitter expands, as its line declares it
+/// (`count(xs): int from emitter`; print's `nothing` a Node of no value)
+pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
+	let word = unaliased(word);
+	let line = crate::ffi::emitter_word_lines().iter().find(|line| line.name == word && line.takes(arguments))?;
+	match line.result {
+		NOTHING_RESULT => Some(Kind::Empty),
+		// a type's name (`type(3)` is int), held as no other value is
+		crate::words::SYMBOL_WORD => Some(Kind::Symbol),
+		result => crate::analyzer::type_word_kind(result),
+	}
+}
+
 fn line_result_kind(line: &crate::ffi::ForeignLine) -> Option<Kind> {
 	match line.result {
 		"text" => Some(Kind::Text),
@@ -310,12 +325,17 @@ pub fn canonical_spelling(name: &str) -> &str {
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
-	let aliases = crate::modules::prelude_aliases();
-	let name = aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str());
+	let name = unaliased(name);
 	let runtime = crate::ffi::runtime_word_lines().iter().map(|line| line.name);
 	let expanded = EXPANDED_WORDS.into_iter().map(|(word, _, _)| word);
 	let built_in = runtime.chain(expanded).chain(OTHER_LIBRARY_WORDS).find(|word| *word == name);
 	built_in.or_else(|| crate::modules::prelude_word(name))
+}
+
+/// The word a prelude alias names (`size` → count), else the name itself
+fn unaliased(name: &str) -> &str {
+	let aliases = crate::modules::prelude_aliases();
+	aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str())
 }
 
 pub(crate) fn arity(word: &str) -> usize {
