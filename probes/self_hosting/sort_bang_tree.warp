@@ -1,5 +1,7 @@
 #!/usr/bin/env warp
-// parser.warp's tree of `sort xs!` (card suite-sort-bang: self-hosted "sort needs a function, got not ø"): no `!`
-// suffix yet, a stray `["key" "not" ø ø]` item (notes/self_hosting_dropped.md)
+// parser.warp's trees of the bang suffix (card suite-sort-bang, Rust twin suffixes.rs try_parse_evaluate_bang):
+// `sort xs!` marks xs ["attribute" "mutated" 1 …] (Rust: true), `upper(x)!` assigns back, `x!!` marks with 2, `{1}!` stays the block
 use "lib/compiler/parser.warp"
-print tree("xs = [3 1 2]; sort xs!; xs#1")
+for source in ["xs = [3 1 2]; sort xs!; xs#1", "x.upper!", "upper(x)!", "x!!", "{1}!", "name! email?", "x!+1", "f !x", "a != b"] {
+	print "\(source) → \(tree(source))"
+}

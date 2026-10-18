@@ -27,7 +27,7 @@ pub fn positioned_view(node: &Node) -> Node {
 /// ["data", "#i"] or ["number", "#i"], its handle in
 /// the returned nodes: `node_of_handled_view` puts the node back where a warp stage left the handle
 pub fn handled_plain_view(node: &Node) -> (Node, Vec<Node>) {
-	let viewer = Viewer { handles: Some(std::cell::RefCell::new(vec![])), ..Viewer::default() };
+	let viewer = Viewer { handles: Some(std::cell::RefCell::new(vec![])), marks: true, ..Viewer::default() };
 	// the attribute layers stay: the Rust passes after the warp stage read them (the mark of `x!`, `extends`)
 	let view = without_layers(viewer.view(node), &["literal"]);
 	(view, viewer.handles.map(std::cell::RefCell::into_inner).unwrap_or_default())
@@ -37,6 +37,8 @@ pub fn handled_plain_view(node: &Node) -> (Node, Vec<Node>) {
 struct Viewer {
 	positions: std::cell::Cell<bool>,
 	handles: Option<std::cell::RefCell<Vec<Node>>>,
+	/// the mark of `x!` as an attribute layer: the bridge hands it on, a source's own view has no such annotation
+	marks: bool,
 }
 
 impl Viewer {
@@ -106,11 +108,14 @@ impl Viewer {
 			return tagged("attribute", [Node::text(name), self.view(value), self.view(inner)]);
 		}
 		let mark = match node {
-			Node::Meta { data, .. } => crate::mutation::mark_value(data),
+			Node::Meta { data, .. } if self.marks => crate::mutation::mark_value(data),
 			_ => None,
 		};
 		if let Some(value) = mark {
-			return tagged("attribute", [Node::text(crate::mutation::MUTATED_MARK), self.view(value), self.view(inner)]);
+			return tagged(
+				"attribute",
+				[Node::text(crate::mutation::MUTATED_MARK), self.view(value), self.view(inner)],
+			);
 		}
 		self.view(inner)
 	}
