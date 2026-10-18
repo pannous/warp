@@ -33,6 +33,11 @@ elements_field, list_reverse, node_slice (no list_reverse any more: cells built 
 list_items' own array; ranks copied from it, then from the keys' items), list_text/list_join, swizzled (picks index
 the array, no local per item), list_to_ints, node_map_of. A rebuilt list (reverse, slice, sort) takes the list's kind
 for every cell, not each cell's own; meta entries no longer join, reverse or count (they never should).
+list_items' array is the caller's own: list_join/list_text store each item's joinable form back in pass 1
+(`emit_item_replaced`) and pass 2 writes from it (`emit_items_again`), so the big per-item conversion is emitted once.
+Quicksort budget (tests/wasm/test_executable_size.rs, 62000): main 61961 carried before B1; list_items alone cost +200
+(compressed), the single conversion won ~1100 back. Measure: build both with `warp build --exe` and
+`WARP_RUNTIME_STUB`, then probes/rust_texts/carried.py + fsizes.py (name the copy `x.exe`: carried.py writes x.cwasm).
 Still on cells: map_find and map_index (they must see meta entries: `x.name` falls back to the entry `@name`),
 deep_copy's memo (internal), emit_list_walk (indexing: a copy per `xs#i` would make loops quadratic, it moves with the
 builders), values_equal/unordered entries, list_changes (in-place changes), copy_spine, node_api relisted.
