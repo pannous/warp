@@ -51,6 +51,15 @@ impl FunctionRegistry {
 		call_index
 	}
 
+	/// Register a code function at the index the emitter declared it under: program functions and functions emitted
+	/// after them take indices between the runtime functions
+	pub fn register_at(&mut self, mut func: Function, call_index: u32) {
+		func.call_index = call_index as i32;
+		self.next_code_idx += 1;
+		self.name_to_idx.insert(func.name.clone(), self.functions.len());
+		self.functions.push(func);
+	}
+
 	pub fn get(&self, name: &str) -> Option<&Function> {
 		self.name_to_idx.get(name).map(|&idx| &self.functions[idx])
 	}
