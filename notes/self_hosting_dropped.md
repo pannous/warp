@@ -39,14 +39,10 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 `$a` pattern holes are kept (the pattern roadmap in notes/matching.md is built on them).
 
 ## Parser: deviations
-tests/common/parser_deviations.rs rewrites the Rust tree to the clean shape, one function per entry; when Rust
-changes (card in the last column), its function goes.
-
-| Key | Form | Rust | parser.warp | Card |
-|-----|------|------|-------------|------|
-| definition-head | `f(x, y) { x }` | `((f (x y)) {x})`: the parameters a nested group | `((f x y) {x})`: the head a call | rust-definition-head |
-| bare-return | `return` | the phrase `[return ø]` | the word `return` | rust-bare-return |
-| colon-body | `for 1..3: print it` | the body wrapped as `{;}` | the body bare, as in `for i in xs: x` (`3 times: x` keeps `{;}`: a block runs, `3 times "ab"` repeats) | rust-colon-body |
+None left (2026-10-18): the Rust parser builds the clean shapes parser.warp writes (`x²` is `x ^ 2`, a bare `return` the
+word, `f(x, y) { x }` the head `(f x y)`, a colon body of `for 1..3: x` bare; cards rust-square-cube, rust-bare-return,
+rust-definition-head, rust-colon-body), so the parser differential compares the trees as they are. A new quirk is fixed
+in the Rust parser instead of being listed here.
 
 Fixed in both parsers instead: hex digit separators `0xFF_FF`; a wrong closer `(1 + 2]` and a stray top-level `]`
 are error nodes; `3 times: print it` runs the whole rest of the line.

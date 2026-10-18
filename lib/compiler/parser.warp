@@ -4,7 +4,7 @@ use "lib/compiler/lexer.warp"
 use "lib/compiler/shapes.warp"
 use "lib/compiler/sugar.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool; branch: bool; grouped: bool; resumes: list; breaks: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; bound: list; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; resumes: list; breaks: list }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
@@ -13,7 +13,7 @@ def tree(source) := sugared(written_tree(source))
 // The tree as the source writes it, before the sugar pass (lib/compiler/sugar.warp)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false, branch: false, grouped: false, resumes: found.resumes, breaks: found.breaks}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, bound: program_functions(source), indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, resumes: found.resumes, breaks: found.breaks}
 	items(p, ' ', "")
 }
 
@@ -67,8 +67,8 @@ def items(p, closer, bracket) {
 // Rust twin: conditions.rs ends_with_clause_word
 def follows_clause_word(found) {
 	if found.length == 0 { return false }
-	last = found#(found.length)#1
-	last is list and last.length == 2 and last#1 == "symbol" and CLAUSE_WORDS.contains(last#2)
+	previous = found#(found.length)#1
+	previous is list and previous.length == 2 and previous#1 == "symbol" and CLAUSE_WORDS.contains(previous#2)
 }
 
 CLAUSE_WORDS = ["where", "match", "switch"]
@@ -574,8 +574,8 @@ def word_begins_item(p) {
 	c == '{' or (c == ':' and not (next == ':' or next == '='))
 }
 
-// An assignment's value or an argument that is no name is called with whatever the operand is
-def applies_otherwise(p, min_power) := min_power <= 60 or unnamed_at(p)
+// An assignment's value, a branch or an argument that is no name is called with whatever the operand is
+def applies_otherwise(p, min_power) := min_power <= 60 or min_power == p.branch_power or unnamed_at(p)
 
 def unnamed_at(p) {
 	c = peek(p.code, p.at, p.n)
@@ -826,7 +826,7 @@ def returned(p) {
 	c = peek(p.code, p.at, p.n)
 	value = ø
 	if not (c == '}' or c == ';' or c == '\n' or c == '\r') { value = continued(p, expression(p, 59), 0) }
-	// `return` alone is the word (Rust: [return ø], Deviations bare-return)
+	// `return` alone is the word
 	if value === ø then ["symbol", "return"] else listed("", " ", [["symbol", "return"], value])
 }
 
@@ -899,7 +899,30 @@ def else_branch(p) {
 
 // A branch of an if; `then print x, y` and `else print ord x` are the call print(…) of the expressions after it
 // Rust twin: if_else.rs parse_branch, commands.rs take_braceless_print, print_call_from
+// A `then` or `else` branch is a statement: a braceless call there takes a variable, `then count xs`
+// Rust twin: expressions.rs parse_right_operand (branch_bp)
 def branch(p, min_power) {
+	outer = p.branch_power
+	p.branch_power = min_power
+	value = branch_assignment(p, branch_value(p, min_power), min_power)
+	p.branch_power = outer
+	value
+}
+
+// `if c then s += 5 else s = 0` assigns in the branch, the value stopping at `else`
+// Rust twin: if_else.rs branch_assignment
+def branch_assignment(p, target, min_power) {
+	skip_spaces(p)
+	op = operator_at(p)
+	if op.length == 0 or not BRANCH_ASSIGNING.contains(op#2) { return target }
+	p.at = p.at + op#1.length
+	skip_spaces(p)
+	["key", op#2, target, expression(p, min_power)]
+}
+
+BRANCH_ASSIGNING = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
+
+def branch_value(p, min_power) {
 	at = blank_end(p, p.at + 5)
 	if not (keyword_at(p, "print") and at > p.at + 5 and starts_atom_at(p, at)) { return expression(p, min_power) }
 	p.at = at
@@ -960,7 +983,7 @@ def ranged_loop(p) {
 		body = indented_block(p)
 	}
 	if body == ø { return ø }
-	// a colon body stays bare, as in `for i in xs: x` (Rust wraps it: Deviations colon-body)
+	// a colon body stays bare, as in `for i in xs: x`
 	listed("", " ", [["symbol", "for"], iterable, body])
 }
 
@@ -1205,7 +1228,7 @@ def named(p) {
 	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
-		// the head is the call f(x, y) (Rust nests the parameters: Deviations definition-head)
+		// the head is the call f(x, y)
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))
@@ -1232,11 +1255,18 @@ TRUE_WORDS = ["true", "yes"]
 FALSE_WORDS = ["false", "no"]
 EMPTY_WORDS = ["null", "nul", "none", "nil", "nill", "nix", "nada", "nothing", "empty", "void"]
 
-// The items of an argument list: none for ø, the list's items, else the one argument
+// The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter
+// `greet(person name: String)` stays one argument
+// Rust twin: atoms.rs function_call, is_labeled_parameter
 def spread(arguments) {
 	if arguments == ø { return [] }
-	if arguments is list and arguments#1 == "list" { return arguments[3 .. arguments.length] }
+	if arguments is list and arguments#1 == "list" and not labeled_parameter(arguments) { return arguments[3 .. arguments.length] }
 	[arguments]
+}
+
+// `person name: String`: a label, then the typed parameter
+def labeled_parameter(words) {
+	words.length == 5 and words#3 == " " and is_symbol(words#4) and words#5 is list and words#5#1 == "key" and words#5#2 == ":" and is_symbol(words#5#3)
 }
 
 // The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type

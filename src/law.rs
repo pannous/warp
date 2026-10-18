@@ -22,6 +22,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::wasm_emitter::eval_parsed;
+use crate::words::FOR_WORD;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -112,14 +113,14 @@ fn quantified_variable(node: &Node) -> Option<(String, Kind)> {
 	let [for_word, variable, type_block] = parts.as_slice() else {
 		return None;
 	};
-	if !for_word.is_symbol("for") {
+	if !for_word.is_symbol(FOR_WORD) {
 		return None;
 	}
-	let Node::List(types, Bracket::Curly, _) = type_block.drop_meta() else {
+	// `for x: int`, its colon body bare
+	let Node::Symbol(type_name) = type_block.drop_meta() else {
 		return None;
 	};
-	let [type_name] = types.as_slice() else { return None };
-	Some((variable.name(), kind_of_type_name(&type_name.name())))
+	Some((variable.name(), kind_of_type_name(type_name)))
 }
 
 fn quantified_law(node: &Node) -> Option<LawDeclaration> {
