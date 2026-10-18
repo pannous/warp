@@ -117,11 +117,16 @@ fn joined(kinds: &[Kind]) -> Option<Kind> {
 }
 
 /// The kinds joined, a Node of unknown kind beside known kinds leaving them standing (`added(xs, ys)` given a list and
-/// a map value)
+/// a map value); beside numbers it stands, as a number parameter can't hold it (`rect(x, y, w, shown[band], c)` and
+/// `rect(x, y, w, 2, c)`)
 fn joined_known(kinds: &[Kind]) -> Option<Kind> {
 	let floats = kinds.contains(&Kind::Float);
-	let known: Vec<Kind> =
-		kinds.iter().copied().filter(|kind| *kind != Kind::Empty && !(floats && *kind == Kind::Data)).collect();
+	let numbers = floats || kinds.contains(&Kind::Int);
+	let known: Vec<Kind> = kinds
+		.iter()
+		.copied()
+		.filter(|kind| (*kind != Kind::Empty || numbers) && !(floats && *kind == Kind::Data))
+		.collect();
 	joined(if known.is_empty() { kinds } else { &known })
 }
 
