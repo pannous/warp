@@ -673,7 +673,13 @@ impl<'a> Loader<'a> {
 	}
 
 	fn load_parsed(&mut self, import: Import, path: PathBuf, file: PathBuf, module: Node) -> Result<Vec<Node>, Node> {
-		let module = lowered_source(&path, module, classes_early(import, &file))?;
+		let classes_early = classes_early(import, &file);
+		let module = match is_std_source(&shown_path(&path).to_string_lossy()) {
+			true => lowered_std_definitions(&module, classes_early, || {
+				lowered_source(&path, module.clone(), classes_early)
+			})?,
+			false => lowered_source(&path, module, classes_early)?,
+		};
 		self.join_lowered(import, path, file, module)
 	}
 
@@ -946,21 +952,18 @@ fn reached_prelude_definitions_untimed(program: &[Node]) -> Vec<Node> {
 	};
 	let mut reached = reachable(&Node::List(program.to_vec(), Bracket::None, Separator::Semicolon));
 	// a look ahead: the program's own fresh names and hints are not this lowering's
-	let lowered_aside = |definitions: Vec<Node>| {
+	// each definition lowered alone, so a kept one serves every program reaching it; what the lowerings write in the
+	// compile context is put back after
+	let lowered_aside = |definitions: Vec<Node>| -> Vec<Node> {
 		let fresh_number = crate::compiler::compile_context::read(|context| context.fresh_number);
-		crate::compiler::compile_context::scoped(
+		let effects = crate::compiler::compile_context::LoweredEffects::now();
+		let lowered: Vec<Node> = crate::compiler::compile_context::scoped(
 			|context| &mut context.fresh_number,
 			fresh_number,
-			|| {
-				crate::normalize::without_hints(|| {
-					statements(crate::pipeline::lower_module_source(Node::List(
-						definitions,
-						Bracket::None,
-						Separator::Semicolon,
-					)))
-				})
-			},
-		)
+			|| crate::normalize::without_hints(|| definitions.iter().flat_map(lowered_prelude_definition).collect()),
+		);
+		effects.apply();
+		lowered
 	};
 	loop {
 		let lowered = lowered_aside(reached.clone());

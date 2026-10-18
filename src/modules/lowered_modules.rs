@@ -46,8 +46,37 @@ pub(super) fn lowered_std_module(
 	classes_early: bool,
 	lower: impl FnOnce() -> Result<Node, Node>,
 ) -> Result<Node, Node> {
+	lowered_kept(source.as_bytes(), classes_early, lower)
+}
+
+/// Parsed definitions of a standard module (the prelude's the program reaches) lowered by `lower`, or as kept
+pub(super) fn lowered_std_definitions(
+	definitions: &Node,
+	classes_early: bool,
+	lower: impl FnOnce() -> Result<Node, Node>,
+) -> Result<Node, Node> {
+	match postcard::to_allocvec(definitions) {
+		Ok(identity) => lowered_kept(&identity, classes_early, lower),
+		Err(_) => lower(),
+	}
+}
+
+/// The prelude's definition as its module source passes leave it (prelude reach look-ahead), or as a run before this
+/// one kept it
+pub(super) fn lowered_prelude_definition(definition: &Node) -> Vec<Node> {
+	let module = Node::List(vec![definition.clone()], Bracket::None, Separator::Semicolon);
+	let lowered = lowered_std_definitions(&module, false, || Ok(crate::pipeline::lower_module_source(module.clone())));
+	statements(lowered.unwrap_or_else(|failure| failure))
+}
+
+/// What `lower` makes of the code `identity` stands for (its source, or its parsed form serialized), or as kept
+fn lowered_kept(
+	identity: &[u8],
+	classes_early: bool,
+	lower: impl FnOnce() -> Result<Node, Node>,
+) -> Result<Node, Node> {
 	let inputs = lowering_inputs();
-	let Some(key) = key(source, classes_early, &inputs) else { return lower() };
+	let Some(key) = key(identity, classes_early, &inputs) else { return lower() };
 	if let Some(kept) = kept(&key) {
 		kept.effects.apply();
 		return Ok(kept.module);
@@ -127,18 +156,18 @@ fn keep(key: &str, kept: &Kept) {
 #[cfg(not(feature = "native"))]
 fn keep(_: &str, _: &Kept) {}
 
-/// The binary, the module's source, whether its classes went in front of the program and what its passes read
+/// The binary, the module's code, whether its classes went in front of the program and what its passes read
 #[cfg(feature = "native")]
-fn key(source: &str, classes_early: bool, inputs: &str) -> Option<String> {
+fn key(identity: &[u8], classes_early: bool, inputs: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let mut hasher = Sha256::new();
 	hasher.update(binary_stamp()?);
 	hasher.update(format!("{classes_early}\n{inputs}\n{:?}\n", LoweredEffects::now()));
-	hasher.update(source);
+	hasher.update(identity);
 	Some(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
 #[cfg(not(feature = "native"))]
-fn key(_: &str, _: bool, _: &str) -> Option<String> {
+fn key(_: &[u8], _: bool, _: &str) -> Option<String> {
 	None
 }

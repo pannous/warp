@@ -463,10 +463,13 @@ fn run_passes(node: Node, passes: &[Pass]) -> Node {
 }
 
 /// `run_passes` with each pass's warp twin in its place when self-hosted (WARP_SELF_HOSTED, self_hosted.rs)
-fn run_program_passes(node: Node, passes: &[Pass]) -> Node {
-	passes
-		.iter()
-		.fold(node, |node, pass| crate::compiler::self_hosted::pass(*pass, &node).unwrap_or_else(|| pass(node)))
+fn run_program_passes(node: Node, (phase, passes): (usize, &&[Pass])) -> Node {
+	passes.iter().enumerate().fold(node, |node, (index, pass)| {
+		crate::compiler::phase_times::timed_as(
+			|| format!("program pass {phase}.{index}"),
+			|| crate::compiler::self_hosted::pass(*pass, &node).unwrap_or_else(|| pass(node)),
+		)
+	})
 }
 
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
@@ -502,7 +505,10 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	crate::errors::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = without_located_errors(SOURCE_PHASES.iter().fold(node, |node, phase| run_program_passes(node, phase)))?;
+	let node = crate::compiler::phase_times::timed("program source passes", || {
+		SOURCE_PHASES.iter().enumerate().fold(node, run_program_passes)
+	});
+	let node = without_located_errors(node)?;
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
 	}
@@ -522,7 +528,9 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::numbers::real::answer(&node) {
 		return Err(crate::numbers::units::static_units::with_answer_units(answer));
 	}
-	let node = without_located_errors(run_passes(node, MEANING_PASSES))?;
+	let node = without_located_errors(crate::compiler::phase_times::timed("meaning passes", || {
+		run_passes(node, MEANING_PASSES)
+	}))?;
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
