@@ -54,7 +54,23 @@ fn program_names(program: &Node) -> HashSet<String> {
 	names
 }
 
+/// The program's functions taking data or a function, and the standard ones taking data it does not define
 fn taking_functions(program: &Node) -> Positions {
+	let mut functions = Positions::new();
+	for (_, line) in crate::modules::std_data_functions() {
+		functions.extend(functions_taking(&crate::warp_parser::parse(line)));
+	}
+	// a function of the program's own wins
+	program.visit(&mut |node| {
+		if let Some(head) = function_head(node) {
+			functions.remove(head.name);
+		}
+	});
+	functions.extend(functions_taking(program));
+	functions
+}
+
+fn functions_taking(program: &Node) -> Positions {
 	let mut functions = Positions::new();
 	program.visit(&mut |node| {
 		let Some(head) = function_head(node) else {

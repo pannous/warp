@@ -112,7 +112,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 36 | music_words live loops | 636 | 1 | library (sound; decided) |
 | 37 | go_blocks | 259 | 24 | keep (decided) |
 | 38 | references | 193 | 0 | keep |
-| 40 | style_rules | 220 | 6 | library (markup; decided) |
+| 40 | style_rules | 220 | 6 | library: lib/markup.warp style(sheet: data), done |
 | 41, 42 | lambdas infix iterations, member lambdas | lambdas.rs | 5, 0 | keep, merge |
 | 43, 44, 46 | glued_attributes, select_options, transitions | 43, 81, 242 | 1, 1, 3 | library (markup; decided) |
 | 47 | member_phrases | 31 | 1 | keep |
