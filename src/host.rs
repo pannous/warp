@@ -148,7 +148,7 @@ pub const FILE_NAMING_STD_MODULE: &str = "sound";
 /// and other modules; a built site without tasks moves those one route calls into its route's module (route_split.rs)
 pub const USER_FUNCTIONS_SECTION: &str = "warp.user_functions";
 pub const USER_FUNCTIONS_SEPARATOR: &str = "\n";
-/// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web/web_server.rs), blocks while
+/// serve_routes(port, [[method, path] …]): `serve 8080 { get "/" { … } }` (src/web/web_server.rs), blocks while
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// response_header(name, value): `header "name" "value"` in a route's body, `status 418` the CGI header Status

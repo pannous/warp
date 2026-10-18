@@ -1,6 +1,10 @@
 //! Paths and URLs: where a path literal starts and a URL ends
 use super::*;
 
+/// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
+/// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
+const URL_MARK: &str = "://";
+
 /// A text written as a path without quotes (`~/notes.txt`, `./a.wav`, `/tmp`): a call of a word with a method for the
 /// class Path passes it as a Path (lib/shell.warp, `sort ./names.txt`; traits generics.rs path_arguments)
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

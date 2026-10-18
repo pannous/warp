@@ -1,0 +1,21 @@
+#!/usr/bin/env warp
+// meta(x): what the compiler knows of a module or class (decision reflection-plain)
+use math
+class A { a: int }
+class P extends A { x: int }
+length(p: P) := p.x
+print meta(math).name
+print count(meta(math).words) > 3
+print meta(P)
+f(m) := meta(m).words
+print count(f(math)) == count(meta(math).words)
+print meta(type(P(1, 2))).fields
+// dir and methods of a module, also known only at run time
+print dir(math) == meta(math).words
+g(m) := dir(m)
+print g(math) == dir(math)
+fs = methods(math)
+print fs#1(12, 18)
+print count(math.methods) == count(dir(math))
+use time
+print count(dir(time)) > 0

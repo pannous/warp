@@ -274,7 +274,7 @@ pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
 		crate::words::NUMBER_WORD | crate::analyzer::BOOL_TYPE => None,
 		// a Node of any kind, decided at run time (`removed_value(x, k)`)
 		crate::words::ANY_TYPE => Some(Kind::Empty),
-		result => crate::analyzer::type_word_kind(result),
+		_ => line_result_kind(line).or_else(|| crate::analyzer::type_word_kind(line.result)),
 	}
 }
 

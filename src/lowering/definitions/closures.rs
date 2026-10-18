@@ -1067,9 +1067,15 @@ impl Lifting {
 	/// The variables of the enclosing scopes the body reads, in order of first use
 	fn captured(&self, body: &Node, params: &[String], bound: &HashSet<String>) -> Vec<String> {
 		let globals: HashSet<String> = body.declared_globals();
+		let mut keys = field_names(body);
 		let mut captured: Vec<String> = vec![];
 		body.visit(&mut |node| {
 			if let Node::Symbol(name) = node {
+				// `{name: "x"}`, `user.name`: a field's name, no read of a variable name
+				if let Some(left) = keys.get_mut(name).filter(|left| **left > 0) {
+					*left -= 1;
+					return;
+				}
 				// `t = k * 2` before any read of t binds the lambda's own local, no capture; `global n` shares n
 				if !params.contains(name)
 					&& !globals.contains(name)
@@ -1083,6 +1089,29 @@ impl Lifting {
 		});
 		captured
 	}
+}
+
+/// How often each name names a field: the key of an entry of a braced literal (`{name: "x", inner: {k: no}}`) or the
+/// field read after a dot (`users#id.name`)
+fn field_names(body: &Node) -> HashMap<String, usize> {
+	let mut names: HashMap<String, usize> = HashMap::new();
+	let mut count = |field: &Node| {
+		if let Some(name) = field.symbol_name() {
+			*names.entry(name.to_string()).or_default() += 1;
+		}
+	};
+	body.visit(&mut |node| match node {
+		Node::List(items, Bracket::Curly, _) => {
+			for item in items {
+				if let Node::Key(key, Op::Colon, _) = item.drop_meta() {
+					count(key);
+				}
+			}
+		}
+		Node::Key(_, Op::Dot, field) => count(field),
+		_ => {}
+	});
+	names
 }
 
 /// The names a body assigns, `angle = 0.5`: its local variables, never a function of the same name
