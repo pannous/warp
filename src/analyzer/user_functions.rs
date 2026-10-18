@@ -590,6 +590,15 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 			changed = true;
 			continue;
 		}
+		// passed a list and a number or a Node (`fract(v)` and `fract(item)` of a run-time choice, broadcasting each_any):
+		// a Node, a list wrapped no number into a list of one
+		let list_and_values =
+			kinds.contains(&Kind::List) && kinds.iter().any(|kind| matches!(kind, Kind::Empty | Kind::Float | Kind::Data));
+		if list_and_values && matches!(param.used_as, None | Some(Kind::List | Kind::Int)) && takes_passed_kind(param) {
+			param.used_as = Some(Kind::Empty);
+			changed = true;
+			continue;
+		}
 		let mut kinds: Vec<Kind> =
 			kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
 		// passed a number of run-time kind and a float (`turned(p.xy, p.z * 0.12 + time)` and `turned(q, time)`): a
