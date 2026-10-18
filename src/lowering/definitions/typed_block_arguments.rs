@@ -2,19 +2,23 @@
 //! (decisions.md data-parameter): `shape(code: data) := code.op` called `shape(a + b)` gets `data(a + b)`, and a tag's
 //! block is the argument of a function with one data parameter: `style{ ul > li { color: red } }` is
 //! `style(data({ ul > li { color: red } }))`, so a library takes a DSL block. The parameter itself is `any`, the value a
-//! quoted node (lowering/control/blocks.rs). Typed `function` a `{…}` block is the lambda of it (decision serve-plain,
-//! card block-function-argument): `get "/echo" { it.body }` keeps `it => {it.body}` to call later, `run { n + 1 }`
-//! gets `() => {n + 1}`; a lambda or a function passes as it is. Before the quotes are sealed, so no sugar pass rewrites
-//! inside an argument.
+//! quoted node (lowering/control/blocks.rs). A name the program binds is its value in the tree (decisions.md
+//! data-names): `color: theme` splices theme's value as `$(theme)` (quasi_quote.rs), an unbound word stays a word, and a
+//! part made of values only is evaluated: `"count " + n`.
+//! Typed `function` a `{…}` block is the lambda of it (decision serve-plain, card block-function-argument):
+//! `get "/echo" { it.body }` keeps `it => {it.body}` to call later, `run { n + 1 }` gets `() => {n + 1}`; a lambda or a
+//! function passes as it is. Before the quotes are sealed, so no sugar pass rewrites inside an argument.
 use crate::lowering::blocks::{quote, DATA_WORD};
-use crate::lowering::nodes::{function_head, is_block};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::lowering::nodes::{function_head, is_block, parameter_name};
+use crate::node::{children_rewritten, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::IMPLICIT_PARAMETER;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const ANY_TYPE: &str = "any";
 const FUNCTION_TYPE: &str = "function";
+/// `$(expr)`: the splice quasi_quote.rs builds into the template
+const SPLICE_CALL: &str = "$";
 
 /// What a parameter makes of its argument
 #[derive(Clone, Copy, PartialEq)]
@@ -27,12 +31,25 @@ enum Takes {
 /// A function's parameters, by what they take, of the functions with a data or function parameter
 type Positions = HashMap<String, Vec<Takes>>;
 
+struct Scope<'a> {
+	functions: &'a Positions,
+	/// The names the program binds where an argument stands: its variables, functions and the enclosing parameters
+	bound: HashSet<String>,
+}
+
 pub fn lower(program: Node) -> Node {
 	let functions = taking_functions(&program);
 	if functions.is_empty() {
 		return program;
 	}
-	taken_arguments(program, &functions)
+	let scope = Scope { functions: &functions, bound: program_names(&program) };
+	taken_arguments(program, &scope)
+}
+
+fn program_names(program: &Node) -> HashSet<String> {
+	let mut names: HashSet<String> = program.written_names();
+	program.visit(&mut |node| names.extend(function_head(node).map(|head| head.name.to_string())));
+	names
 }
 
 fn taking_functions(program: &Node) -> Positions {
@@ -64,9 +81,9 @@ pub(crate) fn is_function_type(kind: &Node) -> bool {
 }
 
 /// The argument as the parameter takes it
-fn taken(argument: Node, takes: Takes) -> Node {
+fn taken(argument: Node, takes: Takes, scope: &Scope) -> Node {
 	match takes {
-		Takes::Data => quote(argument),
+		Takes::Data => quote(spliced(argument, &scope.bound)),
 		Takes::Function if is_block(&argument) => block_lambda(argument),
 		_ => argument,
 	}
@@ -81,29 +98,42 @@ fn block_lambda(block: Node) -> Node {
 	Node::Key(Box::new(parameters), Op::Arrow, Box::new(block))
 }
 
-fn taken_arguments(node: Node, functions: &Positions) -> Node {
-	if let Some(head) = function_head(&node) {
-		if functions.contains_key(head.name) {
-			return with_any_parameters(node, functions);
-		}
+/// Each largest part made of bound names and literals only, with a bound name in it, as the splice `$(part)`
+fn spliced(code: Node, bound: &HashSet<String>) -> Node {
+	let values_only = !code.mentions_where(|name| !bound.contains(name));
+	if values_only && code.mentions_where(|name| bound.contains(name)) {
+		return Node::List(vec![symbol(SPLICE_CALL), code], Bracket::Round, Separator::None);
 	}
-	let node = node.map_children(|child| taken_arguments(child, functions));
+	children_rewritten(code, |child| spliced(child, bound))
+}
+
+fn taken_arguments(node: Node, scope: &Scope) -> Node {
+	if let Some(head) = function_head(&node) {
+		let mut bound = scope.bound.clone();
+		bound.extend(head.written_parameters.iter().filter_map(parameter_name));
+		let inner = Scope { functions: scope.functions, bound };
+		if scope.functions.contains_key(head.name) {
+			return with_any_parameters(node, &inner);
+		}
+		return node.map_children(|child| taken_arguments(child, &inner));
+	}
+	let node = node.map_children(|child| taken_arguments(child, scope));
 	match node {
 		Node::List(items, bracket @ Bracket::Round, separator) => {
-			with_taken(items, bracket, separator, functions, |_| true)
+			with_taken(items, bracket, separator, scope, |_| true)
 		}
 		// `get "/echo" { it.body }`: a spaced call's blocks
 		Node::List(items, bracket @ Bracket::None, separator @ Separator::Space) => {
-			with_taken(items, bracket, separator, functions, is_block)
+			with_taken(items, bracket, separator, scope, is_block)
 		}
 		// `style{ … }`, `run{ … }`: the block is the one argument
-		Node::Key(tag, Op::Colon, block)
-			if is_block(&block)
-				&& functions
-					.get(&tag.name())
-					.is_some_and(|positions| positions.len() == 1 && positions[0] != Takes::Value) =>
-		{
-			crate::node::call(&tag.name(), vec![taken(*block, functions[&tag.name()][0])])
+		Node::Key(tag, Op::Colon, block) if is_block(&block) => {
+			match scope.functions.get(&tag.name()).map(Vec::as_slice) {
+				Some(&[takes]) if takes != Takes::Value => {
+					crate::node::call(&tag.name(), vec![taken(*block, takes, scope)])
+				}
+				_ => Node::Key(tag, Op::Colon, block),
+			}
 		}
 		other => other,
 	}
@@ -114,25 +144,25 @@ fn with_taken(
 	items: Vec<Node>,
 	bracket: Bracket,
 	separator: Separator,
-	functions: &Positions,
+	scope: &Scope,
 	changes: fn(&Node) -> bool,
 ) -> Node {
-	let Some(positions) = items.first().and_then(|callee| functions.get(&callee.name())) else {
+	let Some(positions) = items.first().and_then(|callee| scope.functions.get(&callee.name())) else {
 		return Node::List(items, bracket, separator);
 	};
 	let mut items = items.into_iter();
 	let callee = items.next().into_iter();
 	let arguments = items.enumerate().map(|(index, argument)| match positions.get(index) {
-		Some(takes) if changes(&argument) => taken(argument, *takes),
+		Some(takes) if changes(&argument) => taken(argument, *takes, scope),
 		_ => argument,
 	});
 	Node::List(callee.chain(arguments).collect(), bracket, separator)
 }
 
 /// The definition with its data parameters typed any, its body's arguments taken as their parameters take them
-fn with_any_parameters(definition: Node, functions: &Positions) -> Node {
+fn with_any_parameters(definition: Node, scope: &Scope) -> Node {
 	match definition {
-		Node::Meta { .. } => definition.under_meta(|inner| with_any_parameters(inner, functions)),
+		Node::Meta { .. } => definition.under_meta(|inner| with_any_parameters(inner, scope)),
 		Node::Key(head, op, body) => {
 			let head = head.under_meta(|head| match head {
 				Node::List(items, bracket, separator) => {
@@ -140,9 +170,9 @@ fn with_any_parameters(definition: Node, functions: &Positions) -> Node {
 				}
 				other => other,
 			});
-			Node::Key(Box::new(head), op, Box::new(taken_arguments(*body, functions)))
+			Node::Key(Box::new(head), op, Box::new(taken_arguments(*body, scope)))
 		}
-		other => other.map_children(|child| taken_arguments(child, functions)),
+		other => other.map_children(|child| taken_arguments(child, scope)),
 	}
 }
 
