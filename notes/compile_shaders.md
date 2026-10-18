@@ -23,3 +23,17 @@ functions painted as one shader, its WGSL printed), beside the WGSL samples/gpu/
 - A class's operator dispatch (`if x is Note then x.plus(1) else x + 1`) keeps only the built-in operator in kernels.
 - `spectrum(song, time, bands)` of a file name is measured by the host (src/sound/spectrum.rs, Goertzel);
   `sound_seconds(song)`. Browser host: card spectrum-song.
+
+## Porting a WebGPU page: web-ocean (samples/gpu/ocean.warp)
+github.com/Noniv/web-ocean (MIT; clone in scratch/web-ocean) is a multi-pass WebGPU renderer (FFT wave cascades in
+compute passes, sky LUTs, environment cube map, CDLOD mesh, bloom). paint(f) is one fragment shader, so the port
+raymarches a sum of dragged exp(sin − 1) waves under an analytic sky with two noise cloud layers, and ports the
+post chain (white balance, highlight bleach, AgX + look) as is; card gpu-multipass for the real pipeline.
+- Settings and camera are program numbers (globals the shader reads); program *lists* don't reach kernels as vectors
+  yet (card kernel-global-lists): constant colors and the sun direction are zero-parameter functions.
+- shader_of refuses without a reason (card kernel-refusal-reason): bisect with `g(x, y) := part(…)` and
+  `print shader_of(g)`; a paint function must give a 3-list (a 4-list as color is refused too).
+- The painted functions only work on the GPU: their CPU fallback (WARP_GPU=off) fails on vector parameters
+  (card vector-params-cpu); vector math must use the dotted operators, `p - 289 * floor(p / 289)` types p as a number.
+- Original's visual check without a local browser: probes/ocean/screenshot_on_server.sh (agent-browser + SwiftShader on
+  pannous.com) — it runs (906 CDLOD nodes, 60 fps) but SwiftShader gives a white frame; compare with its docs/*.jpg.

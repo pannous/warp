@@ -7,15 +7,17 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{assign, block, call, children_rewritten, is_block, is_call_head, is_kinded_type_word, key};
+use super::nodes::{
+	assign, block, call, children_rewritten, is_block, is_call_head, is_kinded_type_word, is_return, key,
+};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
 use crate::words::IS_WORD;
-use crate::words::LET_WORD;
 use crate::words::{EVENT_ALIASES, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use crate::words::{IMPLICIT_PARAMETER, SELF_WORD, THIS_WORD};
+use crate::words::{LET_WORD, RETURN_WORD};
 use std::collections::HashSet;
 
 use crate::words::{MATCH_WORD, SWITCH_WORDS};
@@ -144,6 +146,35 @@ fn named_reserved(target: &Node, destructures: bool) -> Option<(Node, String)> {
 			items.iter().find_map(|item| named_reserved(item, destructures))
 		}
 		_ => None,
+	}
+}
+
+/// A bare `return` (the parser keeps the word alone: `if t == ø { return }`) is the phrase `return ø` every pass reads;
+/// `return` named on a key's left (`return = 2`, for the soft keyword check) or as a field (`op.return`) stays the word
+pub fn lower_bare_returns(node: Node) -> Node {
+	if !node.mentions_any(&[RETURN_WORD]) {
+		return node;
+	}
+	bare_returns(node)
+}
+
+fn bare_returns(node: Node) -> Node {
+	match node {
+		Node::Symbol(word) if word == RETURN_WORD => {
+			Node::List(vec![symbol(RETURN_WORD), Node::Empty], Bracket::None, Separator::Space)
+		}
+		Node::List(mut items, bracket, separator) if is_return(&items) => {
+			let value = items.pop().expect("a return phrase has its value");
+			items.push(bare_returns(value));
+			Node::List(items, bracket, separator)
+		}
+		Node::Key(left, op, right) if left.is_symbol(RETURN_WORD) => {
+			Node::Key(left, op, Box::new(bare_returns(*right)))
+		}
+		Node::Key(left, Op::Dot, right) if right.is_symbol(RETURN_WORD) => {
+			Node::Key(Box::new(bare_returns(*left)), Op::Dot, right)
+		}
+		other => other.map_children(bare_returns),
 	}
 }
 
@@ -1040,13 +1071,18 @@ fn function_parameters(head: &Node) -> Option<Node> {
 	match parameters {
 		[single] => Some(single.clone()),
 		[] => None,
-		// Go's `func(x int)`, `func(a, b int)`: the names, the types after them dropped
+		// Go's `func(a, b int)` (the parser typed `b int` as b:int): the names, the types dropped
 		several => {
-			let names: Vec<Node> = several.iter().filter_map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
-				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
-				_ => None,
-			}).collect();
+			let names: Vec<Node> = several
+				.iter()
+				.filter_map(|parameter| match parameter.drop_meta() {
+					Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
+					Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+						Some(name.as_ref().clone())
+					}
+					_ => None,
+				})
+				.collect();
 			Some(Node::single_or_list(names, Bracket::Round, Separator::Comma))
 		}
 	}

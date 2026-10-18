@@ -94,6 +94,7 @@ mod test_is_declaration;
 mod test_is_teaches_be;
 mod test_iterable;
 mod test_kept_wiki_forms;
+mod test_kind_marks; // card kind-reflection
 mod test_list_annotations;
 mod test_list_element_types;
 mod test_list_test_of_a_map;

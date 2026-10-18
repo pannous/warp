@@ -16,6 +16,7 @@ mod function_names;
 mod kind_changes;
 pub mod match_exhaustive;
 mod nulls;
+pub mod self_typed_fields;
 pub mod unit_names;
 pub mod unresolved_blocks;
 pub(crate) use calls::*;

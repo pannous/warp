@@ -122,11 +122,7 @@ impl WarpParser {
 					}
 				},
 			};
-			return Some(Node::List(
-				vec![Symbol("for".to_string()), iterable, as_block(body)],
-				Bracket::None,
-				Separator::Space,
-			));
+			return Some(Node::List(vec![Symbol("for".to_string()), iterable, body], Bracket::None, Separator::Space));
 		};
 		// `for pi in xs` binds no name, as `pi = 4` assigns none (P130, card library-word)
 		if let Symbol(name) = variable.drop_meta() {
