@@ -1,8 +1,8 @@
 # Block-scoped handlers: dropped
 
 `on e {h} in {block}` answered `emit e` only while the block ran, also deep in the functions it called; `break v` in
-the handler ended the block with v. Dropped (cleanup cuts): the form
-is an error naming the program-wide `on e {…}` (src/lowering/control/scoped_handlers.rs keeps only that check).
+the handler ended the block with v. Dropped (cleanup cuts); the check that named the program-wide `on e {…}` went
+too (decision rust-cleanup-drops), so the form now reads as any other `{…} in {…}`.
 
 Only `warp_error` (`try … else`, `catch e`) is left of the abort machinery; a call's events always pass on. Its tests
 are cleanup-edge ignores in tests/control (test_scoped_handlers, test_aborting_handlers, test_handler_unwinding,
