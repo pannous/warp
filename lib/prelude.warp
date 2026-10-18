@@ -57,11 +57,11 @@ remove(xs, x) from emitter
 pop(xs) from emitter
 clear(xs) from emitter
 number(x): number from emitter
-string(x): text from emitter
 // the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
 list_become(place, fresh): same as place from emitter
 removed_value(x, k): any from emitter
 list_sorted_by(xs, keys): any from emitter
+string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning

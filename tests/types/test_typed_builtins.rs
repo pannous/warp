@@ -48,6 +48,9 @@ fn a_member_words_number_or_bool_result_is_decided_where_it_is_made() {
 fn a_result_read_off_an_argument_is_spelled_same_as_or_value_of() {
 	is!("field_with.signature", warp::Node::Text("(object, name, value) -> same as object".into()));
 	is!("map_get_or.signature", warp::Node::Text("(m, key, default = ø) -> value of m".into()));
+	is!("list_become.signature", warp::Node::Text("(place, fresh) -> same as place".into()));
+	is!("removed_value.signature", warp::Node::Text("(x, k) -> any".into()));
+	is!("list_sorted_by.signature", warp::Node::Text("(xs, keys) -> any".into()));
 	let program =
 		warp::pipeline::lower("p = {x: 1}; q = p.copy(); m = {a: \"x\"}; f = m.get(\"a\", \"z\")").expect("lowered");
 	let kinds = warp::analyzer::inferred_kinds(&program);
