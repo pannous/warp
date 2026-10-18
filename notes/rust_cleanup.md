@@ -51,8 +51,9 @@ its own because a non-group keeps its position there), `node.symbol_name().and_t
 What a duplicate scan of src/ found: no two functions with identical bodies; the near-twins left are deliberate
 (serve.rs and broadcasting.rs `replaced` compare by serialize vs by node). Functions that recurse into `(x)` themselves
 convert to `match x.ungrouped()` only when no arm reads the parameter again (guards or bodies would see `(x)` instead
-of x); the ~8 left (type_names, law expressions, for_loop, time holds_time, equality, control_flow) need a reading of
-each arm's meta use first. The lowering is otherwise well factored: the remaining line gains are the repair-pass
+of x); rust-ungrouped converted the ten that qualify (-11). The rest read the parameter in another arm (law expressions,
+for_loop counting_range, holds_time, is_linear_list, arrow_lambda, equality, last_statement, list_sharing) or return
+the inner node with its meta (method_call, try_parse_data): converting them changes behaviour, so they stay. The lowering is otherwise well factored: the remaining line gains are the repair-pass
 drops after parser S2/S3 and the word-phrase pass, not helpers.
 Then per file (symbol_name/is_symbol/is_block idioms, shared helpers): rust-closures (lambdas+closures, -124), rust-broadcasting
 (-34), rust-tasks (-29), rust-library-words (-12), rust-welcome (welcome_forms, -8).
