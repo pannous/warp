@@ -34,14 +34,11 @@ impl GcString {
 	pub fn from_val(store: &Store<()>, val: Val) -> Result<Self> {
 		let anyref = anyref_of(&val)?;
 
-		// Try struct first (ptr/len pattern)
-		if let Ok(structref) = anyref.clone().unwrap_struct(store) {
-			return Ok(Self { inner: GcStringInner::PtrLen(structref) });
-		}
-
-		// Try array (i8 array pattern)
-		if let Ok(arrayref) = anyref.unwrap_array(store) {
+		if let Ok(Some(arrayref)) = anyref.as_array(store) {
 			return Ok(Self { inner: GcStringInner::Array(arrayref) });
+		}
+		if let Ok(Some(structref)) = anyref.as_struct(store) {
+			return Ok(Self { inner: GcStringInner::PtrLen(structref) });
 		}
 
 		Err(anyhow!("Value is neither a string struct nor byte array"))
@@ -81,7 +78,7 @@ pub(super) fn memory_text(structref: &Rooted<StructRef>, store: &mut Store<()>, 
 }
 
 /// The text of an `(array i8)` string: its bytes as UTF-8
-fn array_text(array: &Rooted<ArrayRef>, store: &mut Store<()>) -> Result<String> {
+pub(super) fn array_text(array: &Rooted<ArrayRef>, store: &mut Store<()>) -> Result<String> {
 	let len = array.len(&*store)?;
 	let bytes = (0..len).map(|i| Ok(array.get(&mut *store, i)?.unwrap_i32() as u8)).collect::<Result<Vec<u8>>>()?;
 	Ok(String::from_utf8(bytes)?)

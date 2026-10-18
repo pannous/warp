@@ -82,7 +82,7 @@ pub fn json_of<T>(node: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory
 			let code = data.unwrap_anyref().and_then(|reference| reference.unwrap_i31(&*store).ok());
 			Value::String(code.and_then(|code| char::from_u32(code.get_u32())).unwrap_or('\0').to_string())
 		}
-		TEXT | SYMBOL | ERROR => Value::String(text_of(&data, store, memory)?),
+		TEXT | SYMBOL | ERROR => Value::String(text_of(&data, value, store, memory)?),
 		KEY => Value::Object(Map::from_iter([entry_of(&data, &value, store, memory)?])),
 		BLOCK => object_of(items_of(data, value, store)?, store, memory)?,
 		LIST if high_bits == CURLY => object_of(items_of(data, value, store)?, store, memory)?,
@@ -186,10 +186,25 @@ fn integer_of<T>(payload: &Val, store: &mut StoreContextMut<'_, T>) -> Result<f6
 	})
 }
 
-/// The letters of a `$String(ptr, len)` in linear memory
-fn text_of<T>(string: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory) -> Result<String> {
+/// The text of a Text node from its data, after the texts before it when it is a rope (text_append: data the last
+/// piece, the value field the text before it)
+fn text_of<T>(data: &Val, before: Val, store: &mut StoreContextMut<'_, T>, memory: Memory) -> Result<String> {
+	let mut pieces = vec![bytes_of(data, store, memory)?];
+	let mut before = before;
+	while let Some((_, data, earlier)) = fields(&before, store) {
+		pieces.push(bytes_of(&data, store, memory)?);
+		before = earlier;
+	}
+	Ok(String::from_utf8_lossy(&pieces.into_iter().rev().flatten().collect::<Vec<u8>>()).into_owned())
+}
+
+/// The bytes of a text: a GC byte array `$Text`, or a `$String(ptr, len)` in linear memory
+fn bytes_of<T>(string: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory) -> Result<Vec<u8>> {
+	if let Some(Ok(array)) = string.unwrap_anyref().map(|reference| reference.unwrap_array(&*store)) {
+		return Ok(array.elems(&mut *store)?.map(|byte| byte.unwrap_i32() as u8).collect());
+	}
 	let Some(string) = as_struct(string, store) else {
-		return Ok(String::new());
+		return Ok(vec![]);
 	};
 	let pointer = string.field(&mut *store, 0)?.unwrap_i32() as u32 as usize;
 	let length = string.field(&mut *store, 1)?.unwrap_i32() as u32 as usize;
@@ -197,7 +212,7 @@ fn text_of<T>(string: &Val, store: &mut StoreContextMut<'_, T>, memory: Memory) 
 		.data(&*store)
 		.get(pointer..pointer + length)
 		.ok_or_else(|| wasmtime::Error::msg("a text beyond memory"))?;
-	Ok(String::from_utf8_lossy(bytes).into_owned())
+	Ok(bytes.to_vec())
 }
 
 /// The constructors, memory and text heap of the program: what JSON is built into a node with

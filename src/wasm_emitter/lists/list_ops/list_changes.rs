@@ -389,7 +389,6 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let string_type = self.type_manager.string_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
 		// list_with_at(list, index, value node): the cell at index takes the value in place, so every holder of the list sees
@@ -442,13 +441,18 @@ impl WasmGcEmitter {
 		// text_with_char_at(text, index, value): a fresh copy with the grapheme at index replaced by the UTF-8 of value
 		let text_with_char_at = next_index(self);
 		let params = vec![node_ref, ValType::I64, ValType::I64];
-		self.runtime_function("text_with_char_at", params.clone(), vec![node_ref], vec![ValType::I32; 8], |s, f| {
-			let (start, stop, pointer, end, width, length, copy, codepoint) = (3, 4, 5, 6, 7, 8, 9, 10);
+		let text = self.text_ref();
+		let text_type = self.type_manager.text_type;
+		let mut locals = vec![ValType::I32; 8];
+		locals[6] = text;
+		locals.push(text);
+		self.runtime_function("text_with_char_at", params.clone(), vec![node_ref], locals, |s, f| {
+			let (start, stop, pointer, end, width, length, copy, codepoint, bytes) = (3, 4, 5, 6, 7, 8, 9, 10, 11);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "text_grapheme_offset");
 			f.instruction(&I::LocalSet(start));
-			s.emit_text_bounds(f, pointer, end);
-			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+			s.emit_text_bounds(f, (bytes, pointer, end));
+			Self::emit_list(f, &[I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(end)]);
 			s.call(f, "grapheme_end");
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -457,57 +461,23 @@ impl WasmGcEmitter {
 			]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_utf8_width(f, codepoint);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(width),
-					// length = bytes - replaced grapheme + width
-					I::LocalGet(end),
-					I::LocalGet(pointer),
-					I::I32Sub,
-					I::LocalGet(stop),
-					I::LocalGet(start),
-					I::I32Sub,
-					I::I32Sub,
-					I::LocalGet(width),
-					I::I32Add,
-					I::LocalSet(length),
-				],
-			);
-			s.emit_text_allocation(f, length, copy);
-			let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-			Self::emit_list(
-				f,
-				&[
-					// bytes before the grapheme
-					I::LocalGet(copy),
-					I::LocalGet(pointer),
-					I::LocalGet(start),
-					I::LocalGet(pointer),
-					I::I32Sub,
-					copy_bytes.clone(),
-					// start becomes the destination of the new character, the rest follows it
-					I::LocalGet(copy),
-					I::LocalGet(start),
-					I::I32Add,
-					I::LocalGet(pointer),
-					I::I32Sub,
-					I::LocalTee(start),
-					I::LocalGet(width),
-					I::I32Add,
-					I::LocalGet(stop),
-					I::LocalGet(end),
-					I::LocalGet(stop),
-					I::I32Sub,
-					copy_bytes,
-				],
-			);
-			Self::emit_utf8_store(f, start, codepoint, width, stop);
+			let copy_bytes = I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type };
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(width),
+				// length = bytes - replaced grapheme + width
+				I::LocalGet(end), I::LocalGet(stop), I::LocalGet(start), I::I32Sub, I::I32Sub, I::LocalGet(width),
+				I::I32Add, I::LocalTee(length), I::ArrayNewDefault(text_type), I::LocalSet(copy),
+				// bytes before the grapheme, then the rest after the new character
+				I::LocalGet(copy), I32Const(0), I::LocalGet(bytes), I32Const(0), I::LocalGet(start), copy_bytes.clone(),
+				I::LocalGet(copy), I::LocalGet(start), I::LocalGet(width), I::I32Add, I::LocalGet(bytes),
+				I::LocalGet(stop), I::LocalGet(end), I::LocalGet(stop), I::I32Sub, copy_bytes,
+			]);
+			s.emit_utf8_store(f, (copy, start), codepoint, width, stop);
 			s.emit_field(f, 0, 0);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(copy), I::LocalGet(length), I::StructNew(string_type),
-				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+				I::LocalGet(copy), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
 			]);
 		});
 

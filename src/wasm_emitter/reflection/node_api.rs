@@ -8,10 +8,9 @@
 use crate::node::Node;
 use crate::operators::OP_CODES;
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
-use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::runtime_dependencies::{any, Dependency};
 use crate::wasm_emitter::text::text_builtins::{ERROR_OF, TEXT_CONCAT, TEXT_OF};
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::wasm_emitter::{WasmGcEmitter, NEW_TEXT_OF};
 use crate::words::SYMBOL_WORD;
 use wasm_encoder::*;
 use Instruction as I;
@@ -98,10 +97,10 @@ pub fn is_pair_part(part: i32) -> bool {
 /// Runtime functions the node words call
 pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 	vec![
-		any(&[NODE_PART], &["new_text", "new_empty"]),
+		any(&[NODE_PART], &[NEW_TEXT_OF, "new_empty"]),
 		any(
 			&[NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED],
-			&[OPERATOR_CODE, BRACKET_CODE, SEPARATOR_CODE, TEXT_OF, TEXT_CONCAT, ERROR_OF, "new_key", "new_text"],
+			&[OPERATOR_CODE, BRACKET_CODE, SEPARATOR_CODE, TEXT_OF, TEXT_CONCAT, ERROR_OF, "new_key", NEW_TEXT_OF],
 		),
 	]
 }
@@ -273,9 +272,8 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &is_kind(kind, Kind::Symbol));
 					Self::emit_list(f, &is_kind(kind, Kind::Text));
 					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
-					s.emit_text_field(f, node, 0);
-					s.emit_text_field(f, node, 1);
-					s.call(f, "new_text");
+					s.emit_text_bytes(f, node);
+					s.call(f, NEW_TEXT_OF);
 					Self::emit_list(f, &[I::Return, I::End, I::End, I::RefNull(HeapType::Concrete(node_type))]);
 				},
 			);
@@ -438,13 +436,9 @@ impl WasmGcEmitter {
 		Self::emit_list(func, kind);
 		Self::emit_list(func, &[I::I32And, I::If(BlockType::Empty)]);
 		for (entry, text) in written {
-			let (pointer, length) = self.allocate_string(text);
-			#[rustfmt::skip]
-			Self::emit_list(func, &[
-				I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty),
-					I::I32Const(pointer as i32), I::I32Const(length as i32),
-			]);
-			self.call(func, "new_text");
+			Self::emit_list(func, &[I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty)]);
+			let literal = self.string_table.literal(text);
+			self.emit_constant_text(func, literal);
 			Self::emit_list(func, &[I::Return, I::End]);
 		}
 		func.instruction(&I::End);
@@ -454,12 +448,11 @@ impl WasmGcEmitter {
 	fn emit_code_of_text(&mut self, name: &'static str, written: &[(i64, &str)]) {
 		let node_ref = Ref(self.node_ref(false));
 		let written: Vec<(i64, String)> = written.iter().map(|(code, text)| (*code, text.to_string())).collect();
-		self.runtime_function(name, vec![node_ref], vec![ValType::I64], vec![ValType::I32, ValType::I32], |s, f| {
-			let (pointer, length) = (1, 2);
-			s.emit_text_field(f, 0, 0);
-			f.instruction(&I::LocalSet(pointer));
-			s.emit_text_field(f, 0, 1);
-			f.instruction(&I::LocalSet(length));
+		let (text, text_type) = (self.text_ref_nullable(), self.type_manager.text_type);
+		self.runtime_function(name, vec![node_ref], vec![ValType::I64], vec![text, ValType::I32], |s, f| {
+			let (bytes, length) = (1, 2);
+			s.emit_text_bytes(f, 0);
+			Self::emit_list(f, &[I::LocalTee(bytes), I::ArrayLen, I::LocalSet(length)]);
 			for (code, text) in &written {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -469,7 +462,7 @@ impl WasmGcEmitter {
 				for (offset, byte) in text.bytes().enumerate() {
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
-						I::LocalGet(pointer), I::I32Load8U(MemArg { offset: offset as u64, ..BYTE }),
+						I::LocalGet(bytes), I::I32Const(offset as i32), I::ArrayGetU(text_type),
 						I::I32Const(byte as i32), I::I32Eq, I::I32And,
 					]);
 				}
@@ -486,9 +479,8 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalTee(text));
 		self.call(func, coder);
 		Self::emit_list(func, &[I::LocalTee(code), I::I64Const(-1), I::I64Eq, I::If(BlockType::Empty)]);
-		let (pointer, length) = self.allocate_string(prefix);
-		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-		self.call(func, "new_text");
+		let literal = self.string_table.literal(prefix);
+		self.emit_constant_text(func, literal);
 		func.instruction(&I::LocalGet(text));
 		self.call(func, TEXT_CONCAT);
 		self.call(func, super::super::text::text_builtins::ERROR_OF);
