@@ -26,11 +26,11 @@ pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 		.or_else(|| prelude_signature(word))
 		.or_else(|| libm_signature(word))
 		.or_else(|| text_builtin_signature(word))
+		.or_else(|| emitter_signature(word))
 		.or_else(|| {
 			crate::library_words::is_library_word(word)
 				.then(|| positional(crate::library_words::arity(word), None, Kind::Empty))
-		})
-		.or_else(|| emitter_signature(word))?;
+		})?;
 	Some((parameter_names(&signature), signature))
 }
 

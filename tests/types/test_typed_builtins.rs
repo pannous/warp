@@ -62,3 +62,10 @@ fn count_declares_a_list_a_text_and_a_map_overload() {
 	is!("count.signature", warp::Node::Text("(xs:list) -> int".into()));
 	is!("count(\"ab\") + count({a: 1})", 3);
 }
+
+#[test]
+fn a_typed_builtin_called_without_parentheses_is_the_call() {
+	is!("sum.signature", warp::Node::Text("(xs:list) -> element of xs".into()));
+	is!("xs = [1 2 3]; sum xs", 6);
+	is!("xs = [1.5 2]; sum xs", 3.5);
+}

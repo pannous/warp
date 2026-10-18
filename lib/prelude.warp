@@ -36,6 +36,7 @@ kind_mark(x: any): int from warp
 count(xs: list): int from emitter
 count(t: text): int from emitter
 count(m: map): int from emitter
+sum(xs: list): element of xs from emitter
 byte_size(x): int from emitter
 type(x): symbol from emitter
 print(values...): nothing from emitter
