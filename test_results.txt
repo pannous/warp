@@ -3811,6 +3811,10 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
+  ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
@@ -6450,7 +6454,6 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6446 passed, 2 failed, 6448 total tested
+16 ignored, 6450 passed, 1 failed, 6451 total tested
