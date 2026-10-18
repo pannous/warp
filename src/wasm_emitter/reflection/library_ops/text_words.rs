@@ -584,20 +584,16 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(is_first), I::I32Eqz, I::If(BlockType::Empty)]);
 			append_text(f, 1);
 			Self::emit_list(f, &[I::End, I32Const(0), I::LocalSet(is_first)]);
+			// the bytes of a text, or of an Int's digits
 			is_kind(f, Kind::Text);
-			f.instruction(&I::If(BlockType::Empty));
-			append_text(f, element);
+			f.instruction(&I::If(BlockType::Result(s.text_ref())));
+			s.emit_text_bytes(f, element);
 			Self::emit_list(f, &[I::Else, I::LocalGet(address), I::LocalGet(address)]);
 			s.emit_int_value_of(f, element);
-			Self::emit_list(
-				f,
-				&[
-					I::Call(s.func_index("int_to_decimal")),
-					I::Call(s.func_index(crate::wasm_emitter::TEXT_FROM_MEMORY)),
-				],
-			);
-			append_bytes(f);
+			s.call(f, "int_to_decimal");
+			s.call(f, crate::wasm_emitter::TEXT_FROM_MEMORY);
 			f.instruction(&I::End);
+			append_bytes(f);
 			end_loop(f);
 			Self::emit_list(f, &[I32Const(0), I::LocalSet(is_first)]);
 			s.emit_text_piece(f, (joined, is_first, position));
