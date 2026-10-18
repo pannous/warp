@@ -174,7 +174,7 @@ def through_effects(samples) {
 	clamped_samples(reverbed(delayed(distorted([x - sample_offset for x in samples]))))
 }
 // amplitudes as samples kept inside the 16 bits
-clamped_samples(amplitudes: list) := [sample_offset + (max(-loudest_sample, min(loudest_sample, round(a))) as int) for a in amplitudes]
+clamped_samples(amplitudes) := [sample_offset + (max(-loudest_sample, min(loudest_sample, round(a))) as int) for a in amplitudes]
 
 // the signal graph as a pipe (card sound-pipe-graph): a signal is the list of its amplitudes, a node a function of it,
 // so osc(C4, 1s) |> lowpass(800) |> delay(0.25) |> reverb(0.3) |> out plays it; mix(a, b) sums signals as a bus does
