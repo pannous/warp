@@ -40,7 +40,8 @@ DROPPED_SESSIONS=/Users/me/dev/angles/warp/data/cloud/dropped-sessions.txt   # t
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
-TEST_TIME_LIMIT_SECONDS=2400  # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
+MIN_FREE_GB=15                 # less free disk before a build: the warm VM's build output is pruned (a build ran out of disk)
+TEST_TIME_LIMIT_SECONDS=2400   # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
 STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
 WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
@@ -62,6 +63,20 @@ abort() {
 	gzip -kf "$HERE_WORK/log.txt"
 	cd "$CLOUD_REPO" && push_result "$name"
 	exit 1
+}
+
+free_gb() { df -Pk . | awk 'NR == 2 { print int($4 / 1048576) }'; }
+
+# A warm VM's target/ grows with every job's branch, features and profile until a build runs out of disk: below
+# MIN_FREE_GB the incremental caches go, then if need be all of target/ (a cold build). Prints what it found and did
+make_room() {
+	local free
+	free=$(free_gb)
+	[ "$free" -ge $MIN_FREE_GB ] && { echo "$free of $(df -Pk . | awk 'NR == 2 { print int($2 / 1048576) }') GB free"; return; }
+	rm -rf target/*/incremental target/*/*/incremental
+	[ "$(free_gb)" -ge $MIN_FREE_GB ] && { echo "$free GB free, $(free_gb) GB after dropping the incremental caches"; return; }
+	rm -rf target
+	echo "$free GB free, $(free_gb) GB after dropping target/"
 }
 
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
@@ -117,9 +132,16 @@ run_tests_here() {
 		done
 	fi
 	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never
-	local build_start=$SECONDS
+	local build_start=$SECONDS disk
+	disk=$(make_room)
 	cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
 	local build_status=$?
+	if [ $build_status -ne 0 ] && grep -q 'No space left on device' "$HERE_WORK/log.txt"; then
+		rm -rf target
+		disk="$disk; out of space during the build: target/ dropped, built again with $(free_gb) GB free"
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
+		build_status=$?
+	fi
 	build_seconds=$((SECONDS - build_start))
 	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
 	# `cargo build --offline` found no miniz_oxide in the VM's registry cache (card cloud-stub-offline); the page stub is
@@ -147,6 +169,7 @@ run_tests_here() {
 		echo "wall: build ${build_seconds} s, tests ${test_seconds} s, total $((SECONDS - started)) s"
 		echo "machine: $(nproc 2>/dev/null) cores, $(free -g 2>/dev/null | awk '/^Mem:/ { print $2 " GB" }'), $(rustc --version)"
 		echo "warm VM: $warm (the checkout and build output of an earlier job)"
+		echo "disk: $disk"
 		echo "crates: $([ -n "$lock_matches" ] && echo "vendor branch (offline)" || echo "crates.io (vendor branch's Cargo.lock differs)")"
 		echo "finished: $(date -u +%FT%TZ)"
 	} > "$HERE_WORK/result.md"
