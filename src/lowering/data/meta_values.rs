@@ -57,7 +57,7 @@ impl Known {
 	fn of(program: &Node, words: Vec<&'static str>) -> Known {
 		let defined = crate::library_words::defined_names(program);
 		let modules = crate::modules::std_module_names()
-			.filter(|module| *module != crate::modules::PRELUDE_MODULE && !defined.contains(*module))
+			.filter(|module| !defined.contains(*module))
 			.filter(|module| program.mentions(module))
 			.collect();
 		Known { layouts: crate::class_methods::class_layouts(program), modules, words }
