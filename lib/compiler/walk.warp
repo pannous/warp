@@ -16,7 +16,7 @@ is_group(n: any) := bracket_of(n) != ø
 attribute_word = "view·attribute"
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
-# (decision empty-group-node); Rust twin: tests/common/twins.rs plain
+# (decision empty-group-node), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
 plain(view: any) := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
@@ -27,6 +27,7 @@ bridged(view: any) := without_layers(view, yes)
 without_layers(view: any, attributes: any) := {
 	kind = kind_of(view)
 	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
+	if kind == "type" or kind == "error" { return view }
 	if kind == "list" and #view == 3 { return ø }
 	if view is list { return view.map(part => without_layers(part, attributes)) }
 	view
