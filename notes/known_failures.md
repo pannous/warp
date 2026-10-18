@@ -10,3 +10,4 @@ Format: `- <module::path::test_name> | <card> | <reason>`
 
 - wasm::test_gc_struct::test_raw_person_struct | rust-emitter | the test reads a raw struct's text field as `$String(ptr, len)`; texts are `$Text` GC byte arrays now (test edit implied by the layout: read the array)
 - wasm::test_gc_struct::test_class_instance_raw | rust-emitter | same: reads the raw text field as `$String(ptr, len)`, now a `$Text` byte array
+- wasm::test_executable_size::test_quicksort_executable_is_tree_shaken | rust-emitter | 62048 bytes carried, 48 over the 62000 budget: the stage-A bridges between memory and `$Text` (text_from_memory, text_address, text_literal) stay until the builders write `$Text` themselves (stage B drops them and the text heap)
