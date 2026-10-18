@@ -1,0 +1,5 @@
+# emitter core: a use statement brings in a module the Rust pipeline already resolved, so it has no code
+# 13
+use math
+area(side: int) := side * side
+area(3) + 4

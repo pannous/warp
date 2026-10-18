@@ -148,6 +148,10 @@ definition(n: any) := {
 	ø
 }
 
+# `use math`, `import f from lib`: the Rust pipeline brought the module in already, so the statement has no code
+import_words = ["use", "require", "import", "include"]
+is_import(n: any) := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in import_words
+
 statements_of(n: any) := {
 	if is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
 	[n]
@@ -158,7 +162,7 @@ collect_functions(program: any, functions: any) := {
 	kept = []
 	for n in statements_of(program) {
 		head = definition(n)
-		if head == ø { kept += [n] } else {
+		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
 			parameters = head[1..].map(parameter_symbol)
 			annotations = head[1..].map(annotation_of)
 			functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
@@ -478,7 +482,6 @@ assignment(body: Body, target: any, value: any) := {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	kind = value#1
-	if kind == "bool" { return refuse("a yes/no variable") }
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
