@@ -4,7 +4,7 @@ use super::*;
 pub(crate) const CAPTURED_FIELD: usize = 1;
 
 /// The exported constructors a value is rebuilt with in an instance
-pub(crate) const CONSTRUCTORS: [&str; 11] = [
+pub(crate) const CONSTRUCTORS: [&str; 12] = [
 	"new_empty",
 	"new_int",
 	crate::wasm_emitter::NEW_BOOL,
@@ -14,6 +14,7 @@ pub(crate) const CONSTRUCTORS: [&str; 11] = [
 	"new_symbol",
 	"new_key",
 	"new_list",
+	crate::wasm_emitter::NEW_TYPE,
 	crate::wasm_emitter::CLOSURE_REBUILD,
 	NODE_AT,
 ];
@@ -38,6 +39,8 @@ pub enum TaskValue {
 	List(Vec<TaskValue>, i64),
 	/// left, the operator's code, right
 	Key(Box<TaskValue>, i64, Box<TaskValue>),
+	/// a type declaration of parsed code, `class P {x: int}`: its name and body
+	Type(Box<TaskValue>, Box<TaskValue>),
 	/// a function value: its target's name and its captured values, rebuilt by the module's closure_rebuild
 	Closure(String, Box<TaskValue>),
 	/// an exact number beyond the fixnums: numerator and denominator (1 for an integer)
@@ -74,6 +77,9 @@ impl TaskValue {
 				crate::operators::op_to_code(op),
 				Box::new(TaskValue::of(right)?),
 			),
+			Node::Type { name, body } => {
+				TaskValue::Type(Box::new(TaskValue::of(name)?), Box::new(TaskValue::of(body)?))
+			}
 			other => return Err(anyhow!("{} cannot cross to another task yet", other.serialize())),
 		})
 	}
@@ -193,6 +199,10 @@ impl Builders {
 				let (left, right) = (self.build(left, store)?, self.build(right, store)?);
 				self.call("new_key", &[left, right, Val::I64(*op)], store)
 			}
+			TaskValue::Type(name, body) => {
+				let (name, body) = (self.build(name, store)?, self.build(body, store)?);
+				self.call(crate::wasm_emitter::NEW_TYPE, &[name, body], store)
+			}
 			// ø, as the emitter makes `[]`: a null would not pass for a Node (a wrapper's empty argument list)
 			TaskValue::List(items, _) if items.is_empty() => self.call("new_empty", &[], store),
 			TaskValue::List(items, bracket) => items.iter().rev().try_fold(Val::AnyRef(None), |rest, item| {
@@ -243,15 +253,11 @@ impl Builders {
 				Ok(TaskValue::Closure(name, Box::new(captured)))
 			}
 			Some(crate::type_kinds::Kind::List) => {
-				let (mut items, mut cell) = (vec![], Some(node));
-				while let Some(current) = cell {
-					let first = current.field(&mut *store, DATA_FIELD)?;
-					if first.unwrap_anyref().is_some() {
-						items.push(self.read_value(&first, store)?);
-					}
-					let rest = current.field(&mut *store, VALUE_FIELD)?;
-					cell = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok());
-				}
+				let (first, rest) = (node.field(&mut *store, DATA_FIELD)?, node.field(&mut *store, VALUE_FIELD)?);
+				let items = warp_runtime::gc_values::items_of(first, rest, store)?
+					.iter()
+					.map(|item| self.read_value(item, store))
+					.collect::<Result<Vec<_>>>()?;
 				Ok(TaskValue::List(items, ((kind >> 8) & 0xFF) | ((kind & crate::type_kinds::SEPARATOR_MASK) >> 8)))
 			}
 			_ => self.read(value, store),

@@ -1,6 +1,4 @@
-# Page ids as names: `who`, `$who`, `element(x)` (card page-ids)
-
-User decision page-ids (2026-10-15, notes/decisions.md; replaces dollar-element of card browser-interaction):
+# Page ids as names: `who`, `$who`, `element(x)` (decision page-ids)
 
 ```warp
 greeting = "Type a name"
@@ -25,22 +23,22 @@ every element `tag{…}`.
 - Clash: an id that is a variable or function of the program is always a compile-time error naming both; for a
   variable of a field (`input{ id: "name" }` + `name = $name`, the common case) it names `input{ bind: name }`. A
   library word (map, sort, print…) clashes only when the program uses the plain name: HTML pages are full of ids
-  like `map` or `search` that never meet the word (user 2026-10-15, via the Interviewer).
+  like `map` or `search` that never meet the word.
 - Bind hint: the first `$who` read of a field per program advises `input{ bind: who }` (normalize::advise, got-it).
 - Old forms, one release with a hint: `$who.value` → `$who`, `$who.focus()` → `who.focus()`, `$document.title` →
   `document.title`, `$xyz.x` of no id → `element("xyz").x`, `$Math.floor` → `Math`.
-- jQuery (user 2026-10-15): `$('#who')` parses as the call of `$` (warp_parser/atoms.rs) and is the element, with
+- jQuery: `$('#who')` parses as the call of `$` (warp_parser/atoms.rs) and is the element, with
   advice naming `who` (`$('#who').value` → `$who`; no markup id → `element("who")`); another selector is the error
   naming `document.querySelector(…)`.
 - Untouched: texts (markup text, single-quoted strings: `$` means something only in warp code), bare `$main` of no
   id (tests/parser/test_dollar_names.rs), `$0`, `$a` naming an enclosing data node (references.rs), `data …`
-  (code patterns' holes). A route's `$title` (lowering/web) and shader holes are taken before this pass.
+  (code patterns' holes). Shader holes are taken before this pass.
 - Open (decision): bare `$who` in markup text position as a live binding.
 
 ## In the playground's Worker
 
-Programs there run in a Worker, which has no document. The wasm32 compiler used to refuse page-only globals
-(web_idl.rs page_only); now it types them by the page's interface and the call goes to the page:
+Programs there run in a Worker, which has no document. The wasm32 compiler types page-only globals (web_idl.rs
+page_only) by the page's interface and the call goes to the page:
 
 - host-foreign.js `callOnPage`: the js runtime, finding no such global in its Worker (or given a `PageObject`), asks the
   page synchronously (host-tasks.js askPage: a shared buffer + Atomics.wait, needs cross-origin isolation).
@@ -52,7 +50,7 @@ Programs there run in a Worker, which has no document. The wasm32 compiler used 
   (site-thread.js answers page calls).
 - localStorage/sessionStorage stay refused with their warp alternative (`local[k]`, `session[k]`).
 
-Freeing (card page-pageobjects): the Worker keeps one `PageObject` per id (a WeakRef) and counts how often it got the
+Freeing: the Worker keeps one `PageObject` per id (a WeakRef) and counts how often it got the
 id; a FinalizationRegistry posts `{releasePageObject: {id, received}}` once it is collected, which serveTaskWorkers
 takes. The page counts per Worker how often it gave each id and drops the object when every holder released it or
 was terminated (Stop, a new run's Worker). A released id asked again says so ("no longer keeps"). Check:

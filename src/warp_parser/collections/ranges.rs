@@ -2,15 +2,13 @@
 use super::*;
 use crate::words::IN_WORD;
 
-/// `lhs op rhs`; a chained comparison `a<b<c` as `a<b and b<c` (`middle` is b), a range subscript `xs#(a..b)` as a slice,
-/// `a down to b` as the reversed `b to a`
+/// `lhs op rhs`; a chained comparison `a<b<c` as `a<b and b<c` (`middle` is b), `a down to b` as the reversed `b to a`
 pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -> Node {
-	match (middle, hash_slice_bounds(&rhs)) {
-		(Some(middle), _) if op.is_ordering() => {
+	match middle {
+		Some(middle) if op.is_ordering() => {
 			let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs));
 			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 		}
-		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
 		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
 		_ if op == Op::In => {
 			let word = match crate::operators::alias_target(written) {
@@ -31,11 +29,6 @@ pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Opti
 		_ if crate::operators::element_wise_operator(written).is_some() => {
 			Node::List(vec![lhs, Symbol(written.to_string()), rhs], Bracket::None, Separator::Space)
 		}
-		_ if op == Op::FloorDiv => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
-		_ if op == Op::FloorDivAssign => {
-			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
-			Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
-		}
 		_ if op == Op::To && written.starts_with(DOWN_WORD) => {
 			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
 		}
@@ -45,9 +38,8 @@ pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Opti
 
 /// `n-1`, the end a Kotlin writer gives an inclusive `..`
 pub(crate) fn is_minus_one(end: &Node) -> bool {
-	match end.drop_meta() {
+	match end.ungrouped() {
 		Node::Key(_, Op::Sub, one) => matches!(one.drop_meta(), Node::Number(Number::Int(1))),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_minus_one(&items[0]),
 		_ => false,
 	}
 }
@@ -68,7 +60,7 @@ impl WarpParser {
 			UPTO => format!(
 				"does `upto {end_text}` include {end_text}? (`..<` or `..` exclude it, `to` or `...` include it)"
 			),
-			EXCLUSIVE_DOTS if self.in_for_header && is_minus_one(end) => {
+			EXCLUSIVE_DOTS if self.context.in_for_header && is_minus_one(end) => {
 				format!("does the loop bound `..{end_text}` include {end_text}? (warp's `..` excludes it, Kotlin's includes it)")
 			}
 			_ => return Ok(op),

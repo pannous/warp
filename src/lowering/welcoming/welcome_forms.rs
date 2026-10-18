@@ -7,21 +7,21 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{assign, block, call, children_rewritten, is_call_head, is_kinded_type_word, key};
+use super::nodes::{
+	assign, block, call, children_rewritten, is_block, is_call_head, is_kinded_type_word, is_return, key,
+};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
 use crate::words::IS_WORD;
-use crate::words::LET_WORD;
 use crate::words::{EVENT_ALIASES, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use crate::words::{IMPLICIT_PARAMETER, SELF_WORD, THIS_WORD};
+use crate::words::{LET_WORD, RETURN_WORD};
 use std::collections::HashSet;
 
 use crate::words::{MATCH_WORD, SWITCH_WORDS};
 const WILDCARD: &str = "_";
-const SET_WORD: &str = "set";
-const SET_PROSE_REASON: &str = "warp doesn't do prose, write the assignment";
 const DEFAULT_CASE: &str = "default";
 const LOOP_KEYWORD: &str = "loop";
 /// Lua's, Ruby's and Julia's word closing a function body
@@ -86,11 +86,8 @@ pub fn lower(node: Node) -> Node {
 		return error;
 	}
 	// the program's own names keep their meaning: a field `Count`, Go's method `Sum()`
-	let own: HashSet<String> = crate::library_words::defined_names(&node)
-		.into_iter()
-		.chain(crate::soft_keywords::names_given(&node))
-		.chain(type_fields(&node))
-		.collect();
+	let mut own = crate::program_names::Bindings::of(&node).given();
+	own.extend(type_fields(&node));
 	let node = qualified_module_calls(module_aliases(node));
 	let node = event_aliases(forms(method_aliases(node, &own)), &own);
 	let mut lambda_names = HashSet::new();
@@ -150,44 +147,37 @@ fn named_reserved(target: &Node, destructures: bool) -> Option<(Node, String)> {
 	}
 }
 
-/// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head
-/// every pass reads (card undefined-function: it was read as a lambda, `undefined function: x`)
-/// `set x to 5` is `x = 5` for any assignment target, with a style hint (decision setter-calls); after of_lookups
-/// `set width of canvas to 12` is `set canvas.width to 12`, so `canvas.width = 12`. A program's own `set` wins
-pub fn lower_set_phrases(node: Node) -> Node {
-	if !node.mentions_any(&[SET_WORD]) {
+/// A bare `return` (the parser keeps the word alone: `if t == ø { return }`) is the phrase `return ø` every pass reads;
+/// `return` named on a key's left (`return = 2`, for the soft keyword check) or as a field (`op.return`) stays the word
+pub fn lower_bare_returns(node: Node) -> Node {
+	if !node.mentions_any(&[RETURN_WORD]) {
 		return node;
 	}
-	crate::program_names::rewritten_where_free(node, SET_WORD, &set_phrases)
+	bare_returns(node)
 }
 
-fn set_phrases(node: Node) -> Node {
-	match set_assignment(&node) {
-		Some(assignment) => set_phrases(assignment),
-		None => node.map_children(set_phrases),
+fn bare_returns(node: Node) -> Node {
+	match node {
+		Node::Symbol(word) if word == RETURN_WORD => {
+			Node::List(vec![symbol(RETURN_WORD), Node::Empty], Bracket::None, Separator::Space)
+		}
+		Node::List(mut items, bracket, separator) if is_return(&items) => {
+			let value = items.pop().expect("a return phrase has its value");
+			items.push(bare_returns(value));
+			Node::List(items, bracket, separator)
+		}
+		Node::Key(left, op, right) if left.is_symbol(RETURN_WORD) => {
+			Node::Key(left, op, Box::new(bare_returns(*right)))
+		}
+		Node::Key(left, Op::Dot, right) if right.is_symbol(RETURN_WORD) => {
+			Node::Key(Box::new(bare_returns(*left)), Op::Dot, right)
+		}
+		other => other.map_children(bare_returns),
 	}
 }
 
-/// The assignment a phrase `set target to value` says, with its style hint
-fn set_assignment(node: &Node) -> Option<Node> {
-	let Node::List(items, Bracket::None, Separator::Space) = node else { return None };
-	let [set, phrase] = items.as_slice() else { return None };
-	let Node::Key(target, Op::To, value) = phrase.drop_meta() else { return None };
-	if !set.is_symbol(SET_WORD) || !is_assignable(target) {
-		return None;
-	}
-	let assignment = assign(target.as_ref().clone(), value.as_ref().clone());
-	crate::normalize::set_position_of(set);
-	let written = format!("{SET_WORD} {} to {}", target.serialize(), value.serialize());
-	crate::normalize::hint(&written, &assignment.serialize(), SET_PROSE_REASON);
-	Some(assignment)
-}
-
-/// A variable or a field `p.width`
-fn is_assignable(target: &Node) -> bool {
-	matches!(target.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Dot, _))
-}
-
+/// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head
+/// every pass reads (card undefined-function: it was read as a lambda, `undefined function: x`)
 pub fn lower_arrow_result_types(node: Node) -> Node {
 	match node {
 		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
@@ -205,7 +195,7 @@ pub fn lower_arrow_result_types(node: Node) -> Node {
 fn collect_lambda_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
 		Node::Key(name, Op::Assign, value)
-			if matches!(name.drop_meta(), Node::Symbol(_)) && crate::lambdas::arrow_lambda(value).is_some() =>
+			if name.symbol_name().is_some() && crate::lambdas::arrow_lambda(value).is_some() =>
 		{
 			names.insert(name.name());
 		}
@@ -306,8 +296,7 @@ fn forms(node: Node) -> Node {
 fn ocaml_fun(node: &Node) -> Option<Node> {
 	let names = match node.drop_meta() {
 		Node::Key(head, Op::Arrow, _) => {
-			let mut words = vec![];
-			crate::lambdas::flatten_phrase(head, &mut words);
+			let words = crate::lowering::nodes::phrase_words_of(head);
 			match words.split_first() {
 				Some((keyword, names)) if keyword.is_symbol(OCAML_FUN) => names.to_vec(),
 				_ => return None,
@@ -318,13 +307,11 @@ fn ocaml_fun(node: &Node) -> Option<Node> {
 			let Node::Key(head, Op::Arrow, _) = arrow.drop_meta() else {
 				return None;
 			};
-			let mut words = vec![];
-			crate::lambdas::flatten_phrase(head, &mut words);
-			words
+			crate::lowering::nodes::phrase_words_of(head)
 		}
 		_ => return None,
 	};
-	if names.is_empty() || !names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) {
+	if names.is_empty() || !names.iter().all(|name| name.symbol_name().is_some()) {
 		return None;
 	}
 	let names: Vec<String> = names.iter().map(Node::name).collect();
@@ -369,7 +356,7 @@ fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 	let Some(position) = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Define, _))) else {
 		return items;
 	};
-	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
+	let is_name = |node: &Node| node.symbol_name().is_some();
 	let Node::Key(name, Op::Define, value) = items[position].drop_meta() else {
 		return items;
 	};
@@ -430,7 +417,7 @@ fn named_subject(item: &Node) -> Option<(Node, Node)> {
 		return None;
 	};
 	let (cases, expression) = parts.split_last()?;
-	if !matches!(name.drop_meta(), Node::Symbol(_)) || !super::nodes::is_block(cases) || expression.is_empty() {
+	if name.symbol_name().is_none() || !is_block(cases) || expression.is_empty() {
 		return None;
 	}
 	let expression = Node::single_or_list(expression.to_vec(), bracket.clone(), separator.clone());
@@ -550,7 +537,7 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	if !word.is_symbol(WHEN_KEYWORD) || has_arms {
 		return None;
 	}
-	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) { ON_WORD } else { WHENEVER_WORD };
+	let listener = if subject.symbol_name().is_some() { ON_WORD } else { WHENEVER_WORD };
 	when_meant(word, listener);
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
 }
@@ -573,7 +560,7 @@ fn aliased_event(items: &[Node], own: &HashSet<String>) -> Option<Vec<Node>> {
 		if let Some((written, event, released)) =
 			attribute_event(attribute).filter(|(written, ..)| !own.contains(written))
 		{
-			if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+			if is_block(body) {
 				note_event_alias(attribute, &written, &format!("{ON_WORD} {event}"), released);
 				return Some(vec![symbol(ON_WORD), symbol(event), body.clone()]);
 			}
@@ -642,7 +629,7 @@ fn when_arm(arm: &Node) -> Option<(Vec<Node>, Node)> {
 
 /// `loop { body }`, Ruby's `loop do body end`
 fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
-	if !word.is_symbol(LOOP_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !word.is_symbol(LOOP_KEYWORD) || !is_block(body) {
 		return None;
 	}
 	let condition = key(Node::Empty, Op::While, Node::True);
@@ -657,7 +644,7 @@ fn lambda(parameters: Node, body: Node) -> Node {
 fn anonymous_function(items: &[Node]) -> Option<Node> {
 	let [head, rest @ ..] = items else { return None };
 	let [body] = without_result_type(rest) else { return None };
-	if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !is_block(body) {
 		return None;
 	}
 	Some(lambda(function_parameters(head)?, forms(body.clone())))
@@ -747,7 +734,7 @@ fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
 	let mut merged: Vec<Node> = Vec::new();
 	for item in items {
 		// Go's function type `f func(int) int` is no lambda: its parameters and result are type words
-		let is_body = !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) && !is_kinded_type_word(&item);
+		let is_body = !is_block(&item) && !is_kinded_type_word(&item);
 		let parameters = merged
 			.last()
 			.filter(|head| is_body && matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)))
@@ -770,7 +757,7 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let &(reduction, iteration) = BLOCK_REDUCTIONS.iter().find(|(reduction, _)| word.is_symbol(reduction))?;
-	if !matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !is_block(block) {
 		return None;
 	}
 	let call = |word: &str, arguments: Vec<Node>| call(word, arguments);
@@ -780,7 +767,7 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
 /// word itself, with a note (a program's own variable `text` keeps its methods)
 fn qualified_module_calls(node: Node) -> Node {
-	let names = crate::soft_keywords::names_given(&node);
+	let names = crate::program_names::Bindings::of(&node).given();
 	let modules: Vec<&str> =
 		crate::modules::std_module_names().chain(FOREIGN_MODULES).filter(|module| !names.contains(*module)).collect();
 	module_calls(node, &modules)
@@ -816,8 +803,7 @@ pub(crate) fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, Strin
 	let Node::Key(module, Op::As, alias) = used.drop_meta() else {
 		return None;
 	};
-	let is_use =
-		matches!(keyword.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str()));
+	let is_use = keyword.symbol_name().is_some_and(|word| crate::modules::USE_KEYWORDS.contains(&word));
 	let alias = alias.symbol_name()?;
 	(is_use && crate::modules::names_a_module(&crate::modules::path_of(module)?))
 		.then(|| (module.as_ref().clone(), alias.to_string()))
@@ -833,20 +819,12 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 			crate::normalize::set_position_of(&items[0]);
 			crate::normalize::hint(&items[0].serialize(), &word, "warp calls a module's word by its name");
 			items[0] = symbol(&word);
-			Node::List(
-				items.into_iter().map(|item| module_calls(item, modules)).collect(),
-				Bracket::None,
-				Separator::Space,
-			)
+			Node::List(items, Bracket::None, Separator::Space).map_children(|item| module_calls(item, modules))
 		}
 		Node::Key(module, Op::Dot, call)
-			if modules.iter().any(|name| module.is_symbol(name))
-				&& matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(_)))) =>
+			if modules.iter().any(|name| module.is_symbol(name)) && called_word(&call).is_some() =>
 		{
-			let word = match call.drop_meta() {
-				Node::List(items, _, _) => items[0].name(),
-				_ => unreachable!("guarded"),
-			};
+			let word = called_word(&call).expect("guarded");
 			if let Some((_, _, own_word)) =
 				QUALIFIED_WORDS.iter().find(|(owner, written, _)| module.is_symbol(owner) && *written == word)
 			{
@@ -854,11 +832,7 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 					unreachable!("guarded")
 				};
 				items[0] = symbol(own_word);
-				return Node::List(
-					items.into_iter().map(|item| module_calls(item, modules)).collect(),
-					bracket,
-					separator,
-				);
+				return Node::List(items, bracket, separator).map_children(|item| module_calls(item, modules));
 			}
 			crate::normalize::hint(
 				&format!("{}.{word}(", module.name()),
@@ -882,14 +856,18 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 	}
 }
 
+/// `word(…)`: the word called
+fn called_word(call: &Node) -> Option<String> {
+	match call.drop_meta() {
+		Node::List(items, Bracket::Round, _) => items.first()?.symbol_name().map(str::to_string),
+		_ => None,
+	}
+}
+
 /// Go's `func(x int) int { … }`: the body without the result type before it
 fn without_result_type(rest: &[Node]) -> &[Node] {
 	match rest {
-		[result_type, body]
-			if is_kinded_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
-		{
-			&rest[1..]
-		}
+		[result_type, body] if is_kinded_type_word(result_type) && is_block(body) => &rest[1..],
 		_ => rest,
 	}
 }
@@ -906,11 +884,10 @@ fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 		[body @ .., end] if end.is_symbol(END_WORD) => body,
 		body => body,
 	};
-	let body = match body {
-		[] => return None,
-		[single] => single.clone(),
-		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-	};
+	if body.is_empty() {
+		return None;
+	}
+	let body = Node::single_or_list(body.to_vec(), Bracket::None, Separator::Space);
 	Some(Node::Key(name.clone(), *op, Box::new(lambda(function_parameters(head)?, forms(body)))))
 }
 
@@ -927,7 +904,7 @@ fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
 		.enumerate()
 		.map(|(index, parameter)| match parameter.drop_meta() {
 			Node::List(names, Bracket::Curly, _)
-				if !names.is_empty() && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) =>
+				if !names.is_empty() && names.iter().all(|name| name.symbol_name().is_some()) =>
 			{
 				let object = Node::Symbol(format!("{DESTRUCTURED_OBJECT}{index}"));
 				let field = |name: &Node| assign(name.clone(), key(object.clone(), Op::Dot, name.clone()));
@@ -944,7 +921,7 @@ fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
 fn ruby_lambda(items: &[Node]) -> Option<Node> {
 	let [word, block] = items else { return None };
 	let is_lambda_word = RUBY_LAMBDA_WORDS.iter().any(|lambda_word| word.is_symbol(lambda_word));
-	(is_lambda_word && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))).then(|| block.clone())
+	(is_lambda_word && is_block(block)).then(|| block.clone())
 }
 
 fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
@@ -955,8 +932,10 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 		Node::List(items, Bracket::Round, _) => items.clone(),
 		single => vec![single.clone()],
 	};
-	let is_starred = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word.starts_with(crate::words::STARRED) && word.len() > 1);
-	if !matches!(name.drop_meta(), Node::Symbol(_)) || !parameters.iter().any(is_starred) {
+	let is_starred = |parameter: &Node| {
+		parameter.symbol_name().is_some_and(|word| word.starts_with(crate::words::STARRED) && word.len() > 1)
+	};
+	if name.symbol_name().is_none() || !parameters.iter().any(is_starred) {
 		return None;
 	}
 	let head = parens([vec![name.clone()], parameters].concat());
@@ -1048,19 +1027,24 @@ fn function_parameters(head: &Node) -> Option<Node> {
 	let [keyword, parameters @ ..] = head_items.as_slice() else {
 		return None;
 	};
-	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
+	if !keyword.symbol_name().is_some_and(crate::operators::is_function_keyword) {
 		return None;
 	}
 	match parameters {
 		[single] => Some(single.clone()),
 		[] => None,
-		// Go's `func(x int)`, `func(a, b int)`: the names, the types after them dropped
+		// Go's `func(a, b int)` (the parser typed `b int` as b:int): the names, the types dropped
 		several => {
-			let names: Vec<Node> = several.iter().filter_map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
-				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
-				_ => None,
-			}).collect();
+			let names: Vec<Node> = several
+				.iter()
+				.filter_map(|parameter| match parameter.drop_meta() {
+					Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
+					Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+						Some(name.as_ref().clone())
+					}
+					_ => None,
+				})
+				.collect();
 			Some(Node::single_or_list(names, Bracket::Round, Separator::Comma))
 		}
 	}

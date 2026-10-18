@@ -12,8 +12,8 @@
 
 use crate::errors::diagnostic::Diagnostic;
 use crate::lowering::blocks::DATA_WORD;
+use crate::lowering::nodes::with_statements_first;
 use crate::lowering::nodes::{arguments_rewritten, key, word_headed};
-use crate::modules::needed_definitions::with_statements_first;
 use crate::node::Node;
 use crate::operators::Op;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -46,11 +46,6 @@ const BIND_ATTRIBUTE: &str = "bind";
 /// jQuery's `$('#who')`
 const JQUERY_WORD: &str = "$";
 const ID_SELECTOR: char = '#';
-/// How names_given_with_kinds and bindings say what the program binds a name as
-const VARIABLE_KIND: &str = "variable";
-const FIELD_KIND: &str = "field";
-const PARAMETER_KIND: &str = "parameter";
-const LOOP_VARIABLE_KIND: &str = "loop variable";
 const OLD_FORM_REASON: &str = "page ids are names: `who` is the element, `$who` its value (card page-ids)";
 
 /// An element of the program's markup that has an id
@@ -151,36 +146,13 @@ fn attribute_value(item: &Node, name: &str, defined: &HashSet<String>) -> Option
 /// An id the program also binds, as a variable, function, parameter or loop variable: the error naming both; a
 /// variable of a field's id is what `bind:` is for (`input{ id: "name" }` + `name = $name`, the most common clash)
 fn clash_with_definition(program: &Node, elements: &BTreeMap<String, PageElement>) -> Option<Node> {
-	let bound = bindings(program);
-	let (id, element) = elements.iter().find(|(id, _)| bound.contains_key(*id))?;
-	let kind = bound[id];
+	let bindings = crate::program_names::Bindings::of(program);
+	let (id, element, meaning) =
+		elements.iter().find_map(|(id, element)| Some((id, element, bindings.meaning_of(id)?)))?;
+	let is_variable = meaning == crate::program_names::Meaning::Variable;
 	let error =
-		clash_error(&innermost_use(program, id), id, element, &format!("the {kind} {id}"), kind == VARIABLE_KIND);
+		clash_error(&innermost_use(program, id), id, element, &format!("the {} {id}", meaning.word()), is_variable);
 	Some(error.into_error())
-}
-
-/// Every name the program binds and how: variables, functions, parameters (`f(x) := …`, `def f(x) {…}`, `x => …`)
-/// and loop variables; a data key or attribute (a field) binds none
-fn bindings(program: &Node) -> BTreeMap<String, &'static str> {
-	let mut bound = BTreeMap::new();
-	for (name, kind) in crate::soft_keywords::names_given_with_kinds(program) {
-		if kind != FIELD_KIND {
-			bound.entry(name).or_insert(kind);
-		}
-	}
-	program.visit(&mut |node| {
-		if let Some(head) = crate::lowering::nodes::function_head(node) {
-			for parameter in head.parameters().into_iter().filter_map(crate::lowering::nodes::parameter_name) {
-				bound.entry(parameter).or_insert(PARAMETER_KIND);
-			}
-		}
-		if let Node::List(items, _, _) = node {
-			if let Some(variable) = crate::lowering::nodes::for_in_variable(items) {
-				bound.entry(variable).or_insert(LOOP_VARIABLE_KIND);
-			}
-		}
-	});
-	bound
 }
 
 /// "name is two things here: the page element of id name (`input{ id: "name" }`) and the variable name", with the
@@ -352,6 +324,15 @@ impl PageNames {
 			self.hint_bind(&id);
 			return self.value_of(&id, member);
 		}
+		// `x = 3; $x`, `$document`: a name that is a value already
+		if let Some(plain) = browser_name(&name).filter(|plain| self.is_value_already(plain, enclosing)) {
+			let at = self.last_name.clone().unwrap_or_else(|| Node::Symbol(name.clone()));
+			warn_superfluous(&at, &name, plain);
+			if PLAIN_GLOBALS.contains(&plain) && !self.defined.contains(plain) {
+				self.globals.insert(plain.to_string());
+			}
+			return Node::Symbol(plain.to_string());
+		}
 		if self.elements.contains_key(&name) {
 			if is_word(&name) {
 				let at = self.last_name.clone().unwrap_or_else(|| Node::Symbol(name.clone()));
@@ -400,6 +381,14 @@ impl PageNames {
 		self.elements.get(id).map(|element| (id.to_string(), element.value_member()))
 	}
 
+	/// A variable, parameter or function of the program, or a global of JavaScript or the browser, that no page id
+	/// or enclosing data node of that name shadows: `$` of it reads nothing more
+	fn is_value_already(&self, name: &str, enclosing: &[String]) -> bool {
+		!self.elements.contains_key(name)
+			&& !enclosing.iter().any(|node| node == name)
+			&& (self.defined.contains(name) || is_global(name))
+	}
+
 	/// `document.getElementById("who").value`, the member the element's kind keeps its value in
 	fn value_of(&mut self, id: &str, member: &str) -> Node {
 		self.globals.insert(DOCUMENT.to_string());
@@ -419,7 +408,7 @@ impl PageNames {
 		let name = browser_name(written).filter(|name| !enclosing.iter().any(|node| node == name))?;
 		crate::normalize::set_position_of(receiver);
 		if is_global(name) {
-			crate::normalize::hint(written, name, OLD_FORM_REASON);
+			warn_superfluous(receiver, written, name);
 			self.globals.insert(name.to_string());
 			return Some(Node::Symbol(name.to_string()));
 		}
@@ -437,6 +426,13 @@ impl PageNames {
 		self.globals.insert(DOCUMENT.to_string());
 		Some(element_of_id(name))
 	}
+}
+
+/// `$document.location`, `$x` of a variable: `$` reads a page id's value; of a name that is a value already it is
+/// superfluous and dropped, with a warning offering the plain name (card js-binding)
+fn warn_superfluous(at: &Node, written: &str, name: &str) {
+	let message = format!("{written} is superfluous: {name} is a value already, `$` reads the value of a page id");
+	crate::errors::diagnostic::say(Diagnostic::at(at, message).offer("the plain name", written, name));
 }
 
 /// `input{ … }`

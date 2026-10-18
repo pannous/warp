@@ -6,19 +6,18 @@ const DAY_MILLISECONDS: i128 = 86_400_000;
 const NANOS_PER_MILLISECOND: i128 = 1_000_000;
 
 /// `q as cm` under a power: the quantity and the powered target units
-pub(super) fn powered_conversion(conversion: &Node, op: Op) -> Option<(&Node, Vec<Factor>)> {
+pub(super) fn powered_conversion<'a>(conversion: &'a Node, exponent: &Node) -> Option<(&'a Node, Vec<Factor>)> {
 	let Node::Key(quantity, Op::As, unit) = conversion.drop_meta() else {
 		return None;
 	};
-	Some((quantity, powered(unit_expression(unit)?, exponent_of(op))))
+	Some((quantity, powered(unit_expression(unit)?, whole_exponent(exponent)?)))
 }
 
-/// The exponent of `²` and `³`
-pub(super) fn exponent_of(op: Op) -> i32 {
-	if op == Op::Square {
-		2
-	} else {
-		3
+/// The right side of `^ 2` (also written `²`): a whole number exponent
+pub(super) fn whole_exponent(exponent: &Node) -> Option<i32> {
+	match exponent.drop_meta() {
+		Node::Number(Number::Int(power)) => i32::try_from(*power).ok(),
+		_ => None,
 	}
 }
 
@@ -33,17 +32,14 @@ pub(super) fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
 
 /// Products, quotients and powers of what `leaf` reads: units (`km/h`) or dimensions (`length/duration`)
 pub(super) fn factor_expression(node: &Node, leaf: &dyn Fn(&Node) -> Option<Vec<Factor>>) -> Option<Vec<Factor>> {
-	match node.drop_meta() {
-		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if nothing.is_empty_node() => {
-			Some(powered(factor_expression(base, leaf)?, exponent_of(*op)))
-		}
+	match node.ungrouped() {
+		Node::Key(base, Op::Pow, exponent) => Some(powered(factor_expression(base, leaf)?, whole_exponent(exponent)?)),
 		Node::Key(left, Op::Mul, right) => {
 			Some([factor_expression(left, leaf)?, factor_expression(right, leaf)?].concat())
 		}
 		Node::Key(left, Op::Div, right) => {
 			Some([factor_expression(left, leaf)?, inverse(&factor_expression(right, leaf)?)].concat())
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => factor_expression(&items[0], leaf),
 		other => leaf(other),
 	}
 }
@@ -135,8 +131,11 @@ pub(super) fn quotient_node(amount: &Rational) -> Node {
 	Node::Number(Number::from_rational(amount.clone()))
 }
 
-pub(super) fn whole(amount: &Rational) -> Option<i64> {
-	amount.is_integer().then(|| amount.numerator.to_i64()).flatten()
+/// The integer nearest the amount, halves away from zero
+pub(super) fn nearest(amount: &Rational) -> Option<i64> {
+	let magnitude = (amount.numerator.magnitude() * 2u32 + amount.denominator.magnitude())
+		/ (amount.denominator.magnitude() * 2u32);
+	BigInt::from_biguint(amount.numerator.sign(), magnitude).to_i64()
 }
 
 /// The finest unit of each dimension among the factors: the unit a result counts in ("unit sums use the finer unit")

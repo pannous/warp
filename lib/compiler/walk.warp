@@ -1,0 +1,150 @@
+# The tree walk every lowering pass twin shares (card twin-harness, notes/self_hosting.md step 10), and the bridge
+# between a node and its plain-data view (tests/common/twins.rs node_view, the form serializer.warp documents).
+# A pass twin is a word from node to node: pass_differential (tests/common/twins.rs) hands it the program as Rust's
+# passes before it left it, as a node built by `node_of(view)`, and compares `view_of(result)` with the view after
+# the Rust pass.
+
+# a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
+opaque_word = "view·opaque"
+
+kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
+# a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
+is_group(n: any) := bracket_of(n) != ø
+
+# an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
+# walks into
+attribute_word = "view·attribute"
+
+# the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
+# (decision empty-group-node), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
+plain(view: any) := without_layers(view, no)
+
+# the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
+# (mutation.rs reads the mark of `x!`); Rust twin: src/compiler/node_views.rs handled_plain_view
+bridged(view: any) := without_layers(view, yes)
+
+# the view without literal layers, without attribute layers unless `attributes`, an empty group as ø
+without_layers(view: any, attributes: any) := {
+	kind = kind_of(view)
+	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
+	if kind == "type" or kind == "error" { return view }
+	if kind == "list" and #view == 3 { return ø }
+	if view is list { return view.map(part => without_layers(part, attributes)) }
+	view
+}
+
+# the node a view stands for
+node_of(view: any) := {
+	kind = kind_of(view)
+	if kind == "symbol" { return symbol(view#2) }
+	if kind == "text" or kind == "char" { return view#2 }
+	if kind == "key" { return key(node_of(view#3), view#2, node_of(view#4)) }
+	if kind == "list" { return separated(bracketed(view[3..].map(node_of), view#2), view#3) }
+	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
+	if kind == "attribute" { return key(symbol(attribute_word), ":", [view#2, node_of(view#3), node_of(view#4)]) }
+	if kind == "" { return view }
+	key(symbol(opaque_word), ":", view)
+}
+
+# the view of a node
+view_of(n: any) := {
+	if type(n) is key {
+		if key_of(n) == symbol(opaque_word) { return value_of(n) }
+		if key_of(n) == symbol(attribute_word) {
+			layer = value_of(n)
+			return ["attribute", layer#1, view_of(layer#2), view_of(layer#3)]
+		}
+		return ["key", op_of(n), view_of(key_of(n)), view_of(value_of(n))]
+	}
+	if n is symbol { return ["symbol", name_of(n)] }
+	if n is text { return ["text", n] }
+	if is_group(n) { return ["list", bracket_of(n), separator_of(n)] + n.map(view_of) }
+	n
+}
+
+# a group of the items, bracketed and separated as n
+group_like(n: any, items: any) := separated(bracketed(items, bracket_of(n)), separator_of(n))
+
+# the call `name(arguments…)`
+call_of(name: text, arguments: any) := bracketed([symbol(name)] + arguments, "(")
+
+# a node with f applied to each of its children
+children(n: any, f: any) := {
+	if type(n) is key and key_of(n) != symbol(opaque_word) { return key(f(key_of(n)), op_of(n), f(value_of(n))) }
+	if is_group(n) { return separated(bracketed(n.map(f), bracket_of(n)), separator_of(n)) }
+	n
+}
+
+# f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
+bottom_up(n: any, f: any) := f(children(n, x => bottom_up(x, f)))
+
+# the node itself: the bridge's own twin, which every pass twin relies on
+unchanged(n: any) := n
+
+# a group's items as a list
+items_of(n: any) := {
+	gathered = []
+	for item in n { gathered += [item] }
+	gathered
+}
+
+# What a pass twin reports, as its Rust twin's hints and warnings are compared (card carries-line): `report(n,
+# message, preferred)` says it at n's position and gives n; pass_differential's call is `reported(view)`, the view
+# with the reports said meanwhile, [line, column, message, preferred] each
+global said = []
+# where n was written, ø for a node without a position (one a pass made)
+line_of(n: any) := try n.line else ø
+column_of(n: any) := try n.column else ø
+is_positioned(n: any) := line_of(n) != ø
+report(n: any, message: any, preferred: any) := {
+	said += [[line_of(n), column_of(n), message, preferred]]
+	n
+}
+reported(view: any) := {
+	found = said
+	said = []
+	[view, found]
+}
+
+# whether the symbol `word` occurs anywhere in n, inside an opaque view too
+mentions(n: any, word: text) := view_has(view_of(n), part => part == ["symbol", word])
+
+# whether `found` holds for the view or a part of it
+view_has(view: any, found: any) := {
+	if found(view) { return yes }
+	if view is list {
+		for part in view {
+			if view_has(part, found) { return yes }
+		}
+	}
+	no
+}
+
+# the leading name of a view, `f` of `f(x)`, `x` of `x: int`, else ""
+head_name(view: any) := {
+	kind = kind_of(view)
+	if kind == "symbol" { return view#2 }
+	if kind == "key" { return head_name(view#3) }
+	if kind == "list" and #view > 3 { return head_name(view#4) }
+	""
+}
+
+# every list in a node's view, the view itself first: the parts a whole-program question walks
+views_in(n: any) := lists_in(view_of(n))
+
+# every list in a view, the view itself first
+lists_in(top: any) := {
+	views = []
+	unvisited = [top]
+	while #unvisited > 0 {
+		view = unvisited#(#unvisited)
+		unvisited = unvisited[0 ..< #unvisited - 1]
+		views += [view]
+		if view is list {
+			for part in view {
+				if part is list { unvisited += [part] }
+			}
+		}
+	}
+	views
+}

@@ -130,13 +130,10 @@ impl WasmGcEmitter {
 					let held = self.node_scratch();
 					self.emit_lookup_target(func, target);
 					func.instruction(&I::LocalSet(held));
-					let (pointer, length) = self.allocate_string(&name);
 					// an instance's field by the very name the program wrote: no symbol made, no general comparison
 					if !self.ctx.type_registry.types().is_empty() {
-						Self::emit_list(
-							func,
-							&[I::LocalGet(held), I::RefAsNonNull, I32Const(pointer as i32), I32Const(length as i32)],
-						);
+						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
+						self.emit_text_literal(func, &name);
 						self.emit_call(func, INSTANCE_FIELD);
 						func.instruction(&I::BrOnNonNull(0));
 					}
@@ -145,12 +142,8 @@ impl WasmGcEmitter {
 						.into_iter()
 						.chain(fallback.map(|meta| (meta, "map_find")));
 					for (key, finder) in attempts {
-						let (pointer, length) = self.allocate_string(&key);
-						Self::emit_list(
-							func,
-							&[I::LocalGet(held), I::RefAsNonNull, I32Const(pointer as i32), I32Const(length as i32)],
-						);
-						self.emit_call(func, "new_symbol");
+						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
+						self.emit_symbol_node(func, &key);
 						self.emit_call(func, finder);
 						func.instruction(&I::BrOnNonNull(0));
 					}
@@ -181,12 +174,8 @@ impl WasmGcEmitter {
 					for field in
 						std::iter::once(name.clone()).chain(crate::extensions::strings::english_singular(&name))
 					{
-						let (pointer, length) = self.allocate_string(&field);
-						Self::emit_list(
-							func,
-							&[I::LocalGet(held), I::RefAsNonNull, I32Const(pointer as i32), I32Const(length as i32)],
-						);
-						self.emit_call(func, "new_symbol");
+						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
+						self.emit_symbol_node(func, &field);
 						self.emit_call(func, ELEMENTS_FIELD);
 						func.instruction(&I::BrOnNonNull(0));
 					}
@@ -252,9 +241,13 @@ impl WasmGcEmitter {
 				I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
 					I::I64Const(Kind::Symbol as i64),
 			]);
-			s.emit_field(f, name, 1);
-			s.emit_field(f, name, 2);
-			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(name), I::RefAsNonNull, I::End]);
+			s.emit_text_bytes(f, name); // a rope (text_append) flattened, else only its last piece names the key
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::RefNull(HeapType::Concrete(node)), I::StructNew(node),
+				I::Else, I::LocalGet(name), I::RefAsNonNull,
+				I::End,
+			]);
 		});
 		self.runtime_function(
 			"map_entry_has_key",
@@ -420,7 +413,7 @@ impl WasmGcEmitter {
 		if self.should_emit_function(STRUCT_BODY) {
 			let type_names: Vec<String> =
 				self.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
-			let type_symbols: Vec<(u32, u32)> = type_names.iter().map(|name| self.allocate_string(name)).collect();
+			let type_symbols: Vec<(u32, u32)> = type_names.iter().map(|name| self.memory_string(name)).collect();
 			self.runtime_function(STRUCT_BODY, vec![node_ref], vec![node_ref], vec![nullable_node_ref], |s, f| {
 				let entry = 1;
 				let field = |f: &mut Function, local: u32, index: u32| {
@@ -486,16 +479,16 @@ impl WasmGcEmitter {
 			});
 		}
 		if self.should_emit_function(INSTANCE_FIELD) {
-			let string = self.type_manager.string_type;
+			let text = self.type_manager.text_type;
 			let nullable = Ref(self.node_ref(true));
-			let int = ValType::I32;
+			let text_ref = self.text_ref();
 			self.runtime_function(
 				INSTANCE_FIELD,
-				vec![node_ref, int, int],
+				vec![node_ref, text_ref],
 				vec![nullable],
 				vec![nullable, nullable, nullable],
-				|_, f| {
-					let (cell, entry, key) = (3, 4, 5);
+				|s, f| {
+					let (cell, entry, key) = (2, 3, 4);
 					let get = |f: &mut Function, local: u32, index: u32| {
 						Self::emit_list(
 							f,
@@ -535,20 +528,11 @@ impl WasmGcEmitter {
 					]);
 					kind_is(f, key, Kind::Symbol as i64);
 					f.instruction(&I::If(BlockType::Empty));
-					// the same string: its offset and length
+					// the same name
 					get(f, key, 1);
-					#[rustfmt::skip]
-					Self::emit_list(f, &[
-						I::RefCastNonNull(HeapType::Concrete(string)),
-						I::StructGet { struct_type_index: string, field_index: 0 }, I::LocalGet(1), I::I32Eq,
-					]);
-					get(f, key, 1);
-					#[rustfmt::skip]
-					Self::emit_list(f, &[
-						I::RefCastNonNull(HeapType::Concrete(string)),
-						I::StructGet { struct_type_index: string, field_index: 1 }, I::LocalGet(2), I::I32Eq, I::I32And,
-						I::If(BlockType::Empty),
-					]);
+					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(text)), I::LocalGet(1)]);
+					s.call(f, TEXT_BYTES_EQUAL);
+					f.instruction(&I::If(BlockType::Empty));
 					get(f, entry, 2);
 					Self::emit_list(f, &[I::Return, I::End, I::End, I::End, I::End, I::End]);
 					get(f, cell, 2);
@@ -667,9 +651,9 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let nullable = Ref(self.node_ref(true));
 		let has_struct_body = !self.ctx.type_registry.types().is_empty();
-		let locals = vec![nullable, nullable, nullable, nullable, nullable, nullable];
+		let locals = [vec![nullable; 5], self.item_walk_locals().to_vec()].concat();
 		self.runtime_function(ELEMENTS_FIELD, vec![node_ref, node_ref], vec![nullable], locals, |s, f| {
-			let (cell, element, value, head, last, made) = (2, 3, 4, 5, 6, 7);
+			let (element, value, head, last, made, walk) = (2, 3, 4, 5, 6, ItemWalk::at(7));
 			let null = I::RefNull(HeapType::Concrete(node));
 			// only a list has elements, a `{…}` map has entries; an empty list has no field to show
 			s.emit_field(f, 0, 0);
@@ -686,11 +670,9 @@ impl WasmGcEmitter {
 				I::RefIsNull, I::I32Or, I::If(BlockType::Empty),
 					null.clone(), I::Return,
 				I::End,
-				I::LocalGet(0), I::LocalSet(cell),
 			]);
-			s.emit_cell_walk(f, cell, |f| {
-				s.emit_field(f, cell, 1);
-				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node))]);
+			s.emit_item_walk(f, 0, walk, |f| {
+				Self::emit_list(f, &[I::LocalGet(walk.item), I::RefAsNonNull]);
 				if has_struct_body {
 					s.call(f, STRUCT_BODY);
 				}
@@ -795,19 +777,15 @@ impl WasmGcEmitter {
 			MAP_COLUMN_CELLS,
 			vec![nullable, ValType::I32],
 			vec![nullable],
-			vec![nullable, nullable, nullable],
+			[vec![nullable; 3], self.item_walk_locals().to_vec()].concat(),
 			|s, f| {
-				let (cell, part, head, last, made) = (0, 1, 2, 3, 4);
-				s.emit_cell_walk(f, cell, |f| {
-					// a meta entry `@name:value` is no key, value or entry of the map
-					s.emit_field(f, cell, 1);
-					s.call(f, super::super::super::reflection::equality::IS_META_ENTRY);
-					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
-					s.emit_field(f, cell, 1);
-					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
+				let (map, part, head, last, made, walk) = (0, 1, 2, 3, 4, ItemWalk::at(5));
+				// a meta entry `@name:value` is no key, value or entry of the map: list_items ends before them
+				s.emit_item_walk(f, map, walk, |f| {
+					Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(walk.item), I::RefAsNonNull]);
+					f.instruction(&I::LocalGet(part));
 					s.call(f, MAP_PART);
 					s.emit_appended_cell(f, CellAppend { made, head, last });
-					f.instruction(&I::End);
 				});
 				f.instruction(&I::LocalGet(head));
 			},
@@ -859,9 +837,9 @@ impl WasmGcEmitter {
 				name,
 				vec![node_ref, node_ref],
 				vec![node_ref],
-				vec![nullable, ValType::I64, ValType::I64],
+				[vec![ValType::I64; 2], self.item_walk_locals().to_vec()].concat(),
 				|s, f| {
-					let (wanted, cell, kind, position) = (1, 2, 3, 4);
+					let (wanted, kind, position, walk) = (1, 2, 3, ItemWalk::at(4));
 					let answer = |f: &mut Function, s: &Self, value: i64| {
 						f.instruction(&if positional && value == 1 {
 							I::LocalGet(position)
@@ -906,11 +884,9 @@ impl WasmGcEmitter {
 						I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And,
 					]);
 					s.emit_fail_if(f, "not_a_list");
-					Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell)]);
-					s.emit_cell_walk(f, cell, |f| {
+					s.emit_item_walk(f, 0, walk, |f| {
 						Self::emit_list(f, &[I::LocalGet(position), I::I64Const(1), I::I64Add, I::LocalSet(position)]);
-						s.emit_field(f, cell, 1);
-						f.instruction(&I::LocalGet(wanted));
+						Self::emit_list(f, &[I::LocalGet(walk.item), I::LocalGet(wanted)]);
 						s.call(f, VALUES_EQUAL);
 						f.instruction(&I::If(BlockType::Empty));
 						answer(f, s, 1);

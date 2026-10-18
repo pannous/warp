@@ -34,5 +34,5 @@ fn distortion_flattens_the_peaks_and_stays_in_range() {
 
 #[test]
 fn effects_play_in_a_program() {
-	is!("delay_time = 1/4 beat\nreverb_mix = 0.2\ndistortion = 0.3\nplay(C4, 50ms)\n1", 1);
+	is!("delay_time = beat(1/4)\nreverb_mix = 0.2\ndistortion = 0.3\nplay(C4, 50ms)\n1", 1);
 }

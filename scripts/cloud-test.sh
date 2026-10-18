@@ -9,7 +9,7 @@
 #       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will (--on <base>: into
 #       origin/<base>, e.g. a batch branch)
 #   scripts/cloud-test.sh --result [--card <card>] <branch> <tip>     wait for and collect a launched run's result
-#   scripts/cloud-test.sh --summarize <cargo test log> [environmental list]    the result's summary of any log
+#   scripts/cloud-test.sh --summarize <cargo test log> [environmental list] [known failures]    the result's summary of any log
 # The cloud session runs this same script from origin/main (the tip may predate it) with --job <job>, which reads the
 # job's arguments from the branch cloud-jobs/<job> and runs them as --run-here: it checks out
 # the tip, builds, tests with --no-fail-fast and pushes result.md + log.txt.gz to the branch cloud-results/<run>.
@@ -28,6 +28,7 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
+KNOWN_FAILURES=notes/known_failures.md   # read in the tested checkout, as the gate reads it at the tested tip
 CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
 MAX_PARALLEL_RUNS=5           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
 PENDING_MINUTES=90             # a job older than this without a result: its session is dropped from the pool (a full run takes ~25)
@@ -39,7 +40,8 @@ DROPPED_SESSIONS=/Users/me/dev/angles/warp/data/cloud/dropped-sessions.txt   # t
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
-TEST_TIME_LIMIT_SECONDS=2400  # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
+MIN_FREE_GB=15                 # less free disk before a build: the warm VM's build output is pruned (a build ran out of disk)
+TEST_TIME_LIMIT_SECONDS=2400   # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
 STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
 WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
@@ -61,6 +63,20 @@ abort() {
 	gzip -kf "$HERE_WORK/log.txt"
 	cd "$CLOUD_REPO" && push_result "$name"
 	exit 1
+}
+
+free_gb() { df -Pk . | awk 'NR == 2 { print int($4 / 1048576) }'; }
+
+# A warm VM's target/ grows with every job's branch, features and profile until a build runs out of disk: below
+# MIN_FREE_GB the incremental caches go, then if need be all of target/ (a cold build). Prints what it found and did
+make_room() {
+	local free
+	free=$(free_gb)
+	[ "$free" -ge $MIN_FREE_GB ] && { echo "$free of $(df -Pk . | awk 'NR == 2 { print int($2 / 1048576) }') GB free"; return; }
+	rm -rf target/*/incremental target/*/*/incremental
+	[ "$(free_gb)" -ge $MIN_FREE_GB ] && { echo "$free GB free, $(free_gb) GB after dropping the incremental caches"; return; }
+	rm -rf target
+	echo "$free GB free, $(free_gb) GB after dropping target/"
 }
 
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
@@ -116,15 +132,32 @@ run_tests_here() {
 		done
 	fi
 	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never
-	local build_start=$SECONDS
+	local build_start=$SECONDS disk
+	disk=$(make_room)
 	cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
 	local build_status=$?
+	if [ $build_status -ne 0 ] && grep -q 'No space left on device' "$HERE_WORK/log.txt"; then
+		rm -rf target
+		disk="$disk; out of space during the build: target/ dropped, built again with $(free_gb) GB free"
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
+		build_status=$?
+	fi
 	build_seconds=$((SECONDS - build_start))
+	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
+	# `cargo build --offline` found no miniz_oxide in the VM's registry cache (card cloud-stub-offline); the page stub is
+	# macOS-only
+	if [ $build_status -eq 0 ]; then
+		if cargo build "${source_flags[@]}" --quiet -p warp-runtime --bin warp-runtime >> "$HERE_WORK/log.txt" 2>&1; then
+			export WARP_TEST_STUBS_BUILT=1
+		else
+			echo "cloud-test: the runtime stub's build failed, the executable tests build it themselves" >> "$HERE_WORK/log.txt"
+		fi
+	fi
 	local test_start=$SECONDS
 	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
-	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" > "$HERE_WORK/summary.txt"
+	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" > "$HERE_WORK/summary.txt"
 	{
 		echo "run: $name"
 		echo "branch: $branch"
@@ -136,6 +169,7 @@ run_tests_here() {
 		echo "wall: build ${build_seconds} s, tests ${test_seconds} s, total $((SECONDS - started)) s"
 		echo "machine: $(nproc 2>/dev/null) cores, $(free -g 2>/dev/null | awk '/^Mem:/ { print $2 " GB" }'), $(rustc --version)"
 		echo "warm VM: $warm (the checkout and build output of an earlier job)"
+		echo "disk: $disk"
 		echo "crates: $([ -n "$lock_matches" ] && echo "vendor branch (offline)" || echo "crates.io (vendor branch's Cargo.lock differs)")"
 		echo "finished: $(date -u +%FT%TZ)"
 	} > "$HERE_WORK/result.md"
@@ -163,11 +197,15 @@ run_watched() {
 	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$log"
 }
 
-# Counts, failing tests with the first line of their panic, environmental ones apart; verdict green|red
+# Counts, failing tests with the first line of their panic, environmental and known ones (notes/known_failures.md,
+# which the gate accepts too) apart; verdict green|red
 summarize() {
-	local log=$1 environmental=$2
-	awk -v environmental="$environmental" '
-		BEGIN { while ((getline line < environmental) > 0) { sub(/[ \t]*#.*/, "", line); if (line != "") patterns[++count] = line } }
+	local log=$1 environmental=$2 known=${3:-/dev/null}
+	awk -v environmental="$environmental" -v known_list="$known" '
+		BEGIN {
+			while ((getline line < environmental) > 0) { sub(/[ \t]*#.*/, "", line); if (line != "") patterns[++count] = line }
+			while ((getline line < known_list) > 0) if (line ~ /^- [^ |]+ \|/) { split(line, field, " "); known[field[2]] = 1 }
+		}
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
 		/^ +(Running|Doc-tests) / { started++ }
 		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
@@ -181,15 +219,18 @@ summarize() {
 				name = order[i]; line = "  " name ": " (name in panic ? panic[name] : "(no panic line)")
 				is_environmental = 0
 				for (p = 1; p <= count; p++) if (name ~ patterns[p]) is_environmental = 1
-				if (is_environmental) environmental_lines = environmental_lines line "\n"; else { real_lines = real_lines line "\n"; real++ }
+				if (is_environmental) { environmental_lines = environmental_lines line "\n"; environmental_count++ }
+				else if (name in known) { known_lines = known_lines line "\n"; known_count++ }
+				else { real_lines = real_lines line "\n"; real++ }
 			}
 			real += incomplete
 			printf "verdict: %s\n", (real == 0 && started > 0) ? "green" : "red"
-			printf "passed: %d, failed: %d (%d environmental), ignored: %d\n", total["passed"], failures + incomplete, failures - (real - incomplete), total["ignored"]
+			printf "passed: %d, failed: %d (%d environmental, %d known), ignored: %d\n", total["passed"], failures + incomplete, environmental_count, known_count, total["ignored"]
 			if (incomplete) printf "crashed or killed test binaries (no result line): %d\n", incomplete
 			for (name in slow) if (!(name in finished_test)) printf "  never finished: %s\n", name
 			if (real_lines != "") printf "failures:\n%s", real_lines
 			if (environmental_lines != "") printf "environmental (Mac-only, %s):\n%s", "scripts/cloud-test-environmental.txt", environmental_lines
+			if (known_lines != "") printf "known (notes/known_failures.md at the tested tip):\n%s", known_lines
 		}' "$log"
 }
 
@@ -431,7 +472,7 @@ main() {
 		--job) run_job "$2"; exit ;;
 		--run-here) shift; run_here "$@"; exit ;;
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
-		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
+		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
 	card="" wait=1 result_only="" base=()
 	while [[ "${1:-}" == --* ]]; do

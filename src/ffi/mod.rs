@@ -41,24 +41,78 @@ pub fn libm_f64_functions() -> &'static [(&'static str, usize)] {
 }
 
 const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
+const PRELUDE_SOURCE: &str = include_str!("../../lib/prelude.warp");
 /// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
 pub const BUILTIN_LIBRARY: &str = "warp";
+/// `count(xs): int from emitter`: a builtin the emitter expands in place, without a runtime function
+pub const EMITTER_LIBRARY: &str = "emitter";
 
 /// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
+#[derive(Clone, Copy)]
 pub struct ForeignLine<'a> {
 	pub name: &'a str,
 	pub parameters: &'a str,
 	pub result: &'a str,
 }
 
-impl ForeignLine<'_> {
+impl<'a> ForeignLine<'a> {
 	pub fn arity(&self) -> usize {
-		if self.parameters.trim().is_empty() {
-			0
-		} else {
-			self.parameters.split(',').count()
+		self.defaults().count()
+	}
+
+	/// Whether a call of `arguments` values fits: the parameters without a default at least, a rest parameter
+	/// (`values...`) any number more
+	pub fn takes(&self, arguments: usize) -> bool {
+		let required = self.defaults().filter(Option::is_none).count();
+		let rest = self.parameters.contains("...");
+		arguments >= required - usize::from(rest) && (rest || arguments <= self.arity())
+	}
+
+	/// Each parameter's name, `separator` of `separator: text = " "`, `values` of `values...`
+	pub fn names(&self) -> impl Iterator<Item = &'a str> {
+		self.parameters
+			.split(',')
+			.map(|parameter| parameter.split([':', '=']).next().unwrap_or_default().trim().trim_end_matches("..."))
+	}
+
+	/// Each parameter's default as written, `" "` of `separator: text = " "`; None for one without
+	pub fn defaults(&self) -> impl Iterator<Item = Option<&'a str>> {
+		let parameters = self.parameters.trim();
+		let parameters = (!parameters.is_empty()).then_some(parameters).into_iter().flat_map(|all| all.split(','));
+		parameters.map(|parameter| parameter.split_once('=').map(|(_, default)| default.trim()))
+	}
+
+	/// The type of the first parameter, `text` of `t: text`; None for one of any value
+	pub fn first_type(&self) -> Option<&'a str> {
+		let first = self.parameters.split(',').next()?.split('=').next()?;
+		first.split_once(':').map(|(_, type_name)| type_name.trim())
+	}
+
+	/// `(x:number) -> int`, as a signature reads
+	pub fn signature(&self) -> String {
+		let parameters = self.parameters.replace(": ", ":");
+		match self.result {
+			"" => format!("({parameters})"),
+			result => format!("({parameters}) -> {result}"),
 		}
 	}
+}
+
+/// lib/prelude.warp's `from warp` lines: the words the emitter computes as runtime functions (upper, split, map_keys …)
+pub fn runtime_word_lines() -> &'static [ForeignLine<'static>] {
+	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
+	LINES.get_or_init(|| PRELUDE_SOURCE.lines().filter_map(|line| foreign_line(line, BUILTIN_LIBRARY)).collect())
+}
+
+/// lib/prelude.warp's `from emitter` lines: the builtins the emitter expands in place (count, print, fetch …)
+pub fn emitter_word_lines() -> &'static [ForeignLine<'static>] {
+	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
+	LINES.get_or_init(|| PRELUDE_SOURCE.lines().filter_map(|line| foreign_line(line, EMITTER_LIBRARY)).collect())
+}
+
+/// Every typed builtin line of the prelude, runtime functions and words the emitter expands
+pub fn typed_word_lines() -> impl Iterator<Item = &'static ForeignLine<'static>> {
+	runtime_word_lines().iter().chain(emitter_word_lines())
 }
 
 /// lib/math.warp's foreign lines of one library: `'m'` (libm) or warp itself (BUILTIN_LIBRARY)
@@ -103,6 +157,7 @@ impl FfiSignature {
 pub use crate::host::HostState as FfiState;
 
 mod header;
+mod header_cache;
 #[cfg(feature = "native")]
 mod link;
 pub use header::*;
@@ -305,10 +360,13 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 }
 
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
-	// all headers first: their struct types decide how pointers cross (is_struct_type)
-	let header_sigs: Vec<FfiHeaderSignature> =
-		get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library)).collect();
-	header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
+	let headers = get_library_header_paths(library);
+	header_cache::header_signatures(library, &headers, || {
+		// all headers first: their struct types decide how pointers cross (is_struct_type)
+		let header_sigs: Vec<FfiHeaderSignature> =
+			headers.iter().flat_map(|path| parse_header_file(path, library)).collect();
+		header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
+	})
 }
 
 /// The signatures warp links by hand, once per process: the libc functions it adapts (strcmp of two texts), libm's f64

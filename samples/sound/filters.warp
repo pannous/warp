@@ -4,16 +4,16 @@
 use sound
 
 wave_shape = "sawtooth"
-loudness = -9 dB
+loudness = dB(-9)
 filter = "lowpass"              # or "highpass", "bandpass"
 cutoff = 900                    # in Hz
 resonance = 4.0                 # Q, peaks at the cutoff (0.707: flat)
-melody([A2 C3 E3 A3], 1 / 2 beat)
+melody([A2 C3 E3 A3], beat(1/2))
 
 unison = 3                      # three voices per note
 detune = 0.15                   # spread over 0.15 semitones: a fuller sound
 pan = -0.6                      # toward the left speaker (-1 left, 1 right)
-play(chord(A3, minor), 1 bar)
+play(chord(A3, minor), bar 1)
 
 filter = "none"
 unison = 1
@@ -22,5 +22,5 @@ pan = 0.6                       # toward the right
 vibrato = 0.5                   # half a semitone up and down
 vibrato_rate = 6                # six times a second
 tremolo = 0.4                   # the gain dips by 40 %
-play(E5, 1 bar)
+play(E5, bar 1)
 wait_sound()

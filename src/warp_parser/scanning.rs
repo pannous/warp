@@ -64,6 +64,11 @@ impl WarpParser {
 		letter.is_alphabetic() || letter == '_'
 	}
 
+	/// A bound name `$h` at the offset: a hole of a code pattern, or a reference
+	pub(super) fn is_hole_start(&self, offset: usize) -> bool {
+		self.peek_char(offset) == '$' && self.is_identifier_start(offset + 1)
+	}
+
 	pub(super) fn peek_char(&self, offset: usize) -> char {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
@@ -171,7 +176,7 @@ impl WarpParser {
 			if ch == '\n' {
 				had_newline = true;
 				line_indent = 0; // reset for new line
-			} else if ch == '\t' || (ch == ' ' && self.indent_counts_spaces) {
+			} else if ch == '\t' || (ch == ' ' && self.context.indent_counts_spaces) {
 				line_indent += 1; // tabs count as indent, spaces only inside a space-indented block
 			}
 			self.advance();
@@ -302,7 +307,7 @@ pub(crate) fn is_identifier_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
 }
 
-/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/words/music_words.rs)
+/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lib/sound.warp)
 pub(crate) fn is_music_accidental(c: char) -> bool {
 	matches!(c, '♯' | '♭')
 }

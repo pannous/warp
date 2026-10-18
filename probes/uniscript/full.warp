@@ -19,7 +19,7 @@ u32(offset) := byte_at(uniscript_index, offset) + 256 * byte_at(uniscript_index,
 text_hash(key:text) := {
 	hash = 0
 	i = 0
-	while i < key.bytes {
+	while i < key.bytecount {
 		hash = (hash * hash_multiplier + byte_at(key, i)) % hash_modulus
 		i++
 	}
@@ -64,7 +64,7 @@ utf8_width(lead) := if lead < 128 {1} else { if lead < 224 {2} else { if lead < 
 script_of(character:text) := {
 	lead = byte_at(character, 0)
 	second = 0
-	if character.bytes > 1 { second = byte_at(character, 1) }
+	if character.bytecount > 1 { second = byte_at(character, 1) }
 	if lead == 240 and second == 147 { return "egyptian" }
 	if (lead == 226 and second >= 186) or (lead >= 227 and lead <= 233) or (lead == 240 and second >= 160 and second <= 179) { return "cjk" }
 	""
@@ -72,10 +72,10 @@ script_of(character:text) := {
 
 is_name_byte(b) := (b >= 48 and b <= 57) or (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 45 or b == 95
 
-// offset of the first occurrence of byte in text at or after start, else text.bytes
+// offset of the first occurrence of byte in text at or after start, else text.bytecount
 offset_of(text:text, byte, start) := {
 	i = start
-	while i < text.bytes and byte_at(text, i) != byte { i++ }
+	while i < text.bytecount and byte_at(text, i) != byte { i++ }
 	i
 }
 
@@ -83,10 +83,10 @@ offset_of(text:text, byte, start) := {
 hyphenated(name:text) := {
 	out = ""
 	i = 0
-	while i < name.bytes {
+	while i < name.bytecount {
 		space = offset_of(name, 32, i)
 		out += byte_slice(name, i, space)
-		if space < name.bytes { out += "-" }
+		if space < name.bytecount { out += "-" }
 		i = space + 1
 	}
 	out
@@ -100,7 +100,7 @@ styled(block:text, character:text) := {
 	if own >= 0 { return value_of(own) }
 	script = script_of(character)
 	suffix = -1
-	if script.bytes > 0 { suffix = find(names_table, block + " *suffix " + script) }
+	if script.bytecount > 0 { suffix = find(names_table, block + " *suffix " + script) }
 	if suffix < 0 { suffix = find(names_table, block + " *suffix") }
 	if suffix >= 0 { return character + value_of(suffix) }
 	character
@@ -112,10 +112,10 @@ operand(block:text, token:text) := {
 	if own >= 0 { return value_of(own) }
 	characters = token
 	named = find(names_table, token)
-	if named >= 0 and token.bytes > 1 { characters = value_of(named) }
+	if named >= 0 and token.bytecount > 1 { characters = value_of(named) }
 	out = ""
 	i = 0
-	while i < characters.bytes {
+	while i < characters.bytecount {
 		width = utf8_width(byte_at(characters, i))
 		out += styled(block, byte_slice(characters, i, i + width))
 		i += width
@@ -129,7 +129,7 @@ operands(block:text, content:text) := {
 	script = ""
 	parts = 0
 	i = 0
-	while i < content.bytes {
+	while i < content.bytecount {
 		if byte_at(content, i) == 32 { i++ } else {
 			end = offset_of(content, 32, i)
 			part = operand(block, byte_slice(content, i, end))
@@ -149,45 +149,45 @@ operands(block:text, content:text) := {
 
 // the text of <:content>, or the block it opens (as "<block>"), or "" for a closing tag; an Error when nothing matches
 tag(content:text) := {
-	if content.bytes == 0 or byte_at(content, 0) == 47 { return "" }
-	if content.bytes == 1 { return content }
+	if content.bytecount == 0 or byte_at(content, 0) == 47 { return "" }
+	if content.bytecount == 1 { return content }
 	record = find(names_table, hyphenated(content))
 	if record >= 0 { return value_of(record) }
 	if is_block(content) { return "<" + content + ">" }
 	space = offset_of(content, 32, 0)
-	if space == content.bytes { space = offset_of(content, 45, 0) }
-	if space < content.bytes {
+	if space == content.bytecount { space = offset_of(content, 45, 0) }
+	if space < content.bytecount {
 		block = byte_slice(content, 0, space)
-		if is_block(block) { return operands(block, byte_slice(content, space + 1, content.bytes)) }
+		if is_block(block) { return operands(block, byte_slice(content, space + 1, content.bytecount)) }
 	}
 	error("unknown uniscript entity: " + content)
 }
 
-// offset of the next "<:" or "\:" at or after start, else source.bytes
+// offset of the next "<:" or "\:" at or after start, else source.bytecount
 next_marker(source:text, start) := {
 	i = start
-	while i + 1 < source.bytes {
+	while i + 1 < source.bytecount {
 		b = byte_at(source, i)
 		if (b == 60 or b == 92) and byte_at(source, i + 1) == 58 { return i }
 		i++
 	}
-	source.bytes
+	source.bytecount
 }
 
 uniscript(source:text) := {
 	out = ""
 	block = ""
 	i = 0
-	while i < source.bytes {
+	while i < source.bytecount {
 		next = next_marker(source, i)
 		if next > i {
 			run = byte_slice(source, i, next)
-			if block.bytes > 0 { out += operands(block, run) } else { out += run }
+			if block.bytecount > 0 { out += operands(block, run) } else { out += run }
 			i = next
 		} else {
 			if byte_at(source, i) == 92 {
 				end = i + 2
-				while end < source.bytes and is_name_byte(byte_at(source, end)) { end++ }
+				while end < source.bytecount and is_name_byte(byte_at(source, end)) { end++ }
 				name = byte_slice(source, i + 2, end)
 				record = find(names_table, name)
 				if record < 0 { return error("unknown uniscript entity: " + name) }
@@ -195,10 +195,10 @@ uniscript(source:text) := {
 				i = end
 			} else {
 				close = offset_of(source, 62, i + 2)
-				if close == source.bytes { return error("unclosed <: at byte " + byte_slice(source, i, source.bytes)) }
+				if close == source.bytecount { return error("unclosed <: at byte " + byte_slice(source, i, source.bytecount)) }
 				content = byte_slice(source, i + 2, close)
 				text = tag(content)
-				if content.bytes == 0 or byte_at(content, 0) == 47 { block = "" } else {
+				if content.bytecount == 0 or byte_at(content, 0) == 47 { block = "" } else {
 					if is_block(content) { block = content } else { out += text }
 				}
 				i = close + 1

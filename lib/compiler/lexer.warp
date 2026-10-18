@@ -17,6 +17,18 @@ def spans_in(source) {
 	found
 }
 
+// The source with its comments and texts blanked out, a space each
+// Rust twin: declaration_scan.rs code_only
+def code_only(source) {
+	parts = []
+	at = 0
+	for span in spans_in(source) {
+		parts += [source[at .. span#1], " "]
+		at = span#2
+	}
+	join(parts + [source[at .. source.length]], "")
+}
+
 // The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `at`, else `at`
 def span_end(source, at, n) {
 	c = source[at]
@@ -113,20 +125,52 @@ def is_blank(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 // Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_line_comment, at_hash_comment
 def skipped_end(source, at, n) {
 	c = source[at]
-	next = peek(source, at + 1, n)
-	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') {
-		return index_of(source, "\n", at, n)
-	}
-	if c == '#' and (at == 0 or is_blank(source[at - 1])) and hash_comment(source, at, n) {
-		return index_of(source, "\n", at, n)
-	}
-	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
-	if c == '/' and next == '#' { return after(source, "#/", at + 2, n) }
+	comment = comment_end(source, at, n)
+	if comment > at { return comment }
 	if c == '$' { return name_end(source, at + 1, n) }
 	brace = shader_brace(source, at, n)
 	if brace > at { return block_end(source, brace + 1, n) }
 	if text_starts(source, at, n) { return text_end(source, at + 1, closing_of(c), n) }
 	at
+}
+
+// The end of the comment starting at `at` (`// …`, `# …`, `/* … */`, `/# … #/`), else `at`
+// Rust twin: warp_parser/scanning.rs at_line_comment, at_hash_comment
+def comment_end(source, at, n) {
+	c = source[at]
+	next = peek(source, at + 1, n)
+	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') { return index_of(source, "\n", at, n) }
+	if c == '#' and (at == 0 or is_blank(source[at - 1])) and hash_comment(source, at, n) {
+		return index_of(source, "\n", at, n)
+	}
+	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
+	if c == '/' and next == '#' { return after(source, "#/", at + 2, n) }
+	at
+}
+
+// The gaps of a source, read once: for each position, where its code goes on after blanks and comments
+// (`resumes`, the source's length at its end) and whether a line break lies between (`breaks`); a comment's own line
+// breaks do not count. The parser asks these instead of scanning ahead (card parser-tokens)
+class Gaps { resumes: list; breaks: list }
+def gaps(source, n) {
+	resumes = (n + 1) times [n]
+	breaks = (n + 1) times [false]
+	at = n - 1
+	while at >= 0 {
+		c = source[at]
+		end = comment_end(source, at, n)
+		if end > at {
+			resumes[at] = resumes[end]
+			breaks[at] = breaks[end]
+		} else if is_blank(c) {
+			resumes[at] = resumes[at + 1]
+			breaks[at] = if c == '\n' then true else breaks[at + 1]
+		} else {
+			resumes[at] = at
+		}
+		at = at - 1
+	}
+	Gaps{resumes: resumes, breaks: breaks}
 }
 
 // A quote opening a text at `at`
@@ -252,7 +296,18 @@ def name_end(source, from, n) {
 	at
 }
 
-def number_starts(source, at) := is_digit(source[at]) and (at == 0 or not is_name_char(source[at - 1]))
+// `full-name`: a hyphen in a name joins the word after it; `x-1` and `i--` end the name at the hyphen
+// Rust twin: warp_parser/atoms.rs parse_symbol, hyphen_joins_word
+def symbol_end(source, from, n) {
+	at = name_end(source, from, n)
+	while at + 1 < n and source[at] == '-' and is_name_start(source[at + 1]) { at = name_end(source, at + 1, n) }
+	at
+}
+
+def number_starts(source, at) := (is_digit(source[at]) or fraction_starts(source, at)) and (at == 0 or not is_name_char(source[at - 1]))
+
+// `.5`, `[.25]`: a fraction written without its 0, where no operand ends before the dot (`xs.1`, `f().5` stay members)
+def fraction_starts(source, at) := source[at] == '.' and at + 1 < source.length and is_digit(source[at + 1]) and (at == 0 or not ").]}".contains(source[at - 1]))
 
 def number_end(source, at, n) {
 	date = date_length(source, at, n)

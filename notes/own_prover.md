@@ -1,7 +1,7 @@
-# An own prover: absorbing Lean and Bend into warp (2026-10-11)
+# An own prover: absorbing Lean and Bend into warp
 
-User question: "do you see any world in which we absorb the ideas of Lean and Bend into warp and just do everything
-ourselves?" Answer: yes, in a limited form: the core, not the ecosystem.
+Can warp absorb the ideas of Lean and Bend and do everything itself? Yes, in a limited form: the core, not the
+ecosystem.
 Background: notes/bend.md (what Bend 2 and HVM are), notes/laws.md (warp's laws today).
 
 ## Tactics vs proof terms

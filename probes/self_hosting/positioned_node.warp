@@ -1,0 +1,8 @@
+# carries-line: a node built by warp code carries a source position (n.line, n.column)
+n = positioned(symbol("x"), 3, 7)
+print n.line
+print n.column
+print n == symbol("x")
+k = positioned(key(symbol("a"), ":", 1), 2, 1)
+print k.key
+print k.line

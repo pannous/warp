@@ -38,7 +38,7 @@ pub(crate) struct ProgramWords {
 }
 
 impl ProgramWords {
-	fn contains(&self, name: &str) -> bool {
+	pub(super) fn contains(&self, name: &str) -> bool {
 		self.variables.contains(name) || self.functions.contains_key(name)
 	}
 
@@ -68,7 +68,11 @@ pub(crate) fn warn_replaced(
 	let mut warned = HashSet::new();
 	for definition in definitions {
 		let Some((head, _, _)) = crate::type_tests::function_definition(definition) else { continue };
-		let Some(name) = leftmost_symbol(&head) else { continue };
+		// the compiler's own functions (`go·block·1` of a go block) are each code's own, nobody wrote them
+		let Some(name) = leftmost_symbol(&head).filter(|name| !name.contains(crate::analyzer::TEMPORARY_SEPARATOR))
+		else {
+			continue;
+		};
 		let Some(replacing) = words.replacing(&name, head_arities(&head)) else { continue };
 		if warned.insert(name.clone()) {
 			let replaced = signature(&name, &head);
@@ -109,7 +113,7 @@ pub(crate) fn program_words(program: &Node) -> ProgramWords {
 }
 
 /// The arguments a definition head takes, fewest and most: `mix(a, b, c = [])` takes 2 or 3
-fn head_arities(head: &Node) -> (usize, usize) {
+pub(super) fn head_arities(head: &Node) -> (usize, usize) {
 	let parameters = parameters_of(head);
 	let defaulted = parameters.iter().filter(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _)));
 	(parameters.len() - defaulted.count(), parameters.len())
@@ -234,24 +238,9 @@ fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -> bool, nam
 	}
 }
 
-pub(crate) fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
-	if first.is_empty() {
-		return program;
-	}
-	match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator)
-		}
-		meta @ Node::Meta { .. } => meta.under_meta(|node| with_statements_first(node, first)),
-		single => {
-			Node::List(first.into_iter().chain(std::iter::once(single)).collect(), Bracket::None, Separator::Newline)
-		}
-	}
-}
-
 pub(crate) fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	let needed = needed_definitions(&program, &definitions);
-	with_statements_in_front(program, needed)
+	crate::lowering::nodes::with_statements_first(program, needed)
 }
 
 /// The definitions the program's calls reach, and those their calls reach in turn
@@ -294,20 +283,6 @@ fn is_implicit_operation_of(definition: &Node, mentioned: &HashSet<String>) -> b
 		&& matches!(first.drop_meta(), Node::Key(_, Op::Colon, type_node) if mentioned.contains(&type_node.drop_meta().name()))
 }
 
-/// The program with the statements before its own
-pub(crate) fn with_statements_in_front(program: Node, needed: Vec<Node>) -> Node {
-	if needed.is_empty() {
-		return program;
-	}
-	let (statements, separator) = match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			(statements, separator)
-		}
-		single => (vec![single], Separator::Semicolon),
-	};
-	Node::List([needed, statements].concat(), Bracket::None, separator)
-}
-
 /// A mentioned name, or the companion f_as of a mentioned f: overloads lowering calls it where f gives an expected type;
 /// or a word operator called by its word, `matches(s, p)` of `infix operator matches` (word_operators lower_call_forms)
 pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
@@ -316,14 +291,35 @@ pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
 		|| name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX).is_some_and(|word| mentioned.contains(word))
 }
 
+/// The forms a later pass or the emitter turns into calls of prelude words the program never names, one row each: the
+/// prelude word a node needs, if any (card lib-from-runtime). A move of a runtime function into lib/prelude.warp adds
+/// its row; a form missing here still compiles, the second time (pipeline::loading_compiler_words)
+const IMPLIED_WORDS: [fn(&Node) -> Option<&'static str>; 7] = [
+	crate::lowering::broadcasting::implied_word,
+	crate::lowering::text_patterns::implied_word,
+	crate::gpu_maps::implied_word,
+	crate::wasm_emitter::numbers::radix::implied_word,
+	crate::lowering::filled_lists::implied_word,
+	crate::wasm_emitter::numbers::uncertain::implied_word,
+	crate::wasm_emitter::numbers::exact::implied_word,
+];
+
+/// The prelude words IMPLIED_WORDS finds in the statements
+fn implied_words(statements: &[Node]) -> Vec<String> {
+	let mut words = Vec::new();
+	for statement in statements {
+		statement.visit(&mut |node| words.extend(IMPLIED_WORDS.iter().filter_map(|implied| implied(node))));
+	}
+	words.into_iter().map(str::to_string).collect()
+}
+
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
 	let implied = [
-		crate::lowering::broadcasting::implied_words(statements),
-		crate::gpu_maps::implied_words(statements),
+		implied_words(statements),
 		crate::lowering::library_words::implied_count_words(statements),
-		crate::wasm_emitter::numbers::radix::implied_words(statements),
+		crate::compiler::compile_context::read(|context| context.compiler_words.clone()),
 	]
 	.concat();
 	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).chain(implied).collect())
@@ -420,37 +416,37 @@ pub(crate) fn is_global_declaration(statement: &Node) -> bool {
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
 pub(crate) fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Node> {
-	definitions
-		.into_iter()
-		.map(|definition| {
-			names
-				.iter()
-				.fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))
-		})
-		.collect()
+	let renames = shadowed_renames(names.iter().map(String::as_str));
+	definitions.into_iter().map(|definition| renamed_words(definition, &renames)).collect()
 }
 
-/// `from` as a word renamed `to`; a field `x.from` and a map's key `{from: …}` keep their name (card map-key)
-pub(crate) fn renamed_word(node: Node, from: &str, to: &str) -> Node {
+/// Each word a key of `renames` renamed its value, in one walk; a field `x.from` and a map's key `{from: …}` keep their
+/// name (card map-key)
+pub(crate) fn renamed_words(node: Node, renames: &HashMap<String, String>) -> Node {
 	match node {
-		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
-		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_word(*receiver, from, to)), Op::Dot, field),
+		Node::Symbol(name) => Node::Symbol(renames.get(&name).cloned().unwrap_or(name)),
+		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_words(*receiver, renames)), Op::Dot, field),
 		Node::List(items, Bracket::Curly, separator) => Node::List(
-			items.into_iter().map(|item| renamed_entry_value(item, from, to)).collect(),
+			items.into_iter().map(|item| renamed_entry_value(item, renames)).collect(),
 			Bracket::Curly,
 			separator,
 		),
-		other => other.map_children(|child| renamed_word(child, from, to)),
+		other => other.map_children(|child| renamed_words(child, renames)),
 	}
 }
 
 /// A map entry `from: value` with only its value renamed; any other item as a whole
-fn renamed_entry_value(item: Node, from: &str, to: &str) -> Node {
+fn renamed_entry_value(item: Node, renames: &HashMap<String, String>) -> Node {
 	match item {
-		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_entry_value(*node, from, to)), data },
+		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_entry_value(*node, renames)), data },
 		Node::Key(name, Op::Colon, value) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-			Node::Key(name, Op::Colon, Box::new(renamed_word(*value, from, to)))
+			Node::Key(name, Op::Colon, Box::new(renamed_words(*value, renames)))
 		}
-		other => renamed_word(other, from, to),
+		other => renamed_words(other, renames),
 	}
+}
+
+/// `names` mapped to `lib·name` (SHADOWED_WORD_PREFIX), for renamed_words
+pub(crate) fn shadowed_renames<'a>(names: impl IntoIterator<Item = &'a str>) -> HashMap<String, String> {
+	names.into_iter().map(|name| (name.to_string(), format!("{SHADOWED_WORD_PREFIX}{name}"))).collect()
 }

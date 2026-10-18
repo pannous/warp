@@ -11,12 +11,13 @@ Time Machine excluded:
 | /Volumes/Build | disk3s7 | the shared cargo target (`target-dir` in ~/.cargo/config.toml; ~/.cargo/shared-target.noindex is a symlink to it) | only with an empty test queue and no builds (Integrator idle); costs one full rebuild |
 | /Volumes/Worktrees | disk3s9 | new worktrees, `/Volumes/Worktrees/<name>` | never |
 
-Wipe: `diskutil apfs deleteVolume <disk>`, then recreate and redo the setup (guide: ~/dev/bin/notes/apfs-churn-volumes.md).
+Setup, check and wipe: `~/dev/bin/churn-volume setup|check|wipe <volume>` (guide: ~/dev/bin/notes/apfs-churn-volumes.md).
 
 - cowtree needs a registered donor worktree on the Worktrees volume, one per project named after it:
   /Volumes/Worktrees/warp, detached at origin/main, never removed (scripts/prune-worktrees.sh keeps it on origin/main).
-- Older worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay on Data until retired; the Integrator's integrate*
-  worktrees and the infra trees (main-binary, nightly, trial) still live there because scripts name those paths.
+- All worktrees live on the Worktrees volume, the infra trees too (integrate, integrate2,
+  main-binary, nightly, trial); /Volumes/Worktrees/integrator is a plain folder with integrator_tools and the
+  Integrator's logs, batch and held files.
 - sccache's cache and data/ (kept logs and results) stay on Data.
 - APFS clones (clonefile, `cp -c`, cowtree) work only inside one volume. Cargo's hard links stay inside the target dir.
   A copy from Build to Junk or Data (scripts/own-warp.sh → scratch/warp) is a real copy of ~225 MB.

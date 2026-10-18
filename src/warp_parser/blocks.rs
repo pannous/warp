@@ -3,7 +3,7 @@
 use super::expressions::BODY_ENDS;
 use super::*;
 use crate::node::children_rewritten;
-use crate::words::IN_WORD;
+use crate::warp_parser::context::Context;
 
 /// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
 pub(super) fn statement_block(block: Node) -> Node {
@@ -45,45 +45,11 @@ impl WarpParser {
 	}
 
 	pub(super) fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
-		if self.names_end() {
+		if self.names_end {
 			return false;
 		}
-		let mut open = 1;
-		for (word_start, word_end) in code_words(&self.chars, start) {
-			if word_start > 0 && self.chars[word_start - 1] == '.' {
-				continue; // `range.end` is a property
-			}
-			let word: String = self.chars[word_start..word_end].iter().collect();
-			match word.as_str() {
-				END_KEYWORD => open -= 1,
-				opener if openers.contains(&opener) && !is_endless_definition(&self.chars, word_end) => open += 1,
-				_ => {}
-			}
-			if open == 0 {
-				return true;
-			}
-		}
-		false
-	}
-
-	/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned variable
-	/// (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
-	pub(super) fn names_end(&self) -> bool {
-		let next_visible =
-			|from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
-		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
-		code_words(&self.chars, 0).any(|(word_start, word_end)| {
-			if self.chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
-				return false;
-			}
-			let before = previous_visible(word_start).map(|index| self.chars[index]);
-			let after = next_visible(word_end);
-			let assigned =
-				after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
-			// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
-			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')'))
-				|| assigned
-		})
+		let mut indexes = self.closing_ends.borrow_mut();
+		indexes.entry(openers.join(" ")).or_insert_with(|| ClosingEnds::of(&self.chars, openers)).close_after(start)
 	}
 
 	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
@@ -149,7 +115,7 @@ impl WarpParser {
 	pub(in crate::warp_parser) fn skip_end_line(&mut self) {
 		let before = self.mark();
 		let (_, indent) = self.skip_whitespace();
-		if indent != self.base_indent || !self.matches_keyword(END_KEYWORD) {
+		if indent != self.context.base_indent || !self.matches_keyword(END_KEYWORD) {
 			self.rewind(before);
 			return;
 		}
@@ -162,18 +128,16 @@ impl WarpParser {
 		let next_line = self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').skip(1);
 		let indented_by_spaces = next_line.take_while(|ch| matches!(ch, ' ' | '\t')).any(|ch| *ch == ' ');
 		let before_block = self.mark();
-		let outer_counts_spaces = self.indent_counts_spaces;
-		self.indent_counts_spaces |= indented_by_spaces;
-		let (_, indent) = self.skip_whitespace();
-		if indent <= self.base_indent {
-			self.indent_counts_spaces = outer_counts_spaces;
+		let spaced =
+			Context { indent_counts_spaces: self.context.indent_counts_spaces || indented_by_spaces, ..self.context };
+		let (_, indent) = self.within(spaced, Self::skip_whitespace);
+		if indent <= self.context.base_indent {
 			self.rewind(before_block);
 			return None;
 		}
-		let outer_indent = std::mem::replace(&mut self.base_indent, indent);
-		let block = self.parse_list_with_separators(None, Bracket::None);
-		self.base_indent = outer_indent;
-		self.indent_counts_spaces = outer_counts_spaces;
+		let block = self.within(Context { base_indent: indent, ..spaced }, |parser| {
+			parser.parse_list_with_separators(None, Bracket::None)
+		});
 		self.seek_back_over_whitespace(); // the newline after the block still separates the next statement
 		Some(curly_block(block))
 	}
@@ -186,17 +150,14 @@ impl WarpParser {
 
 	/// The statements up to the closing `end` (consumed) as a `{…}` block; a `then` block also ends at its `else`
 	pub(in crate::warp_parser) fn parse_end_block(&mut self, stops_at_else: bool) -> Node {
-		let outer_else = std::mem::replace(&mut self.stops_at_else, stops_at_else);
-		let outer_end = std::mem::replace(&mut self.stops_at_end, true);
-		let outer_indent = self.base_indent;
 		let before_first_line = self.mark();
 		let (_, indent) = self.skip_whitespace();
 		self.rewind(before_first_line);
-		self.base_indent = self.base_indent.max(indent); // its lines may be indented, the `end` line not
-		let block = self.parse_list_with_separators(None, Bracket::None);
-		self.base_indent = outer_indent;
-		self.stops_at_else = outer_else;
-		self.stops_at_end = outer_end;
+		// its lines may be indented, the `end` line not
+		let base_indent = self.context.base_indent.max(indent);
+		let block = self.within(Context { stops_at_else, stops_at_end: true, base_indent, ..self.context }, |parser| {
+			parser.parse_list_with_separators(None, Bracket::None)
+		});
 		self.skip_whitespace();
 		if self.matches_keyword(END_KEYWORD) {
 			self.advance_by(END_KEYWORD.len());
@@ -206,8 +167,8 @@ impl WarpParser {
 
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
 	pub(in crate::warp_parser) fn at_block_close(&self) -> bool {
-		self.stops_at_end
-			&& (self.matches_keyword(END_KEYWORD) || (self.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
+		self.context.stops_at_end
+			&& (self.matches_keyword(END_KEYWORD) || (self.context.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
 	}
 }
 
@@ -221,6 +182,69 @@ pub(super) fn without_end_lines(body: Node) -> Node {
 			separator,
 		),
 		other => children_rewritten(other, without_end_lines),
+	}
+}
+
+/// `range.end` is a property, no keyword
+fn is_property(chars: &[char], word_start: usize) -> bool {
+	word_start > 0 && chars[word_start - 1] == '.'
+}
+
+/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned
+/// variable (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
+pub(super) fn names_end(chars: &[char]) -> bool {
+	let next_visible =
+		|from: usize| chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
+	let previous_visible = |before: usize| chars[..before].iter().rposition(|ch| !ch.is_whitespace());
+	code_words(chars, 0).any(|(word_start, word_end)| {
+		if chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
+			return false;
+		}
+		let before = previous_visible(word_start).map(|index| chars[index]);
+		let after = next_visible(word_end);
+		let assigned = after.is_some_and(|index| chars[index] == '=' && chars.get(index + 1) != Some(&'='));
+		// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
+		matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(chars[index], ',' | ')')) || assigned
+	})
+}
+
+/// The `end` keywords and openers (`do`, `then`, …) of a source in order, as running balances: an opener adds one, an
+/// `end` takes one away. A block opened before a word closes when the balance later falls below the one before that
+/// word, so the lowest balance from each word on answers every search with one lookup
+pub(super) struct ClosingEnds {
+	word_starts: Vec<usize>,
+	balances: Vec<i32>,
+	lowest_from: Vec<i32>,
+}
+
+impl ClosingEnds {
+	fn of(chars: &[char], openers: &[&str]) -> Self {
+		let (mut word_starts, mut balances, mut balance) = (vec![], vec![], 0);
+		for (word_start, word_end) in code_words(chars, 0) {
+			if is_property(chars, word_start) {
+				continue;
+			}
+			let word: String = chars[word_start..word_end].iter().collect();
+			balance += match word.as_str() {
+				END_KEYWORD => -1,
+				opener if openers.contains(&opener) && !is_endless_definition(chars, word_end) => 1,
+				_ => continue,
+			};
+			word_starts.push(word_start);
+			balances.push(balance);
+		}
+		let mut lowest_from = balances.clone();
+		for at in (1..lowest_from.len()).rev() {
+			lowest_from[at - 1] = lowest_from[at - 1].min(lowest_from[at]);
+		}
+		ClosingEnds { word_starts, balances, lowest_from }
+	}
+
+	/// Whether an `end` from `start` on closes a block opened just before it, counting the openers in between
+	fn close_after(&self, start: usize) -> bool {
+		let first = self.word_starts.partition_point(|word_start| *word_start < start);
+		let before = first.checked_sub(1).map_or(0, |at| self.balances[at]);
+		self.lowest_from.get(first).is_some_and(|lowest| *lowest < before)
 	}
 }
 
@@ -274,36 +298,6 @@ pub(super) fn with_trailing_block(assignment: Node, block: Node) -> Node {
 			Node::Key(target, op, Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)))
 		}
 		other => other,
-	}
-}
-
-/// The body block at the end of an `if`/`while` header: `c {b}` is the pair [c {b}], and in `i < n {b}` the
-/// block juxtaposes only with the rightmost operand `n`, so it is split off the right spine of the comparison
-pub(super) fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, Node)> {
-	match header.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 => match items[1].drop_meta() {
-			Node::List(_, Bracket::Curly, _) => Some((items[0].clone(), items[1].clone())),
-			Empty if empty_is_block => Some((items[0].clone(), items[1].clone())),
-			_ => None,
-		},
-		// `if x in xs {…}`: the block after the collection is the body
-		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_WORD) => {
-			split_trailing_block(&items[2], empty_is_block).map(|(collection, block)| {
-				(
-					Node::List(
-						vec![items[0].clone(), items[1].clone(), collection],
-						bracket.clone(),
-						separator.clone(),
-					),
-					block,
-				)
-			})
-		}
-		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => {
-			split_trailing_block(right, empty_is_block)
-				.map(|(operand, block)| (Node::Key(left.clone(), *op, Box::new(operand)), block))
-		}
-		_ => None,
 	}
 }
 

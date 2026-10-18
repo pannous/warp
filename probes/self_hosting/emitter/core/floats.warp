@@ -1,0 +1,5 @@
+# emitter core: float arithmetic, ints promoted
+# 8.75
+x = 2.5
+y = x * 3 + 1.25
+y

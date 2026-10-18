@@ -6,6 +6,7 @@ name = "warp-runtime"
 version = "1.3.0"
 edition = "2021"
 description = "Runs compiled Warp programs without the compiler: the stub of Warp's standalone executables"
+license = "MIT"
 repository = "https://github.com/pannous/warp"
 homepage = "https://warp.pannous.com/"
 

@@ -82,6 +82,13 @@ COMPONENT_HOLE_SHOWN = "addclicked 2 timesaddclicked 10 times"
 REPORT = "(?report shows the report button, which drafts an issue with the program)"  # card report-button
 REPORT_CODE = 'print "reported"'
 REPORT_PRINTED = "reported"
+BUG_BUTTON = "(the bug button sends a comment with the program; ?bug_token stores the token, a wrong one is refused)"  # card bug-report
+BUG_TOKEN = "wrong-probe-token"  # never the real one: the endpoint refuses it, so no card is made
+BUG_COMMENT = "probe comment"
+FIX_BUTTON = "(an \"I meant\" button rewrites the code and runs it again)"  # card clicking-meant: playground.js applyFix
+FIX_BUTTON_CODE = "a=5; b=1; a-b:2; a-b"  # the kebab key's fix renames it at the key and at its read (P81)
+FIX_BUTTON_LABEL = "I meant: a_b"
+FIX_BUTTON_FIXED = ("2", "a=5; b=1; a_b:2; a_b")
 FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
 FILE_KEPT_TEXT = "kept across a reload"
 WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
@@ -166,7 +173,8 @@ FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox
 # 2026-10-15: on the swirl itself, also with a 3 s loop, or on the sample after it); card logs-uncaught finds the cause
 FIREFOX_SKIPPED_SAMPLES = {"warp_compiled_wgsl_shader": "its worker, replaced, logs 'uncaught exception: undefined' (card logs-uncaught)"}
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
-	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING}
+	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING,
+	BUG_BUTTON: ["403"]}  # the browser logs the refused wrong token itself
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
 MANY_TASKS_CODE = """twice(x) := x * 2
@@ -520,6 +528,35 @@ def text_hole_wrong(code=TEXT_HOLE_CODE, root="section", expected_text=TEXT_HOLE
 	return [f"{part}: {shown.get(part)!r}, expected {expected!r}" for part, expected in (("text", expected_text), ("kept", True)) if shown.get(part) != expected]
 
 
+def bug_button_wrong(page_url):
+	"""?bug_token=… is stored and leaves the address; the report holds comment, program and output; pannous.com refuses
+	the wrong token, which the page then forgets"""
+	open_page(f"{page_url}{'&' if '?' in page_url else '?'}bug_token={BUG_TOKEN}")
+	wait_for_isolation()
+	run_code(REPORT_CODE)
+	shown = browser("eval", f"""(async () => {{
+		const address = location.href;
+		document.getElementById("bug").open = true;
+		document.getElementById("bug-comment").value = {json.dumps(BUG_COMMENT)};
+		document.getElementById("bug-express").checked = true;
+		const report = playground.bugReport();
+		document.getElementById("bug-form").requestSubmit();
+		const status = document.getElementById("bug-status");
+		for (let waited = 0; !status.textContent.startsWith("not sent") && waited < 15000; waited += 100) await new Promise(done => setTimeout(done, 100));
+		return JSON.stringify({{ address, report, status: status.textContent, forgotten: localStorage.getItem("warp-playground-bug-token") === null }});
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"report": {}, "status": f"(page gave no answer: {shown or browser_complaint})"}
+	open_page(page_url)
+	wait_for_isolation()
+	report = shown["report"]
+	expected = {"token": BUG_TOKEN, "comment": BUG_COMMENT, "code": REPORT_CODE, "express": True}
+	wrong = [f"bug report {name}: {report.get(name)!r}, expected {value!r}" for name, value in expected.items() if report.get(name) != value]
+	wrong += [] if REPORT_PRINTED in report.get("output", "") else [f"bug report without the program's output: {report.get('output')!r}"]
+	wrong += [] if BUG_TOKEN not in shown.get("address", "") else [f"bug token left in the address: {shown['address']}"]
+	wrong += [] if "wrong token" in shown["status"] else [f"wrong bug token not refused: {shown['status']!r}"]
+	return wrong + ([] if shown.get("forgotten") else ["refused bug token still stored"])
+
+
 def report_wrong(page_url):
 	"""?report turns the report button on in this browser and ?report=off off again; its issue holds the program"""
 	with_parameter = lambda parameter: f"{page_url}{'&' if '?' in page_url else '?'}{parameter}"
@@ -687,6 +724,30 @@ def gpu_jobs_wrong():
 	"""the last of many GPU jobs gives its numbers, or says why not, but never ran out of memory"""
 	shown = run_code(GPU_JOBS_CODE)
 	return [f"after 400 GPU jobs: {shown!r}"] if GPU_JOBS_NEVER in shown or not shown else []
+
+
+def fix_button_wrong():
+	"""the first "I meant" button, clicked as a person clicks it (pointer events, not element.click(): the user's click
+	had no effect while the probe's passed), leaves the fixed code and its value"""
+	run_code(FIX_BUTTON_CODE)
+	found = browser("eval", f"""(() => {{
+		const button = [...document.querySelectorAll(".apply-fix")].find(button => button.textContent === {json.dumps(FIX_BUTTON_LABEL)});
+		if (button) button.id = "fix-under-test";
+		return Boolean(button);
+	}})()""")
+	if found != "true":
+		return [f"no {FIX_BUTTON_LABEL!r} button: {found or browser_complaint}"]
+	if webdriver:
+		browser("eval", "document.getElementById('fix-under-test').click()")
+	else:
+		browser("click", "#fix-under-test")
+	shown = browser("eval", """(async () => {
+		await new Promise(done => setTimeout(done, 100));
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		return JSON.stringify([document.getElementById("value").textContent, playground.code()]);
+	})()""")
+	shown = tuple(json.loads(json.loads(shown))) if shown.startswith('"') else (f"(page gave no answer: {shown or browser_complaint})",)
+	return [] if shown == FIX_BUTTON_FIXED else [f"after clicking the fix: {shown!r}, expected {FIX_BUTTON_FIXED!r}"]
 
 
 def many_tasks_wrong():
@@ -918,7 +979,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

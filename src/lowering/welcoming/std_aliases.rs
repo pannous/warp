@@ -64,12 +64,11 @@ pub(crate) const USE_WORD: &str = "use";
 const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as: file")];
 
 pub fn lower(program: Node) -> Node {
-	let names = crate::soft_keywords::names_given(&program);
+	let names = crate::program_names::Bindings::of(&program).given();
 	let kept: Vec<&str> =
 		STD_ALIASES.iter().map(|alias| alias.module).filter(|module| names.contains(*module)).collect();
 	// `def parse_json(t) {…}` too: the program's own word gets no note (card hint-own-definition)
-	let defined = crate::library_words::defined_names(&program);
-	note_internal_words(&program, &names.union(&defined).cloned().collect());
+	note_internal_words(&program, &names);
 	// after `use json`, json's words are called bare too: `parse(t)` is json.parse(t), unless the program defines parse
 	// (decision used-module-bare-words, notes/dispatch.md level 3)
 	let bare_forms: Vec<&StdAlias> = (BARE_FORMS.iter().filter(|form| !kept.contains(&form.member)))
@@ -228,10 +227,5 @@ pub(crate) fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 	let uses = modules
 		.into_iter()
 		.map(|module| Node::List(vec![symbol(USE_WORD), symbol(module)], Bracket::None, Separator::Space));
-	match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List(uses.chain(statements).collect(), Bracket::None, separator)
-		}
-		single => Node::List(uses.chain(std::iter::once(single)).collect(), Bracket::None, Separator::Semicolon),
-	}
+	crate::lowering::nodes::with_statements_first(program, uses.collect())
 }

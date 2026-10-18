@@ -14,13 +14,14 @@ name = "warp-lang" # crates.io: `warp` is the web framework (user 2026-10-06: "l
 version = "1.3.0"
 edition = "2021"  # Cargo edition! NOT package edition!
 description = "Warp: the Warp language, a data notation that is also a programming language, compiled to WebAssembly GC"
+license = "AGPL-3.0-or-later"
 repository = "https://github.com/pannous/warp"
 homepage = "https://warp.pannous.com/"
 readme = "README.md"
 keywords = ["wasm", "webassembly", "language", "compiler", "notation"]
 categories = ["compilers", "wasm", "command-line-utilities"]
-# the published crate: the sources and the two files they include_str!, not the tests, wiki or playground
-include = ["src/**", "build.rs", "packages.warp", "web/playground/foreign_python.py", "README.md"]
+# the published crate: the sources and the files they include_str! (lib/, the playground's host scripts), not the tests or wiki
+include = ["src/**", "build.rs", "packages.warp", "web/playground/foreign_python.py", "web/playground/*.js", "lib/**", "README.md", "LICENSE"]
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
 
@@ -60,6 +61,7 @@ anyhow = "1.0"
 #regex = "1.10.3" # removed: unused
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.1", default-features = false, features = ["alloc"] } # lowered modules kept on disk (lowered_modules.rs)
 serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"] } # objects keep the order of warp maps (and of JS JSON.stringify); a float read from JSON is the float written (the browser hands results over as JSON)
 #wast = "*"
 wasmparser = "0.259"
@@ -96,7 +98,7 @@ libloading = { version = "0.9", optional = true }  # Dynamic library loading for
 #It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
-wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat", "demangle", "addr2line"], optional = true }
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat", "demangle", "addr2line", "incremental-cache", "parallel-compilation"], optional = true }
 wasmtime-wasi = { version = "49.0.1", optional = true }
 # `warp build --component` (src/component_builder.rs): a module and its WIT world encoded as a component; the versions
 # wasmtime itself builds with (its own wasm-encoder copy)
@@ -189,13 +191,21 @@ codegen-units = 16
 debug = "line-tables-only" # full DWARF is 53 MB; lines and function names are what the debugger and traces need
 strip = false
 
+# the native compiler (brew, the GitHub releases, crates.io): optimized for speed. Measured 2026-10-17 against
+# opt-level z: compiling 3.3x faster (a 300-function program 5.0 s → 1.5 s), the binary 15.5 → 28.9 MB, the
+# standalone executables' warp-runtime stub 1.02 → 1.22 MB
 [profile.release]
 incremental = false    # Release doesn't need incremental
-opt-level = "z"        # Optimize for size
+opt-level = 3
 lto = true             # Full LTO for maximum treeshaking
 codegen-units = 1      # Single codegen unit for best optimization
 panic = "abort"        # Smaller binary, no unwinding
 strip = true           # Strip symbols
+
+# web/playground's warp.wasm, which every visitor downloads: optimized for size (build.sh)
+[profile.web-release]
+inherits = "release"
+opt-level = "z"
 
 # the native runtime runs the programs: its GC and libcalls at full speed (a size-optimized wasmtime ran a GC-heavy
 # map program 2.5× slower than the wasmtime CLI); the web build has no wasmtime, so its size is untouched

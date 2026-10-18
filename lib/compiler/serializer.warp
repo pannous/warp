@@ -3,7 +3,8 @@
 //   a number, yes, no or ø, ["text", "abc"], ["symbol", "x"], ["char", 'c'], ["key", op, left, right],
 //   ["list", bracket, separator, items…], ["literal", source, node] (a literal kept as written: 01234, 1.10),
 //   ["attribute", name, value, node] (@name(value) node), ["error", node], ["type", name, body], ["data", description]
-//   ["number", text] (a number beyond int and float, as Rust writes it)
+//   ["number", text] (a number beyond int and float, as Rust writes it), ["template", text] (an interpolating text,
+//   holes `${expr}`, literal dollars `$$`)
 // an op as written (":", "=", "#"), a bracket by its opening ("{" "[" "(" "<", "" for none, both glyphs for another
 // pair), a separator as written ("," ";" "\n" "\t" " ", "" for none)
 
@@ -57,7 +58,7 @@ written(view: any, with_attributes: any) := {
 	if is_empty(view) { return empty_text }
 	tag = kind(view)
 	if tag == "symbol" { return view#2 }
-	if tag == "text" { return quoted(view#2) }
+	if tag == "text" or tag == "template" { return quoted(view#2) }
 	if tag == "char" { return quoted_by("" + view#2, "'") }
 	if tag == "list" { return list_text(view) }
 	if tag == "key" { return key_text(view#2, view#3, view#4, view) }
@@ -116,15 +117,17 @@ key_text(op: any, left: any, right: any, view: any) := {
 	attribute_prefix(right) + left_side(left, op) + op + gap + written(right, no)
 }
 
-// the left side of op: a key of `:` stays bare (`name: 1`), a text or character operand keeps its quotes (`"ab"+x`)
+// the left side of op: a key of `:` stays bare (`name: 1`), a text, template or character operand keeps its quotes
+// (`"ab"+x`, `"n is ${n}"==t`)
 left_side(left: any, op: any) := if op == ":" then shown(left) else operand_text(left)
-operand_text(left: any) := if kind(bare(left)) == "text" or kind(bare(left)) == "char" then serialize(left) else shown(left)
+operand_text(left: any) := if QUOTED_OPERANDS.contains(kind(bare(left))) then serialize(left) else shown(left)
+QUOTED_OPERANDS = ["text", "template", "char"]
 
 // a node as Rust's Display shows it: texts and symbols bare, list items with their separator and a space
 shown(view: any) := {
 	if view is number { return "" + view }
 	tag = kind(view)
-	if tag == "symbol" or tag == "text" or tag == "data" or tag == "number" { return view#2 }
+	if tag == "symbol" or tag == "text" or tag == "template" or tag == "data" or tag == "number" { return view#2 }
 	if tag == "char" { return "" + view#2 }
 	if is_layer(view) { return shown(layered(view)) }
 	if tag == "list" {

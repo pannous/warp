@@ -7,6 +7,7 @@
 //! A lookup it cannot answer (a missing key, a key no name) takes the generic way on that copy, with its errors.
 
 use super::super::lists::list_dispatch::Slot;
+use super::super::lists::list_ops::ItemWalk;
 use super::super::WasmGcEmitter;
 use crate::compiler::context::UserFunctionDef;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
@@ -262,10 +263,11 @@ impl WasmGcEmitter {
 		if !NODE_MAP_FUNCTIONS.iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
-		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		let (node, text) = (self.type_manager.node_type, self.type_manager.text_type);
 		let (map, array, slots) =
 			(self.type_manager.node_map_type, self.type_manager.node_array_type, self.type_manager.limbs_type);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_list = self.node_list_type();
 		let map_ref = Ref(self.node_map_ref());
 		let slots_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(slots) });
 		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
@@ -287,34 +289,19 @@ impl WasmGcEmitter {
 		});
 
 		// FNV-1a of the letters of a name
-		self.runtime_function(NODE_MAP_HASH, vec![node_ref], vec![int], vec![int, int, int], |s, f| {
-			let (pointer, length, hash) = (1, 2, 3);
-			for (index, local) in [(0, pointer), (1, length)] {
-				s.emit_field(f, 0, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNonNull(HeapType::Concrete(string)),
-						I::StructGet { struct_type_index: string, field_index: index },
-						I::LocalSet(local),
-					],
-				);
-			}
+		let text_bytes = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(text) });
+		self.runtime_function(NODE_MAP_HASH, vec![node_ref], vec![int], vec![text_bytes, int, int], |s, f| {
+			let (bytes, index, hash) = (1, 2, 3);
+			s.emit_text_bytes(f, 0);
+			Self::emit_list(f, &[I::LocalSet(bytes), I::I32Const(FNV_OFFSET), I::LocalSet(hash)]);
+			let condition = [I::LocalGet(index), I::LocalGet(bytes), I::ArrayLen, I::I32LtU];
 			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::I32Const(FNV_OFFSET), I::LocalSet(hash),
-				I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-						I::LocalGet(length), I::I32Eqz, I::BrIf(1),
-						I::LocalGet(hash), I::LocalGet(pointer),
-						I::I32Load8U(MemArg { offset: 0, align: 0, memory_index: 0 }), I::I32Xor,
-						I::I32Const(FNV_PRIME), I::I32Mul, I::LocalSet(hash),
-						I::LocalGet(pointer), I::I32Const(1), I::I32Add, I::LocalSet(pointer),
-						I::LocalGet(length), I::I32Const(1), I::I32Sub, I::LocalSet(length),
-						I::Br(0),
-				I::End, I::End,
-				I::LocalGet(hash),
+			Self::emit_while(f, &condition, &[
+				I::LocalGet(hash), I::LocalGet(bytes), I::LocalGet(index), I::ArrayGetU(text), I::I32Xor,
+				I::I32Const(FNV_PRIME), I::I32Mul, I::LocalSet(hash),
+				I::LocalGet(index), I::I32Const(1), I::I32Add, I::LocalSet(index),
 			]);
+			f.instruction(&I::LocalGet(hash));
 		});
 
 		// the slot of a name: the one holding its entry, else the empty one where it would go
@@ -521,9 +508,10 @@ impl WasmGcEmitter {
 			NODE_MAP_OF,
 			vec![node_ref],
 			vec![map_ref],
-			vec![map_ref, nullable, nullable, ValType::I64],
+			vec![map_ref, nullable, ValType::I64, node_list, ValType::I32],
 			|s, f| {
-				let (table, cell, entry, kind) = (1, 2, 3, 4);
+				let (table, entry, kind) = (1, 2, 3);
+				let walk = ItemWalk { items: 4, index: 5, item: entry };
 				let add_entry = |s: &Self, f: &mut Function| {
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
@@ -573,33 +561,15 @@ impl WasmGcEmitter {
 					I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty),
 				]);
 				s.call(f, "not_an_object");
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::End,
-					I::LocalGet(0), I::LocalSet(cell),
-					I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-							I::LocalGet(cell), I::RefIsNull, I::BrIf(1),
-							I::LocalGet(cell), I::RefAsNonNull,
-							I::StructGet { struct_type_index: node, field_index: 1 },
-							I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(entry), I::RefIsNull, I::I32Eqz,
-							I::If(BlockType::Empty),
-				]);
-				kind_is(f, entry, Kind::Key as i64);
-				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
-				s.call(f, "not_an_object");
 				f.instruction(&I::End);
-				add_entry(s, f);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::End,
-					I::LocalGet(cell), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index: 2 },
-					I::LocalSet(cell),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(table),
-				]);
+				s.emit_item_walk(f, 0, walk, |f| {
+					kind_is(f, entry, Kind::Key as i64);
+					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+					s.call(f, "not_an_object");
+					f.instruction(&I::End);
+					add_entry(s, f);
+				});
+				f.instruction(&I::LocalGet(table));
 			},
 		);
 

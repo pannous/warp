@@ -173,53 +173,36 @@ pub(crate) fn class_fields(node: &Node) -> ClassFields {
 	let mut fields = std::collections::HashMap::new();
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
-			let typed = class_items(body)
-				.iter()
-				.filter(|item| method_parts(item).is_none())
-				.filter_map(|item| Some((declared_field_name(item)?, field_type_name(item))))
-				.collect();
+			let typed = field_items(body).into_iter().map(|(_, name, type_name)| (name, type_name)).collect();
 			fields.insert(name.drop_meta().name(), typed);
 		}
 	});
 	fields
 }
 
-/// `class Tree{left: Tree}`: a field of the class's own type without `?` could never be filled, every Tree needing a
-/// Tree first (card empty-field, user decision: strict, the fix `left: Tree?`)
-pub fn check_self_typed_fields(program: &Node) -> Option<crate::errors::diagnostic::Diagnostic> {
-	let mut unfillable = None;
-	program.visit(&mut |part| {
-		let Node::Type { name, body } = part else { return };
-		let class = name.drop_meta().name();
-		let field = class_items(body)
-			.into_iter()
-			.filter(|item| method_parts(item).is_none())
-			.find(|item| field_type_name(item) == class);
-		if let Some(field) = field.filter(|_| unfillable.is_none()) {
-			let field_name = declared_field_name(&field).unwrap_or_default();
-			unfillable = Some(
-				crate::errors::diagnostic::Diagnostic::at(
-					&field,
-					format!("{field_name} can never be filled: every {class} needs a {class} first"),
-				)
-				.fix(format!("{field_name}: {class}?")),
-			);
-		}
-	});
-	unfillable
-}
-
 /// Each field of a class body: its name, type name (empty when untyped) and default value (`legs: int = 4`)
 pub(crate) fn field_declarations(body: &Node) -> Vec<(String, String, Option<Node>)> {
-	class_items(body)
-		.iter()
-		.filter(|item| method_parts(item).is_none())
-		.filter_map(|item| {
+	field_items(body)
+		.into_iter()
+		.map(|(item, name, type_name)| {
 			let default = match item.drop_meta() {
 				Node::Key(_, Op::Assign, value) => Some(value.as_ref().clone()),
 				_ => None,
 			};
-			Some((declared_field_name(item)?, field_type_name(item), default))
+			(name, type_name, default)
+		})
+		.collect()
+}
+
+/// Each field of a class body as written, with its name and type name (empty when untyped)
+pub(crate) fn field_items(body: &Node) -> Vec<(Node, String, String)> {
+	class_items(body)
+		.into_iter()
+		.filter(|item| method_parts(item).is_none())
+		.filter_map(|item| {
+			let name = declared_field_name(&item)?;
+			let type_name = field_type_name(&item);
+			Some((item, name, type_name))
 		})
 		.collect()
 }
@@ -853,7 +836,7 @@ fn gives_value(body: &Node) -> bool {
 }
 
 /// The names a method body reads from its receiver: fields and getters (`area`), and methods it calls (`area()`)
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Readable<'a> {
 	/// `self` in a class body, the first parameter of an outside method
 	receiver: &'a str,
@@ -880,7 +863,51 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 			}))
 		}
 		Node::Key(object, Op::Dot, member) => Node::Key(Box::new(receiver_reads(*object, readable)), Op::Dot, member),
+		Node::List(items, bracket, separator) if separator.separates_statements() => {
+			Node::List(statements_reads(items, readable), bracket, separator)
+		}
+		other if let_binding(&other).is_some() => other.map_children(|part| value_reads(part, readable)),
 		other => other.map_children(|child| receiver_reads(child, readable)),
+	}
+}
+
+/// `n = value` of `let n = value`: the value reads the receiver, n is the new local
+fn value_reads(binding: Node, readable: &Readable) -> Node {
+	match binding {
+		Node::Key(target, Op::Assign, value) => {
+			Node::Key(target, Op::Assign, Box::new(receiver_reads(*value, readable)))
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(value_reads(*node, readable)), data },
+		word => word,
+	}
+}
+
+/// Statements in order: from `let n = …` on, n is the method's local, no longer its receiver's field
+fn statements_reads(statements: Vec<Node>, readable: &Readable) -> Vec<Node> {
+	let mut readable = readable.clone();
+	statements
+		.into_iter()
+		.map(|statement| {
+			let read = receiver_reads(statement, &readable);
+			if let Some(local) = let_binding(&read) {
+				readable.fields.retain(|field| field.as_str() != local);
+			}
+			read
+		})
+		.collect()
+}
+
+/// The name `let name = …` binds
+fn let_binding(statement: &Node) -> Option<String> {
+	let Node::List(items, _, Separator::Space) = statement.drop_meta() else {
+		return None;
+	};
+	match items.as_slice() {
+		[keyword, binding] if keyword.is_symbol(crate::words::LET_WORD) => match binding.drop_meta() {
+			Node::Key(target, Op::Assign, _) => target.drop_meta().symbol_name().map(str::to_string),
+			_ => None,
+		},
+		_ => None,
 	}
 }
 

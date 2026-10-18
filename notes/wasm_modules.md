@@ -1,7 +1,7 @@
 # Importing WebAssembly core modules
 
 `import name` (also `use`, `require`, `include`) finds `name.wasp`/`name.warp` first; failing those `name.wasm` or its
-text form `name.wat`, in the module search directories (src/modules.rs `use_wasm_module`). An explicit path works too:
+text form `name.wat`, in the module search directories (src/modules/loader.rs `use_wasm_module`). An explicit path works too:
 `import "lib/x.wasm"`, `use "x.wat"`.
 
 ```warp
@@ -14,13 +14,13 @@ twice(ft) + half(5.0)                   // 86.5
   convert arguments and results like C calls (an i32 result is an Int, f32/f64 a Float). Other exports (references,
   v128, memories, tables) are not callable from warp yet.
 - An exported global reads as its value: `ft` becomes the call `ft()` (wasm_modules::rewrite_uses), linked to a getter.
-  P140: assigning a mutable global (`level = 5`, `level += 2`, qualified `fourty_two.level = 5`) sets it in the module (the setter import `set level`);
+  Assigning a mutable global (P140) (`level = 5`, `level += 2`, qualified `fourty_two.level = 5`) sets it in the module (the setter import `set level`);
   an immutable one is the loud error of P130's `pi = 4`: "ft is an immutable global of an imported module; fix: another name".
 - An export qualified by the module's file stem, `fourty_two.twice(21)`, `fourty_two.ft`, is the same import under the
   key `fourty_two.twice` (wasm_modules::rewrite_uses): it reaches an export named like a warp builtin,
   `fourty_two.double(21)`. P141: the bare `double(21)` is the loud error "double is ambiguous: fourty_two.double(21) for
   the export, 21 as float for the cast" (an export a cast or type word would take).
-- P139: `import`, `use`, `require` of a module only declare (their value is ø); `include m` also runs m's `main` (or
+- `import`, `use`, `require` of a module only declare (P139) (their value is ø); `include m` also runs m's `main` (or
   `_start`) and is its value: `include fourty_two` is 42.
 - Linking (src/modules/wasm_modules/mod.rs `link`, native): every import from a module path is a host function that instantiates
   the module in the run's store at its first call (HostState::wasm_modules), so its state (globals, memory) lasts for
@@ -42,7 +42,7 @@ twice(ft) + half(5.0)                   // 86.5
   text from the module's memory (NULL is ø) and is typed Text (`t = shout("ab"); letters(t)`); header parameter names
   serve named arguments where the module has no name section. host.js cannot see an import's types, so the program
   carries a custom section `warp.c_calls` (wasm_modules c_calls: `module\tname\tparameters\tresult`) and host.js
-  callC crosses the same way. Plan: notes/stdlib_connectors.md "Status 2026-10-06".
+  callC crosses the same way. Connectors overview: notes/stdlib_connectors.md.
 - How each C value crosses (wasm_modules c_parameters, CParameter, CResult, by the header):
   - `char *` and a const pointer to anything but a struct (zlib's `const Bytef *buf`, `const void *input`): the
     program's text, copied into the module's malloc. An unsigned count right after it (`size_t length`, `uLong len`)
@@ -97,5 +97,5 @@ twice(ft) + half(5.0)                   // 86.5
 
 - Not yet: output buffers whose length is a plain count rather than a pointer (`uint8_t *out, size_t out_len`,
   blake3's finalize), callbacks (function pointers), structs by value.
-- Not yet: `help m.f` (warp has no help word yet). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
+- Not yet: `help m.f` for an imported module's function (`warp help <module>` covers standard modules). tests/wasm/test_wasm.rs test_import_wasm pins P139 (P144).
 - WebAssembly components (`use lib.wasm`, long form `use wasm "lib.wasm" as lib`; `lib.f(x)`) are the other road: notes/stdlib_connectors.md.

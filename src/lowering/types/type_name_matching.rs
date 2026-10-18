@@ -144,7 +144,7 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
 	type_name.symbol_name().filter(|word| {
-		(is_kinded_type_or_any(word.trim_end_matches('?')) || is_union(word))
+		(is_kinded_type_or_any(word.trim_end_matches('?')) || is_union(word) || is_collection_type(word))
 			&& !crate::operators::FUNCTION_KEYWORDS.contains(word)
 	})?;
 	let type_name = type_name.drop_meta();
@@ -155,22 +155,9 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
 		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
 		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && is_block(body)) => {
-			Some(key(flat_head(&items[0]), Op::Define, converted(&items[1], type_name)))
+			Some(key(items[0].clone(), Op::Define, converted(&items[1], type_name)))
 		}
 		_ => None,
-	}
-}
-
-/// The glued signature keeps its parameters as one group, `(half (x))`: `(half x)` like the head of `half(x) := …`
-fn flat_head(head: &Node) -> Node {
-	match head.drop_meta() {
-		Node::List(items, bracket, separator) if items.len() == 2 => match items[1].drop_meta() {
-			Node::List(parameters, _, _) => {
-				Node::List([vec![items[0].clone()], parameters.clone()].concat(), bracket.clone(), separator.clone())
-			}
-			_ => head.clone(),
-		},
-		_ => head.clone(),
 	}
 }
 
@@ -215,11 +202,19 @@ fn is_union(word: &str) -> bool {
 }
 
 /// A result checked rather than converted, where converting could lose something: a union (user 2026-10-12, `-> int or
-/// text`) and a whole-number type (decision float-result: `-> int { 2.5 }` is no 2), optional too (`-> int?`: an int, ø
-/// or an Error, decision error-optional); `-> text { 3 }` still converts
+/// text`), a whole-number type (decision float-result: `-> int { 2.5 }` is no 2) and a collection (`: list` of a text
+/// is no list of its characters, card list-result-type), optional too (`-> int?`: an int, ø or an Error, decision
+/// error-optional); `-> text { 3 }` still converts
 pub(crate) fn is_checked_result(word: &str) -> bool {
 	let word = word.strip_suffix('?').unwrap_or(word);
-	is_union(word) || (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
+	is_union(word)
+		|| is_collection_type(word)
+		|| (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
+}
+
+/// `list`, `map`: a collection type, whose values no kind names (type_tests::held_kind)
+fn is_collection_type(word: &str) -> bool {
+	crate::type_tests::COLLECTION_WORDS.contains(&word.trim_end_matches('?'))
 }
 
 /// `{the result: int or text = value; the result}`: the value admitted as a variable declared of the type is, a

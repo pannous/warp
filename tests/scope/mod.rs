@@ -26,4 +26,5 @@ mod test_typed_globals; // card w0-globals
 mod test_undefined_variable;
 mod test_use_scopes;
 mod test_variable_kind_change;
-mod test_variable_kind_clash; // found merging decimals-exact
+mod test_variable_kind_clash;
+mod test_variable_named_like_method; // card bytes-variable-clash // found merging decimals-exact

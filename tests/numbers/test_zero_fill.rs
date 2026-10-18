@@ -27,3 +27,8 @@ fn a_zero_list_is_still_a_list_of_zeros() {
 fn a_zero_list_of_nothing_is_empty() {
 	is!("n=0; x = n*int; count(x)", 0);
 }
+
+#[test]
+fn a_filled_list_is_the_prelude_word_beside_a_program_fill() {
+	is!("fill(n, v) := 9; n = 3; m = n times [5]; fill(1, 2) + count(m)", 12);
+}

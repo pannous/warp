@@ -1,15 +1,11 @@
 # ± values: numbers with uncertainty (card plus-minus)
 
-User (card): "allow `x ≈ radius±1`, hopefully similar to Julia, which just passes through all the functions without
-needing any modifications to the system at all". Julia's Measurements.jl: `x = 5 ± 1` is one number with an
+Goal: `x ≈ radius±1` like Julia, where a ± value passes through every function without changes to them.
+Julia's Measurements.jl: `x = 5 ± 1` is one number with an
 uncertainty; every generic function computes with it, the uncertainty propagates (linear error propagation).
 
-## Today (2026-10-08, probed)
 - `±` (also ` +- `) parses as Op::PlusMinus. units.rs evaluates `1950 ± 50` and `1950 ± 50 cm` at compile time as a
-  Tolerance (integers, printed as written); `1900 - 2000 AD == 1950 AD ± 50` waits for a user decision
-  (notes/ignored_tests.md).
-- Any arithmetic on it is the error "arithmetic on a value with tolerance or a range is not supported", `r ± 0.1` of a
-  variable or a float is a parse error, `sqrt(4 ± 1)` too, `12 ≈ r±1` the same error.
+  Tolerance (integers, printed as written).
 - `≈` (notes/approximately.md): numbers within 1e-9 relative (`tolerance`), field by field for objects.
 
 ## Meaning (user decisions P217–P220, notes/decisions.md)
@@ -22,7 +18,7 @@ uncertainty; every generic function computes with it, the uncertainty propagates
 - Default (undoable): never silent: a function that cannot take an interval (FFI, `as int`, a parameter typed
   `x: float`) is a loud error naming the ± value, never a dropped bound.
 
-## Where it runs (branch plus-minus, done)
+## Where it runs
 No static kind and no specialising: `a ± b` is a run-time value, Kind::Uncertain = 17, analyzed as Kind::Data, so every
 `+ - * /` that meets one goes through node_add/sub/mul/div (list_ops.rs), and untyped functions pass it through
 unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
@@ -35,7 +31,7 @@ unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
   span comparisons (`1950 ± 50 == 1900 - 2000`) and every case with units stay compile-time as before.
 - Tests: tests/numbers/test_plus_minus.rs.
 
-- Card plus-minus-print (done): print and `str(x)` show `6.0 ± 1.0` (uncertain_text in list_join, the format of
+- Printing: print and `str(x)` show `6.0 ± 1.0` (uncertain_text in list_join, the format of
   the read-back); `x.value`, `x.low`, `x.high`, `x.uncertainty` as floats (uncertain_field, in the constant-field
   lookup like `e.message`); `-x` of any run-time number is node_sub(0, x). Sorting orders intervals by their values
   (node_order). Tests: tests/numbers/test_plus_minus_print.rs, sample samples/numbers/measurements.warp.
@@ -47,15 +43,15 @@ unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
   `certainly`: an overlap counts as no and warns once per run through host.warn, naming the line; a program that
   makes ± values and orders values therefore imports the host (may_order_intervals).
 
-- Card plus-minus-playground (done): math words map an interval (P217). √ ∛ abs and the libm functions of one
+- Math words map an interval (P217). √ ∛ abs and the libm functions of one
   argument (crate::uncertain::INTERVAL_WORDS), of a value held as a Node in a program with ± values, call
   uncertain_<word> (wasm_emitter/uncertain.rs): f of a number as before, of an interval f at both ends, least and
   greatest, and an extremum or pole the interval reaches is the bound (sin's ±1 at π/2 + 2πk, tan's ±∞ at its poles,
   cosh's and abs's least at 0). The analyzer types the word's result a Node when its argument is one. `(y)` of a
-  variable now has the variable's kind (it read as the call y()). The playground reader (web.rs) reads ± values back.
+  variable has the variable's kind. The playground reader (web.rs) reads ± values back.
   Tests: tests/numbers/test_plus_minus_math.rs.
 
-## ± with units at run time (card plus-minus-units, 2026-10-09)
+## ± with units at run time
 `x = 5 m ± 1 cm; x * 2` gives `10.000 ± 0.020m`. units.rs lower_run_time_tolerances turns a written `v ± s` with a unit
 into `quantity(amount ± spread, "unit")` (spread converted to v's unit, a plain spread counts in it, another dimension
 is a DimensionError), but only when units::answer can't answer the whole program (RUN_TIME_TOLERANCE_ERRORS or
@@ -65,7 +61,7 @@ value (type_tests.rs runtime_kind_mask; `float` stays strict). Function paramete
 A final Quantity value shows its text (card instance-final). `f` called with a quantity and with a plain number calls
 a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_methods.rs specialized_calls). Tests: tests/numbers/test_plus_minus_units.rs, samples/numbers/measurements.warp.
 
-## Quantities with tolerance (card quantity-tolerance, 2026-10-09)
+## Quantities with tolerance
 - `rope certainly > 4 m`: lower_certainty runs before class_methods, whose with_certain_amounts compares
   `rope.amount` with `same_dimension(rope, 4 m, "compare").amount`, so the interval survives (Quantity.more is a plain yes).
 - `rope.low/.high/.value/.uncertainty`: Quantity methods (lib/units.warp) over `bound_of`; the names are
@@ -88,7 +84,7 @@ a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_me
   marks a `number` parameter type with IntervalNumber, which annotated_kind reads as a Node parameter (Kind::Empty)
   with the run-time mask of `number`; a wrong argument says "needs a number".
 
-## Gaussian ± (card plus-minus-gaussian, 2026-10-09)
+## Gaussian ±
 `5 ± 1σ` or `5 ± 1 σ` (the spread times the symbol σ, joined like a unit word: card trailing-symbol) is a Gaussian: one standard deviation; a bare `5 ± 1` stays an
 interval (P217). Its parts are [value, low, high, σ, id₁, c₁, id₂, c₂, …]: each contribution c = ∂/∂xᵢ·σᵢ of an
 independent source xᵢ (a fresh id per written `±σ`), σ = √Σc² (Measurements.jl's linear propagation with
@@ -98,11 +94,9 @@ gaussian_add…div → gaussian_combine (merges contributions by id); math words
 An interval and a Gaussian don't mix (run-time failure). Tests: tests/numbers/test_plus_minus_gaussian.rs.
 
 ## Open
-- `if area certainly > 10 then …` parses as `(if area) (then (certainly > 10) …)`: the condition stops at the second
-  word; `if (area certainly > 10) then` and `ok = area certainly > 10` work. `x + 1 certainly < 8` reads
-  `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`.
-- `x + 1 certainly < 8` reads `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`. (`if area certainly > 10 then`
-  works since card parser-if-stops: a condition takes a braceless call with a variable argument, as a branch does.)
+- `1900 - 2000 AD == 1950 AD ± 50`: a range with a unit is a subtraction, its tests are ignored as cleanup-edge
+  (card discuss-moving).
+- `x + 1 certainly < 8` reads `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`.
 - `"y=" + x` with an interval x is the general type error text + data (no implicit conversion of a run-time value);
   `"y=" + str(x)` works. Text interpolation does not exist in warp (notes/i18n.md).
 - A typed parameter `f(x: float)` refuses an interval argument ("not a number"); the error should name the ± value.

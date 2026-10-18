@@ -1,6 +1,108 @@
 // The prelude (notes/stdlib.md §8): words every program has without `use`; only those it calls come along.
 // Each is `name(parameters) := body` (modules::prelude_word_arity reads the parameters); library_words maps other
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
+
+// The words warp computes itself, the emitter's runtime functions, with their signatures (decision
+// foreign-signature, `from warp`); a parameter with a default may be left out (`s.split` splits at spaces). A word
+// of several lines is overloaded by its first parameter's type, whose line gives the call's result (card typed-builtins)
+upper(t: text): text from warp
+lower(t: text): text from warp
+reverse(xs: list): list from warp
+reverse(t: text): text from warp
+sort(xs: list): list from warp
+sort(t: text): text from warp
+split(t: text, separator: text = " "): list of text from warp
+join(xs: list, separator: text): text from warp
+chars(t: text): list of text from warp
+code_point_list(t: text): list of int from warp
+ord(c: codepoint): int from warp
+map_keys(m): list from warp
+map_values(m): list from warp
+map_entries(m): list from warp
+map_without(m, key): list from warp
+map_of_entry(entry): same as entry from warp
+map_get_or(m, key, default = ø): value of m from warp
+collection_contains(xs, x) from warp
+collection_position(xs, x) from warp
+slice(xs: list, start, end = ø): list from warp
+slice(t: text, start, end = ø): text from warp
+field_with(object, name, value): same as object from warp
+instance_copy(x, shallow): same as x from warp
+wasi_environment(): text from warp
+kind_mark(x: any): int from warp
+
+// The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
+// results, as the analyzer reads them
+count(xs: list): int from emitter
+count(t: text): int from emitter
+count(m: map): int from emitter
+sum(xs: list): element of xs from emitter
+byte_size(x): int from emitter
+type(x): symbol from emitter
+print(values...): nothing from emitter
+puts(t: text): int from emitter
+puti(n: int): int from emitter
+putl(n: int): int from emitter
+putf(x: float): int from emitter
+fetch(url: text, options...): text from emitter
+// the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
+map(xs, f: function) from emitter
+filter(xs, f: function) from emitter
+reduce(xs, f: function) from emitter
+fold(xs, start, f: function) from emitter
+any(xs, f: function): bool from emitter
+all(xs, f: function): bool from emitter
+find(xs, f: function) from emitter
+each(xs, f: function) from emitter
+add(xs, x) from emitter
+insert(xs, x, at: int) from emitter
+remove(xs, x) from emitter
+pop(xs) from emitter
+clear(xs) from emitter
+number(x): number from emitter
+// the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
+list_become(place, fresh): same as place from emitter
+removed_value(x, k): any from emitter
+list_sorted_by(xs, keys): any from emitter
+string(x): text from emitter
+
+// Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
+alias warn = warning
+alias tuple = list
+alias keys = map_keys
+alias values = map_values
+alias contains = collection_contains
+alias has = collection_contains
+alias includes = collection_contains
+alias get = map_get_or
+// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
+alias index_of = collection_position
+// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too; decision text-unit-plurals:
+// `t.graphemes`, `t.codepoints` are the lists
+alias characters = chars
+alias glyphs = chars
+alias graphemes = chars
+alias codepoints = code_point_list
+alias uppercase = upper
+alias lowercase = lower
+// the text builtin trim, Python's strip
+alias strip = trim
+alias reversed = reverse
+alias size = count
+alias len = count
+alias length = count
+alias sorted = sort
+alias clone = copy
+alias ordinal = ord
+alias codepoint = ord
+alias isdigit = is_digit
+alias average = mean
+alias is_letter = is_alpha
+alias isalpha = is_alpha
+alias is_alnum = is_alphanumeric
+alias isalnum = is_alphanumeric
+alias is_whitespace = is_space
+alias isspace = is_space
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
 // Python's `list(x)`: the list itself, a text's characters
@@ -16,6 +118,8 @@ last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
 round_to(x, places) := round(x * 10 ^ places) / 10 ^ places
 // the arithmetic mean, also spelled average
 mean(xs) := sum(xs) / count(xs)
+// the UTF-8 bytes of a text, `t.bytes` (decision text-unit-plurals)
+bytes(t: text) := (0..byte_size(t)).map(offset => byte_at(t, offset))
 // x↑n, Knuth's up arrow, is the power and x↓b the log of x to base b (card easy-add): operators of numbers only, so
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
@@ -26,6 +130,45 @@ is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
+is_word_char(c) := is_alphanumeric(c) or c == '_'
+// at least one character, each passing is_class: consists_of("42", is_digit)
+consists_of(t: text, is_class) := { if t == "" { return false }; for c in t { if not is_class(c) { return false } }; true }
+// a whole number, optionally signed: "-3"
+is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
+// a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`
+fits_text_type(t: text, type: text) := match type {
+	"int" | "integer" => is_integer(t)
+	"number" | "float" => { parts = split(t, "."); count(parts) <= 2 and is_integer(parts#1) and (count(parts) == 1 or consists_of(parts#2, is_digit)) }
+	"digit" => count(t) == 1 and is_digit(t)
+	"digits" => consists_of(t, is_digit)
+	"letter" => count(t) == 1 and is_alpha(t)
+	"letters" => consists_of(t, is_alpha)
+	"hex" => consists_of(t, is_hex_digit)
+	"space" => consists_of(t, is_space)
+	"word" => consists_of(t, is_word_char)
+	_ => true
+}
+// text patterns (notes/matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
+// match (also when t is no text); the first piece is the prefix, the last the suffix, "" where the pattern starts or
+// ends with a hole; each hole's text fits its type, "" for any text
+text_holes(t, pieces: [text], types: [text]) := {
+	if not (t is text) { return [] }
+	prefix = first(pieces)
+	suffix = last(pieces)
+	if count(t) < count(prefix) + count(suffix) or not starts_with(t, prefix) or not ends_with(t, suffix) { return [] }
+	rest = t[count(prefix): count(t) - count(suffix)]
+	holes = []
+	for piece in pieces[1: count(pieces) - 1] {
+		at = index_of(rest, piece)
+		if at == 0 { return [] }
+		holes = holes + [rest[0: at - 1]]
+		rest = rest[at - 1 + count(piece):]
+	}
+	holes = holes + [rest]
+	for i in 1 to count(holes) { if not fits_text_type(holes#i, types#i) { return [] } }
+	holes
+}
 // the digits of n in a base up to 36, letters past 9 (upper: true capitals): to_base(255, 16) is "ff",
 // from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
 // symbols, which needs the grapheme runtime
@@ -36,6 +179,61 @@ from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwx
 radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
 hex_text(n: int) := radix_text(n, 16, "0x")
 binary_text(n: int) := radix_text(n, 2, "0b")
+// a value's form as its kind field holds it (card kind-reflection, src/type_kinds.rs), what the lib printers read:
+// the Kind in the low byte (Int 1, Text 3, Key 6, List 8, Error 11, …), the info byte above it (a key's operator, a
+// list's bracket, an Int's bool 1, hex 2 or binary 3), and the mark of a type value (`int`, `type(x)`; code is
+// `x is code`)
+kind_number(x: any) := kind_mark(x) % 256
+kind_info(x: any) := (kind_mark(x) >> 8) % 256
+is_type_value(x: any) := (kind_mark(x) >> 54) % 2 == 1
+// n copies of value, ø for none (list.warp fill): `n times [x]` and `int[n]` where no typed array holds them; the
+// compiler calls it (wasm_emitter/lists/list_emitter.rs), so a fractional count is the error the runtime gives
+filled_list(n, value: any) := { if n > floor(n) { raise "count must be an integer; fix: compute it with /! (floor division) or `… as int`" }; out = []; for i in 1 to n { out = out + [value] }; out }
+// how a ± value prints (card plus-minus, P219): the ± part to 2 significant digits, the value to the same place, 7.0 ± 2.0;
+// a ± part of 0 or ∞, or more digits than 17, as each float prints; gaussian 1 adds σ. The printer calls it with the
+// parts (wasm_emitter/numbers/uncertain.rs)
+uncertain_text(value: float, radius: float, gaussian: int) := {
+	sigma = if gaussian == 1 then "σ" else ""
+	if not (radius > 0.0 and radius < 1.0 / 0.0) { return "\(value) ± \(radius)\(sigma)" }
+	scale = 1.0
+	decimals = 0
+	while radius * scale < 9.5 and decimals <= 17 { scale = scale * 10.0; decimals += 1 }
+	while radius * scale >= 99.5 { scale = scale / 10.0 }
+	if decimals > 17 or abs(value) * scale >= 1e17 { return "\(value) ± \(radius)\(sigma)" }
+	place_text(value, scale, decimals) + " ± " + place_text(radius, scale, decimals) + sigma
+}
+// x rounded to the place of 1/scale with that many decimals: whole units half away from zero, decimals half to even
+place_text(x: float, scale: float, decimals: int) := {
+	sign = if x < 0.0 then "-" else ""
+	if decimals == 0 { return sign + to_base((floor(abs(x) * scale + 0.5) * round(1.0 / scale)) as int, 10) }
+	digits = round(abs(x) * scale) as int
+	fraction = ""
+	while #fraction < decimals { fraction = (digits % 10 + 48) as char + fraction; digits = digits /! 10 }
+	sign + to_base(digits, 10) + "." + fraction
+}
+// `x as decimal` of a ratio (card repeating-decimals): the digits before the period, then the period's overlined, 1/6
+// is 0.16̅; a terminating decimal, or a period longer than 1000 digits, as the ratio prints. The cast calls it with the
+// ratio's parts, the denominator never 0 (wasm_emitter/numbers/exact.rs)
+decimal_text(numerator: int, denominator: int) := {
+	rest = denominator; twos = 0; fives = 0
+	while rest % 2 == 0 { rest = rest /! 2; twos += 1 }
+	while rest % 5 == 0 { rest = rest /! 5; fives += 1 }
+	if rest == 1 { return "\(numerator / denominator)" }
+	// the period: the first power of ten that is 1 modulo the rest
+	power = 10 % rest; period = 1
+	while power != 1 and period <= 1000 { power = power * 10 % rest; period += 1 }
+	if period > 1000 { return "\(numerator / denominator)" }
+	before_period = if twos > fives then twos else fives
+	whole = abs(numerator)
+	text = (if numerator < 0 then "-" else "") + "\(whole /! denominator)."
+	remainder = whole % denominator
+	for digit in 1 to before_period + period {
+		remainder = remainder * 10
+		text = text + "\(remainder /! denominator)" + (if digit > before_period then "̅" else "")
+		remainder = remainder % denominator
+	}
+	text
+}
 // x as a fraction, by its continued fraction (src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
@@ -73,6 +271,25 @@ popped_item(x, k) := if x is map then x.get(k) else x#(popped_position(x, k))
 popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x#i for i in 1 to count(x) if i != popped_position(x, k)]
 // Python's xs.clear() and m.clear() (card python-aliases, declaration_lowering cleared_collection): the empty list or map
 cleared(x) := if x is map then {} else []
+// xs.insert(v, at: i) (list_mutations inserted_in_place): the list with v at the 0-based position i, past the end or
+// before 0 at the end
+inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs[0: i] + [v] + xs[i:]
+// `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
+// pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
+// other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
+alike(a: any, b: any, tolerance: float, rough: bool) := {
+	if bracket_of(a) == "{" and bracket_of(b) == "{" {
+		return #a == #b and keys(a).all(k => b has k and alike(a[k], b[k], tolerance, rough))
+	}
+	if bracket_of(a) != ø and bracket_of(a) == bracket_of(b) {
+		return #a == #b and (1 to #a).all(i => alike(a#i, b#i, tolerance, rough))
+	}
+	if type(a) is key and type(b) is key {
+		keys_alike = alike(key_of(a), key_of(b), tolerance, rough)
+		return op_of(a) == op_of(b) and keys_alike and alike(value_of(a), value_of(b), tolerance, rough)
+	}
+	if rough then values_rough(a, b, tolerance) else values_similar(a, b, tolerance)
+}
 // `a .op b` where the compiler cannot tell which side is a list (broadcasting.rs, card compile-shaders): each item of
 // a list with the other side, two lists paired by index, two numbers plainly; `combined` is `(l, r) => l op r`. Both
 // sides are `any`: inferred from the body, one call with a number made it a list

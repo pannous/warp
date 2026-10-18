@@ -4,6 +4,8 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::{op_to_code, Op};
 use crate::type_kinds::{Kind, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
 use crate::type_kinds::{CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
+use crate::wasm_emitter::lists::list_dispatch::LIST_ITEMS;
+use crate::wasm_emitter::lists::list_ops::ItemWalk;
 use crate::wasm_emitter::WasmGcEmitter;
 use crate::words::ORD_WORD;
 use wasm_encoder::*;
@@ -29,7 +31,6 @@ const MAX_INT_BYTES: i32 = 20;
 const DECIMAL_BASE: i64 = 10;
 const ZERO_DIGIT: i32 = b'0' as i32;
 const MINUS_SIGN: i32 = b'-' as i32;
-const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 /// The text of a ø item in the text of a list (`str([1, ø])` is "[1 ø]")
 const EMPTY_TEXT: &str = "ø";
 
@@ -179,8 +180,9 @@ impl WasmGcEmitter {
 		}
 		let (nullable, node_ref) = (Ref(self.node_ref(true)), Ref(self.node_ref(false)));
 		let node_type = self.type_manager.node_type;
-		self.runtime_function("list_reverse", vec![nullable], vec![node_ref], vec![nullable], |s, f| {
-			let reversed = 1;
+		let locals = [vec![nullable], self.item_walk_locals().to_vec()].concat();
+		self.runtime_function("list_reverse", vec![nullable], vec![node_ref], locals, |s, f| {
+			let (reversed, walk) = (1, ItemWalk::at(2));
 			// a text reverses by characters
 			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
 			for kind in [Kind::Text, Kind::Codepoint] {
@@ -193,10 +195,10 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 			s.emit_empty_as_null(f, 0);
 			s.emit_require_list(f);
-			s.emit_cell_walk(f, 0, |f| {
+			s.emit_item_walk(f, 0, walk, |f| {
 				s.emit_field(f, 0, 0);
-				s.emit_field(f, 0, 1);
-				Self::emit_list(f, &[I::LocalGet(reversed), I::StructNew(node_type), I::LocalSet(reversed)]);
+				Self::emit_list(f, &[I::LocalGet(walk.item), I::LocalGet(reversed), I::StructNew(node_type)]);
+				f.instruction(&I::LocalSet(reversed));
 			});
 			s.emit_list_result(f, reversed);
 		});
@@ -210,31 +212,12 @@ impl WasmGcEmitter {
 		}
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let locals = vec![ValType::I32, ValType::I64, ValType::I64, ValType::I64, ValType::I64, nullable, nullable];
+		let locals = [vec![ValType::I32], vec![ValType::I64; 4], vec![self.node_list_type(), nullable]].concat();
 		self.runtime_function(NODE_SLICE, vec![nullable, nullable, nullable], vec![node_ref], locals, |s, f| {
 			let (list, start, end) = (0, 1, 2);
-			let (is_text, length, from, to, index, cell, sliced) = (3, 4, 5, 6, 7, 8, 9);
-			let walk_cells = |f: &mut Function| {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(list), I::LocalSet(cell),
-					I::I64Const(0), I::LocalSet(index),
-					I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-							I::LocalGet(cell), I::RefIsNull, I::BrIf(1),
-				]);
-			};
-			let next_cell = |f: &mut Function| {
-				s.emit_field(f, cell, 2);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalSet(cell),
-					I::LocalGet(index), I::I64Const(1), I::I64Add, I::LocalSet(index),
-					I::Br(0),
-					I::End,
-					I::End,
-				]);
-			};
+			let (is_text, length, from, to, index, found, sliced) = (3, 4, 5, 6, 7, 8, 9);
+			let found_part =
+				|field_index| I::StructGet { struct_type_index: s.type_manager.node_list_type, field_index };
 			// bound = the int in `bound`, or `default` for ø; never negative (no wrap around, Footguns.md); at most length
 			let clamped_bound = |f: &mut Function, bound: u32, default: u32, target: u32| {
 				s.emit_empty_as_null(f, bound);
@@ -270,24 +253,24 @@ impl WasmGcEmitter {
 			s.emit_text_as_characters(f, list, is_text);
 			s.emit_empty_as_null(f, list);
 			s.emit_require_list(f);
-			walk_cells(f);
-			next_cell(f);
-			Self::emit_list(f, &[I::LocalGet(index), I::LocalSet(length), I::I64Const(0), I::LocalSet(from)]);
-			clamped_bound(f, start, from, from);
-			clamped_bound(f, end, length, to);
-			// the cells from…to-1, collected backwards
-			walk_cells(f);
+			f.instruction(&I::LocalGet(list));
+			s.call(f, LIST_ITEMS);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(index), I::LocalGet(to), I::I64GeS, I::BrIf(1),
-				I::LocalGet(index), I::LocalGet(from), I::I64GeS, I::If(BlockType::Empty),
+				I::LocalTee(found), found_part(0), I::I64ExtendI32U, I::LocalSet(length), I::I64Const(0), I::LocalSet(from),
 			]);
-			s.emit_field(f, cell, 0);
-			s.emit_field(f, cell, 1);
-			Self::emit_list(f, &[I::LocalGet(sliced), I::StructNew(node_type), I::LocalSet(sliced), I::End]);
-			next_cell(f);
-			f.instruction(&I::LocalGet(sliced));
-			s.call(f, "list_reverse");
+			clamped_bound(f, start, from, from);
+			clamped_bound(f, end, length, to);
+			// the cells of the items to-1 back to from
+			Self::emit_list(f, &[I::LocalGet(to), I::LocalSet(index)]);
+			let more = [I::LocalGet(index), I::LocalGet(from), I::I64GtS];
+			let mut cell = vec![I::LocalGet(index), I::I64Const(1), I::I64Sub, I::LocalSet(index)];
+			cell.extend([I::LocalGet(list), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+			cell.extend([I::LocalGet(found), found_part(1), I::LocalGet(index), I::I32WrapI64]);
+			let array = s.type_manager.node_array_type;
+			cell.extend([I::ArrayGet(array), I::LocalGet(sliced), I::StructNew(node_type), I::LocalSet(sliced)]);
+			Self::emit_while(f, &more, &cell);
+			s.emit_list_result(f, sliced);
 			f.instruction(&I::LocalSet(sliced));
 			s.emit_characters_as_text(f, sliced, is_text);
 		});

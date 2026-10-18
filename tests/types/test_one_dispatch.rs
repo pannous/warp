@@ -168,6 +168,11 @@ fn a_field_named_like_a_library_word_is_written() {
 fn a_local_name_leaves_the_keyword_to_the_top_level() {
 	is!("f(undo) := undo + 1; x = 1; x = 2; undo x; x + f(1)", 3);
 	is!("o = {undo: 5}; x = 1; x = 2; undo x; x + o.undo", 6);
+}
+
+#[test]
+#[ignore = "dropped: rust-cleanup-drops: the set x to y phrase; warp writes x = y (set x of y to z may come back as library code)"]
+fn a_local_set_leaves_the_set_phrase_to_the_top_level() {
 	is!("g() := { set = 2; set }; set x to 5; x + g()", 7);
 }
 

@@ -65,10 +65,7 @@ fn mentions_generator(node: &Node) -> bool {
 }
 
 fn is_function_name(node: &Node) -> Option<&'static str> {
-	match node.drop_meta() {
-		Node::Symbol(name) => FUNCTIONS.iter().find(|f| *f == name).copied(),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| FUNCTIONS.iter().find(|f| **f == name).copied())
 }
 
 /// Programs that were not evaluated exactly see exact reals as their f64 value (as before), except their constant
@@ -301,10 +298,6 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 		}
 		// To do why does to have the special logic over here?
 		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if left.is_empty_node() => unary(op, evaluate(right, scope)?),
-		Op::Square | Op::Cube if right.is_empty_node() => {
-			let exponent = if op == Op::Square { 2 } else { 3 };
-			arithmetic(evaluate(left, scope)?, Op::Pow, Value::Real(Real::Exact(Exact::integer(exponent))))
-		}
 		Op::As => {
 			let value = evaluate(left, scope)?;
 			match right.drop_meta() {

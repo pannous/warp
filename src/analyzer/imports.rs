@@ -70,7 +70,6 @@ fn operation_required(ctx: &mut Context, key: &Node, op: &Op, value: &Node) {
 			Op::Pow => {
 				ctx.required_functions.insert("i64_pow");
 			}
-			Op::Square | Op::Cube => return analyze_required_functions(ctx, key),
 			_ if op.is_prefix() && key.is_empty_node() => return analyze_required_functions(ctx, value),
 			Op::Hash => subscript_required(ctx, key, value),
 			Op::Dot if method_counter_required(ctx, key, value) => return,
@@ -224,7 +223,7 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::Eq | Op::Ne => &[VALUES_EQUAL],
 		Op::Identical | Op::NotIdentical => &[VALUES_EQUAL, SAME_NODE],
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
-		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
+		Op::Inc | Op::Dec | Op::Neg | Op::Abs => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		Op::Xor => &[INT_RUNTIME],
 		Op::BitAnd | Op::BitOr => &[INT_RUNTIME, IS_TRUTHY],
 		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::numbers::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
@@ -239,7 +238,6 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
 	use crate::wasm_emitter::time::times::TIME_FIELD;
 	match word {
-		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
 		crate::time::INSTANT_AT => {
 			&[crate::time::INSTANT_AT, TIME_FIELD, crate::wasm_emitter::lists::list_ops::RETURNED_ERROR]
 		}
@@ -250,13 +248,12 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			crate::wasm_emitter::time::times::ZONE_NAMES,
 			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
-		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		crate::list_mutations::LIST_BECOME => &[crate::list_mutations::LIST_BECOME],
 		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => {
 			&[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY]
 		}
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
-		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
+		INSERT_EITHER_CALL => &[crate::list_mutations::LIST_BECOME],
 		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
 		crate::wasm_emitter::text::text_builtins::TEXT_FORM => &["list_join"],
 		// IEEE bits beyond the fixnums are BigInts

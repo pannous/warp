@@ -16,6 +16,7 @@ mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
 mod test_block_function;
+mod test_block_function_argument; // card block-function-argument
 mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
@@ -40,6 +41,7 @@ mod test_charged_getters;
 mod test_closure_float_arguments; // card if-list
 mod test_closure_value_arguments;
 mod test_closures;
+mod test_collection_result_types;
 mod test_comma_calls;
 mod test_concatenated_text_argument;
 mod test_concatenating_parameter;
@@ -47,6 +49,7 @@ mod test_constant_free_variables;
 mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
+mod test_data_parameter; // card data-parameter
 mod test_deep_recursion;
 mod test_def_block_without_parentheses; // card def-hello
 mod test_def_bool_result;
@@ -61,6 +64,7 @@ mod test_deterministic_inference;
 mod test_dollar_body;
 mod test_dot_lambda; // card dot-lambda
 mod test_each_spellings;
+mod test_early_return_kind;
 mod test_effect_block_operand;
 mod test_effects;
 mod test_effects_symbols;
@@ -70,6 +74,7 @@ mod test_empty_function_bodies;
 mod test_event_effects;
 mod test_fail_effect;
 mod test_failed_word;
+mod test_field_closure_call; // card field-closure-call
 mod test_field_function_values;
 mod test_float_list_parameters; // card untyped-parameters
 mod test_float_to_int_parameter;
@@ -84,7 +89,9 @@ mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_type_at_run_time; // card type-function
+mod test_function_typed_parameters;
 mod test_function_values;
+mod test_function_words_consume; // card function-words-consume
 mod test_functions;
 mod test_functions_passed_by_name; // card specialise-named-functions
 mod test_gap_feeding; // card gap-feeding
@@ -120,6 +127,7 @@ mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_list_fields; // card field-list
 mod test_map_phrase;
 mod test_map_real_function; // card map-sin
+mod test_match_subject_not_called; // card compiler-patterns
 mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert
 mod test_memoization;
@@ -158,6 +166,7 @@ mod test_parameter_shapes;
 mod test_parens_getter_warning;
 mod test_partial_application;
 mod test_passed_through_functions;
+mod test_pattern_clauses; // card pattern-clauses
 mod test_phrase_calls;
 mod test_phrase_colon_body;
 mod test_phrase_each; // card phrase-each
@@ -215,4 +224,4 @@ mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
 mod test_whole_float_to_int_parameter;
-mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow
+mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow // card is-early-return

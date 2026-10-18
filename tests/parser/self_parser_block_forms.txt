@@ -1,0 +1,20 @@
+for i in xs:⏎⇥x⏎⇥y⏎z
+while c:⏎⇥x⏎⇥y⏎z
+if c:⏎⇥x⏎⇥y⏎z
+f(n):⏎⇥x⏎⇥y
+def f(n):⏎⇥x⏎⇥y
+def f(n)⏎⇥x⏎⇥y
+repeat⏎⇥x
+for x in xs:⏎⇥if x:⏎⇥⇥y⏎⇥z⏎w
+a:⏎b
+a:⏎⇥b c
+repeat⏎⇥a b
+for x in xs:⏎  a⏎  b⏎c
+r = 2⏎  f x⏎y
+if c:⏎    a⏎    if d:⏎        b⏎    e
+x = (1 + 2]
+print 3 ¤ 4
+f(a, b]
+y = [1, 2)
+a ] b
+g = { for x in xs:⏎    a }⏎print 1

@@ -1,6 +1,6 @@
-# Ints shown in hex (card hex-printing)
+# Ints shown in hex
 
-User, 2026-10-11: `255 as hex` is an int that behaves exactly like an int but shows as 0xFF; so does the ephemeral
+`255 as hex` is an int that behaves exactly like an int but shows as 0xFF; so does the ephemeral
 fast type byte (`byte`, `u8`, `uint8`), a plain wasm integer, special logic only at FFI crossings.
 
 - Static, not a run-time type: `x as hex` computes as `x as int` (wasm_emitter/hex.rs computed_type). Only where such a

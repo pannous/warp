@@ -138,65 +138,9 @@ impl WasmGcEmitter {
 		);
 	}
 
-	/// list_drop_last(list): the list without its last item, in place (`xs.pop()`, P200b): the cell before the last ends
-	/// the list, a single cell becomes ø itself
-	pub(super) fn emit_list_drop_last(&mut self) {
-		if !self.should_emit_function(crate::list_mutations::LIST_DROP_LAST) {
-			return;
-		}
-		let node_ref_nullable = Ref(self.node_ref(true));
-		let node_ref = Ref(self.node_ref(false));
-		let node_type = self.type_manager.node_type;
-		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
-		let no_node = || I::RefNull(HeapType::Concrete(node_type));
-		self.runtime_function(
-			crate::list_mutations::LIST_DROP_LAST,
-			vec![node_ref_nullable],
-			vec![node_ref],
-			vec![node_ref_nullable],
-			|s, f| {
-				Self::emit_list(f, &s.forget_list_cursor());
-				let (list, cell) = (0, 1);
-				s.emit_empty_as_null(f, list);
-				Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Return, I::End]);
-				s.emit_field(f, list, 2);
-				Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
-				s.emit_become_empty(f, list);
-				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
-				// the cell whose rest is the last cell
-				Self::emit_list(
-					f,
-					&[I::LocalGet(list), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)],
-				);
-				s.emit_field(f, cell, 2);
-				Self::emit_list(
-					f,
-					&[I::StructGet { struct_type_index: node_type, field_index: 2 }, I::RefIsNull, I::BrIf(1)],
-				);
-				s.emit_field(f, cell, 2);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(cell),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(cell),
-						no_node(),
-						set(2),
-						I::LocalGet(list),
-						I::RefAsNonNull,
-					],
-				);
-			},
-		);
-	}
-
 	/// list_become(list, fresh): the list takes the items of the fresh list in place, every holder sees them (`xs.pop(i)`,
-	/// `xs.clear()`, card aliased-list): its first cell takes fresh's kind, item and rest, its element mark stays; an
-	/// empty fresh list makes it ø itself, ø takes nothing and is fresh
+	/// `xs.clear()`, `xs.insert(v, at: i)`, card aliased-list): its first cell takes fresh's kind, item and rest, its
+	/// element mark stays and checks fresh's items; an empty fresh list makes it ø itself, ø takes nothing and is fresh
 	pub(super) fn emit_list_become(&mut self) {
 		if !self.should_emit_function(crate::list_mutations::LIST_BECOME) {
 			return;
@@ -213,6 +157,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				Self::emit_list(f, &s.forget_list_cursor());
 				let (list, fresh) = (0, 1);
+				s.emit_item_check(f, super::super::super::declared_values::LIST_ITEMS_CHECK, list, fresh);
 				s.emit_empty_as_null(f, fresh);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -444,7 +389,6 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let string_type = self.type_manager.string_type;
 		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 
 		// list_with_at(list, index, value node): the cell at index takes the value in place, so every holder of the list sees
@@ -497,13 +441,18 @@ impl WasmGcEmitter {
 		// text_with_char_at(text, index, value): a fresh copy with the grapheme at index replaced by the UTF-8 of value
 		let text_with_char_at = next_index(self);
 		let params = vec![node_ref, ValType::I64, ValType::I64];
-		self.runtime_function("text_with_char_at", params.clone(), vec![node_ref], vec![ValType::I32; 8], |s, f| {
-			let (start, stop, pointer, end, width, length, copy, codepoint) = (3, 4, 5, 6, 7, 8, 9, 10);
+		let text = self.text_ref();
+		let text_type = self.type_manager.text_type;
+		let mut locals = vec![ValType::I32; 8];
+		locals[6] = text;
+		locals.push(text);
+		self.runtime_function("text_with_char_at", params.clone(), vec![node_ref], locals, |s, f| {
+			let (start, stop, pointer, end, width, length, copy, codepoint, bytes) = (3, 4, 5, 6, 7, 8, 9, 10, 11);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "text_grapheme_offset");
 			f.instruction(&I::LocalSet(start));
-			s.emit_text_bounds(f, pointer, end);
-			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+			s.emit_text_bounds(f, (bytes, pointer, end));
+			Self::emit_list(f, &[I::LocalGet(bytes), I::LocalGet(start), I::LocalGet(end)]);
 			s.call(f, "grapheme_end");
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -512,57 +461,23 @@ impl WasmGcEmitter {
 			]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_utf8_width(f, codepoint);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(width),
-					// length = bytes - replaced grapheme + width
-					I::LocalGet(end),
-					I::LocalGet(pointer),
-					I::I32Sub,
-					I::LocalGet(stop),
-					I::LocalGet(start),
-					I::I32Sub,
-					I::I32Sub,
-					I::LocalGet(width),
-					I::I32Add,
-					I::LocalSet(length),
-				],
-			);
-			s.emit_text_allocation(f, length, copy);
-			let copy_bytes = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
-			Self::emit_list(
-				f,
-				&[
-					// bytes before the grapheme
-					I::LocalGet(copy),
-					I::LocalGet(pointer),
-					I::LocalGet(start),
-					I::LocalGet(pointer),
-					I::I32Sub,
-					copy_bytes.clone(),
-					// start becomes the destination of the new character, the rest follows it
-					I::LocalGet(copy),
-					I::LocalGet(start),
-					I::I32Add,
-					I::LocalGet(pointer),
-					I::I32Sub,
-					I::LocalTee(start),
-					I::LocalGet(width),
-					I::I32Add,
-					I::LocalGet(stop),
-					I::LocalGet(end),
-					I::LocalGet(stop),
-					I::I32Sub,
-					copy_bytes,
-				],
-			);
-			Self::emit_utf8_store(f, start, codepoint, width, stop);
+			let copy_bytes = I::ArrayCopy { array_type_index_dst: text_type, array_type_index_src: text_type };
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(width),
+				// length = bytes - replaced grapheme + width
+				I::LocalGet(end), I::LocalGet(stop), I::LocalGet(start), I::I32Sub, I::I32Sub, I::LocalGet(width),
+				I::I32Add, I::LocalTee(length), I::ArrayNewDefault(text_type), I::LocalSet(copy),
+				// bytes before the grapheme, then the rest after the new character
+				I::LocalGet(copy), I32Const(0), I::LocalGet(bytes), I32Const(0), I::LocalGet(start), copy_bytes.clone(),
+				I::LocalGet(copy), I::LocalGet(start), I::LocalGet(width), I::I32Add, I::LocalGet(bytes),
+				I::LocalGet(stop), I::LocalGet(end), I::LocalGet(stop), I::I32Sub, copy_bytes,
+			]);
+			s.emit_utf8_store(f, (copy, start), codepoint, width, stop);
 			s.emit_field(f, 0, 0);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(copy), I::LocalGet(length), I::StructNew(string_type),
-				I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+				I::LocalGet(copy), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
 			]);
 		});
 

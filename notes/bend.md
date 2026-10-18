@@ -10,7 +10,7 @@ interaction calculus) is a separate research runtime. For warp the value is in t
 - **Parallel let** `a b = f(x) g(y)` (src/lowering/control/parallel.rs, notes/go_blocks.md "Parallel let"): lowered
   onto go/await, the last call on the current thread, forks only down to a depth cutoff (BendRT: a fork met while
   draining runs as a plain call).
-- **Laws convention** (notes/laws.md): `for x: T` quantifier lines on named laws, the root `LAWS.warp` is the
+- **Laws convention** (notes/laws.md): `for x: T` quantifier lines on named laws, samples/laws/project_laws.warp is the
   human-owned contract agents must not edit, `warp verify` exits successfully only when every law is proved ("all
   proofs check / some proofs fail"). Warp checks generated Lean directly, so no `PROOF.warp`.
 

@@ -8,7 +8,7 @@
 use super::nodes::{assign, block, call, for_in_variable, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::while_do;
+use crate::warp_parser::{while_do, REVERSE_WORD};
 use crate::wasm_emitter::{is_step, mark_step};
 use crate::words::ORD_WORD;
 use crate::words::{CHR_WORD, FOR_WORD, IMPLICIT_PARAMETER, IN_WORD};
@@ -20,10 +20,11 @@ const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 /// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
 const CODE_SUFFIX: &str = "·code";
-/// `for c in w.chars`, `w.chars.map(…)`: walked, the unit word `w.chars` (elsewhere the count) is the list `chars(w)`,
-/// `w.codepoints` the list `codepoint·list(w)`: the counting unit and the list of its items
-const WALKED_UNITS: [(&str, &str); 2] =
-	[("graphemes", crate::library_words::CHARS_WORD), ("codepoints", crate::library_words::CODE_POINT_LIST)];
+/// `for c in w.chars`: walked, a unit count is the list of its items, `chars(w)`, `code_point_list(w)`
+const WALKED_UNITS: [(&str, &str); 2] = [
+	(crate::analyzer::GRAPHEME_COUNT, crate::library_words::CHARS_WORD),
+	(crate::analyzer::CODE_POINT_COUNT, crate::library_words::CODE_POINT_LIST),
+];
 /// The method an iterator object gives its next item with, ø at the end
 const NEXT_METHOD: &str = "next";
 /// The object a loop walks with next(), `x·iterator`
@@ -57,16 +58,24 @@ pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 	body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
 			variables.extend(for_in_variable(items));
-			for step in items.iter().filter(|item| is_step(item)) {
-				if let Node::Key(counter, Op::Inc, _) = step.drop_meta() {
-					let counter = counter.name();
-					variables
-						.extend(counter.strip_suffix(INDEX_SUFFIX).unwrap_or(&counter).split('·').map(str::to_string));
-				}
-			}
+			variables.extend(step_variables(items));
 		}
 	});
 	variables
+}
+
+/// The variables of a lowered loop's marked steps among these items: `x++`, `x·index++`, `k·v·index++`
+pub(crate) fn step_variables(items: &[Node]) -> Vec<String> {
+	let counter_of = |step: &Node| match step.drop_meta() {
+		Node::Key(counter, Op::Inc, _) if is_step(step) => Some(counter.name()),
+		_ => None,
+	};
+	let counters = items.iter().filter_map(counter_of);
+	counters
+		.flat_map(|counter| {
+			counter.strip_suffix(INDEX_SUFFIX).unwrap_or(&counter).split('·').map(str::to_string).collect::<Vec<_>>()
+		})
+		.collect()
 }
 
 /// `for(init;test;step){body}`, parsed as `((for (init;test;step)) {body})`
@@ -110,6 +119,9 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	}
 	if names.len() > 1 {
 		return Some(destructuring_loop(&names, iterable, body));
+	}
+	if let Some((high, low)) = falling_range(&iterable) {
+		return Some(counter_loop(variable, &high, (Op::Ge, Op::Dec), &low, body));
 	}
 	Some(match counting_range(&iterable).drop_meta() {
 		Node::Key(start, op @ (Op::Range | Op::To), end) => match letters(start, *op, end) {
@@ -230,18 +242,36 @@ fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 	walking_loop(&element, entries, parts.chain(body).collect())
 }
 
-/// `for iterable {body}` binds the implicit `it`: `for 1..4 {x+=it}`
+/// `for iterable {body}` and `for iterable: body` bind the implicit `it`: `for 1..4 {x+=it}`
 fn for_it(items: &[Node]) -> Option<Node> {
 	let [keyword, iterable, body] = items else { return None };
-	if !keyword.is_symbol(FOR_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_WORD) {
 		return None;
 	}
 	for_in(&[keyword.clone(), symbol(IMPLICIT_PARAMETER), symbol(IN_WORD), iterable.clone(), body.clone()])
 }
 
-fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {
+/// `for i in 10 down to 1`, parsed as `reverse(1 to 10)`: the high end and the low end of a falling count of numbers
+/// (letters keep the walked list)
+fn falling_range(iterable: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, _, _) = iterable.drop_meta() else { return None };
+	let [word, range] = items.as_slice() else { return None };
+	match range.drop_meta() {
+		Node::Key(low, Op::To, high) if word.is_symbol(REVERSE_WORD) && !is_letter(low) && !is_letter(high) => {
+			Some((counted_start(high), (**low).clone()))
+		}
+		_ => None,
+	}
+}
+
+fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, body: Vec<Node>) -> Node {
 	let test_op = if range == Op::To { Op::Le } else { Op::Lt };
-	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
+	counter_loop(variable, start, (test_op, Op::Inc), end, body)
+}
+
+/// `variable = start; while variable <test> end do {body; variable <step>}`, the end held in a variable unless literal
+fn counter_loop(variable: &Node, start: &Node, (test_op, step): (Op, Op), end: &Node, mut body: Vec<Node>) -> Node {
+	body.push(mark_step(key(variable.clone(), step, Node::Empty)));
 	let mut statements = vec![assign(variable.clone(), start.clone())];
 	let is_literal = matches!(end.drop_meta(), Node::Number(_) | Node::Char(_));
 	let end = if !is_literal {

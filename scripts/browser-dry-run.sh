@@ -97,12 +97,15 @@ run_dir=$1 agent_browser_args=$2 firefox_prefs=$3 checks=$4; shift 4
 find "$SERVER_HOME/runs" -mindepth 1 -maxdepth 1 -mtime +"$RUNS_KEPT_DAYS" ! -path "$run_dir" -exec rm -rf {} +
 exec 9> "$SERVER_HOME/run.lock"
 flock -n 9 || { echo "another dry run holds the server ($SERVER_HOME/run.lock): waiting"; flock 9; }
-unit=browser-dry-run-$$
-trap 'systemctl stop "$unit".scope 2>/dev/null' EXIT
+# one scope per browser start: a check's scope still loaded (its browser lingering) made the next start fail
+units=() started=0
+trap 'systemctl stop "${units[@]/%/.scope}" 2>/dev/null' EXIT
 cd "$run_dir"
 # the user's own, low priority, memory-capped: a runaway browser is killed in its scope, not the server's sites; a
 # clean environment (root's XDG_RUNTIME_DIR kept agent-browser from making its socket)
 as_browser_user() {
+	local unit=browser-dry-run-$$-$((++started))
+	units+=("$unit")
 	systemd-run --quiet --scope --unit="$unit" --uid="$SERVER_USER" --gid="$SERVER_USER" -p MemoryMax="$MEMORY_MAX" \
 		-p MemorySwapMax=0 -p CPUWeight=20 -p IOWeight=20 \
 		env -i HOME="$SERVER_HOME" USER="$SERVER_USER" LANG=C.UTF-8 PATH="$SERVER_HOME/npm/bin:/usr/local/bin:/usr/bin:/bin" CI=1 GITHUB_TOKEN="$GITHUB_TOKEN" \

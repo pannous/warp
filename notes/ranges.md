@@ -1,4 +1,4 @@
-# Ranges as values (card range-value, 2026-10-05)
+# Ranges as values
 
 A range is a loop header in `for i in a..b`, `a..b do {…}` and a slice in `xs#(a..b)`; anywhere else it is the list of its
 numbers, as `x = 1..5` always was (wiki range.md: `print 1…5`):
@@ -7,5 +7,4 @@ numbers, as `x = 1..5` always was (wiki range.md: `print 1…5`):
 - Literal bounds become the list literal; computed bounds (`print a..b`) the list a loop collects into the temporary
   `range_value·range` (analyzer lower_declarations_among, after for_loop has turned `for` headers into loops), the same
   as `xs = a..b` collects into `xs·range`. analyzer infer_type types a range List.
-- `puts x` writes the text of any value without a line break (put_value), like `print` without it: before, anything
-  but a text literal or a text variable wrote nothing (or the variable's name) and gave 0.
+- `puts x` writes the text of any value without a line break (put_value), like `print` without it.

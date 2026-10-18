@@ -1,14 +1,15 @@
 // The standard library module list (notes/stdlib.md): standard functions of every program, `unique(xs)` or `xs.unique()`, no `use` needed (`use list` only for the qualified `list.zip(a, b)`)
 
 unique(xs) := { out = []; for x in xs { if not (x in out) { out = out + [x] } }; out }
-zip(a, b) := { out = []; for i in 1 to min(count(a), count(b)) { out = out + [[a#i, b#i]] }; out }
-enumerate(xs) := { out = []; for i in 1 to count(xs) { out = out + [[i, xs#i]] }; out }
+zip(a, b) := [[a#i, b#i] for i in 1 to min(count(a), count(b))]
+enumerate(xs) := [[i, xs#i] for i in 1 to count(xs)]
 product(xs) := { out = 1; for x in xs { out = out * x }; out }
+// loops, not slices: the type model's W0 (tests/types/test_type_model.rs) reads take and drop, and has no slices
 take(xs, n) := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
 drop(xs, n) := { out = []; for i in n + 1 to count(xs) { out = out + [xs#i] }; out }
 flatten(xs) := { out = []; for x in xs { out = out + x }; out }
 chunk(xs, n) := { out = []; part = []; for x in xs { part = part + [x]; if count(part) == n { out = out + [part]; part = [] } }; if count(part) > 0 { out = out + [part] }; out }
-window(xs, n) := { out = []; for i in 1 to count(xs) - n + 1 { part = []; for j in i to i + n - 1 { part = part + [xs#j] }; out = out + [part] }; out }
+window(xs, n) := [xs[i:i + n] for i in 0 to count(xs) - n]
 median(xs) := { s = sort(xs); n = count(s); if n % 2 == 1 then s#(n /! 2 + 1) else (s#(n /! 2) + s#(n /! 2 + 1)) / 2 }
 flat_map(xs, f) := { out = []; for x in xs { out = out + f(x) }; out }
 // [kept, rest]: the elements f holds for, and the others
@@ -19,11 +20,11 @@ min_by(xs, f) := { best = xs#1; for x in xs { if f(x) < f(best) { best = x } }; 
 group_by(xs, f) := { out = {}; for x in xs { k = "" + f(x); if out.has(k) { out[k] = out.get(k) + [x] } else { out[k] = [x] } }; out }
 // {element: how often}
 tally(xs) := { out = {}; for x in xs { k = "" + x; if out.has(k) { out[k] = out.get(k) + 1 } else { out[k] = 1 } }; out }
-zip_with(a, b, f) := { out = []; for i in 1 to min(count(a), count(b)) { out = out + [f(a#i, b#i)] }; out }
-sum_by(xs, f) := { out = 0; for x in xs { out = out + f(x) }; out }
-count_by(xs, f) := { out = 0; for x in xs { if f(x) { out = out + 1 } }; out }
+zip_with(a, b, f) := [f(a#i, b#i) for i in 1 to min(count(a), count(b))]
+sum_by(xs, f) := sum([f(x) for x in xs])
+count_by(xs, f) := count([x for x in xs if f(x)])
 // the elements moved n places to the left
-rotate(xs, n) := { k = n % count(xs); out = []; for i in k + 1 to count(xs) { out = out + [xs#i] }; for i in 1 to k { out = out + [xs#i] }; out }
+rotate(xs, n) := { k = n % count(xs); xs[k:] + xs[:k] }
 interleave(a, b) := { out = []; for i in 1 to max(count(a), count(b)) { if i <= count(a) { out = out + [a#i] }; if i <= count(b) { out = out + [b#i] } }; out }
 // without runs of equal neighbours
 dedupe(xs) := { out = []; for x in xs { if count(out) == 0 or last(out) != x { out = out + [x] } }; out }
@@ -35,11 +36,11 @@ drop_while(xs, f) := { out = []; dropping = true; for x in xs { if not (dropping
 argmax(xs) := { best = 1; for i in 1 to count(xs) { if xs#i > xs#best { best = i } }; best - 1 }
 argmin(xs) := { best = 1; for i in 1 to count(xs) { if xs#i < xs#best { best = i } }; best - 1 }
 // the neighbours: pairwise([1, 2, 3]) is [[1 2] [2 3]]
-pairwise(xs) := { out = []; for i in 1 to count(xs) - 1 { out = out + [[xs#i, xs#(i + 1)]] }; out }
+pairwise(xs) := [[xs#i, xs#(i + 1)] for i in 1 to count(xs) - 1]
 // [the first n, the rest]
 split_at(xs, n) := [take(xs, n), drop(xs, n)]
 // every pair of an element of a and one of b
-cartesian(a, b) := { out = []; for x in a { for y in b { out = out + [[x, y]] } }; out }
+cartesian(a, b) := [[x, y] for x in a for y in b]
 // the most frequent element, the first of equally frequent ones
 mode(xs) := { best = xs#1; most = 0; for x in xs { n = count_by(xs, y => y == x); if n > most { best = x; most = n } }; best }
 // the population variance and standard deviation
@@ -49,7 +50,7 @@ stdev(xs) := sqrt(variance(xs))
 index_where(xs, f) := { for i in 1 to count(xs) { if f(xs#i) { return i } }; 0 }
 last_n(xs, n) := drop(xs, max(count(xs) - n, 0))
 // n copies of value: fill(3, 0) is [0 0 0]
-fill(n, value) := { out = []; for i in 1 to n { out = out + [value] }; out }
+fill(n, value) := filled_list(n, value)
 // [smallest, greatest]
 minmax(xs) := [min(xs), max(xs)]
 // Python's list methods (card python-stdlib): extend appends each of ys in place, index is the position from 0
@@ -59,7 +60,7 @@ concat(xs, ys) := xs + ys
 index(xs, x) := { at = index_of(xs, x); if at == 0 { raise "ValueError: " + str(x) + " is not in the list" }; at - 1 }
 // sets of list items (card parse-free): the words and their math glyphs; ⊂ and ⊃ are proper, ⊆ and ⊇ allow equal sets
 union(a, b) := unique(a + b)
-intersection(a, b) := { out = []; for x in unique(a) { if x in b { out.append(x) } }; out }
+intersection(a, b) := [x for x in unique(a) if x in b]
 subset(a, b) := { for x in a { if not (x in b) { return false } }; true }
 superset(a, b) := subset(b, a)
 infix operator ∪(a, b) := union(a, b)

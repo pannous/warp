@@ -17,6 +17,12 @@ on:
         # validate the next image before ubuntu-latest moves to it: `gh workflow run … --ref <branch> -f runner=ubuntu-26.04`
         description: the runner image to run on
         default: ubuntu-latest
+      skip_checks:
+        # publish at once, the tours and suites skipped (user: an urgent fix must be live in a minute):
+        # `gh workflow run pages.yml --ref main -f skip_checks=true`
+        description: deploy right after the build, without tours and test suites
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -124,7 +130,7 @@ jobs:
   # Four shards of every 4th test, each running one test per core (user 2026-10-10: one job took 21 min)
   browser-suite:
     needs: scope
-    if: needs.scope.outputs.suite == 'true'
+    if: needs.scope.outputs.suite == 'true' && !inputs.skip_checks
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: 30
     strategy:
@@ -154,9 +160,10 @@ jobs:
         tool: wasm-tools
     - name: Install agent-browser (headless Chrome)
       run: npm install -g agent-browser && agent-browser install --with-deps
-    # the browser cannot run git: the pinned packages of packages.warp, cloned and linked as packages/<name>
-    - name: Fetch the pinned packages
-      run: web/playground/build.sh pinned
+    # the browser cannot run git: the packages, fetched by a native debug warp as `use` fetches them (card build-sh:
+    # warp reads packages.warp and the default registry itself, no regex reader)
+    - name: Fetch the packages
+      run: cargo fetch && web/playground/build.sh pinned
     - name: The test suite in headless Chrome
       run: cargo browser-test
 
@@ -164,6 +171,7 @@ jobs:
   # console, in the collected site, else no deploy
   tour-chrome:
     needs: build
+    if: ${{ !inputs.skip_checks }}
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
@@ -181,6 +189,7 @@ jobs:
   # the same in headless Firefox: the runner's own, driven by firefox_driver.mjs
   tour-firefox:
     needs: build
+    if: ${{ !inputs.skip_checks }}
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
@@ -214,6 +223,7 @@ jobs:
   # not before it: macOS runners queue longer
   tour-safari:
     needs: build
+    if: ${{ !inputs.skip_checks }}
     runs-on: macos-26
     timeout-minutes: 20
     steps:
@@ -230,8 +240,10 @@ jobs:
   # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
   # tours, green, instead of a failed deploy mailing a failed run
   deploy:
-    needs: [ tour-chrome, tour-firefox ]
-    if: github.ref == 'refs/heads/main'
+    needs: [ build, tour-chrome, tour-firefox ]
+    if: >-
+      always() && github.ref == 'refs/heads/main' && needs.build.result == 'success' &&
+      (inputs.skip_checks || (needs.tour-chrome.result == 'success' && needs.tour-firefox.result == 'success'))
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     environment:
       name: github-pages

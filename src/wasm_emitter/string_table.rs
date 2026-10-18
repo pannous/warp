@@ -1,4 +1,5 @@
-//! String table management for WASM data section
+//! The module's data: text literals in one passive segment, which array.new_data turns into $Text arrays, and the
+//! bytes that live in linear memory (lookup tables, and texts handed to the host by address) in active segments
 
 use crate::node::Node;
 use crate::operators::Op;
@@ -7,68 +8,79 @@ use wasm_encoder::{ConstExpr, DataSection};
 
 /// Bytes at the start of linear memory reserved for the WASI iovec and nwritten slots (see `emit_wasi_puts`)
 const WASI_SCRATCH_BYTES: u32 = 16;
+/// The index of the passive segment holding the text literals: the first segment
+pub const TEXT_SEGMENT: u32 = 0;
 
-/// Manages string allocation in WASM linear memory
 pub struct StringTable {
-	/// Maps strings to their offsets in linear memory
-	table: HashMap<String, u32>,
-	/// Next available offset in linear memory
+	/// Offsets of the text literals in the passive segment
+	literals: HashMap<String, u32>,
+	literal_bytes: Vec<u8>,
+	/// Offsets in linear memory of the bytes placed there, by text or by "\0" + table name
+	in_memory: HashMap<String, u32>,
+	memory_segments: Vec<(u32, Vec<u8>)>,
+	/// Next free offset in linear memory
 	next_offset: u32,
-	/// WASM data section for storing strings
-	data_section: DataSection,
 }
 
 impl Default for StringTable {
 	fn default() -> Self {
-		Self { table: HashMap::new(), next_offset: WASI_SCRATCH_BYTES, data_section: DataSection::new() }
+		Self {
+			literals: HashMap::new(),
+			literal_bytes: vec![],
+			in_memory: HashMap::new(),
+			memory_segments: vec![],
+			next_offset: WASI_SCRATCH_BYTES,
+		}
 	}
 }
 
 impl StringTable {
-	/// Allocate a string in linear memory, returning (ptr, len)
-	/// Deduplicates strings - if the string is already allocated, returns existing offset
-	pub fn allocate(&mut self, s: &str) -> (u32, u32) {
-		if let Some(&offset) = self.table.get(s) {
-			return (offset, s.len() as u32);
+	/// The text `s` in the literal segment: (offset, length) for array.new_data, deduplicated
+	pub fn literal(&mut self, s: &str) -> (u32, u32) {
+		let length = s.len() as u32;
+		if let Some(&offset) = self.literals.get(s) {
+			return (offset, length);
 		}
-		let offset = self.next_offset;
-		let bytes = s.as_bytes();
-		self.data_section.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
-		self.table.insert(s.to_string(), offset);
-		self.next_offset += bytes.len() as u32;
-		(offset, bytes.len() as u32)
+		let offset = self.literal_bytes.len() as u32;
+		self.literal_bytes.extend_from_slice(s.as_bytes());
+		self.literals.insert(s.to_string(), offset);
+		(offset, length)
 	}
 
-	/// Store binary data (a lookup table) under a name that no text can have, returning its offset
+	/// The text `s` in linear memory, for a host that reads it by address: (ptr, len), deduplicated
+	pub fn in_memory(&mut self, s: &str) -> (u32, u32) {
+		(self.place(s.to_string(), s.as_bytes()), s.len() as u32)
+	}
+
+	/// Binary data (a lookup table) in linear memory under a name that no text can have, returning its offset
 	pub fn allocate_bytes(&mut self, name: &str, bytes: &[u8]) -> u32 {
-		let key = format!("\0{name}");
-		if let Some(&offset) = self.table.get(&key) {
+		self.place(format!("\0{name}"), bytes)
+	}
+
+	fn place(&mut self, key: String, bytes: &[u8]) -> u32 {
+		if let Some(&offset) = self.in_memory.get(&key) {
 			return offset;
 		}
 		let offset = self.next_offset;
-		self.data_section.active(0, &ConstExpr::i32_const(offset as i32), bytes.iter().copied());
-		self.table.insert(key, offset);
+		self.memory_segments.push((offset, bytes.to_vec()));
+		self.in_memory.insert(key, offset);
 		self.next_offset += bytes.len() as u32;
 		offset
 	}
 
-	/// Recursively collect and allocate all strings from a Node tree
-	/// Also updates scope with string variable data (for WASI puts)
+	/// Collect the text literals of a Node tree; a text assigned to a variable is placed in memory too, where WASI
+	/// puts and FFI read it by address (the Local's data pointer)
 	pub fn collect_from_node(&mut self, node: &Node, scope: &mut crate::analyzer::Scope) {
 		let node = node.drop_meta();
 		match node {
 			Node::Text(s) | Node::Symbol(s) => {
-				self.allocate(s);
+				self.literal(s);
 			}
 			Node::Key(key, op, value) => {
-				// Track string variable assignments: x='hello' or x:='hello'
-				// Store data pointer/length in the Local for later use by WASI puts
 				if matches!(op, Op::Assign | Op::Define) {
-					if let Node::Symbol(var_name) = key.drop_meta() {
-						if let Node::Text(s) = value.drop_meta() {
-							let (ptr, len) = self.allocate(s);
-							scope.set_local_data(var_name, ptr, len);
-						}
+					if let (Node::Symbol(var_name), Node::Text(s)) = (key.drop_meta(), value.drop_meta()) {
+						let (ptr, len) = self.in_memory(s);
+						scope.set_local_data(var_name, ptr, len);
 					}
 				}
 				self.collect_from_node(key, scope);
@@ -80,7 +92,7 @@ impl StringTable {
 				}
 			}
 			Node::Data(dada) => {
-				self.allocate(&dada.type_name);
+				self.literal(&dada.type_name);
 			}
 			Node::Type { name, body } => {
 				self.collect_from_node(name, scope);
@@ -90,12 +102,22 @@ impl StringTable {
 		}
 	}
 
-	/// Get a reference to the data section (for adding to WASM module)
-	pub fn data_section(&self) -> &DataSection {
-		&self.data_section
+	/// The data section: the literal segment first (TEXT_SEGMENT), then the memory segments
+	pub fn data_section(&self) -> DataSection {
+		let mut section = DataSection::new();
+		section.passive(self.literal_bytes.iter().copied());
+		for (offset, bytes) in &self.memory_segments {
+			section.active(0, &ConstExpr::i32_const(*offset as i32), bytes.iter().copied());
+		}
+		section
 	}
 
-	/// The bytes the texts take: the module's memory holds at least these
+	/// The number of data segments, for the data count section array.new_data needs
+	pub fn segment_count(&self) -> u32 {
+		1 + self.memory_segments.len() as u32
+	}
+
+	/// The bytes placed in memory take this much: the module's memory holds at least these
 	pub fn next_offset(&self) -> u32 {
 		self.next_offset
 	}

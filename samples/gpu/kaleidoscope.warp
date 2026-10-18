@@ -1,0 +1,71 @@
+#!/usr/bin/env warp
+# a kaleidoscope as a WGSL fragment shader: paint colors every pixel on the GPU, frame after frame. Each pixel is folded
+# into one wedge of the circle and mirrored, so shards of colored glass drifting through that wedge repeat all around.
+# The pointer runs it: left to right gives 3 to 12 mirrors, up and down zooms; a press holds the tube up to the light,
+# the wheel turns the tube, a quarter wedge a step. $time, $mouse, $mouse_down, $mouse_wheel and $size are paint's
+# values, read at each frame
+kaleidoscope = shader {
+	const TAU = 6.2831853;
+
+	fn hash(cell: vec2f) -> f32 {
+		var h = (bitcast<u32>(vec2i(cell).x) * 1103515245u) ^ (bitcast<u32>(vec2i(cell).y) * 2654435761u);
+		h = (h ^ (h >> 16u)) * 2246822519u;
+		return f32(h ^ (h >> 13u)) / 4294967295.0;
+	}
+
+	// a glass color for a shard: the hue wheel, rich and a little dark
+	fn glass(seed: f32) -> vec3f {
+		return 0.45 + 0.4 * cos(TAU * (seed + vec3f(0.0, 0.33, 0.67)));
+	}
+
+	// shards: a grid of cells, each with a jittered point; a pixel belongs to its nearest point (Voronoi) and the
+	// lead lines are where two points are almost as near
+	fn shards(p: vec2f) -> vec3f {
+		let cell = floor(p);
+		var nearest = 9.0;
+		var second = 9.0;
+		var owner = vec2f(0.0);
+		for (var y = -1; y <= 1; y++) {
+			for (var x = -1; x <= 1; x++) {
+				let neighbor = cell + vec2f(f32(x), f32(y));
+				let point = neighbor + 0.5 + 0.4 * sin(vec2f(hash(neighbor), hash(neighbor + 7.0)) * TAU + $time * 0.3);
+				let away = length(p - point);
+				if (away < nearest) {
+					second = nearest;
+					nearest = away;
+					owner = neighbor;
+				} else if (away < second) {
+					second = away;
+				}
+			}
+		}
+		let lead = smoothstep(0.02, 0.06, second - nearest);
+		let shine = 1.0 - 0.6 * nearest;
+		return glass(hash(owner) + $time * 0.02) * shine * lead;
+	}
+
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		let pointer = $mouse / $size;
+		let mirrors = floor(3.0 + 9.99 * clamp(pointer.x, 0.0, 1.0));
+		let zoom = 2.0 + 6.0 * clamp(pointer.y, 0.0, 1.0);
+		let centered = (at.xy - 0.5 * $size) / $size.y;
+		let wedge = TAU / mirrors;
+		// a wheel step turns the tube a quarter wedge
+		var angle = atan2(centered.y, centered.x) + $time * 0.1 + $mouse_wheel * wedge * 0.25;
+		// fold into one wedge, then mirror every other wedge
+		angle = abs(angle - wedge * floor(angle / wedge) - 0.5 * wedge);
+		let radius = length(centered);
+		let folded = vec2f(cos(angle), sin(angle)) * radius * zoom;
+		let color = shards(folded + vec2f($time * 0.15, 0.0));
+		// the tube: dark beyond its round window
+		let window = smoothstep(0.5, 0.47, radius);
+		let light = select(1.0, 1.6, $mouse_down > 0.5);
+		return vec4f(color * window * light, 1.0);
+	}
+}
+# ten seconds by the clock, however long a frame takes
+started = clock()
+while clock() - started < 10000 {
+	paint(kaleidoscope)
+	sleep(1 / 60)
+}

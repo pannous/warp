@@ -22,6 +22,8 @@ use std::collections::HashSet;
 pub const NODE_KIND_IN: &str = "node_kind_in";
 /// `node_type_name(node)`: `type(x)` of a value of unknown static type, its run-time type as a symbol (list_ops.rs)
 pub const NODE_TYPE_NAME: &str = "node_type_name";
+/// `node_is_map(node)`: 1 when the node is a map at run time, a curly list of pairs; quoted code `{print 1}` is none
+pub const NODE_IS_MAP: &str = "node_is_map";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
@@ -84,7 +86,7 @@ const BUILTIN_TYPES: [BuiltinType; 26] = [
 		None,
 		&[],
 	),
-	builtin(SYMBOL_WORD, &[], &[], None, &[K::Symbol as i64]),
+	builtin(SYMBOL_WORD, &[], &[], Some(K::Symbol), &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[OPERATION_WORD], None, &[K::Key as i64, crate::type_kinds::OPERATION_MASK_BIT]),
 	builtin(OPERATION_WORD, &["expression"], &[], None, &[crate::type_kinds::OPERATION_MASK_BIT]),
 	builtin(crate::words::CODE_WORD, &[], &[], None, &[crate::type_kinds::CODE_MASK_BIT]),
@@ -293,7 +295,7 @@ pub(crate) fn program_names(node: &Node) -> Names {
 	let mut variables: HashSet<String> =
 		context.user_functions.keys().filter(|name| !is_builtin_type_word(name)).cloned().collect();
 	collect_outer_assigned_names(node, &mut variables);
-	let mut bound_otherwise = super::module_properties::bound_names(node);
+	let mut bound_otherwise = crate::program_names::Bindings::of(node).bound();
 	bound_otherwise.retain(|name| !context.user_functions.contains_key(name));
 	let functions_taking_arguments = context
 		.user_functions
@@ -473,13 +475,7 @@ pub fn with_compared_text(subject: Node, written: &str) -> Node {
 
 /// The written value a compared name carries (with_compared_text)
 pub fn compared_text(subject: &Node) -> Option<String> {
-	match subject {
-		Node::Meta { node, data } => match data.as_ref() {
-			Node::Key(key, _, value) if key.name() == COMPARED_WITH => Some(value.drop_meta().name()),
-			_ => compared_text(node),
-		},
-		_ => None,
-	}
+	subject.marked(COMPARED_WITH).map(|(_, value)| value.drop_meta().name())
 }
 
 pub fn is_equality_operand(node: &Node) -> bool {

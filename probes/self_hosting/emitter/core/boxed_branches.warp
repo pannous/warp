@@ -1,0 +1,2 @@
+pick(n: int) := if n > 1 then "many" else n
+[pick(1), pick(5)]

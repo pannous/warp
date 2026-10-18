@@ -13,6 +13,14 @@ mod loader;
 use loader::*;
 mod std_modules;
 pub use std_modules::*;
+mod std_words_cache;
+#[cfg(feature = "native")]
+pub(crate) use std_words_cache::binary_stamp;
+use std_words_cache::*;
+mod lowered_modules;
+use lowered_modules::*;
+mod prelude_slices;
+use prelude_slices::*;
 pub mod binaryen;
 #[cfg(feature = "native")]
 pub mod cargo_crates;
@@ -35,9 +43,11 @@ pub(crate) use declarations::*;
 mod implicit_modules;
 pub use implicit_modules::*;
 pub(crate) mod needed_definitions;
+use crate::lowering::nodes::with_statements_first;
 use needed_definitions::*;
 mod program_file;
 pub use program_file::*;
+pub mod rewrites;
 mod use_statements;
 pub(crate) use use_statements::*;
 
@@ -62,7 +72,7 @@ pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
 /// `use math` and other native libraries stay in place for the FFI; an unknown name is an error value.
 pub fn resolve(program: Node) -> Node {
-	resolve_in(program, &SEARCH_DIRECTORIES)
+	crate::compiler::phase_times::timed("resolve uses", || resolve_in(program, &SEARCH_DIRECTORIES))
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
@@ -84,14 +94,19 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
-	loader.program_words = program_words(&program);
+	loader.program_words = crate::compiler::phase_times::timed("resolve: program words", || program_words(&program));
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader
 		.resolve(program)
 		.and_then(|program| {
+			crate::compiler::phase_times::timed("resolve: finish imports", || loader.finish_imports(program))
+		})
+		.and_then(|program| {
 			loader.loading_implicitly = true;
-			let loaded = loader.implicit_std_modules(&program);
+			let loaded = crate::compiler::phase_times::timed("resolve: implicit modules", || {
+				loader.implicit_std_modules(&program)
+			});
 			loader.loading_implicitly = false;
 			loaded.map(|_| program)
 		})
@@ -100,7 +115,11 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 			None => Ok(program),
 		})
 		.map(|program| crate::modules::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
-		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
+		.map(|program| {
+			crate::compiler::phase_times::timed("resolve: needed definitions", || {
+				with_needed_definitions(program, loader.hidden_apart())
+			})
+		});
 	let files = loader.loaded.iter().chain(&loader.included).filter(|path| path.is_file()).cloned().collect();
 	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
@@ -115,12 +134,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// The modules a program `use`s and the implicit ones it needs (`play` → sound): their classes go in front alike, the
 /// module itself stays a used module (its note names, its settings); units moves whole (with_implicit_class_modules)
 fn used_and_implicit_modules(program: &Node) -> Vec<String> {
-	let mut names: Vec<String> = statements_of(program)
-		.iter()
-		.filter_map(used_module)
-		.filter(|used| used.import == Import::Use)
-		.map(|used| used.name)
-		.collect();
+	let mut names = modules_used_by(statements_of(program));
 	for (module, needed) in IMPLICIT_MODULES {
 		if !names.iter().any(|name| name == module) && !MODULES_COMPILED_AS_PROGRAM.contains(&module) && needed(program)
 		{
@@ -130,7 +144,17 @@ fn used_and_implicit_modules(program: &Node) -> Vec<String> {
 	names
 }
 
+/// The modules these statements `use`
+fn modules_used_by(statements: &[Node]) -> Vec<String> {
+	statements.iter().filter_map(used_module).filter(|used| used.import == Import::Use).map(|used| used.name).collect()
+}
+
 /// The WebAssembly module a used name finds, when no warp source of that name exists
+/// The file a `use name` finds: a warp module, else a WebAssembly module
+fn module_file(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
+	loader.find(name).or_else(|| loader.find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
+}
+
 fn wasm_module_path(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
 	loader
 		.find(name)
@@ -178,7 +202,14 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
 		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
-	for name in used_and_implicit_modules(&program) {
+	let mut aliases: Vec<(String, String)> = vec![]; // the used standard modules' `alias pow = power` lines
+
+	// what a used module itself uses reaches the program, its classes too (decision package-reexport)
+	let mut modules = used_and_implicit_modules(&program);
+	let mut index = 0;
+	while let Some(name) = modules.get(index).cloned() {
+		index += 1;
+		note_lookup(&name, || module_file(&loader, &name));
 		if let Some(module) = wasm_module_path(&loader, &name) {
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);
@@ -207,9 +238,17 @@ pub fn insert_module_classes(program: Node) -> Node {
 			continue; // the loader reports it
 		}
 		let definitions = statements(module);
+		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
+		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
+		for used in reexported {
+			if !modules.contains(&used) {
+				modules.push(used);
+			}
+		}
 		defined.extend(definitions.iter().filter_map(name_declared_by));
 		match is_std {
 			true => {
+				aliases.extend(definitions.iter().filter_map(word_alias));
 				if definitions.iter().any(is_class) {
 					class_modules.push(name.clone());
 				}
@@ -222,10 +261,8 @@ pub fn insert_module_classes(program: Node) -> Node {
 	// joined, not replaced: a module's own lowering (markup's) runs this again before the program's sound loads
 	crate::compiler::compile_context::change(|context| context.early_class_modules.extend(early));
 	let is_foreign = |class: &Node| name_declared_by(class).is_none_or(|name| !own_names.contains(&name));
-	let aliases: Vec<(&str, &str)> = STD_ALIASES
-		.into_iter()
-		.filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias))
-		.collect();
+	aliases.retain(|(alias, _)| !own_names.contains(alias));
+	let aliases: Vec<(&str, &str)> = aliases.iter().map(|(alias, word)| (alias.as_str(), word.as_str())).collect();
 	// `collections.Counter(xs)`: the bare class before class_methods reads its construction; other qualified calls
 	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
 	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
@@ -242,6 +279,6 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
 	let program = as_constructions(program, &inserted);
-	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
-	with_statements_in_front(program, file_classes)
+	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
+	with_statements_first(program, file_classes)
 }

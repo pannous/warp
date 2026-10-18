@@ -59,11 +59,19 @@ fn parsed(node: Node) -> Node {
 	let Some(argument) = word_argument(&node, PARSE_WORD).cloned() else {
 		return crate::node::children_rewritten(node, parsed);
 	};
-	// a text that fails to parse fails at run time, where `try` catches it
-	match argument.text_value().and_then(|source| code_of(&source).ok()) {
+	// a text that fails to parse fails at run time, where `try` catches it; a type declaration is built there too, as
+	// written, where a constant's `class P {…}` would read as the program's own type P
+	let constant = argument.text_value().and_then(|source| code_of(&source).ok()).filter(|code| !declares_type(code));
+	match constant {
 		Some(code) => super::blocks::quoted_code(code),
 		None => crate::node::call(AS_CODE, vec![parens(vec![symbol(PARSE_CODE), parsed(argument)])]),
 	}
+}
+
+fn declares_type(code: &Node) -> bool {
+	let mut declares = false;
+	code.visit(&mut |part| declares |= matches!(part, Node::Type { .. }));
+	declares
 }
 
 /// `parse "…"`, `parse(t)`, `parse t`: what is parsed, the same of eval

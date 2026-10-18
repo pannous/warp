@@ -1,9 +1,7 @@
-# Hosting warp programs (card cloud-hosting, cloud-deploy step 2)
+# Hosting warp programs
 
-Roadmap card: hosting (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
-
-The user asked on 2026-10-09: "determine the hosting options; let's start with our own login and let people log in with
-their own button". Step 1, `warp deploy` through wrangler, belongs to warp-web. This note covers hosting and login.
+Roadmap card: hosting (notes/roadmaps.md). Hosting options and login for deployed programs; `warp deploy` through
+wrangler is warp-web's.
 
 ## What a host has to do
 A warp program is one WASM GC module (`warp compile --wasm`). A pure one has no imports, and printing imports only
@@ -56,14 +54,14 @@ lambda's DNS moves to Cloudflare):
   HMAC `SESSION_SECRET`, 30 days). Opened directly, the page says "Logged in as <login>". The CLI and the test send
   `Authorization: Bearer <GitHub token>` instead (`gh auth token`), checked against api.github.com/user.
 - `GET /auth/cloudflare?origin=…` → Cloudflare OAuth client "warp hosting" (PKCE, callback …/callback/cloudflare) →
-  `{warpHosting: {cloudflareToken}}`. The client is public and verified since 2026-10-15 (it was private until the publisher TXT record
-  on lambda.pannous.com); the API-token paste (Workers Scripts: Edit) stays as fallback.
-  Scopes (card cf-deploy-access): `workers-scripts.edit` is the role "Workers Editor", which updates existing Workers
+  `{warpHosting: {cloudflareToken}}`. The client is public and verified (publisher TXT record on lambda.pannous.com);
+  the API-token paste (Workers Scripts: Edit) stays as fallback.
+  Scopes: `workers-scripts.edit` is the role "Workers Editor", which updates existing Workers
   but cannot create one, so a new program's upload failed "No access to the specified resource". The login asks for
   `workers-scripts.admin` (Workers Admin) + `user-details.read` + `account-settings.read`. Each must be registered on
   the client, else the authorize page refuses the whole login (invalid_scope). Which scopes the client has can be read
   without a login: `/oauth2/auth?client_id=…&state=x&scope=<one>` redirects with error=invalid_scope for an
-  unregistered one (probes/hosting/oauth_scopes.sh over `GET /client/v4/oauth/scopes`). On 2026-10-15 it had:
+  unregistered one (probes/hosting/oauth_scopes.sh over `GET /client/v4/oauth/scopes`). Registered:
   account-settings.read user-details.read workers-scripts.edit workers-routes.write workers-ci.write containers.write
   workers-kv-storage.write workers-observability(-telemetry).write workers-r2(-bucket-item).write r2-catalog.write.
   Errors name the call (`Cloudflare PUT workers/scripts/x: …`); Cloudflare's 9109 "Invalid access token" is a 401
@@ -76,15 +74,13 @@ lambda's DNS moves to Cloudflare):
   `DELETE /deploy?name=` removes one's own program.
 - "Deploy to my own account": the same upload with `X-Cloudflare-Token` (and `X-Cloudflare-Account` when the token
   reaches several accounts), passed through, never stored. api.cloudflare.com has no CORS, hence the Worker.
-- Login tickets (card deploy-opens-tab): GitHub's login page cuts the popup off from the playground (COOP: `opener`
-  is null afterwards, so postMessage never arrived and the user saw "Logged in as …, you can close this window" with
-  nothing deployed). The playground sends `&ticket=<random>` to /auth/…; the callback stores the login in KV under
+- Login tickets: GitHub's login page cuts the popup off from the playground (COOP: `opener` is null afterwards, so
+  postMessage never arrives). The playground sends `&ticket=<random>` to /auth/…; the callback stores the login in KV under
   `ticket:<ticket>` (10 minutes) and the playground polls `GET /ticket?ticket=`. After deploying it posts
   `POST /ticket?ticket=&program=<url>` (only *.workers.dev and *.lambda.pannous.com addresses) or `&error=`, and the
   login window, waiting on the same ticket, turns into the program's tab. Already logged in, the click opens a tab
   at once at the same deploy window: only a click may open a window, so each deploy opens exactly one.
-- The deploy window (card user-click; user: "they should give one the link or a redirect to the link"):
-  `GET /deploying?ticket=` shows the program's link as soon as the ticket holds it (`/deploy?…&ticket=` stores the
+- The deploy window: `GET /deploying?ticket=` shows the program's link as soon as the ticket holds it (`/deploy?…&ticket=` stores the
   address once uploaded, an error replaces it and stays shown with its reason; the playground posts it again, and
   native deploys only post it), and opens the program
   once `GET /up?program=` says it answers: Cloudflare's "error code: 1042" means no Worker under that name yet, a new
@@ -93,8 +89,8 @@ lambda's DNS moves to Cloudflare):
   Worker has the compatibility flag `global_fetch_strictly_public`. Probe: probes/hosting/login_ticket.sh runs the
   window's script in node (deploying_window.mjs).
 - Names of the account's own Workers (warp-hosting itself, warp-assistant) can't be claimed: `claim` refuses a name
-  whose warp-<name> Worker exists without an owner in NAMES (before 2026-10-12 a GitHub user could have overwritten
-  the control Worker by deploying the name `hosting`).
+  whose warp-<name> Worker exists without an owner in NAMES (else deploying the name `hosting` would overwrite the
+  control Worker).
   An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
 - Clients: `warp deploy --hosted app.warp` (src/web/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
@@ -102,7 +98,7 @@ lambda's DNS moves to Cloudflare):
 - Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
   dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
 
-## Browser programs (card deploy-browser-site)
+## Browser programs
 A program that uses the browser (paint, use draw, the GPU, sound, text on a canvas, the clipboard, `on frame` and
 other page events: host_parts.rs uses_the_browser) has nothing to answer on a server: the Worker would fail at its
 first request ("host.signal_listen is not available"). Deploy makes it a site instead (host_parts.rs `deployable` →
@@ -118,7 +114,7 @@ program-server (CLI and playground alike), rather than dropping them silently. S
 `warp serve` runs main on the server too (paint writes a png there), while a Worker's host has no browser words, so
 the server's module would need main without them, or the Worker host a decided meaning for them.
 
-## Built: warp-lambda, native on pannous.com (card ferron-hosting)
+## Built: warp-lambda, native on pannous.com
 - Playground ⋯ menu "☁ Deploy to pannous.com" (same GitHub login as ☁ Deploy) sends the program's source to
   https://lambda.pannous.com/native/deploy?name=x; it answers at https://x.lambda.pannous.com. Demo:
   https://lambda-demo.lambda.pannous.com/fib/20.
@@ -127,9 +123,8 @@ the server's module would need main without them, or the Worker host a decided m
   program), warp-lambda.service, warp-lambda.rules (polkit: the daemon may start/restart/stop/clean only
   warp-lambda@*.service), install.sh (over ssh, optional Linux binary:
   `cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.39 --bin warp`).
-- Sandboxed (user, 2026-10-09): `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
-  runtimes: "capability denied" at deploy). The rule at run time (src/host/sandbox.rs, cards sandbox-exec and
-  sandbox-hosted, 2026-10-13): no process (os.exec behind `exec sh"…"`, which std_io hid from the capability check;
+- Sandboxed: `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
+  runtimes: "capability denied" at deploy). The rule at run time (src/host/sandbox.rs): no process (os.exec behind `exec sh"…"`, which std_io hid from the capability check;
   sound players, the MIDI sender), loud "capability denied … warp --sandbox"; files are written only inside the state
   folder (systemd's STATE_DIRECTORY, else the working directory): file.write/write_bytes/append, stored values,
   SQLite files, midi.write_file, sound.render, the path resolved, `..` and symbolic links refused; fetch and net reach
@@ -154,30 +149,18 @@ the server's module would need main without them, or the Worker host a decided m
 - On Workers Paid ($5/month) usage would bill without a hard cap: then add billing notifications and a rate limit on
   /deploy before switching.
 
-## Decisions (user, via the Interviewer, 2026-10-09)
-Free plan now, programs at warp-<name>.pannous.workers.dev, no Workers for Platforms yet; GitHub login with the
-callback on lambda.pannous.com behind a proxy on pannous.com (not workers.dev); a private Cloudflare OAuth client now
-with the token-paste fallback. Open: publishing the Cloudflare client (TXT record; card oauth-client-publish), pannous.com nameservers (card warp-subdomains).
-State on 2026-10-12 (sent to the Interviewer as user steps):
-- The registrar (alpinedomains / orderbox) delegates to the 4 orderbox nameservers only, but the orderbox zone also
-  lists houston/sky.ns.cloudflare.com. Cloudflare's pannous.com zone is "pending" and answers authoritatively with
-  empty answers (`dig A pannous.com @sky.ns.cloudflare.com`: NOERROR, aa, 0 answers), so a resolver that asks it
-  caches "no address" for pannous.com, lambda.pannous.com and the mail records. Fix: delete those two NS records in
-  the orderbox zone. Moving the domain to Cloudflare instead would change pannous.com itself: that zone points it at
-  Workers (AAAA 100::) and has no lambda record.
-- Publishing the OAuth client needs the TXT record on the client URL's host. warp.pannous.com is a CNAME to GitHub
-  Pages, so no TXT can go there: the client URL should be https://lambda.pannous.com (A record) with the TXT on
-  `lambda`, then visibility Public in the dashboard. Our API token can't read or edit OAuth clients.
-- 2026-10-14: adding that TXT (zone serial 2026101301) left `lambda` and `*.lambda` without A records at orderbox:
-  lambda.pannous.com stopped resolving, while the server still answers on 81.169.181.160. Both A records have to be
-  added back next to the TXT (one name can have A and TXT together).
-
-## Decisions (moved from notes/decisions.md, 2026-10-09)
-- Each program is its own Cloudflare Worker uploaded by the hosting Worker. Q1 GitHub OAuth App for "Log in with
-  GitHub" (callback https://lambda.pannous.com/callback, proxied by pannous.com to warp-hosting.pannous.workers.dev);
-  Q2 a Cloudflare "Edit Cloudflare Workers" API token for uploads; Q3 free Workers plan (~90 programs, 100k
-  requests/day), Workers for Platforms only near the cap; Q4 programs at warp-<name>.pannous.workers.dev,
-  <name>.warp.pannous.com later; Q5 a private Cloudflare OAuth client for one's own account, others paste a scoped
-  token kept in their browser.
+## Decisions
+- Free Workers plan (~90 programs, 100k requests/day), programs at warp-<name>.pannous.workers.dev (later
+  <name>.warp.pannous.com), Workers for Platforms only near the cap; each program its own Worker uploaded by the
+  hosting Worker.
+- GitHub OAuth App for "Log in with GitHub", callback on lambda.pannous.com behind the proxy on pannous.com (not
+  workers.dev). For one's own account the Cloudflare OAuth client, others paste a scoped token kept in their browser.
 - Fermyon / Akamai Functions: a live test of "☁ Deploy to Fermyon" needs the user's personal access token in .env as
   akamai_functions_token (card fermyon-token); visitors paste their own token, kept in their browser.
+
+## DNS gotchas
+- pannous.com is served by the orderbox nameservers (registrar alpinedomains); Cloudflare's pannous.com zone is not
+  delegated. Extra NS records pointing at Cloudflare in the orderbox zone made resolvers cache "no address".
+- The OAuth publisher TXT sits on `lambda` (warp.pannous.com is a CNAME to GitHub Pages, so no TXT there). Editing
+  that record once dropped the A records of `lambda` and `*.lambda` (81.169.181.160): a name may hold A and TXT
+  together, check both after a change.

@@ -1,7 +1,7 @@
 //! The basic text and list words (`upper`, `first`, `sum`, `split` …) in their three spellings: `x.word`, `x.word(args)`,
 //! `word(x, args)` and `word x args` all become the call `word(x, args)`.
 //! Words that need no runtime function are expanded to source here (`first`, `last`, `sum`); the others are calls that the
-//! emitter resolves (`RUNTIME_WORDS`). A user function or variable of the same name wins.
+//! emitter resolves (lib/prelude.warp's `from warp` lines). A user function or variable of the same name wins.
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
@@ -15,6 +15,7 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::Kind;
 use crate::warp_parser::{parse_template, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 use crate::words::COPY_WORD;
@@ -25,9 +26,7 @@ use crate::words::IN_WORD;
 use crate::words::LIST_WORD;
 use crate::words::LOG_WORD;
 use crate::words::NUMBER_WORD;
-use crate::words::ORD_WORD;
-use crate::words::SPLIT_WORD;
-use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
+use crate::words::{MAP_KEYS, RAISE_WORD, SUM_WORD};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -65,105 +64,47 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
 /// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
+/// The result type of a builtin that gives no value (`print(values...): nothing from emitter`)
+const NOTHING_RESULT: &str = "nothing";
+/// The spellings of a result read off an argument (decision same-as-result)
+const ARGUMENT_RESULTS: [(&str, ArgumentResult); 3] = [
+	("same as ", ArgumentResult::Same),
+	("element of ", ArgumentResult::Element),
+	("value of ", ArgumentResult::Element),
+];
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// lib/prelude.warp's words of `count x in y`: how often an item or character occurs, how often a part of a text
 const COUNT_ITEM: &str = "count_item";
 const COUNT_PART: &str = "count_of";
+/// lib/prelude.warp's byte list of a text, `t.bytes`
+pub(crate) const BYTE_LIST: &str = "bytes";
 
-/// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 36] = [
-	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
-	// Python's tuple(xs) (card python-stdlib)
-	(LIST_WORD, &["tuple"]),
-	(MAP_KEYS, &["keys"]),
-	(MAP_VALUES, &["values"]),
-	(MAP_ENTRIES, &[]),
-	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
-	(MAP_GET_OR, &["get"]),
-	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
-	(COLLECTION_POSITION, &["index_of"]),
-	// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too
-	(CHARS_WORD, &["characters", "glyphs"]),
-	("upper", &["uppercase"]),
-	("lower", &["lowercase"]),
-	// the text builtin trim (text_builtins.rs), Python's strip
-	("trim", &["strip"]),
-	("reverse", &["reversed"]),
-	("sort", &["sorted"]),
-	("split", &[]),
-	("join", &[]),
-	("first", &[]),
-	("last", &[]),
-	(SLICE, &[]),
-	(COPY_WORD, &["clone"]),
-	("replace", &[]),
-	(ORD_WORD, &["ordinal", CODEPOINT]),
-	(IS_DIGIT, &["isdigit"]),
-	("mean", &["average"]),
-	(IS_ALPHA, &["is_letter", "isalpha"]),
-	("is_alphanumeric", &["is_alnum", "isalnum"]),
-	("is_space", &["is_whitespace", "isspace"]),
-	("nearest", &[]),
-	// lib/prelude.warp's digits in a base up to 36 and back
-	("to_base", &[]),
-	("from_base", &[]),
-	// lib/prelude.warp's Euclidean length of a list, a number's absolute value (decision S3)
-	("norm", &[]),
-	("magnitude", &[]),
-	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
-	(DICT_WORD, &[]),
-	(FROMKEYS, &[]),
-	// lib/prelude.warp's count of a part of a text (`count "an" in t` calls it too)
-	(COUNT_PART, &[]),
-	(crate::words::UNWRAP, &[]),
-];
+/// The library's words besides the runtime, expanded and prelude words: the text builtins warning and trim, the type
+/// word list and copy; their other spellings are lib/prelude.warp's alias lines
+const OTHER_LIBRARY_WORDS: [&str; 4] =
+	[crate::wasm_emitter::text::text_builtins::WARNING, LIST_WORD, "trim", COPY_WORD];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/lists/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
 /// `t.chars`: the list of a text's characters, a grapheme cluster each (`char` is short for character)
 pub const CHARS_WORD: &str = "chars";
 /// The list of a text's code points, which `for codepoints in t` and `for each codepoint in t` walk
-pub const CODE_POINT_LIST: &str = "codepoint·list";
+pub const CODE_POINT_LIST: &str = "code_point_list";
 /// The runtime functions behind them: text_graphemes(text), the list of its characters; text_chars(text), of its code points
 pub const TEXT_GRAPHEMES: &str = "text_graphemes";
 pub const TEXT_CODE_POINTS: &str = "text_chars";
 
-/// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 21] = [
-	(crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT, 0),
-	(ORD_WORD, 1),
-	("upper", 1),
-	("lower", 1),
-	("reverse", 1),
-	("sort", 1),
-	("split", 2),
-	("join", 2),
-	(CHARS_WORD, 1),
-	(CODE_POINT_LIST, 1),
-	(FIELD_WITH, 3),
-	(MAP_KEYS, 1),
-	(MAP_VALUES, 1),
-	(MAP_ENTRIES, 1),
-	(COLLECTION_CONTAINS, 2),
-	(COLLECTION_POSITION, 2),
-	(MAP_GET_OR, 3),
-	(SLICE, 3),
-	(MAP_WITHOUT, 2),
-	(INSTANCE_COPY, 2),
-	(crate::one_entry_maps::MAP_OF_ENTRY, 1),
-];
-/// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
-/// `s.split` splits at spaces (left_out_argument)
-const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT_WORD, 1)];
-const SPLIT_SEPARATOR: &str = " ";
-/// What an optional argument left out is: the space `s.split` splits at, else ø
-fn left_out_argument(word: &str) -> Node {
-	match word {
-		SPLIT_WORD => text(SPLIT_SEPARATOR),
-		_ => Node::Empty,
-	}
+/// A word the emitter implements as a runtime function: its `from warp` line in lib/prelude.warp
+fn runtime_word(name: &str) -> Option<&'static crate::ffi::ForeignLine<'static>> {
+	crate::ffi::runtime_word_lines().iter().find(|line| line.name == name)
+}
+
+/// The argument at `index` a call leaves out: its parameter's default (the space `s.split` splits at), else ø
+fn left_out_argument(word: &str, index: usize) -> Node {
+	let default = runtime_word(word).and_then(|line| line.defaults().nth(index).flatten());
+	default.map_or(Node::Empty, |default| crate::warp_parser::parse(default).drop_meta().clone())
 }
 
 /// The bases with an exact libm logarithm: `log(1000, 10)` is log10(1000) = 3, where ln(1000)/ln(10) is 2.9999999999999996
@@ -229,8 +170,9 @@ pub(crate) fn expanded_word_definition(word: &str) -> Option<String> {
 	let parameters: String = std::iter::once(TEMPORARY.to_string()).chain(after_receiver).collect();
 	Some(format!("{name}({parameters}) := {template}"))
 }
-const IS_DIGIT: &str = "is_digit";
 const DICT_WORD: &str = "dict";
+/// The type of a parameter taking a function value: `c: function`
+const FUNCTION_TYPE_WORD: &str = "function";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
@@ -249,11 +191,11 @@ const ARITY_VARIANTS: [(&str, usize, &str); 5] = [
 ];
 const AS_LIST: &str = "as_list";
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
-/// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
+/// and popped_rest, `x.clear()` to cleared, `x.insert(v, at: i)` to inserted (list_mutations removed_key,
+/// cleared_collection, lowered_insert)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
-const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
-	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
-const IS_ALPHA: &str = "is_alpha";
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 4] =
+	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"]), ("insert", &["inserted"])];
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand";
@@ -267,28 +209,80 @@ const WORD_BASE: &str = "word";
 const SAFE_PREFIX: &str = "safe_tmp_";
 const SAFE_BASE: &str = "safe";
 
-/// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 5] =
-	["upper", "lower", "trim", "join", crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT];
-const LIST_RESULT_WORDS: [&str; 9] = [
-	CHARS_WORD,
-	CODE_POINT_LIST,
-	"sort",
-	"split",
-	MAP_KEYS,
-	MAP_VALUES,
-	MAP_ENTRIES,
-	MAP_WITHOUT,
-	crate::wasm_emitter::lists::list_ops::LIST_EXTEND,
-];
+/// A library word's result when it is always a text or a list: its signature's (upper, split, map_keys), a text
+/// builtin's (trim), list_extend's (`xs + ys` of lists)
+pub fn result_kind(word: &str) -> Option<Kind> {
+	call_result_kind(word, || None)
+}
 
-pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
-	use crate::type_kinds::Kind;
+/// A library word's result for a first argument of the kind `argument` gives: the result of its overload for that
+/// kind (`reverse(t: text): text`, card typed-builtins), else the one all its overloads share. When the overloads
+/// differ, a Node of run-time kind gives a Node and any other value no overload is typed for (a name, a range) the
+/// first line's result, a list's. The argument is inferred only then
+pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> Option<Kind> {
 	let word = canonical_spelling(word);
-	if TEXT_RESULT_WORDS.contains(&word) {
-		Some(Kind::Text)
-	} else {
-		LIST_RESULT_WORDS.contains(&word).then_some(Kind::List)
+	let overloads: Vec<_> = crate::ffi::runtime_word_lines().iter().filter(|line| line.name == word).collect();
+	let Some(first) = overloads.first() else {
+		return match word {
+			crate::wasm_emitter::lists::list_ops::LIST_EXTEND => Some(Kind::List),
+			_ => {
+				crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, 1).filter(|kind| *kind == Kind::Text)
+			}
+		};
+	};
+	if overloads.iter().all(|line| line_result_kind(line) == line_result_kind(first)) {
+		return line_result_kind(first);
+	}
+	let fitting = match argument()? {
+		Kind::Empty => return Some(Kind::Empty),
+		Kind::Codepoint => Kind::Text,
+		kind => kind,
+	};
+	let typed_for = |line: &&&crate::ffi::ForeignLine| line.first_type().and_then(crate::analyzer::type_word_kind);
+	line_result_kind(overloads.iter().find(|line| typed_for(line) == Some(fitting)).unwrap_or(first))
+}
+
+/// How a builtin's result follows one of its arguments (decision same-as-result): its very type, `same as object`, or
+/// the type of its elements, `element of xs`, `value of m`
+#[derive(Clone, Copy)]
+pub enum ArgumentResult {
+	Same,
+	Element,
+}
+
+/// The argument a builtin line's result follows, and how: `field_with(object, name, value): same as object` → (Same,
+/// 0), `map_get_or(m, key, default): value of m` → (Element, 0)
+pub fn argument_result(word: &str) -> Option<(ArgumentResult, usize)> {
+	let word = unaliased(word);
+	let line = crate::ffi::typed_word_lines().find(|line| line.name == word)?;
+	let (how, parameter) = ARGUMENT_RESULTS
+		.iter()
+		.find_map(|(spelling, how)| line.result.strip_prefix(spelling).map(|parameter| (*how, parameter)))?;
+	Some((how, line.names().position(|name| name == parameter)?))
+}
+
+/// The result of a call of `arguments` values to a builtin the emitter expands, as its line declares it
+/// (`count(xs): int from emitter`; print's `nothing` a Node of no value)
+pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
+	let word = unaliased(word);
+	let line = crate::ffi::emitter_word_lines().iter().find(|line| line.name == word && line.takes(arguments))?;
+	match line.result {
+		NOTHING_RESULT => Some(Kind::Empty),
+		// a type's name (`type(3)` is int), held as no other value is
+		crate::words::SYMBOL_WORD => Some(Kind::Symbol),
+		// `number("2.5")` an int or a float, `any(xs, f)` a bool the emitter marks: decided where it is made
+		crate::words::NUMBER_WORD | crate::analyzer::BOOL_TYPE => None,
+		// a Node of any kind, decided at run time (`removed_value(x, k)`)
+		crate::words::ANY_TYPE => Some(Kind::Empty),
+		result => crate::analyzer::type_word_kind(result),
+	}
+}
+
+fn line_result_kind(line: &crate::ffi::ForeignLine) -> Option<Kind> {
+	match line.result {
+		"text" => Some(Kind::Text),
+		result if result.starts_with(LIST_WORD) => Some(Kind::List),
+		_ => None,
 	}
 }
 
@@ -300,11 +294,11 @@ pub fn is_field_update_of(name: &str, value: &Node) -> bool {
 	let [word, map, _, _] = items.as_slice() else {
 		return false;
 	};
-	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
+	word.name() == FIELD_WITH && map.is_symbol(name)
 }
 
 pub fn is_runtime_word(name: &str) -> bool {
-	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
+	runtime_word(name).is_some()
 }
 
 /// A word of the library, under any of its spellings: `codepoint(c)` calls it, it is no type constructor
@@ -325,7 +319,7 @@ pub fn is_standard_function(name: &str) -> bool {
 /// (`count sorted xs`, `max sorted xs`, `print sorted xs`)
 pub fn is_calling_word(name: &str) -> bool {
 	is_standard_function(name)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 		|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name)
 }
 
@@ -348,11 +342,11 @@ pub fn needs_one_value(name: &str) -> bool {
 pub fn is_one_value_function(name: &str) -> bool {
 	needs_one_value(name)
 		|| crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 }
 
 fn fewest_arguments(word: &str) -> usize {
-	let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
+	let optional = runtime_word(word).map_or(0, |line| line.defaults().flatten().count());
 	arity(word) - optional
 }
 
@@ -362,16 +356,23 @@ pub fn canonical_spelling(name: &str) -> &str {
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
-	SYNONYMS
-		.iter()
-		.find(|(word, synonyms)| *word == name || synonyms.contains(&name))
-		.map(|(word, _)| *word)
-		.or((name == SUM_WORD).then_some(SUM_WORD))
+	let name = unaliased(name);
+	let runtime = crate::ffi::runtime_word_lines().iter().map(|line| line.name);
+	let expanded = EXPANDED_WORDS.into_iter().map(|(word, _, _)| word);
+	let built_in = runtime.chain(expanded).chain(OTHER_LIBRARY_WORDS).find(|word| *word == name);
+	built_in.or_else(|| crate::modules::prelude_word(name))
+}
+
+/// The word a prelude alias names (`size` → count), else the name itself
+pub(crate) fn unaliased(name: &str) -> &str {
+	let aliases = crate::modules::prelude_aliases();
+	aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str())
 }
 
 pub(crate) fn arity(word: &str) -> usize {
 	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
-	let built_in = RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
+	let runtime = crate::ffi::runtime_word_lines().iter().map(|line| (line.name, line.arity()));
+	let built_in = runtime.chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
 	built_in.or_else(|| crate::modules::prelude_word_arity(word)).unwrap_or(1)
 }
 
@@ -400,6 +401,7 @@ pub fn lower(node: Node) -> Node {
 		.map(|(operation, _)| operation.to_string())
 		.collect();
 	shadowed.extend(variants);
+	let functions = shadowed.clone();
 	crate::type_tests::collect_outer_assigned_names(&node, &mut shadowed);
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);
@@ -413,11 +415,13 @@ pub fn lower(node: Node) -> Node {
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
+		functions,
 		program: crate::program_names::ProgramNames::of(&node),
 		objects,
 		plain,
 		instances,
 		parameters: RefCell::new(vec![]),
+		function_parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
 		times,
@@ -468,7 +472,7 @@ fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 /// The field and step of `x++` / `x--` after a dot
 fn field_step(method: &Node) -> Option<(Node, Op)> {
 	match method.drop_meta() {
-		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if matches!(field.drop_meta(), Node::Symbol(_)) => {
+		Node::Key(field, op @ (Op::Inc | Op::Dec), _) if field.symbol_name().is_some() => {
 			Some((field.as_ref().clone(), *op))
 		}
 		_ => None,
@@ -479,7 +483,7 @@ fn field_step(method: &Node) -> Option<(Node, Op)> {
 /// `bags#1.n`, `xs#1#2`
 fn is_nested_place(place: &Node) -> bool {
 	match place.drop_meta() {
-		Node::Key(base, Op::Dot | Op::Hash, _) => !matches!(base.drop_meta(), Node::Symbol(_)),
+		Node::Key(base, Op::Dot | Op::Hash, _) => base.symbol_name().is_none(),
 		_ => false,
 	}
 }
@@ -567,6 +571,9 @@ struct Lowering {
 	/// The names the program defines where the lowering is: its functions, the variables outside functions and those
 	/// the function being lowered assigns (a local in one function hides no library word in another)
 	shadowed: RefCell<HashSet<String>>,
+	/// The functions the program defines, the only names that hide a library word after a dot: a variable named like
+	/// the word is no member of the receiver (`t.bytes` with `bytes = …` still reads the bytes)
+	functions: HashSet<String>,
 	/// The program's functions at the numbers of arguments they take
 	program: crate::program_names::ProgramNames,
 	objects: HashMap<String, Node>,
@@ -576,6 +583,9 @@ struct Lowering {
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
 	parameters: RefCell<Vec<String>>,
+	/// The parameters declared `function` of the definitions being lowered: `c.name` reads the function's name, never a
+	/// class's method name()
+	function_parameters: RefCell<Vec<String>>,
 	/// The functions being defined, innermost last, each with its parameters: `start(l) := l.start` reads the field
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
@@ -719,6 +729,8 @@ impl Lowering {
 		let mut locals = self.shadowed.borrow().clone();
 		collect_assigned_names(&right, &mut locals);
 		let outer = self.shadowed.replace(locals);
+		let function_scope = self.function_parameters.borrow().len();
+		self.function_parameters.borrow_mut().extend(crate::traits::parameters_of_type(head, FUNCTION_TYPE_WORD));
 		let lowered = self.within_function(name, parameters, || {
 			let body = self.body_statement(head, right);
 			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
@@ -727,6 +739,7 @@ impl Lowering {
 			}
 			self.expand(body)
 		});
+		self.function_parameters.borrow_mut().truncate(function_scope);
 		self.shadowed.replace(outer);
 		lowered
 	}
@@ -824,20 +837,38 @@ impl Lowering {
 	}
 
 	fn library_word(&self, name: &str) -> Option<&'static str> {
-		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(word))
+		self.word_unless(name, &|word| self.shadows(word))
+	}
+
+	fn word_unless(&self, name: &str, shadows: &dyn Fn(&str) -> bool) -> Option<&'static str> {
+		canonical_word(name).filter(|word| !shadows(name) && !shadows(word))
 	}
 
 	/// The library word a call of `name` with that many arguments (receiver included) means; shadowing is per arity:
 	/// `first(x) := …` leaves `first(xs, 2)` to the library (notes/dispatch.md); a prelude word answers to its own
 	/// name too (`round_to(x, 2)` as `round(x, 2)` does, card lib-math)
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
+		self.word_for_unless(name, argument_count, &|word| self.shadows(word))
+	}
+
+	/// The library word `x.name(…)` calls: only the program's functions hide it (Lowering::functions)
+	fn method_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
+		self.word_for_unless(name, argument_count, &|word| self.functions.contains(word))
+	}
+
+	fn word_for_unless(
+		&self,
+		name: &str,
+		argument_count: usize,
+		shadows: &dyn Fn(&str) -> bool,
+	) -> Option<&'static str> {
 		let variant = arity_variant(name, argument_count);
 		let prelude_word = || crate::modules::prelude_word(name);
 		if self.program.function_takes(name, argument_count) == Some(false) && !self.program.binds(name) {
 			return variant.or_else(|| canonical_word(name)).or_else(prelude_word);
 		}
-		let unshadowed = || prelude_word().filter(|_| !self.shadows(name));
-		variant.filter(|_| !self.shadows(name)).or_else(|| self.library_word(name)).or_else(unshadowed)
+		let unshadowed = || prelude_word().filter(|_| !shadows(name));
+		variant.filter(|_| !shadows(name)).or_else(|| self.word_unless(name, shadows)).or_else(unshadowed)
 	}
 
 	/// `word(x, args)` and `word x args`
@@ -848,12 +879,9 @@ impl Lowering {
 		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
 			return Some(raised);
 		}
-		let head = match items.first()?.drop_meta() {
-			Node::Symbol(name) => name,
-			_ => return None,
-		};
+		let head = items.first()?.symbol_name()?;
 		// `log(x, base)` is ln(x)/ln(base): libm's log takes one argument (unless the program defines its own log)
-		if let (LOG_WORD, [_, value, base]) = (head.as_str(), items) {
+		if let (LOG_WORD, [_, value, base]) = (head, items) {
 			if self.shadows(LOG_WORD) {
 				return None;
 			}
@@ -871,12 +899,15 @@ impl Lowering {
 			{
 				// a synonym calls its library word: `sorted xs` is sort(xs)
 				let word = canonical_spelling(head);
-				let function = if word == head { function.clone() } else { Node::Symbol(word.to_string()) };
-				return Some(word_call(&function, argument, vec![]));
+				let function = if word == head { function.clone() } else { symbol(word) };
+				// the call lowered as if written so: an expanded word (`sum xs`) expands
+				let call = word_call(&function, argument, vec![]);
+				let Node::List(call_items, call_bracket, call_separator) = &call else { unreachable!("a call") };
+				return Some(self.word_call(call_items, call_bracket, call_separator).unwrap_or(call));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
-		if let (NUMBER_WORD, [_, value]) = (head.as_str(), items) {
+		if let (NUMBER_WORD, [_, value]) = (head, items) {
 			if !self.shadows(NUMBER_WORD) && call_name(items, bracket, separator).is_some() {
 				return Some(key(value.clone(), Op::As, symbol(NUMBER_WORD)));
 			}
@@ -899,7 +930,7 @@ impl Lowering {
 		let is_prefix = is_words_call(bracket, separator) && items.len() > 1;
 		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
 		// (a bare word that names no variable keeps the list data: `[first last]`)
-		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadows(name));
+		let is_value = |argument: &Node| argument.symbol_name().is_none_or(|name| self.shadows(name));
 		let is_element = *bracket == Bracket::Square
 			&& *separator == Separator::Space
 			&& items.len() == arity(word) + 1
@@ -928,7 +959,7 @@ impl Lowering {
 		let (key, value) = match names.drop_meta() {
 			Node::Symbol(_) => (names.clone(), None),
 			Node::List(parts, Bracket::Round | Bracket::None, _) => match parts.as_slice() {
-				[key, value] if [key, value].iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => {
+				[key, value] if [key, value].iter().all(|name| name.symbol_name().is_some()) => {
 					(key.clone(), Some(value.clone()))
 				}
 				_ => return None,
@@ -986,6 +1017,14 @@ impl Lowering {
 			return Some(crate::warp_parser::subscript(receiver.clone(), method.clone()));
 		}
 		let (word_node, name, arguments) = method_parts(method)?;
+		// `c.name` of a parameter `c: function`: what the function value answers at run time
+		let is_function_parameter = receiver
+			.symbol_name()
+			.is_some_and(|parameter| self.function_parameters.borrow().iter().any(|p| p == parameter));
+		let is_function_word = || crate::wasm_emitter::functions::function_words().any(|(word, _)| word == name);
+		if is_function_parameter && arguments.is_empty() && is_function_word() {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
 			return Some(self.call(FROMKEYS, word_node, arguments, false));
 		}
@@ -1010,7 +1049,7 @@ impl Lowering {
 		}
 		// `p.center`, `s.words` of another module's word on what may be an object: its field, as before the word was
 		// loaded; a parameter or a user function's result may be of the word's type module, chosen at run time
-		let is_module_word = is_bare && is_loaded_module_word(name) && self.library_word_for(name, 1).is_none();
+		let is_module_word = is_bare && is_loaded_module_word(name) && self.method_word_for(name, 1).is_none();
 		let may_be_object = match own_member {
 			OwnMember::Maybe => true,
 			OwnMember::Not => self.is_object(receiver, name),
@@ -1089,7 +1128,7 @@ impl Lowering {
 		let call = |call: Node| WordMeaning::Call { call, typed: false };
 		// a counting word without parentheses stays the count the emitter reads (`xs.count`)
 		if let Some(word) = self
-			.library_word_for(name, arguments.len() + 1)
+			.method_word_for(name, arguments.len() + 1)
 			.filter(|_| !is_bare || counting_method(name, &self.context).is_none())
 		{
 			let typed = !reads_entry_first(name, word);
@@ -1166,8 +1205,7 @@ impl Lowering {
 
 	/// A receiver known to be an object: a field lookup, a parameter, a call's result, or one of a declared field name
 	fn is_object(&self, receiver: &Node, name: &str) -> bool {
-		let is_call_result =
-			matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
+		let is_call_result = receiver.symbol_name().is_some_and(|variable| self.call_results.contains(variable));
 		is_field_lookup(receiver)
 			|| self.is_parameter(receiver)
 			|| is_call_result
@@ -1195,9 +1233,7 @@ impl Lowering {
 		// object: its field is looked up at run time
 		// a parenthesized receiver is what it holds: `(x#2).name` is `x#2.name` (card name-quoted); `f()` stays a call
 		let inner = match receiver.drop_meta() {
-			Node::List(items, Bracket::Round, _)
-				if items.len() == 1 && !matches!(items[0].drop_meta(), Node::Symbol(_)) =>
-			{
+			Node::List(items, Bracket::Round, _) if items.len() == 1 && items[0].symbol_name().is_none() => {
 				items[0].drop_meta()
 			}
 			other => other,
@@ -1228,7 +1264,9 @@ impl Lowering {
 		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
 		let wanted = arity(word);
 		if arguments.len() < wanted && arguments.len() >= fewest_arguments(word) {
-			arguments.resize(wanted, left_out_argument(word));
+			while arguments.len() < wanted {
+				arguments.push(left_out_argument(word, arguments.len()));
+			}
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
 		if let (COPY_WORD, [receiver], shallow) | (COPY_WORD, [receiver, shallow], _) =
@@ -1255,12 +1293,8 @@ impl Lowering {
 				call(&qualified, crate::modules::prelude_arguments(word, arguments))
 			}
 			None => {
-				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) {
-					head.clone()
-				} else {
-					// the written spelling's position: `warn "x"` errs where warn is
-					symbol(word).with_meta_of(head)
-				};
+				// else the written spelling's position: `warn "x"` errs where warn is
+				let name = if head.is_symbol(word) { head.clone() } else { symbol(word).with_meta_of(head) };
 				parens([vec![name], arguments].concat())
 			}
 		}
@@ -1274,7 +1308,7 @@ impl Lowering {
 			return arguments;
 		}
 		let (kept, rest) = arguments.split_at(wanted - 1);
-		let heads_with_word = matches!(rest[0].drop_meta(), Node::Symbol(name) if self.library_word(name).is_some());
+		let heads_with_word = rest[0].symbol_name().is_some_and(|name| self.library_word(name).is_some());
 		let phrase = heads_with_word.then(|| self.word_call(rest, &Bracket::None, &Separator::Space)).flatten();
 		let phrase = phrase.unwrap_or_else(|| crate::lowering::ambiguous_forms::spaced_phrase(rest.to_vec()));
 		[kept.to_vec(), vec![phrase]].concat()

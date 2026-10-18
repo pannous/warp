@@ -1,0 +1,113 @@
+#!/usr/bin/env warp
+# a compute.toys kernel through compute_toy of `use compute_toys` (samples/gpu/lava_lamp.warp shows the simplest):
+# a gas giant with rings, lit by a sun off to the left. Every pixel's ray is tested against the planet (a sphere) and
+# the rings (a flat disc with a hole); the planet's bands drift with time, the rings throw a shadow on it and it on them.
+# The pointer turns the view: left and right go around the planet, up and down tilt the rings; the wheel flies closer
+# or farther (compute.toys' mouse.zoom). Full HD, so a star is one pixel
+use compute_toys
+width = 1920
+height = 1080
+planet = compute_toy(shader {
+	const PLANET = 1.0;
+	const RING_INNER = 1.45;
+	const RING_OUTER = 2.6;
+
+	fn hash(cell: float2) -> f32 {
+		var h = (bitcast<u32>(vec2i(cell).x) * 2654435761u) ^ (bitcast<u32>(vec2i(cell).y) * 2246822519u);
+		h = (h ^ (h >> 15u)) * 2246822519u;
+		return f32(h ^ (h >> 13u)) / 4294967295.0;
+	}
+
+	// distance along the ray to the sphere, or -1 when it misses
+	fn hit_planet(origin: float3, toward: float3) -> f32 {
+		let b = dot(origin, toward);
+		let c = dot(origin, origin) - PLANET * PLANET;
+		let disc = b * b - c;
+		if (disc < 0.0) { return -1.0; }
+		return -b - sqrt(disc);
+	}
+
+	// distance along the ray to the ring plane (y = 0) inside the rings, or -1
+	fn hit_rings(origin: float3, toward: float3) -> f32 {
+		if (abs(toward.y) < 1e-5) { return -1.0; }
+		let along = -origin.y / toward.y;
+		let radius = length((origin + along * toward).xz);
+		if (along < 0.0 || radius < RING_INNER || radius > RING_OUTER) { return -1.0; }
+		return along;
+	}
+
+	// how much light the rings let through at this radius: gaps, dense and thin lanes
+	fn ring_density(radius: f32) -> f32 {
+		let across = (radius - RING_INNER) / (RING_OUTER - RING_INNER);
+		let lanes = 0.55 + 0.45 * sin(across * 70.0) * sin(across * 23.0 + 1.0);
+		let gap = smoothstep(0.02, 0.0, abs(across - 0.62));
+		return clamp(lanes * (1.0 - gap) * smoothstep(0.0, 0.05, across) * smoothstep(1.0, 0.9, across), 0.0, 1.0);
+	}
+
+	fn planet_color(point: float3, t: f32) -> float3 {
+		// bands by latitude, bent a little by a slow wave that travels around
+		let longitude = atan2(point.z, point.x) + t * 0.15;
+		let latitude = point.y + 0.04 * sin(longitude * 3.0 + point.y * 9.0);
+		let band = 0.5 + 0.5 * sin(latitude * 18.0) * cos(latitude * 7.0);
+		let storm = smoothstep(0.12, 0.0, length(float2(longitude % 6.2831853 - 2.0, (point.y + 0.35) * 2.0)));
+		let cream = float3(0.92, 0.82, 0.62);
+		let rust = float3(0.68, 0.38, 0.2);
+		return mix(mix(rust, cream, band), float3(0.8, 0.3, 0.15), storm);
+	}
+
+	@compute @workgroup_size(16, 16)
+	fn main_image(@builtin(global_invocation_id) id: vec3u) {
+		let screen_size = textureDimensions(screen);
+		if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
+		let size = float2(screen_size);
+		// the pointer, 0 … 1 across and down; before any move it sits in the middle
+		let pointer = select(float2(mouse.pos) / size, float2(0.5, 0.45), mouse.pos.x <= 0 && mouse.pos.y <= 0);
+		let around = (pointer.x - 0.5) * 4.0;
+		let tilt = 0.08 + (pointer.y - 0.2) * 0.8;
+		let distance = clamp(6.0 / mouse.zoom, 2.2, 30.0);
+		let eye = distance * float3(sin(around) * cos(tilt), sin(tilt), -cos(around) * cos(tilt));
+		let forward = normalize(-eye);
+		let right = normalize(cross(float3(0.0, 1.0, 0.0), forward));
+		let up = cross(forward, right);
+		// y up: compute.toys counts pixel rows from the top
+		let at = (float2(id.xy) - 0.5 * size) / size.y * float2(1.0, -1.0);
+		let ray = normalize(forward * 1.6 + at.x * right + at.y * up);
+		let sun = normalize(float3(-1.0, 0.3, -0.25));
+		let t = time.elapsed;
+
+		// the sky: stars, sparse and faint
+		let star = hash(float2(id.xy));
+		var color = float3(0.004, 0.006, 0.015) + float3(select(0.0, 0.8, star > 0.9985));
+
+		let planet_at = hit_planet(eye, ray);
+		let rings_at = hit_rings(eye, ray);
+		if (planet_at > 0.0) {
+			let point = eye + planet_at * ray;
+			let normal = normalize(point);
+			var light = max(dot(normal, sun), 0.0);
+			// the rings' shadow: the sun's ray from this point through the ring plane
+			let shade_at = hit_rings(point, sun);
+			if (shade_at > 0.0) {
+				light *= 1.0 - 0.8 * ring_density(length((point + shade_at * sun).xz));
+			}
+			let rim = pow(1.0 - max(dot(normal, -ray), 0.0), 3.0);
+			color = planet_color(point, t) * (0.03 + light) + float3(0.25, 0.35, 0.6) * rim * light;
+		}
+		// rings in front of the planet, or with nothing behind them
+		if (rings_at > 0.0 && (planet_at < 0.0 || rings_at < planet_at)) {
+			let point = eye + rings_at * ray;
+			let density = ring_density(length(point.xz));
+			// the planet's shadow on the rings
+			let lit = select(1.0, 0.05, hit_planet(point, sun) > 0.0);
+			let dust = mix(float3(0.55, 0.5, 0.45), float3(0.85, 0.75, 0.6), density);
+			color = mix(color, dust * (0.05 + 0.95 * lit), density * 0.9);
+		}
+		textureStore(screen, id.xy, float4(color, 1.0));
+	}
+})
+# ten seconds by the clock, however long a frame takes
+started = clock()
+while clock() - started < 10000 {
+	paint(planet)
+	sleep(1 / 60)
+}

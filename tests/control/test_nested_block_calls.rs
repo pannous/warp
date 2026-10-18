@@ -1,0 +1,19 @@
+//! Card block-call-nested: a call of a block function inside a branch, a loop or a function body ran only its block,
+//! and `at beats(2) { … }` (read as `at ((beats 2) {…})`) was no call of at; music's `at` is a plain library function so
+use crate::is;
+
+#[test]
+fn a_block_call_alone_in_a_branch_runs_the_function() {
+	is!("r(t, body: block) := { k += t; body! }; k = 0; if 1 { r 3 { k += 10 } }; k", 13);
+	is!("global k = 0; r(t, body: block) := { k += t; body! }; f() := { r 3 { k += 10 } }; f(); k", 13);
+}
+
+#[test]
+fn a_block_call_in_a_loop_runs_each_time() {
+	is!("r(t, body: block) := { k += t; body! }; k = 0; for i in 1 to 2 { r i { k += 10 } }; k", 23);
+}
+
+#[test]
+fn a_call_before_the_block_is_the_value_argument() {
+	is!("twice(n) := n * 2; r(t, body: block) := { k += t; body! }; k = 0; r twice(3) { k += 10 }; k", 16);
+}

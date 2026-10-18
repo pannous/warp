@@ -1,10 +1,11 @@
 //! Atoms: symbols with suffixes, function calls, keyword forms and glued suffixes
 
 use super::*;
+use crate::warp_parser::context::Context;
 use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
-const VOID_WORD: &str = "void";
+use crate::words::VOID_WORD;
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
@@ -34,15 +35,14 @@ impl WarpParser {
 			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
 			'&' if self.starts_capture() => {
 				self.advance();
-				let outer = std::mem::replace(&mut self.in_capture, true);
-				let group = self.parse_bracketed('(');
-				self.in_capture = outer;
+				let group =
+					self.within(Context { in_capture: true, ..self.context }, |parser| parser.parse_bracketed('('));
 				match group {
 					Node::List(items, Bracket::Round, separator) => Node::List(items, Bracket::Curly, separator),
 					other => Node::List(vec![other], Bracket::Curly, Separator::None),
 				}
 			}
-			'&' if self.peek_char(1).is_ascii_digit() && self.in_capture => {
+			'&' if self.peek_char(1).is_ascii_digit() && self.context.in_capture => {
 				self.advance();
 				let position: usize = self.take_while_char(|ch| ch.is_ascii_digit()).parse().unwrap_or(1);
 				Node::Symbol(format!("${}", position.saturating_sub(1)))
@@ -81,7 +81,7 @@ impl WarpParser {
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
-			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
+			// `.card { … }`: a leading-dot name, a class selector in a style block (lib/markup.warp style)
 			'.' if self.is_identifier_start(1) => self.symbol_after(1, |name| Node::Symbol(format!(".{name}"))),
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'[' => {
@@ -340,7 +340,8 @@ impl WarpParser {
 		let declared = self.declared_types.contains(&symbol);
 		// inside a data literal any spaced `c { … }` is the child c{ … } (card spaced-child), but in a for header
 		// `for t in todos { … }` it is the collection and the body (card markup-ul)
-		let spaced_child = self.in_data_literal && !self.in_for_header && !declared && self.blanks_then('{');
+		let spaced_child =
+			self.context.in_data_literal && !self.context.in_for_header && !declared && self.blanks_then('{');
 		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
 			self.skip_blanks();
 		}
@@ -468,18 +469,18 @@ impl WarpParser {
 			'{' => {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
-				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				// a rule `p { … }` of a style sheet is still the sheet
-				let in_style_sheet = op == Op::Colon && (symbol == STYLE_WORD || self.in_style_sheet);
-				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, in_style_sheet);
+				let in_style_sheet = op == Op::Colon && (symbol == STYLE_WORD || self.context.in_style_sheet);
 				self.tag_block = op == Op::Colon;
-				let mut blocks = vec![self.parse_bracketed('{')];
-				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
-				while self.current_char() == '{' {
-					blocks.push(self.parse_bracketed('{'));
-				}
-				self.in_data_literal = outer_data_literal;
-				self.in_style_sheet = outer_style_sheet;
+				let data_literal = Context { in_data_literal: op == Op::Colon, in_style_sheet, ..self.context };
+				let blocks = self.within(data_literal, |parser| {
+					let mut blocks = vec![parser.parse_bracketed('{')];
+					// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
+					while parser.current_char() == '{' {
+						blocks.push(parser.parse_bracketed('{'));
+					}
+					blocks
+				});
 				let block = Node::single_or_list(blocks, Bracket::None, Separator::None);
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
@@ -543,11 +544,14 @@ impl WarpParser {
 				self.skip_spaces(); // Only spaces, preserve newlines as statement separators
 
 				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
-				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header && !is_switch_subject {
-					// Function with body: name(params) { body }
+				if self.current_char() == '{'
+					&& !self.context.equals_compares
+					&& !self.context.in_for_header
+					&& !is_switch_subject
+				{
+					// Function with body: name(params) { body }, its head the call
 					let body = self.parse_bracketed('{');
-					let signature = call(&symbol, vec![typed_parameters(args_node)]);
-					Node::List(vec![signature, body], Bracket::Round, Separator::None)
+					Node::List(vec![function_call(symbol, args_node), body], Bracket::Round, Separator::None)
 				} else if symbol == PRINT_WORD {
 					print_call(print_arguments(args_node))
 				} else {
@@ -587,11 +591,20 @@ impl WarpParser {
 fn function_call(symbol: String, args_node: Node) -> Node {
 	let mut items = vec![Symbol(symbol)];
 	match typed_parameters(args_node) {
+		// Swift's labeled parameter `greet(person name: String)` stays one argument, unlike Go's `f(a, b int)`
+		Node::List(args, bracket, Separator::Space) if is_labeled_parameter(&args) => {
+			items.push(Node::List(args, bracket, Separator::Space))
+		}
 		Node::List(args, _, _) => items.extend(args),
 		Node::Empty => {}
 		other => items.push(other),
 	}
 	Node::List(items, Bracket::Round, Separator::None)
+}
+
+/// `person name: String`: a label, then the typed parameter
+fn is_labeled_parameter(words: &[Node]) -> bool {
+	matches!(words, [label, typed] if matches!(label.drop_meta(), Symbol(_)) && matches!(typed.drop_meta(), Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Symbol(_))))
 }
 
 /// The arguments of a glued group `(5)`, `(1, 2)`, `()`, as a round list

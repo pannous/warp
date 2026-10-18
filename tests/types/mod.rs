@@ -1,5 +1,6 @@
 mod test_array_types;
 mod test_bare_class; // card bare-class
+mod test_field_default_variable; // card field-default-constant
 mod test_inline_unions;
 // card union-types
 mod test_class_unions;
@@ -30,6 +31,7 @@ mod test_class_field_names;
 mod test_class_field_type_phrases;
 mod test_class_fields_checked;
 mod test_class_forms_ported;
+mod test_class_index_operator;
 mod test_class_interfaces;
 mod test_class_json;
 mod test_class_method_changes;
@@ -93,6 +95,7 @@ mod test_is_declaration;
 mod test_is_teaches_be;
 mod test_iterable;
 mod test_kept_wiki_forms;
+mod test_kind_marks; // card kind-reflection
 mod test_list_annotations;
 mod test_list_element_types;
 mod test_list_test_of_a_map;
@@ -108,6 +111,7 @@ mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
 mod test_method_result_text; // card instance-result
 mod test_mixed_list_parameter_kinds; // card infers-int
+mod test_mixed_results; // card function-returning
 mod test_multi_word_class; // card multi-word-class
 mod test_mutating_methods;
 mod test_nested_type_calls; // text hex 255 is text(hex(255))
@@ -151,7 +155,9 @@ mod test_struct_instances;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
 mod test_sum_types;
+mod test_symbol_parameters; // card symbol-parameters
 mod test_symbolism_object; // card symbolism-object
+mod test_tag_entries; // decision markup-plain-library
 mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions
 mod test_text_as_bool; // card yes-print
@@ -196,6 +202,7 @@ mod test_type_word_scopes;
 mod test_type_word_user_function;
 mod test_type_words;
 mod test_typed_arrays;
+mod test_typed_builtins; // card typed-builtins
 mod test_typed_list_elements; // card typed-list-elements
 mod test_types;
 mod test_types_scope;

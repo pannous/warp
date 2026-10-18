@@ -98,7 +98,7 @@ fn lower_knowing_functions(node: Node) -> Node {
 	let node = crate::gpu_maps::kept_on_gpu(node);
 	// the first array the program itself declares linear, before the compiler picks any
 	let mut first_linear: Option<(Node, String, Element)> = None;
-	// the compiler's own (a name with TEMPORARY_SEPARATOR, as music_words' blocks) are not the program's
+	// the compiler's own (a name with TEMPORARY_SEPARATOR) are not the program's
 	node.visit(&mut |part| {
 		if let Some((name, _, shared)) = declaration(part).filter(|(name, _, shared)| {
 			shared.storage == Storage::Linear && !name.contains(crate::analyzer::TEMPORARY_SEPARATOR)
@@ -994,10 +994,7 @@ fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap
 
 /// What a shared array named by `node` holds, if it is one
 fn shared(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
-	match node.drop_meta() {
-		Node::Symbol(name) => names.get(name).copied().filter(|kind| !kind.value),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| names.get(name).copied().filter(|kind| !kind.value))
 }
 
 /// `(xs·list = float[count(xs)]; for xs·index in 1 to count(xs) { xs·list#xs·index = get(xs, xs·index) }; xs·list)`
@@ -1021,10 +1018,7 @@ fn collected(array: &Node, kind: Shared) -> Node {
 
 /// The type of a shared value named by `node`, if it is one
 fn shared_value(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
-	match node.drop_meta() {
-		Node::Symbol(name) => names.get(name).copied().filter(|kind| kind.value),
-		_ => None,
-	}
+	node.symbol_name().and_then(|name| names.get(name).copied().filter(|kind| kind.value))
 }
 
 /// `n + v` or `n - v` as the value of `n`: the compound operator and v

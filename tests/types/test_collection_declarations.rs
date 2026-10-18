@@ -1,11 +1,11 @@
-// card declaration-type: a typed declaration takes the collection words type() answers: `map data = {…}`,
+// card declaration-type: a typed declaration takes the collection words type() answers: `map config = {…}`,
 // `list xs = […]`, `tuple t = (…)`, with dict and array as alias words of map and list (got-it note)
 use crate::is;
 use warp::normalize::{capture_hints, clear_shown_hints};
 
 #[test]
 fn a_collection_word_declares_a_variable() {
-	is!("map data = {key: \"value\"}; data.key", "value");
+	is!("map config = {key: \"value\"}; config.key", "value");
 	is!("list xs = [1 2]; xs#2", 2);
 	is!("tuple t = (1, 2, 3); t#3", 3);
 	is!("dict d = {a: 1}; d.a", 1);

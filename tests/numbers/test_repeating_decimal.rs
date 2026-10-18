@@ -33,3 +33,10 @@ fn terminating_and_long_periods_as_decimal() {
 	is!("3 as decimal", "3");
 	is!("(1/7919) as decimal", "1/7919"); // a period of 7918 digits stays a ratio
 }
+
+#[test]
+fn decimal_text_is_the_prelude_word_the_cast_calls() {
+	is!("decimal_text(1, 6)", "0.16̅");
+	is!("decimal_text(-3, 8)", "-0.375");
+	is!("decimal_text(2, 1019)", "2/1019");
+}

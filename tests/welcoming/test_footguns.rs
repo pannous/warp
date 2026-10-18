@@ -361,10 +361,15 @@ fn test_text_is_indexed_by_grapheme() {
 #[test] // size is a synonym for count; bytes only via byte count / .bytes, .chars .graphemes name the unit
 fn test_text_units_are_explicit() {
 	is!("x=\"👍🏽\";x.size", 1);
-	is!("byte count of \"👍🏽\"", 8);
 	is!("x=\"👍🏽\";x.chars.count", 1); // x.chars is the list of characters (user 2026-10-14, card abc-chars; char = character 2026-10-16)
-	is!("x=\"👍🏽\";x.codepoints", 2);
-	is!("x=\"👍🏽\";x.graphemes", 1);
+	is!("x=\"👍🏽\";count x.codepoints", 2);
+	is!("x=\"👍🏽\";count x.graphemes", 1);
+}
+
+#[test]
+#[ignore = "dropped: rust-cleanup-drops: the unit count byte count of t; warp writes number of bytes in t, t.bytecount"]
+fn test_byte_count_of_texts_and_lists() {
+	is!("byte count of \"👍🏽\"", 8);
 	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
 
@@ -423,7 +428,7 @@ fn test_index_assignment_of_multi_byte_character() {
 	is!("x=\"héllo\";x#2='e';x", "hello");
 	is!("x=\"a👍🏽c\";x#2='b';x", "abc"); // replaces the whole grapheme
 	is!("x=\"ab\";x#2='👍';x#2", '👍');
-	is!("x=\"ab\";x#2='€';x.bytes", 4);
+	is!("x=\"ab\";x#2='€';count x.bytes", 4);
 }
 
 #[test] // NFC 'é' vs NFD 'e'+U+0301 compare equal: source text is normalized to NFC

@@ -49,6 +49,11 @@ Worker.
 brew install pannous/tap/warp
 ```
 
+**pip** (macOS, Linux; any Python 3):
+```bash
+pip install warp-language
+```
+
 **Debian, Ubuntu, Fedora** (glibc 2.39 or newer: Ubuntu 24.04, Debian 13, Fedora 40): the `.deb` or `.rpm` of the
 [latest release](https://github.com/pannous/warp/releases/latest), e.g.
 `sudo apt install ./warp-lang_*_amd64.deb` or `sudo dnf install ./warp-lang-*.x86_64.rpm`.
@@ -58,7 +63,7 @@ brew install pannous/tap/warp
 
 **Cargo** (any platform with [Rust](https://rustup.rs)):
 ```bash
-cargo install --locked --git https://github.com/pannous/warp warp warp-runtime
+cargo install --locked warp-lang warp-runtime
 ```
 
 **From source:**
@@ -83,6 +88,17 @@ warp help                         # all commands
 
 `samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
 Python-like style and an idiomatic Warp style, one folder per chapter of the guide (samples/graphics, samples/sound …).
+
+## Packages
+
+`use` loads a local module, or else a package of the registry
+[warp-packages](https://github.com/pannous/warp-packages) by name, fetched once into `packages/`:
+```warp
+use colors
+to_hex(mix(from_hex("#ff0000"), from_hex("#0000ff"), 0.5))   # "#800080"
+```
+Packages so far: `colors`, `geometry`, `webgl`, `ciphers`, `life` and `uniscript`; `packages.warp` pins versions
+([use](https://github.com/pannous/warp/wiki/use)).
 
 ## Rust ⇄ Wasm GC round trip
 
@@ -115,3 +131,8 @@ Experimental and moving fast. 2036 tests pass (`cargo test`). The language spec 
 [Angle](https://github.com/pannous/angle) and [english-script](https://github.com/pannous/english-script).
 
 Feedback, issues and especially "this surprised me" reports are welcome.
+
+## License
+The compiler is licensed under the [GNU AGPL v3 or later](LICENSE); the runtime `crates/warp-runtime`, which goes into
+every program built with warp, under the [MIT license](crates/warp-runtime/LICENSE), so your programs are yours.
+Commercial licenses of the compiler: info@pannous.com. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

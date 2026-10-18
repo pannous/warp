@@ -50,13 +50,13 @@ HOST_BACKEND_MIN_LENGTH: Option<u32> = None                   run-time switch le
 Each `emit_list_*` method matches on `list_backend` and emits the generic Node code or the typed code. The generic
 Node implementation is never removed: it is the fallback for any list the analysis cannot prove.
 
-## How a host-native or GPU backend plugs in (no wasm SIMD: user decision 2026-10-03)
+## How a host-native or GPU backend plugs in
 
-1. Keep the whole-list operation visible until emission. Today `sum`, `map`, element-wise arithmetic and `sort` are
+1. Keep the whole-list operation visible until emission. `sum`, `map`, element-wise arithmetic and `sort` are
    lowered to loops early. For a backend to take over a whole operation, lower `sum xs` to a pseudo-call such as
    `list_sum(xs)` (like `zero_fill` and `ran_without_error`), and `map` with a known body to `list_map(xs, body)`, then add
    `ListOp::{Sum, Map(body), ElementWise(op), Sort}`. The typed backend emits the loop over `$IntArray` (what the lowered
-   loop does today); the Node backend keeps today's lowering.
+   loop does); the Node backend keeps the current lowering.
 2. `list_backend` returns `Backend::Host` for those ops when the element type is supported. The emitted code tests the
    length at run time: `if length >= HOST_BACKEND_MIN_LENGTH { call host.list_sum(list) } else { typed loop }`, so a short
    list never pays the transfer and the program cannot tell which ran.
@@ -75,7 +75,7 @@ Node implementation is never removed: it is the fallback for any list the analys
 - Typed parameters and return values (a function taking `xs: ints`) would avoid the Node conversion at calls.
 - `sort` of a typed list could sort the i64 array in place for fixnums (ratios/big ints need the exact comparison).
 
-## Node lists (2026-10-04)
+## Node lists
 `ElementType::Node`: a list variable of any elements is a `$NodeList` (length, `(array (mut (ref null $Node)))`, the
 kind of the list node it stands for, so tuples keep their brackets) when the program indexes or counts it (`xs#i`,
 `#xs`, which every for loop does). It starts from a literal, ø, appends, or `node_list_of` (one pass over a Node
@@ -89,7 +89,7 @@ stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function inde
   shares one array without copies (moved_lists). A list parameter indexed in a loop and not reassigned from a call there
   is copied into an array once (`arr·list = arr`). quicksort_partitioned of 1000: 32 s → 12.5 s; what remains is the
   Node conversion per recursive call (a $NodeList ABI for parameters and results would remove it).
-- Array calling convention (src/wasm_emitter/lists/list_abi.rs, 2026-10-04): a function whose list parameter p is used only
+- Array calling convention (src/wasm_emitter/lists/list_abi.rs): a function whose list parameter p is used only
   through its copy `p·list = p` takes p as a `$NodeList` (the callee copies it with one array.copy, values stay values);
   a function whose every result is such an array or a call of another such function returns the `$NodeList`. Callers
   convert only where a Node is needed. quicksort_partitioned of 1000: 12.5 s → 0.9 s. Not for closure targets, tuple
@@ -97,9 +97,8 @@ stack (recursive list_with_at) → 0.5 s. Parameters stay Nodes: a function inde
   caller's Int/Float list passes through `int_list_as_node_list` (one node per element, no cons cells): 20 sums of a
   20000-element list 5.3 s → 2.5 s (debug build).
 
-## Globals and captured lists (card compiler-picks, 2026-10-06)
-A list main builds and a function reads (`xs = []; for i in 1..n { xs.add(i) }; at(i) := xs#i`) was a capture global of
-cons cells: every read walked i links and n reads ran out of fuel at n = 10^5. Now:
+## Globals and captured lists
+A list main builds and a function reads (`xs = []; for i in 1..n { xs.add(i) }; at(i) := xs#i`):
 - A typed list of main that a main-level function captures is passed in a capture global of its array type
   (`(ref null $IntList)`): main's typed lists are worked out once before the capture globals are declared
   (allocate_closure_captures, reused by emit_node_main); the capture at the definition stores the array, a copy when main
@@ -108,11 +107,11 @@ cons cells: every read walked i links and n reads ran out of fuel at n = 10^5. N
   typed operations. Not with tasks (a task's instance copies capture globals as Nodes).
 - A `global xs` that no function assigns is typed the same way (find_typed_globals; its sources are all main's).
 - A typed list captured by a nested function that takes a Node capture global is converted to its Node list there.
-- Measured (probes/numeric_lists_bench.sh, `global` row): n = 10^5 out of fuel before, 0.07 s after; n = 10^6 0.08 s.
+- probes/numeric_lists_bench.sh, `global` row: n = 10^6 in 0.08 s.
 - The automatic choice of linear memory (the card's first idea) gains nothing yet: linear memory and GC arrays run at
   the same speed (notes/linear_arrays.md); it pays only once a host or GPU backend takes the block.
 
-## Element types are checked (card list-element-types, 2026-10-08)
+## Element types are checked
 A declared list (`names: texts`, `names: list of text`, a field `items: texts`) holds only items of its element type,
 checked like a declared scalar:
 - Literal items are compile-time errors (analyzer `check_declared_types`, `list_items_mismatch`): the declaration
@@ -130,34 +129,17 @@ checked like a declared scalar:
   field `items` guards its check, `if (x is bag) and not (v is text)`, so a map with an `items` key stays unchecked and
   a literal item is checked at run time too (card list-element-field).
 - A float or number list takes ints (`is number`), as a declared float does.
-- Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
-  `declared_element_type`, `elements_fit`).
+- Parameters (`f(xs: texts)` called with `[420]`): checks.rs `declared_element_type`, `elements_fit`.
 - A receiver inside an element (`bags#1.n = 5`, `bags#1.items.add(v)`, `bags#1.items#1 = v`) is taken out into
   `nested·N`, changed, checked and written back (lowering/collections/nested_index.rs); a receiver that is a call's result
   (`make().n = 5`) is the error "make() gives a copy" (card list-field-receivers).
-- A character stored into a list of unknown static type (one read from a field) goes as its Node; node_with_at took
-  it as an Int, so `x#1 = "z"` gave `[122]` (list_ops `is_exact_int_element`).
+- A character stored into a list of unknown static type (one read from a field) goes as its Node (list_ops
+  `is_exact_int_element`).
 - Variance (TypeScript's covariant arrays), P215: lists are shared (P200b), so a view of a declared list under a wider
   element type that changes it (`widen(xs: list) := xs.add(420)` of `names: texts`, `ys: [Shape] = circles;
   ys.add(…)`) is a compile error where the alias is visible (src/analyzer/list_views.rs); a view that only reads, or of
-  a fitting element type (a subclass), is fine. Not yet: the run-time half (a lax alias, an unannotated parameter,
-  writes checked against the list's own declared element type), probes/variance/.
-
-## Appends copy only while aliased (card map-typed, 2026-10-08)
-`xs = xs + [v]` copies the array first when another variable may hold it (P200b). That was decided for the whole alias
-group, so every lowered map and filter, `d = (out = ø; for … { out = out + [x] }; out)`, copied on each append: the
-alias `d = out` exists, though only after the loop (int[20000].map 0.5 s, 80000 out of fuel). Now
-(list_dispatch.rs appends_while_aliased) an append copies only if it can run after an assignment between its own
-variable and another (`ys = xs`, `xs = ys`) in program order, or in a loop around one. map / filter of 10^6 ints: 7–9
-ms (release); a variable given a second map result (`d = d.map(…)`) stays linear. Tests: tests/lists/test_map_typed.rs.
-In a loop around both (card map-inside, 2026-10-12: a map in a `for round` body, 100k floats 3.8 s a round) the
-alias at the end of one round no longer counts for the next round's appends when the round first gives the variable
-a fresh list (`out = ø`, a literal, a call's result), unconditionally, in that loop and before the append (ListEvent
-Fresh). Tests: tests/lists/test_map_inside_loop.rs, probes/map_inside_loop.warp. A result variable
-declared before the loop (`d = []; for … { d = xs.map(…) }`, card map-predeclared) has the kind ø, as `[]` does; it
-counts as a list local once it is given a list variable (typed_list_elements given_a_list), else it was no typed array
-and turned its alias, the map's out list, into Nodes (list_concat, int[20000] 2.3 s → 0.17 s for int[100000]).
-  a fitting element type (a subclass), is fine. The run-time half (a lax alias `ys = names`, an unannotated parameter
+  a fitting element type (a subclass), is fine.
+- The run-time half (a lax alias `ys = names`, an unannotated parameter
   `f(xs) := xs.add(420)`): a declared Node-held list's head cell carries an element mark, the node_kind_in kinds its
   element type admits, in kind bits 16+ (type_kinds::element_mark, set by list_mark at the assignment);
   list_extend, list_insert_at and list_with_at check each new item (list_item_check, error "list cannot hold this
@@ -167,3 +149,16 @@ and turned its alias, the map's out list, into Nodes (list_concat, int[20000] 2.
   (list_extend, list_insert_at, emit_become_empty; ø compares mask with KIND_MASK; card p215-empty).
   Limits: a class element type checks only that the item is an object (OBJECT_KINDS), not its class; typed arrays
   need none. Probes: probes/variance/runtime_*.warp.
+
+## Appends copy only while aliased
+`xs = xs + [v]` copies the array first when another variable may hold it (P200b). A lowered map or filter,
+`d = (out = ø; for … { out = out + [x] }; out)`, has the alias `d = out` only after the loop, so (list_dispatch.rs
+appends_while_aliased) an append copies only if it can run after an assignment between its own
+variable and another (`ys = xs`, `xs = ys`) in program order, or in a loop around one. map / filter of 10^6 ints: 7–9
+ms (release); a variable given a second map result (`d = d.map(…)`) stays linear. Tests: tests/lists/test_map_typed.rs.
+In a loop around both (a map in a `for round` body) the alias at the end of one round does not count for the next round's appends when the round first gives the variable
+a fresh list (`out = ø`, a literal, a call's result), unconditionally, in that loop and before the append (ListEvent
+Fresh). Tests: tests/lists/test_map_inside_loop.rs, probes/map_inside_loop.warp. A result variable
+declared before the loop (`d = []; for … { d = xs.map(…) }`, card map-predeclared) has the kind ø, as `[]` does; it
+counts as a list local once it is given a list variable (typed_list_elements given_a_list), so the map's out list stays
+a typed array.

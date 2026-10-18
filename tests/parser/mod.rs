@@ -36,6 +36,7 @@ mod test_one_line_statements;
 mod test_operator_aliases;
 mod test_operator_word_keys; // card abs-fails
 mod test_parameter_scope; // card path-parameter-scope
+mod test_parse_long_definitions;
 mod test_parse_long_sources;
 mod test_parser;
 mod test_parser_sugar;
@@ -47,13 +48,29 @@ mod test_rust_macros;
 mod test_rust_paths;
 mod test_scheme_relative_url;
 #[cfg(feature = "native")]
+mod test_self_analyzer; // card inferred-kinds
+#[cfg(feature = "native")]
 mod test_self_differential; // card self-differential
+#[cfg(feature = "native")]
+mod test_self_emitter; // card emits-wasm
+#[cfg(feature = "native")]
+mod test_self_hosted_views; // card warp-pipeline-suite
 #[cfg(feature = "native")]
 mod test_self_lexer; // card self-lexer
 #[cfg(feature = "native")]
 mod test_self_parser; // card self-parser
 #[cfg(feature = "native")]
+mod test_self_parser_survey; // card self-parser
+#[cfg(feature = "native")]
+mod test_self_pass_reports; // card carries-line
+#[cfg(feature = "native")]
+mod test_self_passes; // card twin-harness
+#[cfg(feature = "native")]
+mod test_self_pipeline; // card parser-tree
+#[cfg(feature = "native")]
 mod test_self_serializer; // card self-serializer
+#[cfg(feature = "native")]
+mod test_self_words; // card library-word-tables
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;
@@ -61,6 +78,8 @@ mod test_spaced_required_fields;
 mod test_statement_phrases;
 mod test_statement_terminators;
 mod test_statements_after_type;
+#[cfg(feature = "native")]
+mod test_sugar_survey; // card sugar-twins
 mod test_superscript_signs;
 mod test_surface_syntax;
 mod test_symbol_hyphen;

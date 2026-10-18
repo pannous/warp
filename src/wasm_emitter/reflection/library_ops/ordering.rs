@@ -10,12 +10,13 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let float_box = self.type_manager.f64_box_type;
 		let exact = self.int_runtime();
-		let mut locals = vec![ValType::I64, ValType::I64, ValType::F64, ValType::F64];
-		locals.extend([ValType::I32; 6]);
+		let text_type = self.type_manager.text_type;
+		let mut locals = vec![ValType::I64, ValType::I64, ValType::F64, ValType::F64, self.text_ref(), self.text_ref()];
+		locals.extend([ValType::I32; 4]);
 		self.runtime_function(NODE_ORDER, vec![node_ref, node_ref], vec![ValType::I32], locals, |s, f| {
 			let (first, second, kinds) = (0, 1, [2, 3]);
 			let (first_float, second_float) = (4, 5);
-			let (first_pointer, second_pointer, first_length, second_length, index, difference) = (6, 7, 8, 9, 10, 11);
+			let (first_bytes, second_bytes, first_length, second_length, index, difference) = (6, 7, 8, 9, 10, 11);
 			let is_kind = |f: &mut Function, local: u32, kind: Kind| {
 				Self::emit_list(f, &[I::LocalGet(local), I::I64Const(kind as i64), I::I64Eq])
 			};
@@ -35,13 +36,9 @@ impl WasmGcEmitter {
 			// texts: the first differing byte, else the shorter one first
 			both(f, Kind::Text, I::I32And);
 			f.instruction(&I::If(BlockType::Empty));
-			for (node, pointer, length) in
-				[(first, first_pointer, first_length), (second, second_pointer, second_length)]
-			{
-				s.emit_text_field(f, node, 0);
-				f.instruction(&I::LocalSet(pointer));
-				s.emit_text_field(f, node, 1);
-				f.instruction(&I::LocalSet(length));
+			for (node, bytes, length) in [(first, first_bytes, first_length), (second, second_bytes, second_length)] {
+				s.emit_text_bytes(f, node);
+				Self::emit_list(f, &[I::LocalTee(bytes), I::ArrayLen, I::LocalSet(length)]);
 			}
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -49,8 +46,8 @@ impl WasmGcEmitter {
 					I::Loop(BlockType::Empty),
 						I::LocalGet(index), I::LocalGet(first_length), I::I32GeU, I::LocalGet(index),
 						I::LocalGet(second_length), I::I32GeU, I::I32Or, I::BrIf(1),
-						I::LocalGet(first_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE),
-						I::LocalGet(second_pointer), I::LocalGet(index), I::I32Add, I::I32Load8U(BYTE), I::I32Sub,
+						I::LocalGet(first_bytes), I::LocalGet(index), I::ArrayGetU(text_type),
+						I::LocalGet(second_bytes), I::LocalGet(index), I::ArrayGetU(text_type), I::I32Sub,
 						I::LocalTee(difference), I::If(BlockType::Empty),
 							I::LocalGet(difference), I::Return,
 						I::End,
@@ -128,7 +125,7 @@ impl WasmGcEmitter {
 		let mut locals = vec![ValType::I32, ValType::I32, nullable];
 		locals.extend([array_ref; 4]);
 		locals.extend([ValType::I32; 7]);
-		locals.extend([nullable, ValType::I32]);
+		locals.extend([nullable, ValType::I32, self.node_list_type()]);
 
 		// list_sorted_by(list, keys): a new list of the list's items (a text's characters), ordered by their keys (the
 		// items themselves when keys is null) as node_order compares them; a bottom-up merge sort over arrays, stable and
@@ -136,6 +133,7 @@ impl WasmGcEmitter {
 		self.runtime_function(LIST_SORTED_BY, vec![nullable, nullable], vec![node_ref], locals, |s, f| {
 			let (list, keys, count, index, cell, cells, ranks, cells_to, ranks_to) = (0, 1, 2, 3, 4, 5, 6, 7, 8);
 			let (width, low, middle, high, left, right, from, sorted, is_text) = (9, 10, 11, 12, 13, 14, 15, 16, 17);
+			let found = 18;
 			s.emit_text_as_characters(f, list, is_text);
 			s.emit_empty_as_null(f, list);
 			s.emit_require_list(f);
@@ -143,11 +141,6 @@ impl WasmGcEmitter {
 				[I::LocalGet(array_local), I::LocalGet(index_local), I::ArrayGet(array)]
 			};
 			let increment = |local: u32| [I::LocalGet(local), I::I32Const(1), I::I32Add, I::LocalSet(local)];
-			let rank_of_cell = |f: &mut Function| {
-				Self::emit_list(f, &[I::LocalGet(ranks), I::LocalGet(index)]);
-				s.emit_field(f, cell, 1);
-				Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::ArraySet(array)]);
-			};
 			let smaller = |f: &mut Function, a: &[I<'static>], b: &[I<'static>]| {
 				Self::emit_list(f, a);
 				Self::emit_list(f, b);
@@ -155,23 +148,31 @@ impl WasmGcEmitter {
 				Self::emit_list(f, b);
 				Self::emit_list(f, &[I::I32LtU, I::Select]);
 			};
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell)]);
-			s.emit_cell_walk(f, cell, |f| Self::emit_list(f, &increment(count)));
-			for array_local in [cells, ranks, cells_to, ranks_to] {
+			let found_part =
+				|field_index| I::StructGet { struct_type_index: s.type_manager.node_list_type, field_index };
+			f.instruction(&I::LocalGet(list));
+			s.call(f, LIST_ITEMS);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalTee(found), found_part(0), I::LocalSet(count), I::LocalGet(found), found_part(1), I::LocalSet(cells),
+			]);
+			for array_local in [ranks, cells_to, ranks_to] {
 				Self::emit_list(f, &[I::LocalGet(count), I::ArrayNewDefault(array), I::LocalSet(array_local)]);
 			}
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell)]);
-			s.emit_cell_walk(f, cell, |f| {
-				Self::emit_list(f, &[I::LocalGet(cells), I::LocalGet(index), I::LocalGet(cell), I::ArraySet(array)]);
-				rank_of_cell(f);
-				Self::emit_list(f, &increment(index));
-			});
-			Self::emit_list(f, &[I::LocalGet(keys), I::LocalSet(cell), I::I32Const(0), I::LocalSet(index)]);
-			s.emit_cell_walk(f, cell, |f| {
-				Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(count), I::I32GeU, I::BrIf(1)]);
-				rank_of_cell(f);
-				Self::emit_list(f, &increment(index));
-			});
+			// ranked by the keys as far as they go, by the items themselves after
+			let copy = I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array };
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(ranks), I::I32Const(0), I::LocalGet(cells), I::I32Const(0), I::LocalGet(count), copy.clone(),
+				I::LocalGet(keys),
+			]);
+			s.call(f, LIST_ITEMS);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(found), I::LocalGet(ranks), I::I32Const(0), I::LocalGet(found), found_part(1), I::I32Const(0),
+			]);
+			smaller(f, &[I::LocalGet(found), found_part(0)], &[I::LocalGet(count)]);
+			f.instruction(&copy);
 			// in order already (ascending: as it is; strictly descending: reversed, so equal keys keep their order) takes
 			// n - 1 comparisons and no merging
 			let (ascending, descending) = (left, right);
@@ -297,7 +298,7 @@ impl WasmGcEmitter {
 				f,
 				&[I::LocalGet(width), I::I32Const(1), I::I32Shl, I::LocalSet(width), I::Br(0), I::End, I::End],
 			);
-			// new cells from the last one back, each of its item's kind of cell
+			// new cells from the last one back, of the list's kind
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::Block(BlockType::Empty),
@@ -305,10 +306,8 @@ impl WasmGcEmitter {
 						I::LocalGet(count), I::I32Eqz, I::BrIf(1),
 						I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count),
 			]);
+			s.emit_field(f, list, 0);
 			Self::emit_list(f, &get(cells, count));
-			Self::emit_list(f, &[I::RefAsNonNull, I::LocalSet(cell)]);
-			s.emit_field(f, cell, 0);
-			s.emit_field(f, cell, 1);
 			Self::emit_list(
 				f,
 				&[I::LocalGet(sorted), I::StructNew(node_type), I::LocalSet(sorted), I::Br(0), I::End, I::End],

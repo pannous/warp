@@ -6,7 +6,7 @@ A big goal (a web framework, a type system, sound) has three parts that point at
    and per step "what is done and what is left". Its first line under the title names the topic card:
    `Roadmap card: <topic-key> (board, topic n/m done)`.
 2. **The topic card** on the board (key = the goal, e.g. `web-framework`): one line of goal, the body links the plan
-   note. It lives in the board's column Roadmaps (user, 2026-10-12; moved there by `--topic` / `todo sub`), or in
+   note. It lives in the board's column Roadmaps (moved there by `--topic` / `todo sub`), or in
    Now while someone actively drives it, until every sub-card is Done; then `todo done <topic> <last commit>`.
 3. **The sub-cards**: one per step of the note's table and one per open "what is left" item, made with
    `todo add "…" --topic <topic-key>` or attached later with `todo sub <topic-key> <card>…`. The note's step table
@@ -24,9 +24,8 @@ Rules
   The cleanup topic repeats: cargo-fmt and clippy-reports every 7 days, cleanup-dead-scan every 14 days, and the area
   sweeps, big files, stale notes, probe scripts and closed lists every 30 days.
 
-Applied first to notes/web_framework.md (topic card web-framework, 2026-10-12; notes/server_routes.md joins it), then
-the same day to: signals.md → signals, sound.md → sound, type_theory.md → type-theory, classes.md → class-system,
-orm.md → database-tables, simd.md + gpu.md → fast-numbers, threads.md → threads, reflection.md → reflection-words,
-stdlib_connectors.md → connectors, effect_handlers.md → effects, web_playground.md → playground, hosting.md → hosting;
-cleanup.md → cleanup (the user card itself became the topic); self_hosting.md → self-hosted (planned with the user).
-Leftovers found already fixed by a Done card were corrected in the note instead of getting a new card.
+Plan notes and their topic cards: web_framework.md + server_routes.md → web-framework, signals.md → signals,
+sound.md → sound, type_theory.md → type-theory, classes.md → class-system, orm.md → database-tables, simd.md + gpu.md →
+fast-numbers, threads.md → threads, reflection.md → reflection-words, stdlib_connectors.md → connectors,
+effect_handlers.md → effects, web_playground.md → playground, hosting.md → hosting, cleanup.md → cleanup,
+self_hosting.md → self-hosted.

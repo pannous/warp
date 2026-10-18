@@ -42,7 +42,11 @@ pub(super) fn without_fast_pragma(code: Node) -> (Node, bool) {
 
 /// A fast program's pragma as the module it means: `use fast_math`
 pub(super) fn fast_math_use() -> Node {
-	let module = Node::Symbol(FAST_MODULE.into());
+	use_of(Node::Symbol(FAST_MODULE.into()))
+}
+
+/// `use module`
+fn use_of(module: Node) -> Node {
 	Node::List(vec![Node::Symbol(USE_KEYWORD.into()), module], Bracket::None, Separator::Space)
 }
 
@@ -69,7 +73,7 @@ pub(super) fn fast_name(word: &str) -> String {
 
 /// The node with fast_math's `words` called by their qualified names (fast_name)
 pub(super) fn with_fast_names(node: Node, words: &[String]) -> Node {
-	words.iter().fold(node, |node, word| renamed_word(node, word, &fast_name(word)))
+	renamed_words(node, &words.iter().map(|word| (word.clone(), fast_name(word))).collect())
 }
 
 /// `a / b` of fast code as `(a as float) / b`: a float, never an exact ratio
@@ -148,10 +152,7 @@ pub(super) fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 /// `import square from math`, `import (zip, unique) from list`: the from-import of a standard module defining every
 /// named word; any other `import f from lib` stays the foreign import (analyzer/imports.rs: `import sqrt from math` is libm's)
 pub(super) fn std_words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, Vec<String>)> {
-	let Node::Symbol(module_name) = module.drop_meta() else {
-		return None;
-	};
-	let defined = std_module_definitions(std_module_name(module_name))?;
+	let defined = std_module_definitions(std_module_name(module.symbol_name()?))?;
 	let imported = words_from(module, names)?;
 	imported.2.iter().all(|name| defined.contains(name)).then_some(imported)
 }
@@ -164,14 +165,10 @@ pub(super) fn words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, 
 	};
 	let names = names
 		.iter()
-		.map(|name| match name.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		})
+		.map(|name| name.symbol_name().map(String::from))
 		.collect::<Option<Vec<String>>>()
 		.filter(|names| !names.is_empty())?;
-	let statement =
-		Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
+	let statement = use_of(module.clone());
 	used_module(&statement).map(|used| (used, statement, names))
 }
 
@@ -184,10 +181,8 @@ pub(super) fn used_module(node: &Node) -> Option<Used> {
 	let [keyword, argument, rest @ ..] = items.as_slice() else {
 		return None;
 	};
-	let Node::Symbol(keyword) = keyword.drop_meta() else {
-		return None;
-	};
-	let import = if USE_KEYWORDS.contains(&keyword.as_str()) {
+	let keyword = keyword.symbol_name()?;
+	let import = if USE_KEYWORDS.contains(&keyword) {
 		Import::Use
 	} else if keyword == INCLUDE_KEYWORD {
 		Import::Include

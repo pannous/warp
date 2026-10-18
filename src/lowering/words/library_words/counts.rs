@@ -97,12 +97,45 @@ pub(super) fn count_in(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let haystack = Node::single_or_list(haystack.to_vec(), Bracket::None, Separator::Space);
-	if let Some(unit) =
-		matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten()
-	{
+	if let Some(unit) = needle.symbol_name().and_then(crate::analyzer::text_unit) {
 		return Some(key(haystack, Op::Dot, symbol(unit)));
 	}
 	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1)
 		&& !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
 	Some(prelude_call(if substring { COUNT_PART } else { COUNT_ITEM }, vec![haystack, needle.clone()]))
+}
+
+/// `count x.bytes`, `#x.bytes`, `x.bytes.number`: the count of a byte list is the byte size `byte_size(x)`, of any
+/// value, so a list's bytes count without being made (decision text-unit-plurals: `pixels.bytes.count` is 24)
+pub fn lower_byte_counts(node: Node) -> Node {
+	let node = node.map_children(lower_byte_counts);
+	let counted = match node.drop_meta() {
+		Node::Key(list, Op::Dot, property) if names_counting(property) => list,
+		Node::Key(nothing, Op::Hash, list) if nothing.drop_meta().is_empty_node() => list,
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, list] if word.symbol_name().is_some_and(crate::analyzer::is_counting_word) => list,
+			_ => return node,
+		},
+		_ => return node,
+	};
+	match byte_list_of(counted) {
+		Some(value) => call(crate::analyzer::BYTE_SIZE, vec![value.clone()]),
+		None => node,
+	}
+}
+
+/// `count`, `number`, `size()`: a counting property, called or not
+fn names_counting(property: &Node) -> bool {
+	let word = match property.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => &items[0],
+		other => other,
+	};
+	word.symbol_name().is_some_and(crate::analyzer::is_counting_property)
+}
+
+/// `prelude·bytes(x)`: x
+fn byte_list_of(node: &Node) -> Option<&Node> {
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	let [function, value] = items.as_slice() else { return None };
+	(function.symbol_name()? == crate::modules::prelude_name(BYTE_LIST)?).then_some(value)
 }

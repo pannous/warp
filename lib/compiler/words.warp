@@ -1,0 +1,62 @@
+# The word tables the pass twins share, each a plain list checked against its Rust twin by tests/parser/test_self_words.rs
+# until the Rust table is gone (card library-word-tables).
+
+# the words naming a type a value is held as, lowercase (Rust twin: analyzer type_word_kind, from BUILTIN_TYPES in
+# src/lowering/types/type_tests.rs and FIXED_WIDTHS in src/numbers/fixed_width.rs)
+type_words = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact", "float", "double", "f64", "f32",
+	"float32", "float64", "fast", "number", "text", "str", "string", "codepoint", "char", "character", "bool", "boolean", "symbol",
+	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
+	"uint64"]
+any_word = "any"
+# a collection type's head words, before `of` (`list of int`; Rust twin: type_tests.rs COLLECTION_WORDS) and the
+# foreign spellings of list (warp_parser/mod.rs FOREIGN_LIST_HEADS)
+collection_words = ["list", "map"]
+foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
+
+is_type_word(word: text) := type_words contains word.lower()
+is_type_word_or_any(word: text) := word == any_word or is_type_word(word)
+is_collection_head(word: text) := collection_words contains word or foreign_list_heads contains word
+
+# the words opening a definition, `def f(x) {…}` (Rust twin: operators/mod.rs FUNCTION_KEYWORDS)
+function_keywords = ["fun", "fn", "def", "define", "function", "func"]
+# the words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t` (Rust twin:
+# of_lookups.rs SELECTOR_WORDS)
+selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "bytes", "letters", "words", "lines",
+	"keys", "values"]
+# the operators a dotted spelling applies to each element, `xs .* 2` (Rust twin: operators/spellings.rs
+# ELEMENT_WISE_OPERATORS)
+element_wise_operators = ["+", "-", "*", "/", "^"]
+
+# the kind a call of a library or runtime word gives (Rust twin: analyzer builtin_word_kind and library_call_kind,
+# checked by tests/parser/test_self_words.rs call_kinds_are_rusts)
+call_kinds = {"string": "text", "count": "int", "is_type": "int", "collection_contains": "int", "std_io": "empty",
+	"field_with": "empty", "round": "float", "slice": "list", "system_value": "int", "print": "empty",
+	"text_form": "text", "raise": "text", "closure_new": "function", "clock": "int", "str": "text",
+	"floor_quotient": "int", "split": "list", "join": "text", "floor": "float", "cos": "float", "list_sum": "int",
+	"removed_value": "empty", "map_without": "list", "log2": "float", "starts_with": "int", "map_keys": "list",
+	"sin": "float", "zero_fill": "list", "page_path": "empty", "paint": "empty", "map_values": "list",
+	"sound_samples": "empty", "task_spawn_values": "int", "byte_slice": "text", "draw_shape": "empty",
+	"byte_at": "int", "foreign_call": "empty", "random": "float", "linear_count": "int", "collection_position": "int",
+	"symbol": "symbol", "is_error": "int", "sleep": "empty", "bracketed": "list", "ran_without_error": "int",
+	"task_join": "int", "task_failure": "empty", "task_await_value": "empty", "next": "int", "as_code": "int",
+	"instance_of": "int", "float": "float", "time_of": "data", "linear_getf": "float", "linear_new": "int",
+	"separated": "list", "linear_setf": "float", "key_of": "empty", "cell_get": "empty", "int": "int",
+	"signal_listen": "empty", "ord": "int", "std_pure": "empty", "draw_shader": "empty", "map_entries": "list",
+	"error": "empty", "instance_copy": "empty", "ends_with": "int", "draw_show": "empty", "instant_at": "data",
+	"chr": "codepoint", "value_of": "empty", "op_of": "empty", "len": "int", "upper": "text", "trim": "text",
+	"type": "symbol", "reverse": "list", "lower": "text", "read": "text", "switch_no_case": "int",
+	"response_header": "empty", "random_below": "int", "exp": "float", "DrawCircle": "int", "exit": "empty",
+	"warning": "text", "key_held": "int", "chars": "list", "bracket_of": "empty", "atan2": "float",
+	"signal_listeners": "empty", "DrawText": "int", "task_status": "int", "parse_code": "empty",
+	"empty_extremum": "int", "name_of": "empty", "InitWindow": "int", "map_of_entry": "empty", "serve_routes": "empty",
+	"gpu_render": "empty", "caught_error": "error", "memo_known": "int", "memo_value": "int", "memo_store": "int",
+	"byte_size": "int", "cell_set": "empty", "BeginDrawing": "int", "ClearBackground": "int", "EndDrawing": "int",
+	"map_get_or": "empty", "uniscript_error": "int", "uniscript_warnings": "int", "uniscript_to_unicode": "int",
+	"uniscript_to_uniscript": "int", "uniscript_explicit": "int", "separator_of": "empty", "shared_new": "int",
+	"gpu_compute": "empty", "text_coverage": "empty", "guarded_call": "empty", "signal_new": "data",
+	"shared_set": "int", "atof": "float", "save_picture": "empty", "task_control": "int",
+	"gpu_map_linear": "int", "sort": "list", "positioned": "empty", "signal_listeners_set": "empty", "strcmp": "int",
+	"shared_get": "int", "channel_new": "int", "channel_take": "empty", "channel_put": "empty", "pow": "float",
+	"linear_dotf": "float", "task_forks": "int", "list_sorted_by": "empty", "set_system_value": "empty",
+	"SetTargetFPS": "int", "CloseWindow": "int", "DrawRectangle": "int", "shared_add": "int", "strlen": "int",
+	"fmin": "float", "atoi": "int", "size": "int", "fetch": "text", "fetch_reply": "empty"}

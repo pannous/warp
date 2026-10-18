@@ -528,6 +528,23 @@ impl Node {
 		}
 	}
 
+	/// The node the metadata entry `mark` marks, through any other Meta layers around it, and the entry's value
+	pub fn marked(&self, mark: &str) -> Option<(&Node, &Node)> {
+		let Meta { node, data } = self else { return None };
+		match data.as_ref() {
+			Key(key, _, value) if key.name() == mark => Some((node, value)),
+			_ => node.marked(mark),
+		}
+	}
+
+	/// `x` of `(x)` and `((x))`, under its meta like drop_meta
+	pub fn ungrouped(&self) -> &Node {
+		match self.drop_meta() {
+			List(items, Bracket::Round, _) if items.len() == 1 => items[0].ungrouped(),
+			bare => bare,
+		}
+	}
+
 	/// Whether one of `words` occurs as a symbol anywhere in the tree: a pass about these words has nothing to do
 	/// without one, and can skip working out the program's functions
 	pub fn mentions_any(&self, words: &[&str]) -> bool {
@@ -557,6 +574,11 @@ impl Node {
 			}
 		});
 		names.into_iter().collect()
+	}
+
+	/// `x` of every `x = …` and `x := …` anywhere in this node
+	pub fn written_names<Names: FromIterator<String>>(&self) -> Names {
+		self.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
 	}
 
 	/// The name `x = …`, `f(x) := …`, `f := …it…`, `def f(x){…}` or `def ((init ø) {1})` defines
@@ -1021,6 +1043,11 @@ pub fn block(xs: Vec<Node>) -> Node {
 
 pub fn parens(xs: Vec<Node>) -> Node {
 	List(xs, Bracket::Round, Separator::None)
+}
+
+/// statements in order, `a; b`
+pub fn sequence(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::None, Separator::Semicolon)
 }
 
 /// `function(arguments…)`

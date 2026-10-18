@@ -35,8 +35,18 @@ pub(crate) fn typed_parameter(arguments: Node) -> Node {
 	let is_type_word =
 		|node: &Node| matches!(node.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some());
 	match arguments.drop_meta() {
-		Node::List(items, _, Separator::Space) => match items.as_slice() {
+		// a list `[C3 G3]` stays a list; Dart's named parameters `{int b = 2}` are typed
+		Node::List(items, bracket, Separator::Space) if !matches!(bracket, Bracket::Square) => match items.as_slice() {
 			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => {
+				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
+			}
+			// Go's `x int`, `s Shape`: the type after the name
+			[name, type_word]
+				if matches!(name.drop_meta(), Symbol(_))
+					&& !is_type_word(name)
+					&& (is_type_word(type_word)
+						|| matches!(type_word.drop_meta(), Symbol(word) if word.starts_with(char::is_uppercase))) =>
+			{
 				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
 			}
 			// `x of int`: the parameter x of type int
@@ -205,7 +215,7 @@ impl WarpParser {
 		let ruby_definition = self.closing_end_follows(&RUBY_END_OPENERS);
 		// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
 		// would make each line the block of the one before)
-		let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
+		let tab_indented_ruby = ruby_definition && self.context.base_indent == 0 && self.next_line_starts_with_tab();
 		if (ruby_definition && !tab_indented_ruby) || !self.only_blanks_before_newline() {
 			return definition;
 		}
@@ -259,7 +269,7 @@ impl WarpParser {
 				let reference_to_value = next == '&'
 					|| next == '(' && !self.starts_capture()
 					|| next == '[' || next == '"'
-					|| next.is_ascii_digit() && !self.in_capture;
+					|| next.is_ascii_digit() && !self.context.in_capture;
 				reference_to_value || self.mutable_reference_follows()
 			}
 			'*' => {

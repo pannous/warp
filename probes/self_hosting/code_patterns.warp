@@ -1,0 +1,11 @@
+// code patterns the warp compiler needs; each line's comment says what it should give
+n = parse("g(1, 2, 3)")
+print match n { data(g($first, $rest...)) => rest; _ => "no" }      // (2, 3)
+xs = parse("[1, 2, 3]")
+print match xs { data([$h, $t...]) => t; _ => "no" }                 // [2, 3]
+loop = parse("for x in xs { print x }")
+print match loop { data(for $v in $it { $body }) => body; _ => "no" } // print x
+branch = parse("if c { a } else { b }")
+print match branch { data(if $c { $a } else { $b }) => b; _ => "no" } // b
+binary = parse("a - b")
+print match binary { data($l $op $r) => op; _ => "no" }              // -

@@ -2,6 +2,7 @@
 
 pub use control::traps::*;
 mod diagnostics;
+mod export_names;
 mod module_finish;
 #[cfg(feature = "native")]
 pub use maps::raw_structs::run_raw_struct;
@@ -19,7 +20,11 @@ pub(crate) use host::wasi_emitter::{OUTPUT_CALLS, OUTPUT_WORDS};
 pub(crate) use lists::list_sharing::reads_collection;
 pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
-pub use constructors::NEW_BOOL;
+pub(crate) use constructors::{
+	CONSTANT_TEXT, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_LITERAL,
+	TEXT_PIECE,
+};
+pub use constructors::{NEW_BOOL, NEW_SYMBOL_OF, NEW_TEXT_OF, NEW_TYPE};
 pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
 mod config;
 mod function_builder;
@@ -35,6 +40,7 @@ pub use maps::map_backend::MAP_COPY_SUFFIX;
 pub(crate) mod reflection;
 mod runtime_dependencies;
 mod string_table;
+pub(crate) use string_table::TEXT_SEGMENT;
 pub(crate) mod text;
 mod type_manager;
 pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
@@ -125,7 +131,7 @@ pub struct WasmGcEmitter {
 	module: Module,
 	functions: FunctionSection,
 	code: CodeSection,
-	exports: ExportSection,
+	exports: export_names::Exports,
 	names: NameSection,
 	/// main's index, named in the name section (a trap's backtrace shows `main`, not `<wasm function N>`)
 	main_index: Option<u32>,
@@ -185,7 +191,6 @@ pub struct WasmGcEmitter {
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
-	text_room_globals: Option<u32>, // the first global of the rooms texts grow into (text_rooms.rs)
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
@@ -228,6 +233,8 @@ pub struct WasmGcEmitter {
 	text_witness: Option<reflection::witness::WitnessTable>,    // runtime dispatch of Printable to user types (witness.rs)
 	shown: Option<u32>, // the function giving main's value with printable instances as their texts (witness.rs)
 	late_calls: Vec<functions::late_calls::LateCall>, // runtime calls of warp-written functions (late_calls.rs)
+	/// prelude words the emitted code calls that the program did not load (late_calls.rs compiler_word)
+	missing_compiler_words: Vec<String>,
 	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
@@ -308,16 +315,16 @@ impl WasmGcEmitter {
 		idx
 	}
 
-	/// Get function call index by name
+	/// The index of the runtime function or import `name`, else of the program's function: a program word named like a
+	/// runtime function (`node_count`) is a function of its own (card export-name-clash)
 	fn func_index(&self, name: &str) -> u32 {
-		if let Some(idx) = self.ctx.user_functions.get(name).and_then(|user_fn| user_fn.func_index) {
-			return idx;
+		if let Some(function) = self.ctx.func_registry.get(name) {
+			return function.call_index as u32;
 		}
-		// then the builtins and imports
 		self.ctx
-			.func_registry
+			.user_functions
 			.get(name)
-			.map(|f| f.call_index as u32)
+			.and_then(|user_fn| user_fn.func_index)
 			.unwrap_or_else(|| panic!("Unknown function: {}", name))
 	}
 
@@ -325,38 +332,36 @@ impl WasmGcEmitter {
 	// Helper methods for clean, DRY code
 	// ═══════════════════════════════════════════════════════════════════════════
 
-	/// Emit string lookup from table and call constructor
-	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
-		let (ptr, len) = self.allocate_string(s); // a text the pre-scan did not see is added to the table, never read from offset 0
-		Self::emit_list(func, &[I32Const(ptr as i32), I32Const(len as i32)]);
-		self.emit_call(func, constructor);
+	/// The Text node of the literal `s`
+	fn emit_text_node(&mut self, func: &mut Function, s: &str) {
+		let (offset, length) = self.string_table.literal(s);
+		Self::emit_list(func, &[I::I32Const(offset as i32), I::I32Const(length as i32)]);
+		self.emit_call(func, CONSTANT_TEXT);
+	}
+
+	/// The Symbol node of the literal `s`
+	fn emit_symbol_node(&mut self, func: &mut Function, s: &str) {
+		self.emit_text_literal(func, s);
+		self.emit_call(func, NEW_SYMBOL_OF);
 	}
 
 	/// The type value `name` (`int`, `Person`): its symbol marked TYPE_VALUE_MARK, which printing shows as `class int`
 	pub(crate) fn emit_type_value(&mut self, func: &mut Function, name: &str) {
-		let prefix = crate::type_kinds::TYPE_VALUE_PREFIX.len() as u32;
-		let (shown, shown_len) = self.allocate_string(&format!("{}{name}", crate::type_kinds::TYPE_VALUE_PREFIX));
-		let (ptr, len) = (shown + prefix, shown_len - prefix);
-		let (node_type, string) = (self.type_manager.node_type, self.type_manager.string_type);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::I64Const(crate::type_kinds::TYPE_VALUE_KIND), I32Const(ptr as i32), I32Const(len as i32),
-			I::StructNew(string), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
-		]);
+		func.instruction(&I::I64Const(crate::type_kinds::TYPE_VALUE_KIND));
+		self.emit_text_literal(func, name);
+		func.instruction(&I::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+		func.instruction(&I::StructNew(self.type_manager.node_type));
 	}
 
-	/// The text `class int` of the type value in Node local `local`: its name widened over the prefix stored before it
-	pub(crate) fn emit_type_value_text(&self, func: &mut Function, local: u32) {
-		let prefix = I32Const(crate::type_kinds::TYPE_VALUE_PREFIX.len() as i32);
+	/// The text `class int` of the type value in Node local `local`: the prefix (the literal of TYPE_VALUE_PREFIX)
+	/// joined with its name
+	pub(crate) fn emit_type_value_text(&self, func: &mut Function, local: u32, prefix: (u32, u32)) {
 		func.instruction(&I::I64Const(Kind::Text as i64));
-		self.emit_text_field(func, local, 0);
-		Self::emit_list(func, &[prefix.clone(), I::I32Sub]);
-		self.emit_text_field(func, local, 1);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			prefix, I::I32Add, I::StructNew(self.type_manager.string_type),
-			I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::StructNew(self.type_manager.node_type),
-		]);
+		self.emit_literal_text(func, prefix);
+		self.emit_text_bytes(func, local);
+		self.call(func, TEXT_BYTES_JOIN);
+		func.instruction(&I::RefNull(HeapType::Concrete(self.type_manager.node_type)));
+		func.instruction(&I::StructNew(self.type_manager.node_type));
 	}
 
 	/// Whether the Node in local `local` is a type value (TYPE_VALUE_MARK), as an i32
@@ -380,14 +385,6 @@ impl WasmGcEmitter {
 		crate::type_tests::is_builtin_type_word(word)
 			|| word == crate::type_tests::TYPE_WORD
 			|| self.ctx.type_registry.types().iter().any(|t| t.name == word)
-	}
-
-	/// Append String struct field names (ptr, len) to an IndirectNameMap
-	fn append_string_field_names(type_field_names: &mut IndirectNameMap, type_idx: u32) {
-		let mut names = NameMap::new();
-		names.append(0, "ptr");
-		names.append(1, "len");
-		type_field_names.append(type_idx, &names);
 	}
 
 	/// Infer the Kind for an expression
@@ -525,17 +522,23 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
-		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes or parses
-		// (cards data-meta, parse-word)
-		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
+		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes, parses or
+		// positions a node (cards data-meta, parse-word, carries-line)
+		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS)
+			|| node.mentions_any(&[crate::host::PARSE_CODE, reflection::node_api::POSITIONED])
+		{
 			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
 		}
+		// code joins a text as its literal (card print-parse)
 		if node.mentions_any(&[crate::words::AS_CODE]) {
 			self.ctx.required_functions.insert(crate::words::AS_CODE);
+			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
+			self.parses_code = true;
 		}
-		// code parsed at run time holds any operator and joins a text as its literal (card print-parse)
+		// code parsed at run time holds any operator
 		if node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
+			self.ctx.required_functions.insert(constructors::NEW_TYPE);
 			self.parses_code = true;
 			self.highest_key_operator = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
@@ -654,9 +657,9 @@ impl WasmGcEmitter {
 		self.string_table.allocate_bytes(name, bytes)
 	}
 
-	/// Allocate a string in linear memory
-	fn allocate_string(&mut self, s: &str) -> (u32, u32) {
-		self.string_table.allocate(s)
+	/// Place the text `s` in linear memory, for a host or C function that reads it by address: (ptr, len)
+	fn memory_string(&mut self, s: &str) -> (u32, u32) {
+		self.string_table.in_memory(s)
 	}
 
 	/// Node locals not first assigned by a statement of the body itself (`if c { n = "a" } else { n = "b" }; n`) start
@@ -713,7 +716,7 @@ impl WasmGcEmitter {
 		self.source_position = None;
 		self.wrapping_ints = crate::compiler::compile_mode::is_fast_program();
 		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
-		self.live_loops = crate::lowering::music_words::live_loop_names(node);
+		self.live_loops = crate::host::live_loop_names(node);
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
 		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));
@@ -873,7 +876,7 @@ impl WasmGcEmitter {
 				}
 			},
 			Node::Text(s) => {
-				self.emit_string_call(func, s, "new_text");
+				self.emit_text_node(func, s);
 			}
 			Node::Char(c) => {
 				func.instruction(&I32Const(*c as i32));
@@ -934,7 +937,7 @@ impl WasmGcEmitter {
 					self.emit_type_value(func, s);
 					return;
 				}
-				self.emit_string_call(func, s, "new_symbol");
+				self.emit_symbol_node(func, s);
 			}
 			Node::Key(left, op, right) => {
 				self.emit_key_node(func, left, op, right);
@@ -943,7 +946,7 @@ impl WasmGcEmitter {
 				self.emit_list_node(func, items, bracket, separator);
 			}
 			Node::Data(dada) => {
-				self.emit_string_call(func, &dada.type_name, "new_symbol");
+				self.emit_symbol_node(func, &dada.type_name);
 			}
 			Node::Meta { .. } => {
 				self.emit_call(func, "new_empty");
@@ -954,7 +957,7 @@ impl WasmGcEmitter {
 				// Emit type as a tagged block with name and fields
 				self.emit_node_instructions(func, name);
 				self.emit_node_instructions(func, body);
-				self.emit_call(func, "new_type");
+				self.emit_call(func, constructors::NEW_TYPE);
 			}
 			&Node::False => {
 				func.instruction(&I::I64Const(0));
@@ -983,7 +986,7 @@ fn last_statement_items(program: &Node) -> usize {
 /// The module of `node`; `%` and `//` use the small int_* runtime unless the module makes ratios, which takes a
 /// second emission with the ratio-aware exact_* one (card int-i64)
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
-	let (compiled, int_division) = emit_module_with(node, false)?;
+	let (compiled, int_division) = crate::compiler::phase_times::timed("emit", || emit_module_with(node, false))?;
 	if int_division && makes_ratios(&compiled.bytes) {
 		// the first emission already hinted the same program
 		return Ok(crate::normalize::without_hints(|| emit_module_with(node, true))?.0);
@@ -1002,6 +1005,12 @@ fn emit_module_with(node: &Node, ratio_division: bool) -> Result<(CompiledModule
 	let mut emitter = WasmGcEmitter::new();
 	emitter.ratio_division = ratio_division;
 	emitter.emit_for_node(node);
+	if !emitter.missing_compiler_words.is_empty() {
+		let missing = std::mem::take(&mut emitter.missing_compiler_words);
+		let message = format!("internal error: {} called but not loaded", missing.join(", "));
+		crate::compiler::compile_context::change(|context| context.missing_compiler_words = missing);
+		return Err(crate::node::error(&message));
+	}
 	if let Some(type_error) = emitter.type_error() {
 		return Err(type_error);
 	}

@@ -1,7 +1,6 @@
 //! Casts: as int/float/text/char/bool/number/exact, list and run-time text casts
 
 use super::super::*;
-use crate::wasm_emitter::layout::BYTE;
 
 /// Builtins that round a float to an exact Int
 pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] =
@@ -21,7 +20,8 @@ const LAST_CODE_POINT: i64 = 0x10FFFF;
 const FIRST_SURROGATE: i64 = 0xD800;
 const SURROGATE_COUNT: i64 = 0x800;
 /// The words emit_cast converts to besides the number types (int, float, rational …)
-const CONVERSION_WORDS: [&str; 5] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number"];
+const CONVERSION_WORDS: [&str; 6] =
+	["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number", crate::words::SYMBOL_WORD];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -262,9 +262,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND)]);
 		self.emit_entry_in_braces(func, held);
 		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
-		let (pointer, length) = self.allocate_string("");
-		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-		self.emit_call(func, "new_text");
+		self.emit_empty_text(func);
 		self.emit_call(func, reflection::library_ops::LIST_TEXT);
 		func.instruction(&I::End);
 		if shows_definitions {
@@ -329,6 +327,10 @@ impl WasmGcEmitter {
 			"float" => self.emit_cast_to_float(func, value, target_type),
 			"text" => self.emit_cast_to_text(func, written),
 			"codepoint" => self.emit_cast_to_char(func, value),
+			// `:post`, `"post" as symbol`: the symbol of a text, also of a symbol
+			crate::words::SYMBOL_WORD => {
+				self.emit_node_builtin(func, crate::words::SYMBOL_WORD, std::slice::from_ref(written))
+			}
 			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
 			"number" => self.emit_cast_to_number(func, value),
 			// `255 as byte`: the whole number, trapping as a declared byte does when it leaves the range
@@ -456,14 +458,14 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_cast_to_text(&mut self, func: &mut Function, value: &Node) {
 		// `string(data x+1)` is "x+1"
 		if let Some(quoted) = crate::blocks::quoted_data(value) {
-			return self.emit_string_call(func, &quoted.serialize(), "new_text");
+			return self.emit_text_node(func, &quoted.serialize());
 		}
 		match value.drop_meta() {
-			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
-			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
-			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
+			Node::Number(n) => self.emit_text_node(func, &n.to_string()),
+			Node::Char(c) => self.emit_text_node(func, &c.to_string()),
+			Node::Text(s) => self.emit_text_node(func, s),
 			// `str(data a and b)`: quoted data reads as written
-			_ if let Some(source) = quoted_source(value) => self.emit_string_call(func, &source, "new_text"),
+			_ if let Some(source) = quoted_source(value) => self.emit_text_node(func, &source),
 			_ => self.emit_runtime_text_cast(func, value),
 		}
 	}
@@ -571,9 +573,9 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64];
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64, self.text_ref()];
 		self.runtime_function(TEXT_AS_NUMBER, vec![node_ref], vec![node_ref], locals, |s, f| {
-			let (start, end, slash, bits) = (1, 2, 3, 4);
+			let (start, end, slash, bits, bytes) = (1, 2, 3, 4, 5);
 			// a number (any node but a text or character) as it is
 			let is_kind = |s: &mut Self, f: &mut Function, kind: Kind| {
 				s.emit_field(f, 0, 0);
@@ -586,25 +588,21 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 0);
 			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
 			Self::emit_list(f, &[I::If(BlockType::Empty)]);
-			s.emit_text_bounds(f, start, end);
+			s.emit_text_bounds(f, (bytes, start, end));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(start), I::LocalSet(slash),
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 						I::LocalGet(slash), I::LocalGet(end), I::I32GeU, I::BrIf(1),
-						I::LocalGet(slash), I::I32Load8U(BYTE), I::I32Const(RATIO_SLASH), I::I32Eq,
+						I::LocalGet(bytes), I::LocalGet(slash), I::ArrayGetU(s.type_manager.text_type),
+						I::I32Const(RATIO_SLASH), I::I32Eq,
 						I::If(BlockType::Empty),
-							I::LocalGet(start), I::LocalGet(slash), I::LocalGet(start), I::I32Sub,
 			]);
-			s.call(f, "new_text");
+			s.emit_text_piece(f, (bytes, start, slash));
 			s.call(f, lists::list_ops::TEXT_AS_INT);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalGet(end), I::LocalGet(slash), I::I32Sub,
-				I::I32Const(1), I::I32Sub,
-			]);
-			s.call(f, "new_text");
+			Self::emit_list(f, &[I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalSet(start)]);
+			s.emit_text_piece(f, (bytes, start, end));
 			s.call(f, lists::list_ops::TEXT_AS_INT);
 			s.call(f, "exact_div");
 			s.call(f, "new_int");

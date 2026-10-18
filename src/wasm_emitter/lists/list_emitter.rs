@@ -26,8 +26,7 @@ const PLAIN_VALUE_KINDS: [Kind; 9] = [
 ];
 
 /// Runtime functions called from lowered code with their node arguments, and how many those are
-const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
-	(crate::list_mutations::LIST_DROP_LAST, 1),
+const NODE_ARGUMENT_CALLS: [(&str, usize); 3] = [
 	(crate::list_mutations::LIST_BECOME, 2),
 	(super::super::lists::list_ops::LIST_EXTEND, 2),
 	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),
@@ -35,7 +34,7 @@ const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 
 /// Names the emitter resolves itself, besides user functions, imports, type words, counting functions and the
 /// NODE_ARGUMENT_CALLS
-const BUILTIN_CALLS: [&str; 24] = [
+const BUILTIN_CALLS: [&str; 23] = [
 	crate::words::RETURN_WORD,
 	crate::words::AS_CODE,
 	crate::host::FETCH_WORD,
@@ -50,7 +49,6 @@ const BUILTIN_CALLS: [&str; 24] = [
 	crate::min_max::EMPTY_EXTREMUM_CALL,
 	crate::switch::NO_CASE_CALL,
 	crate::filled_lists::ZERO_FILL_CALL,
-	crate::list_mutations::INSERT_AT_CALL,
 	crate::list_mutations::INSERT_EITHER_CALL,
 	crate::library_words::LIST_SUM,
 	crate::words::INSTANCE_OF,
@@ -430,9 +428,8 @@ impl WasmGcEmitter {
 				}
 			}
 		}
-		if let [word, left, right, tolerance] = items {
-			if crate::library_words::is_similarity_call(&word.drop_meta().name()) {
-				self.emit_similarity(func, &word.drop_meta().name(), left, right, tolerance);
+		if let [word, arguments @ ..] = items {
+			if self.emit_similarity(func, &word.drop_meta().name(), arguments) {
 				self.emit_call(func, super::super::NEW_BOOL);
 				return;
 			}
@@ -473,9 +470,14 @@ impl WasmGcEmitter {
 		}
 		if let [Node::Symbol(call), count, zero] = items {
 			if call == crate::filled_lists::ZERO_FILL_CALL {
-				self.emit_numeric_value(func, count);
-				self.emit_node_instructions(func, zero);
-				self.emit_call(func, crate::filled_lists::ZERO_FILL_CALL);
+				match self.compiler_word(crate::filled_lists::FILLED_LIST_WORD) {
+					Some(filled_list) => {
+						self.emit_user_function_call(func, &filled_list, &[count.clone(), zero.clone()])
+					}
+					None => {
+						func.instruction(&I::Unreachable);
+					}
+				}
 				return;
 			}
 		}
@@ -520,14 +522,12 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(call), list, first, second] = items {
-			if call == crate::list_mutations::INSERT_AT_CALL || call == crate::list_mutations::INSERT_EITHER_CALL {
-				let Some((position, value)) = self.insert_position_and_value(func, call, first, second) else {
+			if call == crate::list_mutations::INSERT_EITHER_CALL {
+				let Some((position, value)) = self.insert_position_and_value(func, first, second) else {
 					return;
 				};
-				self.emit_node_instructions(func, list);
-				self.emit_numeric_value(func, position);
-				self.emit_node_instructions(func, value);
-				self.emit_call(func, crate::list_mutations::INSERT_AT_CALL);
+				let inserted = crate::list_mutations::inserted_in_place(list, position.clone(), value.clone());
+				self.emit_node_instructions(func, &inserted);
 				return;
 			}
 		}
@@ -753,8 +753,9 @@ impl WasmGcEmitter {
 					self.call(func, "is_ratio");
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::Else, I::I64Const(0), I::End]);
 				}
-				// a map is a curly list at run time, no list (card inside-function)
-				if crate::type_tests::canonical_spec_word(spec) == crate::words::LIST_WORD {
+				// a map is a curly list at run time, no list (card inside-function); code in braces is a list of its
+				// statements, as code in any other brackets
+				if crate::type_tests::canonical_spec_word(spec) == crate::words::LIST_WORD && !code {
 					self.emit_node_instructions(func, subject);
 					self.emit_is_map(func);
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64And]);
@@ -945,7 +946,7 @@ impl WasmGcEmitter {
 		]);
 		self.emit_field(func, instance_local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-		let (pointer, length) = self.allocate_string(type_name);
+		let (pointer, length) = self.memory_string(type_name);
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_symbol");
 		self.emit_call(func, super::super::VALUES_EQUAL);
@@ -1043,19 +1044,15 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// The (position, value) of an insert: given by `at:`, else the one Int among the two arguments is the position;
+	/// The (position, value) of an insert: the one Int among the two arguments is the position;
 	/// two Ints are ambiguous (Python `insert(i, x)` vs warp `insert(x, i)`): the user is asked, unanswered it is an error
 	fn insert_position_and_value<'a>(
 		&mut self,
 		func: &mut Function,
-		call: &str,
 		first: &'a Node,
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
 		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-		if call == crate::list_mutations::INSERT_AT_CALL {
-			return Some((first, second));
-		}
 		let is_int = |kind: crate::type_kinds::Kind| kind == crate::type_kinds::Kind::Int;
 		let (a, b) = (crate::normalize::operand_text(first), crate::normalize::operand_text(second));
 		match (is_int(self.get_type(first)), is_int(self.get_type(second))) {

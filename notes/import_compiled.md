@@ -1,4 +1,4 @@
-# Importing a module warp compiled (card import-compiled, 2026-10-08)
+# Importing a module warp compiled
 
 `import "shapes.wasm"` works for a module warp compiled, as for any WebAssembly module, and its functions on values
 (texts, lists, instances: Nodes) and its classes are the program's too. Sample: samples/wasm/import_compiled.warp, test:
@@ -17,13 +17,13 @@ tests/modules/test_import_compiled.rs (the browser too).
 - struct_backend.rs: a function nobody in its own program calls keeps the Node parameter (`p:P` as a P·instance
   struct only when every call passes one, and there is at least one call): an exported function is called by importers.
 
-- The browser (card import-compiled-browser): host-foreign.js moduleImports copies each Node argument into the module's
+- The browser: host-foreign.js moduleImports copies each Node argument into the module's
   instance and its result back (reader.js readNode, host.js buildValue, which reads keys and so instances too). A host
   without GC field access needs the module's reflection getters, so `warp compile --wasm` emits them
   (pipeline::for_any_host, about 700 bytes). The sample imports tests/fixtures/compiled/shapes.wasm, which the deploy
   (pages.yml) ships.
 
-- Shared changes (card import-shared): passing the reference itself does not work. Both modules canonicalize to the same
+- Shared changes: passing the reference itself does not work. Both modules canonicalize to the same
   $Node type, so the module accepts the program's Node, but a Node's texts, field names among them, are offsets into its
   own instance's linear memory. The module would compare "x" against the program's offsets read in the module's memory,
   not find it, and grow a field whose name points into the module's memory: a corrupt object. So an argument still

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Removes finished agent worktrees from the warp.worktrees.noindex folders (WORKTREE_ROOTS) and the branches merged
+# Removes finished agent worktrees from the Worktrees volume (WORKTREE_ROOTS) and the branches merged
 # into origin/main, which nobody
 # else removes (54 worktrees, 56 local and 39 remote branches on 2026-10-14). Nothing unmerged is touched:
 #   1. a worktree on a branch whose HEAD origin/main holds (also as equal patches after a rebase or squash), idle for
@@ -14,8 +14,8 @@
 #   prune-worktrees.sh --dry-run  only print what it would do
 # Run daily by cron.
 WARP=/Users/me/dev/angles/warp
-# new worktrees go to the Worktrees volume (user 2026-10-16, card new-worktrees); the Data volume's until they retire
-WORKTREE_ROOTS=(/Volumes/Worktrees /Users/me/dev/angles/warp.worktrees.noindex)
+# worktrees live on the Worktrees volume (notes/churn_volume.md); integrator/ there is a plain folder, not a worktree
+WORKTREE_ROOTS=(/Volumes/Worktrees)
 DONOR=/Volumes/Worktrees/warp  # named after the project: the volume may hold other projects
 LEFTOVERS=$WARP/data/worktree-leftovers
 TWEAK_FILES=(Cargo.toml Cargo.lock crates/warp-runtime/Cargo.toml)

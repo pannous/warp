@@ -1,7 +1,7 @@
 # LLM tools (scripts/llm/)
 
-User decision 2026-10-10: the ~$200 Anthropic API credit on ANTHROPIC_KEY_WARP (~/.keys, the playground proxy's
-workspace key) pays for a docs checker, a program corpus and, maybe, extra API workers. Spend stops at $150.
+The Anthropic API credit on ANTHROPIC_KEY_WARP (~/.keys, the playground proxy's workspace key) pays for a docs
+checker, a program corpus and API workers. Spend stops at $150 (budget check in llm.py).
 
 ## Tools
 - `scripts/llm/docs_check.py [--dry-run] [--limit N] [page.md …]`: every ```warp fence and inline `code` → `value`

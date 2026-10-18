@@ -4,12 +4,12 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::nodes::{
-	assign, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key,
-	word_headed, Counter,
+	assign, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_block, is_call_head,
+	is_kinded_type_word, key, word_headed, Counter,
 };
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::words::{IMPLICIT_PARAMETER, ON_WORD, RETURN_WORD, SELF_WORD, THIS_WORD};
+use crate::words::{IMPLICIT_PARAMETER, ON_WORD, RETURN_WORD, SELF_WORD, THIS_WORD, VOID_WORD};
 
 mod tasks;
 pub use tasks::*;
@@ -145,7 +145,7 @@ fn named_flags(value: &Node) -> Vec<String> {
 /// P28 (user, 2026-10-05: "Zero value (Go)"): `real x;` declares x with the zero value of its type, `x:real = 0.0`.
 /// Only a fresh name: after `x = "5"`, `int x` is the conversion of x
 pub fn lower_bare_declarations(program: Node) -> Node {
-	let names = crate::soft_keywords::names_given(&program);
+	let names = crate::program_names::Bindings::of(&program).given();
 	let named: Vec<&str> =
 		COLLECTION_DECLARATION_WORDS.iter().map(|(word, _)| *word).filter(|word| names.contains(*word)).collect();
 	let program = collection_declarations(program, &named);
@@ -656,7 +656,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let (name, arguments) = head_items.split_first()?;
 	let _ = name.symbol_name()?;
 	let mut labeled_names = vec![];
-	let parameters = written_parameters(arguments, keyword.is_symbol(SWIFT_FUNCTION_KEYWORD), &mut labeled_names);
+	let parameters = written_parameters(arguments, &mut labeled_names);
 	let body = with_label_names(body, labeled_names);
 	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
 	let op = if parameters.is_empty() { op } else { Op::Define };
@@ -742,15 +742,7 @@ fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
 }
 
 /// The parameters of a keyword's definition as written, their labels collected into `labeled_names`
-fn written_parameters(arguments: &[Node], is_swift: bool, labeled_names: &mut Vec<Node>) -> Vec<Node> {
-	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
-	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
-	let arguments = match arguments {
-		[label, typed] if is_swift && argument_label(label, typed).is_some() => {
-			vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)]
-		}
-		_ => arguments.to_vec(),
-	};
+fn written_parameters(arguments: &[Node], labeled_names: &mut Vec<Node>) -> Vec<Node> {
 	// the parameters may come as one group: `f (a, b)`, `f (m)`, `f ø`
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Space) if matches!(group.as_slice(), [label, typed] if argument_label(label, typed).is_some()) => vec![argument.clone()],
@@ -761,19 +753,8 @@ fn written_parameters(arguments: &[Node], is_swift: bool, labeled_names: &mut Ve
 	// Python's markers `*` (keyword-only after it) and `/` (positional-only before it) take no argument
 	.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(left, Op::Mul | Op::Div, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty))))
 	.map(name_then_type);
-	let parameters: Vec<Node> = parameters.map(|parameter| labeled_parameter(parameter, labeled_names)).collect();
-	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type;
-	// a comma separates parameters, so `def f(p, number)` keeps two
-	let comma_separated = arguments
-		.iter()
-		.any(|argument| matches!(argument.drop_meta(), Node::List(_, Bracket::Round, Separator::Comma)));
-	if let (false, [parameter, type_word]) = (comma_separated, parameters.as_slice()) {
-		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
-		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_kinded_type_word(type_word) || is_type_name) {
-			return vec![key(parameter.clone(), Op::Colon, type_word.clone())];
-		}
-	}
-	parameters
+	// `func add1(x int)` arrives typed: the parser reads Go's `x int` as `x:int` (typed_parameter)
+	parameters.map(|parameter| labeled_parameter(parameter, labeled_names)).collect()
 }
 
 /// Kotlin's extension method `fun Int.twice() = this * 2`: the function `twice(this:Int) := this * 2`, its receiver the
@@ -954,7 +935,16 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 	}
 	match node {
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(|item| lower_lists(item, lowering)).collect();
+			// `fun f(_) {…}`: the head glued to its block stays a head, as in `f(_) := …`
+			let glued_definition = matches!(items.as_slice(), [head, body] if is_call_head(head) && is_block(body));
+			let items: Vec<Node> = items
+				.into_iter()
+				.enumerate()
+				.map(|(index, item)| match glued_definition && index == 0 {
+					true => lower_definition_head(item, lowering),
+					false => lower_lists(item, lowering),
+				})
+				.collect();
 			lowering(&items).unwrap_or(Node::List(items, bracket, separator))
 		}
 		other => children_rewritten(other, |child| lower_lists(child, lowering)),
@@ -983,14 +973,15 @@ fn lower_definition_head(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> 
 /// Swift's label for an argument without a label
 const WILDCARD_LABEL: &str = "_";
 const DART_REQUIRED: &str = "required";
-const SWIFT_FUNCTION_KEYWORD: &str = "func";
 
-/// `real f(real x) { … }`: the definition `f(x:real) := { … }` (the parser reads the type word, then the call and its
-/// block); the result kind is inferred as for any definition
+/// `real f(real x) { … }`: the definition `f(x:real): real := { … }` (the parser reads the type word, then the call and
+/// its block); `void f() {…}` declares no result type
 pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let [result_type, definition] = items else { return None };
-	let result_type = result_type.symbol_name()?;
-	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
+	let result_word = result_type.symbol_name()?;
+	if is_function_keyword(result_word)
+		|| crate::analyzer::type_word_kind(result_word).is_none() && result_word != VOID_WORD
+	{
 		return None;
 	}
 	let (head, body) = match definition.drop_meta() {
@@ -1015,7 +1006,11 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	});
 	let parameters: Option<Vec<Node>> = parameters.map(|parameter| c_parameter(&parameter)).collect();
 	let head = Node::List([vec![name.clone()], parameters?].concat(), Bracket::Round, Separator::Comma);
-	Some(key(head, Op::Define, body.clone()))
+	let target = match result_word == VOID_WORD {
+		true => head,
+		false => key(head, Op::Colon, result_type.drop_meta().clone()),
+	};
+	Some(key(target, Op::Define, body.clone()))
 }
 
 /// `real x` is `x:real`; a bare name stays untyped, as does a parameter the parser typed already

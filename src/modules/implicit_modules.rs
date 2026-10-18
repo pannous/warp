@@ -7,6 +7,8 @@ pub(crate) const UNITS_MODULE: &str = "units";
 pub(crate) const QUANTITY: &str = "quantity";
 /// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/web/serve.rs) are read by the router's words
 pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
+/// lib/router.warp: a route's `status 418` and `header "name" "value"`
+const ANSWER_PARTS: [&str; 2] = ["status", "header"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 pub(crate) const AGENT_MODULE: &str = "agent";
 /// lib/fast_math.warp: sin cos exp pow atan2 as wasm polynomials, `use fast_math` or for every program `warp fast <file>`
@@ -42,7 +44,7 @@ pub(crate) const SOUND_SETUP_FREE_WORDS: [&str; 4] = ["play", "beep", "stop_soun
 /// Whether a program needs a module
 pub(crate) type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page or a hosted page route → markup (lowering/web/page_html.rs, serve.rs answered_page),
-/// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/web/routes.rs), a call of quantity → units (run-time units),
+/// routes, a server route's path parameters or its status and headers → router, a route's regular expression → regex (lowering/web/routes.rs), a call of quantity → units (run-time units),
 /// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
 pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 9] = [
 	("file", mentions_file_url),
@@ -51,10 +53,11 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 9] = [
 		mode.renders_itself() || mode.for_hosting && calls_undefined(program, crate::page_html::TO_HTML)
 	}),
 	("router", |program| {
-		defined(program, crate::routes::PAGE_ROUTES).is_some() || {
-			let called = called_names(statements_of(program));
-			ROUTE_PARTS.iter().any(|word| called.contains(*word))
-		}
+		defined(program, crate::routes::PAGE_ROUTES).is_some()
+			|| {
+				let called = called_names(statements_of(program));
+				ROUTE_PARTS.iter().any(|word| called.contains(*word))
+			} || first_called_undefined(program, ANSWER_PARTS).is_some()
 	}),
 	("regex", |program| {
 		defined(program, crate::routes::PAGE_ROUTE_INDEX)
@@ -78,9 +81,8 @@ pub(crate) const MODULES_COMPILED_AS_PROGRAM: [&str; 1] = [UNITS_MODULE];
 pub(crate) fn with_implicit_class_modules(mut program: Node) -> Node {
 	for (module, needed) in IMPLICIT_MODULES {
 		if MODULES_COMPILED_AS_PROGRAM.contains(&module) && needed(&program) {
-			let source = std_module(module).expect("an implicit module is embedded");
 			// lib/units.warp's unit_definitions block as the tables its functions read, before they are picked by name
-			let parsed = crate::normalize::without_hints(|| WarpParser::parse(source));
+			let parsed = parsed_std_module(module).expect("an implicit module is embedded");
 			let definitions = statements(crate::numbers::units::with_run_time_unit_tables(parsed));
 			program = with_needed_definitions(without_use_of(program, module), definitions);
 		}
@@ -151,7 +153,7 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	)
 }
 
-/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
+/// Whether the program plays sound: it calls a sound word or says `use sound`
 pub fn uses_sound(program: &Node) -> bool {
 	// `use sound` first: it reads the statements, the calls walk the whole program
 	says_use(program, SOUND_MODULE) || first_called_undefined(program, SOUND_WORDS).is_some()
@@ -174,6 +176,15 @@ pub(crate) fn rare_sound_word(program: &Node) -> Option<&'static str> {
 /// Whether the program calls `word` without defining it
 pub(crate) fn calls_undefined(program: &Node, word: &str) -> bool {
 	first_called_undefined(program, [word]).is_some()
+}
+
+/// Whether the program calls `word` or writes it as a tag with a block: `style{ … }`
+pub(crate) fn tags_or_calls(program: &Node, word: &str) -> bool {
+	let mut found = false;
+	program.visit(&mut |node| {
+		found |= matches!(node, Node::Key(tag, Op::Colon, block) if tag.is_symbol(word) && crate::lowering::nodes::is_block(block))
+	});
+	found || called_names(statements_of(program)).contains(word)
 }
 
 /// The first of `words` the program calls without defining it

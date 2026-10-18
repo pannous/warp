@@ -6,23 +6,14 @@ runtime functions. A user function or a variable of the same name wins (the word
 | Word (aliases) | Args | How |
 |---|---|---|
 | `first`, `last`, `sum` | 1 | expanded to source in `library_words.rs` (`x#1`, `x#(count(x))`, a `for` fold) |
-| `reverse`, `sort` | 1 | `list_reverse`, `list_sort` (ints only; other elements are an error) |
-| `upper` (`uppercase`), `lower` (`lowercase`) | 1 | `text_upper`, `text_lower`: ASCII only, a non-ASCII byte is the error `non ascii text` |
+| `reverse`, `sort` | 1 | `list_reverse`, `list_sort`; `reverse` of a text reverses its graphemes |
+| `upper` (`uppercase`), `lower` (`lowercase`) | 1 | `text_upper`, `text_lower`: Latin, Greek and Cyrillic case (wasm_emitter/text/text_unicode.rs) |
 | `split` | 2 | `text_split`: the pieces share the bytes of the text; an empty separator is an error |
-| `join` | 2 | `list_join`: texts, ints and ASCII characters |
+| `join` | 2 | `list_join` |
 
-An unknown `.word` on a name, a text, a number or a square list is `undefined function: word`. `{a:1}.a` (an object literal) stays
-data: property access is row 7 of wiki_features.md.
-
-## Known gaps
-
-- `sum` of a list of decimals or floats: the `for` loop over such a list traps (`for i in [1.5 2] {i}` → cast failure). Fix the loop, not `sum`.
-- A space before `[` never indexes (decided 2026-10-03): `first [10, 5]` and `reduce [7] (a b)->a+b` pass the list
-  (tests/parser/test_surface_syntax.rs). Still open: `x = reduce xs (a b)->a+b` and `print first [10, 5]` (see TODO.md).
-- `upper`/`lower` beyond ASCII need Unicode case tables. `reverse` and `first`/`last` of a text: `first`/`last` work (graphemes), `reverse` of a text is an error.
-- `sort` compares ints only (no floats, texts, mixed): the comparison of two Nodes is not a runtime function yet.
-- `x.upper!` (in-place, inventions.md) is not implemented: `x.upper` returns a new text, value semantics.
-- Words not added because the meaning is unclear: `uppercase!`/`x.upper!` (in-place spelling), `sum := fold +` (needs first-class operators, row 22).
+An unknown `.word` on a name, a text, a number or a square list is `undefined function: word`. A space before `[`
+never indexes: `first [10, 5]` and `reduce [7] (a b)->a+b` pass the list (tests/parser/test_surface_syntax.rs).
+`x.upper!` (in-place, inventions.md) is not implemented: `x.upper` returns a new text, value semantics.
 
 # Property access on objects
 
@@ -38,12 +29,11 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
   codepoint and is a key only as a literal (`p["x"]`).
 - `p[k]` with a symbol `k` keeps the old meaning: the variable `k` if there is one, else the name; its miss is `key not found`.
 - The possessive is a parser rule: an identifier directly followed by `'s ` and an identifier (`p's name`).
-- On a list of instances a field read maps (card people-map, broadcasting.rs `element_fields`): `people's name`,
+- On a list of instances a field read maps (broadcasting.rs `element_fields`): `people's name`,
   `people.name`, `name of people` are `people.map(p => p.name)`. The shapes come from InstanceTypes over the program as
   type_constructor will construct it, since broadcasting runs before it; a list word (`people.count`) stays the list's.
-- Not done: assignment to a field (row 8).
 
-## Map words (fix-maps, Dijkstra field test)
+## Map words
 
 One map path for every spelling (tests/welcoming/test_welcoming_maps.rs):
 - Keys compare by name at runtime: `map_key_name` turns a text or a character (`"A"` is a Codepoint) into the symbol of the
@@ -59,9 +49,6 @@ One map path for every spelling (tests/welcoming/test_welcoming_maps.rs):
   name in a map of unknown values (a parameter) and anything indexed out of such a value are `Kind::Empty`, held as a Node;
   `d[k]`/`d[k]=v` with such a key dispatches at runtime (`node_at_key`, `node_with_key`: an Int indexes, else a key).
   A parameter read as a map (`g.keys()`) is a List. Text + such a Node concatenates.
-- Open: the elements of a list returned by a function (`result[0]`) are still typed Int; `x in xs` as an if-condition needs
-  the infix `in` of the parser (fix-parse).
-- Quirk found: `{a:1}.length` counts 2 (the single entry is the Key node itself, counted as a pair), `{a:1 b:2}.length` is 2.
 
 ## Field assignment and `?.`
 
@@ -70,8 +57,7 @@ One map path for every spelling (tests/welcoming/test_welcoming_maps.rs):
   (P200/P200b), `q=p; p.a=9; q.a` is 9 for maps and instances. A new name is added at the end, in front of meta entries. Only a variable that is an object (assigned an object literal, or another such variable) can be assigned to; any
   other target is `undefined function: a` at the lowering.
 - `a?.name` is `(t=a; if t == ø then ø else t.name)` (`Op::SafeDot`, lexed only before a letter, so `x ?.5 : 1` stays a ternary);
-  on a non-ø receiver that is no object the miss is `no field name`. `y = x?.a` with a ø result into a variable still fails
-  ("cannot extract a numeric value from ø"): a variable cannot hold the ø of an if-branch yet.
+  on a non-ø receiver that is no object the miss is `no field name`.
 - `count {a:1}` and `{a:1}.length` are 1: a key:value node counts as one item.
 - Nested objects are square lists in memory and print as `{a:1 b:[c:3]}` (existing: emit_default_key converts the inner braces).
 
@@ -81,9 +67,7 @@ One map path for every spelling (tests/welcoming/test_welcoming_maps.rs):
 lists (`filled_lists::typed_array_value`, `zero_list`). `x:[number]` is `x:list of number`, `numbers x = [1 2]` declares a list
 (a plural type word before a name is a declaration). The bracket spelling `[number]` hints the plural `numbers`
 (`ListTypeStyle::Bracket`); the fixed-array spellings have no canonical form yet (both are decided as valid), so they get no hint.
-
-The ignored array tests were edited by user decision P59 (2026-10-05) and pass: test_array_creation (setting past the end
-is `index out of range`), test_array_initialization_basics, test_array_initialization, test_array_type_generics (`list of int`).
+Setting past the end is `index out of range` (P59).
 
 
 # Data as scope (Decided #6)
@@ -104,43 +88,18 @@ A variable or user function named like the type word (`int=3; 3 is int`) keeps e
 type and value; with x defined nowhere it is an error teaching `x be number 9` (P61). `type of x` is `type(x)` (the parser reads `type of` as a declaration head). `x as number = 9` is `x:number=9`.
 Static means `x=f(); x is int` uses the compile-time kind of x, like `type(x)`.
 
-# Lambdas (compile-time)
+# Functions as values
 
-`src/lowering/definitions/lambdas.rs` (lowered right after type_tests). Functions are not first-class values yet, so a lambda is lowered where it stands:
-`f = x=>x*x`, `f = (x y)->x+y`, `f = (x, y) => x+y`, and `f = {it*2}` (a block only when it uses `it`; `p={a:1}` stays an object) become
-the definition `f(x):=…` at that point, so variables are captured by value there (`n=10; f = x=>x+n; n=20; f 1` is 11). `{x*x}(x=5)` defines
-an anonymous function and calls it (`{x+y}(x=1 y=2)`). `map xs F`, `map(xs, F)`, `xs.map(F)`, `xs.map {it*it}` with F a block, a lambda or a defined function is the loop
-`(out=[]; for item in xs { out.add(F(item)) }; out)` with a literal body inlined. A lambda as the argument of any other call, or `map` over a
-non-function, is the error `functions are not first-class values yet`. Not done: `filter`, `reduce`, `each`, lambdas returned from
-functions (row 22, first-class functions). A user function named like a type word (`double`) is read as the type cast.
-Ignored tests: test_stacked_lambdas (`a{x:1}{y:2}{3}` must parse as three items, a parser question), test_modifiers, test_wit_function are unrelated.
+Functions are first-class values (closures: notes/closures.md). `map`, `filter`, `reduce`, `fold`, `each` and the
+other iteration words (`lambdas::ITERATIONS`, one loop template per word) inline a literal block, lambda or known
+function as a loop: `filter xs {it>2}`, `reduce xs (a b)->a+b` (first element is the start; an empty list is the
+error `reduce of an empty list`), `fold xs 10 (a b)->a+b`, `each xs {it*10}` (the value is the body of the last
+item). An operator is a function value (`fold [1 2 3] 0 +`, `reduce xs *`); `sum := fold +` defines a function of the
+list. `&name` is glued to the name (`a &b` is `a (&b)`, `a & b` and `a&b` stay `and`). Body `a-b` of a lambda with
+parameters a and b is the difference (kebab rule). Write `it < k`, not `{it<k}`, which reads as a type application.
+A user function named like a type word (`double`) is read as the type cast.
 
-## filter, reduce, fold, each
-
-Same compile-time way as `map` (`lambdas::ITERATIONS`, one loop template per word): `filter xs {it>2}`, `xs.filter(x=>x%2==1)`, `reduce xs (a b)->a+b`
-(first element is the start; an empty list is the error `reduce of an empty list`), `fold xs 10 (a b)->a+b`, `each xs {it*10}`
-(the value is the body of the last item, 0 for an empty list). The function is a literal block/lambda or a defined function; a wrong
-number of parameters is `reduce takes a function of two arguments`, anything else `functions are not first-class values yet`.
-Body `a-b` of a lambda with parameters a and b is the difference (kebab rule). Parser quirks that bite: `{it<k}` reads `it<k}` as a type
-application (write `it < k`).
-
-# First-class functions (compile-time)
-
-Choice: no funcref table. The emitter gives every user function its own signature (i64, f64 or node per parameter and result, by inferred
-kind), so a table needs one uniform signature and boxing wrappers for all of them. Instead `src/lowering/definitions/function_values.rs` specialises: a function
-that uses a parameter as a function (`f(x)`, `f x`, `map xs f`, or passing it on) is replaced by one copy per function it is called with,
-`apply(double, 3)` calls `apply__double(3)` with `double` in place of `f` (specialisations sit where the original definition was, so captures by value
-behave). What can be passed: a defined function, `&name` (the parser reads it as the name), an alias (`g = double`, assigned once), an
-operator (`+` is `(a b)->a+b`: `fold [1 2 3] 0 +`, `reduce xs *`), a lambda or `{it*2}` block that reads no variable of the program.
-`sum := fold +` (also `map`, `filter`, `each`, `reduce` with only a function) defines a function of the list; fold without a start uses the
-identity of `+` (0) or `*` (1), else reduce. `map square on xs`, `map &square xs` (function first) work. A function chosen at run time
-(`h = if c then f else g; apply(h, 1)`) or a lambda that captures a variable is the error `functions are not first-class values yet`;
-that is what a funcref table plus closures would add. Pipeline: lambdas (loops for known functions) → function_values → lambdas strict (errors).
-Parser: `&name` is glued to the name and not to a word before it (`a &b` is now the application `a (&b)`, `a & b` and `a&b` stay `and`);
-`x<k` is a comparison, only a type name (`Vec<T>`, `list<int>`, a type word) starts a generic; a braceless `map xs f` is flattened.
-Not done: `f(+)` (an operator inside call brackets does not parse), unary operators as values, functions stored in lists or objects.
-
-## Python's list, dict and tuple words (card python-stdlib, tests/lists/test_python_collections.rs)
+## Python's list, dict and tuple words (tests/lists/test_python_collections.rs)
 
 Aliases of warp's own words: `reversed` → reverse, `tuple(xs)` → list, `len` → count (with its hint), `xs.index(x)` (lib/list.warp:
 the position from 0, a `ValueError` raise when absent; `index_of` stays the 1-based one), `xs.extend(ys)` (appends in place),
@@ -149,12 +108,12 @@ append, remove, pop(), count, copy, keys, values, get, sorted, any, all, sum, mi
 Not aliased, on purpose or open:
 - `xs.sort()` / `xs.reverse()` stay copies with the unused-value warning; warp's in-place form is `xs.sort!` (wiki/mutable.md).
 - `xs.insert(i, v)` is the ambiguity error naming both readings (decided earlier).
-- Card python-aliases: `x.pop(k)` (0-based position of a list, -1 the last; key of a map) and `x.clear()` of a variable lower
+- `x.pop(k)` (0-based position of a list, -1 the last; key of a map) and `x.clear()` of a variable lower
   in list_mutations (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
   dispatch with `x is map` at run time; library_words::LOWERED_TO_PRELUDE makes modules load them. `m.popitem()` (lib/map.warp),
   `fromkeys(ks, v)` (prelude), `dict.fromkeys(ks, v)` (library_words method_call drops the `dict` receiver).
-- pop, pop(i) and clear() change the list in place like append/remove (card aliased-list): pop(i) and clear() wrap the
+- pop, pop(i) and clear() change the list in place like append/remove: pop(i) and clear() wrap the
   fresh rest in `list_become(xs, …)` (list_ops emit_list_become); an alias group changed in place is no typed array
   (list_dispatch find_typed_lists), whose Node copy would part from the alias. A map of one entry passed to a function is its lone key at run time (`type` says key).
-- `x is list` of a value of unknown type is no for a map (a curly list at run time, card inside-function); lib/markup.warp
+- `x is list` of a value of unknown type is no for a map (a curly list at run time); lib/markup.warp
   asks html_is_group (list or map) where a block `{…}` and a list `[…]` both hold items.

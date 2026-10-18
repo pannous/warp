@@ -4,13 +4,18 @@
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
+pub use warp::compiler::node_views::{node_view, plain_view, positioned_plain_view, view_json, warp_list};
+use warp::host::with_captured_stdout;
 use warp::warp_parser::parse;
-use warp::wasm_emitter::eval;
-use warp::{Bracket, Node, Number, Separator};
+use warp::{Node, Number, Op};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
 const COMPILER_FOLDER: &str = "lib/compiler";
+/// The input files of the twin programs, the arguments of their calls (scratch/: temporary, ignored)
+const INPUT_FOLDER: &str = "scratch/twins";
+/// The fringe forms a pass twin leaves out, with how to bring each back
+const DROPPED_NOTES: &str = "notes/self_hosting_dropped.md";
 /// Characters shown on each side of the first difference
 const CONTEXT: usize = 40;
 /// Sources per evaluated program: each program's store is freed before the next, which keeps the test under 1 GB
@@ -20,6 +25,11 @@ const LISTED: usize = 12;
 /// Outside the nightly run the twins check every GATE_SHARE-th source: they were 1100 s of the suite's test time
 const GATE_SHARE: usize = 4;
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+/// Threads computing the Rust side of a pass differential: the passes before the pass lower every `use`d module again
+/// for each source, 95 s for 352 sources in one thread (card pass-twins)
+const RUST_SIDE_THREADS: usize = 4;
+/// Stack of each of those threads: the passes recurse as deeply as a test thread's
+const RUST_SIDE_STACK: usize = 64 << 20;
 
 /// Every sample and probe source, sorted; a file that is not UTF-8 text is no source
 pub fn sources() -> Vec<PathBuf> {
@@ -41,71 +51,6 @@ fn collect_sources(folder: &Path, found: &mut Vec<PathBuf>) {
 			found.push(path);
 		}
 	}
-}
-
-/// A Rust twin's list as warp writes it: the empty list is ø
-pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
-	let items: Vec<Node> = items.collect();
-	if items.is_empty() {
-		return Node::Empty;
-	}
-	Node::List(items, Bracket::Square, Separator::None)
-}
-
-/// A node as plain warp data, the view the parser and serializer twins share (notes/self_hosting.md): a number,
-/// bool or ø is itself, every other node a list tagged by its kind
-pub fn node_view(node: &Node) -> Node {
-	match node {
-		Node::True | Node::False | Node::Empty => node.clone(),
-		Node::Number(number @ (Number::Int(_) | Number::Float(_))) => Node::Number(*number),
-		Node::Number(number) => tagged("number", [Node::text(&number.to_string())]),
-		Node::Char(c) => tagged("char", [Node::Char(*c)]),
-		Node::Text(text) => tagged("text", [Node::text(text)]),
-		Node::Symbol(name) => tagged("symbol", [Node::text(name)]),
-		Node::Error(inner) => tagged("error", [node_view(inner)]),
-		Node::Key(left, op, right) => tagged("key", [Node::text(op.as_str()), node_view(left), node_view(right)]),
-		Node::List(items, bracket, separator) => {
-			let mut parts = vec![Node::text(&bracket_glyphs(bracket)), Node::text(&separator_glyph(separator))];
-			parts.extend(items.iter().map(node_view));
-			tagged("list", parts)
-		}
-		Node::Type { name, body } => tagged("type", [node_view(name), node_view(body)]),
-		Node::Data(data) => tagged(
-			"data",
-			[Node::text(&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")))],
-		),
-		Node::Meta { node: inner, .. } => meta_view(node, inner),
-	}
-}
-
-/// A source literal (`01234`, `1.10`) and an annotation (`@name(value)`) survive, comments and positions go
-fn meta_view(node: &Node, inner: &Node) -> Node {
-	if let Some(literal) = node.source_literal() {
-		return tagged("literal", [Node::text(literal), node_view(inner)]);
-	}
-	let attributes = node.attributes();
-	if attributes.len() > inner.attributes().len() {
-		let (name, value) = attributes[0];
-		return tagged("attribute", [Node::text(name), node_view(value), node_view(inner)]);
-	}
-	node_view(inner)
-}
-
-fn tagged(kind: &str, parts: impl IntoIterator<Item = Node>) -> Node {
-	warp_list(std::iter::once(Node::text(kind)).chain(parts))
-}
-
-/// The opening glyph ("{", "[", "(", "<", "" for none), both glyphs for another pair
-fn bracket_glyphs(bracket: &Bracket) -> String {
-	match bracket {
-		Bracket::None => String::new(),
-		Bracket::Other(open, close) => format!("{open}{close}"),
-		_ => bracket.opening().to_string(),
-	}
-}
-
-fn separator_glyph(separator: &Separator) -> String {
-	separator.to_char().map(String::from).unwrap_or_default()
 }
 
 /// `word(read(path))` of lib/compiler/<part>.warp for every source, each written as the Rust twin's value of the same
@@ -136,10 +81,10 @@ fn todays_offset() -> usize {
 /// `word(view)` of lib/compiler/<part>.warp for the node view of every parsed source, against the Rust parse of the
 /// source serialized: the serializer twin
 pub fn view_differential(part: &str, word: &str) {
-	let view_of_source =
-		|_: &Path, text: &str| format!("json({})", warp_text_literal(&view_json(&node_view(&parse(text)))));
+	let view_of_source = |_: &Path, text: &str| view_json(&node_view(&parse(text)));
 	let serialized = |text: &str| Node::text(&parse(text).serialize());
-	report(word, &differences_with(&checked_share(&sources()), part, word, view_of_source, serialized));
+	let call = format!("{word}(json(argument))");
+	report(word, &differences_with(&checked_share(&sources()), part, &call, view_of_source, serialized));
 }
 
 /// Fails with the first difference and the names of the next sources that differ
@@ -164,30 +109,344 @@ pub fn differences(
 	word: &str,
 	rust_twin: impl Fn(&str) -> Node,
 ) -> Vec<(String, String, String)> {
-	let read_source = |path: &Path, _: &str| format!("read(\"{}\")", path.display());
-	differences_with(paths, part, word, read_source, rust_twin)
+	let source_path = |path: &Path, _: &str| path.display().to_string();
+	differences_with(paths, part, &format!("{word}(read(argument))"), source_path, rust_twin)
 }
 
-/// The sources where `word(argument)` differs from the Rust twin, the argument written from the source's path and text
+/// The sources where `call` differs from the Rust twin, its `argument` written from the source's path and text
 fn differences_with(
 	paths: &[PathBuf],
 	part: &str,
-	word: &str,
+	call: &str,
 	argument: impl Fn(&Path, &str) -> String,
 	rust_twin: impl Fn(&str) -> Node,
 ) -> Vec<(String, String, String)> {
+	let cases = paths.iter().map(|path| {
+		let text = std::fs::read_to_string(path).unwrap();
+		Case::new(path, argument(path, &text), rust_twin(&text))
+	});
+	differences_of(cases, part, call)
+}
+
+/// One source of a differential: the text the warp twin's call gets as `argument` (a path, a view as JSON) and the
+/// value the Rust twin gave, as compared (text: a case is made in one thread and checked in another)
+struct Case {
+	path: String,
+	argument: String,
+	expected: String,
+}
+
+impl Case {
+	fn new(path: &Path, argument: String, expected: Node) -> Self {
+		Case { path: path.display().to_string(), argument, expected: as_compared(expected).serialize() }
+	}
+}
+
+/// The cases where `call`, a warp expression of `argument`, differs from the expected value: path, warp's and Rust's
+/// text. One program serves every case: it reads the arguments at run time, so it compiles once (program_cache) for
+/// all chunks and for the halves of a chunk that fails (card pass-twins)
+fn differences_of(cases: impl Iterator<Item = Case>, part: &str, call: &str) -> Vec<(String, String, String)> {
+	let cases: Vec<Case> = cases.collect();
+	let twin = TwinProgram::new(part, call);
 	let mut differing = vec![];
-	for paths in paths.chunks(SOURCES_PER_PROGRAM) {
-		let texts: Vec<String> = paths.iter().map(|path| std::fs::read_to_string(path).unwrap()).collect();
-		let arguments: Vec<String> = paths.iter().zip(&texts).map(|(path, text)| argument(path, text)).collect();
-		for ((path, text), value) in paths.iter().zip(&texts).zip(warp_values(part, word, &arguments)) {
-			let (warp_text, rust_text) = (as_compared(value).serialize(), as_compared(rust_twin(text)).serialize());
-			if warp_text != rust_text {
-				differing.push((path.display().to_string(), warp_text, rust_text));
+	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
+		let arguments: Vec<&str> = cases.iter().map(|case| case.argument.as_str()).collect();
+		for (case, value) in cases.iter().zip(twin.values(&arguments)) {
+			let warp_text = as_compared(value).serialize();
+			if warp_text != case.expected {
+				differing.push((case.path.clone(), warp_text, case.expected.clone()));
 			}
 		}
 	}
 	differing
+}
+
+/// A lowering pass's twin (card twin-harness, notes/self_hosting.md step 10): for every source the Rust passes before
+/// `pass` run, the program goes to `word` of lib/compiler/<part>.warp as a node (walk.warp node_of), and the view of
+/// its result is compared with the view after the Rust pass, next to what each reported (walk.warp report) as
+/// [line, column, message, preferred]. Literal and attribute layers are left out on both sides (a warp node has none);
+/// the nodes carry their positions where the Rust pass reports or makes an error (card carries-line). A source the
+/// pipeline refuses before the passes, or whose passes fail, is no case.
+/// `dropped`: the sources of the fringe forms the twin leaves out, each named in DROPPED_NOTES with how to bring it
+/// back (user 2026-10-17: the port keeps the clean core, not every Rust case)
+pub fn pass_differential(pass: fn(Node) -> Node, part: &str, word: &str, dropped: &[&str]) {
+	let cases = in_parallel(twin_sources(dropped), |path| {
+		let text = std::fs::read_to_string(path).ok()?;
+		let reporting = || warp::pipeline::around_source_pass_reporting(&text, pass);
+		let (before, after, diagnostics) = std::panic::catch_unwind(reporting).ok()??;
+		let reports = warp_list(diagnostics.iter().map(report_view));
+		let after = plain_view(&after);
+		let given = if reports != Node::Empty || mentions_error(&after) { positioned_plain_view } else { plain_view };
+		let given = given(&before);
+		let expected = warp_list([after, reports].into_iter());
+		Some(Case::new(path, view_json(&given), expected))
+	});
+	report(
+		word,
+		&differences_of(cases.into_iter(), part, &format!("reported(view_of({word}(node_of(json(argument)))))")),
+	);
+}
+
+/// `case` of each path, in the paths' order, computed in RUST_SIDE_THREADS threads; each thread takes every
+/// RUST_SIDE_THREADS-th path, so the slow sources of one folder spread over all of them
+fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> + Sync) -> Vec<T> {
+	let (paths, case) = (&paths, &case);
+	let mut numbered: Vec<(usize, T)> = std::thread::scope(|scope| {
+		let threads: Vec<_> = (0..RUST_SIDE_THREADS)
+			.map(|first| {
+				let share = move || {
+					let mine = (first..paths.len()).step_by(RUST_SIDE_THREADS);
+					mine.filter_map(|index| Some((index, case(&paths[index])?))).collect::<Vec<_>>()
+				};
+				std::thread::Builder::new().stack_size(RUST_SIDE_STACK).spawn_scoped(scope, share).unwrap()
+			})
+			.collect();
+		threads.into_iter().flat_map(|thread| thread.join().unwrap()).collect()
+	});
+	numbered.sort_by_key(|(index, _)| *index);
+	numbered.into_iter().map(|(_, case)| case).collect()
+}
+
+/// The warp pipeline so far (card parser-tree, notes/self_hosting.md step 13): `word(source text)` of
+/// lib/compiler/<part>.warp parses with parser.warp and runs the pass twins in pipeline order; compared with the Rust
+/// parse of the same text after the Rust twins of those passes in that order (only those: the others have no twin yet),
+/// over the day's share of the sources as the parser differential, without the `dropped` ones (twin_sources)
+pub fn chain_differential(
+	paths: &[PathBuf],
+	part: &str,
+	word: &str,
+	rust_passes: &[fn(Node) -> Node],
+	dropped: &[&str],
+) {
+	let cases = twin_sources_of(paths, dropped).into_iter().filter_map(|path| {
+		let text = std::fs::read_to_string(&path).ok()?;
+		let lowered =
+			std::panic::catch_unwind(|| rust_passes.iter().fold(parse(&text), |node, pass| pass(node))).ok()?;
+		Some(Case::new(&path, path.display().to_string(), plain_view(&lowered)))
+	});
+	report(word, &differences_of(cases, part, &format!("{word}(read(argument))")));
+}
+
+/// A hint or warning as a twin reports it: [line, column, message, preferred form or ø]
+fn report_view(diagnostic: &warp::errors::diagnostic::Diagnostic) -> Node {
+	let preferred = diagnostic.preferred.as_deref().map_or(Node::Empty, Node::text);
+	let parts =
+		[Node::int(diagnostic.line as i64), Node::int(diagnostic.column as i64), Node::text(&diagnostic.message)];
+	warp_list(parts.into_iter().chain([preferred]))
+}
+
+fn mentions_error(view: &Node) -> bool {
+	match view {
+		Node::List(items, ..) => {
+			items.first().and_then(Node::text_value).as_deref() == Some("error") || items.iter().any(mentions_error)
+		}
+		_ => false,
+	}
+}
+
+/// The analyzer's twin (card inferred-kinds, notes/self_hosting.md step 14): each source the pipeline lowers goes to
+/// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its kinds compared with src/analyzer/inferred_kinds.rs
+/// on the same program slot by slot: warp's kind is Rust's or a more general one (`covers`), never a narrower one
+pub fn analyzer_differential(paths: &[PathBuf]) {
+	let cases: Vec<(String, String, Vec<String>)> = paths
+		.iter()
+		.filter_map(|path| {
+			let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
+			Some((path.display().to_string(), view_json(&program), kinds))
+		})
+		.collect();
+	let twin = TwinProgram::new("analyzer", "inferred_kinds(node_of(json(argument)))");
+	let mut differing = vec![];
+	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, argument, _)| argument.as_str()).collect();
+		for ((path, _, rust), value) in cases.iter().zip(twin.values(&arguments)) {
+			let warp: Vec<String> = match value.drop_meta() {
+				Node::List(items, ..) => items.iter().filter_map(Node::text_value).collect(),
+				other => vec![other.serialize()],
+			};
+			if !covers(&kind_slots(&warp), &kind_slots(rust)) {
+				differing.push((path.clone(), warp.join(" | "), rust.join(" | ")));
+			}
+		}
+	}
+	report("inferred_kinds", &differing);
+}
+
+/// Each slot's kind in an inferred kinds text: `f(0)` for f's first parameter, `f()` its result, a variable by name,
+/// `=` the program's value
+fn kind_slots(lines: &[String]) -> std::collections::BTreeMap<String, String> {
+	let mut slots = std::collections::BTreeMap::new();
+	for line in lines {
+		if let Some(value) = line.strip_prefix("= ") {
+			slots.insert("=".to_string(), value.to_string());
+		} else if let Some((signature, result)) = line.split_once(") -> ") {
+			let (name, params) = signature.split_once('(').unwrap_or((signature, ""));
+			for (index, kind) in params.split(", ").filter(|kind| !kind.is_empty()).enumerate() {
+				slots.insert(format!("{name}({index})"), kind.to_string());
+			}
+			slots.insert(format!("{name}()"), result.to_string());
+		} else if let Some((name, kind)) = line.rsplit_once(": ") {
+			slots.insert(name.to_string(), kind.to_string());
+		}
+	}
+	slots
+}
+
+/// The same slots, each of warp's kinds Rust's or a more general one: a node (empty) holds any value, a number of
+/// run-time kind (data) any number; a narrower kind would hold a value Rust's may not fit
+fn covers(
+	warp: &std::collections::BTreeMap<String, String>,
+	rust: &std::collections::BTreeMap<String, String>,
+) -> bool {
+	let general = |warp: &str, rust: &str| {
+		warp == rust || warp == "empty" || (warp == "data" && (rust == "int" || rust == "float"))
+	};
+	warp.len() == rust.len()
+		&& rust.iter().all(|(slot, kind)| warp.get(slot).is_some_and(|warp_kind| general(warp_kind, kind)))
+}
+
+/// The view of the program after every lowering pass and the kinds the Rust analyzer infers in it; None for a program
+/// refused or answered before code generation
+pub fn analyzed(code: &str) -> Option<(Node, Vec<String>)> {
+	let program = std::panic::catch_unwind(|| warp::pipeline::lower(code).ok()).ok()??;
+	Some((plain_view(&declared_types_shown(program.clone())), warp::analyzer::inferred_kinds(&program)))
+}
+
+/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
+fn declared_types_shown(node: Node) -> Node {
+	match node {
+		Node::Key(target, Op::Assign, value)
+			if let Node::Meta { node: name, data } = *target.clone()
+				&& matches!(*data, Node::Symbol(_)) =>
+		{
+			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
+		}
+		other => other.map_children(declared_types_shown),
+	}
+}
+
+/// The bridge every pass twin relies on: the view of each parsed source, made a node and viewed again, is itself
+pub fn bridge_differential() {
+	bridge_differential_of(plain_view)
+}
+
+/// The bridge with positions: a positioned node is the node, its position read by `n.line` and `n.column`
+pub fn positioned_bridge_differential() {
+	bridge_differential_of(positioned_plain_view)
+}
+
+fn bridge_differential_of(given: fn(&Node) -> Node) {
+	let cases = twin_sources(&[]).into_iter().map(|path| {
+		let parsed = parse(&std::fs::read_to_string(&path).unwrap());
+		Case::new(&path, view_json(&given(&parsed)), plain_view(&parsed))
+	});
+	report("view_of", &differences_of(cases, "walk", "view_of(node_of(json(argument)))"));
+}
+
+/// The emitter core's twin (card emits-wasm, notes/self_hosting.md step 15): every lowered program (pipeline::lower)
+/// goes to lib/compiler/emitter.warp `wasm_module` as a node, the module it gives runs, and its value is compared with
+/// the program's value run by Rust. A program outside the core (a text "outside the core: …") is no case; fails
+/// unless at least `least` programs are inside it. Returns the paths inside the core
+pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
+	let cases = in_parallel(paths.to_vec(), |path| {
+		let text = std::fs::read_to_string(path).ok()?;
+		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
+		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
+	});
+	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}.json", std::process::id()));
+	let runtime_source = std::fs::read_to_string(Path::new(COMPILER_FOLDER).join(RUNTIME_WORDS)).unwrap();
+	let lowered_runtime = warp::pipeline::lower(&runtime_source).expect("lib/compiler/runtime.warp lowers");
+	std::fs::create_dir_all(INPUT_FOLDER).unwrap();
+	std::fs::write(&runtime, view_json(&plain_view(&lowered_runtime))).unwrap();
+	let setup = format!("runtime_words = node_of(json(read(\"{}\")))", runtime.display());
+	let twin = TwinProgram::with_setup("emitter", &setup, "wasm_module(node_of(json(argument)), runtime_words)");
+	let (mut inside, mut differing, mut refusals) = (vec![], vec![], std::collections::BTreeMap::new());
+	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
+		let arguments: Vec<&str> = cases.iter().map(|(_, view, _)| view.as_str()).collect();
+		for ((path, _, text), module) in cases.iter().zip(twin.values(&arguments)) {
+			if let Some(refusal) = module.text_value().filter(|text| text.starts_with(OUTSIDE_THE_CORE)) {
+				*refusals.entry(refusal).or_insert(0) += 1;
+				continue;
+			}
+			inside.push(path.clone());
+			let (warp_value, warp_output) = with_captured_stdout(|| module_value(&module));
+			let (rust_value, rust_output) = with_captured_stdout(|| warp::wasm_emitter::eval(text).drop_meta().clone());
+			if !same_value(&warp_value, &rust_value) || warp_output != rust_output {
+				let shown = |value: &Node, output: &str| format!("{} printing {output:?}", value.serialize());
+				differing.push((path.clone(), shown(&warp_value, &warp_output), shown(&rust_value, &rust_output)));
+			}
+		}
+	}
+	if std::env::var_os(REFUSALS_REPORT).is_some() {
+		let mut ranked: Vec<_> = refusals.into_iter().collect();
+		ranked.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+		eprintln!("{} inside; outside the core:", inside.len());
+		ranked.iter().for_each(|(refusal, count)| eprintln!("{count:5} {refusal}"));
+	}
+	let _ = std::fs::remove_file(&runtime);
+	report("wasm_module", &differing);
+	assert!(
+		inside.len() >= least,
+		"only {} programs inside the emitter core, {least} expected: {inside:?}",
+		inside.len()
+	);
+	inside
+}
+
+/// The runtime words emitter.warp compiles into a module, lowered like a program, in COMPILER_FOLDER
+const RUNTIME_WORDS: &str = "runtime.warp";
+/// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
+const OUTSIDE_THE_CORE: &str = "outside the core";
+/// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first
+const REFUSALS_REPORT: &str = "EMITTER_REFUSALS";
+
+/// The value main of a module given as a list of bytes returns (its prints through WASI), or the failure as a text
+fn module_value(module: &Node) -> Node {
+	let Node::List(items, ..) = module.drop_meta() else {
+		return Node::text(&format!("no module: {}", module.serialize()));
+	};
+	let byte = |item: &Node| match item.drop_meta() {
+		Node::Number(Number::Int(byte)) => u8::try_from(*byte).ok(),
+		_ => None,
+	};
+	let bytes: Option<Vec<u8>> = items.iter().map(byte).collect();
+	let wasi = warp::run::wasm_reader::Imports { wasi: true, ..Default::default() };
+	match bytes.map(|bytes| warp::run::wasm_reader::read_bytes_with_imports(&bytes, wasi)) {
+		Some(Ok(value)) => value,
+		Some(Err(failure)) => Node::text(&format!("{MODULE_FAILED}{failure}")),
+		None => Node::text("a module byte beyond 0..255"),
+	}
+}
+
+const MODULE_FAILED: &str = "module failed: ";
+
+/// Equal values; a float equals another number of exactly its value (the core's 3.5 * 2 is 7.0, Rust's 7); a failure on
+/// both sides is the same outcome: emitter.warp's module traps where Rust's gives its error (an index out of range,
+/// probes/readme/oob.warp; a million nested calls, probes/functions/deep_recursion.warp)
+fn same_value(warp_value: &Node, rust_value: &Node) -> bool {
+	match (warp_value, rust_value) {
+		(Node::Text(failure), Node::Error(_)) => failure.starts_with(MODULE_FAILED),
+		(Node::Number(a @ Number::Float(_)), Node::Number(b))
+		| (Node::Number(a), Node::Number(b @ Number::Float(_))) => f64::from(*a) == f64::from(*b),
+		_ => warp_value == rust_value,
+	}
+}
+
+/// The checked share of the sources without the dropped ones, which DROPPED_NOTES must name; TWIN_ONLY=<path suffix>
+/// checks only the sources ending so (one source while fixing a twin)
+pub fn twin_sources(dropped: &[&str]) -> Vec<PathBuf> {
+	twin_sources_of(&sources(), dropped)
+}
+
+fn twin_sources_of(paths: &[PathBuf], dropped: &[&str]) -> Vec<PathBuf> {
+	let notes = std::fs::read_to_string(DROPPED_NOTES).unwrap_or_default();
+	let unexplained: Vec<&&str> = dropped.iter().filter(|source| !notes.contains(**source)).collect();
+	assert!(unexplained.is_empty(), "dropped sources not named in {DROPPED_NOTES}: {unexplained:?}");
+	let kept = |path: &PathBuf| !dropped.iter().any(|source| path.ends_with(source));
+	match std::env::var("TWIN_ONLY") {
+		Ok(only) => paths.iter().filter(|path| path.ends_with(&only)).cloned().collect(),
+		Err(_) => checked_share(paths).into_iter().filter(kept).collect(),
+	}
 }
 
 /// A value with each one-character text as its character: warp compares `"a" == 'a'`, holds a literal `"a"` as the
@@ -203,67 +462,65 @@ fn as_compared(value: Node) -> Node {
 	}
 }
 
-/// `word(argument)` for the arguments, in one program; when it fails, each half alone, down to a single argument that
-/// gives the warp error as its value (so it differs from the Rust twin instead of hiding the other sources)
-fn warp_values(part: &str, word: &str, arguments: &[String]) -> Vec<Node> {
-	match warp_values_at_once(part, word, arguments) {
-		Ok(values) => values,
-		Err(failure) if arguments.len() == 1 => vec![Node::text(&format!("warp failed: {failure}"))],
-		Err(_) => {
-			let (first, second) = arguments.split_at(arguments.len() / 2);
-			let mut values = warp_values(part, word, first);
-			values.extend(warp_values(part, word, second));
-			values
+/// The program of a differential: `call` of each argument of the input file, one per line (JSON and paths have no
+/// newline), compiled once and run for each chunk of arguments and each half of a failing one
+struct TwinProgram {
+	module: Result<warp::pipeline::CompiledModule, Node>,
+	input: PathBuf,
+}
+
+impl TwinProgram {
+	fn new(part: &str, call: &str) -> Self {
+		Self::with_setup(part, "", call)
+	}
+
+	/// As new, with `setup` run once before the calls (a value every call shares)
+	fn with_setup(part: &str, setup: &str, call: &str) -> Self {
+		static DIFFERENTIALS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+		let number = DIFFERENTIALS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		std::fs::create_dir_all(INPUT_FOLDER).unwrap();
+		let input = Path::new(INPUT_FOLDER).join(format!("{part}-{}-{number}.txt", std::process::id()));
+		let program = format!(
+			"use \"{COMPILER_FOLDER}/{part}.warp\"\n{setup}\ntwin_case(argument: text) := {call}\ntwin_values = []\n\
+			 for argument in read(\"{}\").split(\"\\n\") {{ twin_values += [twin_case(argument)] }}\ntwin_values",
+			input.display()
+		);
+		TwinProgram { module: warp::pipeline::compile(&program), input }
+	}
+
+	/// The call's value for each argument; when the program fails, each half alone, down to a single argument that
+	/// gives the warp error as its value (so it differs from the Rust twin instead of hiding the other sources)
+	fn values(&self, arguments: &[&str]) -> Vec<Node> {
+		match self.values_at_once(arguments) {
+			Ok(values) => values,
+			Err(failure) if arguments.len() == 1 => vec![Node::text(&format!("warp failed: {failure}"))],
+			Err(_) => {
+				let (first, second) = arguments.split_at(arguments.len() / 2);
+				let mut values = self.values(first);
+				values.extend(self.values(second));
+				values
+			}
+		}
+	}
+
+	fn values_at_once(&self, arguments: &[&str]) -> Result<Vec<Node>, String> {
+		assert!(arguments.iter().all(|argument| !argument.contains('\n')), "an argument is one line");
+		std::fs::write(&self.input, arguments.join("\n")).unwrap();
+		let value = match &self.module {
+			Ok(module) => warp::pipeline::run_module(module.clone()),
+			Err(failure) => failure.clone(),
+		};
+		match value.drop_meta() {
+			Node::List(values, ..) if values.len() == arguments.len() => Ok(values.clone()),
+			other => Err(other.serialize()),
 		}
 	}
 }
 
-fn warp_values_at_once(part: &str, word: &str, arguments: &[String]) -> Result<Vec<Node>, String> {
-	let calls: Vec<String> = arguments.iter().map(|argument| format!("{word}({argument})")).collect();
-	let program = format!("use \"{COMPILER_FOLDER}/{part}.warp\"\n[{}]", calls.join(",\n"));
-	let result = eval(&program);
-	match result.drop_meta() {
-		Node::List(values, ..) if values.len() == arguments.len() => Ok(values.clone()),
-		other => Err(other.serialize()),
+impl Drop for TwinProgram {
+	fn drop(&mut self) {
+		let _ = std::fs::remove_file(&self.input);
 	}
-}
-
-/// A node view as JSON (ø is null): the warp twin reads it with `json(…)`, data the host parses, where the same view
-/// as a warp literal is code to compile (a 100 KB chunk of sources took 2.4 GB in a debug build)
-pub fn view_json(view: &Node) -> String {
-	match view {
-		Node::Text(text) => json_text(text),
-		Node::Char(character) => json_text(&character.to_string()),
-		Node::List(items, ..) => format!("[{}]", items.iter().map(view_json).collect::<Vec<_>>().join(", ")),
-		Node::Empty => "null".into(),
-		Node::True => "true".into(),
-		Node::False => "false".into(),
-		number => number.serialize(),
-	}
-}
-
-fn json_text(text: &str) -> String {
-	quoted(text, |character| character.is_control().then(|| format!("\\u{:04x}", character as u32)))
-}
-
-/// A text as a warp text literal: `${…}` would be a hole
-fn warp_text_literal(text: &str) -> String {
-	quoted(text, |character| (character == '$').then(|| "\\$".into()))
-}
-
-/// The text in double quotes, its quotes, backslashes, newlines, tabs and returns escaped, other characters by `extra`
-fn quoted(text: &str, extra: impl Fn(char) -> Option<String>) -> String {
-	let escaped: String = text
-		.chars()
-		.map(|character| match character {
-			'"' | '\\' => format!("\\{character}"),
-			'\n' => "\\n".into(),
-			'\t' => "\\t".into(),
-			'\r' => "\\r".into(),
-			other => extra(other).unwrap_or_else(|| other.to_string()),
-		})
-		.collect();
-	format!("\"{escaped}\"")
 }
 
 /// The text around its first character that differs from the other text

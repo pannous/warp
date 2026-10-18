@@ -265,12 +265,26 @@ fn first_unsaid_ordering(node: &Node, intervals: &HashSet<String>) -> Option<Dia
 		{
 			Some(unsaid_ordering(node, left, *op, right))
 		}
+		Node::Key(head, Op::Define | Op::Assign, body)
+			if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) =>
+		{
+			let outer = intervals.difference(&parameter_names(head)).cloned().collect();
+			first_unsaid_ordering(body, &outer)
+		}
 		Node::Key(left, _, right) => {
 			first_unsaid_ordering(left, intervals).or_else(|| first_unsaid_ordering(right, intervals))
 		}
 		Node::List(items, _, _) => items.iter().find_map(|item| first_unsaid_ordering(item, intervals)),
 		_ => None,
 	}
+}
+
+/// The parameters of a definition head `f(x, y: float)`: inside its body they shadow outer ± variables of that name
+fn parameter_names(head: &Node) -> HashSet<String> {
+	let Node::List(parameters, _, _) = head.drop_meta() else {
+		return HashSet::new();
+	};
+	parameters.iter().filter_map(crate::lowering::nodes::parameter_name).collect()
 }
 
 fn makes_intervals(program: &Node) -> bool {
@@ -308,13 +322,12 @@ fn interval_names(program: &Node) -> HashSet<String> {
 
 /// Known to be ± here: `6 ± 1`, a variable given one, arithmetic or a negation with one
 fn is_interval(node: &Node, names: &HashSet<String>) -> bool {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Key(_, Op::PlusMinus, _) => true,
 		Node::Symbol(name) => names.contains(name),
 		Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Neg, right) => {
 			is_interval(left, names) || is_interval(right, names)
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_interval(&items[0], names),
 		_ => false,
 	}
 }

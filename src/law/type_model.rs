@@ -442,8 +442,7 @@ impl Exporter {
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
 		program_node.visit(&mut |part| {
-			words_used |=
-				[COUNT_WORD, IN_WORD].iter().chain(&crate::analyzer::COUNTING_WORDS).any(|word| part.is_symbol(word))
+			words_used |= part.is_symbol(IN_WORD) || part.symbol_name().is_some_and(crate::analyzer::is_counting_word)
 		});
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
@@ -621,7 +620,7 @@ impl Exporter {
 		if annotation.is_none() && is_evident_bool(value) {
 			self.bool_names.push(name.clone());
 		}
-		if matches!(unwrapped(value), Node::Key(_, Op::Arrow, _)) {
+		if matches!(value.ungrouped(), Node::Key(_, Op::Arrow, _)) {
 			self.lambda_names.push(name.clone());
 		}
 		if map_entries(value).is_some() {

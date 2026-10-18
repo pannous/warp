@@ -7,8 +7,8 @@
 // @stage(compute) syntax are compute.toys' engine, which warp does not have: compute_toy says so
 use regex
 
-// compute.toys' prelude (github compute-toys/compute.toys lib/engine/index.ts getPrelude): its type aliases, its
-// Time and Mouse, keyDown; each read from paint's built-in values
+// compute.toys' prelude (github compute-toys/compute.toys lib/engine/index.ts getPrelude, MIT © 2023 compute.toys):
+// its type aliases, its Time and Mouse, keyDown; each read from paint's built-in values
 compute_toys_prelude = "
 alias int = i32;
 alias uint = u32;
@@ -69,7 +69,8 @@ fn keyDown(keycode: uint) -> bool {
 }
 "
 
-// The fragment main: compute.toys' uniforms from paint's values, the kernel for this pixel, its color sRGB-encoded.
+// The fragment main: compute.toys' uniforms from paint's values (mouse.zoom from the wheel, 5% a step, as compute.toys
+// zooms on a wheel event), the kernel for this pixel, its color sRGB-encoded.
 // A fragment colors only its own pixel: a kernel storing elsewhere, as a mirror does ((x, height - 1 - y)), runs again
 // from where it stored, which for a mirror is the pixel that stores here. Any other kernel storing elsewhere (an
 // offset, several pixels in a loop) cannot run as a fragment: its pixels are magenta (0xFFFF00FF), loud, not wrong
@@ -77,7 +78,7 @@ compute_toys_main = "
 @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 	time = Time(values.time, 1.0 / 60.0, u32(values.frame));
 	let pointer = vec2i(values.mouse);
-	mouse = Mouse(pointer, 1.0, i32(values.mouse_down), pointer, vec2i(0));
+	mouse = Mouse(pointer, pow(1.05, values.mouse_wheel), i32(values.mouse_down), pointer, vec2i(0));
 	let here = vec2i(at.xy);
 	warp_run(here);
 	if (!warp_scattered && any(warp_where != here) && all(warp_where >= vec2i(0))) {

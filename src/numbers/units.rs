@@ -15,7 +15,7 @@ pub use quantity_arithmetic::*;
 
 pub mod static_units;
 
-use crate::extensions::reals::Rational;
+use crate::extensions::reals::{superscript, Rational};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::fmt;
@@ -496,13 +496,11 @@ fn with_written_amount(node: Node) -> Node {
 				_ => Node::List(items, Bracket::None, Separator::Space),
 			}
 		}
-		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing)
-			if nothing.is_empty_node() && powered_conversion(&conversion, op).is_some() =>
-		{
+		Node::Key(conversion, Op::Pow, exponent) if powered_conversion(&conversion, &exponent).is_some() => {
 			let Node::Key(quantity, Op::As, unit) = conversion.drop_meta().clone() else {
 				unreachable!("a powered conversion is an `as`")
 			};
-			Node::Key(quantity, Op::As, Box::new(Node::Key(unit, op, nothing)))
+			Node::Key(quantity, Op::As, Box::new(Node::Key(unit, Op::Pow, exponent)))
 		}
 		other => other,
 	}
@@ -720,7 +718,7 @@ fn run_time_tolerance(value: &Node, spread: &Node) -> Result<Node, String> {
 
 /// `5 m/s` as its amount and unit text: a number times units, then more units multiplied or divided
 fn unit_literal(node: &Node) -> Option<(Node, String)> {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Key(amount, Op::Mul, unit) if matches!(amount.drop_meta(), Node::Number(_)) => {
 			Some((amount.drop_meta().clone(), unit_text(unit)?))
 		}
@@ -729,7 +727,6 @@ fn unit_literal(node: &Node) -> Option<(Node, String)> {
 			let joint = if *op == Op::Mul { "·" } else { "/" };
 			Some((amount, format!("{written}{joint}{}", unit_text(unit)?)))
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => unit_literal(&items[0]),
 		_ => None,
 	}
 }
@@ -738,7 +735,9 @@ fn unit_literal(node: &Node) -> Option<(Node, String)> {
 fn unit_text(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) if is_unit(name) => Some(name.clone()),
-		Node::Key(base, power @ (Op::Square | Op::Cube), _) => Some(format!("{}{power}", unit_text(base)?)),
+		Node::Key(base, Op::Pow, exponent) => {
+			Some(format!("{}{}", unit_text(base)?, superscript(i64::from(whole_exponent(exponent)?))))
+		}
 		_ => None,
 	}
 }
@@ -937,7 +936,7 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 	if !(needs_quantities(&program) || program.mentions_any(&[NOW_WORD, TIME_WORD])) {
 		return program;
 	}
-	let bound = crate::system_values::assigned_symbols(&program);
+	let bound = crate::program_names::Bindings::of(&program).bound();
 	let constants = constant_quantities(&program);
 	let clock = !bound.contains(NOW_WORD);
 	let time_is_the_type = !bound.contains(TIME_WORD);
@@ -1088,14 +1087,15 @@ fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
 	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(duration, message)])
 }
 
-/// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
+/// A constant duration in milliseconds, to the nearest one: `1000 ms`, `2 s`, `1 min`, `2 seconds`, `16.7 ms` (17), a
+/// duration of the time module; the timers and sleep count whole milliseconds
 pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	if let Node::Data(data) = node.drop_meta() {
 		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
 		Ok(Some((seconds, signature))) if signature == [(Dimension::duration(), 1)] => {
-			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
+			nearest(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
 		}
 		_ => None,
 	}
@@ -1152,6 +1152,14 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 			}
 		}
 	};
+	// `data($m + 0)`: a hole names a variable, also in the arm it binds for (card unit-hole-name)
+	if let Some(code) = crate::lowering::blocks::quoted_data(node) {
+		code.visit(&mut |part| {
+			if let Some(name) = crate::lowering::switch::hole_name(part) {
+				add_unit(&Node::Symbol(name.to_string()))
+			}
+		});
+	}
 	let mut add_parameters = |head: &Node| match head.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| match item.drop_meta() {
 			Node::Key(name, Op::Colon, _) => add_unit(name),

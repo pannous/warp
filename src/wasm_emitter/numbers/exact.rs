@@ -12,8 +12,7 @@
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
-use super::super::WasmGcEmitter;
-use crate::wasm_emitter::layout::BYTE;
+use super::super::{WasmGcEmitter, NEW_TEXT_OF, TEXT_PIECE};
 use num_bigint::BigInt;
 use num_traits::One;
 use wasm_encoder::*;
@@ -24,20 +23,20 @@ pub const MAX_SHIFT_COUNT: i64 = 1 << 16;
 /// exact_text(x): the text of any exact number, as the host prints it (`2.5`, `1/3`, `-∞`, big integers in full)
 pub const EXACT_TEXT: &str = "exact_text";
 /// decimal_text(x), `x as decimal`: an exact ratio in decimal digits, each repeating one overlined: 1/6 is 0.16̅
-/// (card repeating-decimals); a period longer than MAX_PERIOD digits stays the ratio's text
+/// (card repeating-decimals); a period longer than 1000 digits stays the ratio's text (lib/prelude.warp writes it)
 pub const DECIMAL_TEXT: &str = "decimal_text";
 pub const DECIMAL_WORD: &str = "decimal";
+/// lib/prelude.warp's decimal_text, by its prelude name; the program loads it where it writes `as decimal` (implied_words)
+const DECIMAL_TEXT_WORD: &str = "prelude·decimal_text";
+const DECIMAL_TEXT_NAME: &str = "decimal_text";
 /// `a % b` and `a // b` of two Ints beyond the fixnum fast path (big_int.rs emit_int_op)
 pub const INT_MOD: &str = "int_mod";
 pub const INT_EUCLID_DIV: &str = "int_euclid_div";
 /// Makes every ratio of a module: without it a module holds none
 pub const RATIO_NEW: &str = "ratio_new";
-const MAX_PERIOD: i32 = 1000;
 /// The bits int_and, int_or and int_xor combine per step of an Int beyond the fixnums
 const BIT_CHUNK: i64 = 32;
 const BIT_CHUNK_MASK: i64 = (1 << BIT_CHUNK) - 1;
-/// U+0305 COMBINING OVERLINE in UTF-8, after each repeating digit
-const OVERLINE_BYTES: [u8; 2] = [0xCC, 0x85];
 const INT_TEXT: &str = "int_text";
 /// int_gcd(a, b): every ratio is normalized by one
 pub(crate) const INT_GCD: &str = "int_gcd";
@@ -57,6 +56,11 @@ const SMALL_DENOMINATOR: u32 = 7;
 const SMALL_LOCALS: usize = 6;
 /// A ratio whose denominator has no other prime factors is a terminating decimal
 const DECIMAL_PRIMES: [i64; 2] = [2, 5];
+
+/// The prelude word that writes `x as decimal`, for modules IMPLIED_WORDS: the cast calls it, the program does not
+pub(crate) fn implied_word(node: &crate::node::Node) -> Option<&'static str> {
+	node.symbol_name().is_some_and(|name| name.eq_ignore_ascii_case(DECIMAL_WORD)).then_some(DECIMAL_TEXT_NAME)
+}
 
 impl WasmGcEmitter {
 	/// Decimal literal as the exact value of its shortest round-trip digits: `0.1` → 1/10
@@ -837,23 +841,21 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(EXACT_TEXT) {
 			return;
 		}
-		self.emit_text_heap_global();
 		let (i64t, i32t, node_ref) = (ValType::I64, ValType::I32, ValType::Ref(self.node_ref(false)));
-		let constant = |s: &mut Self, text: &str| s.allocate_string(text);
+		let constant = |s: &mut Self, text: &str| s.string_table.literal(text);
 		let [minus, dot, slash, empty, infinity, negative_infinity, not_a_number] =
 			["-", ".", "/", "", "∞", "-∞", "NaN"].map(|text| constant(self, text));
-		let push_text = |s: &Self, f: &mut Function, (address, length): (u32, u32)| {
-			Self::emit_list(f, &[I::I32Const(address as i32), I::I32Const(length as i32)]);
-			s.call(f, "new_text");
+		let push_text = |s: &Self, f: &mut Function, literal: (u32, u32)| {
+			s.emit_constant_text(f, literal);
 		};
 
 		// int_text(n): sign, then the digits written from the last one back, a chunk of 18 per big division
 		// (card out-fuel), into room for LIMB_DIGITS per limb; the text starts at the first digit written.
-		// locals: negative, digits, address, length, chunk, last (the chunk is the value's top one)
-		let locals = vec![i32t, i32t, i32t, i32t, i64t, i32t];
-		let big_int = self.type_manager.big_int_type;
+		// locals: negative, digits, bytes, length, chunk, last (the chunk is the value's top one)
+		let locals = vec![i32t, i32t, self.text_ref_nullable(), i32t, i64t, i32t];
+		let (big_int, text_type) = (self.type_manager.big_int_type, self.type_manager.text_type);
 		self.runtime_function(INT_TEXT, vec![i64t], vec![node_ref], locals, |s, f| {
-			let (value, negative, digits, address, length, chunk, last) = (0, 1, 2, 3, 4, 5, 6);
+			let (value, negative, digits, bytes, length, chunk, last) = (0, 1, 2, 3, 4, 5, 6);
 			s.is_negative(f, value);
 			Self::emit_list(f, &[I::LocalTee(negative), I::If(BlockType::Empty)]);
 			s.negate_local(f, value);
@@ -863,9 +865,9 @@ impl WasmGcEmitter {
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::StructGet { struct_type_index: big_int, field_index: BIG_INT_LIMBS }, I::ArrayLen,
-				I::I32Const(LIMB_DIGITS), I::I32Mul, I::I32Const(2), I::I32Add, I::LocalTee(digits), I::LocalSet(length),
+				I::I32Const(LIMB_DIGITS), I::I32Mul, I::I32Const(2), I::I32Add, I::LocalTee(digits), I::LocalTee(length),
+				I::ArrayNewDefault(text_type), I::LocalSet(bytes),
 			]);
-			s.emit_text_allocation(f, length, address);
 			Self::emit_list(f, &[I::Loop(BlockType::Empty), I::LocalGet(value), I::I64Const(CHUNK)]);
 			s.call(f, "int_cmp");
 			#[rustfmt::skip]
@@ -887,9 +889,9 @@ impl WasmGcEmitter {
 					I::LocalSet(value),
 				I::End,
 				I::Loop(BlockType::Empty),
-					I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address), I::I32Add,
+					I::LocalGet(bytes), I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits),
 					I::LocalGet(chunk), I::I64Const(DECIMAL_BASE), I::I64RemU, I::I32WrapI64,
-					I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE),
+					I::I32Const(b'0' as i32), I::I32Add, I::ArraySet(text_type),
 					I::LocalGet(chunk), I::I64Const(DECIMAL_BASE), I::I64DivU, I::LocalTee(chunk),
 					// the top chunk stops at 0, a lower one at its leading 1
 					I::I64Const(1), I::LocalGet(last), I::I64ExtendI32U, I::I64Sub, I::I64GtU, I::BrIf(0),
@@ -897,13 +899,11 @@ impl WasmGcEmitter {
 				I::LocalGet(last), I::I32Eqz, I::BrIf(0),
 				I::End,
 				I::LocalGet(negative), I::If(BlockType::Empty),
-					I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address), I::I32Add,
-					I::I32Const(b'-' as i32), I::I32Store8(BYTE),
+					I::LocalGet(bytes), I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits),
+					I::I32Const(b'-' as i32), I::ArraySet(text_type),
 				I::End,
-				I::LocalGet(address), I::LocalGet(digits), I::I32Add,
-				I::LocalGet(length), I::LocalGet(digits), I::I32Sub,
 			]);
-			s.call(f, "new_text");
+			s.emit_text_piece(f, (bytes, digits, length));
 		});
 
 		// exact_text(x); locals: numerator, denominator, rest, scale, fraction digits
@@ -995,11 +995,12 @@ impl WasmGcEmitter {
 				s.call(f, "int_add");
 				s.call(f, INT_TEXT);
 				f.instruction(&I::LocalSet(fraction));
-				s.emit_text_field(f, fraction, 0);
-				Self::emit_list(f, &[I::I32Const(1), I::I32Add]);
-				s.emit_text_field(f, fraction, 1);
-				Self::emit_list(f, &[I::I32Const(1), I::I32Sub]);
-				s.call(f, "new_text");
+				s.emit_text_bytes(f, fraction);
+				f.instruction(&I::I32Const(1));
+				s.emit_text_bytes(f, fraction);
+				Self::emit_list(f, &[I::ArrayLen, I::I32Const(1), I::I32Sub]);
+				s.call(f, TEXT_PIECE);
+				s.call(f, NEW_TEXT_OF);
 				concat(f);
 			},
 		);
@@ -1007,132 +1008,25 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(DECIMAL_TEXT) {
 			return;
 		}
-		// decimal_text(x): the digits before the period (as many as the larger count of 2s and 5s in the denominator),
-		// then the period (the order of 10 modulo the rest of the denominator), written by long division
-		let locals = vec![i64t, i64t, i64t, i32t, i32t, i32t, i64t, i32t, i32t, i32t, nullable];
-		self.runtime_function(DECIMAL_TEXT, vec![i64t], vec![node_ref], locals, |s, f| {
-			let (value, numerator, denominator, rest, before_period, fives, period, power, length, address, at, prefix) =
-				(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
-			let concat = |f: &mut Function| s.call(f, crate::wasm_emitter::text::text_builtins::TEXT_CONCAT);
-			let exact_text_if = |f: &mut Function| {
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(value)]);
-				s.call(f, EXACT_TEXT);
-				Self::emit_list(f, &[I::Return, I::End]);
-			};
-			// an integer, ±∞ and NaN, and a terminating or too long decimal: as exact_text writes them
+		// decimal_text(x), written in warp: lib/prelude.warp decimal_text(numerator, denominator), called late with a
+		// ratio's parts; an integer, ±∞ and NaN as exact_text writes them
+		let late = self.late_call(DECIMAL_TEXT_WORD, vec![i64t, i64t], vec![node_ref]);
+		self.runtime_function(DECIMAL_TEXT, vec![i64t], vec![node_ref], vec![i64t], |s, f| {
+			let (value, denominator) = (0, 1);
 			f.instruction(&I::LocalGet(value));
 			s.call(f, "is_ratio");
-			f.instruction(&I::I32Eqz);
-			exact_text_if(f);
-			f.instruction(&I::LocalGet(value));
-			s.call(f, "exact_numerator");
-			Self::emit_list(f, &[I::LocalSet(numerator), I::LocalGet(value)]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(value)]);
 			s.call(f, "exact_denominator");
-			Self::emit_list(f, &[I::LocalTee(denominator), I::LocalSet(rest), I::LocalGet(denominator), I::I64Eqz]);
-			exact_text_if(f);
-			for (prime, count) in DECIMAL_PRIMES.into_iter().zip([before_period, fives]) {
-				s.divide_out(f, rest, prime, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
-			}
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(before_period), I::LocalGet(fives), I::LocalGet(before_period), I::LocalGet(fives),
-				I::I32GtS, I::Select, I::LocalSet(before_period),
-				I::LocalGet(rest), I::I64Const(1), I::I64Eq,
+				I::LocalTee(denominator), I::I64Eqz, I::I32Eqz, I::If(BlockType::Empty),
+					I::LocalGet(value),
 			]);
-			exact_text_if(f);
-			// the period: the first power of ten that is 1 modulo the rest
-			Self::emit_list(f, &[I::I64Const(DECIMAL_BASE), I::LocalGet(rest)]);
-			s.call(f, "int_rem");
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalSet(power),
-				I::I32Const(1), I::LocalSet(period),
-				I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-						I::LocalGet(power), I::I64Const(1), I::I64Eq, I::BrIf(1),
-						I::LocalGet(period), I::I32Const(MAX_PERIOD), I::I32GeU,
-			]);
-			exact_text_if(f);
-			Self::emit_list(f, &[I::LocalGet(power), I::I64Const(DECIMAL_BASE)]);
-			s.call(f, "int_mul");
-			f.instruction(&I::LocalGet(rest));
-			s.call(f, "int_rem");
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalSet(power),
-				I::LocalGet(period), I::I32Const(1), I::I32Add, I::LocalSet(period),
-				I::Br(0),
-				I::End,
-				I::End,
-			]);
-			// the sign and the whole part
-			s.is_negative(f, numerator);
-			f.instruction(&I::If(BlockType::Result(node_ref)));
-			s.negate_local(f, numerator);
-			push_text(s, f, minus);
-			f.instruction(&I::Else);
-			push_text(s, f, empty);
-			Self::emit_list(f, &[I::End, I::LocalGet(numerator), I::LocalGet(denominator)]);
-			s.call(f, "int_quot");
-			s.call(f, INT_TEXT);
-			concat(f);
-			push_text(s, f, dot);
-			concat(f);
-			f.instruction(&I::LocalSet(prefix));
-			// the fraction's digits, one byte each and the period's followed by the overline's two
-			Self::emit_list(f, &[I::LocalGet(numerator), I::LocalGet(denominator)]);
-			s.call(f, "int_rem");
-			let overlined_digit_bytes = 1 + OVERLINE_BYTES.len() as i32;
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalSet(rest),
-				I::LocalGet(before_period), I::LocalGet(period), I::I32Const(overlined_digit_bytes), I::I32Mul,
-				I::I32Add, I::LocalSet(length),
-			]);
-			s.emit_text_allocation(f, length, address);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(address), I::LocalSet(at),
-				I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-						I::LocalGet(before_period), I::LocalGet(period), I::I32Or, I::I32Eqz, I::BrIf(1),
-						I::LocalGet(rest), I::I64Const(DECIMAL_BASE),
-			]);
-			s.call(f, "int_mul");
-			Self::emit_list(f, &[I::LocalSet(rest), I::LocalGet(at), I::LocalGet(rest), I::LocalGet(denominator)]);
-			s.call(f, "int_quot");
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::I32WrapI64, I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE),
-				I::LocalGet(rest), I::LocalGet(denominator),
-			]);
-			s.call(f, "int_rem");
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalSet(rest),
-				I::LocalGet(at), I::I32Const(1), I::I32Add, I::LocalSet(at),
-				I::LocalGet(before_period), I::If(BlockType::Empty),
-					I::LocalGet(before_period), I::I32Const(1), I::I32Sub, I::LocalSet(before_period),
-				I::Else,
-			]);
-			for byte in OVERLINE_BYTES {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(at), I::I32Const(byte as i32), I::I32Store8(BYTE),
-					I::LocalGet(at), I::I32Const(1), I::I32Add, I::LocalSet(at),
-				]);
-			}
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(period), I::I32Const(1), I::I32Sub, I::LocalSet(period),
-				I::End,
-				I::Br(0),
-				I::End,
-				I::End,
-				I::LocalGet(prefix), I::RefAsNonNull,
-			]);
-			s.emit_new_text(f, address, length);
-			concat(f);
+			s.call(f, "exact_numerator");
+			f.instruction(&I::LocalGet(denominator));
+			Self::emit_late_call(f, &late);
+			Self::emit_list(f, &[I::Return, I::End, I::End, I::LocalGet(value)]);
+			s.call(f, EXACT_TEXT);
 		});
 	}
 

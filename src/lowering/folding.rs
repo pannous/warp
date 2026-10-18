@@ -343,7 +343,8 @@ pub fn specialise_constant_arguments(program: Node) -> Node {
 	definitions(&program, &mut found);
 	let definitions: HashMap<String, Definition> = found
 		.into_iter()
-		.filter(|definition| pure.contains(&definition.name))
+		// alike keeps its calls whole: the emitter compares two plain numbers of one inline (library_words ALIKE_FUNCTION)
+		.filter(|definition| pure.contains(&definition.name) && definition.name != crate::library_words::ALIKE_FUNCTION)
 		.map(|definition| (definition.name.clone(), definition))
 		.collect();
 	if definitions.is_empty() {
@@ -364,12 +365,7 @@ pub fn specialise_constant_arguments(program: Node) -> Node {
 		})
 		.map(|(_, definition)| definition.clone())
 		.collect();
-	match rewritten {
-		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List([variants, items].concat(), Bracket::None, separator)
-		}
-		single => Node::List([variants, vec![single]].concat(), Bracket::None, Separator::Semicolon),
-	}
+	crate::lowering::nodes::with_statements_first(rewritten, variants)
 }
 
 struct Specialiser {

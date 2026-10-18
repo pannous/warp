@@ -1,6 +1,7 @@
 //! Loops: for-in, C-style for, while/until, `n times`
 
 use super::*;
+use crate::warp_parser::context::Context;
 
 /// The words an operand may start counting with: `thrice {…}` is `3 times {…}`
 const COUNT_WORDS: [(&str, i64); 3] = [("once", 1), ("twice", 2), ("thrice", 3)];
@@ -10,9 +11,8 @@ impl WarpParser {
 	/// The iterable of a for header and the word that opens the body: `:`, `do` or none.
 	/// In the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
 	fn for_iterable_and_body_word(&mut self) -> (Node, Option<&'static str>) {
-		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
-		self.in_for_header = outer_header;
+		let header = Context { in_for_header: true, equals_compares: false, ..self.context };
+		let iterable = self.within(header, Self::parse_iterable);
 		self.skip_spaces();
 		let body_word =
 			if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
@@ -122,11 +122,7 @@ impl WarpParser {
 					}
 				},
 			};
-			return Some(Node::List(
-				vec![Symbol("for".to_string()), iterable, as_block(body)],
-				Bracket::None,
-				Separator::Space,
-			));
+			return Some(Node::List(vec![Symbol("for".to_string()), iterable, body], Bracket::None, Separator::Space));
 		};
 		// `for pi in xs` binds no name, as `pi = 4` assigns none (P130, card library-word)
 		if let Symbol(name) = variable.drop_meta() {
@@ -295,11 +291,6 @@ impl WarpParser {
 			return while_do(rhs, body);
 		}
 
-		if let Some((condition, body)) = split_trailing_block(&rhs, true) {
-			// `{}` parses as ø
-			return while_do(condition, body);
-		}
-
 		if let Some(body) = self.indented_lines_below() {
 			self.skip_end_line(); // Ruby's `while c` … `end`
 			return while_do(rhs, body);
@@ -327,7 +318,11 @@ impl WarpParser {
 	/// `twice: …` stays a key and `twice{a: 1}`, a block of `key: value` pairs, a tag; a function named so (`def twice`),
 	/// a member (`p.twice`) and a binding of the word in scope keep it, the binding asked loudly
 	pub(crate) fn try_parse_count_word(&mut self) -> Option<Node> {
-		if self.options.data_mode || self.in_data_literal || self.after_function_keyword || self.prev_char() == '.' {
+		if self.options.data_mode
+			|| self.context.in_data_literal
+			|| self.after_function_keyword
+			|| self.prev_char() == '.'
+		{
 			return None;
 		}
 		let (word, count) = COUNT_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word))?;
@@ -380,7 +375,10 @@ impl WarpParser {
 		let after =
 			(TIMES_WORD.len()..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(TIMES_WORD.len());
 		let next = self.peek_char(after);
-		next.is_ascii_digit() || matches!(next, '"' | '\'') || self.is_identifier_start(after)
+		next.is_ascii_digit()
+			|| matches!(next, '"' | '\'')
+			|| self.is_identifier_start(after)
+			|| self.is_hole_start(after)
 	}
 
 	/// `n times {body}`, `n times: body`, `n times [x]`, `n times "ab"`: the phrase [n times operand] as written, which
@@ -389,13 +387,12 @@ impl WarpParser {
 		self.skip_spaces();
 		let operand = match self.current_char() {
 			'{' | '[' => self.parse_atom(),
-			':' => {
-				self.advance();
-				as_block(self.with_equals_comparing(false, |parser| parser.parse_expr(0)))
-			}
+			// `3 times: print it` runs the rest of the line, or the lines indented below
+			':' => as_block(self.with_equals_comparing(false, |parser| parser.colon_body(":"))),
 			quote_or_letter
 				if matches!(quote_or_letter, '"' | '\'')
 					|| self.is_identifier_start(0)
+					|| self.is_hole_start(0)
 					|| quote_or_letter.is_ascii_digit() =>
 			{
 				self.parse_atom()

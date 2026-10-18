@@ -4,8 +4,8 @@ use sound
 
 tempo = 110
 loop{
-bass = go { melody [C3 G2 A2 F2] each: 1 beat }   // a voice of its own
-drum = go { melody [C5 G5 A5 F5] each: 1/8 beat }   // a voice of its own
-melody [E4 G4 C5 B4 A4 C5 F4 A4] each: 1/2 beat    // starts together with the bass
+bass = go { melody [C3 G2 A2 F2] each: beat 1 }   // a voice of its own
+drum = go { melody [C5 G5 A5 F5] each: beat(1/8) }   // a voice of its own
+melody [E4 G4 C5 B4 A4 C5 F4 A4] each: beat(1/2)    // starts together with the bass
 tempo*=1.05
 }

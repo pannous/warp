@@ -1,4 +1,5 @@
 // card data-quoting: `data` takes the whole expression after it, as text it reads as written
+use crate::common::fails_with;
 use crate::is;
 
 #[test]
@@ -34,9 +35,13 @@ fn data_in_a_list_reads_as_written() {
 	is!("xs = [data a or b, 3]; string xs", "[a or b 3]");
 }
 
-#[test] // a variable named data is read: no prefix quotes what follows it (card counting-sort)
+#[test] // data is a keyword (user, 2026-10-17, card data-reserved; was card counting-sort's variable named data)
 fn a_variable_named_data_is_no_prefix() {
-	is!("data=[4 2 2]; data where it == 2", warp::ints(vec![2, 2]));
-	is!("data=[4 2 2]; n=0; for x in data { n += x }; n", 8);
-	is!("data = [4 2 2 8 3 3 1]\nresult = []\nfor v in 1 to 8 {\n\tmatches = [x for x in data where x == v]\n\tc = #matches\n\tj = 0\n\twhile j < c {\n\t\tresult += [v]\n\t\tj += 1\n\t}\n}\nresult", warp::ints(vec![1, 2, 2, 3, 3, 4, 8]));
+	fails_with("data=[4 2 2]; data where it == 2", "data is a keyword");
+	fails_with("data = {key: 1}; data.key", "data is a keyword");
+	fails_with("f(data) := data + 1; f(2)", "data is a keyword");
+	fails_with("for data in [1, 2] { print data }", "data is a keyword");
+	is!("xs=[4 2 2]; xs where it == 2", warp::ints(vec![2, 2]));
+	is!("xs=[4 2 2]; n=0; for x in xs { n += x }; n", 8);
+	is!("xs = [4 2 2 8 3 3 1]\nresult = []\nfor v in 1 to 8 {\n\tmatches = [x for x in xs where x == v]\n\tc = #matches\n\tj = 0\n\twhile j < c {\n\t\tresult += [v]\n\t\tj += 1\n\t}\n}\nresult", warp::ints(vec![1, 2, 2, 3, 3, 4, 8]));
 }

@@ -41,7 +41,7 @@ const utf8 = new TextEncoder();
 // the system values of the pointer the page shares; without shared memory a running program cannot see it move (the
 // run blocks its Worker's messages), so it would wait for a finger forever (card abysmally-slow: the in-app browser
 // view of an iPad app painted nothing). A key held reads none there, as in the test suite's page
-const POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down"];
+const POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down", "mouse_wheel"];
 const NO_SHARED_POINTER = "this page has no shared memory (it is not cross-origin isolated, as in an app's built-in browser view), so a running program cannot follow the pointer: open the page in Safari, Chrome or Firefox";
 // the pointer the page shares (canvas.js pointerMessage) as the worker keeps it: self.pagePointer, read by system_value
 const sharedPointer = ({ buffer, names }) => ({ values: new Int32Array(buffer), names });
@@ -250,6 +250,7 @@ function buildValue(module, tree) {
 		return module.closure_rebuild(name, tree.captured === null ? null : buildValue(module, tree.captured));
 	}
 	if (tree.key) return module.new_key(buildValue(module, tree.key[0]), buildValue(module, tree.key[1]), BigInt(tree.kind) >> 8n);
+	if (tree.type) return module.new_type(buildValue(module, tree.type[0]), buildValue(module, tree.type[1]));
 	if (tree.items) return tree.items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, BigInt(tree.kind) >> 8n), null) ?? module.new_empty();
 	const kind = BigInt(tree.kind);
 	const payload = tree.data ?? {};
@@ -283,7 +284,7 @@ function buildValue(module, tree) {
 }
 
 // src/operators/codes.rs OP_CODES as written (Op::as_str), by the code a key carries above the kind bits
-const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "²", "³", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "/!", "/!="];
+const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "/!", "/!="];
 // the keys that are entries of an object; the others are operations
 const ENTRY_OPERATORS = ["", ":", "=", ":="];
 const ROUND_BRACKET = 2n; // src/wasm_emitter bracket info: Curly 0, Square 1, Round 2

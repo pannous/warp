@@ -281,7 +281,7 @@ pub fn eval_block_report(request: &Value) -> Value {
 }
 
 /// A value as the tree host.js buildValue builds in a module (the inverse of node_from_tree for the values a task or a
-/// block hands back); None for what has no constructor there yet (an error, a type)
+/// block hands back); None for what has no constructor there yet (an error)
 fn tree_of(node: &Node) -> Option<Value> {
 	// where it was written: `at` [line, column, comment], host.js builds it with node_at (tasks.rs TaskValue::Positioned)
 	if let Some((line, column, comment)) = node.written_at() {
@@ -292,6 +292,12 @@ fn tree_of(node: &Node) -> Option<Value> {
 	let kind = |kind: Kind| (kind as i64).to_string();
 	Some(match node.drop_meta() {
 		Node::Empty => json!({ "kind": kind(Kind::Empty), "data": null, "chain": [] }),
+		// a bool: the Int 1/0 marked BOOL_INFO, host.js builds it with new_bool (as TaskValue::Bool)
+		Node::True | Node::False => json!({
+			"kind": crate::type_kinds::BOOL_KIND.to_string(),
+			"data": { "int": if matches!(node.drop_meta(), Node::True) { "1" } else { "0" } },
+			"chain": []
+		}),
 		Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => {
 			json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] })
 		}
@@ -322,6 +328,8 @@ fn tree_of(node: &Node) -> Option<Value> {
 			let list_kind = (crate::wasm_emitter::list_info(bracket, separator) << KIND_BITS) | Kind::List as i64;
 			json!({ "kind": list_kind.to_string(), "items": items.iter().map(tree_of).collect::<Option<Vec<_>>>()? })
 		}
+		// a parsed `class P {…}` (host.js builds it with new_type, as src/host/tasks/values.rs TaskValue::Type)
+		Node::Type { name, body } => json!({ "kind": kind(Kind::TypeDef), "type": [tree_of(name)?, tree_of(body)?] }),
 		_ => return None,
 	})
 }

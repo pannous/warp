@@ -5,6 +5,8 @@ use super::*;
 pub(crate) const DECLARATION_KEYWORDS: [&str; 4] =
 	["let", "var", crate::words::GLOBAL_WORD, crate::stored_values::STORED_WORD];
 
+const ALIAS_KEYWORD: &str = "alias";
+
 pub(crate) fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword)
 		|| is_import_keyword(keyword)
@@ -36,12 +38,10 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Type { .. } => true,
 		Node::Key(_, Op::Assign | Op::Define, _) => true,
-		Node::Key(scope, Op::Colon, _) => {
-			matches!(scope.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword))
-		}
-		Node::List(items, _, _) if items.len() >= 2 => {
-			matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword) || is_declaration_keyword(keyword))
-		}
+		Node::Key(scope, Op::Colon, _) => scope.symbol_name().is_some_and(is_declaration_keyword),
+		Node::List(items, _, _) if items.len() >= 2 => items[0]
+			.symbol_name()
+			.is_some_and(|keyword| is_function_keyword(keyword) || is_declaration_keyword(keyword)),
 		_ => false,
 	}
 }
@@ -55,12 +55,28 @@ pub(crate) fn name_declared_by(statement: &Node) -> Option<String> {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
 		// `global x = 0`, as the parser reads it: `global: (x = 0)`
-		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => {
+		Node::Key(keyword, Op::Colon, declared) if keyword.symbol_name().is_some_and(is_declaration_keyword) => {
 			name_declared_by(declared)
 		}
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
 		_ => None,
 	}
+}
+
+/// `alias pow = power`: another name of a module's word (wiki/alias.md), as (alias, word); it declares nothing
+pub(crate) fn word_alias(statement: &Node) -> Option<(String, String)> {
+	let Node::List(items, _, _) = statement.drop_meta() else {
+		return None;
+	};
+	let [keyword, alias] = items.as_slice() else {
+		return None;
+	};
+	let Node::Key(alias, Op::Assign, word) = alias.drop_meta() else {
+		return None;
+	};
+	(keyword.symbol_name() == Some(ALIAS_KEYWORD))
+		.then(|| Some((alias.symbol_name()?.to_string(), word.symbol_name()?.to_string())))
+		.flatten()
 }
 
 pub(crate) fn leftmost_symbol(node: &Node) -> Option<String> {
@@ -104,7 +120,7 @@ pub(crate) fn program_bound_names(node: &Node, names: &mut HashSet<String>) {
 		}
 		Node::List(items, _, _) => {
 			if let [keyword, bound, ..] = items.as_slice() {
-				if matches!(keyword.drop_meta(), Node::Symbol(word) if binds_names(word)) {
+				if keyword.symbol_name().is_some_and(binds_names) {
 					names.extend(mentioned_names(std::slice::from_ref(header(bound))));
 				}
 			}

@@ -1,15 +1,15 @@
-# Lazy ranges (card lazy-range, 2026-10-06)
+# Lazy ranges
 
-User direction: big lists of numbers should be numbers internally; above a threshold lazy (an iterator) or symbolic, so
-a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of a list.
+Big lists of numbers are numbers internally: above a threshold lazy (an iterator) or symbolic, so a GPU backend
+(P118: only for explicit `@gpu`) receives a descriptor instead of a list.
 
-## What a range is now
+## What a range is
 - A range of plain bounds (integer literals or variables), `a..b` or `a to b`, is a descriptor (start, end) in the
   lowering pass `src/lowering/collections/lazy_ranges.rs` (first of MEANING_PASSES):
   - `count r`, `#r`, `r.count`: `end - start`, at least 0 (constant for literal bounds)
   - `sum r`, `r.sum`: `n * (2 * start + n - 1) / 2` (exact, big integers included)
   - `r#i`: `start + i - 1` when `1 <= i <= n`, else the list's own index, so the error and its hint stay the same
-  - `for x in r`, `r.map(f)`, `filter`, `each`, `fold`, `find`, `any`, `all`, `reduce` already looped over the bounds
+  - `for x in r`, `r.map(f)`, `filter`, `each`, `fold`, `find`, `any`, `all`, `reduce` loop over the bounds
 - A range variable `xs = a..b` (in a statement list, not an object) is replaced by its range at every use when every
   use only reads it as above, nothing changes it (`xs#i = v`, `xs += …`), no function definition reads it as a global,
   its bound variables are not changed afterwards and no lambda parameter hides them. Otherwise it is a list, collected once.
@@ -17,22 +17,22 @@ a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of 
   (counting.rs `range_elements`, LITERAL_RANGE_MAX_LENGTH); a longer one is collected at run time into one int array
   (list_dispatch.rs typed lists), never a literal of 100000 nodes (that overflowed the compiler's stack).
 
-## Ranges passed to functions (card range-value-run, 2026-10-06)
+## Ranges passed to functions
 - A function defined once whose body only reads a parameter as a range (the same reads as a range variable, and it
   never changes it) is a range reader of that parameter. A call passing a range there (any bounds: `f(1..10^9)`,
   `f(2, 1..n)`, or a range variable replaced as above, `r = 1..n; f(r)`) calls a copy `f·range·<positions>(start, end, …)`
   whose body reads the parameter as the range `(p·start..p·end)`; the copy follows f's definition, f stays for list
   arguments. `a to b` passes b + 1 as its end. So the range travels as its two bounds (unboxed, no descriptor struct).
-- Benchmark probes/range_argument_bench.sh (`def total(xs) = sum xs; total(1..n)`): n = 10^7 took 3.35 s before
-  (collected 10^7 nodes, then summed them), 0.04 s after, flat in n.
-- Transitive (card transitive-range): a parameter passed on only to range readers is read as a range too, worked out
+- Benchmark probes/range_argument_bench.sh (`def total(xs) = sum xs; total(1..n)`): n = 10^7 in 0.04 s, flat in n
+  (collecting the list first took 3.35 s).
+- Transitive: a parameter passed on only to range readers is read as a range too, worked out
   until nothing changes; a copy's body calls the copies of the readers it passes the range to
-  (`g(ys) := sum ys; f(xs) := g(xs); f(1..10^7)`: 0.17 s, was a collected list like above). A recursive call is no
+  (`g(ys) := sum ys; f(xs) := g(xs); f(1..10^7)`: 0.17 s). A recursive call is no
   reader, so `f(xs, n) := … f(xs, n - 1)` keeps its list.
 - Not passed as bounds: a parameter that is changed, returned, printed or passed to a function that does not only
   read it, a function defined twice, a typed or defaulted parameter.
 
-## Ranges returned by functions (card range-value-run-2, 2026-10-08)
+## Ranges returned by functions
 - A function defined once whose value is a range of its parameters only (`f(n) := 1..n`, `span(a, b) := { a to b }`,
   `evens(n) := 0..2*n`) is a range producer. A call whose arguments are numbers, variables or arithmetic of them, no
   call (`f(10^12)`, `f(m)`), is replaced by the range itself, the parameters by the arguments; everything above then
@@ -41,13 +41,12 @@ a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of 
   the collected list: the range may read its parameter twice.
 - Not yet: a body with statements before the range, a range of globals, a range stored in a structure.
 
-## Ranges held by a structure (card range-descriptor, 2026-10-09)
-- `r: 1..n` is the range like `r = 1..n` (user: `..` already says it is a value): blocks.rs `is_computed` and
+## Ranges held by a structure
+- `r: 1..n` is the range like `r = 1..n` (`..` already says it is a value): blocks.rs `is_computed` and
   checks.rs `data_binding` take a range as a value, so `{r: 1..10}`, `r: 1..5; r` read it, with no block warning.
 - A held range (`{r = 1..10^5}`, `[1..10^5, 5]`, `zs = 1..10^5; y = [zs, 5]`) is collected in linear time: a list an
   item or a field holds only after its last append stays a typed array, converted once where it is held
-  (list_dispatch.rs `held_complete`, list_sharing.rs `Holds.places`). It was a Node list, O(n) per append. Not
-  relaxed: a list passed to a function that changes it, an `xs += …` (a written root), any shared list changed in place.
+  (list_dispatch.rs `held_complete`, list_sharing.rs `Holds.places`). Not relaxed: a list passed to a function that changes it, an `xs += …` (a written root), any shared list changed in place.
 
 ## Not yet
 - No step (`1..10 step 2` has no syntax yet); a step joins the descriptor as its third field.

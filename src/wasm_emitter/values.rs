@@ -184,9 +184,8 @@ impl WasmGcEmitter {
 				}
 			}
 		}
-		if let [word, left, right, tolerance] = items {
-			if crate::library_words::is_similarity_call(&word.drop_meta().name()) {
-				self.emit_similarity(func, &word.drop_meta().name(), left, right, tolerance);
+		if let [word, arguments @ ..] = items {
+			if self.emit_similarity(func, &word.drop_meta().name(), arguments) {
 				return true;
 			}
 		}
@@ -395,7 +394,7 @@ impl WasmGcEmitter {
 	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b
 	pub(super) fn emit_literal(&mut self, func: &mut Function, node: &Node) {
 		match node.drop_meta() {
-			Node::Symbol(name) => self.emit_string_call(func, name, "new_symbol"),
+			Node::Symbol(name) => self.emit_symbol_node(func, name),
 			Node::Key(left, op, right) => {
 				self.emit_literal(func, left);
 				self.emit_literal(func, right);

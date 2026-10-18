@@ -89,6 +89,7 @@ mod test_fresh_names; // card cleanup-fresh-names
 mod test_function_body; // card g_X_3s
 mod test_function_dir; // card dir-function
 mod test_function_objects; // card module-methods
+mod test_function_value_words; // card introspection-reflection
 mod test_glued_block_words; // card glued-loop
 mod test_go_blocks;
 mod test_go_heavy_map; // card go-heavy-map
@@ -140,11 +141,13 @@ mod test_match_tuples;
 mod test_match_type_arms;
 mod test_match_whole_value;
 mod test_member_completion;
+mod test_method_let_shadows_field; // card receiver-field-assign
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;
 mod test_named_patterns; // card patterns-values
 mod test_named_reflection;
+mod test_nested_block_calls; // card block-call-nested
 mod test_not_condition_block;
 mod test_object_blocks;
 mod test_object_functions;
@@ -161,6 +164,7 @@ mod test_pattern_unit_name; // card pattern-unit-name
 mod test_plural_field_of_elements; // card plural-of
 mod test_print_empty; // card print-error
 mod test_print_empty_map;
+mod test_quasi_quote; // cards data-pattern-sealed, unit-hole-name, data-splice
 mod test_quoted_data_untouched; // card data-quote-lowered
 mod test_raise;
 mod test_reactive_ports;
@@ -186,6 +190,7 @@ mod test_signal_in_loop;
 mod test_signal_lists;
 mod test_signal_reflection;
 mod test_signal_values;
+#[cfg(feature = "native")] // a page runs its timers after main, never inside main's loop (host-timers.js)
 mod test_slow_handler; // card timer-handler
 mod test_soft_tests;
 mod test_split_kernel; // card go-split-kernel
@@ -224,10 +229,12 @@ mod test_task_list_literal;
 mod test_task_name_scope;
 mod test_task_parameter_shadows;
 mod test_task_pool;
+mod test_task_returning_function;
 mod test_task_signals;
 mod test_task_values;
 mod test_tasks;
 mod test_text_loop_value;
+mod test_text_patterns; // card text-patterns
 mod test_threads;
 mod test_time_of_day;
 mod test_times_count_once;

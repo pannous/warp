@@ -6,10 +6,14 @@ const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), 
 // animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
 // then "held 0" … the codes of the keys held, in the order they went down (host.js key_held, card allow-diagonals)
 const KEYS_HELD_KEPT = 8;
-const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`)];
+// mouse_wheel: the wheel steps turned over a canvas, up adding (crates/warp-runtime host_words.rs MOUSE_WHEEL)
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`)];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
 const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9 };
+// a wheel step in the units of WheelEvent.deltaMode: pixels (host_words.rs PIXELS_PER_WHEEL_STEP), lines (a notch
+// scrolls three), pages
+const WHEEL_DELTAS_PER_STEP = [100, 3, 1];
 const TYPING_TARGETS = ".CodeMirror, input, textarea, [contenteditable]";
 // window.width = 800 (host.js set_system_value): the size in CSS pixels the run's paintings show at, scaled to fit
 let paintingWindow;
@@ -113,6 +117,15 @@ function trackPointer(event) {
 // the button or first finger lifted, or the touch taken over by the browser (pointercancel)
 const releasePointer = event => pointer && !laterFinger(event) && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0);
 
+// the wheel over a painting turns the program's mouse_wheel, not the page; a trackpad's scroll in fractions of a step
+let wheelTurned = 0;
+function trackWheel(event) {
+	if (!pointer || !event.target.closest?.("canvas")) return;
+	event.preventDefault();
+	wheelTurned -= event.deltaY / WHEEL_DELTAS_PER_STEP[event.deltaMode];
+	Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_wheel"), Math.round(wheelTurned));
+}
+
 // the keys held outside the editor and the fields, each code while down; "key" the last to go down
 const keysHeld = [];
 function trackKey(event) {
@@ -142,6 +155,7 @@ function pointOn(target, event) {
 // the pointer tracked over the canvases inside `element`, released anywhere
 function followPointer(element) {
 	for (const event of ["pointermove", "pointerdown", "pointerup"]) element.addEventListener(event, trackPointer);
+	element.addEventListener("wheel", trackWheel, { passive: false });
 	for (const event of ["pointerup", "pointercancel"]) document.addEventListener(event, releasePointer);
 	for (const event of ["keydown", "keyup"]) document.addEventListener(event, trackKey);
 	globalThis.addEventListener("blur", releaseKeys);

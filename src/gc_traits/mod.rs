@@ -254,7 +254,11 @@ fn format_gc_val(
 		Val::F32(n) => write!(f, "{}", f32::from_bits(*n)),
 		Val::F64(n) => write!(f, "{}", f64::from_bits(*n)),
 		Val::AnyRef(Some(anyref)) => {
-			if let Ok(struct_ref) = anyref.clone().unwrap_struct(&*store) {
+			if let Ok(Some(bytes)) = anyref.as_array(&*store) {
+				let text = gc_string::array_text(&bytes, store).unwrap_or_default();
+				return write!(f, "'{}'", text);
+			}
+			if let Ok(Some(struct_ref)) = anyref.as_struct(&*store) {
 				// a two-field struct is likely a $String (ptr, len)
 				let is_pair = struct_ref.ty(&*store).is_ok_and(|ty| ty.fields().len() == 2);
 				if let (true, Some(instance)) = (is_pair, instance) {

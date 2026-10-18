@@ -46,9 +46,8 @@ pub(crate) fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node
 	Ok(Node::int(handle as i64))
 }
 
-/// play_blocks(fill, seconds) (music_words.rs with_block_signals): the program's `fill·blocks(t: float)` called for
-/// each block, t its first sample's time, which fills the linear float arrays at `blocks` (one, or left and right)
-/// through fill; its handle
+/// play_blocks(fill, block, seconds) (lib/sound.warp): the program's `fill(t: float)` called for each block, t its first
+/// sample's time, which fills the program's linear float arrays at `blocks` (one, or left and right); its handle
 pub(crate) fn played_blocks(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
 	let ([function, blocks, seconds, rate], word) =
 		(sound_arguments(arguments, "play_blocks(fill, seconds) needs a function and its seconds")?, "play_blocks");

@@ -63,6 +63,14 @@ pub(crate) fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Optio
 	(is_operator && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
 }
 
+/// The word of `operator ⊕ has precedence above *`
+const PRECEDENCE: &str = "precedence";
+/// The word every operator declaration has: `infix operator ⊕ := …`, `a ⊕ b := …`
+const DEFINE: &str = ":=";
+
+/// The infix operator of lib/regex.warp whose right operand is a regex: `/a.c/` reads as its text there
+const REGEX_OPERATOR: &str = "matches";
+
 /// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
 pub(crate) fn is_operator_word(glyph: &[char]) -> bool {
 	glyph.first().is_some_and(|c| c.is_alphabetic())
@@ -111,9 +119,9 @@ fn declared_kind(word: &str) -> Option<UserOperatorKind> {
 /// The operators a source itself declares: `[prefix|suffix|infix] operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
 pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
-	let declarations = source.lines().flat_map(|line| line.split(';'));
-	// `operator × := *` is an alias (operators/aliases.rs), no function
-	for statement in declarations.filter(|statement| crate::operators::alias_line(&code_only(statement)).is_none()) {
+	// every declaration has its `:=`: the other lines (most of a standard module) need no closer look
+	let declarations = source.lines().flat_map(|line| line.split(';')).filter(|statement| statement.contains(DEFINE));
+	for statement in declarations {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let by_kind = words.split_first().and_then(|(word, rest)| {
 			let kind = declared_kind(word)?;
@@ -127,12 +135,15 @@ pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 			}
 			_ => None,
 		});
-		if let Some((glyph, kind)) = declared {
+		// `operator × := *` is an alias (operators/aliases.rs), no function
+		let alias = || crate::operators::alias_line(&code_only(statement)).is_some();
+		if let Some((glyph, kind)) = declared.filter(|_| !alias()) {
 			found.push(UserOperator { glyph: glyph.chars().collect(), kind, level: kind.default_level() });
 		}
 	}
 	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
-	for statement in source.lines().flat_map(|line| line.split(';')) {
+	for statement in source.lines().flat_map(|line| line.split(';')).filter(|statement| statement.contains(PRECEDENCE))
+	{
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		if let Ok(Some((glyph, level))) = precedence_declaration(&words, &found) {
 			found
@@ -151,7 +162,7 @@ pub(crate) fn precedence_declaration<'a>(
 	words: &[&'a str],
 	declared: &[UserOperator],
 ) -> Result<Option<(&'a str, u8)>, String> {
-	let ["operator", glyph, "has", "precedence", direction, rest @ ..] = words else {
+	let ["operator", glyph, "has", PRECEDENCE, direction, rest @ ..] = words else {
 		return Ok(None);
 	};
 	let Some((_, above)) = PRECEDENCE_DIRECTIONS.iter().find(|(word, _)| word == direction) else {
@@ -332,8 +343,42 @@ impl WarpParser {
 		}
 		self.advance_by(operator.glyph.len());
 		self.skip_whitespace();
-		let rhs = self.parse_expr(right_bp);
+		let rhs = match operator.glyph.iter().copied().eq(REGEX_OPERATOR.chars()) {
+			true => self.slashed_regex().unwrap_or_else(|| self.parse_expr(right_bp)),
+			false => self.parse_expr(right_bp),
+		};
 		Some(operator_call(&operator.glyph, vec![lhs.clone(), rhs]))
+	}
+
+	/// `"abc" matches /a.c/`: where a regex is expected, slashes delimit its text as in JavaScript, `\/` a slash in it;
+	/// `//` and `/*` stay comments, a `/` without its closing one on the line stays what it was (card slash-notation)
+	fn slashed_regex(&mut self) -> Option<Node> {
+		if self.current_char() != '/' || matches!(self.peek_char(1), '/' | '*') {
+			return None;
+		}
+		let mut pattern = String::new();
+		let mut offset = 1;
+		loop {
+			match self.peek_char(offset) {
+				'/' => break,
+				'\\' if self.peek_char(offset + 1) == '/' => {
+					pattern.push('/');
+					offset += 2;
+				}
+				'\\' => {
+					pattern.push('\\');
+					pattern.push(self.peek_char(offset + 1));
+					offset += 2;
+				}
+				'\n' | '\0' => return None,
+				other => {
+					pattern.push(other);
+					offset += 1;
+				}
+			}
+		}
+		self.advance_by(offset + 1);
+		Some(Node::Text(pattern))
 	}
 
 	/// `∆3`: the call of the prefix operator on the operand after it

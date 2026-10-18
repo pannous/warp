@@ -1,0 +1,92 @@
+# Forms other languages use, in warp's own (card sugar-twins; Rust twin: src/lowering/welcoming/welcome_forms.rs).
+#
+# match_arms (lower_match_arms): every match's arms in the one form later passes read: `[match, subject, {k => v …}]`, `[match, (subject {k => v …})]` or `[(match subject), {…}]` with
+# the cases as `k: v`, `_ => v` and `else -> v` as `default: v`; Swift's `case .north: 1` as `.north: 1` and
+# `case 1` as 1. `match alle = f(3) {…}` names its subject: `match (alle = f(3)) {…}`.
+use "walk.warp"
+
+switch_words = [symbol("switch"), symbol("match")]
+default_word = "default"
+
+is_switch_word(n: any) := switch_words contains n
+last_of(items: any) := items#(#items)
+
+# `alle = (f(3) {cases})` as [alle = f(3), {cases}], else ø
+named_subject(item: any) := {
+	if type(item) is not key or op_of(item) != "=" or key_of(item) is not symbol { return ø }
+	value = value_of(item)
+	if not is_group(value) or #value < 2 or bracket_of(last_of(value)) != "{" { return ø }
+	expression = value[0 .. #value - 1]
+	subject = if #expression == 1 then expression#1 else group_like(value, expression)
+	[key(key_of(item), "=", subject), last_of(value)]
+}
+
+named_switch_subjects(n: any) := {
+	if is_group(n) {
+		found = []
+		for item in n.map(named_switch_subjects) {
+			named = if #found > 0 and is_switch_word(last_of(found)) then named_subject(item) else ø
+			if named != ø { found += named } else { found += [item] }
+		}
+		return group_like(n, found)
+	}
+	if type(n) is key and op_of(n) == "=" {
+		left = key_of(n)
+		if is_group(left) and #left == 2 and is_switch_word(left#1) {
+			return named_switch_subjects(separated(bracketed([left#1, key(left#2, "=", value_of(n))], ""), " "))
+		}
+		return key(named_switch_subjects(left), "=", named_switch_subjects(value_of(n)))
+	}
+	children(n, named_switch_subjects)
+}
+
+colon_case(case: any) := {
+	if is_group(case) and bracket_of(case) == "" and separator_of(case) == "," { return group_like(case, case.map(colon_case)) }
+	if type(case) is key and op_of(case) == ":" {
+		label = key_of(case)
+		if type(label) is key and op_of(label) == "." and key_of(label) == symbol("case") {
+			return key(key(ø, ".", value_of(label)), ":", value_of(case))
+		}
+	}
+	if is_group(case) and #case == 2 and case#1 == symbol("case") { return case#2 }
+	if type(case) is key and op_of(case) == "->" {
+		pattern = key_of(case)
+		if pattern == symbol("_") or pattern == symbol("else") { pattern = symbol(default_word) }
+		return key(pattern, ":", value_of(case))
+	}
+	case
+}
+
+colon_cases(block: any) := if bracket_of(block) == "{" then group_like(block, block.map(colon_case)) else block
+
+# the items of a match with its cases block in the colon form; other items as they are
+with_colon_cases(items: any) := {
+	if #items == 2 and is_group(items#1) and #(items#1) == 2 and is_switch_word(items#1#1) {
+		return [items#1, colon_cases(items#2)]
+	}
+	if #items == 0 or not is_switch_word(items#1) { return items }
+	if #items == 3 { return [items#1, items#2, colon_cases(items#3)] }
+	if #items == 2 and is_group(items#2) and #(items#2) == 2 {
+		pair = items#2
+		return [items#1, group_like(pair, [pair#1, colon_cases(pair#2)])]
+	}
+	items
+}
+
+colon_arms(n: any) := if is_group(n) then group_like(n, with_colon_cases(n.map(unchanged))) else n
+
+match_arms(program: any) := bottom_up(named_switch_subjects(program), colon_arms)
+
+# arrow_result_types (lower_arrow_result_types): Swift's and Rust's result arrow before `:=`, `x(p:P) -> int := p.n`,
+# is the typed head `x(p:P): int := p.n` every pass reads
+calls_by_name(n: any) := bracket_of(n) == "(" and #n > 0 and n#1 is symbol
+
+arrow_result_types(n: any) := {
+	if type(n) is key and (op_of(n) == ":=" or op_of(n) == "=") {
+		target = key_of(n)
+		arrowed = type(target) is key and op_of(target) == "->" and calls_by_name(key_of(target))
+		target = if arrowed then key(key_of(target), ":", value_of(target)) else arrow_result_types(target)
+		return key(target, op_of(n), arrow_result_types(value_of(n)))
+	}
+	children(n, arrow_result_types)
+}

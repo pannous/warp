@@ -89,7 +89,7 @@ impl WasmGcEmitter {
 	fn emit_is_instance_of(&mut self, func: &mut Function, local: u32, type_name: &str) {
 		self.emit_field(func, local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
-		let (pointer, length) = self.allocate_string(type_name);
+		let (pointer, length) = self.memory_string(type_name);
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_symbol");
 		self.emit_call(func, super::super::VALUES_EQUAL);

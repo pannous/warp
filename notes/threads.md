@@ -1,134 +1,65 @@
-# Real threads for `go` (user decision P33, 2026-10-04)
+# Real threads for `go` (P33)
 
 Roadmap card: threads (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 
 Native `go` tasks run on a fixed pool of host threads; browser tasks run in Web Workers. Each task has a separate
-WebAssembly instance, while shared values use host-owned atomic arrays. The stages below record how this landed.
+WebAssembly instance; shared values use host-owned atomic arrays.
 
 ## The constraint that shapes everything
-warp values are WASM GC objects ($Node structs, typed arrays). GC references cannot cross threads: the threads proposal
-shares *linear memory* only, and "shared-everything threads" (shared GC types) is still a proposal that neither
-wasmtime 49 nor any browser ships. So two tasks can never hold the same Node.
-
-Consequence: **an instance per task** (an isolate, like a Worker or an Erlang process). Each task runs in its own
-instance of the same compiled module on a fixed worker pool; arguments and results are *copied* between instances. That
-matches warp's value semantics (index assignment already copies, aliases never change), so it costs no language rule.
+warp values are WASM GC objects. GC references cannot cross threads: the threads proposal shares linear memory only,
+and shared-everything threads (shared GC types) ship nowhere. So two tasks never hold the same Node: an instance per
+task (an isolate, like a Worker or an Erlang process), arguments and results copied between instances. That matches
+warp's value semantics, so it costs no language rule.
 
 ## Semantics
-- `job = go f(x)`: queues f(x) in a new instance on the run's worker pool and returns at once with the task.
-- `await job`, and `job` used as its value (the auto-cast): blocks until the task finishes, then is its result.
-- Arguments and results are values: copied, never shared. A task sees the main-level variables as they were when the
-  module started (its own instance), not later changes; a write to a `global` inside a task stays in that task.
-  Sharing state goes through results, signals and (step 6) shared typed arrays.
+- `job = go f(x)`: queues f(x) in a new instance on the run's pool and returns at once with the task.
+- `await job`, and `job` used as its value: blocks until the task finishes, then is its result. `await` binds like
+  a unary minus.
+- Arguments and results are copied. A task sees the main-level variables as the module started them, not later
+  changes; a write to a `global` inside a task stays in that task. Sharing goes through results, signals and
+  `shared` values.
 - `stop job` / `cancel job`: the task traps at its next check point; `await` of a stopped task is the error
-  `task stopped`, catchable with `try`. `pause job` / `resume job`: the task parks at its next check point.
-- `once job finishes: …` and `on job.stop: …` run on the thread that started the task, at its next check point
-  (an `await`, a loop back-edge, a call of a task word), never concurrently with that thread's own code.
-- Errors inside a task are its result: `await` gives the error value (errors are values, decision #1).
+  `task f: task stopped`, catchable with `try`. `pause job` / `resume job`: the task parks at its next check point.
+- Errors inside a task are its result: `await` raises its message as a `returned_error`, which `try` catches
+  (`task·check(task_join(job), task_failure(job)); task_await(job)`).
+- `once job finishes: …` / `on job.stop: …` run on the starting thread, as a check after every later statement of
+  the block (task_status); the block's end waits for the task (before its last statement, which keeps the block's
+  value).
+- Job lists (P47): `jobs.add(go f(i))` keeps the started task unawaited (declarations::job_lists); a read of the list
+  awaits every result (`task·list`), `jobs#i` that job only (`task·element`), `await all xs` reads xs once.
+  `count(jobs)`, `#jobs` count without awaiting.
+- Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` (and `atomic …`) are one-cell shared
+  arrays: reads `shared_get(n, 1)`, `n = v` / `n += v` atomic set and add. `shared xs = int[n]` / `float[n]` (P44,
+  lowering/collections/shared_arrays.rs): host words shared_new/get/set/add/count (+ …f for floats, bits in the same
+  cells) over arrays the host holds (src/host/shared.rs: Arc<[AtomicI64]>; host.js: BigInt64Array over a
+  SharedArrayBuffer). Not wasm shared memory: an imported memory would take index 0 ahead of the module's own. A go
+  block reading a shared name gets it as a parameter; only `shared` names cross between tasks.
 
 ## Native (wasmtime)
-- One `Engine`, one compiled `Module` (both Send + Sync); a run has a fixed pool of twice the available parallelism,
-  since task host calls may block. Every task gets its own `Store`, instance and fuel budget. The host keeps the task
-  table: id → queued/running/result slot/control flags. A worker awaiting a nested task runs queued work itself, so a
-  full pool of parent tasks cannot deadlock waiting for its children.
-- Host imports: `task.spawn(function, arguments) -> id`, `task.await(id) -> result`, `task.control(id, op)`.
-  The function goes by name through an exported entry `task_entry(name, arguments)` generated per program for the
-  functions a `go` starts (the program knows them statically: lower_tasks already collects them).
-- Crossing values: a value leaves an instance as bytes and enters the other one rebuilt. Step 1 carries numbers and
-  texts (i64, f64, UTF-8 bytes: no parser needed in wasm). Lists and objects need a serializer out (list_text exists)
-  and a reader in: either a runtime warp reader in wasm, or the host reads the text (warp_parser) and builds the Node in
-  the target instance through exported constructors (new_int, new_text, list cons) — the second reuses the host parser
-  and gc_traits, and is step 3.
-- Stop and pause: epoch interruption. `Config::epoch_interruption(true)`, each task store gets a deadline; a ticker
-  thread increments the epoch; the store's epoch callback reads the task's flags: stop → trap with `task stopped`,
-  pause → block on a condvar until resume, else continue. No change to the emitted code.
-- Check points for handlers on the starting thread: the host imports above, plus a cheap `task.poll()` the emitter adds
-  at loop back-edges only when the program uses `once`/`on` with tasks.
+- One Engine, one compiled Module; a run has a fixed pool of twice the available parallelism, since task host calls
+  may block (one per core missed the 300-sleeping-task bound). Each task gets its own Store, instance and fuel budget.
+  A worker awaiting a nested task runs queued work itself, so a full pool of parent tasks cannot deadlock.
+- declarations::lower_tasks marks, declarations::resolve_tasks decides (inferred kinds), src/host/tasks/mod.rs runs.
+  A task of values starts through `f·node(arguments·node)` (declarations::with_node_wrappers): one argument list, so
+  neither host needs parameter types; the Int words carry only surely-Int arguments.
+- Values cross as tasks::TaskValue (numbers, texts, characters, lists, keys, closures, exact numbers), rebuilt in the
+  target instance through its exported constructors (new_int … new_list), read with wasm_reader::node_in. Floats passed
+  to a float parameter are converted at the start.
+- Stop and pause: epoch interruption (util::task_engine, only for modules importing the task words, checked by
+  wasmparser before compiling); the store's epoch callback reads the task's flags. No change to the emitted code.
+- Split float maps: `go xs.map(x => kernel)` over a float array starts no tasks: task_split_mapf maps one slice per
+  core in fresh instances on scoped threads (src/host/tasks/mod.rs split_map, notes/simd.md). Other `go xs.map(f)`
+  use map_in_tasks.
 
-## Browser (web/playground)
-- Each task is a Worker running the same module bytes with the same host.js imports.
-- A blocking `await` needs `Atomics.wait` on a SharedArrayBuffer, which needs cross-origin isolation (COOP/COEP
-  headers). GitHub Pages cannot set headers: use a service worker that adds them (the coi-serviceworker approach), or
-  JSPI (JS promise integration) to suspend the calling instance instead of blocking it. Without either, the playground
-  keeps today's behaviour (the task runs where it starts) and says so once.
-- Stop: `worker.terminate()`. Pause: a flag in shared memory checked at the poll points.
-
-## Status
-- Step 1 done (2026-10-04, 487dd2f1): functions of up to four Ints that give an Int; declarations::lower_tasks marks,
-  declarations::resolve_tasks decides (inferred kinds), src/host/tasks/mod.rs runs. `await` binds like a unary minus.
-- Step 2 done (2026-10-04): stop/cancel/pause/resume through epoch interruption (util::task_engine, only for modules
-  importing the task words, checked by wasmparser before compiling). Awaiting a stopped task is the error
-  `task f: task stopped`, catchable with `try` since "Catchable" below (a568a26a9; test_threads
-  try_catches_the_failure_of_a_task).
-
-- Step 3 done (2026-10-04): numbers, texts, characters, lists and keys of them cross (tasks::TaskValue, rebuilt in
-  each instance through its exported constructors new_int … new_list; read back with wasm_reader::node_in). Floats
-  passed to a float parameter are converted at the start (`x as float`), as a call converts them. Still inline: list
-  parameters (the list ABI passes arrays, not Nodes), function values; exact numbers beyond the fixnums (ratios, big
-  integers) are a clear error, being handles into the memory of their instance.
-
-- Catchable (2026-10-04): `await` is `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task
-  raises its message from wasm as a `returned_error` with trap detail, which `try` catches.
-- Lists (2026-10-04): a task of values starts through `f·node(arguments·node)` (declarations::with_node_wrappers): one
-  argument list, so neither host needs parameter types, and the emitter converts into f's own convention (arrays);
-  the Int words carry only surely-Int arguments (literals, variables assigned Int literals).
-- Step 4 done (2026-10-04): `once job finishes: …` / `on job.stop: …` of a task on a thread: a check after every later
-  statement of the block (task_status), the handler runs once; the block's end waits for the task (before its last
-  statement, which keeps the block's value).
-- Step 5 done (2026-10-04): host.js runs tasks on a pool of Workers (task-worker.js) made while the program's worker is
-  idle (a Worker starts only once its creator returns to the event loop), results as JSON in a growable
-  SharedArrayBuffer awaited with Atomics.wait; without cross-origin isolation a task runs at once in a fresh instance.
-  The test server sends COOP/COEP; the playground gets them from coi-serviceworker.js (one reload). Measured: two
-  one-second tasks take 1.0 s in the playground. Pause/resume in the browser: each task Worker gets a control word (Int32Array on a SharedArrayBuffer); `task_poll`,
-  called where every loop starts in a program that controls tasks, waits on it while paused (Atomics.wait).
-
-- Step 6 done (2026-10-04, P44): `shared xs = int[n]` (lowering/collections/shared_arrays.rs): host words shared_new/get/set/add/
-  count (and shared_getf/setf/addf for `float[n]`, bits in the same cells) over arrays the host holds for the run (src/host/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
-  SharedArrayBuffer handed to the task Workers). Not wasm shared memory: an imported memory would take index 0 ahead of
-  the module's own, and every memory instruction assumes 0; the host call per access is the price.
-
-- Fixed native pool (2026-10-12, card fork-join): twice the available parallelism. One worker per core missed the
-  established 300 sleeping-task concurrency bound because blocked workers left capacity idle; 20 workers on the
-  10-core development machine completed it in 7.94 seconds while remaining bounded. Workers awaiting nested tasks
-  run queued work so a full pool of parent tasks cannot deadlock waiting for its children.
-
-## Steps (each its own commit with tests)
-1. Native spawn/await for functions of numbers and texts: lowering `go f(x)` → `task_spawn`, `await` → `task_await`
-   typed by f's result kind; the runner's task table; tests that two tasks really overlap (each sleeps 200 ms, total
-   well under 400 ms) and that results are right. Programs without `go` emit no task imports.
-2. stop / cancel / pause / resume through epoch interruption; `await` of a stopped task is the catchable error.
-3. Lists and objects across tasks (host-side reading into the target instance).
-4. `once job finishes` / `on job.stop` handlers at check points on the starting thread.
-5. Browser: Workers + cross-origin isolation service worker; fallback to inline tasks with a notice.
-6. Shared typed arrays: `shared xs = int[1000]` in shared linear memory (the threads proposal) with atomic adds, for
-   real data parallelism; GC values stay copied.
-
-## Open questions (for open_decisions.md when a step needs them)
-- Does a task see main-level variables assigned before the `go` (snapshot by copying them in) or only the module's
-  initial values? Proposed: the values at `go` time, copied in, like arguments.
-- Job lists (P47, 2026-10-05, user: "jobs are asynchronous by definition; awaiting one must not affect the others"):
-  `jobs.add(go f(i))` keeps the started task unawaited (its id; declarations::job_lists). A read of the list is
-  `task·list` (every result, `jobs.map(awaited_job => checked await)` through task_await_value, which serves Int tasks
-  too), `jobs#i` is `task·element` (that job only); `await all xs` is xs read once (the parser groups `await all X`).
-  A list of tasks that run where they start (TaskPath::Inline) holds their values. `count(jobs)`, `#jobs`, `jobs.size`
-  count without awaiting. The browser host runs job lists too (cargo browser-test test_job_lists: 3 one-second jobs ~1 s).
-- Shared values (P106, 2026-10-06): `shared done = false`, `shared n = 0`, `shared x = 0.5` (and `atomic …`) are
-  one-cell shared arrays (lowering/collections/shared_arrays.rs): reads are `shared_get(n, 1)`, `n = v` / `n += v` the atomic set
-  and add, true/false the Ints 1/0. A go block reading one gets it as a parameter, which shares it like a shared array
-  parameter; only `shared` names cross between tasks, everything else is copied.
-- Browser task hangs (card task-hang, 2026-10-09): about half of the browser runs of the control:: tests hung one task
-  test for 120 s (go_blocks, task_values, after, await_any), a different one each time. Two ways a run waited forever:
-  (a) a go block nobody awaits whose Worker could not instantiate it (out of Wasm memory: the record says `unstarted`,
-  which only finishedTask retried, so `after done` spun forever on the go block that sets done), and (b) a task its
-  Worker never took (or a Worker that failed outside runTask, which never wrote the shared buffer). Now finishedTask
-  waits in 100 ms slices and in between runs the run's stalled tasks here: an unstarted one, or one not taken
-  within 15 s (the task Worker sets the control buffer's second word when it takes a task), which also replaces that
-  Worker and prints why to stderr and the console. task-worker.js writes a failure record for any exception of its
-  own. 4 of 4 runs clean after (before: 2 of 3 hung). Which of (a)/(b) it was is not proven: a passing test's stderr
-  is not shown. A channel wait (send, receive, `for … in ch`: channelWait) runs the stalled tasks too, before each
-  look at the channel (card task-hang-channels).
-
-## Split float maps (card go-split-kernel)
-`go xs.map(x => kernel)` over a float array doesn't start tasks: the host word task_split_mapf splits the linear array
-into one slice per core, maps each slice in a fresh instance on a scoped thread, and writes the results into a new
-block of the caller's memory (src/host/tasks/mod.rs split_map, notes/simd.md). Other `go xs.map(f)` still use map_in_tasks.
+## Browser
+- host.js runs tasks on a pool of Workers (task-worker.js) made while the program's worker is idle (a Worker starts
+  only once its creator returns to the event loop); results as JSON in a growable SharedArrayBuffer awaited with
+  Atomics.wait. That needs cross-origin isolation: the test server sends COOP/COEP, the playground gets them from
+  coi-serviceworker.js (one reload); without it a task runs at once in a fresh instance.
+- Pause/resume: each task Worker gets a control word (Int32Array on a SharedArrayBuffer); `task_poll`, called where
+  every loop starts in a program that controls tasks, waits on it while paused. Stop: `worker.terminate()`.
+- Stalled tasks: finishedTask waits in 100 ms slices and in between runs the run's stalled tasks itself: an unstarted
+  one (its Worker could not instantiate it, e.g. out of Wasm memory) or one not taken within 15 s (the task Worker
+  sets the control buffer's second word when it takes a task), replacing that Worker and saying why on stderr and the
+  console. task-worker.js writes a failure record for any exception of its own. Channel waits (channelWait) run the
+  stalled tasks too.

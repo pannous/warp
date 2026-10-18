@@ -31,7 +31,7 @@ impl WarpParser {
 		let ch = self.current_char();
 		ch.is_alphanumeric()
 			|| ch == '_'
-			|| (ch == '$' && self.is_identifier_start(1)) // a bound name `$h`
+			|| self.is_hole_start(0)
 			|| ch == '"'
 			|| ch == '\''
 			|| ch == '('
@@ -97,7 +97,7 @@ impl WarpParser {
 		let previous = self.prev_char();
 		self.current_char() == ':'
 			&& self.is_identifier_start(1)
-			&& !self.in_style_sheet
+			&& !self.context.in_style_sheet
 			&& (self.pos == 0 || previous.is_whitespace() || EXPLICIT_SYMBOL_STARTS_AFTER.contains(&previous))
 	}
 
@@ -210,13 +210,15 @@ impl WarpParser {
 				_ => true,
 			};
 		// `solid #8884`: the color is the next word of the value; `#main .x`: the descendant selector's next part
-		let selector_part =
-			self.in_style_sheet && matches!(spelling, "." | "#") && prev.is_whitespace() && self.is_identifier_start(1);
+		let selector_part = self.context.in_style_sheet
+			&& matches!(spelling, "." | "#")
+			&& prev.is_whitespace()
+			&& self.is_identifier_start(1);
 		let style_word =
 			spelling.chars().count() == 1 && (self.css_color_length().is_some() || self.at_pseudo_class_selector());
 		let op = match spelling {
-			"=" if self.equals_compares => Op::Eq,
-			"until" if !self.in_for_header => Op::While, // `i++ until done`, Kotlin's `for i in 0 until n` ranges
+			"=" if self.context.equals_compares => Op::Eq,
+			"until" if !self.context.in_for_header => Op::While, // `i++ until done`, Kotlin's `for i in 0 until n` ranges
 			_ => op,
 		};
 		// a word operator stands before its operand, `use same;` names the module same; `then`, `else`, `do` may end a line
@@ -358,7 +360,7 @@ impl WarpParser {
 			('+', '+') => Some((Op::Inc, 2)),
 			('-', '-') => Some((Op::Dec, 2)),
 			// `width: 50% height: 10px`: in a style sheet a % glued to a number is a percentage (card web-styles-limits)
-			('%', _) if self.in_style_sheet && self.prev_char().is_ascii_digit() => Some((Op::Mod, 1)),
+			('%', _) if self.context.in_style_sheet && self.prev_char().is_ascii_digit() => Some((Op::Mod, 1)),
 			// `10%`, `10% + x`: a percent, no remainder, when no operand follows
 			('%', next) if next != '=' && self.expression_ends_after(1) => Some((Op::Mod, 1)),
 			// `ℯ⌟`: the natural log when no base follows

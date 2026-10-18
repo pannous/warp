@@ -93,9 +93,7 @@ pub(crate) fn assigned_global(
 			globals.get(global).map(|mutable| (global.clone(), *mutable, format!("{SETTER_PREFIX}{global}")))
 		}
 		Node::Key(receiver, Op::Dot, member) => {
-			let (Node::Symbol(alias), Node::Symbol(global)) = (receiver.drop_meta(), member.drop_meta()) else {
-				return None;
-			};
+			let (alias, global) = (receiver.symbol_name()?, member.symbol_name()?);
 			modules.iter().filter(|path| module_alias(path) == *alias).find_map(|path| {
 				match exports(path).get(global)?.role {
 					Role::Global { mutable } => Some((
@@ -156,7 +154,7 @@ pub(crate) fn is_module_function(node: &Node, modules: &[String]) -> bool {
 	let Node::Key(receiver, Op::Dot, member) = node.drop_meta() else {
 		return false;
 	};
-	let (Node::Symbol(alias), Node::Symbol(export)) = (receiver.drop_meta(), member.drop_meta()) else {
+	let (Some(alias), Some(export)) = (receiver.symbol_name(), member.symbol_name()) else {
 		return false;
 	};
 	modules.iter().any(|path| {
@@ -173,7 +171,7 @@ pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 	match node.drop_meta() {
 		// `m.f.params`: a word of the function itself, not of its result (reflection.rs reads it off warp.meta)
 		Node::Key(receiver, Op::Dot, member)
-			if matches!(member.drop_meta(), Node::Symbol(_)) && is_module_function(receiver, modules) =>
+			if member.symbol_name().is_some() && is_module_function(receiver, modules) =>
 		{
 			return Ok(node)
 		}

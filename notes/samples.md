@@ -1,67 +1,41 @@
-# Sample sweep (samples/, started 2026-10-03)
+# Samples (samples/)
 
-Goal: every `samples/<chapter>/*.warp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
-`is!("samples/<chapter>/x.warp", …)` line in tests/programs/test_samples.rs.
+Every `samples/<chapter>/*.warp` runs, ideally by fixing the language rather than the sample. Fixed samples get an
+`is!("samples/<chapter>/x.warp", …)` line in tests/programs/test_samples.rs; tests/programs/test_playground_samples.rs
+runs every sample not listed in web/playground/excluded_samples.txt, which gives each exclusion its reason.
 
 ## How to sweep
-- Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …` (or `probes/samples/…`).
-  The shared `debug/warp` is not hashed per checkout: another worktree's build overwrites it between your build and your run.
+- Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …`. The shared `debug/warp` is
+  overwritten by other worktrees' builds between your build and your run.
 - Skip `raylib_*` / `sdl_*` in sweeps: they open real windows.
 - `test.wasm` in the cwd is the last emitted module, written before validation: `wasm-tools print test.wasm` shows the
   function behind an "internal error: WASM validation failed".
-- `samples/loops/life_kotlin_ranges.warp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
+- The exit code is the program's Int value, and 1 after an uncaught error, so a sweep for exit code 1 also finds
+  samples whose value is 1: check for `Error(` in the output.
+- Output filters: `grep -v '^      '` (to hide hint continuation lines) also hides indented program output.
+- `samples/loops/life_kotlin_ranges.warp` and `errors` fail on purpose (tests/welcoming/test_welcoming_ask.rs pins the
+  explanation).
 
-## Warp habits the old samples get wrong (sample-side fixes)
+## Warp habits old samples get wrong (sample-side fixes)
 - Lists are shared (P200b): a function changes the list it is passed, as in Python; `+` and `copy()` make new lists.
 - A function sees main-level constants; to change (or read a computed) main-level value, declare it `global`.
-- `/` is exact division (`7/3` stays a fraction); use `/!` for floor division (`7 /! 2`); `//` is always a comment.
+- `/` is exact division (`7/3` stays a fraction); `/!` is floor division (`7 /! 2`); `//` is always a comment.
 - `1e10` is an exact number and cannot later hold a float: `1e10 as float`.
 - One-character texts are characters: `'5' as int` is 53; `c as text as int` is the digit.
-- Types are declared `type V { x: float }` (not `type V: {…}` / `type V = {…}`); construct with `V(1, 2)`, `V{x: 1}` or `V { x: 1 }`.
-- No keyboard/mouse input, no `pop`, no `Array2D`: interactive games become self-playing demos.
-
-## Language fixes made for the samples (see git log of branch `samples`)
-replace word, `x.chars()` list, suffix words vs variables (`solved`), one run state for host+WASI+FFI imports, host
-words sleep/random/clock, run-time float text, comma tuples of computed items, list statements in loop bodies, globals in
-return-kind inference, `and`/`or` decided at run time for calls and Nodes, `if` of two characters, spaced construction,
-run-time field reads of declared fields, `{x: x}` keys, call shapes, declared field kinds, float parameter widening,
-float-path conditionals/returns/zero-arg calls, globals and captures typed with function kinds.
-
-Later batches: records (optional fields, field_with on instances, bare return, recursive list functions), nested block
-comments, C-style `real f(real x) {…}` definitions and `if (c) statement`.
-- Output filters: `grep -v '^      '` (to hide hint continuation lines) also hides indented program output.
+- Types are declared `type V { x: float }`; construct with `V(1, 2)`, `V{x: 1}` or `V { x: 1 }`.
 - `tau`/`τ`, `pi` are constants: a variable cannot be named so.
 - `real` is the exact real type; use `float` for IEEE arithmetic.
+- No keyboard/mouse input, no `pop`, no `Array2D`: interactive games become self-playing demos.
 
-Branch samples-2 / implicit-libm (warp-d2): a character variable compares by code point (`c >= '0'`), words
-`is_digit` `is_alpha` `is_alphanumeric`, method syntax for builtins (`x.round()`, `x.floor()`, `x.sin()`; user
-functions since 3da746b), `x="5"; x as int` is 5, and libm called without import links libm (exp/sin/… compiled to
-their argument at run time before).
-
-## Still failing (2026-10-08, branch samples-run)
-All other samples run. The exit code is the program's Int value, and 1 after an uncaught error (card cli-error-exit),
-so a sweep for exit code 1 also finds samples whose value is 1: check for `Error(` in the output.
-The failures left, each with its reason in web/playground/excluded_samples.txt:
-- errors (malformed on purpose), life_kotlin_ranges (fails on purpose), webgpu (WGSL block), netbase (needs a
-  netbase server).
-- natural runs (card samples-uncaught, 2026-10-09): `send email to … with subject …` became the `to` phrase
-  `mail "Hello" to "user@example.com"` (send is a keyword, P165); whether that phrase itself should work, and
-  `results where country is germany`, wait on card natural-phrases.
-- modules runs (card samples-uncaught): it shows `use` of a standard module, one with classes and a file beside
-  the program; the module-system sketch it was moved to notes/module_manager.md (card module-manager).
-- raylib/sdl: not run in sweeps (windows). SDL_video.h is among the SDL headers now (SDL_CreateWindow).
-Fixed on samples-run: a loop variable reusing a number's name reads fields (`item = 2; for item in basket {
-item.price }`); an import no header declares says so; `xs where country is germany` hints `it.country==germany`.
-
-## Folders (2026-10-16)
+## Folders
 - samples/ has one folder per chapter of the playground guide, the groups of its example menu (web/playground/guide.js
   groupExamplesByChapter): hello numbers text signals conditions matching lists objects loops functions types storage
   errors modules events tasks web servers graphics gpu sound wasm laws advanced; plus system (crontab, unix_commands:
-  native-only processes), golf/ and wit/ as before. A sample sits in the folder of the first chapter whose `Examples:
-  …; samples:` line names it; samples no chapter can name (excluded_samples.txt: raylib, SDL, errors…) sit by topic.
+  native-only processes), golf/ and wit/. A sample sits in the folder of the first chapter whose `Examples: …;
+  samples:` line names it; samples no chapter can name (raylib, SDL, errors…) sit by topic.
 - tests/web/test_guide.rs every_chapter_has_its_own_sample_folder keeps the two in step: a chapter's samples in one
   folder, no folder shared by two chapters. A new sample: its chapter's folder + its name in that chapter's line.
-- The menu and the address (#fizzbuzz) still name a sample by its file name, so names stay unique across folders
+- The menu and the address (#fizzbuzz) name a sample by its file name, so names stay unique across folders
   (build.sh refuses twins); samples.js has SAMPLE_FILES name → path for the runs' neighbour files (play "mozart.mp3").
 - Tests find a sample by name with tests/common sample_path / sample_files (never format!("samples/{name}.warp")).
 - `use lib`, `use square` and `import shapes` find the module samples through SEARCH_DIRECTORIES "samples/modules"

@@ -207,9 +207,7 @@ fn function_position(items: &[Node], words: &SuffixWords) -> usize {
 /// program assigns is its variable, never a suffix word (`solved = solve(x); return solved`)
 fn suffix_words(node: &Node) -> SuffixWords {
 	// loop variables and parameters too: `for ord in xs { x = ord }` reads the item (card codepoint-loop-variable)
-	let mut variables: HashSet<String> = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
-	crate::library_words::collect_assigned_names(node, &mut variables);
-	variables.extend(crate::analyzer::function_definitions(node).parameter_names());
+	let variables = crate::program_names::Bindings::of(node).bound();
 	let mut functions = crate::analyzer::applicable_function_names(node);
 	// `trim(x) := x-1` is the program's trim·any beside the library's trim: `4 trimmed` chooses between them
 	let own_library_words: Vec<String> =
@@ -373,7 +371,7 @@ fn is_number_or_text(node: &Node) -> bool {
 /// `2⁻¹`, `2²`, `3+1`: arithmetic of numbers
 fn is_arithmetic_of_values(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(left, op, right) if ARITHMETIC.contains(op) || matches!(op, Op::Square | Op::Cube) => {
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) => {
 			(left.is_empty_node() || is_number_or_text(left) || is_arithmetic_of_values(left))
 				&& (right.is_empty_node() || is_number_or_text(right) || is_arithmetic_of_values(right))
 		}

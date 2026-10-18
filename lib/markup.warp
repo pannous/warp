@@ -22,6 +22,8 @@ html_attributes = ["class", "id", "href", "src", "alt", "title", "style", "type"
 html_boolean_attributes = ["checked", "disabled", "selected", "readonly", "required", "hidden", "multiple", "autofocus"]
 // a meta element's own attributes: `meta{ charset: "utf-8" }` stays the element, `meta: { author: "Ann" }` names metas
 html_meta_attributes = ["charset", "name", "content", "http-equiv", "property", "media"]
+// where an element's one style attribute goes among its attributes, its styles joined: a "<" no attribute holds
+html_style_mark = "<style>"
 // CSS properties whose number has no unit; any other number is pixels
 html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"]
 
@@ -45,7 +47,8 @@ html_is_element(value: any) := html_is_listed_element(value) or (value is pair a
 html_is_listed_element(value: any) := value is pair and contains(html_elements, keys(value)#1)
 
 // `my-card{…}`: a page's own element is named with a dash, unlike data-, aria- and the listed attributes (decision unknown-tag)
-html_is_custom_element(name: any) := name is text and contains(name, "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
+// str(name): a one-letter key (`"s": "small"`) is a Char, which contains refuses (card contains-fails)
+html_is_custom_element(name: any) := name is text and contains(str(name), "-") and not starts_with(name, "data-") and not starts_with(name, "aria-") and not contains(html_attributes, name)
 
 html_element(tag: any, content: any, scope: any, chosen: any) := {
 	let items = html_items(content)
@@ -60,14 +63,22 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	var attributes = ""
 	var children = ""
 	var facts = ""
+	// `style: { color: red }` and a transition's style: one attribute
+	var styles = []
 	for item in items {
 		if tag == "html" and html_is_page_fact(item) { facts = facts + html_page_fact(keys(item)#1, values(item)#1) }
+		else if html_is_attribute(item, tag) and keys(item)#1 == "style" and html_is_declarations(values(item)#1) {
+			if count(styles) == 0 { attributes = attributes + html_style_mark }
+			styles.add(html_css(values(item)#1))
+		}
 		else if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
 		else if tag == "style" { children = children + html_style_rule(item, scope) + " " }
 		else if tag == "script" { children = children + html_plain(item) }
+		else if tag == "select" and not html_is_element(item) { children = children + html_options(item, own_chosen) }
 		else { children = children + html_render(item, own_scope, own_chosen) }
 	}
 	// the option whose value, else text, is the select's
+	if count(styles) > 0 { attributes = replace(attributes, html_style_mark, " style=\"" + html_escaped(join(styles, "; ")) + "\"") }
 	if tag == "option" and chosen != ø and (if value == ø then children else html_escaped(value)) == html_escaped(chosen) { attributes = attributes + " selected" }
 	if contains(html_void_elements, tag) { return "<" + tag + attributes + ">" }
 	if tag == "style" { children = trim(children) }
@@ -76,6 +87,17 @@ html_element(tag: any, content: any, scope: any, chosen: any) := {
 	// `</script>` inside a script would end it
 	if contains(html_raw_text_elements, tag) { children = replace(children, "</", "<\\/") }
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
+}
+
+// `select{ "apple" "pear" }`, `select{ ["apple" "pear"] }`, `select{ fruits }`: what a select holds besides elements
+// is its options, a pair `"s": "small"` an option's value and label (card select-shorthand)
+html_options(listed: any, chosen: any) := {
+	if html_is_element(listed) { return html_render(listed, ø, chosen) }
+	if listed is pair { return html_render(option{ value: keys(listed)#1; values(listed)#1 }, ø, chosen) }
+	if not html_is_group(listed) { return html_render(option{ listed }, ø, chosen) }
+	var out = ""
+	for item in listed { out = out + html_options(item, chosen) }
+	out
 }
 
 // `html{ title: "Shop" description: "…" meta: { author: "Ann" } }`: facts about the page, for its head (card html-meta)
@@ -252,4 +274,155 @@ html_elements_in(item: any) := {
 	var elements = []
 	if html_is_group(item) { for part in item { for child in html_elements_in(part) { elements.add(child) } } }
 	elements
+}
+
+// `style{ .card { padding: 8px } }` a style sheet, `style: { color: theme }` an element's inline style: the element
+// with its selectors and lengths as the texts CSS writes, the tree as the parser read it (decisions.md data-parameter)
+style(sheet: data) := key(symbol("style"), ":", style_body(sheet))
+
+// lengths CSS writes with a unit, where warp reads `8px` as 8 * px
+style_units = ["px", "em", "rem", "vh", "vw", "vmin", "vmax", "pt", "ch", "ex", "fr", "deg", "turn", "ms", "s", "cm", "mm"]
+// how a selector joins the parts the parser read as operators: `ul > li`, `a:hover`, `div.card`, `#main`
+style_combinators = {">": " > ", "+": " + ", "~": " ~ ", "≈": " ~ ", ".": ".", ":": ":", "#": "#"}
+
+style_combinator(node: any) := if contains(keys(style_combinators), str(node.op)) then style_combinators[str(node.op)] else ø
+
+style_body(body: any) := bracketed(style_items(if style_is_block(body) then body else [body]), "{")
+
+style_is_block(node: any) := not (node is pair) and str(node.bracket) == "{"
+
+// the items of a block: rules with their selectors as texts, declarations with their lengths as texts; selector
+// words wait for their block (`ul li`, `h1, h2`)
+style_items(block: any) := {
+	var output = []
+	var pending = []
+	for entry in style_entries(block, block.separator, ø) {
+		let item = entry#1
+		let joiner = entry#2
+		let rule = style_rule_parts(item)
+		let selector_value = style_selector_value(item)
+		if rule != ø {
+			output.add(style_rule(style_joined(pending, rule#1, joiner), rule#2))
+			pending = []
+		} else if count(pending) > 0 and style_is_block(item) {
+			// `.card { … }`: a leading-dot name stays apart from its block
+			output.add(style_rule(style_joined(pending, "", ""), item))
+			pending = []
+		} else if selector_value != ø {
+			output.add(style_rule(selector_value#1, key(symbol("color"), ":", selector_value#2)))
+		} else if style_is_declaration(item) {
+			let length = style_length(item.value)
+			output.add(key(item.key, ":", if length == ø then item.value else length))
+		} else if count(output) > 0 and style_is_declaration(output#count(output)) and style_continued(output#count(output).value, item) != ø {
+			let last = output.pop()
+			output.add(key(last.key, ":", style_continued(last.value, item)))
+		} else if style_selector_text(item) != ø {
+			pending.add([style_selector_text(item), joiner, item])
+		} else {
+			output.add(item)
+		}
+	}
+	for selector in pending { output.add(selector#3) }
+	output
+}
+
+// the items of a block with the joiner before each, a group's (`h1, .x { … }` is h1 and the group `.x { … }`) among
+// them: a selector started before the group continues in it
+style_entries(items: any, separator: any, leading: any) := {
+	let list_joiner = if str(separator) == "," then ", " else " "
+	var entries = []
+	for item in items {
+		for part in style_unchained(item) {
+			let joiner = if count(entries) == 0 and leading != ø then leading else list_joiner
+			if not (part is pair) and str(part.bracket) == "" { entries = entries + style_entries(part, part.separator, joiner) }
+			else { entries.add([part, joiner]) }
+		}
+	}
+	entries
+}
+
+// `ul li { … }` and `.a { … }` on the next line: the parser chains the leading dot onto the rule before it
+// (`rule.a{…}`), as it does `#main` on the same line (`rule#main{…}`); the rules apart again
+style_unchained(node: any) := {
+	if not (node is pair) or not (str(node.op) == "." or str(node.op) == "#") { return [node] }
+	var parts = style_unchained(node.key)
+	let last = parts.pop()
+	if style_rule_parts(last) != ø {
+		parts.add(last)
+		parts.add(key(ø, node.op, node.value))
+	} else if count(parts) == 0 { return [node] }
+	else { parts.add(key(last, node.op, node.value)) }
+	parts
+}
+
+// `ul li`, `h1, h2`: the selector words waiting for their block, joined with the last one
+style_joined(pending: any, last: any, last_joiner: any) := {
+	var text = ""
+	for selector in pending { text = text + (if text == "" then "" else selector#2) + selector#1 }
+	text + (if text == "" then "" else last_joiner) + last
+}
+
+style_rule(selector: any, body: any) := key(selector, ":", style_body(body))
+
+// `color: theme`: a property name and a value that is no block
+style_is_declaration(node: any) := node is pair and str(node.op) == ":" and (node.key is symbol or node.key is text) and not style_is_block(node.value)
+
+// `#done = "red"`, `.done: "red"`: a class or id selector and a value that is no block, nor the one declaration the
+// parser chains onto it (`.done{color:red}` reads `.done:color:red`)
+style_selector_value(node: any) := {
+	if not (node is pair) or not (str(node.op) == ":" or str(node.op) == "=") { return ø }
+	let selector = style_selector_text(node.key)
+	if selector == ø or not (starts_with(selector, ".") or starts_with(selector, "#")) { return ø }
+	if style_is_block(node.value) or (node.value is pair and str(node.value.op) == ":") { return ø }
+	[selector, node.value]
+}
+
+// `padding: 8px` followed by `4px`: the value `8px 4px`, when both parts are constants; a bare number in a value of
+// several words stays as written, as CSS reads it (`flex: 1 1 auto`, `margin: 0 auto`)
+style_continued(value: any, next: any) := {
+	let first = style_piece(value)
+	let second = style_piece(next)
+	if first == ø or second == ø { return ø }
+	first + " " + second
+}
+
+style_piece(node: any) := if node is number or node is text or node is symbol then str(node) else style_length(node)
+
+// `8px`, `1.5em`, `50%`, `-2px`: the length as CSS writes it
+style_length(node: any) := {
+	if not (node is pair) { return ø }
+	let op = str(node.op)
+	if op == "*" and node.key is number and node.value is symbol and contains(style_units, str(node.value)) { return str(node.key) + str(node.value) }
+	if op == "%" and node.value == ø and node.key is number { return str(node.key) + "%" }
+	if op == "-" and node.key == ø {
+		let length = style_length(node.value)
+		if length != ø { return "-" + length }
+	}
+	ø
+}
+
+// `ul > li`: a rule, its selector as CSS text and its block of declarations
+style_rule_parts(node: any) := {
+	if not (node is pair) { return ø }
+	if str(node.op) == ":" and style_is_block(node.value) {
+		let selector = style_selector_text(node.key)
+		return if selector == ø then ø else [selector, node.value]
+	}
+	let rest = style_rule_parts(node.value)
+	let joiner = style_combinator(node)
+	let left = style_selector_text(node.key)
+	if rest == ø or joiner == ø or left == ø { return ø }
+	[left + joiner + rest#1, rest#2]
+}
+
+// `ul`, `.card`, `#main`, `div.card`, `"@media …"`: the selector a node spells
+style_selector_text(node: any) := {
+	if node is symbol or node is text { return str(node) }
+	if node == ø { return "" }
+	if not (node is pair) { return ø }
+	let joiner = style_combinator(node)
+	let left = style_selector_text(node.key)
+	let right = style_selector_text(node.value)
+	if joiner == ø or left == ø or right == ø { return ø }
+	left + joiner + right
 }

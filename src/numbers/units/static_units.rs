@@ -14,7 +14,7 @@
 //! text; `xs.add(q)` checks the element signature.
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
-use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
+use super::{finest_units, unit_named, units_text, whole_exponent, Dimension, Factor, Quantity, Unit};
 use crate::lowering::{function_head, DefinitionForm};
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
@@ -255,6 +255,7 @@ impl Inference {
 			in_progress: vec![],
 			numbered: 0,
 			new_definitions: vec![],
+			value_names: value_names(program),
 			display: finest_units(&written),
 			written: HashMap::new(),
 			temperatures,
@@ -264,6 +265,17 @@ impl Inference {
 			started: HashMap::new(),
 		}
 	}
+}
+
+/// The symbols written other than as the first word of a list, which calls it: the functions passed as values
+fn value_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			names.extend(items.iter().skip(1).filter_map(|item| item.symbol_name().map(str::to_string)));
+		}
+	});
+	names
 }
 
 /// Every unit word written in `node`, once per mention
@@ -417,8 +429,7 @@ pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
 }
 
 pub(super) fn exact_amount(value: &Node) -> Option<Rational> {
-	match value.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => exact_amount(&items[0]),
+	match value.ungrouped() {
 		Node::Number(Number::Int(n)) => Some(Rational::integer(*n)),
 		Node::Number(Number::Quotient(n, d)) => Some(Rational::new(BigInt::from(*n), BigInt::from(*d))),
 		// a written amount converts as the decimal it spells: 6.5km is 6500m, not 6499.999…m
@@ -558,12 +569,12 @@ fn shown_zero(units: &[Factor]) -> Rational {
 	}
 }
 
-/// `²`, `³` and `^ 2`: the power a quantity is raised to, a whole number written
+/// `^ 2` (also written `²`): the power a quantity is raised to, a whole number written
 fn written_power(op: Op, exponent: &Node) -> Option<i32> {
-	match (op, exponent.drop_meta()) {
-		(Op::Square | Op::Cube, Node::Empty) => Some(exponent_of(op)),
-		(Op::Pow, Node::Number(Number::Int(power))) => i32::try_from(*power).ok(),
-		_ => None,
+	if op == Op::Pow {
+		whole_exponent(exponent)
+	} else {
+		None
 	}
 }
 
@@ -679,6 +690,10 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 				Some((name.name(), (parameter.drop_meta().clone(), None)))
 			}
 			Node::Key(name, Op::Colon, _) => Some((name.name(), (Node::Symbol(name.name()), None))),
+			// `f: (float) -> float`, parsed `(f: (float)) -> float`: a function, no quantity
+			Node::Key(typed, Op::Arrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
+				Some((typed.name(), (parameter.drop_meta().clone(), None)))
+			}
 			// `t = 1s`: a call leaving t out gives the default
 			Node::Key(name, Op::Assign, default) => {
 				Some((name.name(), (Node::Symbol(name.name()), Some(default.as_ref().clone()))))
@@ -743,6 +758,8 @@ struct Inference {
 	in_progress: Vec<InProgress>,
 	numbered: usize,
 	new_definitions: Vec<Node>,
+	/// The names written as values, not called: `live_loop(drums, 2)` passes the function drums
+	value_names: HashSet<String>,
 	/// The finest written unit of each dimension: the unit a quantity shows in unless converted
 	display: Vec<&'static Unit>,
 	/// The units written in each variable's values: the units it shows in (card print-print)
@@ -777,10 +794,9 @@ pub(super) fn with_unit_written(amount: &Node, unit: &str) -> String {
 
 /// `5`, `(5)`, `5 ± 0.01`: the amount a unit word binds to
 fn is_number_literal(amount: &Node) -> bool {
-	match amount.drop_meta() {
+	match amount.ungrouped() {
 		Node::Number(_) => true,
 		Node::Key(value, Op::PlusMinus, tolerance) => is_number_literal(value) && is_number_literal(tolerance),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_number_literal(&items[0]),
 		_ => false,
 	}
 }
@@ -803,10 +819,7 @@ fn last_statement(node: &Node) -> Option<&Node> {
 
 /// The units a conversion shows: `q as km`, `q in km/h`
 fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => conversion_target(&items[0]),
-		other => super::conversion(other).map(|(_, units)| units),
-	}
+	super::conversion(node.ungrouped()).map(|(_, units)| units)
 }
 
 /// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`, a fraction in parentheses
@@ -886,9 +899,14 @@ fn object_entries(value: &Node) -> Option<Vec<(Node, Op, Node)>> {
 
 impl Inference {
 	fn infer(&mut self, node: Node) -> Result<(Node, Signature), Stop> {
-		if let Some((_, definition)) = function_definition(&node) {
-			// a body or default with unit literals compiles only in its specialisations
-			let kept = if self.has_units(&definition) { Node::Empty } else { node };
+		if let Some((name, definition)) = function_definition(&node) {
+			// a body or default with unit literals compiles only in its specialisations, and as the plain one a
+			// function passed as a value is
+			let kept = match self.has_units(&definition) {
+				false => node,
+				true if self.value_names.contains(&name) => self.plain_forward(&name, &definition),
+				true => Node::Empty,
+			};
 			return Ok((kept, Signature::plain()));
 		}
 		if let Some(construction) = self.named_construction(&node) {
@@ -1079,9 +1097,11 @@ impl Inference {
 			Node::Key(list, Op::Hash, index) => {
 				let (list, signature) = self.infer(*list)?;
 				let (index, index_signature) = self.infer(*index)?;
-				if !index_signature.is_empty() || (!signature.is_empty() && !signature.is_list()) {
+				if !index_signature.is_empty() {
 					return Err(Stop::Unsupported);
 				}
+				// an item of a single quantity, which has none, its units: a branch not taken (lib's is_signal of
+				// play(440Hz, 1s) reads tone#1 of a list only), else an error at run time
 				Ok((Node::Key(Box::new(list), Op::Hash, Box::new(index)), signature.element()))
 			}
 			// `√a`: the powers halve, an odd power has no root

@@ -2,8 +2,7 @@
 
 Roadmap card: type-theory (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 
-User, 2026-10-08: "type theory is formally verifiable, let's make it highest priority to implement that". Card
-type-theory. Goal: warp's type system has a formal model in Lean 4 with machine-checked soundness (progress and
+Goal: warp's type system has a formal model in Lean 4 with machine-checked soundness (progress and
 preservation), and the implementation is tied to that model by tests so they cannot drift.
 
 This note states the model and maps every rule to the code that implements it today. Where warp's checker accepts a
@@ -191,9 +190,9 @@ Model choices to keep in mind (each a simplification of warp, not a claim about 
 
 | program | W0 | card |
 | --- | --- | --- |
-| `x: bool = 2`, `b = true; b = 2`, `f(b: bool) := b; f(2)` | int ≰ bool (b then prints `yes`) | bool-assign |
-| `s: Shape = Circle("a", 2); s.r`, `c: Color = rgb(1, 2, 3); c.r` | Shape has no field r (warp looks it up at run time) | upcast-field |
-| `s = 0; for x in 3 { s += x }; s` | a for over an int (warp fails at run time, "not a list") | non-list |
+| `b: bool = no; b++; b` | `++` of a bool | bool-assign |
+| `f(n) := { n = "x"; n }; f(3)` | a parameter assigned a value of another type | param-assign-unchecked |
+| `s = 0; for x in 3 { s += x }; s` | a for over an int (warp fails at run time, "not a list") | cleanup-early-shape-checks |
 
 P199: a bool place (a declared variable or parameter, or a variable whose first value is evidently bool) takes
 the literals 1 and 0 as yes and no. The exporter elaborates them to `.bool` (src/law/type_model.rs bool_literal),
@@ -203,14 +202,13 @@ analyzer admits (the run-time check of a value against a builtin type word) agre
 type word × W0 scalar value type (test_warp_admits_what_the_type_model_subtypes), except bool ← int: the run-time
 Kind has no bool, so any int passes a bool check there.
 
-Fixed: declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts = [420]`), card
-list-element-types (warp-a1, main 499bb5b1c); typed parameters (`f(x: text) := x; f(3)`, card param-types) and
-call results (`f(x: int) := x + 1; y = f(2); y = "a"`, card call-result), functions2 on main by 18952a635.
+Refused by warp (no holes): declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts =
+[420]`), typed parameters (`f(x: text) := x; f(3)`), call results (`f(x: int) := x + 1; y = f(2); y = "a"`), upcasts
+read as their declared type (`s: Shape = Circle("a", 2); s.r`).
 static-int: a constant call whose value misfits its declared result (`def half(x) -> int { x / 2 }; half(3)`) is
 refused by `compile` (folding.rs refuse_result_misfits computes the call without the check); `half(4)` stays 2, as
 `x: int = 4/2` does (value-based, where W0 types `int / int` as exact and refuses both). Two corpus programs the model
-checks only by a run-time cast are refused earlier by warp: KNOWN_EARLIER_REFUSALS.
-bool-assign is on its way (warp-15 tip 64c8abf14). Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
+checks only by a run-time cast are refused earlier by warp: KNOWN_EARLIER_REFUSALS. Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
 
 ## Classes and sum types (phase 4)
 
@@ -271,16 +269,12 @@ for a whole number when they run. This is stricter than warp, never unsound, so 
   `f(x) := x + 1; f(3); f("a")` ("a1"), `f(x) := x - 1; f(3); f("a")` (a run-time error), `x: any = 2; x * 3`.
   warp is stricter than W0 where it knows the value: `x: any = "a"; x - 1` is a compile error in warp (constant
   propagation), so that form stays out of the corpus.
-- Coverage (probes/type_coverage.sh over data/types/sample_programs.txt, 599 is!() programs sampled from tests/,
-  result data/types/coverage.txt): 83 were inside W0 before this phase. On 2026-10-08, 95 exported, but 23 of those
-  were mis-exports the model rejected (method calls such as `x.size` or `4.square` exported as field reads, named
-  arguments, overloads, first bindings inside expressions, `.add` on a text) or a model gap (`#` and `++` on `any`
-  and texts). The exporter now refuses the former (a field read needs a field some class declares; `.add` needs a
-  name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
-  anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
-  The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123; with `let x = …`, `shared n = …` and C-style `int i = 2` / `String s = …`: 125; with ranges: 131; with `not`/`and`/`or`: 140; with `a, b = xs`: 141; with lambdas: 149, all agreeing. Most of the rest:
-  imports (`use`), multiple assignment `a, b = xs`, nested functions, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
+- Coverage (probes/type_coverage.sh over data/types/sample_programs.txt, ~600 is!() programs sampled from tests/,
+  result data/types/coverage.txt): the exporter refuses method calls exported as field reads (a field read needs a
+  field some class declares; `.add` needs a name bound to a list). Lists are gradual like arithmetic: `#` gives
+  `elementTy` (a text's element is a text, anything but a list or text gives `any`), `++` takes any operands, and
+  non-lists raise "not a list" when it runs; the checker demands lists, texts (for `#`) or `any`. Each section below
+  widened the exported share; every exported program agrees with warp.
 
 ## Globals
 
@@ -433,18 +427,18 @@ assignments and call arguments. A union field (`size: int | text`) and one of se
 arguments object `f·args`) are casts where an instance is made and where a field is written; W0 knows no object's class
 at `o.size = v`, so it casts only when every class with a field of that name declares it alike (card w0-unions). Warp
 checks a union field's literal when it is constructed and written (type_kinds keeps the union's name, its storage is a
-Node), and folding no longer inlines a variant with a declared parameter: `f(a: int, b: int) := a + b; f(1, 2.5)`
-folded to 3.5 unchecked. A union may name declared classes (card union-types): `s: Circle | Square` is the join of the
+Node), and folding never inlines a variant with a declared parameter (`f(a: int, b: int) := a + b; f(1, 2.5)` is
+checked). A union may name declared classes (card union-types): `s: Circle | Square` is the join of the
 classes (their common ancestor, `object` of unrelated ones), so W0 needs nothing new; warp lowers it like a union of
 builtin types (analyzer `union_of_types`, a class covers no builtin part: `Point | text` keeps both), holds it as a Node,
 and traits.rs `admit` refuses an instance like none of the classes. Class-typed places (card class-field): traits.rs
 `Dispatch` remembers `s: C = …` per definition scope (a function's `s = …` is its own local) and admits a later `s = v`,
 each constructor field (`instance_parts`) and a field write, which reaches dispatch as `b = field_with(b, "content", v)`;
 a class field may hold ø (tree leaves). The analyzer lowers unions inside class bodies too: `map_children` skips field
-declarations, so `content: Circle | Square` had registered as `any`. Every union part names a builtin type or a
-class (card undeclared-union): only a builtin part covers another, else `int | zork` collapsed to the unknown `zork`.
-`or` spells `|` everywhere (user 2026-10-12). A union result (card union-return, `def f(x) as int or text {…}`,
-`f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it, user 2026-10-12 return-as: `as` binds
+declarations, so `content: Circle | Square` is not `any`. Every union part names a builtin type or a
+class (card undeclared-union): only a builtin part covers another (`int | zork` is an unknown type error).
+`or` spells `|` everywhere. A union result (card union-return, `def f(x) as int or text {…}`,
+`f(x): int | text := …`; `as` is the canonical spelling, `->` hints toward it; `as` binds
 tighter than `or`, so declarations::as_union_result regroups `(f(x) as int) or text`) is checked, not converted: type_name_matching passes each returned value through the local
 `the result: int or text = v`, so a result gets the variable's checks. Not yet: a run-time check of a union
 variable (`x: int | text = f(2.5)` holds 2.5), `x is int` of a rational variable is yes (card int-accepts). Not yet: `x as T?` (a conversion in warp:
@@ -541,7 +535,7 @@ number, it becomes a float (`(1/3) as float`); a text is parsed ("4" is 4, "a" t
 convert to a number type (`[1] as int`, a compile error in warp too). The exporter takes scalar targets (int, number,
 text, bool and their spellings); `x as Point`, `x as texts` and `x as int?` are other operations in warp and stay out.
 
-A declared result converts the body's value only when nothing is lost (user 2026-10-12, card lossy-return): `-> text`,
+A declared result converts the body's value only when nothing is lost (card lossy-return): `-> text`,
 `-> float` convert as `body as T` and the exporter wraps the body in `.conv`; a whole-number type (`-> int`) and a
 union check it as a variable declared of the type is (type_name_matching `checked_result`, the local `the result`),
 `.cast` in W0: `def f() -> int { 2.5 }` is a compile error, `half(3)` of `-> int { x / 2 }` fails when it runs with
@@ -549,7 +543,7 @@ union check it as a variable declared of the type is (type_name_matching `checke
 `fun f(x: Int): Int`, `function f(x: number): number`, `def f(x) -> int: body`, `f(a, b): int := …`,
 `square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …` (`typed_definition` in
 src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all
-agreeing (2026-10-09). Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
+agreeing. Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
 conversion, KNOWN_HOLES) and card bool-conversion (`2 as bool` gives 1, not yes, KNOWN_VALUE_DIFFERENCES).
 
 ## Fixed widths and typed list elements

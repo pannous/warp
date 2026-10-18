@@ -1,0 +1,298 @@
+#!/usr/bin/env warp
+# A sunset sea, after web-ocean (github.com/Noniv/web-ocean, MIT): waves, sun glitter, whitecaps, a warm sky with two
+# cloud layers, aerial perspective and AgX tone mapping, all warp functions that paint(ocean, width, height) compiles
+# to one fragment shader. Each pixel casts a ray from the camera: it marches down onto the waves or goes up into the sky.
+# web-ocean simulates its waves by FFT on a quadtree mesh over several passes; here they are a sum of wind waves, each
+# one dragging the next along (cheap, and the crests stay sharp)
+use math
+width = 960
+height = 540
+global time = 0.0
+
+# the settings of web-ocean's panel (H), with its defaults
+wind_speed = 7 # m/s: longer, higher waves as it rises
+wind_direction = 28 # degrees off the line of sight, the waves roll toward the camera
+swell_height = 1.8 # metres, significant wave height
+swell_length = 120 # metres
+swell_direction = -4 # degrees off the line of sight
+choppiness = 1.25
+turbidity = 1.6 # how bright and green the water body is (coastal sediment, plankton)
+foam_amount = 1.0
+sun_elevation = 2.6 # degrees above the horizon
+sun_azimuth = 4 # degrees to the right of the view
+haze = 1.0
+cloud_cover = 0.4
+exposure = 1.0
+
+# the camera: 2.4 m above the water looking toward the sun, as docs/front.jpg of web-ocean; it flies as there:
+# W A S D move, Space or E up, Q or C down, drag the mouse to look around, Escape ends
+global camera_x = 0.0
+global camera_z = 0.0
+global camera_height = 2.4
+global yaw = 0.0 # degrees to the right
+global pitch = -3.0 # degrees up
+field_of_view = 60
+flying_speed = 6 # m/s
+looking_speed = 0.2 # degrees per pixel the mouse moves
+lowest = 0.8 # metres above the calm sea
+
+geometry_waves = 12
+detail_waves = 32
+drag = 0.28
+far_away = 20000.0
+
+# the direction toward a point elevation degrees above the horizon, azimuth degrees to the right
+direction_of(elevation, azimuth) := {
+	up = to_radians(elevation)
+	around = to_radians(azimuth)
+	[sine(around) * cosine(up), sine(up), cosine(around) * cosine(up)]
+}
+# functions, not program lists: a shader reads a program list only item by item yet (card kernel-global-lists)
+sun() := direction_of(sun_elevation, sun_azimuth)
+eye() := [camera_x, camera_height, camera_z]
+sun_light() := [1.0, 0.78, 0.55] .* 9
+zenith_blue() := [0.09, 0.13, 0.22]
+horizon_gold() := [1.0, 0.58, 0.2]
+
+# a number in 0 … 1 per lattice point: sin-hashes stripe in f32 for big arguments, so the point is wrapped first
+hash(p) := fract(sine(dot(p .- 289 .* floor(p ./ 289), [127.1, 311.7])) * 43758.547)
+
+# smooth value noise: the corner hashes of the lattice cell, blended
+noise(p) := {
+	cell = floor(p)
+	inside = p .- cell
+	blend = inside .* inside .* (3 .- 2 .* inside)
+	bottom = mix(hash(cell), hash(cell .+ [1, 0]), blend.x)
+	top = mix(hash(cell .+ [0, 1]), hash(cell .+ [1, 1]), blend.x)
+	mix(bottom, top, blend.y)
+}
+
+# fractal noise: octaves of noise, each twice as fine and half as strong, turned so their grids don't line up
+clouds_noise(p, octaves) := {
+	sum = 0.0
+	weight = 0.5
+	q = p
+	for octave in 0..octaves {
+		sum = sum + weight * noise(q)
+		q = [1.6 * q.x - 1.2 * q.y, 1.2 * q.x + 1.6 * q.y] .+ 17.3
+		weight = weight * 0.5
+	}
+	sum
+}
+
+# a wave's direction of travel on the water, degrees off the line of sight, rolling toward the camera
+heading(degrees) := [sine(to_radians(degrees)), -cosine(to_radians(degrees))]
+
+# one sharp-crested wave, an exp(sin − 1) profile, at p after time: [height, slope along x, slope along z, rise]
+wave_at(p, direction, length, amplitude) := {
+	frequency = tau / length
+	speed = sqrt(9.81 / frequency)
+	phase = dot(p, direction) * frequency - time * speed * frequency
+	crest = exponential(sine(phase) - 1)
+	rise = crest * cosine(phase)
+	slope = direction .* (rise * amplitude * frequency)
+	[crest * amplitude, slope.x, slope.y, rise]
+}
+
+# the sea surface at p (metres, x and z): [height, slope along x, slope along z]
+# the long swell, then wind waves fanning around the wind, each shorter one dragged along by the slope before it, so
+# the short waves bunch on the crests of the long ones
+waves(p, count) := {
+	swell = wave_at(p, heading(swell_direction), swell_length, swell_height * 0.35)
+	surface = swell.xyz
+	length = 1.6 + wind_speed * 4.5
+	amplitude = 0.05 * wind_speed * choppiness
+	weights = amplitude
+	at = p
+	for wave in 0..count {
+		direction = heading(wind_direction + 70 * sine(wave * 2.39996))
+		one = wave_at(at, direction, length, amplitude)
+		surface = surface .+ one.xyz
+		at = at .- direction .* (one.w * drag * amplitude * 4)
+		weights = weights + amplitude
+		length = length / 1.18
+		amplitude = amplitude * 0.83
+	}
+	surface .- [weights * 0.37, 0, 0]
+}
+
+surface_height(p) := {
+	surface = waves(p, geometry_waves)
+	surface.x
+}
+
+# the sky's color in a direction: the air's gradient, the glow around the sun, the sun itself, then the clouds
+air(direction) := {
+	up = max(direction.y, 0)
+	toward_sun = max(dot(direction, sun()), 0)
+	gradient = mix(horizon_gold(), zenith_blue(), smoothstep(0, 0.5, up) ^ 0.6)
+	glow = [1.0, 0.55, 0.25] .* (0.4 * toward_sun ^ 8 + 2.0 * toward_sun ^ 120 + 6 * toward_sun ^ 2000) .* (1 - up) ^ 3
+	gradient .+ glow .* haze
+}
+
+sun_disc(direction) := sun_light() .* (40 * smoothstep(0.99996, 0.99999, dot(direction, sun())))
+
+# one flat cloud layer at altitude metres: coverage cuts the fractal noise, the side facing the sun is lit
+cloud_layer(direction, altitude, scale, stretch, cover, octaves) := {
+	distance = altitude / max(direction.y, 0.02)
+	spot = direction.xz .* (distance / scale) .* [1, stretch] .+ [time * 0.004, 0.3]
+	density = clouds_noise(spot, octaves)
+	opacity = smoothstep(1 - cover, 1.15 - cover, density) * smoothstep(0.015, 0.09, direction.y)
+	thickness = clouds_noise(spot .+ [0.05 * sun().x, 0.05 * sun().z], octaves)
+	toward_sun = max(dot(direction, sun()), 0)
+	lit = clamp(1.2 - 3 * (thickness - density) - 0.8 * density, 0.1, 1.1)
+	color = mix([0.5, 0.36, 0.24], [1.5, 0.95, 0.4], lit) .+ [1.0, 0.7, 0.4] .* (2.5 * toward_sun ^ 12)
+	[color.x, color.y, color.z, opacity]
+}
+
+sky(direction) := {
+	color = air(direction) .+ sun_disc(direction)
+	high = cloud_layer(direction, 6000, 2600, 4, cloud_cover * 0.7, 4)
+	color = mix(color, high.xyz .* 1.1, high.w * 0.6)
+	low = cloud_layer(direction, 1500, 900, 1.3, cloud_cover, 5)
+	mix(color, low.xyz, low.w)
+}
+
+# where the ray hits the waves: march between the highest and lowest water, then halve the last step until it fits
+hit_distance(origin, ray) := {
+	top = 1.6
+	near = (origin.y - top) / -ray.y
+	far = min((origin.y + top) / -ray.y, far_away)
+	distance = near
+	for step in 0..72 {
+		p = origin .+ ray .* distance
+		above = p.y - surface_height(p.xz)
+		if above < 0.002 * distance or distance > far {
+			break
+		}
+		distance = distance + max(above * 0.7, 0.01 * distance)
+	}
+	distance
+}
+
+water_normal(p, distance) := {
+	slopes = waves(p.xz, detail_waves)
+	n = normalize([-slopes.y, 1, -slopes.z])
+	# far away the waves are smaller than a pixel: the surface turns into a smooth sheen instead of shimmering
+	normalize(mix(n, [0, 1, 0], smoothstep(150, 3000, distance) * 0.85))
+}
+
+# the sea where the ray hit it: the sky mirrored by Fresnel, the sun's glitter, the turbid water below, whitecaps
+water(ray, distance) := {
+	p = eye() .+ ray .* distance
+	n = water_normal(p, distance)
+	view = ray .* -1
+	# Fresnel of a partly smoothed normal: at grazing angles the finer facets the eye sees stay mirror-like
+	facing = max(dot(normalize(mix(n, [0, 1, 0], 0.45)), view), 0)
+	fresnel = 0.02 + 0.98 * (1 - facing) ^ 5
+	mirrored = reflect(ray, n)
+	lifted = normalize([mirrored.x, abs(mirrored.y) * 0.4 + max(mirrored.y, 0) * 0.6, mirrored.z])
+	reflection = sky(lifted)
+	# glitter: a Gaussian distribution of facet slopes, rougher far away where many waves share a pixel
+	halfway = normalize(sun() .+ view)
+	along = max(dot(n, halfway), 0.001)
+	roughness = 0.09 + distance * 0.00002
+	tilt = (1 - along * along) / (along * along * roughness * roughness)
+	glitter = sun_light() .* (exponential(-tilt) / (pi * roughness * roughness * along ^ 4) * fresnel * 0.05)
+	# the water body: light scattered up from below, and a green glow where the sun shines through a thin crest
+	sky_light = air([0, 1, 0]) .* 1.6 .+ sun_light() .* (max(sun().y, 0) * 0.8)
+	body = [0.018, 0.085, 0.072] .* turbidity .* sky_light
+	crest = clamp((p.y + 0.2) / 0.9, 0, 1)
+	toward_sun = max(dot(sun(), view .* -1), 0)
+	thin = clamp(0.5 - 0.5 * dot(sun(), n), 0, 1) ^ 3
+	body = body .+ [0.035, 0.12, 0.085] .* sun_light() .* (0.4 * crest * crest * toward_sun ^ 4 * thin * exponential(-distance / 600))
+	# whitecaps on the highest crests, broken into patches, gone where they would be smaller than a pixel
+	foam_line = p.y + 0.3 * noise(p.xz .* 0.5) + 0.15 * foam_amount
+	patches = smoothstep(0.4, 0.8, noise(p.xz .* 3) * noise(p.xz .* 0.7 .+ 5))
+	# patches = smoothstep(0.4, 0.8, noise(p.xz .* 1) * noise(p.xz .* 0.1 .+ 5))
+	foam = smoothstep(0.85, 1.1, foam_line) * patches * foam_amount * exponential(-distance / 250)
+	sea = mix(body, reflection, fresnel) .+ glitter
+	mix(sea, [0.82, 0.87, 0.92] .* sky_light .* 0.5, clamp(foam, 0, 0.95))
+}
+
+# min, max and clamp of a color channel by channel (card min-max: the words don't take vectors yet)
+at_least(color, low) := [max(color.x, low), max(color.y, low), max(color.z, low)]
+within(color, low, high) := [clamp(color.x, low, high), clamp(color.y, low, high), clamp(color.z, low, high)]
+
+# AgX tone mapping (Troy Sobotka's, in Benjamin Wrensch's fit): log encoding, then a sigmoid polynomial
+# (binary_log isn't a shader word yet, card kernel-binary-log)
+agx(color) := {
+	inset = [dot(color, [0.842479, 0.0784336, 0.0792237]), dot(color, [0.042328, 0.878469, 0.0791661]), dot(color, [0.0423756, 0.0784336, 0.879142])]
+	low = -12.47393
+	high = 4.026069
+	x = within((ln(at_least(inset, 0.0000000001)) ./ ln(2) .- low) ./ (high - low), 0, 1)
+	x2 = x .* x
+	x4 = x2 .* x2
+	15.5 .* x4 .* x2 .- 40.14 .* x4 .* x .+ 31.96 .* x4 .- 6.868 .* x2 .* x .+ 0.4298 .* x2 .+ 0.1191 .* x .- 0.00232
+}
+
+# back from AgX's space, a touch more saturated and contrasty as web-ocean's look
+agx_display(curve) := {
+	luminance = dot(curve, [0.2126, 0.7152, 0.0722])
+	look = (at_least(curve, 0) .^ 1.06 .- luminance) .* 1.05 .+ luminance
+	[dot(look, [1.19687900512017, -0.0980208811401368, -0.0990297440797205]), dot(look, [-0.0528968517574562, 1.15190312990417, -0.0989611768448433]), dot(look, [-0.0529716355144438, -0.0980434501171241, 1.15107367264116])]
+}
+
+# web-ocean's camera: exposure, a slight vignette, a cool white balance, glints and the sun bleached toward white
+film(color, x, y) := {
+	off_center = [(x / width - 0.5) * width / height, y / height - 0.5]
+	exposed = color .* (exposure * (1 - 0.1 * dot(off_center, off_center))) .* [0.81, 1, 1.19]
+	luminance = dot(exposed, [0.2126, 0.7152, 0.0722])
+	bleached = mix(exposed, [luminance, luminance, luminance], smoothstep(0.7, 6, luminance) * 0.55)
+	within(agx_display(agx(bleached)), 0, 1)
+}
+
+# the camera's ray through the pixel at column x, row y
+ray_through(x, y) := {
+	turn = to_radians(yaw)
+	tilt = to_radians(pitch)
+	forward = [sine(turn) * cosine(tilt), sine(tilt), cosine(turn) * cosine(tilt)]
+	right = normalize(cross([0, 1, 0], forward))
+	up = cross(forward, right)
+	spread = tangent(to_radians(field_of_view) / 2) / (height / 2)
+	normalize(forward .+ right .* ((x - width / 2) * spread) .+ up .* ((height / 2 - y) * spread))
+}
+
+ocean(x, y) := {
+	ray = ray_through(x, y)
+	color = sky(ray)
+	if ray.y < -0.0005 {
+		distance = hit_distance(eye(), ray)
+		# aerial perspective: the far sea fades into the haze of the horizon
+		hazy = 1 - exponential(-distance * 0.00004 * haze)
+		color = mix(water(ray, distance), air([ray.x, 0.02, ray.z]), hazy)
+	}
+	film(color, x, y)
+}
+
+# the free camera, one step of seconds long
+fly(seconds) := {
+	turn = to_radians(yaw)
+	way = flying_speed * seconds
+	if held_key == "w" { camera_x += sine(turn) * way; camera_z += cosine(turn) * way }
+	if held_key == "s" { camera_x -= sine(turn) * way; camera_z -= cosine(turn) * way }
+	if held_key == "d" { camera_x += cosine(turn) * way; camera_z -= sine(turn) * way }
+	if held_key == "a" { camera_x -= cosine(turn) * way; camera_z += sine(turn) * way }
+	if held_key == space or held_key == "e" { camera_height += way }
+	if held_key == "q" or held_key == "c" { camera_height = max(camera_height - way, lowest) }
+}
+
+started = clock()
+last_frame = started
+last_x = mouse_x
+last_y = mouse_y
+# each frame of the window, until it closes (headless: one frame, as a PNG)
+on frame {
+	if held_key == ESC: exit()
+	now = clock()
+	time = float(now - started) / 1000
+	fly(float(now - last_frame) / 1000)
+	last_frame = now
+	if mouse_down {
+		yaw += (mouse_x - last_x) * looking_speed
+		pitch = clamp(pitch - (mouse_y - last_y) * looking_speed, -89, 89)
+	}
+	last_x = mouse_x
+	last_y = mouse_y
+	paint(ocean, width, height)
+}

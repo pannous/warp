@@ -59,8 +59,12 @@ impl WasmGcEmitter {
 		self.emit_list_cursor_globals();
 		self.emit_text_cursor_globals();
 		self.emit_map_index_globals();
+		self.emit_text_foundation();
 		constructors::emit_all_constructors(self);
+		self.emit_is_meta_entry();
+		self.emit_list_items(); // before every function walking a list's items
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
+		self.emit_text_address();
 		self.emit_int_runtime();
 		self.export_exact_builders();
 		// a C function returning char * hands its text in through the text heap (ffi.rs text_node)
@@ -98,6 +102,7 @@ impl WasmGcEmitter {
 		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
 		self.emit_node_api(); // after text_of, text_concat and error_of, which it calls
+		self.emit_function_body(); // after node_at, which its quoted code calls
 	}
 
 	pub(in crate::wasm_emitter) fn emit_getters(&mut self) {
@@ -144,7 +149,7 @@ impl WasmGcEmitter {
 		// so a host without GC field access (JavaScript) can read a result text from memory
 		for (name, field_index) in [("get_text_ptr", 0), ("get_text_len", 1)] {
 			self.exported_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
-				let string = HeapType::Concrete(s.type_manager.string_type);
+				let string = HeapType::Concrete(s.type_manager.text_type);
 				s.emit_field(f, 0, 1);
 				Self::emit_list(f, &[I::RefTestNonNull(string), I::If(BlockType::Result(ValType::I32))]);
 				s.emit_text_field(f, 0, field_index);

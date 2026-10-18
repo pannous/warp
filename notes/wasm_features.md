@@ -1,14 +1,14 @@
 # Wasm features: what warp uses, wants, and skips
 
-Decisions and directions from the user (2026-10-03). Runtime support for exceptions: notes/wasm_exceptions.md.
+Decisions and directions. Runtime support for exceptions: notes/wasm_exceptions.md.
 
 ## On by default
 - GC, reference types, typed function references, bulk memory, exception handling (`try`).
-- Extended constant expressions (Wasm 3.0): "should just be default". wasmtime and wasmparser enable them by default,
+- Extended constant expressions (Wasm 3.0): default. wasmtime and wasmparser enable them by default,
   wasm-opt gets `--enable-extended-const` (BINARYEN_FEATURES in src/wasm_optimizer.rs). The emitter does not use them
   yet: a global with an arithmetic initialiser (`global x = 2*21`) could be a constant expression instead of a store in main.
 
-## Built (2026-10-03 rounds)
+## Built
 - typed-lists: homogeneous Int/Float lists as GC arrays behind one list-operation dispatch layer (notes/typed_lists.md).
 - closures: first-class functions as a GC struct of a typed function reference plus captured values (notes/closures.md).
 - multi-value: real multi-value results in the runtime helpers and tuple returns (`return a, b`) (notes/multi_value.md).

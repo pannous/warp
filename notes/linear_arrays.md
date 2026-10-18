@@ -1,7 +1,6 @@
-# Linear arrays (user, 2026-10-06; card linear-memory)
+# Linear arrays
 
-User: "Create an explicit array type for linear data, but discourage its use by saying that the compiler will prefer
-picking it automatically."
+An explicit array type for linear data, discouraged by a hint: the compiler picks linear memory by itself.
 
 ## Syntax and meaning
 - `linear xs = int[n]`, `linear xs = float[n]`: n zeroed cells in the module's linear memory, one block
@@ -10,16 +9,15 @@ picking it automatically."
   `prefer xs = float[n] over linear xs = float[n]: the compiler picks where a list of numbers lives by itself, linear
   memory included; linear only forces it`. Not where they are paired in a way the compiler would not pick linear
   memory for (tests/lists/test_linear_hint.rs).
-- The compiler picks linear memory (card compiler-picks-dot, shared_arrays.rs picked_linear): a plain `xs = float[n]`
+- The compiler picks linear memory (shared_arrays.rs picked_linear): a plain `xs = float[n]`
   assigned once, paired by `dot` or `.*` with another such float array, every other mention a cell read/write/add,
   `#xs`, `count(xs)`, `xs.count` or `for x in xs`, becomes `linear xs = float[n]`. dot of 10^6 then runs as
   linear_dotf (2–3 ms) instead of over GC lists (13 ms). Anything else (a reassignment, `print(xs)`, a call, an
-  append, a GC list partner) keeps both as GC lists. samples/lists/dot.warp has no `linear` any more.
-- Mapped by a numeric kernel (card auto-linear-floats, 2026-10-12): `xs.map(x => body)` / `map(xs, x => body)` whose
+  append, a GC list partner) keeps both as GC lists.
+- Mapped by a numeric kernel: `xs.map(x => body)` / `map(xs, x => body)` whose
   lambda gpu_maps::kernel translates (arithmetic, sqrt, sin, max …, captured numbers) counts like a dot pairing, so a
   plain `xs = float[n]` becomes linear and the map runs as the f64x2 kernel or one loop into a new block. A lambda
-  calling a user function keeps the GC list. probes/perf/auto_linear_map.warp (20 maps of 10^6 in a loop): 0.08 s;
-  main ran out of fuel after 15 s there (card map-inside: a GC-list map inside a loop body is quadratic).
+  calling a user function keeps the GC list. probes/perf/auto_linear_map.warp (20 maps of 10^6 in a loop): 0.08 s.
 - Reads like any list: `xs#i`, `xs#i = v`, `xs#i += v`, `#xs`, `count xs`, `xs.count`, `for x in xs {…}`, passing
   it to a function (by reference, as shared arrays); used as a whole value (printed, returned) it is the list of its
   cells. Outside 1..n: `index out of range`. A `go` cannot take one (an error says to use `shared`): another task has
@@ -36,6 +34,5 @@ picking it automatically."
 - `linear xs = int[n]` 0.18–0.24 s, automatic `xs = int[n]` (wasm GC array) 0.19–0.23 s: the same speed. Linear memory
   pays for its layout, not speed: one block a host or GPU backend (P118, `@gpu` maps only) can take without copying.
 
-## Later (linear-memory card)
-- The compiler picking linear memory by itself above a threshold, when a backend needs the block (GPU, host SIMD).
+## Later
 - Freeing blocks (an arena per run or per call) once programs allocate many.

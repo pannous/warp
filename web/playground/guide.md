@@ -765,12 +765,19 @@ block or function when every digit counts; `@gpu` asks for the graphics card fro
 
 [[#Pictures]] above shows how to draw directly on the GPU.
 
-Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader, cyber_fuji, singularity, wormhole
+Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader, lava_lamp, northern_lights, ringed_planet, kaleidoscope
 
 ## Sound and music
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
-`play "mozart.mp3"` plays a music file; a relative name is the program file's neighbour.
+
+### Music files
+
+`play` plays a music file in the background. A sample names its neighbours by name (`play "mozart.mp3"` in samples/sound/play_mp3.warp); here the file goes by its path.
+
+```warp
+play "samples/sound/mozart.mp3"
+```
 
 Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp
 

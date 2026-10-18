@@ -1,6 +1,6 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
-use crate::lowering::nodes::{assign, block, fresh_number, phrase_words, word_headed};
+use crate::lowering::nodes::{assign, block, fresh_number, phrase_words_of, with_statements_first, word_headed};
 use crate::node::parens;
 use crate::words::{ADD_WORD, ALL_WORD, RAISE_WORD};
 
@@ -59,8 +59,9 @@ pub fn lower_tasks(node: Node) -> Node {
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
 	let mut started = std::collections::HashMap::new();
+	let mut task_functions = std::collections::HashMap::new();
 	node.visit(&mut |part| {
-		if let Node::Key(head, Op::Define | Op::Assign, _) = part {
+		if let Node::Key(head, Op::Define | Op::Assign, value) = part {
 			let name = match head.drop_meta() {
 				Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
 				Node::Symbol(name) => Some(name.clone()),
@@ -73,9 +74,24 @@ pub fn lower_tasks(node: Node) -> Node {
 				}
 			}
 			if matches!(head.drop_meta(), Node::List(..)) {
+				if let Some((function, started)) = name.clone().zip(started_at_end(value)) {
+					task_functions.insert(function, started);
+				}
 				functions.extend(name.clone());
 			}
 			defined.extend(name);
+		}
+	});
+	// `voice = live_loop(drums, 2)` of a function whose value is the task its `go` starts
+	node.visit(&mut |part| {
+		if let Node::Key(head, Op::Define | Op::Assign, value) = part {
+			let called = value.call_parts().map(|(function, _)| function);
+			if let (Node::Symbol(variable), Some(function)) = (head.drop_meta(), called) {
+				if let Some(function) = task_functions.get(function) {
+					tasks.insert(variable.clone());
+					started.insert(variable.clone(), function.clone());
+				}
+			}
 		}
 	});
 	let words: Vec<&str> = TASK_WORDS.into_iter().filter(|word| !defined.contains(*word)).collect();
@@ -89,7 +105,7 @@ pub fn lower_tasks(node: Node) -> Node {
 	node.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
 			if let [word, started, ..] = items.as_slice() {
-				if matches!(word.drop_meta(), Node::Symbol(name) if name == TASK_WORDS[0]) {
+				if word.is_symbol(TASK_WORDS[0]) {
 					let function = match started.drop_meta() {
 						Node::List(call, _, _) => call.first().map(|name| name.drop_meta().name()),
 						other => Some(other.name()),
@@ -102,6 +118,18 @@ pub fn lower_tasks(node: Node) -> Node {
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
+}
+
+/// The function a body's value starts as a task: `go { … }` (go_blocks.rs made it `go go·block·1(…)`), the last
+/// statement of a block
+fn started_at_end(body: &Node) -> Option<String> {
+	match body.drop_meta() {
+		Node::List(items, _, _) if is_start(body) => started_call(&items[1..]).map(|(function, _)| function),
+		Node::List(items, _, separator) if separator.separates_statements() || items.len() == 1 => {
+			items.last().and_then(started_at_end)
+		}
+		_ => None,
+	}
 }
 
 /// `job = go f(x)`: the task variable and the words of its start
@@ -121,16 +149,20 @@ pub(super) fn task_start(node: &Node) -> Option<(&String, &Vec<Node>)> {
 
 /// The words of a statement the parser paired, flat: `(await any) [a, b]`, `await (all [go f(1), …])`
 pub(super) fn spoken_words(items: &[Node]) -> Vec<Node> {
-	let pair = |node: &Node| match node.drop_meta() {
-		Node::List(inner, Bracket::None, _) if inner.len() == 2 => Some(inner.clone()),
-		_ => None,
-	};
 	match items {
-		[first, rest @ ..] if pair(first).is_some() => [pair(first).expect("guarded"), rest.to_vec()].concat(),
-		[head, second] if head.name() == TASK_WORDS[1] && pair(second).is_some() => {
-			[vec![head.clone()], pair(second).expect("guarded")].concat()
+		[first, rest @ ..] if paired_words(first).is_some() => [paired_words(first).expect("guarded"), rest].concat(),
+		[head, second] if head.name() == TASK_WORDS[1] && paired_words(second).is_some() => {
+			[std::slice::from_ref(head), paired_words(second).expect("guarded")].concat()
 		}
 		_ => items.to_vec(),
+	}
+}
+
+/// The two words the parser paired: `(await any)`, `(all jobs)`
+fn paired_words(node: &Node) -> Option<&[Node]> {
+	match node.drop_meta() {
+		Node::List(inner, Bracket::None, _) if inner.len() == 2 => Some(inner),
+		_ => None,
 	}
 }
 
@@ -306,7 +338,7 @@ pub(super) fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
 pub(super) fn awaited(node: Node) -> Node {
 	match node {
 		Node::List(mut items, bracket, separator) => {
-			let head = word(items.first().unwrap_or(&Node::Empty));
+			let head = head_word(&items);
 			if let Some((_, named)) = AWAITED_MARKERS.iter().find(|(read, _)| *read == head) {
 				items[0] = symbol(named);
 			}
@@ -434,7 +466,7 @@ impl Tasks<'_> {
 				// a signal handler first, before its `download.stop` reads as a control
 				if let Some(handled) = self.signal_handler(&items) {
 					// a task·on marker holds the task variable itself, its body is lowered already
-					let is_task_handler = matches!(&handled, Node::List(parts, _, _) if word(parts.first().unwrap_or(&Node::Empty)) == TASK_ON);
+					let is_task_handler = matches!(&handled, Node::List(parts, _, _) if head_word(parts) == TASK_ON);
 					return if is_task_handler { handled } else { self.lower(handled) };
 				}
 				// `await any [a, b]` and `await job within 100 ms` read the tasks themselves, before a read of one waits
@@ -475,7 +507,7 @@ impl Tasks<'_> {
 		if word(marker_word) != crate::warp_parser::TRY_MARKER {
 			return None;
 		}
-		self.within(&phrase_words(std::slice::from_ref(awaited)), Some(fallback.clone()))
+		self.within(&phrase_words_of(awaited), Some(fallback.clone()))
 	}
 
 	/// `await job within 100 ms or 0` (P154, asyncio.wait_for, Kotlin withTimeout): the job's result if it ends in
@@ -573,10 +605,7 @@ impl Tasks<'_> {
 				}
 				// `await all jobs` (also read as `await (all jobs)`): every result, a job list read awaits them all
 				let spoken = match rest {
-					[phrase] => match phrase.drop_meta() {
-						Node::List(inner, Bracket::None, _) if inner.len() == 2 => inner.as_slice(),
-						_ => rest,
-					},
+					[phrase] => paired_words(phrase).unwrap_or(rest),
 					_ => rest,
 				};
 				Some(awaited(one(match spoken {
@@ -694,13 +723,7 @@ impl Tasks<'_> {
 				None => body.clone(),
 			};
 		}
-		never_happens(
-			subject,
-			&format!(
-				"`{event}` of {} never happens: a task finishes where it starts, its handler never runs",
-				subject.name()
-			),
-		)
+		handler_never_runs(subject, event)
 	}
 }
 
@@ -726,7 +749,7 @@ pub(super) const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 pub fn resolve_tasks(node: Node) -> Node {
 	use crate::type_kinds::Kind;
 	let mut has_task = false;
-	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(read_marker(&word(items.first().unwrap_or(&Node::Empty))).0, TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT | crate::warp_parser::TRY_MARKER)));
+	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(read_marker(&head_word(items)).0, TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT | crate::warp_parser::TRY_MARKER)));
 	if !has_task {
 		return node;
 	}
@@ -778,11 +801,7 @@ impl TaskHandler {
 	pub(super) fn check(&self) -> Node {
 		use crate::variable_signals::assign_variable;
 		let not_handled = key(Node::Empty, Op::Not, Node::Symbol(self.flag.clone()));
-		let status = key(
-			call(crate::host::TASK_STATUS, vec![self.job.clone()]),
-			Op::Eq,
-			Node::Number(crate::extensions::numbers::Number::Int(self.status)),
-		);
+		let status = key(call(crate::host::TASK_STATUS, vec![self.job.clone()]), Op::Eq, crate::node::int(self.status));
 		let condition = key(not_handled, Op::And, status);
 		if_then(condition, block(vec![assign_variable(&self.flag, Node::True), self.body.clone()]))
 	}
@@ -817,7 +836,7 @@ impl TaskHandlers<'_> {
 		let (mut active, mut own, mut out) = (outer.to_vec(), vec![], vec![]);
 		let count = items.len();
 		for (index, item) in items.into_iter().enumerate() {
-			let is_handler = matches!(item.drop_meta(), Node::List(parts, _, _) if word(parts.first().unwrap_or(&Node::Empty)) == TASK_ON);
+			let is_handler = matches!(item.drop_meta(), Node::List(parts, _, _) if head_word(parts) == TASK_ON);
 			if !is_handler {
 				let lowered = self.lower(item, &active);
 				if index + 1 == count {
@@ -838,13 +857,7 @@ impl TaskHandlers<'_> {
 				// the task finished where it started: a finish handler runs now, one of a stop or pause never
 				out.push(match event.as_str() {
 					FINISH_EVENT => body,
-					_ => never_happens(
-						&job,
-						&format!(
-							"`{event}` of {} never happens: a task finishes where it starts, its handler never runs",
-							job.name()
-						),
-					),
+					_ => handler_never_runs(&job, &event),
 				});
 				continue;
 			}
@@ -896,37 +909,14 @@ pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMa
 			// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
 			let declared = key(arguments.clone(), Op::Colon, symbol("list"));
 			let head = call(&format!("{function}{NODE_WRAPPER_SUFFIX}"), vec![declared]);
-			let argument = |index: usize| {
-				key(
-					arguments.clone(),
-					Op::Hash,
-					Node::Number(crate::extensions::numbers::Number::Int(index as i64 + 1)),
-				)
-			};
+			let argument = |index: usize| key(arguments.clone(), Op::Hash, crate::node::int(index as i64 + 1));
 			let call = call(&function.clone(), (0..*count).map(argument).collect());
 			let result = symbol(WRAPPER_RESULT);
 			let body = block(vec![assign(result.clone(), call), result]);
 			key(head, Op::Define, body)
 		})
 		.collect();
-	with_definitions_first(node, items)
-}
-
-/// The program with `definitions` as its first statements
-pub(crate) fn with_definitions_first(node: Node, mut definitions: Vec<Node>) -> Node {
-	if definitions.is_empty() {
-		return node;
-	}
-	match node {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			definitions.extend(statements);
-			Node::List(definitions, Bracket::None, separator)
-		}
-		single => {
-			definitions.push(single);
-			Node::List(definitions, Bracket::None, Separator::Semicolon)
-		}
-	}
+	with_statements_first(node, items)
 }
 
 /// A raise inside a task reaches the starting thread's handlers (P110, notes/signals.md phase 6): each handler
@@ -985,7 +975,7 @@ pub(super) fn checked_await(job: &Node, crossing: Crossing) -> Node {
 	let result = call(crate::host::TASK_AWAIT_VALUE, vec![job.clone()]);
 	let result = match crossing {
 		Crossing::AsIs => result,
-		Crossing::Bool => key(result, Op::Ne, Node::Number(crate::extensions::numbers::Number::Int(0))),
+		Crossing::Bool => key(result, Op::Ne, crate::node::int(0)),
 		Crossing::Char => key(result, Op::As, symbol("char")),
 	};
 	Node::List(vec![check, result], Bracket::None, Separator::Semicolon)
@@ -1078,7 +1068,7 @@ pub(super) fn resolved(
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| resolved(item, path, wrapped)).collect();
-			let head = word(items.first().unwrap_or(&Node::Empty));
+			let head = head_word(&items);
 			let (read, said) = read_marker(&head);
 			if let Some(error) = (!said).then(|| unsaid_wait(read, &items, path)).flatten() {
 				return error;
@@ -1131,10 +1121,7 @@ pub(super) fn resolved(
 					TaskPath::Inline => nothing_to_stop(&items[1], &word(&items[3])),
 					_ => call(
 						TASK_CONTROL,
-						vec![
-							items[1].clone(),
-							Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(&items[3])))),
-						],
+						vec![items[1].clone(), crate::node::int(control_operation(&word(&items[3])))],
 					),
 				},
 				_ => Node::List(items, bracket, separator),
@@ -1206,10 +1193,12 @@ fn read_job(items: &[Node]) -> Option<&Node> {
 }
 
 pub(crate) fn word(node: &Node) -> String {
-	match node.drop_meta() {
-		Node::Symbol(name) => name.clone(),
-		_ => String::new(),
-	}
+	node.symbol_name().unwrap_or_default().to_string()
+}
+
+/// The word a list starts with, "" for none
+fn head_word(items: &[Node]) -> String {
+	items.first().map(word).unwrap_or_default()
 }
 
 /// The word of `stop`, `stop()`, `(stop)`
@@ -1218,6 +1207,16 @@ pub(super) fn control_word(node: &Node) -> String {
 		Node::List(items, _, _) if items.len() == 1 => items[0].drop_meta().name(),
 		other => other.name(),
 	}
+}
+
+fn handler_never_runs(subject: &Node, event: &str) -> Node {
+	never_happens(
+		subject,
+		&format!(
+			"`{event}` of {} never happens: a task finishes where it starts, its handler never runs",
+			subject.name()
+		),
+	)
 }
 
 pub(super) fn nothing_to_stop(subject: &Node, control: &str) -> Node {

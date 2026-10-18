@@ -350,16 +350,14 @@ pub(crate) fn val_to_node<T>(result: &Val, store: &mut Store<T>, instance: &Inst
 /// The Node a GC `$Node` struct encodes (layout in CLAUDE.md "Serialization"); null is Empty. Generic over the store
 /// state, so runs with WASI or host imports read lists and keys like plain runs do.
 pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &Instance) -> Node {
-	match instance.get_memory(&mut *store, "memory") {
-		Some(memory) => node_in(value, store, memory),
-		None => Node::Empty,
-	}
+	let memory = instance.get_memory(&mut *store, "memory");
+	node_along(value, store, memory, &mut vec![])
 }
 
 /// The Node a GC `$Node` struct encodes, its texts read from `memory`: also from a host function, which has the memory
 /// of its caller but no Instance (tasks.rs)
 pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
-	node_along(value, store, memory, &mut vec![])
+	node_along(value, store, Some(memory), &mut vec![])
 }
 
 /// What a node met again inside itself reads as: objects may point to each other (a team's players and each player's
@@ -370,7 +368,7 @@ pub const CYCLE_MARK: &str = "…";
 fn node_along<T>(
 	value: &Val,
 	store: &mut StoreContextMut<'_, T>,
-	memory: wasmtime::Memory,
+	memory: Option<wasmtime::Memory>,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
 ) -> Node {
 	let Some(structref) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else {
@@ -388,7 +386,7 @@ fn node_along<T>(
 fn struct_node<T>(
 	structref: &wasmtime::Rooted<wasmtime::StructRef>,
 	store: &mut StoreContextMut<'_, T>,
-	memory: wasmtime::Memory,
+	memory: Option<wasmtime::Memory>,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
 ) -> Node {
 	use crate::node::Bracket;
@@ -404,7 +402,7 @@ fn struct_node<T>(
 		Some(Kind::Int) => int_node(store, &data, high_byte),
 		Some(Kind::Float) => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
 		Some(Kind::Codepoint) => char_node(store, &data),
-		Some(Kind::Text) => Node::Text(text_of(store, &data, memory)),
+		Some(Kind::Text) => Node::Text(rope_text(store, data, child, memory)),
 		Some(Kind::Symbol) if kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
 			Node::type_value(&text_of(store, &data, memory))
 		}
@@ -486,9 +484,13 @@ fn list_in<T>(
 	bracket: crate::node::Bracket,
 	separator: crate::node::Separator,
 	store: &mut StoreContextMut<'_, T>,
-	memory: wasmtime::Memory,
+	memory: Option<wasmtime::Memory>,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
 ) -> Node {
+	if let Some(items) = warp_runtime::gc_values::vector_items(&first, store) {
+		let items = items.iter().map(|item| node_along(item, store, memory, path)).collect();
+		return Node::List(items, bracket, separator);
+	}
 	let mut items = Vec::new();
 	loop {
 		// a null first item is the empty list's cell; a ø element is a node of kind Empty, kept
@@ -524,13 +526,35 @@ fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<
 	Some(parts)
 }
 
-/// The letters of a `$String(ptr, len)` in linear memory
-fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: wasmtime::Memory) -> String {
+/// The text of a Text node: its bytes, after those of the texts before it when it is a rope (text_append: data the last
+/// piece, the value field the text before it)
+fn rope_text<T>(
+	store: &mut StoreContextMut<'_, T>,
+	data: Val,
+	before: Val,
+	memory: Option<wasmtime::Memory>,
+) -> String {
+	let mut pieces = vec![text_of(store, &data, memory)];
+	let mut before = before;
+	while let Some(structref) = before.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) {
+		let Some((_, data, earlier)) = node_fields(&structref, store) else { break };
+		pieces.push(text_of(store, &data, memory));
+		before = earlier;
+	}
+	pieces.into_iter().rev().collect()
+}
+
+/// A text's bytes: a GC byte array `$Text`, or a `$String` (ptr, len) in memory
+fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: Option<wasmtime::Memory>) -> String {
 	let read = |store: &mut StoreContextMut<'_, T>| -> Option<String> {
+		if let Ok(Some(bytes)) = data.unwrap_anyref()?.as_array(&*store) {
+			let bytes: Vec<u8> = bytes.elems(&mut *store).ok()?.map(|byte| byte.unwrap_i32() as u8).collect();
+			return String::from_utf8(bytes).ok();
+		}
 		let string = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
 		let ptr = string.field(&mut *store, 0).ok()?.unwrap_i32() as usize;
 		let len = string.field(&mut *store, 1).ok()?.unwrap_i32() as usize;
-		let bytes = memory.data(&*store).get(ptr..ptr + len)?;
+		let bytes = memory?.data(&*store).get(ptr..ptr + len)?;
 		String::from_utf8(bytes.to_vec()).ok()
 	};
 	read(store).unwrap_or_default()

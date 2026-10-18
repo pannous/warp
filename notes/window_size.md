@@ -1,4 +1,4 @@
-# Window, display and canvas sizes (card make-width, decision canvas-size)
+# Window, display and canvas sizes (decision canvas-size)
 
 `window.width/height`, `display.width/height` and `canvas.width/height` are properties: read like fields, written
 like them where the platform can resize. `canvas(w, h)` stays; a bare `width`/`height` the program doesn't bind is

@@ -47,6 +47,11 @@ pub(crate) fn phrase_words(items: &[Node]) -> Vec<Node> {
 		.collect()
 }
 
+/// The words of the phrase `node`, as phrase_words reads them
+pub(crate) fn phrase_words_of(node: &Node) -> Vec<Node> {
+	phrase_words(std::slice::from_ref(node))
+}
+
 /// The operands of `a or b or c` (`|` parses as or, between whole numbers as the bit or), else the node itself
 pub(crate) fn or_operands(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
@@ -116,6 +121,20 @@ pub(crate) fn statement_list(statements: Vec<Node>, bracket: Bracket) -> Node {
 	Node::List(statements, bracket, Separator::Semicolon)
 }
 
+/// `first` before the program's own statements, at its main level: a program of one statement becomes a list of them
+pub(crate) fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
+	if first.is_empty() {
+		return program;
+	}
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			Node::List([first, statements].concat(), Bracket::None, separator)
+		}
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_statements_first(node, first)),
+		single => statement_list([first, vec![single]].concat(), Bracket::None),
+	}
+}
+
 /// `{a; b}`
 pub(crate) fn block(statements: Vec<Node>) -> Node {
 	statement_list(statements, Bracket::Curly)
@@ -124,11 +143,10 @@ pub(crate) fn block(statements: Vec<Node>) -> Node {
 /// A place a value can be written to: a variable `s`, a field of one `box.shape`, `p#…` (a declared type's field
 /// index), `shapes#1`, in parentheses or not
 pub(crate) fn is_place(node: &Node) -> bool {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Symbol(_) => true,
 		Node::Key(object, Op::Dot, field) => matches!(field.drop_meta(), Node::Symbol(_)) && is_place(object),
 		Node::Key(object, Op::Hash, _) => is_place(object),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_place(&items[0]),
 		_ => false,
 	}
 }

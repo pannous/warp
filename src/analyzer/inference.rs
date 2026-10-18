@@ -1,7 +1,7 @@
 //! Kind inference: the kind of a node, of arithmetic, of list elements and branches
 
 use super::*;
-use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, PRINT_WORD, REAL_WORD};
+use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, REAL_WORD};
 
 /// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
 pub(super) fn is_update(node: &Node) -> bool {
@@ -106,9 +106,8 @@ pub(crate) fn may_be_ratio(node: &Node, scope: &Scope) -> bool {
 
 /// The value of an expression of number literals alone: `(1/3)`, `1.0 / 3`
 fn constant_value(node: &Node) -> Option<f64> {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Number(number) => Some(f64::from(*number)),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => constant_value(&items[0]),
 		Node::Key(left, op, right) => {
 			let (a, b) = (constant_value(left)?, constant_value(right)?);
 			match op {
@@ -418,7 +417,7 @@ pub(super) fn infer_list_type(
 
 /// The kind of a lowered form headed by `name` that is no function call: an insertion, a time, `return x`, `data …`
 fn special_form_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scope) -> Option<Kind> {
-	if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name) {
+	if [ZERO_FILL_CALL, INSERT_EITHER_CALL].contains(&name) {
 		return Some(Kind::List);
 	}
 	// `now`, `2024-02-29`: a time, a kind the node operations meet at run time (wasm_emitter/times.rs)
@@ -485,20 +484,12 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 			_ => Kind::Text,
 		});
 	}
-	if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
-		return Some(Kind::Symbol); // the type's name
-	}
-	// `puti x`, `puts t`: the output words give an Int (the number written, or the write's status), with or without
-	// parentheses
-	if crate::wasm_emitter::OUTPUT_WORDS.contains(&name) && items.len() == 2 {
-		return Some(Kind::Int);
-	}
-	// `count ys`, `size t`: a number
-	if (super::counting::is_counting_word(name) || name == BYTE_SIZE) && items.len() == 2 {
-		return Some(Kind::Int);
-	}
-	if name == PRINT_WORD && (items.len() >= 2 || *bracket == Bracket::Round) {
-		return Some(Kind::Empty); // `print x` writes x and gives nothing (user, issue #18)
+	// `count ys`, `print x`, `type(x)`, `puti n`: a builtin the emitter expands gives what its prelude line declares,
+	// called with arguments or parentheses
+	if items.len() >= 2 || *bracket == Bracket::Round {
+		if let Some(kind) = crate::library_words::emitted_call_kind(name, items.len() - 1) {
+			return Some(kind);
+		}
 	}
 	// a call of a function the component being compiled imports (`host.time()`)
 	if let Some(kind) = crate::wasm_emitter::host::component_adapters::imported_kind(name) {
@@ -506,9 +497,6 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 	}
 	if items.len() < 2 {
 		return None;
-	}
-	if name == "fetch" {
-		return Some(Kind::Text);
 	}
 	// FFI/builtin function calls (strcmp, strlen, abs, …) return Int by default
 	crate::ffi::is_ffi_function(name).then(|| match items {
@@ -521,30 +509,19 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 
 /// The kind of `name(arguments…)`: a library word's own result, Int for any other call
 fn library_call_kind(name: &str, items: &[Node], scope: &Scope) -> Kind {
-	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR};
-	match name {
-		// a slice, reversal or sort of a text is a text, of a Node (known at runtime only) a Node, of anything else a list
-		_ if name == crate::words::SLICE || name == "reverse" || name == "sort" => match infer_type(&items[1], scope) {
-			Kind::Text | Kind::Codepoint => Kind::Text,
-			Kind::Empty => Kind::Empty,
-			_ => Kind::List,
-		},
-		// the object with one field set, or its copy: a Node, whatever the object's kind is known as
-		FIELD_WITH | INSTANCE_COPY => match infer_type(&items[1], scope) {
-			kind if kind.is_ref() => kind,
-			_ => Kind::Empty,
-		},
-		LIST_DROP_LAST => Kind::List,
-		// a list, or a text when it sorts a text's characters
-		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => Kind::Empty,
-		// the place itself, changed; the map of `{a:1}` a node as the pair is
-		crate::list_mutations::LIST_BECOME | crate::one_entry_maps::MAP_OF_ENTRY => infer_type(&items[1], scope),
-		// a map's value or a list: decided at runtime (removed_value), a Node
-		REMOVED_VALUE_CALL => Kind::Empty,
-		// `m.get(k)` is worth what `m[k]` is: a value of the map
-		MAP_GET_OR => element_kind(&items[1], scope).unwrap_or(Kind::Empty),
-		_ => crate::library_words::result_kind(name).unwrap_or(Kind::Int),
+	use crate::library_words::ArgumentResult;
+	// `field_with(object, …): same as object`, `map_get_or(m, …): value of m`: read off that argument
+	if let Some((how, index)) = crate::library_words::argument_result(name) {
+		let Some(argument) = items.get(index + 1) else { return Kind::Empty };
+		return match how {
+			// a value kept as a Node: an object's or a list's kind, a number or character inside it a Node
+			ArgumentResult::Same => Some(infer_type(argument, scope)).filter(Kind::is_ref).unwrap_or(Kind::Empty),
+			ArgumentResult::Element => element_kind(argument, scope).unwrap_or(Kind::Empty),
+		};
 	}
+	// an overloaded word's by its first argument: a reversal of a text is a text, of a list a list
+	crate::library_words::call_result_kind(name, || items.get(1).map(|first| infer_type(first, scope)))
+		.unwrap_or(Kind::Int)
 }
 
 /// Kind of an element of `indexed`: a list's common element type (`list of text` → Text), the character of a text;

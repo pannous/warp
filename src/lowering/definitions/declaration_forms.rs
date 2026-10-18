@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
-	let variables = assigned_names(&node);
+	let variables: HashSet<String> = node.written_names();
 	let mut names = Names { values: names_used_as_values(&node), variables, texts: text_variables(&node) };
 	names.values.extend(names.variables.iter().cloned());
 	lower_declarations_among(node, &names)
@@ -512,10 +512,6 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			if let Some(zeros) = zero_filled_subscript(&element, &one_based, &names.values) =>
 		{
 			zeros
-		}
-		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
-		Node::Key(base, op, _) if let Some(exponent) = op.suffix_exponent() => {
-			key(lower(*base), Op::Pow, Node::int(exponent))
 		}
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {

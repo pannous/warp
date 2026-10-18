@@ -11,10 +11,11 @@ fn shalom(code: &str) -> String {
 
 #[test]
 fn shalom_counts_four_characters_and_six_code_points() {
-	for four in ["count s", "s.graphemes", "count(s.chars)", "number of chars in s", "number of characters in s"] {
+	for four in ["count s", "count s.graphemes", "count(s.chars)", "number of chars in s", "number of characters in s"]
+	{
 		is!(&shalom(four), 4);
 	}
-	for six in ["s.codepoints", "number of codepoints in s"] {
+	for six in ["count s.codepoints", "number of codepoints in s"] {
 		is!(&shalom(six), 6);
 	}
 }
@@ -53,5 +54,5 @@ fn a_glyph_is_a_character() {
 fn letters_are_whole_characters() {
 	// q with an acute accent as its own code point (U+0301, q́ has no precomposed form): one letter, not q and a lone accent
 	is!("t = \"aq\\u{301}!\"; count(letters(t))", 2);
-	is!("t = \"aq\\u{301}!\"; x = letters(t)#2; x.codepoints", 2);
+	is!("t = \"aq\\u{301}!\"; x = letters(t)#2; count x.codepoints", 2);
 }

@@ -1,4 +1,4 @@
-# Selector prepositions: of, in, from (card of-in-chain, 2026-10-15)
+# Selector prepositions: of, in, from
 
 `of` selects a part: `a of b` is `b.a`, right associative (`length of words of t` is `t.words.length`).
 `in` and `from` select the same way when a selector word stands before them and the program does not bind that word
@@ -18,6 +18,6 @@ print words in "ab cd"           // the walk: prints ab, then cd
 - Implemented in the `of` pass (of_lookups.rs): `in`/`from` after a selector word is one more preposition of
   `looked_up`, so the chain resolves from the right like `of`.
 - `print <selector> in t` walks `t.<selector>` (`for part in t.words {print part}`), so printing a selection prints
-  each part, as the older walk `print chars in t` did.
+  each part.
 - Why right associative: English nests a selecting *of* to the right, "the length of the names of the people"
   (wiki/operator.md "Right associative operators").

@@ -8,10 +8,9 @@
 use crate::node::Node;
 use crate::operators::OP_CODES;
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
-use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::runtime_dependencies::{any, Dependency};
 use crate::wasm_emitter::text::text_builtins::{ERROR_OF, TEXT_CONCAT, TEXT_OF};
-use crate::wasm_emitter::WasmGcEmitter;
+use crate::wasm_emitter::{WasmGcEmitter, NEW_TEXT_OF};
 use crate::words::SYMBOL_WORD;
 use wasm_encoder::*;
 use Instruction as I;
@@ -44,9 +43,33 @@ const NEW_SEPARATED: &str = "new_separated";
 const KEY: &str = "key";
 const BRACKETED: &str = "bracketed";
 const SEPARATED: &str = "separated";
-/// name, number of arguments, result kind
-pub const NODE_BUILTINS: [(&str, usize, Kind); 4] =
-	[(SYMBOL_WORD, 1, Kind::Symbol), (KEY, 3, Kind::Key), (BRACKETED, 2, Kind::List), (SEPARATED, 2, Kind::List)];
+/// `key_of(n)`, `value_of(n)`, …: the node part itself, which a field of that name never shadows (card
+/// node-part-clash: `.key` of the code `key = 3` is 3), ø for a part the node has not
+const PART_READERS: [(&str, i32); 6] = [
+	("key_of", KEY_PART),
+	("value_of", VALUE_PART),
+	("op_of", OP_PART),
+	("name_of", NAME_PART),
+	("bracket_of", BRACKET_PART),
+	("separator_of", SEPARATOR_PART),
+];
+/// `positioned(node, line, column)`: the node at that source position, as `n.line` and `n.column` read it (card
+/// carries-line: a pass written in warp reports where Rust's does)
+pub const POSITIONED: &str = "positioned";
+/// name, number of arguments, result kind (a part read or a positioned node is a Node of any kind)
+pub const NODE_BUILTINS: [(&str, usize, Kind); 11] = [
+	(SYMBOL_WORD, 1, Kind::Symbol),
+	(KEY, 3, Kind::Key),
+	(BRACKETED, 2, Kind::List),
+	(SEPARATED, 2, Kind::List),
+	(PART_READERS[0].0, 1, Kind::Empty),
+	(PART_READERS[1].0, 1, Kind::Empty),
+	(PART_READERS[2].0, 1, Kind::Empty),
+	(PART_READERS[3].0, 1, Kind::Empty),
+	(PART_READERS[4].0, 1, Kind::Empty),
+	(PART_READERS[5].0, 1, Kind::Empty),
+	(POSITIONED, 3, Kind::Empty),
+];
 /// The opening brackets by their bracket info in a list's kind field (Curly 0, Square 1, Round 2, Less 3, None 5)
 const BRACKETS: [(&str, i64); 5] = [("{", 0), ("[", 1), ("(", 2), ("<", 3), ("", 5)];
 /// The bracket info of a round group `(…)`
@@ -54,6 +77,12 @@ const ROUND_INFO: i64 = BRACKETS[2].1;
 const UNKNOWN_OPERATOR: &str = "unknown operator: ";
 const UNKNOWN_BRACKET: &str = "unknown bracket: ";
 const UNKNOWN_SEPARATOR: &str = "unknown separator: ";
+
+/// The code of the op a built key is given (OP_CODES' index), the highest when it is no constant
+fn built_operator_code(op: &Node) -> i64 {
+	let written = |text: String| OP_CODES.iter().position(|code| code.as_str() == text);
+	op.text_value().and_then(written).unwrap_or(OP_CODES.len() - 1) as i64
+}
 
 /// The part a field name reads when the node has no field of that name
 pub fn node_part(field: &str) -> Option<i32> {
@@ -68,17 +97,27 @@ pub fn is_pair_part(part: i32) -> bool {
 /// Runtime functions the node words call
 pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 	vec![
-		any(&[NODE_PART], &["new_text"]),
+		any(&[NODE_PART], &[NEW_TEXT_OF, "new_empty"]),
 		any(
 			&[NEW_KEY_OF, NEW_BRACKETED, NEW_SEPARATED],
-			&[OPERATOR_CODE, BRACKET_CODE, SEPARATOR_CODE, TEXT_OF, TEXT_CONCAT, ERROR_OF, "new_key", "new_text"],
+			&[OPERATOR_CODE, BRACKET_CODE, SEPARATOR_CODE, TEXT_OF, TEXT_CONCAT, ERROR_OF, "new_key", NEW_TEXT_OF],
 		),
 	]
 }
 
 impl WasmGcEmitter {
-	/// `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)`, `separated(items, separator)`
+	/// `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)`, `separated(items, separator)`,
+	/// `positioned(node, line, column)`
 	pub(in crate::wasm_emitter) fn emit_node_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
+		if let (POSITIONED, [node, line, column]) = (name, arguments) {
+			self.emit_node_instructions(func, node);
+			func.instruction(&I::RefAsNonNull);
+			self.emit_numeric_value(func, line);
+			self.emit_numeric_value(func, column);
+			self.emit_node_null(func);
+			self.emit_call(func, NODE_AT);
+			return;
+		}
 		for argument in arguments {
 			self.emit_node_instructions(func, argument);
 			func.instruction(&I::RefAsNonNull);
@@ -93,9 +132,28 @@ impl WasmGcEmitter {
 				self.emit_call(func, "get_text_len");
 				self.emit_call(func, "new_symbol");
 			}
-			KEY => self.emit_call(func, NEW_KEY_OF),
+			KEY => {
+				// list_text writes the op as written: the op given, any when only the run time knows it
+				let code = arguments.get(1).map_or(0, built_operator_code);
+				self.discovered_needs.insert(crate::wasm_emitter::Need::KeyOperator(code));
+				self.emit_call(func, NEW_KEY_OF)
+			}
 			SEPARATED => self.emit_call(func, NEW_SEPARATED),
-			_ => self.emit_call(func, NEW_BRACKETED),
+			BRACKETED => self.emit_call(func, NEW_BRACKETED),
+			reader => {
+				let Some((_, part)) = PART_READERS.iter().find(|(word, _)| *word == reader) else {
+					unreachable!("NODE_BUILTINS names {reader}");
+				};
+				let read = self.node_scratch();
+				func.instruction(&I::I32Const(*part));
+				self.emit_call(func, NODE_PART);
+				#[rustfmt::skip]
+				Self::emit_list(func, &[
+					I::LocalTee(read), I::RefIsNull, I::If(BlockType::Result(Ref(self.node_ref(false)))),
+				]);
+				self.emit_call(func, "new_empty");
+				Self::emit_list(func, &[I::Else, I::LocalGet(read), I::RefAsNonNull, I::End]);
+			}
 		}
 	}
 
@@ -189,6 +247,14 @@ impl WasmGcEmitter {
 					let separators: Vec<(i64, &str)> =
 						separators.iter().map(|(code, text)| (*code, text.as_str())).collect();
 					s.emit_part_text(f, &part_is(SEPARATOR_PART), &is_kind(kind, Kind::List), code, &separators);
+					// a node that is no group has no bracket and no separator: ø, so a walk tests groups without `try`
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(part), I::I32Const(BRACKET_PART), I::I32Eq, I::LocalGet(part),
+						I::I32Const(SEPARATOR_PART), I::I32Eq, I::I32Or, I::If(BlockType::Empty),
+					]);
+					s.call(f, "new_empty");
+					Self::emit_list(f, &[I::Return, I::End]);
 					// a word's name, or the name of a key's key (`x` of `x: 3`, of `x.y: 3` too)
 					Self::emit_list(f, &part_is(NAME_PART));
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::Loop(BlockType::Empty)]);
@@ -206,9 +272,8 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &is_kind(kind, Kind::Symbol));
 					Self::emit_list(f, &is_kind(kind, Kind::Text));
 					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
-					s.emit_text_field(f, node, 0);
-					s.emit_text_field(f, node, 1);
-					s.call(f, "new_text");
+					s.emit_text_bytes(f, node);
+					s.call(f, NEW_TEXT_OF);
 					Self::emit_list(f, &[I::Return, I::End, I::End, I::RefNull(HeapType::Concrete(node_type))]);
 				},
 			);
@@ -329,10 +394,14 @@ impl WasmGcEmitter {
 			vec![ValType::I64, nullable_node_ref],
 			|s, f| {
 				let (code, rest) = (2, 3);
+				s.emit_code_or_error(f, text, code, coder, prefix);
+				// no items is the empty list ø, whatever its brackets, as `()` parses
+				Self::emit_list(f, &kind_of(items));
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(items), I::Return, I::End]);
 				Self::emit_list(f, &kind_of(items));
 				Self::emit_kind_test(f, Kind::List as i64, I::I64Ne);
 				s.emit_fail_if(f, "not_a_list");
-				s.emit_code_or_error(f, text, code, coder, prefix);
 				Self::emit_list(f, &kind_of(items));
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -367,13 +436,9 @@ impl WasmGcEmitter {
 		Self::emit_list(func, kind);
 		Self::emit_list(func, &[I::I32And, I::If(BlockType::Empty)]);
 		for (entry, text) in written {
-			let (pointer, length) = self.allocate_string(text);
-			#[rustfmt::skip]
-			Self::emit_list(func, &[
-				I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty),
-					I::I32Const(pointer as i32), I::I32Const(length as i32),
-			]);
-			self.call(func, "new_text");
+			Self::emit_list(func, &[I::LocalGet(code), I::I32Const(*entry as i32), I::I32Eq, I::If(BlockType::Empty)]);
+			let literal = self.string_table.literal(text);
+			self.emit_constant_text(func, literal);
 			Self::emit_list(func, &[I::Return, I::End]);
 		}
 		func.instruction(&I::End);
@@ -383,12 +448,11 @@ impl WasmGcEmitter {
 	fn emit_code_of_text(&mut self, name: &'static str, written: &[(i64, &str)]) {
 		let node_ref = Ref(self.node_ref(false));
 		let written: Vec<(i64, String)> = written.iter().map(|(code, text)| (*code, text.to_string())).collect();
-		self.runtime_function(name, vec![node_ref], vec![ValType::I64], vec![ValType::I32, ValType::I32], |s, f| {
-			let (pointer, length) = (1, 2);
-			s.emit_text_field(f, 0, 0);
-			f.instruction(&I::LocalSet(pointer));
-			s.emit_text_field(f, 0, 1);
-			f.instruction(&I::LocalSet(length));
+		let (text, text_type) = (self.text_ref_nullable(), self.type_manager.text_type);
+		self.runtime_function(name, vec![node_ref], vec![ValType::I64], vec![text, ValType::I32], |s, f| {
+			let (bytes, length) = (1, 2);
+			s.emit_text_bytes(f, 0);
+			Self::emit_list(f, &[I::LocalTee(bytes), I::ArrayLen, I::LocalSet(length)]);
 			for (code, text) in &written {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -398,7 +462,7 @@ impl WasmGcEmitter {
 				for (offset, byte) in text.bytes().enumerate() {
 					#[rustfmt::skip]
 					Self::emit_list(f, &[
-						I::LocalGet(pointer), I::I32Load8U(MemArg { offset: offset as u64, ..BYTE }),
+						I::LocalGet(bytes), I::I32Const(offset as i32), I::ArrayGetU(text_type),
 						I::I32Const(byte as i32), I::I32Eq, I::I32And,
 					]);
 				}
@@ -415,9 +479,8 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalTee(text));
 		self.call(func, coder);
 		Self::emit_list(func, &[I::LocalTee(code), I::I64Const(-1), I::I64Eq, I::If(BlockType::Empty)]);
-		let (pointer, length) = self.allocate_string(prefix);
-		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-		self.call(func, "new_text");
+		let literal = self.string_table.literal(prefix);
+		self.emit_constant_text(func, literal);
 		func.instruction(&I::LocalGet(text));
 		self.call(func, TEXT_CONCAT);
 		self.call(func, super::super::text::text_builtins::ERROR_OF);

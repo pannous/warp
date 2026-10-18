@@ -1,0 +1,3 @@
+use "inner.warp"
+class Outer { inner: Inner }
+def make() := Outer{inner: Inner{x: 3}}

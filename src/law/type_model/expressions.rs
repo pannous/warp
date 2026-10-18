@@ -192,10 +192,9 @@ impl Exporter {
 
 	/// a literal, a name (not a function's), or operators on such: evaluating it twice changes nothing
 	pub(super) fn is_pure(&self, node: &Node) -> bool {
-		match node.drop_meta() {
+		match node.ungrouped() {
 			Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
 			Node::Symbol(name) => !self.functions.contains_key(name),
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_pure(&items[0]),
 			Node::Key(left, op, right) => {
 				!matches!(op, Op::Assign | Op::Define | Op::Dot)
 					&& !op.is_compound_assign()
