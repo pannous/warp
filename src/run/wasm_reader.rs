@@ -487,7 +487,7 @@ fn list_in<T>(
 	memory: Option<wasmtime::Memory>,
 	path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>,
 ) -> Node {
-	if let Some(items) = vector_items(&first, store) {
+	if let Some(items) = warp_runtime::gc_values::vector_items(&first, store) {
 		let items = items.iter().map(|item| node_along(item, store, memory, path)).collect();
 		return Node::List(items, bracket, separator);
 	}
@@ -513,18 +513,6 @@ fn list_in<T>(
 		(first, rest) = (data, child);
 	}
 	Node::List(items, bracket, separator)
-}
-
-/// The items of a list held as a vector, `$list (len i32, items (array anyref))` (lib/compiler/emitter.warp): its first
-/// field is the i32 length, where a cons cell's first item is a $Node, whose first field is the i64 kind
-fn vector_items<T>(data: &Val, store: &mut StoreContextMut<'_, T>) -> Option<Vec<Val>> {
-	let vector = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
-	let Val::I32(length) = vector.field(&mut *store, 0).ok()? else {
-		return None;
-	};
-	let items = vector.field(&mut *store, 1).ok()?.unwrap_anyref()?.as_array(&*store).ok()??;
-	let items: Vec<Val> = items.elems(&mut *store).ok()?.take(length as usize).collect();
-	Some(items)
 }
 
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
