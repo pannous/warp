@@ -5,8 +5,8 @@
 //! blue, never green. A subject of unknown type, or an arm this check cannot read
 //! (a guard, alternatives, a comparison), keeps the run-time error "no case for …".
 
-use super::sum_variants::sum_types;
 use crate::errors::diagnostic::Diagnostic;
+use crate::lowering::sum_variants::sum_types;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::words::{IS_WORD, SWITCH_WORDS};
