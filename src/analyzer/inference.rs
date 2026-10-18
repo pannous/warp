@@ -1,7 +1,7 @@
 //! Kind inference: the kind of a node, of arithmetic, of list elements and branches
 
 use super::*;
-use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, PRINT_WORD, REAL_WORD};
+use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, REAL_WORD};
 
 /// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
 pub(super) fn is_update(node: &Node) -> bool {
@@ -483,20 +483,12 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 			_ => Kind::Text,
 		});
 	}
-	if name == crate::type_tests::TYPE_WORD && items.len() == 2 {
-		return Some(Kind::Symbol); // the type's name
-	}
-	// `puti x`, `puts t`: the output words give an Int (the number written, or the write's status), with or without
-	// parentheses
-	if crate::wasm_emitter::OUTPUT_WORDS.contains(&name) && items.len() == 2 {
-		return Some(Kind::Int);
-	}
-	// `count ys`, `size t`: a number
-	if (super::counting::is_counting_word(name) || name == BYTE_SIZE) && items.len() == 2 {
-		return Some(Kind::Int);
-	}
-	if name == PRINT_WORD && (items.len() >= 2 || *bracket == Bracket::Round) {
-		return Some(Kind::Empty); // `print x` writes x and gives nothing (user, issue #18)
+	// `count ys`, `print x`, `type(x)`, `puti n`: a builtin the emitter expands gives what its prelude line declares,
+	// called with arguments or parentheses
+	if items.len() >= 2 || *bracket == Bracket::Round {
+		if let Some(kind) = crate::library_words::emitted_call_kind(name, items.len() - 1) {
+			return Some(kind);
+		}
 	}
 	// a call of a function the component being compiled imports (`host.time()`)
 	if let Some(kind) = crate::wasm_emitter::host::component_adapters::imported_kind(name) {
@@ -504,9 +496,6 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 	}
 	if items.len() < 2 {
 		return None;
-	}
-	if name == "fetch" {
-		return Some(Kind::Text);
 	}
 	// FFI/builtin function calls (strcmp, strlen, abs, …) return Int by default
 	crate::ffi::is_ffi_function(name).then(|| match items {

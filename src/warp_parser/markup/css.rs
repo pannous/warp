@@ -13,7 +13,7 @@ impl WarpParser {
 	/// css-block): its length with the `#`. Ids starting with a letter stay selectors where one is followed by a block
 	/// or another selector part (`#fed { … }`); an id never starts with a digit
 	pub(crate) fn css_color_length(&self) -> Option<usize> {
-		if !self.in_style_sheet || self.current_char() != '#' {
+		if !self.context.in_style_sheet || self.current_char() != '#' {
 			return None;
 		}
 		let digits = (1..).take_while(|&offset| self.peek_char(offset).is_ascii_hexdigit()).count();
@@ -29,7 +29,7 @@ impl WarpParser {
 	/// markup-style-block)
 	pub(crate) fn at_pseudo_class_selector(&self) -> bool {
 		let previous = self.chars[..self.pos].iter().rev().find(|ch| !ch.is_whitespace()).copied().unwrap_or('\0');
-		self.in_style_sheet
+		self.context.in_style_sheet
 			&& self.current_char() == ':'
 			&& self.is_identifier_start(1)
 			&& SELECTOR_STARTS_AFTER.contains(&previous)

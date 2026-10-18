@@ -1,5 +1,6 @@
 //! Guards: `try`/`catch`/`finally` and fallback words over a guarded phrase
 use super::*;
+use crate::warp_parser::context::Context;
 
 impl WarpParser {
 	/// `try` or `assert` followed by an operand: the words that guard a statement
@@ -24,11 +25,10 @@ impl WarpParser {
 		self.advance_by(word_length);
 		self.skip_spaces();
 		self.skip_python_colon();
-		let outer = std::mem::replace(&mut self.stops_at_else, true);
 		let start = self.pos;
-		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
+		let guard = Context { stops_at_else: true, equals_compares: marker == ASSERT_MARKER, ..self.context };
+		let guarded = self.within(guard, Self::parse_guarded_phrase);
 		let written: String = self.chars[start..self.pos].iter().collect();
-		self.stops_at_else = outer;
 		self.skip_spaces();
 		let mut caught = None;
 		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {

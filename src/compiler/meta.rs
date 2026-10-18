@@ -177,14 +177,58 @@ impl PartialEq for DataValue {
 	}
 }
 
+/// A Data payload whose value serde keeps in binary formats (a lowered module kept on disk, modules/lowered_modules.rs):
+/// its type name and how its value is written as JSON and read back. Other payloads read back as a placeholder text
+struct PayloadCodec {
+	type_name: &'static str,
+	write: fn(&dyn CloneAny) -> Option<String>,
+	read: fn(&str) -> Option<Box<dyn CloneAny>>,
+}
+
+fn codec<T: Serialize + serde::de::DeserializeOwned + Clone + PartialEq + 'static>() -> PayloadCodec {
+	PayloadCodec {
+		type_name: std::any::type_name::<T>(),
+		write: |value| serde_json::to_string(value.as_any().downcast_ref::<T>()?).ok(),
+		read: |text| Some(Box::new(serde_json::from_str::<T>(text).ok()?)),
+	}
+}
+
+/// The payloads lowered standard modules hold
+static KEPT_PAYLOADS: std::sync::LazyLock<Vec<PayloadCodec>> = std::sync::LazyLock::new(|| {
+	vec![
+		codec::<LineInfo>(),
+		codec::<crate::warp_parser::SpacedMinus>(),
+		codec::<crate::warp_parser::WrittenIndex>(),
+		codec::<crate::warp_parser::SubscriptOffset>(),
+		codec::<crate::warp_parser::PathLiteral>(),
+	]
+});
+
+fn payload_codec(type_name: &str) -> Option<&'static PayloadCodec> {
+	KEPT_PAYLOADS.iter().find(|codec| codec.type_name == type_name)
+}
+
+impl DataValue {
+	/// Whether serde keeps this payload's value in binary formats
+	pub fn is_kept_payload(&self) -> bool {
+		payload_codec(&self.type_name).is_some()
+	}
+}
+
+/// type name and data type; in binary formats also the payload's value as JSON, when its type has a PayloadCodec
 impl Serialize for DataValue {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		let mut state = serializer.serialize_struct("DataValue", 2)?;
+		let binary = !serializer.is_human_readable();
+		let mut state = serializer.serialize_struct("DataValue", 2 + usize::from(binary))?;
 		state.serialize_field("type_name", &self.type_name)?;
 		state.serialize_field("data_type", &self.data_type)?;
+		if binary {
+			let payload = payload_codec(&self.type_name).and_then(|codec| (codec.write)(self.data.as_ref()));
+			state.serialize_field("payload", &payload)?;
+		}
 		state.end()
 	}
 }
@@ -199,13 +243,22 @@ impl<'de> Deserialize<'de> for DataValue {
 			type_name: String,
 			data_type: DataType,
 		}
+		#[derive(Deserialize)]
+		struct BinaryDataValueHelper {
+			type_name: String,
+			data_type: DataType,
+			payload: Option<String>,
+		}
 
-		let helper = DataValueHelper::deserialize(deserializer)?;
-		// Create a placeholder DataValue with empty string
-		Ok(DataValue {
-			data: Box::new(String::from("<deserialized>")),
-			type_name: helper.type_name,
-			data_type: helper.data_type,
-		})
+		let (type_name, data_type, payload) = match deserializer.is_human_readable() {
+			true => {
+				DataValueHelper::deserialize(deserializer).map(|helper| (helper.type_name, helper.data_type, None))?
+			}
+			false => BinaryDataValueHelper::deserialize(deserializer)
+				.map(|helper| (helper.type_name, helper.data_type, helper.payload))?,
+		};
+		let kept = payload.zip(payload_codec(&type_name)).and_then(|(payload, codec)| (codec.read)(&payload));
+		let placeholder = || Box::new(String::from("<deserialized>")) as Box<dyn CloneAny>;
+		Ok(DataValue { data: kept.unwrap_or_else(placeholder), type_name, data_type })
 	}
 }

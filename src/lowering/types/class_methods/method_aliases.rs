@@ -30,7 +30,7 @@ const METHOD_ALIASES: [(&str, &[&str]); 23] = [
 ];
 
 /// `d.append(1)` of a deque, `s.contains(2)` of a set, `len(s)`: the class's own method when it does not define that
-/// name (METHOD_ALIASES, analyzer::COUNTING_WORDS), with a note
+/// name (METHOD_ALIASES, analyzer::counting_words), with a note
 pub(super) fn method_aliases(node: Node) -> Node {
 	let mut methods: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 	node.visit(&mut |part| {
@@ -59,7 +59,7 @@ pub(super) fn aliased_method(written: &str, defined: &[String]) -> Option<String
 		return None;
 	}
 	let candidates: Vec<&str> = match crate::analyzer::is_counting_word(written) {
-		true => crate::analyzer::COUNTING_WORDS.to_vec(),
+		true => crate::analyzer::counting_words(),
 		false => METHOD_ALIASES
 			.iter()
 			.find(|(alias, _)| *alias == written)

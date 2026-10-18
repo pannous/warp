@@ -15,6 +15,7 @@ pub(crate) fn node_to_i32(node: &Node) -> i32 {
 
 /// The program's value printed, its Int the exit status, an uncaught error status 1
 pub(crate) fn print_and_exit(result: Node) -> ! {
+	warp::compiler::phase_times::report();
 	exit_if_program_exited();
 	show(&result, "");
 	ended_well(&result);
@@ -23,6 +24,7 @@ pub(crate) fn print_and_exit(result: Node) -> ! {
 
 /// The value of inline code printed; an uncaught error exits with status 1, so scripts and CI see it failed
 pub(crate) fn show_and_fail_on_error(result: &Node, mark: &str) {
+	warp::compiler::phase_times::report();
 	exit_if_program_exited();
 	show(result, mark);
 	if matches!(result.drop_meta(), Node::Error(_)) {

@@ -14,10 +14,23 @@ kind switches they stand for. Done in slices per word family, each with its net 
 - library_signatures.rs library_types lists every overload's type (the typed-redefinition refusal names each).
 - `reverse.signature` shows the first line, `(xs:list) -> list` (was the untyped `(xs)`).
 
-## Next slices (candidates)
-- A line form for words the emitter expands without a runtime function (count, map, filter, keys, …):
-  MEMBER_SIGNATURES as prelude lines, without making them runtime words (list_emitter.rs is_runtime_word).
-- Counting words: `size`, `len`, `length` as prelude aliases of count (COUNTING_WORDS has five readers).
-- Number words: int and float overloads (abs, min/max, floor …) with their results, replacing the analyzer's arms.
-- Blocker found: a `:=` definition with a list or map result type is lost (card list-result-type), so lib words
-  written in warp cannot yet declare `: list`.
+## Landed (2026-10-18)
+- Slice 1 (reverse, sort, slice): overloaded `from warp` lines. An argument no line is typed for takes the first
+  line's result (a list's); only a Node of run-time kind gives a Node (slice-twin: the analyzer twins agree on
+  `b = a[0:2]`, words.warp call_kinds says list).
+- Counting: `alias size/len/length = count` in the prelude; COUNTING_WORDS is gone, is_counting_word reads the aliases.
+- `from emitter` lines (warp-self-analyzer): builtins the emitter expands in place declare signature and result
+  (count, byte_size, type, print, puts/puti/putl/putf, fetch); library_words::emitted_call_kind replaced five
+  builtin_word_kind arms. A `number` or `bool` result stays undecided (Int would mis-type `number("2.5")` and drop
+  any()'s yes/no).
+- Members: MEMBER_SIGNATURES became 15 `from emitter` lines (map, filter, …, number, string), read last by
+  library_signature.
+- Number words have no analyzer table: abs lowers to ‖x‖, min/max inline, floor/round/ceil go through lib/math.warp.
+
+## Left
+- library_call_kind's arms whose result follows an argument (field_with/instance_copy: the object's kind, map_get_or:
+  a value of the map, list_become/map_of_entry: the place's): need a type variable in a line
+  (`field_with(object: T, name, value): T`), a design step of its own.
+- PRINT_SIGNATURE `(x)` beside print's `(values...)` line: dropping it makes print variadic for library_arity.
+- Blocker: a `:=` definition with a list or map result type is lost (card list-result-type), so lib words written in
+  warp cannot yet declare `: list`.

@@ -14,6 +14,6 @@ fn warns_never_raised(code: &str) -> bool {
 fn an_element_s_handler_draws_no_native_warning() {
 	assert!(!warns_never_raised("x = \"\"\ninput{ bind: x }"));
 	assert!(!warns_never_raised("x = 0\nbutton{ on click { x = 1 } \"b\" }"));
-	assert!(!warns_never_raised("fruit = \"\"\nselect{ bind: fruit [\"apple\" \"pear\"] }"));
+	assert!(!warns_never_raised("fruit = \"\"\nselect{ bind: fruit; [\"apple\" \"pear\"] }"));
 	assert!(warns_never_raised("x = 0\non submit { x = 1 }\nx"));
 }

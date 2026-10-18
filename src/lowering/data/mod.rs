@@ -12,5 +12,6 @@ pub mod meta_entries;
 pub mod printable;
 pub mod reflection;
 pub mod stored_values;
+pub mod tag_entries;
 pub mod versions;
 pub mod word_help;
