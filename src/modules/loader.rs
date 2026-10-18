@@ -668,7 +668,10 @@ impl<'a> Loader<'a> {
 		let module =
 			Node::List(statements(module).into_iter().filter(kept).collect(), Bracket::None, Separator::Semicolon);
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
-		let module = crate::pipeline::lower_module_source(module);
+		let module = crate::compiler::phase_times::timed_as(
+			|| format!("module source passes of {}", shown.display()),
+			|| crate::pipeline::lower_module_source(module),
+		);
 		// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
 		if let Node::Error(_) = module.drop_meta() {
 			return Err(crate::errors::diagnostic::located_in_file(&module, &shown));
@@ -906,6 +909,10 @@ fn imported_statements(node: &Node) -> Option<Vec<Node>> {
 /// write a call of another prelude word): lowering all of lib/prelude.warp for each program cost more than compiling
 /// a small one (card cache-lowered)
 fn reached_prelude_definitions(program: &[Node]) -> Vec<Node> {
+	crate::compiler::phase_times::timed("prelude reach look-ahead", || reached_prelude_definitions_untimed(program))
+}
+
+fn reached_prelude_definitions_untimed(program: &[Node]) -> Vec<Node> {
 	let reachable = |callers: &Node| {
 		needed_definitions(callers, &prelude_declarations_reached(&called_names(statements_of(callers))))
 	};

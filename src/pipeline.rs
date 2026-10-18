@@ -415,8 +415,13 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 	MODULE_SOURCE_PHASES
 		.iter()
 		.flat_map(|phase| phase.iter())
-		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(crate::lowering::for_loop::headers::lower(module), |module, pass| pass(module))
+		.enumerate()
+		.filter(|(_, pass)| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
+		.fold(crate::lowering::for_loop::headers::lower(module), |module, (index, pass)| {
+			crate::compiler::phase_times::timed("module source passes", || {
+				crate::compiler::phase_times::timed_as(|| format!("module source pass {index}"), || pass(module))
+			})
+		})
 }
 
 /// The program just before and just after the source pass `pass`, the earlier passes run as compiling runs them: what
@@ -466,7 +471,11 @@ fn run_program_passes(node: Node, passes: &[Pass]) -> Node {
 /// (a constant answer, an error, a denied capability).
 pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::lowering::blocks::unsealed;
-	crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node)).map(unsealed).map_err(unsealed)
+	crate::compiler::phase_times::timed("lowering, all", || {
+		crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node))
+	})
+	.map(unsealed)
+	.map_err(unsealed)
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
@@ -527,11 +536,11 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
 		without_constraints(node),
 	)?)?;
-	if let Some(error) = crate::analyzer::diagnose(&node) {
+	if let Some(error) = crate::compiler::phase_times::timed("diagnose", || crate::analyzer::diagnose(&node)) {
 		return Err(error);
 	}
 	// the standard modules' code warns no program using it (nearest's exact float stop)
-	let mut warnings = crate::analyzer::lint(&node);
+	let mut warnings = crate::compiler::phase_times::timed("lint", || crate::analyzer::lint(&node));
 	warnings.retain(|warning| !warning.file.as_deref().is_some_and(crate::modules::is_std_source));
 	crate::errors::diagnostic::report(&warnings)?;
 	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(crate::lowering::inlining::lower(
@@ -717,11 +726,13 @@ fn checked_markup(result: Node) -> Node {
 #[cfg(feature = "native")]
 pub fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
 	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
-	let result = if needs_ffi || needs_wasi || needs_host {
-		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
-	} else {
-		read_bytes(&bytes)
-	};
+	let result = crate::compiler::phase_times::timed("run (with wasmtime compile)", || {
+		if needs_ffi || needs_wasi || needs_host {
+			read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
+		} else {
+			read_bytes(&bytes)
+		}
+	});
 	result.unwrap_or_else(failed_run)
 }
 

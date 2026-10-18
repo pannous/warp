@@ -72,6 +72,10 @@ pub enum Origin {
 /// `bytes` (a binary module or WAT text) compiled for `engine`: from this process's modules or the cache when they
 /// hold it, else compiled and added to both
 pub fn compiled_module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+	crate::compiler::phase_times::timed("wasmtime compile", || compiled_module_untimed(engine, bytes))
+}
+
+fn compiled_module_untimed(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 	if is_precompiled(bytes) {
 		// SAFETY: compiled code runs as it is, so a .cwasm file is trusted like a native executable: the user runs it
 		return unsafe { Module::deserialize(engine, bytes) };

@@ -67,7 +67,7 @@ pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
 /// `use math` and other native libraries stay in place for the FFI; an unknown name is an error value.
 pub fn resolve(program: Node) -> Node {
-	resolve_in(program, &SEARCH_DIRECTORIES)
+	crate::compiler::phase_times::timed("resolve uses", || resolve_in(program, &SEARCH_DIRECTORIES))
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {

@@ -597,7 +597,7 @@ impl WarpParser {
 	}
 
 	pub fn parse(input: &str) -> Node {
-		Self::parse_with_options(input, ParserOptions::default())
+		crate::compiler::phase_times::timed("parse", || Self::parse_with_options(input, ParserOptions::default()))
 	}
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
