@@ -376,6 +376,13 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   positions and literal layers (a plain view has none), so position-checking tests fail by design.
 - The stage program compiles once per worker thread (its compile has thread-local state the outer compile keeps);
   the twin tests parser::test_self_* are skipped (they compare warp with Rust themselves).
+- Since card End-end (branch self-switch): three stage programs, each its own warp program (a `Stage` static with
+  its worker pool): passes.warp `stage`, analyzer.warp `kinds` (self_hosted::analysis, JSON; separate because
+  analyzer.warp's names clash with parser.warp's, card local-variable-named) and emitter.warp `wasm_module`
+  (wasm_emitter::emit_module asks it first; "outside the core: …" falls back to the Rust emitter, other failures are
+  errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
+  binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
+  with the Rust pipeline (that compile shows a Rust `emit` phase).
 - The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
   warp-lang at opt-level 2, as test.sh), in three jobs at once (TEST_GROUPS: self-hosted, the whole suite outlasts the
   lane's 2400 s limit), branches self-hosted/<tip>-<n>, deleted after the run.
