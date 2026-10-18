@@ -7,8 +7,8 @@ pub(crate) const UNITS_MODULE: &str = "units";
 pub(crate) const QUANTITY: &str = "quantity";
 /// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/web/serve.rs) are read by the router's words
 pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
-/// lib/router.warp: a route's `status 418` and `header "name" "value"`
-const ANSWER_PARTS: [&str; 2] = ["status", "header"];
+/// lib/router.warp: a route's `status 418` and `header "name" "value"`, and the table of routes without a server
+const ANSWER_PARTS: [&str; 3] = ["status", "header", crate::serve::ROUTE_ADD];
 /// lib/markup.warp: `form post "/todos" { … }`, a form named by its route
 const FORM_ROUTE: &str = "form";
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
