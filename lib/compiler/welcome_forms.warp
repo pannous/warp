@@ -12,52 +12,57 @@ is_switch_word(n: any) := switch_words contains n
 last_of(items: any) := items#(#items)
 
 # `alle = (f(3) {cases})` as [alle = f(3), {cases}], else ø
-named_subject(item: any) := {
-	if type(item) is not key or op_of(item) != "=" or key_of(item) is not symbol { return ø }
-	value = value_of(item)
+named_subject(item: Node) := match item {
+	Key(name, Op.Assign, value): { if name is symbol then named_value(name, value) else ø }
+	_: ø
+}
+
+named_value(name: Node, value: Node) := {
 	if not is_group(value) or #value < 2 or bracket_of(last_of(value)) != "{" { return ø }
 	expression = value[0 .. #value - 1]
 	subject = if #expression == 1 then expression#1 else group_like(value, expression)
-	[key(key_of(item), "=", subject), last_of(value)]
+	[Key(name, Op.Assign, subject), last_of(value)]
 }
 
-named_switch_subjects(n: any) := {
-	if is_group(n) {
-		found = []
-		for item in n.map(named_switch_subjects) {
-			named = if #found > 0 and is_switch_word(last_of(found)) then named_subject(item) else ø
-			if named != ø { found += named } else { found += [item] }
-		}
-		return group_like(n, found)
-	}
-	if type(n) is key and op_of(n) == "=" {
-		left = key_of(n)
-		if is_group(left) and #left == 2 and is_switch_word(left#1) {
-			return named_switch_subjects(separated(bracketed([left#1, key(left#2, "=", value_of(n))], ""), " "))
-		}
-		return key(named_switch_subjects(left), "=", named_switch_subjects(value_of(n)))
-	}
-	children(n, named_switch_subjects)
+named_switch_subjects(n: Node): Node := match n {
+	List(items, bracket, separator): List(subjects_named(items.map(named_switch_subjects)), bracket, separator)
+	Key(left, Op.Assign, value): named_assignment(left, value)
+	_: children(n, named_switch_subjects)
 }
 
-colon_case(case: any) := {
-	if is_group(case) and bracket_of(case) == "" and separator_of(case) == "," { return group_like(case, case.map(colon_case)) }
-	if type(case) is key and op_of(case) == ":" {
-		label = key_of(case)
-		if type(label) is key and op_of(label) == "." and key_of(label) == symbol("case") {
-			return key(key(ø, ".", value_of(label)), ":", value_of(case))
-		}
+# the items with the subject after each switch word named
+subjects_named(items: any) := {
+	found = []
+	for item in items {
+		named = if #found > 0 and is_switch_word(last_of(found)) then named_subject(item) else ø
+		if named != ø { found += named } else { found += [item] }
 	}
-	if is_group(case) and #case == 2 and case#1 == symbol("case") { return case#2 }
-	if type(case) is key and op_of(case) == "->" {
-		pattern = key_of(case)
-		if pattern == symbol("_") or pattern == symbol("else") { pattern = symbol(default_word) }
-		return key(pattern, ":", value_of(case))
-	}
-	case
+	found
 }
 
-colon_cases(block: any) := if bracket_of(block) == "{" then group_like(block, block.map(colon_case)) else block
+# `(match alle) = …` as `match (alle = …)`
+named_assignment(left: Node, value: Node): Node := {
+	if is_group(left) and #left == 2 and is_switch_word(left#1) {
+		return named_switch_subjects(List([left#1, Key(left#2, Op.Assign, value)], Bracket.None, Separator.Space))
+	}
+	Key(named_switch_subjects(left), Op.Assign, named_switch_subjects(value))
+}
+
+colon_case(case: Node): Node := match case {
+	List(cases, Bracket.None, Separator.Comma): List(cases.map(colon_case), Bracket.None, Separator.Comma)
+	Key(Key(word, Op.Dot, label), Op.Colon, value): { if word == symbol("case") then Key(Key(ø, Op.Dot, label), Op.Colon, value) else case }
+	List(parts, bracket, separator): { if #parts == 2 and parts#1 == symbol("case") then parts#2 else case }
+	Key(arm_pattern, Op.Arrow, value): Key(default_pattern(arm_pattern), Op.Colon, value)
+	_: case
+}
+
+# `_` and `else` as `default`
+default_pattern(pattern: Node) := if pattern == symbol("_") or pattern == symbol("else") then symbol(default_word) else pattern
+
+colon_cases(block: Node): Node := match block {
+	List(cases, Bracket.Curly, separator): List(cases.map(colon_case), Bracket.Curly, separator)
+	_: block
+}
 
 # the items of a match with its cases block in the colon form; other items as they are
 with_colon_cases(items: any) := {
@@ -73,20 +78,28 @@ with_colon_cases(items: any) := {
 	items
 }
 
-colon_arms(n: any) := if is_group(n) then group_like(n, with_colon_cases(n.map(unchanged))) else n
+colon_arms(n: Node): Node := match n {
+	List(items, bracket, separator): List(with_colon_cases(items.map(unchanged)), bracket, separator)
+	_: n
+}
 
 match_arms(program: any) := bottom_up(named_switch_subjects(program), colon_arms)
 
 # arrow_result_types (lower_arrow_result_types): Swift's and Rust's result arrow before `:=`, `x(p:P) -> int := p.n`,
 # is the typed head `x(p:P): int := p.n` every pass reads
-calls_by_name(n: any) := bracket_of(n) == "(" and #n > 0 and n#1 is symbol
+calls_by_name(n: Node) := match n {
+	List(parts, Bracket.Round, separator): #parts > 0 and parts#1 is symbol
+	_: no
+}
 
-arrow_result_types(n: any) := {
-	if type(n) is key and (op_of(n) == ":=" or op_of(n) == "=") {
-		target = key_of(n)
-		arrowed = type(target) is key and op_of(target) == "->" and calls_by_name(key_of(target))
-		target = if arrowed then key(key_of(target), ":", value_of(target)) else arrow_result_types(target)
-		return key(target, op_of(n), arrow_result_types(value_of(n)))
-	}
-	children(n, arrow_result_types)
+arrow_result_types(n: Node): Node := match n {
+	Key(target, Op.Define, value): Key(result_typed(target), Op.Define, arrow_result_types(value))
+	Key(target, Op.Assign, value): Key(result_typed(target), Op.Assign, arrow_result_types(value))
+	_: children(n, arrow_result_types)
+}
+
+# `x(p:P) -> int` as `x(p:P): int`
+result_typed(target: Node): Node := match target {
+	Key(head, Op.Arrow, result): { if calls_by_name(head) then Key(head, Op.Colon, result) else arrow_result_types(target) }
+	_: arrow_result_types(target)
 }
