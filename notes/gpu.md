@@ -202,6 +202,28 @@ into a new texture and keeps it per shader text (native gpu.rs PREVIOUS_FRAMES, 
 previousFrames); a canvas paint then copies it into the canvas texture (configured COPY_DST). Kept as 8 bits per
 channel, so small fades round: subtract a step (≥ 1/255) rather than multiply by 0.99, which stalls at ~33/255.
 
+## Several passes (card gpu-multipass, design, not built)
+web-ocean renders its sea in passes (FFT spectra, a height-field texture, then the sea that samples it); one fragment
+shader per paint covers only the last pass. The plan, in warp's words, with $previous as the model:
+- **A pass is a painted function whose image stays on the GPU.** `waves = render(height_field, 256, 256)` (word
+  pending, warp-interviewer: render / image / texture) gives an image value: a texture handle, no readback, never
+  shown. Calling it again each frame renders into the same texture (kept by name like PREVIOUS_FRAMES).
+- **Another painted function reads it** as a function of a position: `waves(p.xz)` (or `sample(waves, uv)`) in
+  `ocean(x, y)`. The kernel translation sees a program value that is an image (as it sees program vectors today,
+  program_values) and makes it a texture binding: `@group(0) @binding(2 + k) var warp_image_k: texture_2d<f32>` plus a
+  sampler, the call `textureSampleLevel(warp_image_k, warp_sampler, uv / size, 0.0)`; ints sample with textureLoad.
+- **The host** generalizes $previous's one binding to a list of textures per painter (native gpu.rs `bindings`,
+  browser host-gpu.js): the painter's layout gets one texture entry per image it reads, the render binds the kept
+  textures by name. Rendering order is the program's order of statements, so a pass written before the paint is
+  drawn first in the same frame (one command encoder, no CPU wait between passes).
+- **Precision**: images as rgba16float (the heights need more than 8 bits; $previous's 8-bit rounding is the warning).
+- **On the CPU** an image is the list of its pixels (as paint_each computes them) and `waves(at)` reads the nearest
+  pixel, so the fallback paints the same.
+- **Compute passes** (an FFT over a spectrum) are maps over lists kept on the GPU (kept_on_gpu, linear arrays), a later
+  step; an image built from such a list (`image(list, width, height)`) joins them to the paint.
+- First step: render + reading an image in a painted function, native only, one probe rendering a gradient into an
+  image and painting it shifted (probes/gpu/). Then the browser host, then samples/gpu/ocean.warp's waves as a texture.
+
 ## WGSL errors at their place in the program
 WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). Both hosts report a
 shader that does not compile as `<word>: line:column: why` in the shader's text (native gpu.rs compile_errors, browser
