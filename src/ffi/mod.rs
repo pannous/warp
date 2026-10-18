@@ -65,6 +65,12 @@ impl<'a> ForeignLine<'a> {
 		parameters.map(|parameter| parameter.split_once('=').map(|(_, default)| default.trim()))
 	}
 
+	/// The type of the first parameter, `text` of `t: text`; None for one of any value
+	pub fn first_type(&self) -> Option<&'a str> {
+		let first = self.parameters.split(',').next()?.split('=').next()?;
+		first.split_once(':').map(|(_, type_name)| type_name.trim())
+	}
+
 	/// `(x:number) -> int`, as a signature reads
 	pub fn signature(&self) -> String {
 		let parameters = self.parameters.replace(": ", ":");
