@@ -149,4 +149,5 @@
 
 - Reproduce the labelled method-call form with one focused regression before changing the prelude.
 - Reuse the general preposition-label machinery by declaring `with new`; keep positional calls working.
+- Keep reflected parameter names label-free through the shared library-signature extractor.
 - Update the existing sample and call guide, then run targeted tests and the worker gates.

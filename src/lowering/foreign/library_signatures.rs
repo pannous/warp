@@ -133,7 +133,7 @@ fn builtin_lines() -> impl Iterator<Item = crate::ffi::ForeignLine<'static>> {
 	crate::ffi::math_foreign_lines(crate::ffi::BUILTIN_LIBRARY).chain(crate::ffi::runtime_word_lines().iter().copied())
 }
 
-/// `replace(t, old, new) := …` → `(t, old, new)`
+/// `replace(t, old, with new) := …` → `(t, old, with new)`
 fn prelude_signature(word: &str) -> Option<String> {
 	let head = crate::modules::std_docs::word_head(PRELUDE, word)?;
 	head.strip_prefix(word).map(str::to_string)
@@ -172,7 +172,8 @@ fn positional(arity: usize, parameter_type: Option<&str>, result: Kind) -> Strin
 	format!("({}){result}", parameters.join(", "))
 }
 
-/// `(t:text, separator:text) -> …` → `[t separator]`, `(x, limit = 0)` → `[x limit]`
+/// `(t:text, separator:text) -> …` → `[t separator]`, `(x, limit = 0)` → `[x limit]`,
+/// `(t, old, with new)` → `[t old new]`
 fn parameter_names(signature: &str) -> Vec<String> {
 	let inside = signature.strip_prefix('(').and_then(|rest| rest.split(')').next()).unwrap_or_default();
 	inside
@@ -180,6 +181,19 @@ fn parameter_names(signature: &str) -> Vec<String> {
 		.filter_map(|parameter| parameter.split([':', '=']).next())
 		.map(str::trim)
 		.filter(|name| !name.is_empty())
+		.map(|name| {
+			let mut words = name.split_whitespace();
+			let first = words.next().unwrap_or_default();
+			match words.next() {
+				Some(parameter)
+					if crate::type_name_matching::PREPOSITIONS.contains(&first)
+						|| first == crate::type_name_matching::AS_LABEL =>
+				{
+					parameter
+				}
+				_ => first,
+			}
+		})
 		.map(str::to_string)
 		.collect()
 }

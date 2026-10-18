@@ -64,3 +64,4 @@
 2026-10-17 interviewer: src/extensions.rs texts! Separator::Colon edit (unknown origin, user "fix it") reverted to Comma; backup data/patches/texts-macro-colon-2026-10-17.patch
 
 - 2026-10-18 like-tea: a prelude function gets the same natural call labels as user functions by declaring the parameter after its preposition (`replace(t, old, with new)`); positional calls keep working and `.replace "tea" with: "coffee"` uses the shared preposition-call lowering.
+- 2026-10-18 like-tea CI: prelude reflection reads signatures as text, so labelled parameters need the same label stripping as AST parameters; keep `replace.signature` labelled while `replace.params` returns the variable name `new`.
