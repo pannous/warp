@@ -14,7 +14,10 @@ use crate::lowering::switch::{hole_name, rest_hole};
 
 const REWRITE_WORD: &str = "rewrite";
 const REWRITE_LINE_START: &str = "rewrite ";
+/// The word between a rule's pattern and its template, as written and as parsed (decision rewrite-general: it may
+/// become `as` or `with`, swapped here)
 const ARROW: &str = "=>";
+const ARROW_OP: Op = Op::Arrow;
 const WHERE_CLAUSE: &str = " where ";
 const WHERE_WORD: &str = "where";
 /// The kinds a typed hole `$x: text` names
@@ -108,7 +111,7 @@ fn rule_of(statement: &Node, module: Option<&'static str>) -> Option<Rule> {
 	};
 	let (first, rest) = items.split_first()?;
 	let (last, words) = rest.split_last()?;
-	let Node::Key(last_word, Op::Arrow, right) = last.drop_meta() else {
+	let Node::Key(last_word, ARROW_OP, right) = last.drop_meta() else {
 		return None;
 	};
 	if !first.is_symbol(REWRITE_WORD) {
