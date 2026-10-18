@@ -983,10 +983,12 @@ impl Broadcast {
 		Some(each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
-	/// A list variable, a range or a broadcast: `sqrt xs`, `sqrt (1 to 4)`, `round(floor(xs))` map over its items
+	/// A list variable, a range, a broadcast or an element-wise expression of a list: `sqrt xs`, `sqrt (1 to 4)`,
+	/// `round(floor(xs))`, `floor([0.5] .* 0.5)` map over its items (card math-of-elementwise)
 	fn is_list_value(&self, node: &Node) -> bool {
 		is_range(node)
 			|| is_broadcast(node)
+			|| element_wise_parts(node.ungrouped()).is_some_and(|(receiver, _, _)| self.is_list(receiver.ungrouped()))
 			|| node.symbol_name().is_some_and(|variable| {
 				self.list_variables.contains(variable) && !self.shadowed.borrow().iter().any(|name| name == variable)
 			})
