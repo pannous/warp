@@ -28,9 +28,9 @@ kind switches they stand for. Done in slices per word family, each with its net 
 - Number words have no analyzer table: abs lowers to ‖x‖, min/max inline, floor/round/ceil go through lib/math.warp.
 
 ## Left
-- library_call_kind's arms whose result follows an argument (field_with/instance_copy: the object's kind, map_get_or:
-  a value of the map, list_become/map_of_entry: the place's): need a type variable in a line
-  (`field_with(object: T, name, value): T`), a design step of its own.
+- Results following an argument: branch same-as-results (`same as object`, `value of m`, read by
+  library_words::argument_result; a same-as result of a number or character stays a Node, as runtime functions give).
+- type_word_kind("list") and ("map") are None (type_tests held_as), so an overload line `xs: list` never matches by
+  kind; a list argument reaches it only as call_result_kind's first-line fallback.
 - PRINT_SIGNATURE `(x)` beside print's `(values...)` line: dropping it makes print variadic for library_arity.
-- Blocker: a `:=` definition with a list or map result type is lost (card list-result-type), so lib words written in
-  warp cannot yet declare `: list`.
+- The untyped single signatures still to type per kind: listed on the card (audit note 2026-10-18).
