@@ -22,8 +22,6 @@ use std::collections::HashSet;
 
 use crate::words::{MATCH_WORD, SWITCH_WORDS};
 const WILDCARD: &str = "_";
-const SET_WORD: &str = "set";
-const SET_PROSE_REASON: &str = "warp doesn't do prose, write the assignment";
 const DEFAULT_CASE: &str = "default";
 const LOOP_KEYWORD: &str = "loop";
 /// Lua's, Ruby's and Julia's word closing a function body
@@ -180,42 +178,6 @@ fn bare_returns(node: Node) -> Node {
 
 /// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head
 /// every pass reads (card undefined-function: it was read as a lambda, `undefined function: x`)
-/// `set x to 5` is `x = 5` for any assignment target, with a style hint (decision setter-calls); after of_lookups
-/// `set width of canvas to 12` is `set canvas.width to 12`, so `canvas.width = 12`. A program's own `set` wins
-pub fn lower_set_phrases(node: Node) -> Node {
-	if !node.mentions_any(&[SET_WORD]) {
-		return node;
-	}
-	crate::program_names::rewritten_where_free(node, SET_WORD, &set_phrases)
-}
-
-fn set_phrases(node: Node) -> Node {
-	match set_assignment(&node) {
-		Some(assignment) => set_phrases(assignment),
-		None => node.map_children(set_phrases),
-	}
-}
-
-/// The assignment a phrase `set target to value` says, with its style hint
-fn set_assignment(node: &Node) -> Option<Node> {
-	let Node::List(items, Bracket::None, Separator::Space) = node else { return None };
-	let [set, phrase] = items.as_slice() else { return None };
-	let Node::Key(target, Op::To, value) = phrase.drop_meta() else { return None };
-	if !set.is_symbol(SET_WORD) || !is_assignable(target) {
-		return None;
-	}
-	let assignment = assign(target.as_ref().clone(), value.as_ref().clone());
-	crate::normalize::set_position_of(set);
-	let written = format!("{SET_WORD} {} to {}", target.serialize(), value.serialize());
-	crate::normalize::hint(&written, &assignment.serialize(), SET_PROSE_REASON);
-	Some(assignment)
-}
-
-/// A variable or a field `p.width`
-fn is_assignable(target: &Node) -> bool {
-	matches!(target.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Dot, _))
-}
-
 pub fn lower_arrow_result_types(node: Node) -> Node {
 	match node {
 		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {

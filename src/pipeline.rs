@@ -90,8 +90,6 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 pub const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
-	// `if let Some(v) = o`, a match of `Some(v) =>` and `None =>` arms (rust_options.rs), before the arms below
-	crate::lowering::rust_options::lower,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
 	// a bare `return` as the phrase `return ø` (welcome_forms.rs), before any pass reads a return
@@ -100,8 +98,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
-	// `set x to 5` is `x = 5`, after of_lookups: `set width of p to 12` is `p.width = 12` (welcome_forms.rs)
-	crate::lowering::welcome_forms::lower_set_phrases,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
 	crate::lowering::grouped_receivers::lower,
 	// `window.width = 800`, `canvas.height`, a bare width (module_properties.rs): getters and setters, before any pass
@@ -118,8 +114,6 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// `cbrt(x: float): float from 'm'` (foreign_lines.rs) as the import it declares, before any pass reads it as a call
 	crate::lowering::foreign_lines::lower,
 	crate::lowering::inline_unions::lower_inline_unions,
-	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
-	crate::lowering::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::lowering::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send

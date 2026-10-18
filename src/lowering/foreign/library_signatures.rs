@@ -11,29 +11,6 @@ use std::sync::OnceLock;
 /// print, which no line or table names; the words warp computes itself are lib/math.warp's and lib/prelude.warp's
 /// `from warp` lines (builtin_signature)
 const PRINT_SIGNATURE: (&str, &str) = ("print", "(x)");
-/// The builtin methods of lists, texts and maps no table above names (members.rs LIST_MEMBERS …), so each is a function
-/// value like the others (card dir-lists: methods(x) lists what dir(x) does)
-const MEMBER_SIGNATURES: [(&str, &str); 19] = [
-	("count", "(xs) -> int"),
-	("map", "(xs, f: function)"),
-	("filter", "(xs, f: function)"),
-	("reduce", "(xs, f: function)"),
-	("fold", "(xs, start, f: function)"),
-	("any", "(xs, f: function) -> bool"),
-	("all", "(xs, f: function) -> bool"),
-	("find", "(xs, f: function)"),
-	("each", "(xs, f: function)"),
-	("add", "(xs, x)"),
-	("insert", "(xs, x, at: int)"),
-	("remove", "(xs, x)"),
-	("pop", "(xs)"),
-	("clear", "(xs)"),
-	("number", "(x) -> number"),
-	("string", "(x) -> text"),
-	("keys", "(m) -> list"),
-	("values", "(m) -> list"),
-	("get", "(m, key)"),
-];
 const PRELUDE: &str = "prelude";
 const POSITIONAL_NAMES: [&str; 4] = ["a", "b", "c", "d"];
 const LIBM_PARAMETER_TYPE: &str = "float";
@@ -53,7 +30,7 @@ pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 			crate::library_words::is_library_word(word)
 				.then(|| positional(crate::library_words::arity(word), None, Kind::Empty))
 		})
-		.or_else(|| named(&MEMBER_SIGNATURES, word))?;
+		.or_else(|| emitter_signature(word))?;
 	Some((parameter_names(&signature), signature))
 }
 
@@ -148,6 +125,11 @@ fn builtin_signature(word: &str) -> Option<String> {
 		by_name
 	});
 	by_name.get(word).map(|line| line.signature())
+}
+
+/// `map(xs, f: function) from emitter` → `(xs, f:function)`: a builtin the emitter expands, as lib/prelude.warp writes it
+fn emitter_signature(word: &str) -> Option<String> {
+	crate::ffi::emitter_word_lines().iter().find(|line| line.name == word).map(|line| line.signature())
 }
 
 /// The `from warp` lines, read once: every library signature looks a word up in them
