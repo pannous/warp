@@ -5,6 +5,11 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+- rewrite-syntax (card compiler-modules, warp-self-passes): how a module extends the compiler. Default built: a line
+  `rewrite PATTERN => TEMPLATE`, optionally `where $c = SHAPE`; holes `$x`, `$xs...` as in code patterns; any program
+  or module may declare them, a standard module's rules apply wherever their words appear. Example (lib/channels.warp):
+  `rewrite $c.send($v) => channel_put($c, $v) where $c = channel()`. Alternatives: the keyword `macro`/`syntax`;
+  `data(…)` around both sides; `rules { … }` blocks (matching roadmap step 4).
 
 ## Parked
 - maybe-javascript (card in Later): typed `js "…"` / `wgsl "…"` templates like `sql` and `sh`, once glue code is needed that warp/wasm can't produce; until then `shader {…}` and `use js`.
