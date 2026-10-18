@@ -17,12 +17,15 @@ SCRATCH_PREFIX=self-hosted       # the throwaway branches
 CONFIG=.cargo/config.toml
 # the suite's speed as test.sh runs it (cloud-test.sh --full): the hosted parser runs in the tests' warp-lang
 SPEED_PROFILE=$'\n[profile.test.package.warp-lang]\nopt-level = 2'
-# The suite in parts of ~2000 tests that run at once: self-hosted, the whole suite took longer than the lane's
-# 2400 s limit (6020 tests of ~6300), and a killed run prints no failure messages
+# The suite in parts of ~1600 tests that run at once: self-hosted, the whole suite took longer than the lane's
+# 2400 s limit (6020 tests of ~6300), and a killed run prints no failure messages; the third part of ~2000 outgrew it
+# too (8f8d6dc8). Filters match anywhere in a test's path (lists:: also takes control::test_job_lists), so a test
+# may run in two parts: rank counts each test once.
 TEST_GROUPS=(
 	"control:: functions:: ffi::"
 	"types:: lists:: modules:: node:: numbers:: operators::"
-	"parser:: programs:: scope:: sweeps:: text:: wasm:: web:: welcoming::"
+	"parser:: programs:: scope:: sweeps::"
+	"text:: wasm:: web:: welcoming::"
 )
 REPORTS=/Users/me/dev/angles/warp/data/self-hosted
 COUNTS=/Users/me/dev/angles/warp/data/self_hosting/suite_counts.txt   # the count over time, one line per cloud run
@@ -41,13 +44,18 @@ rank() {
 	for log in "$@"; do
 		if [[ "$log" == *.gz ]]; then gunzip -c "$log"; else cat "$log"; fi
 	done | LC_ALL=C awk -v listed="${LISTED:-}" -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH -v family_least=$FAMILY_LEAST '
-		/(^|[^ ])test [^ ]+ \.\.\. ok$/ { passed++ }
-		/(^|[^ ])test [^ ]+ \.\.\. FAILED$/ { failed++ }
+		match($0, /(^|[^ ])test [^ ]+ \.\.\. (ok|FAILED)$/) { result($0) }
 		/^cloud-test: KILLED/ { killed++ }
 		/^---- [^ ]+ stdout ----$/ { current = $2; state = 1; next }
-		state == 1 && / panicked at / { state = 2; next }
+		state == 1 && / panicked at / { state = (current in caused) ? 0 : 2; caused[current]; next }
 		state == 2 { message = $0; state = (message ~ /^assertion/) ? 3 : 0; if (!state) count_cause(message); next }
 		state == 3 { sub(/^ *left: */, ""); count_cause($0); state = 0 }
+		# a test that ran in two parts counts once, failed if it failed in either
+		function result(line,   name) {
+			sub(/^.*test /, "", line); name = line; sub(/ .*$/, "", name)
+			if (line ~ /FAILED$/) outcome[name] = "FAILED"
+			else if (!(name in outcome)) outcome[name] = "ok"
+		}
 		# the message itself: an error value or a text of one unwrapped, its quotes unescaped
 		function count_cause(cause) {
 			gsub(/\\"/, "\"", cause)
@@ -64,6 +72,7 @@ rank() {
 		}
 		END {
 			if (listed != "") exit
+			for (name in outcome) if (outcome[name] == "ok") passed++; else failed++
 			all = passed + failed
 			printf "self-hosted: %d passed / %d (%.1f%%)\n", passed, all, all ? 100 * passed / all : 0
 			if (killed) printf "%d killed runs: their unfinished tests are not counted, their failures have no cause\n", killed
@@ -134,7 +143,8 @@ cloud_run() {
 	mkdir -p "$REPORTS"
 	rank "${logs[@]}" | tee "$REPORTS/${tip:0:8}.txt"
 	mkdir -p "$(dirname "$COUNTS")"
-	[ -s "$COUNTS" ] && newly_failed "$(tail -1 "$COUNTS" | awk '{ print $2 }')" "${logs[@]}" | tee -a "$REPORTS/${tip:0:8}.txt"
+	# against the last complete run: a line noting "incomplete" lacks the tests of its killed part
+	[ -s "$COUNTS" ] && newly_failed "$(grep -v -e '^#' -e incomplete "$COUNTS" | tail -1 | awk '{ print $2 }')" "${logs[@]}" | tee -a "$REPORTS/${tip:0:8}.txt"
 	printf '%s  %s  %s  %s\n' "$(date +%F)" "${tip:0:8}" "$(head -1 "$REPORTS/${tip:0:8}.txt" | sed 's/^self-hosted: //; s/ passed//')" \
 		"data/self-hosted/${tip:0:8}.txt" >> "$COUNTS"
 	echo "(report: $REPORTS/${tip:0:8}.txt, logs: ${logs[*]})"
