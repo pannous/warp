@@ -97,9 +97,12 @@ remember(scope: any, pairs: any) := {
 }
 
 # name → its meanings, of the whole program
-scope_of(program: any) := {
+scope_of(program: any) := scope_of_view(view_of(program))
+
+# name → its meanings, of a program's view (parser.warp's tree)
+scope_of_view(top: any) := {
 	scope = {}
-	for view in views_in(program) {
+	for view in lists_in(top) {
 		scope = remember(remember(scope, meanings_of(view)), fields_of(view))
 	}
 	scope
