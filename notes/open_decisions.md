@@ -22,3 +22,9 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - P45 script mode: may a variable change kind (`x=[1]; x=5`) under `use script`? Today a compile error everywhere.
 - Extended rationals: ±1/0 as exact infinities instead of the divide-by-zero error (footgun-divzero).
 - #10 Polish notation for .wat/.wast (`(module a b)` as nodes, a ParserOptions mode); test_wast stays ignored.
+
+## domains-plain-libraries (supervisor, 2026-10-18)
+The user decided music is a plain library with no compiler magic (decisions.md music-plain-library). Does the same hold
+for the other domains whose Rust passes are being moved: web routes (serve.rs), markup/styles, graphics/window
+properties, shader placeholders, reflection/help? Default until answered: yes as the goal; rule-shaped sugar moves to
+rewrite rules meanwhile, the rest waits for module-passes or a general core feature.
