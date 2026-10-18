@@ -74,5 +74,5 @@ fn a_typed_builtin_called_without_parentheses_is_the_call() {
 fn the_map_and_membership_words_declare_their_kinds() {
 	is!("keys.signature", warp::Node::Text("(m:map) -> list".into()));
 	is!("\"abc\".contains(\"b\") and [1 2].contains(2) and {a: 1}.has(\"a\")", true);
-	is!("\"abc\".index_of(\"c\") + [5 6].index_of(6)", 5);
+	is!("\"abc\".index_of(\"c\") == [5 6 7].index_of(7)", true);
 }
