@@ -112,7 +112,7 @@ section(id: int, content: any) := [id] + uleb(#content) + content
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {} }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
@@ -476,11 +476,25 @@ assignment(body: Body, target: any, value: any) := {
 	kind = value#1
 	if kind == "bool" { return refuse("a yes/no variable") }
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
+	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
-		kind = body.kinds#(body.names[name] + 1)
+		held = body.kinds#(body.names[name] + 1)
+		if widens(body, name, held, kind) {
+			body.function.widened[name] = joint_kind(held, kind)
+			return [held, [op.unreachable]]
+		}
+		kind = held
 	}
 	index = uleb(local_index(body, name, kind))
 	[kind, converted(value, kind) + [op.local_tee] + index]
+}
+
+# whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
+# its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float
+widens(body: Body, name: text, held: text, kind: text) := {
+	if body.names[name] < #body.function.parameters or held == pending or kind == pending { return no }
+	joint = joint_kind(held, kind)
+	joint != held and (joint in type_bytes or joint in references)
 }
 
 # `global name = value` declares the module's variable name, which every function reads and writes
@@ -644,11 +658,16 @@ compile_function(f: Function, argument_kinds: any) := {
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
-	# the first reading finds the result kind, the second gives the code with every recursive call knowing it
-	f.result = pending
-	first = new_scope(f)
-	result = expression(first, f.body)#1
-	for kind in first.returned { result = joint_kind(result, kind) }
+	# the first readings find the result kind and the kinds of locals assigned values of two kinds (`widens`), the
+	# last gives the code with every recursive call knowing the result
+	widened = -1
+	while widened != #f.widened.keys {
+		widened = #f.widened.keys
+		f.result = pending
+		first = new_scope(f)
+		result = expression(first, f.body)#1
+		for kind in first.returned { result = joint_kind(result, kind) }
+	}
 	if result == no_kind or result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
 	f.result = result
 	scope = new_scope(f)
