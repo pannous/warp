@@ -193,3 +193,8 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   ("list cannot hold this item"); warp's gives ["hi" 420], because the lowered view the emitter reads carries no
   declaration. Sources: probes/variance/runtime_lax_alias.warp, probes/variance/runtime_unannotated_param.warp. Back: the lowered view keeps the declared element type
   of a list, the emitter checks adds against it.
+- A declared result type: `def half(x) -> int { x / 2 }; half(3)` fails in Rust ("an int must be a whole number",
+  card static-int); warp's module gives 3/2 shown as 1.5, because the lowered view drops `-> int` (the body becomes
+  `the result = x / 2; the result`). Source: probes/static_result.warp (accepted by the Integrator with
+  emitter-beyond-core). Back: the lowering keeps the result type as `(body) as int` or an annotation, and the emitter
+  checks a ratio against it.

@@ -1,0 +1,6 @@
+// a float printed and joined to a text as Rust shows it
+x = 1.5
+print x
+print x * x
+print "x is " + x
+x * 2
