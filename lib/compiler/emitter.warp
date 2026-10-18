@@ -76,6 +76,8 @@ pending = "?"
 # what a refusal says first: the twin harness counts such a program as outside the core
 outside_the_core = "outside the core: "
 no_kind = "none"
+# the names of the helpers Rust's lowering adds to a program (prelude·round_to)
+prelude_prefix = "prelude·"
 
 ## bytes
 uleb(n: int) := {
@@ -819,11 +821,11 @@ wasm_module(program: any, runtime: any) := {
 	try {
 		main.body = separated(bracketed(collect_functions(program, module.functions), ""), ";")
 		compile_function(main, [])
-		# a function never called is compiled too, its parameters of any kind: Rust's compiles every function, so a
-		# program with one it cannot compile fails there
+		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
+		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
 		for name in module.functions.keys {
 			f = module.functions[name]
-			if f.kinds == ø { compile_function(f, f.parameters.map(p => "node")) }
+			if f.kinds == ø and not name.starts_with(prelude_prefix) { compile_function(f, f.parameters.map(p => "node")) }
 		}
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
