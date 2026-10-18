@@ -199,6 +199,8 @@ converted(value: any, to: text) := {
 	if to == "node" { return boxed(value) }
 	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
 	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
+	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
+	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
