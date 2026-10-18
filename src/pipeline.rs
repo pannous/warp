@@ -172,8 +172,10 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::tag_children::lower,
 	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after tag_children read `p.note "hi"` as an element
 	crate::lowering::member_phrases::lower,
-	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
-	crate::lowering::introspection::lower,
+	// `meta(math)`, `meta(P)`: what the compiler knows of a module or class, as a map, and its views `dir(time)`,
+	// `methods(math)` (meta_values.rs), before any pass reads time as a value
+	crate::lowering::meta_values::lower,
+	crate::lowering::meta_values::with_table,
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
 	// `help(sound)`, `help(midi)`: a standard module's index, a word's head and comment (word_help.rs), before reflection.rs
 	// answers help(sound) with the signature of the word sound
@@ -389,10 +391,11 @@ const MEANING_PASSES: &[Pass] = &[
 /// A module's source after the passes the program ran before its `use` was resolved (MODULE_SOURCE_PHASES):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
-/// become calls) serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
+/// become calls), meta_values::with_table (the program's table of its classes and modules), serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let program_only: [Pass; 3] = [
+	let program_only: [Pass; 4] = [
 		crate::lowering::getters::lower,
+		crate::lowering::meta_values::with_table,
 		crate::lowering::serve::with_default_routes,
 		crate::lowering::serve::with_page_routes,
 	];

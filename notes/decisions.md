@@ -238,7 +238,6 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Functions and calls
 - reflection: function objects have .name, .signature, .return_type, .parameters, .doc; printing one shows its doc above its typed .dump; `methods(x)` returns the function objects; `use reflection` adds compilation unit, compiler, origin, wasm index, effects. A bare parameterless function inside print/help/dump/type is called, with a warning and hint `function now`.
 - function-in-list: in a list or text a function prints as its name; only alone it shows doc + definition.
-- help-prints (also help-statement): a statement-level `help(x)` prints; inside an expression it returns the text.
 - dir-lists: built-ins are function values of type `builtin` (a subtype of function); methods(x) lists them.
 - one-method-form: methods are functions: a class-body `def x()` is `def x(_:P)`, `p.x() == x(p)`; `methods(P)` = every function whose first parameter is P, an ancestor or a trait P implements; `dir(p)` = fields + methods(P); where a function is declared is only metadata (`.declared_in`).
 - default-methods: `x.word` ≡ `x.word()`, resolved by multi-dispatch on the receiver's type; a member or method of the object's own class is more specific and wins.
