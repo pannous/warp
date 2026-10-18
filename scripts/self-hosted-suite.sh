@@ -1,23 +1,24 @@
 #!/bin/bash
 # The suite through the warp compiler (card warp-pipeline-suite, notes/self_hosting.md): every test with
-# WARP_SELF_HOSTED=1 (src/compiler/self_hosted.rs: parser.warp parses, the pass twins of lib/compiler/passes.warp
-# replace their Rust passes, the rest stays Rust), the twin tests (parser::test_self_*) left out. Prints
+# WARP_SELF_HOSTED=front (src/compiler/self_hosted.rs: parser.warp parses, the pass twins of lib/compiler/passes.warp
+# replace their Rust passes, the rest stays Rust; =1 adds emitter.warp), the twin tests (parser::test_self_*) left out. Prints
 # "self-hosted: N passed / M" and the failures grouped by cause, the most frequent first.
 #   scripts/self-hosted-suite.sh [<tip>]               on the cloud lane: the pushed tip (default HEAD) plus a throwaway
 #                                                      commit switching self-hosting on (.cargo/config.toml [env]), one
 #                                                      job per TEST_GROUPS entry at once, each on its own branch
 #                                                      SCRATCH_PREFIX/<tip>-<group>, deleted after the run
-#   scripts/self-hosted-suite.sh --stage <name>=<VAR>… [<tip>]   the same with a later stage's switch on too (VAR=1 beside
-#                                                      the front end's), counted apart as run <tip>+<name>; e.g.
-#                                                      --stage analyzer=WARP_SELF_HOSTED_ANALYZER (notes/self_hosting.md
-#                                                      "Back-end focus": front end only, + analyzer, + emitter)
+#   scripts/self-hosted-suite.sh --stage <name>=<VAR>[=<value>]… [<tip>]   the same with a later stage's switch set too
+#                                                      (value 1 by default; WARP_SELF_HOSTED's own replaces "front"),
+#                                                      counted apart as run <tip>+<name>; notes/self_hosting.md
+#                                                      "Back-end focus": front end only, + emitter (--stage
+#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer
 #   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
+SWITCHES=("$SWITCH=front")       # VAR=value lines of .cargo/config.toml [env]: the front end alone, unless --stage adds
 STAGE=""                         # the later stages switched on too (--stage), as the run's name suffix
-STAGE_SWITCHES=()
 SKIPPED=parser::test_self_       # the twins compare warp with Rust themselves
 SCRATCH_PREFIX=self-hosted       # the throwaway branches
 CONFIG=.cargo/config.toml
@@ -94,7 +95,7 @@ rank() {
 local_run() {
 	mkdir -p "$REPORTS"
 	local log=$REPORTS/local.log
-	env "$SWITCH=1" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
+	env "${SWITCHES[@]}" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
 	rank "$log"
 	echo "(log: $log)"
 }
@@ -103,6 +104,17 @@ local_run() {
 failed_tests() {
 	local log
 	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^.*test \([^ ]*\) \.\.\. FAILED$/\1/p' | LC_ALL=C sort -u
+}
+
+# --stage <name>=<VAR>[=<value>]: the run's name grows by the stage, VAR is set (again) to the value
+set_switch() {
+	local variable=${1#*=} value=1 index
+	[[ "$variable" == *=* ]] && value=${variable#*=} variable=${variable%%=*}
+	STAGE=${STAGE:+$STAGE+}${1%%=*}
+	for index in "${!SWITCHES[@]}"; do
+		[ "${SWITCHES[$index]%%=*}" = "$variable" ] && { SWITCHES[index]="$variable=$value"; return; }
+	done
+	SWITCHES+=("$variable=$value")
 }
 
 # A run's name as its cloud results folder spells it
@@ -122,7 +134,7 @@ switched_on() {
 	local tip=$1 group=$2 index blob commit
 	index=$(mktemp "${TMPDIR:-/tmp}/self-hosted-index.XXXXXX")
 	GIT_INDEX_FILE=$index git read-tree "$tip"
-	blob=$({ git show "$tip:$CONFIG"; printf '%s = "1"\n' "$SWITCH" ${STAGE_SWITCHES[@]+"${STAGE_SWITCHES[@]}"}; echo "$SPEED_PROFILE"; } |
+	blob=$({ git show "$tip:$CONFIG"; printf '%s\n' "${SWITCHES[@]}" | sed 's/^\([^=]*\)=\(.*\)$/\1 = "\2"/'; echo "$SPEED_PROFILE"; } |
 		git hash-object -w --stdin)
 	GIT_INDEX_FILE=$index git update-index --cacheinfo "100644,$blob,$CONFIG"
 	commit=$(git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip: $group")
@@ -169,11 +181,11 @@ case "${1:-}" in
 	--tests) shift; LISTED=$1; shift; rank "$@" ;;
 	--stage)
 		while [ "${1:-}" = --stage ]; do
-			STAGE=${STAGE:+$STAGE+}${2%%=*} STAGE_SWITCHES+=("${2#*=}")
+			set_switch "$2"
 			shift 2
 		done
 		cloud_run "$@" ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,16p' "$0"; exit 2 ;;
+	--*) sed -n '2,17p' "$0"; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac
