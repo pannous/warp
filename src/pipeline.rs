@@ -258,7 +258,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `{a:1}` becomes the map of its one entry where a map is needed (one_entry_maps.rs), before a pass lowers m.pop(k)
 	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
-	// note names (`play F#4`) while the program is its own, before the sound module joins it
 	crate::lowering::routes::lower,
 	crate::lowering::page_html::use_markup,
 ];
@@ -270,6 +269,9 @@ const MODULE_PASSES: &[Pass] = &[
 	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
 	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
+	// `hum(t) := …; play_signal(hum, 2)`: a function passed for a parameter typed `(float) -> float` takes its types, the
+	// library's declarations joined in resolve
+	crate::lowering::function_types::lower,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,
 	// again: `dir(is_square)`, `is_square.params` of a used module's function, which joined the program in resolve

@@ -336,16 +336,16 @@ transposed(frequency, semitones) := {
 	if midi_hertz(key) == frequency and semitones is int then midi_hertz(key + semitones) else frequency * 2 ^ (semitones / 12)
 }
 // the semitones of a chord's notes above its root, and of a scale's up to its octave: chord(C4, major7), scale(D4, dorian)
-// (a kind word the program doesn't define is its text, src/lowering/music_words.rs)
+// (a kind word the program doesn't define is its symbol)
 chord_intervals = {major: [0, 4, 7], minor: [0, 3, 7], diminished: [0, 3, 6], augmented: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7], seventh: [0, 4, 7, 10], major7: [0, 4, 7, 11], minor7: [0, 3, 7, 10], diminished7: [0, 3, 6, 9]}
 scale_intervals = {major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 10, 12], ionian: [0, 2, 4, 5, 7, 9, 11, 12], dorian: [0, 2, 3, 5, 7, 9, 10, 12], phrygian: [0, 1, 3, 5, 7, 8, 10, 12], lydian: [0, 2, 4, 6, 7, 9, 11, 12], mixolydian: [0, 2, 4, 5, 7, 9, 10, 12], aeolian: [0, 2, 3, 5, 7, 8, 10, 12], locrian: [0, 1, 3, 5, 6, 8, 10, 12], pentatonic: [0, 2, 4, 7, 9, 12], minor_pentatonic: [0, 3, 5, 7, 10, 12], blues: [0, 3, 5, 6, 7, 10, 12], chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
 chord(root, kind) := transpose_each(root, chord_intervals[kind])
 scale(root, kind) := transpose_each(root, scale_intervals[kind])
 transpose_each(root, intervals) := [transpose(root, i) for i in intervals]
-// the gain factor of decibels: loudness = -6 dB is about half (src/lowering/music_words.rs reads `-6 dB`)
+// the gain factor of decibels: loudness = dB(-6) is about half
 decibels(level) := 10 ^ (level / 20.0)
-// note names (C4, F#4, Bb3, any octave 0–9) are their frequencies in a program that uses sound: the compiler parses them
-// (src/lowering/music_words.rs), as note(name) does at run time
+// note names (C4, F♯4 or Fs4, B♭3 or Bb3, octaves 0–8) are the constants of their frequencies below; note("F#4") reads
+// a note's text at run time
 
 // one wave at phase p (0 to 1) of its period, from -1 to 1, a sample advancing the phase by dt; the jumps of square
 // and sawtooth are band-limited (card reason-beep), sharp without dt
@@ -545,16 +545,18 @@ stop_sound(handle = 0) := std_io("sound", "stop", [handle])
 // a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play(C4, 4s);
 // fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. save sound writes the fade too
 fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
-// a signal computed while it plays (card real-time): hum(t: float) := 0.3 * sin(2 * pi * 220 * t) as float;
-// play(hum, 2s) (play([left, right], 2s) in stereo, or play_signal) calls hum for every sample, t its time in seconds, a
-// block ahead of the speaker; returns the handle when the last is queued. A float function until card
-// function-typed-parameters types it from this parameter
-play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
-// block-wise: `linear hum_block = float[512]`, hum(t: float) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 *
-// pi * 220 * (t + (i - 1) / sample_rate)) }; 0.0 as float }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
+// a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t); play(hum, 2s)
+// (play([left, right], 2s) in stereo, or play_signal) calls hum for every sample, t its time in seconds, a block ahead of
+// the speaker; returns the handle when the last is queued. The parameter's type makes hum a function of a float
+// (src/lowering/types/function_types.rs)
+play_signal(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
+mono_signal(signal: (float) -> float, seconds) := std_io("sound", "signal", [signal, si_amount(seconds), sample_rate])
+stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := std_io("sound", "signal", [[left, right], si_amount(seconds), sample_rate])
+// block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
+// 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
 // The address until a library function takes a linear array (card linear-parameters)
-play_blocks(fill, blocks, seconds) := std_io("sound", "blocks", [fill, blocks, si_amount(seconds), sample_rate])
+play_blocks(fill: (float) -> float, blocks, seconds) := std_io("sound", "blocks", [fill, blocks, si_amount(seconds), sample_rate])
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)

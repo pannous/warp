@@ -678,6 +678,10 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 				Some((name.name(), (parameter.drop_meta().clone(), None)))
 			}
 			Node::Key(name, Op::Colon, _) => Some((name.name(), (Node::Symbol(name.name()), None))),
+			// `f: (float) -> float`, parsed `(f: (float)) -> float`: a function, no quantity
+			Node::Key(typed, Op::Arrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
+				Some((typed.name(), (parameter.drop_meta().clone(), None)))
+			}
 			// `t = 1s`: a call leaving t out gives the default
 			Node::Key(name, Op::Assign, default) => {
 				Some((name.name(), (Node::Symbol(name.name()), Some(default.as_ref().clone()))))
