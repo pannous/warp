@@ -1,7 +1,7 @@
 //! Kebab names: a data key read later in its block (`a-b:2 … a-b`), the difference of variables (`a-b`), and
 //! `p.phone-number` of an object without that field
 
-use crate::analyzer::{assigned_names, data_binding, function_definitions};
+use crate::analyzer::{data_binding, function_definitions};
 use crate::errors::diagnostic::Diagnostic;
 use crate::lowering::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node};
@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 /// A symbol that is not a variable reads the value of the data key of that name given earlier in the same block:
 /// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
 pub fn resolve_data_scope(program: Node) -> Node {
-	let mut variables = assigned_names(&program);
+	let mut variables: HashSet<String> = program.written_names();
 	variables.extend(function_definitions(&program).parameter_names());
 	let resolved = resolve_blocks(program, &variables);
 	subtract_kebab_variables(resolved, &variables)
@@ -25,7 +25,7 @@ pub fn lower_kebab_members(program: Node) -> Node {
 	if objects.is_empty() {
 		return program;
 	}
-	let variables = assigned_names(&program);
+	let variables: HashSet<String> = program.written_names();
 	let mut missing = None;
 	program.visit(&mut |node| {
 		if let Node::Key(receiver, Op::Dot, member) = node {

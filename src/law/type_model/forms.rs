@@ -294,20 +294,10 @@ pub(super) fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 		return None;
 	};
-	let (Node::Symbol(name), Node::Key(parameter, Op::Arrow, body)) =
-		(target.drop_meta(), unwrapped(value).drop_meta())
-	else {
+	let (Node::Symbol(name), Node::Key(parameter, Op::Arrow, body)) = (target.drop_meta(), value.ungrouped()) else {
 		return None;
 	};
 	Some((name, vec![parameter.name()], &**body))
-}
-
-/// `(e)` is e
-pub(super) fn unwrapped(node: &Node) -> &Node {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => unwrapped(&items[0]),
-		other => other,
-	}
 }
 
 /// `global x; x = 7`: the first statement naming x assigns it (or none names it), so that is the global's binding

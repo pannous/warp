@@ -9,7 +9,7 @@
 //! in an element its inline CSS animation like a transition. What CSS lacks is a removal that waits: `leave: pop 400ms
 //! reverse` is the animation the page plays before it removes the element (attribute `data-warp-leave`).
 
-use super::nodes::{key, phrase_words};
+use super::nodes::{key, phrase_words_of};
 use crate::element_events::with_element_items;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -115,13 +115,12 @@ fn with_line_words(items: Vec<Node>) -> Vec<Node> {
 fn css_words_of(item: &Node) -> Option<(&'static str, Vec<Node>)> {
 	let css_word = |name: &Node| CSS_WORDS.iter().copied().find(|word| name.is_symbol(word));
 	match item.drop_meta() {
-		Node::Key(name, Op::Colon, value) => Some((css_word(name)?, phrase_words(std::slice::from_ref(value)))),
+		Node::Key(name, Op::Colon, value) => Some((css_word(name)?, phrase_words_of(value))),
 		Node::List(items, Bracket::None, _) => match items.split_first().map(|(first, rest)| (first.drop_meta(), rest))
 		{
-			Some((Node::Key(name, Op::Colon, value), rest)) => Some((
-				css_word(name)?,
-				phrase_words(std::slice::from_ref(value)).into_iter().chain(rest.iter().cloned()).collect(),
-			)),
+			Some((Node::Key(name, Op::Colon, value), rest)) => {
+				Some((css_word(name)?, phrase_words_of(value).into_iter().chain(rest.iter().cloned()).collect()))
+			}
 			_ => None,
 		},
 		_ => None,

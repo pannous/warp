@@ -26,7 +26,7 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let phrases = Phrases {
-		assigned: assigned_variables(&node),
+		assigned: node.written_names(),
 		shared: crate::shared_arrays::shared_names(&node),
 		parallel_maps: Default::default(),
 	};
@@ -36,7 +36,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let blocks = GoBlocks::default();
 	let node = blocks.lower(node, &[]);
-	crate::declarations::with_definitions_first(node, blocks.definitions.into_inner())
+	crate::lowering::nodes::with_statements_first(node, blocks.definitions.into_inner())
 }
 
 /// A function as a message names it: `go·block·1` is `go block 1`
@@ -73,7 +73,7 @@ impl GoBlocks {
 					.into_iter()
 					.map(|item| {
 						let lowered = self.lower(item.clone(), &known);
-						known.extend(assigned_variables(&item));
+						known.extend(item.written_names::<Vec<String>>());
 						lowered
 					})
 					.collect();
@@ -252,8 +252,4 @@ fn defines_go(node: &Node) -> bool {
 		}
 	});
 	found
-}
-
-fn assigned_variables(node: &Node) -> Vec<String> {
-	node.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
 }

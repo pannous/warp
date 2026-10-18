@@ -106,9 +106,8 @@ pub(crate) fn may_be_ratio(node: &Node, scope: &Scope) -> bool {
 
 /// The value of an expression of number literals alone: `(1/3)`, `1.0 / 3`
 fn constant_value(node: &Node) -> Option<f64> {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Number(number) => Some(f64::from(*number)),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => constant_value(&items[0]),
 		Node::Key(left, op, right) => {
 			let (a, b) = (constant_value(left)?, constant_value(right)?);
 			match op {
@@ -533,7 +532,6 @@ fn library_call_kind(name: &str, items: &[Node], scope: &Scope) -> Kind {
 			kind if kind.is_ref() => kind,
 			_ => Kind::Empty,
 		},
-		LIST_DROP_LAST => Kind::List,
 		// a list, or a text when it sorts a text's characters
 		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => Kind::Empty,
 		// the place itself, changed; the map of `{a:1}` a node as the pair is

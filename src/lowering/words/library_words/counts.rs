@@ -97,9 +97,7 @@ pub(super) fn count_in(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let haystack = Node::single_or_list(haystack.to_vec(), Bracket::None, Separator::Space);
-	if let Some(unit) =
-		matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten()
-	{
+	if let Some(unit) = needle.symbol_name().and_then(crate::analyzer::text_unit) {
 		return Some(key(haystack, Op::Dot, symbol(unit)));
 	}
 	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1)

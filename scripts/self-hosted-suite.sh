@@ -41,8 +41,8 @@ rank() {
 	for log in "$@"; do
 		if [[ "$log" == *.gz ]]; then gunzip -c "$log"; else cat "$log"; fi
 	done | LC_ALL=C awk -v listed="${LISTED:-}" -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH -v family_least=$FAMILY_LEAST '
-		/^test [^ ]+ \.\.\. ok$/ { passed++ }
-		/^test [^ ]+ \.\.\. FAILED$/ { failed++ }
+		/(^|[^ ])test [^ ]+ \.\.\. ok$/ { passed++ }
+		/(^|[^ ])test [^ ]+ \.\.\. FAILED$/ { failed++ }
 		/^cloud-test: KILLED/ { killed++ }
 		/^---- [^ ]+ stdout ----$/ { current = $2; state = 1; next }
 		state == 1 && / panicked at / { state = 2; next }
@@ -87,7 +87,7 @@ local_run() {
 # The failed tests of a run's logs, sorted
 failed_tests() {
 	local log
-	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^test \([^ ]*\) \.\.\. FAILED$/\1/p' | LC_ALL=C sort -u
+	for log in "$@"; do gunzip -c "$log"; done | sed -n 's/^.*test \([^ ]*\) \.\.\. FAILED$/\1/p' | LC_ALL=C sort -u
 }
 
 # The tests failing now that passed in the last recorded run (a regression check), from the logs both runs left

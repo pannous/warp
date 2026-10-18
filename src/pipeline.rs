@@ -144,7 +144,7 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
 	crate::lowering::sum_variants::lower,
 	// card match-exhaustive: a match on a declared sum type or enum that misses a case, while its arms are as written
-	crate::lowering::match_exhaustive::check,
+	crate::analyzer::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::lowering::late_binding::split_global_assignments,
 	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
@@ -156,7 +156,7 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
 	crate::lowering::named_patterns::lower,
 	// `x is {host: h}`: h is the unit hour, a weak warning while it is still the word (card pattern-unit-name)
-	crate::lowering::switch::check_unit_names,
+	crate::analyzer::unit_names::check_unit_names,
 	// `tree find {type: "image", src}` and `tree replace p with q`: each a recursive walker of its own (tree_walks.rs)
 	crate::lowering::tree_walks::lower,
 	// `data($a + 1)` builds the code with a's value before any pass renames a, once tree walks are match arms (quasi_quote.rs)
@@ -335,14 +335,14 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::tuples::lower,
 	// `parse("n * 1")` of a constant text is `data (n * 1)` (card parse-word), before blocks.rs reads data
 	crate::lowering::parse_word::lower,
-	crate::lowering::run_time_blocks::warn_unresolved,
+	crate::analyzer::unresolved_blocks::warn_unresolved,
 	crate::lowering::run_time_blocks::lower_interpret,
 	crate::lowering::blocks::lower,
 	// again for the `data e` that parse_word and blocks made (lower_for_emission unseals them)
 	crate::lowering::blocks::seal_quoted,
 	crate::lowering::getters::lower,
 	crate::lowering::run_time_blocks::lower_run_time_bangs,
-	crate::lowering::mutation::warn_discarded,
+	crate::analyzer::discarded_values::warn_discarded,
 	crate::lowering::mutation::lower,
 	crate::lowering::nested_index::lower,
 	crate::lowering::field_elements::lower,

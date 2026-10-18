@@ -4,9 +4,9 @@
 //! index, counting from 0 as C does (unlike warp's 1-based positions `x in xs`, `c#1`), is `Coin.Dime as int`; an int
 //! becomes a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case has that index.
 
-use super::match_exhaustive::typed_subjects;
 use super::nodes::{key, matched};
 use super::sum_variants::sum_type;
+use crate::analyzer::match_exhaustive::typed_subjects;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;

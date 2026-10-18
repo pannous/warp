@@ -329,13 +329,6 @@ fn is_mark(data: &Node) -> bool {
 
 /// The item under the mark, through any other metadata around it, and the place it is written into
 pub fn marked_item(node: &Node) -> Option<(&Node, Place)> {
-	let Node::Meta { node: inner, data } = node else {
-		return None;
-	};
-	match data.as_ref() {
-		Node::Key(key, _, place) if key.name() == DATA_ITEM => {
-			Some((inner, if place.name() == Place::Field.word() { Place::Field } else { Place::ListItem }))
-		}
-		_ => marked_item(inner),
-	}
+	let (item, place) = node.marked(DATA_ITEM)?;
+	Some((item, if place.name() == Place::Field.word() { Place::Field } else { Place::ListItem }))
 }

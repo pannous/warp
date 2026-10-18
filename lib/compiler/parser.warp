@@ -45,7 +45,7 @@ def items(p, closer, bracket) {
 		// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
 		if stray and p.grouped { break }
 		before = p.at
-		item = if stray then stray_closer(p, c) else expression(p, 0)
+		item = if stray then stray_closer(p, c) else if follows_clause_word(found) then header_expression(p, 0) else expression(p, 0)
 		newline = skip_blanks(p)
 		if bracket == "" and newline and line_indent(p) > p.indent {
 			body = lines_below(p)
@@ -62,6 +62,16 @@ def items(p, closer, bracket) {
 	p.grouped = outer_grouped
 	grouped(found, bracket)
 }
+
+// `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
+// Rust twin: conditions.rs ends_with_clause_word
+def follows_clause_word(found) {
+	if found.length == 0 { return false }
+	last = found#(found.length)#1
+	last is list and last.length == 2 and last#1 == "symbol" and CLAUSE_WORDS.contains(last#2)
+}
+
+CLAUSE_WORDS = ["where", "match", "switch"]
 
 def stray_closer(p, c) {
 	p.at = p.at + 1
@@ -303,6 +313,13 @@ def continued(p, left, min_power) {
 			p.at = p.at + word.length
 			skip_blanks(p)
 			left = listed("", " ", [left, ["symbol", word], expression(p, 116)])
+		} else if down_to_at(p) > 0 {
+			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
+			powers = binding_powers("to")
+			if powers#1 < min_power { break }
+			p.at = p.at + down_to_at(p)
+			skip_blanks(p)
+			left = listed("(", "", [["symbol", "reverse"], ["key", "to", expression(p, powers#2), left]])
 		} else {
 			op = operator_at(p)
 			if op.length == 0 {
@@ -634,6 +651,14 @@ def operand_follows(p, width) {
 
 // `word` at the parser's position as a whole word
 def keyword_at(p, word) := keyword_at_position(p, word, p.at)
+
+// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), else 0
+// Rust twin: ranges.rs down_to_length
+def down_to_at(p) {
+	if not keyword_at(p, "down") { return 0 }
+	at = blank_end(p, p.at + 4)
+	if at > p.at + 4 and keyword_at_position(p, "to", at) then at + 2 - p.at else 0
+}
 
 // Left and right binding power of an operator
 // Rust twin: operators.rs Op::binding_power
@@ -1119,7 +1144,6 @@ ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 // A name and what is glued to it: `f(x)` calls f, `f(x) {…}` defines it, `a{…}` is the tagged block `a:{…}`
 // Rust twin: atoms.rs parse_symbol_with_suffix, parse_glued_suffix, function_call
 def named(p) {
-	before = word_before(p)
 	end = symbol_end(p.code, p.at, p.n)
 	word = p.code[p.at .. end]
 	p.at = end
@@ -1139,8 +1163,7 @@ def named(p) {
 	p.at = p.at + 1
 	arguments = items(p, ')', "(")
 	skip_spaces(p)
-	// `match f(3, 4) {…}`: the block holds the cases, no body of a definition of f
-	if is_at(p.code, p.at, '{', p.n) and not p.header and not SWITCH_WORDS.contains(before) {
+	if is_at(p.code, p.at, '{', p.n) and not p.header {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
 		// the head is the call f(x, y)
@@ -1148,9 +1171,6 @@ def named(p) {
 	}
 	listed("(", "", [name] + spread(arguments))
 }
-
-// Rust twin: words.rs SWITCH_WORDS
-SWITCH_WORDS = ["switch", "match"]
 
 // `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
 // follows: `map function square on xs`); `function add(x) {…}` defines it
