@@ -365,6 +365,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - site-budget: the hello-world site is ≤ 100 KB gzipped. tour-firefox-stall: a Worker-run site ships task-workers.js.
 - Hosting: our own login first, then deploy to one's own provider: Cloudflare Workers, Ferron on pannous.com (`<name>.lambda.pannous.com`), Fermyon/Akamai (notes/hosting.md).
 - P235 WGSL is a `shader { … }` block (alias `wgsl`); P235b no capture of warp variables, `$name` is an explicit hole; shader-untouched: WGSL stays as written otherwise; WGSL errors are reported at the .warp line and column. P234 `paint` takes a shader text; `use graphics` = `use draw`.
+- gpu-multipass: `waves = render(height_field, 256, 256)` paints off-screen, the image stays on the GPU (alias `texture`); another painted function reads it as a function, `waves(uv)`, like `$previous(at)` (Interviewer's decision; notes/gpu.md "Several passes").
 
 ## Sound
 - play-dispatch: `play` dispatches on what it plays (signal, stereo pair, block function); `play(hum, 2s)` until prepositions-call.
