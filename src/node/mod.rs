@@ -1045,6 +1045,11 @@ pub fn parens(xs: Vec<Node>) -> Node {
 	List(xs, Bracket::Round, Separator::None)
 }
 
+/// statements in order, `a; b`
+pub fn sequence(xs: Vec<Node>) -> Node {
+	List(xs, Bracket::None, Separator::Semicolon)
+}
+
 /// `function(arguments…)`
 pub fn call(function: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![symbol(function)], arguments].concat(), Bracket::Round, Separator::None)

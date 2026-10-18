@@ -77,6 +77,15 @@ pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 /// or no library word. A library word is immutable for these types (decision library-words-typed)
 pub fn library_types(word: &str) -> Vec<String> {
 	let word = crate::library_words::canonical_spelling(word);
+	// each overload's (`reverse` of a list and of a text)
+	let overloads: Vec<String> = crate::ffi::runtime_word_lines()
+		.iter()
+		.filter(|line| line.name == word)
+		.filter_map(|line| line.first_type().map(str::to_string))
+		.collect();
+	if !overloads.is_empty() {
+		return overloads;
+	}
 	if let Some(typed) = library_signature(word).and_then(|(_, signature)| first_parameter_type(&signature)) {
 		return vec![typed];
 	}

@@ -1,5 +1,6 @@
 //! Loading modules: the Loader finds, fetches and parses the modules a program uses, and the sibling files of its folder, package or project (D15 `use folder|package|project`)
 use super::*;
+use crate::node::sequence;
 
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
 pub(crate) const MODULE_DIRECTORY: &str = "module_directory";
@@ -237,7 +238,7 @@ impl<'a> Loader<'a> {
 		if let Some(imported) = self.imported_by(&node)? {
 			return Ok(match imported {
 				imported if imported.is_empty() => Node::Empty,
-				imported => Node::List(imported, Bracket::None, Separator::Semicolon),
+				imported => sequence(imported),
 			});
 		}
 		match node {
@@ -309,7 +310,7 @@ impl<'a> Loader<'a> {
 		let by_the_program = self.loading_modules.is_empty() && self.std_module_depth == 0;
 		Ok(Some(match by_the_program && !imported.is_empty() {
 			true => vec![Node::Meta {
-				node: Box::new(Node::List(imported, Bracket::None, Separator::Semicolon)),
+				node: Box::new(sequence(imported)),
 				data: Box::new(Node::Symbol(IMPORTED_STATEMENTS.into())),
 			}],
 			false => imported,
@@ -574,7 +575,7 @@ impl<'a> Loader<'a> {
 		});
 		warn_replaced(&replaced, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
 		let reached = reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat());
-		let module = Node::List(reached, Bracket::None, Separator::Semicolon);
+		let module = sequence(reached);
 		let definitions = crate::compiler::phase_times::timed("prelude: load reached", || {
 			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))
 		})?;
@@ -898,7 +899,7 @@ fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node
 	// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 	// alias lines are the loader's (modules::resolve), no code of the module
 	let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
-	let module = Node::List(statements(module).into_iter().filter(kept).collect(), Bracket::None, Separator::Semicolon);
+	let module = sequence(statements(module).into_iter().filter(kept).collect());
 	let module = crate::compiler::phase_times::timed_as(
 		|| format!("module source passes of {}", shown.display()),
 		|| crate::pipeline::lower_module_source(module),
@@ -925,7 +926,7 @@ fn with_imports_renamed(node: Node, hidden: &[String]) -> Node {
 			Node::List(items.collect(), bracket, separator)
 		}
 		node => match imported_statements(&node) {
-			Some(statements) => Node::List(renamed_apart(statements, hidden), Bracket::None, Separator::Semicolon),
+			Some(statements) => sequence(renamed_apart(statements, hidden)),
 			None => node.map_children(|child| with_imports_renamed(child, hidden)),
 		},
 	}
@@ -950,7 +951,7 @@ fn reached_prelude_definitions_untimed(program: &[Node]) -> Vec<Node> {
 	let reachable = |callers: &Node| {
 		needed_definitions(callers, &prelude_declarations_reached(&called_names(statements_of(callers))))
 	};
-	let mut reached = reachable(&Node::List(program.to_vec(), Bracket::None, Separator::Semicolon));
+	let mut reached = reachable(&sequence(program.to_vec()));
 	// a look ahead: the program's own fresh names and hints are not this lowering's
 	// each definition lowered alone, so a kept one serves every program reaching it; what the lowerings write in the
 	// compile context is put back after
@@ -967,7 +968,7 @@ fn reached_prelude_definitions_untimed(program: &[Node]) -> Vec<Node> {
 	};
 	loop {
 		let lowered = lowered_aside(reached.clone());
-		let callers = Node::List([program, &lowered].concat(), Bracket::None, Separator::Semicolon);
+		let callers = sequence([program, &lowered].concat());
 		let more = reachable(&callers);
 		if more.len() == reached.len() {
 			return reached;

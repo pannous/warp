@@ -1,6 +1,7 @@
 //! P204: a value whose type only the run time knows (static type any, held as a Node) or whose static kind the declared
 //! type does not admit, going into an annotated place (`x: int = y`, `t: text = y`, a parameter `f(p: P)`), is checked
 //! when it runs: it has the declared type, else the error "not a <type>". Unannotated places stay lax.
+use super::lists::list_ops::ItemWalk;
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
 use crate::lowering::data_items;
@@ -321,7 +322,6 @@ impl WasmGcEmitter {
 		}
 		let node_type = self.type_manager.node_type;
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
-		let is_list = [I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq];
 		#[rustfmt::skip]
 		let is_list_or_empty = [
 			I::I64Const(KIND_MASK), I::I64And, I::LocalTee(2), I::I64Const(Kind::List as i64), I::I64Eq, I::LocalGet(2),
@@ -364,14 +364,11 @@ impl WasmGcEmitter {
 			f.instruction(&I::I64Eqz);
 			s.emit_fail_if(f, LIST_CANNOT_HOLD);
 		});
-		self.runtime_function(LIST_ITEMS_CHECK, vec![nullable, nullable], vec![], vec![], |s, f| {
-			let (list, cell) = (0, 1);
-			s.emit_cell_walk(f, cell, |f| {
-				s.emit_field(f, cell, 0);
-				Self::emit_list(f, &is_list);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(list)]);
-				s.emit_field(f, cell, 1);
-				f.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+		let locals = self.item_walk_locals().to_vec();
+		self.runtime_function(LIST_ITEMS_CHECK, vec![nullable, nullable], vec![], locals, |s, f| {
+			let (list, items, walk) = (0, 1, ItemWalk::at(2));
+			s.emit_item_walk(f, items, walk, |f| {
+				Self::emit_list(f, &[I::LocalGet(list), I::LocalGet(walk.item), I::RefAsNonNull]);
 				s.call(f, LIST_ITEM_CHECK);
 			});
 		});

@@ -81,7 +81,7 @@ fn words_key() -> Option<String> {
 	hasher.update(binary_stamp()?);
 	STD_MODULES.iter().for_each(|(_, source)| hasher.update(source));
 	hasher.update(std_module(PRELUDE_MODULE).unwrap_or_default());
-	Some(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
+	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
 /// The running warp binary: its path, size and time

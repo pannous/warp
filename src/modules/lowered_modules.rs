@@ -64,7 +64,7 @@ pub(super) fn lowered_std_definitions(
 /// The prelude's definition as its module source passes leave it (prelude reach look-ahead), or as a run before this
 /// one kept it
 pub(super) fn lowered_prelude_definition(definition: &Node) -> Vec<Node> {
-	let module = Node::List(vec![definition.clone()], Bracket::None, Separator::Semicolon);
+	let module = crate::node::sequence(vec![definition.clone()]);
 	let lowered = lowered_std_definitions(&module, false, || Ok(crate::pipeline::lower_module_source(module.clone())));
 	statements(lowered.unwrap_or_else(|failure| failure))
 }

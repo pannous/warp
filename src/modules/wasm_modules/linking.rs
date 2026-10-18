@@ -1,6 +1,8 @@
 //! Linking a module's exports at run time: each import calls the module instantiated once per run, its C values copied across
 use super::*;
 
+type Caller<'a> = wasmtime::Caller<'a, crate::host::HostState>;
+
 /// kind, data, value (wasm_emitter/type_manager.rs $Node), each mutable
 #[cfg(feature = "native")]
 pub(crate) const NODE_FIELDS: usize = 3;
@@ -18,7 +20,7 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 		linker.func_new(import.module(), import.name(), function_type, move |mut caller, arguments, results| {
 			let instance = instance_of(&mut caller, &path)?;
 			let global_name = name.strip_prefix(SETTER_PREFIX).unwrap_or(&name);
-			let global = |caller: &mut wasmtime::Caller<'_, crate::host::HostState>| {
+			let global = |caller: &mut Caller<'_>| {
 				instance
 					.get_global(caller, global_name)
 					.ok_or_else(|| wasmtime::format_err!("{path} exports no global {global_name}"))
@@ -57,7 +59,7 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 /// are freed
 #[cfg(feature = "native")]
 pub(crate) fn call_c(
-	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+	caller: &mut Caller<'_>,
 	instance: wasmtime::Instance,
 	function: wasmtime::Func,
 	export: &Export,
@@ -96,11 +98,7 @@ struct ModuleBlocks {
 
 #[cfg(feature = "native")]
 impl ModuleBlocks {
-	fn allocated(
-		&mut self,
-		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
-		bytes: &[u8],
-	) -> wasmtime::Result<i32> {
+	fn allocated(&mut self, caller: &mut Caller<'_>, bytes: &[u8]) -> wasmtime::Result<i32> {
 		let name = self.name;
 		let malloc = self.instance.get_typed_func::<i32, i32>(&mut *caller, "malloc").map_err(|_| {
 			wasmtime::format_err!("{name}: its module exports no malloc(size) to pass a text or out-pointer")
@@ -114,7 +112,7 @@ impl ModuleBlocks {
 	/// The arguments the C function takes for the program's: texts copied into blocks, slots for out-pointers and buffers
 	fn passed(
 		&mut self,
-		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+		caller: &mut Caller<'_>,
 		program_memory: wasmtime::Memory,
 		parameters: &[CParameter],
 		arguments: &[wasmtime::Val],
@@ -166,7 +164,7 @@ impl ModuleBlocks {
 	/// buffer received
 	fn received(
 		&self,
-		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+		caller: &mut Caller<'_>,
 		result: &CResult,
 		returned: wasmtime::Val,
 	) -> wasmtime::Result<wasmtime::Val> {
@@ -213,27 +211,23 @@ impl ModuleBlocks {
 		}
 	}
 
-	fn u32_at(&self, caller: &wasmtime::Caller<'_, crate::host::HostState>, address: usize) -> u32 {
+	fn u32_at(&self, caller: &Caller<'_>, address: usize) -> u32 {
 		self.memory
 			.data(caller)
 			.get(address..address + 4)
 			.map_or(0, |bytes| u32::from_le_bytes(bytes.try_into().unwrap_or_default()))
 	}
 
-	fn text_at(&self, caller: &wasmtime::Caller<'_, crate::host::HostState>, address: u32) -> Option<Vec<u8>> {
+	fn text_at(&self, caller: &Caller<'_>, address: u32) -> Option<Vec<u8>> {
 		(address != 0).then(|| c_text(self.memory.data(caller), address as usize).to_vec())
 	}
 
-	fn text_node(
-		&self,
-		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
-		text: Option<&[u8]>,
-	) -> wasmtime::Result<wasmtime::Val> {
+	fn text_node(&self, caller: &mut Caller<'_>, text: Option<&[u8]>) -> wasmtime::Result<wasmtime::Val> {
 		let name = self.name;
 		crate::ffi::text_node(caller, text).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))
 	}
 
-	fn freed(self, caller: &mut wasmtime::Caller<'_, crate::host::HostState>) -> wasmtime::Result<()> {
+	fn freed(self, caller: &mut Caller<'_>) -> wasmtime::Result<()> {
 		if let Ok(free) = self.instance.get_typed_func::<i32, ()>(&mut *caller, "free") {
 			for block in self.allocated {
 				free.call(&mut *caller, block)?;
@@ -247,7 +241,7 @@ impl ModuleBlocks {
 /// program's instance and built in the module's (its texts live in its own memory), the value result the other way
 #[cfg(feature = "native")]
 pub(crate) fn call_with_values(
-	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+	caller: &mut Caller<'_>,
 	instance: wasmtime::Instance,
 	function: wasmtime::Func,
 	arguments: &[wasmtime::Val],
@@ -273,7 +267,7 @@ pub(crate) fn call_with_values(
 /// (field names among them) live in its instance's linear memory, which the other instance reads at the same offsets
 #[cfg(feature = "native")]
 pub(crate) fn write_back(
-	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+	caller: &mut Caller<'_>,
 	argument: &wasmtime::Val,
 	module_argument: &wasmtime::Val,
 	instance: wasmtime::Instance,
@@ -304,7 +298,7 @@ pub(crate) fn write_back(
 /// A value of one instance (None: the program's) as the same value in the other one; a number stays itself
 #[cfg(feature = "native")]
 pub(crate) fn copied(
-	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+	caller: &mut Caller<'_>,
 	value: &wasmtime::Val,
 	from: Option<wasmtime::Instance>,
 	into: Option<wasmtime::Instance>,
@@ -324,7 +318,7 @@ pub(crate) fn copied(
 /// The linear memory of the instance (None: the program's), where its values' texts live
 #[cfg(feature = "native")]
 fn instance_memory(
-	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+	caller: &mut Caller<'_>,
 	instance: Option<wasmtime::Instance>,
 ) -> wasmtime::Result<wasmtime::Memory> {
 	export_of(caller, instance, crate::wasm_emitter::MEMORY_ENTITY)
@@ -335,7 +329,7 @@ fn instance_memory(
 /// The export `name` of the instance (None: the program's)
 #[cfg(feature = "native")]
 pub(crate) fn export_of(
-	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+	caller: &mut Caller<'_>,
 	instance: Option<wasmtime::Instance>,
 	name: &str,
 ) -> Option<wasmtime::Extern> {
@@ -361,10 +355,7 @@ pub(crate) fn c_text(memory: &[u8], address: usize) -> &[u8] {
 /// The run's instance of the module at `path`, one per file however it is named; its own imports (WASI, warp's host
 /// words, C libraries, other modules) are linked like a program's
 #[cfg(feature = "native")]
-pub(crate) fn instance_of(
-	caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
-	path: &str,
-) -> wasmtime::Result<wasmtime::Instance> {
+pub(crate) fn instance_of(caller: &mut Caller<'_>, path: &str) -> wasmtime::Result<wasmtime::Instance> {
 	let file =
 		std::fs::canonicalize(path).map_or_else(|_| path.to_string(), |file| file.to_string_lossy().into_owned());
 	if let Some(instance) = caller.data().wasm_modules.get(&file) {
