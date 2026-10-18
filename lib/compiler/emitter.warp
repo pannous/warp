@@ -344,7 +344,7 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient
 	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
-	text_form: "node_text"}
+	text_form: "node_text", floor_quotient: "floor_quotient"}
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
 kind_code_of(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and]

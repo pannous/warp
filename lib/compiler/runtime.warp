@@ -492,3 +492,11 @@ zeros(count: int) := {
 	for i in 0..count { set_byte(out, i, 48) }
 	out
 }
+# `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
+floor_quotient(a: int, b: int) := {
+	q = int_quotient(a, b)
+	if a - q * b < 0 {
+		if b > 0 { q -= 1 } else { q += 1 }
+	}
+	q
+}
