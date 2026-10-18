@@ -381,7 +381,9 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 		let mut ranked: Vec<_> = refusals.into_iter().collect();
 		ranked.sort_by_key(|(_, paths)| std::cmp::Reverse(paths.len()));
 		eprintln!("{} inside; outside the core:", inside.len());
-		ranked.iter().for_each(|(refusal, paths)| eprintln!("{:5} {refusal}  e.g. {}", paths.len(), paths[..paths.len().min(3)].join(" ")));
+		ranked.iter().for_each(|(refusal, paths)| {
+			eprintln!("{:5} {refusal}  e.g. {}", paths.len(), paths[..paths.len().min(3)].join(" "))
+		});
 	}
 	let _ = std::fs::remove_file(&runtime);
 	report("wasm_module", &differing);

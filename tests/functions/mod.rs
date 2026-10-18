@@ -90,7 +90,6 @@ mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_type_at_run_time; // card type-function
 mod test_function_typed_parameters;
-mod test_overloaded_function_values;
 mod test_function_values;
 mod test_function_words_consume; // card function-words-consume
 mod test_functions;
@@ -154,6 +153,7 @@ mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
 mod test_optional_words;
+mod test_overloaded_function_values;
 mod test_parameter_any;
 mod test_parameter_assignment;
 mod test_parameter_call_kinds;
