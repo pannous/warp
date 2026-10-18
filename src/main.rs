@@ -445,7 +445,7 @@ fn usage() {
 	println!("  warp run <file.warp> Run a warp file, never an executable");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
-	println!("  warp lower <code>    Show the program after the lowering passes");
+	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
 	println!("  warp parse <code>    Show the parsed AST");
 	println!("  warp verify <file>   Test and prove the laws of a file");
 	println!("  {FORMAT_USAGE}");
