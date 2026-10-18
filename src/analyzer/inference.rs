@@ -106,9 +106,8 @@ pub(crate) fn may_be_ratio(node: &Node, scope: &Scope) -> bool {
 
 /// The value of an expression of number literals alone: `(1/3)`, `1.0 / 3`
 fn constant_value(node: &Node) -> Option<f64> {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Number(number) => Some(f64::from(*number)),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => constant_value(&items[0]),
 		Node::Key(left, op, right) => {
 			let (a, b) = (constant_value(left)?, constant_value(right)?);
 			match op {

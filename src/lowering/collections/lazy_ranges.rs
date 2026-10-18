@@ -55,18 +55,16 @@ struct Range {
 
 /// An integer literal, a variable, or arithmetic of them (`10^12`, `n + 1`): worked out wherever the range is read
 fn plain_bound(bound: &Node) -> bool {
-	match bound.drop_meta() {
+	match bound.ungrouped() {
 		Node::Symbol(_) | Node::Number(crate::extensions::numbers::Number::Int(_)) => true,
 		Node::Key(left, op, right) if BOUND_ARITHMETIC.contains(op) => plain_bound(left) && plain_bound(right),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => plain_bound(&items[0]),
 		_ => false,
 	}
 }
 
 /// A range seen through parentheses, of any bounds: the range itself, its start and its end past the last number
 fn range_parts(node: &Node) -> Option<(&Node, Node, Node)> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => range_parts(&items[0]),
+	match node.ungrouped() {
 		whole @ Node::Key(start, op @ (Op::Range | Op::To), end) => {
 			// `a to b` ends after b: its end is b + 1
 			let end = if *op == Op::To { add_one(end) } else { end.drop_meta().clone() };

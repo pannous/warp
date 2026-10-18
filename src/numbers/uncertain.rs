@@ -322,13 +322,12 @@ fn interval_names(program: &Node) -> HashSet<String> {
 
 /// Known to be ± here: `6 ± 1`, a variable given one, arithmetic or a negation with one
 fn is_interval(node: &Node, names: &HashSet<String>) -> bool {
-	match node.drop_meta() {
+	match node.ungrouped() {
 		Node::Key(_, Op::PlusMinus, _) => true,
 		Node::Symbol(name) => names.contains(name),
 		Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Neg, right) => {
 			is_interval(left, names) || is_interval(right, names)
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_interval(&items[0], names),
 		_ => false,
 	}
 }
