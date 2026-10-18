@@ -16,14 +16,17 @@ join(xs: list, separator: text): text from warp
 chars(t: text): list of text from warp
 code_point_list(t: text): list of int from warp
 ord(c: codepoint): int from warp
-map_keys(m): list from warp
-map_values(m): list from warp
-map_entries(m): list from warp
-map_without(m, key): list from warp
+map_keys(m: map): list from warp
+map_values(m: map): list from warp
+map_entries(m: map): list from warp
+map_without(m: map, key): list from warp
 map_of_entry(entry): same as entry from warp
-map_get_or(m, key, default = ø): value of m from warp
-collection_contains(xs, x) from warp
-collection_position(xs, x) from warp
+map_get_or(m: map, key, default = ø): value of m from warp
+collection_contains(xs: list, x): bool from warp
+collection_contains(t: text, part): bool from warp
+collection_contains(m: map, key): bool from warp
+collection_position(xs: list, x): int from warp
+collection_position(t: text, part): int from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
 field_with(object, name, value): same as object from warp

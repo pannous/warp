@@ -47,7 +47,7 @@ fn a_member_words_number_or_bool_result_is_decided_where_it_is_made() {
 #[test]
 fn a_result_read_off_an_argument_is_spelled_same_as_or_value_of() {
 	is!("field_with.signature", warp::Node::Text("(object, name, value) -> same as object".into()));
-	is!("map_get_or.signature", warp::Node::Text("(m, key, default = ø) -> value of m".into()));
+	is!("map_get_or.signature", warp::Node::Text("(m:map, key, default = ø) -> value of m".into()));
 	is!("list_become.signature", warp::Node::Text("(place, fresh) -> same as place".into()));
 	is!("removed_value.signature", warp::Node::Text("(x, k) -> any".into()));
 	is!("list_sorted_by.signature", warp::Node::Text("(xs, keys) -> any".into()));
@@ -68,4 +68,11 @@ fn a_typed_builtin_called_without_parentheses_is_the_call() {
 	is!("sum.signature", warp::Node::Text("(xs:list) -> element of xs".into()));
 	is!("xs = [1 2 3]; sum xs", 6);
 	is!("xs = [1.5 2]; sum xs", 3.5);
+}
+
+#[test]
+fn the_map_and_membership_words_declare_their_kinds() {
+	is!("keys.signature", warp::Node::Text("(m:map) -> list".into()));
+	is!("\"abc\".contains(\"b\") and [1 2].contains(2) and {a: 1}.has(\"a\")", true);
+	is!("\"abc\".index_of(\"c\") + [5 6].index_of(6)", 5);
 }
