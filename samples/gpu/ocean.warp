@@ -202,6 +202,7 @@ water(ray, distance) := {
 	# whitecaps on the highest crests, broken into patches, gone where they would be smaller than a pixel
 	foam_line = p.y + 0.3 * noise(p.xz .* 0.5) + 0.15 * foam_amount
 	patches = smoothstep(0.4, 0.8, noise(p.xz .* 3) * noise(p.xz .* 0.7 .+ 5))
+	# patches = smoothstep(0.4, 0.8, noise(p.xz .* 1) * noise(p.xz .* 0.1 .+ 5))
 	foam = smoothstep(0.85, 1.1, foam_line) * patches * foam_amount * exponential(-distance / 250)
 	sea = mix(body, reflection, fresnel) .+ glitter
 	mix(sea, [0.82, 0.87, 0.92] .* sky_light .* 0.5, clamp(foam, 0, 0.95))

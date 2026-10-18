@@ -19,5 +19,5 @@ fn the_runtime_words_are_callable_by_name() {
 #[test]
 fn a_signature_is_its_line() {
 	is!("split.signature", "(t:text, separator:text = \" \") -> list of text");
-	is!("reverse.signature", "(xs)");
+	is!("reverse.signature", "(xs:list) -> list"); // its first overload (card typed-builtins)
 }

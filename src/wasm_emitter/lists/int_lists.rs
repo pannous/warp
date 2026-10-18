@@ -3,6 +3,7 @@
 //! memory above the text heap (src/host.rs with_scratch, web/playground/host.js withScratch) and the module walks them.
 
 use super::super::WasmGcEmitter;
+use super::list_ops::ItemWalk;
 use crate::type_kinds::Kind;
 use wasm_encoder::{BlockType, Function, HeapType, Instruction as I, MemArg, RefType, ValType};
 
@@ -66,14 +67,19 @@ impl WasmGcEmitter {
 		let (node_type, box_type) = (self.type_manager.node_type, self.type_manager.i64_box_type);
 		let (int_array, int_list) = (self.type_manager.int_array_type, self.type_manager.int_list_type);
 		let int_list_ref = ValType::Ref(RefType { nullable: true, heap_type: HeapType::Concrete(int_list) });
-		let locals = vec![ValType::I32, ValType::Ref(nullable), ValType::I64, ValType::Ref(nullable), int_list_ref];
+		let locals = [
+			vec![ValType::I32, ValType::Ref(nullable), ValType::I64, ValType::Ref(nullable), int_list_ref],
+			self.item_walk_locals().to_vec(),
+		]
+		.concat();
 		self.exported_function(
 			LIST_TO_INTS,
 			vec![ValType::Ref(RefType::ANYREF), ValType::I32, ValType::I32],
 			vec![ValType::I32],
 			locals,
 			|s, f| {
-				let (list, address, room, count, item, value, cell, ints) = (0, 1, 2, 3, 4, 5, 6, 7);
+				let (list, address, room, count, item, value, cell, ints, walk) =
+					(0, 1, 2, 3, 4, 5, 6, 7, ItemWalk::at(8));
 				let kind_is = |f: &mut Function, local: u32, kind: Kind| {
 					s.emit_field(f, local, 0);
 					Self::emit_kind_test(f, kind as i64, I::I64Eq);
@@ -116,10 +122,11 @@ impl WasmGcEmitter {
 				);
 				kind_is(f, cell, Kind::List);
 				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I32Const(NOT_INTS), I::Return, I::End]);
-				s.emit_cell_walk(f, cell, |f| {
-					Self::emit_list(f, &[I::LocalGet(count), I::LocalGet(room), I::I32GeU, I::BrIf(1)]);
-					s.emit_field(f, cell, 1);
-					Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(item)]);
+				s.emit_item_walk(f, cell, walk, |f| {
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(count), I::LocalGet(room), I::I32GeU, I::BrIf(1), I::LocalGet(walk.item), I::LocalSet(item),
+					]);
 					// an Int whose payload is an $i64box (not a big Int's handle), else the host reads the list
 					#[rustfmt::skip]
 					Self::emit_list(f, &[

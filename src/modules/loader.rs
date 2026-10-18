@@ -1,5 +1,6 @@
 //! Loading modules: the Loader finds, fetches and parses the modules a program uses, and the sibling files of its folder, package or project (D15 `use folder|package|project`)
 use super::*;
+use crate::node::sequence;
 
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
 pub(crate) const MODULE_DIRECTORY: &str = "module_directory";
@@ -237,7 +238,7 @@ impl<'a> Loader<'a> {
 		if let Some(imported) = self.imported_by(&node)? {
 			return Ok(match imported {
 				imported if imported.is_empty() => Node::Empty,
-				imported => Node::List(imported, Bracket::None, Separator::Semicolon),
+				imported => sequence(imported),
 			});
 		}
 		match node {
@@ -309,7 +310,7 @@ impl<'a> Loader<'a> {
 		let by_the_program = self.loading_modules.is_empty() && self.std_module_depth == 0;
 		Ok(Some(match by_the_program && !imported.is_empty() {
 			true => vec![Node::Meta {
-				node: Box::new(Node::List(imported, Bracket::None, Separator::Semicolon)),
+				node: Box::new(sequence(imported)),
 				data: Box::new(Node::Symbol(IMPORTED_STATEMENTS.into())),
 			}],
 			false => imported,
@@ -572,7 +573,7 @@ impl<'a> Loader<'a> {
 		let replaced = prelude_declarations_of(&replaced);
 		warn_replaced(&replaced, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
 		let reached = reached_prelude_definitions(&[std::slice::from_ref(program), &self.std_definitions].concat());
-		let module = Node::List(reached, Bracket::None, Separator::Semicolon);
+		let module = sequence(reached);
 		let definitions =
 			crate::normalize::without_hints(|| self.load_module(Import::Use, std_path(PRELUDE_MODULE), module))?;
 		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
@@ -665,8 +666,7 @@ impl<'a> Loader<'a> {
 			&& crate::compiler::compile_context::read(|context| context.early_class_modules.contains(&file));
 		// alias lines are the loader's (modules::resolve), no code of the module
 		let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
-		let module =
-			Node::List(statements(module).into_iter().filter(kept).collect(), Bracket::None, Separator::Semicolon);
+		let module = sequence(statements(module).into_iter().filter(kept).collect());
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
 		let module = crate::pipeline::lower_module_source(module);
 		// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
@@ -888,7 +888,7 @@ fn with_imports_renamed(node: Node, hidden: &[String]) -> Node {
 			Node::List(items.collect(), bracket, separator)
 		}
 		node => match imported_statements(&node) {
-			Some(statements) => Node::List(renamed_apart(statements, hidden), Bracket::None, Separator::Semicolon),
+			Some(statements) => sequence(renamed_apart(statements, hidden)),
 			None => node.map_children(|child| with_imports_renamed(child, hidden)),
 		},
 	}
@@ -909,7 +909,7 @@ fn reached_prelude_definitions(program: &[Node]) -> Vec<Node> {
 	let reachable = |callers: &Node| {
 		needed_definitions(callers, &prelude_declarations_reached(&called_names(statements_of(callers))))
 	};
-	let mut reached = reachable(&Node::List(program.to_vec(), Bracket::None, Separator::Semicolon));
+	let mut reached = reachable(&sequence(program.to_vec()));
 	// a look ahead: the program's own fresh names and hints are not this lowering's
 	let lowered_aside = |definitions: Vec<Node>| {
 		let fresh_number = crate::compiler::compile_context::read(|context| context.fresh_number);
@@ -918,18 +918,14 @@ fn reached_prelude_definitions(program: &[Node]) -> Vec<Node> {
 			fresh_number,
 			|| {
 				crate::normalize::without_hints(|| {
-					statements(crate::pipeline::lower_module_source(Node::List(
-						definitions,
-						Bracket::None,
-						Separator::Semicolon,
-					)))
+					statements(crate::pipeline::lower_module_source(sequence(definitions)))
 				})
 			},
 		)
 	};
 	loop {
 		let lowered = lowered_aside(reached.clone());
-		let callers = Node::List([program, &lowered].concat(), Bracket::None, Separator::Semicolon);
+		let callers = sequence([program, &lowered].concat());
 		let more = reachable(&callers);
 		if more.len() == reached.len() {
 			return reached;

@@ -35,6 +35,14 @@ impl Conversion {
 	fn is_identity(&self) -> bool {
 		self.expression == "{}"
 	}
+	/// `unchanged` when the conversion keeps a value as it is, else `map` of the conversion of an `x`
+	fn mapped(&self, unchanged: &str, map: impl FnOnce(String) -> String) -> String {
+		if self.is_identity() {
+			unchanged.to_string()
+		} else {
+			map(self.of("x"))
+		}
+	}
 }
 
 /// The receiver of a method: `&self`, `&mut self`, `self`
@@ -237,13 +245,9 @@ impl<'a> Reader<'a> {
 			}
 			if let Some(element) = inner.get("slice") {
 				let element = self.element(element)?;
-				return Some(match element.is_identity() {
-					true => Conversion::list_of(&element, "&{}"),
-					false => Conversion::list_of(
-						&element,
-						&format!("&{{}}.iter().map(|x| {}).collect::<Vec<_>>()", element.of("x")),
-					),
-				});
+				let expression =
+					element.mapped("&{}", |item| format!("&{{}}.iter().map(|x| {item}).collect::<Vec<_>>()"));
+				return Some(Conversion::list_of(&element, &expression));
 			}
 			if let Some(name) = inner["generic"].as_str().filter(|name| *name != "Self") {
 				return self
@@ -336,20 +340,12 @@ impl<'a> Reader<'a> {
 			}
 			("Vec", [element]) => {
 				let element = self.result(element, self_type)?;
-				Some(match element.is_identity() {
-					true => Conversion::list_of(&element, "{}"),
-					false => Conversion::list_of(
-						&element,
-						&format!("{{}}.into_iter().map(|x| {}).collect()", element.of("x")),
-					),
-				})
+				let expression = element.mapped("{}", |item| format!("{{}}.into_iter().map(|x| {item}).collect()"));
+				Some(Conversion::list_of(&element, &expression))
 			}
 			("Option", [inner]) => {
 				let inner = self.result(inner, self_type)?;
-				Some(match inner.is_identity() {
-					true => Conversion::option_of(&inner, "{}"),
-					false => Conversion::option_of(&inner, &format!("{{}}.map(|x| {})", inner.of("x"))),
-				})
+				Some(Conversion::option_of(&inner, &inner.mapped("{}", |item| format!("{{}}.map(|x| {item})"))))
 			}
 			("Result", [ok, ..]) => {
 				let unit = ok["tuple"].as_array().is_some_and(|items| items.is_empty());
@@ -357,10 +353,7 @@ impl<'a> Reader<'a> {
 					true => ("_".to_string(), "()".to_string(), "{}".to_string()),
 					false => {
 						let ok = self.result(ok, self_type)?;
-						let mapped = match ok.is_identity() {
-							true => "{}".to_string(),
-							false => format!("{{}}.map(|x| {})", ok.of("x")),
-						};
+						let mapped = ok.mapped("{}", |item| format!("{{}}.map(|x| {item})"));
 						(ok.wit, ok.rust, mapped)
 					}
 				};

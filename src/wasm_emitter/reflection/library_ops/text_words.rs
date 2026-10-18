@@ -275,19 +275,21 @@ impl WasmGcEmitter {
 		let own_index = self.next_func_idx; // list_text joins a nested list by calling itself
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
-		let mut locals = vec![nullable, nullable];
+		let mut locals = vec![self.node_list_type(), nullable];
 		locals.extend([ValType::I32; 3]);
 		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
 		let (text, text_type) = (self.text_ref(), self.type_manager.text_type);
-		locals.extend([text, text]);
+		locals.extend([text, text, ValType::I32]);
 		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		let radix_texts = self.radix_text_calls();
 		let text_witness = self.text_witness_table();
 		let type_value_prefix = self.string_table.literal(crate::type_kinds::TYPE_VALUE_PREFIX);
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
-			let (cell, element) = (2, 3);
+			let element = 3;
 			let (bound, position, is_first, number, entry_value, operator_entry, list_kind) = (4, 5, 6, 7, 8, 9, 10);
 			let (joined, piece) = (11, 12);
+			// each item in `element`, turned into what it joins as by next_element
+			let walk = ItemWalk { items: 2, index: 13, item: element };
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -297,8 +299,6 @@ impl WasmGcEmitter {
 				Self::emit_kind_test(f, kind as i64, I::I64Eq);
 			};
 			let next_element = |f: &mut Function| {
-				s.emit_field(f, cell, 1);
-				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
 				if !nested {
 					// code parsed at run time joins as its literal: `print "area:", parse(t)` (card print-parse); a list
@@ -515,20 +515,6 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::LocalSet(element), I::End, I::End]);
 				}
 			};
-			let loop_over_cells = |f: &mut Function| {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(0), I::LocalSet(cell),
-					I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-							I::LocalGet(cell), I::RefIsNull, I::BrIf(1),
-				]);
-				next_element(f);
-			};
-			let end_loop = |f: &mut Function| {
-				s.emit_field(f, cell, 2);
-				Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
-			};
 			// append the bytes of the text in node local `text` to joined at position; position += their length
 			let append_text = |f: &mut Function, text: u32| {
 				s.emit_text_bytes(f, text);
@@ -544,39 +530,42 @@ impl WasmGcEmitter {
 			s.emit_require_list(f);
 			s.emit_codepoint_as_text(f, 1);
 			s.emit_require_kind(f, 1, Kind::Text, "not_a_text");
-			// pass 1: an upper bound of the bytes: every item, and a separator after it
-			loop_over_cells(f);
-			is_kind(f, Kind::Text);
-			f.instruction(&I::If(BlockType::Result(ValType::I32)));
-			s.emit_text_field(f, element, 1);
-			f.instruction(&I::Else);
-			is_kind(f, Kind::Int);
-			Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I32Const(MAX_INT_BYTES), I::Else]);
-			Self::emit_list(f, &[I::LocalGet(element), I::GlobalSet(trap_detail)]);
-			s.call(f, super::super::super::lists::list_ops::NOT_JOINABLE);
-			Self::emit_list(f, &[I32Const(0), I::End, I::End, I::LocalGet(bound), I::I32Add]);
-			s.emit_text_field(f, 1, 1);
-			Self::emit_list(f, &[I::I32Add, I::LocalSet(bound)]);
-			end_loop(f);
+			// pass 1: an upper bound of the bytes: every item, and a separator after it; each item replaced by what it
+			// joins as
+			s.emit_item_walk(f, 0, walk, |f| {
+				next_element(f);
+				s.emit_item_replaced(f, walk, element);
+				is_kind(f, Kind::Text);
+				f.instruction(&I::If(BlockType::Result(ValType::I32)));
+				s.emit_text_field(f, element, 1);
+				f.instruction(&I::Else);
+				is_kind(f, Kind::Int);
+				Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I32Const(MAX_INT_BYTES), I::Else]);
+				Self::emit_list(f, &[I::LocalGet(element), I::GlobalSet(trap_detail)]);
+				s.call(f, super::super::super::lists::list_ops::NOT_JOINABLE);
+				Self::emit_list(f, &[I32Const(0), I::End, I::End, I::LocalGet(bound), I::I32Add]);
+				s.emit_text_field(f, 1, 1);
+				Self::emit_list(f, &[I::I32Add, I::LocalSet(bound)]);
+			});
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(bound), I::ArrayNewDefault(text_type), I::LocalSet(joined),
 				I32Const(0), I::LocalSet(position), I32Const(1), I::LocalSet(is_first),
 			]);
 			// pass 2: write
-			loop_over_cells(f);
-			Self::emit_list(f, &[I::LocalGet(is_first), I::I32Eqz, I::If(BlockType::Empty)]);
-			append_text(f, 1);
-			Self::emit_list(f, &[I::End, I32Const(0), I::LocalSet(is_first)]);
-			// the bytes of a text, or an Int's digits
-			is_kind(f, Kind::Text);
-			f.instruction(&I::If(BlockType::Empty));
-			append_text(f, element);
-			Self::emit_list(f, &[I::Else, I::LocalGet(position), I::LocalGet(joined), I::LocalGet(position)]);
-			s.emit_int_value_of(f, element);
-			s.call(f, "int_to_decimal");
-			Self::emit_list(f, &[I::I32Add, I::LocalSet(position), I::End]);
-			end_loop(f);
+			s.emit_items_again(f, walk, |f| {
+				Self::emit_list(f, &[I::LocalGet(is_first), I::I32Eqz, I::If(BlockType::Empty)]);
+				append_text(f, 1);
+				Self::emit_list(f, &[I::End, I32Const(0), I::LocalSet(is_first)]);
+				// the bytes of a text, or an Int's digits
+				is_kind(f, Kind::Text);
+				f.instruction(&I::If(BlockType::Empty));
+				append_text(f, element);
+				Self::emit_list(f, &[I::Else, I::LocalGet(position), I::LocalGet(joined), I::LocalGet(position)]);
+				s.emit_int_value_of(f, element);
+				s.call(f, "int_to_decimal");
+				Self::emit_list(f, &[I::I32Add, I::LocalSet(position), I::End]);
+			});
 			Self::emit_list(f, &[I32Const(0), I::LocalSet(is_first)]);
 			s.emit_text_piece(f, (joined, is_first, position));
 		});

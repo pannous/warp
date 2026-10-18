@@ -33,6 +33,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
   text)`), so the of extras are no special passes; forms that aren't a right-hand infix application are dropped or carded.
   `in`/`from` are a lookup only after a selector word (chars, words, lines, keys, …; one table), membership otherwise
   (in-bool); `print words in t` walks and `byte count of t` are dropped (Interviewer's decision).
+- rust-cleanup-drops (user): the Rust compiler drops them too (Option forms, `set x to y` pass, scoped_handlers, print
+  walk, `byte count of t`); same language on both compilers, their tests retired as decision edits.
+- rust-texts (Interviewer's decision): `t += x` builds a rope flattened once when read; test_gc_struct's
+  read_string_field reads the `$Text` byte array.
 - weekly-cleanup: a fresh cleanup roadmap per week (topic `cleanup-w<week>`); regular chores use `todo repeat <card> <days>`.
 - topic-priority: the column is the priority, for topic cards too (new topics Soon); Roadmaps holds only unprioritized topics; the user's own cards (drafts, issues without "Added by <session> with `todo add`.") stay where the user put them.
 - cleanup-means-fewer-lines: the cleanup's metric is lines removed; each cleanup merge request states its net src/ delta. long-functions: splitting an overly long function by concept is a card of its own even when it adds lines.
@@ -244,6 +248,10 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - type-library-words: list/map/text library words are always available as `x.f()` and `f(x)`; `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module); `write` and `exists` are global.
 - P141/P142 a definition named like a builtin that would win is an error at the definition; library words may be redefined only where the builtin wouldn't win, methods always; a foreign export is called qualified. P39 no `id`/`square` builtins; P191 `square` lives in math.
 - builtins-name (user 2026-10-18): library words are called builtins (shorter to say and write), in notes, cards, messages and new code names; where the old split still matters, the Rust-only ones are "Rust builtins" until retired. Old names (library_words.rs, retire-library-words) are renamed along with the Rust cleanup.
+- music-plain-library (user 2026-10-18): music (lib/sound.warp and the music words) is a plain library: no compiler magic at all, no Rust pass, no rewrite rules, no module pass. It uses only core language features. music_words.rs goes away: each form becomes an ordinary function/class/operator call; a form that can't be written that way either needs a general core feature (card, useful beyond music) or is dropped/simplified. Rephrasing the syntax of some calls is fine; most forms should be doable with the general patterns (definition clauses, function-word patterns, notes/matching.md).
+- domains-plain-libraries (user 2026-10-18): the same holds for web routes, markup and styles, graphics/window properties, shader holes and reflection/help. Whatever isn't expressible in pure warp yet goes to the user as a question, since the language may be extended for it.
+- markup-plain-library (user 2026-10-18): glued attributes are dropped (`label{ for: name; "Name" }`); `form` is a plain function `form(method: symbol, action: text, body)`, so `form post "/todos" {…}` comes from function-words-consume; core rule: `name = value` inside any data block is a key, as `name: value` (`input{type="text"}`).
+- rewrite-general (user 2026-10-18): `rewrite PATTERN => TEMPLATE [where $c = SHAPE]` stays as a general user-macro feature (`rewrite double $x => $x * 2`); the arrow may later become `as`/`with`. Channels are a plain Channel class (send/receive/close); `for v in ch` uses an iteration protocol for classes (core feature).
 - P82 a function reference is `function add` or `&add`; a bare name that needs arguments is "add needs 1 argument". P83 an alias needs the reference; an argument to a function parameter stays bare.
 - arctan-allow: `arctan := arc_tangent` names the function; partial application only with a hole (`add(1, _)`).
 - P84 several juxtaposed arguments to a one-parameter function are one list (`f 1 2 3` = `f [1 2 3]`). `sum := fold +`.
@@ -361,6 +369,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - site-budget: the hello-world site is ≤ 100 KB gzipped. tour-firefox-stall: a Worker-run site ships task-workers.js.
 - Hosting: our own login first, then deploy to one's own provider: Cloudflare Workers, Ferron on pannous.com (`<name>.lambda.pannous.com`), Fermyon/Akamai (notes/hosting.md).
 - P235 WGSL is a `shader { … }` block (alias `wgsl`); P235b no capture of warp variables, `$name` is an explicit hole; shader-untouched: WGSL stays as written otherwise; WGSL errors are reported at the .warp line and column. P234 `paint` takes a shader text; `use graphics` = `use draw`.
+- gpu-multipass: `waves = render(height_field, 256, 256)` paints off-screen, the image stays on the GPU (alias `texture`); another painted function reads it as a function, `waves(uv)`, like `$previous(at)` (Interviewer's decision; notes/gpu.md "Several passes").
 
 ## Sound
 - play-dispatch: `play` dispatches on what it plays (signal, stereo pair, block function); `play(hum, 2s)` until prepositions-call.

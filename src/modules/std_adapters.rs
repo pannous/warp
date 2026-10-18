@@ -194,12 +194,7 @@ fn name_matcher(name: &str) -> Result<impl Fn(&str) -> bool, String> {
 
 fn hash(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
-		("sha256", [subject]) => {
-			use sha2::Digest;
-			Ok(Node::Text(
-				sha2::Sha256::digest(content_of(subject).as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect(),
-			))
-		}
+		("sha256", [subject]) => Ok(Node::Text(crate::extensions::sha256_hex(content_of(subject).as_bytes()))),
 		("crc32", [subject]) => Ok(Node::int(i64::from(crc32fast::hash(content_of(subject).as_bytes())))),
 		_ => no_such_word(arguments),
 	}
