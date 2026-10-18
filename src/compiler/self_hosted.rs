@@ -13,6 +13,7 @@ use std::sync::{Mutex, OnceLock};
 const SWITCH: &str = "WARP_SELF_HOSTED";
 const STAGES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp");
 /// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
+#[cfg(feature = "native")]
 const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
@@ -109,6 +110,7 @@ struct StageProgram {
 impl StageProgram {
 	fn new(input: PathBuf) -> Self {
 		// the input file is the worker's argument, so the program, and its kept module, is the same for every worker
+		#[cfg(feature = "native")]
 		crate::modules::std_adapters::set_program_arguments(vec![input.display().to_string()]);
 		let program = format!("use \"{STAGES}\"\nuse os\nstage(json(read(args#1)))");
 		StageProgram { module: compiled_stages(&program), input }
@@ -134,7 +136,14 @@ impl Drop for StageProgram {
 	}
 }
 
+/// The stage program compiled; the browser build keeps no modules
+#[cfg(not(feature = "native"))]
+fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Node> {
+	crate::pipeline::compile(program)
+}
+
 /// The stage program compiled, or the module kept for it
+#[cfg(feature = "native")]
 fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Node> {
 	use crate::run::program_cache::{keep_under, kept_under};
 	let key = stage_key(program);
@@ -150,6 +159,7 @@ fn compiled_stages(program: &str) -> Result<crate::pipeline::CompiledModule, Nod
 
 /// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/; none
 /// when the binary has no path
+#[cfg(feature = "native")]
 fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	let binary = std::env::current_exe().ok()?;
@@ -170,6 +180,7 @@ fn stage_key(program: &str) -> Option<String> {
 }
 
 /// The files below `folder`, at any depth
+#[cfg(feature = "native")]
 fn files_below(folder: PathBuf) -> Vec<PathBuf> {
 	let entries = std::fs::read_dir(&folder).into_iter().flatten().flatten().map(|entry| entry.path());
 	entries.flat_map(|path| if path.is_dir() { files_below(path) } else { vec![path] }).collect()
