@@ -1083,13 +1083,18 @@ fn function_parameters(head: &Node) -> Option<Node> {
 	match parameters {
 		[single] => Some(single.clone()),
 		[] => None,
-		// Go's `func(x int)`, `func(a, b int)`: the names, the types after them dropped
+		// Go's `func(a, b int)` (the parser typed `b int` as b:int): the names, the types dropped
 		several => {
-			let names: Vec<Node> = several.iter().filter_map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
-				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
-				_ => None,
-			}).collect();
+			let names: Vec<Node> = several
+				.iter()
+				.filter_map(|parameter| match parameter.drop_meta() {
+					Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
+					Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+						Some(name.as_ref().clone())
+					}
+					_ => None,
+				})
+				.collect();
 			Some(Node::single_or_list(names, Bracket::Round, Separator::Comma))
 		}
 	}

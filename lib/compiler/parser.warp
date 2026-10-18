@@ -1190,12 +1190,18 @@ TRUE_WORDS = ["true", "yes"]
 FALSE_WORDS = ["false", "no"]
 EMPTY_WORDS = ["null", "nul", "none", "nil", "nill", "nix", "nada", "nothing", "empty", "void"]
 
-// The items of an argument list: none for ø, the list's items, else the one argument; words side by side are one
-// phrase, `f(person name: String)` (Swift's labeled parameter)
+// The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter
+// `greet(person name: String)` stays one argument
+// Rust twin: atoms.rs function_call, is_labeled_parameter
 def spread(arguments) {
 	if arguments == ø { return [] }
-	if arguments is list and arguments#1 == "list" and (arguments#3 != " " or arguments.length < 5) { return arguments[3 .. arguments.length] }
+	if arguments is list and arguments#1 == "list" and not labeled_parameter(arguments) { return arguments[3 .. arguments.length] }
 	[arguments]
+}
+
+// `person name: String`: a label, then the typed parameter
+def labeled_parameter(words) {
+	words.length == 5 and words#3 == " " and is_symbol(words#4) and words#5 is list and words#5#1 == "key" and words#5#2 == ":" and is_symbol(words#5#3)
 }
 
 // The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type

@@ -586,14 +586,20 @@ impl WarpParser {
 fn function_call(symbol: String, args_node: Node) -> Node {
 	let mut items = vec![Symbol(symbol)];
 	match typed_parameters(args_node) {
-		// `f(a, b)` takes two arguments, `f(person name: String)` one phrase (Swift's labeled parameter)
-		Node::List(args, _, separator) if args.len() < 2 || !matches!(separator, Separator::Space) => {
-			items.extend(args)
+		// Swift's labeled parameter `greet(person name: String)` stays one argument, unlike Go's `f(a, b int)`
+		Node::List(args, bracket, Separator::Space) if is_labeled_parameter(&args) => {
+			items.push(Node::List(args, bracket, Separator::Space))
 		}
+		Node::List(args, _, _) => items.extend(args),
 		Node::Empty => {}
 		other => items.push(other),
 	}
 	Node::List(items, Bracket::Round, Separator::None)
+}
+
+/// `person name: String`: a label, then the typed parameter
+fn is_labeled_parameter(words: &[Node]) -> bool {
+	matches!(words, [label, typed] if matches!(label.drop_meta(), Symbol(_)) && matches!(typed.drop_meta(), Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Symbol(_))))
 }
 
 /// The arguments of a glued group `(5)`, `(1, 2)`, `()`, as a round list
