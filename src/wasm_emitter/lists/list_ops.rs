@@ -6,7 +6,7 @@ use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::wasm_emitter::lists::list_dispatch::Slot;
-use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_PIECE, TEXT_SEGMENT, VALUES_EQUAL, NEW_TEXT_OF};
+use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_LITERAL, TEXT_PIECE, TEXT_SEGMENT, VALUES_EQUAL, NEW_TEXT_OF};
 use crate::words::MAP_WORD;
 use wasm_encoder::*;
 use Instruction as I;

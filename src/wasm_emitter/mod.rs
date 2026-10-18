@@ -21,7 +21,7 @@ pub(crate) use lists::list_sharing::reads_collection;
 pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
 pub use constructors::{NEW_BOOL, NEW_SYMBOL_OF, NEW_TEXT_OF, NEW_TYPE};
-pub(crate) use constructors::{TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_PIECE};
+pub(crate) use constructors::{TEXT_ADDRESS, TEXT_BYTES_EQUAL, TEXT_BYTES_JOIN, TEXT_FLAT, TEXT_FROM_MEMORY, TEXT_LITERAL, TEXT_PIECE};
 pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
 mod config;
 mod function_builder;

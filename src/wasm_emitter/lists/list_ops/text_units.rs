@@ -495,6 +495,14 @@ impl WasmGcEmitter {
 			]);
 			Self::emit_list(f, &[I::LocalGet(bytes), I::RefAsNonNull]);
 		});
+		// one call per literal: array.new_data inline takes several times the machine code of a call
+		self.runtime_function(TEXT_LITERAL, vec![int, int], vec![text], vec![], |_, f| {
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(0), I::LocalGet(1),
+				I::ArrayNewData { array_type_index: text_type, array_data_index: TEXT_SEGMENT },
+			]);
+		});
 		self.runtime_function(TEXT_BYTES_JOIN, vec![text, text], vec![text], vec![text], |_, f| {
 			let (first, second, joined) = (0, 1, 2);
 			#[rustfmt::skip]
@@ -662,11 +670,8 @@ impl WasmGcEmitter {
 
 	/// Push the literal at (offset, length) of the literal segment (StringTable::literal) as a new $Text
 	pub(in crate::wasm_emitter) fn emit_literal_text(&self, func: &mut Function, (offset, length): (u32, u32)) {
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I32Const(offset as i32), I32Const(length as i32),
-			I::ArrayNewData { array_type_index: self.type_manager.text_type, array_data_index: TEXT_SEGMENT },
-		]);
+		Self::emit_list(func, &[I32Const(offset as i32), I32Const(length as i32)]);
+		self.call(func, TEXT_LITERAL);
 	}
 
 	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
