@@ -124,6 +124,12 @@ without_classes). An object's own entries (`address:{…}`) keep their names.
 Routes become ordinary warp definitions in lib/router.warp, no rewrite rules, no module pass. Moved so far:
 - `status 418` / `header "name" "value"`: router functions over the host's response_header; lib/wagi.warp defines
   its own response_header, which wins over the host import in a WAGI build (serve.rs with_answer_headers is gone).
+- route dispatch without a server (warp run, playground, WAGI; serve.rs with_local_routes): each route is
+  `route_add(METHOD, path, request => {globals…; body})` and `page·submitted(request) := route_answer(request)`, the table
+  and dispatcher in lib/router.warp; no route·N functions there any more. Served mode still calls route·N by name
+  (next: the host calls one exported dispatcher; web_server.rs keeps site fallback, failure and list answers, so route
+  records need path and list information). The built-in `get "/x" {…}` sugar intercepts a user function named get:
+  the swap to lib functions get/post/… is one step.
 
 Target shape (the host calls one exported dispatcher instead of route·N by name):
 ```warp
