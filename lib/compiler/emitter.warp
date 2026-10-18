@@ -36,7 +36,8 @@ gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5}
 gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0]]
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
-node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, bool: 257, list: 264}
+node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262}
+# a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 references = {text: [99, gc.text], list: [99, gc.list], node: [110]}
 passive_segment = 1
@@ -233,9 +234,9 @@ node(kind_code: int, payload: any) := [op.i64_const] + sleb(kind_code) + payload
 # a text as its bytes; one character as its codepoint, as warp holds a literal "a"
 text_value(t: text) := {
 	if #t == 1 { return ["char", [op.i32_const] + sleb(ord(t))] }
-	bytes = [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes)
-	["text", bytes + gc_code("array_new_data", [gc.text, 0])]
+	["text", text_bytes(t)]
 }
+text_bytes(t: text) := [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code("array_new_data", [gc.text, 0])
 # a value boxed as a $Node: a number or yes/no in its box, a character as an i31
 boxed(value: any) := {
 	kind = value#1
@@ -250,16 +251,42 @@ boxed(value: any) := {
 	node(node_kind_codes.int, code + gc_code("struct_new", [gc.int_box]))
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
-list_value(body: Body, items: any) := {
-	code = [op.i32_const] + sleb(#items) + joined(items.map(item => boxed(expression(body, item))))
-	["list", code + gc_code("array_new_fixed", [gc.items, #items]) + gc_code("struct_new", [gc.list])]
+list_value(body: Body, items: any) := ["list", vector_code(items.map(item => boxed(expression(body, item))))]
+vector_code(item_codes: any) := {
+	code = [op.i32_const] + sleb(#item_codes) + joined(item_codes)
+	code + gc_code("array_new_fixed", [gc.items, #item_codes]) + gc_code("struct_new", [gc.list])
 }
+## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
+# `name: value` as a map entry: its name a symbol, its value boxed
+entry_code(name_code: any, value_code: any) := [op.i64_const] + sleb(node_kind_codes.entry) + node(node_kind_codes.symbol, name_code) + as_node(value_code) + gc_code("struct_new", [gc.node])
+# the name of an entry `x: v` or a subscript's text "x"
+name_text(n: any) := if n is symbol then name_of(n) else n
+is_entry(n: any) := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text)
+# `{a: 1, b: "x"}`: a map
+map_value(body: Body, entries: any) := {
+	codes = entries.map(e => entry_code(text_bytes(name_text(key_of(e))), boxed(expression(body, value_of(e)))))
+	["node", node(node_kind_codes.map, vector_code(codes))]
+}
+# `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
+instance_value(body: Body, class_name: text, fields: any) := ["node", entry_code(text_bytes(class_name), map_value(body, fields)#2)]
+# `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
+subscript_name(index: any) := {
+	# (type() of an arithmetic key is "operation", not key)
+	if op_of(index) == "+" and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
+	ø
+}
+map_get(map: any, name: text) := runtime_call("map_get", [["node", boxed(map)], text_value_of(name)])
+# `m.x = v`: the map with its entry x set to v
+field_assignment(map: any, name: any, value: any) := runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]])
+# a name as a text value, even of one character (text_value gives a "char" then)
+text_value_of(name: text) := ["text", text_bytes(name)]
 # an int as an i32 index
 index_code(value: any) := converted(value, "int") + [op.i32_wrap_i64]
-# `#x`: the bytes of a text, the items of a list
+# `#x`: the characters of a text, the items of a list or map
 length(value: any) := {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
 	if value#1 == "list" { return ["int", value#2 + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]] }
+	if value#1 == "node" { return runtime_call("node_count", [value]) }
 	refuse("the length of a " + value#1)
 }
 # `xs#i = v`: the i-th item becomes v, boxed; the assignment gives v
@@ -307,6 +334,10 @@ intrinsic(body: Body, name: text, arguments: any) := {
 		taken = field => to + from + gc_code("struct_get", [gc.list, field]) + gc_code("struct_set", [gc.list, field])
 		return [no_kind, code + taken(0) + taken(1)]
 	}
+	if name == "key_name" { return ["text", payload(as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]), gc.text)] }
+	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 2])] }
+	if name == "map_of" { return ["node", node(node_kind_codes.map, values#1#2)] }
+	if name == "new_key" { return ["node", entry_code(values#1#2, values#2#2)] }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
 	if name == "unboxed_float" { return ["float", unboxed(values#1#2, gc.float_box)] }
@@ -323,7 +354,7 @@ intrinsic(body: Body, name: text, arguments: any) := {
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2}
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, key_name: 1, key_value: 1, new_key: 2, map_of: 1}
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
 kind_code_of(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and]
@@ -444,6 +475,9 @@ euclidean_remainder(body: Body, a: any, b: any) := {
 }
 
 assignment(body: Body, target: any, value: any) := {
+	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
+		return map_assignment(body, expression(body, key_of(target)), subscript_name(value_of(target)), value)
+	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
 	}
@@ -459,6 +493,12 @@ assignment(body: Body, target: any, value: any) := {
 	[kind, converted(value, kind) + [op.local_tee] + index]
 }
 
+# `m.x = v` as lowered, `m#("x"+1) = v`: the assignment gives v
+map_assignment(body: Body, map: any, name: text, value: any) := {
+	held = [op.local_get] + uleb(fresh_local(body, value#1))
+	set = dropped(field_assignment(map, text_value_of(name), [value#1, held]))
+	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
 # `global name = value` declares the module's variable name, which every function reads and writes
 declare_global(name: text, value: any) := {
 	if not (name in module.globals) {
@@ -547,6 +587,10 @@ group_expression(body: Body, n: any) := {
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
 	if bracket_of(n) == "[" { return list_value(body, n.map(x => x)) }
+	if bracket_of(n) == "{" and #n > 0 and n.all(is_entry) { return map_value(body, n.map(x => x)) }
+	if bracket_of(n) == "(" and #n == 4 and n#1 == symbol("field_with") {
+		return field_assignment(expression(body, n#2), expression(body, n#3), expression(body, n#4))
+	}
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
 	sequence(body, n.map(x => x))
 }
@@ -562,6 +606,12 @@ key_expression(body: Body, n: any) := {
 	if operator == ":" and left is symbol and name_of(left) == "global" and type(right) is key and op_of(right) == "=" and key_of(right) is symbol {
 		return declare_global(name_of(key_of(right)), expression(body, value_of(right)))
 	}
+	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
+	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
+	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
+		return instance_value(body, name_of(left), right.map(x => x))
+	}
+	if operator == "#" and left != ø and subscript_name(right) != ø { return map_get(expression(body, left), subscript_name(right)) }
 	if operator == "+=" {
 		target = expression(body, left)
 		if target#1 == "list" { return runtime_call("list_append", [target, expression(body, right)]) }
@@ -706,6 +756,12 @@ wasm_module(program: any, runtime: any) := {
 	try {
 		main.body = separated(bracketed(collect_functions(program, module.functions), ""), ";")
 		compile_function(main, [])
+		# a function never called is compiled too, its parameters of any kind: Rust's compiles every function, so a
+		# program with one it cannot compile fails there
+		for name in module.functions.keys {
+			f = module.functions[name]
+			if f.kinds == ø { compile_function(f, f.parameters.map(p => "node")) }
+		}
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
