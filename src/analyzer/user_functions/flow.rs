@@ -6,6 +6,8 @@
 
 use super::*;
 
+/// How often a parameter turns back to one kind before it counts as cycling (given_flows)
+const CYCLE_RETURNS: usize = 2;
 /// The kinds that flow into each parameter, by function and index
 type Flows = HashMap<(String, usize), Vec<Kind>>;
 /// The kind each parameter's use in its body suggests, taken before the flows
@@ -51,8 +53,9 @@ pub(super) fn settle(ctx: &mut Context, program: &Node, globals: &mut HashMap<St
 }
 
 /// Each undeclared parameter its flows joined, else its usage kind, else what the closure calls agree on; whether one
-/// changed. A parameter turning back to a kind it `held` before cycles (`out(signal) := sound(clamped_samples(signal))`
-/// feeding a list and a Node back and forth): it settles on all of them joined.
+/// changed. A parameter turning back again to a kind it `held` twice before cycles (`out(signal) :=
+/// sound(clamped_samples(signal))` feeding a list and a Node back and forth): it settles on all of them joined. Turning
+/// back once is no cycle: the early rounds' results, assumed ints, pass a list as a number once (`delayed(signal)`)
 fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages, held: &mut Flows) -> bool {
 	let mut changed = false;
 	// a closure call's helper takes Nodes, or the numbers type_closure_calls gives both it and its entries
@@ -90,7 +93,9 @@ fn given_flows(ctx: &mut Context, flows: &ProgramFlows, usages: &Usages, held: &
 			let history = held.entry(key).or_default();
 			history.extend(param.used_as);
 			let kind = match kind {
-				Some(cycled) if history.contains(&cycled) => joined(history),
+				Some(cycled) if history.iter().filter(|held| **held == cycled).count() >= CYCLE_RETURNS => {
+					joined(history)
+				}
 				kind => kind,
 			};
 			if param.used_as != kind {
