@@ -799,7 +799,8 @@ fn collect_list_variables(
 				}
 				let declared_list =
 					declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
-				let is_list_variable = |node: &Node| node.symbol_name().is_some_and(|list| assigned.get(list) == Some(&true));
+				let is_list_variable =
+					|node: &Node| node.symbol_name().is_some_and(|list| assigned.get(list) == Some(&true));
 				let is_list = declared_list
 					|| is_list_literal(value)
 					|| match value.drop_meta() {
@@ -830,7 +831,10 @@ fn is_element_wise_of_list(node: &Node, is_list_variable: &dyn Fn(&Node) -> bool
 	let Some((receiver, _, operand)) = element_wise_parts(node.ungrouped()) else { return false };
 	[receiver, operand].iter().any(|side| {
 		let side = side.ungrouped();
-		is_list_literal(side) || is_range(side) || is_list_variable(side) || is_element_wise_of_list(side, is_list_variable)
+		is_list_literal(side)
+			|| is_range(side)
+			|| is_list_variable(side)
+			|| is_element_wise_of_list(side, is_list_variable)
 	})
 }
 
@@ -958,7 +962,8 @@ impl Broadcast {
 	/// `if p is list then map(p, broadcast_item => applied(broadcast_item)) else applied(p)`: decided at run time
 	fn each_any(&self, value: &Node, applied: impl Fn(Node) -> Node) -> Node {
 		let tested = call(crate::words::IS_TYPE, vec![value.clone(), Node::Text(crate::words::LIST_WORD.to_string())]);
-		let bindings = [("TESTED", tested), ("LISTED", each_item(value.clone(), &applied)), ("SCALAR", applied(value.clone()))];
+		let bindings =
+			[("TESTED", tested), ("LISTED", each_item(value.clone(), &applied)), ("SCALAR", applied(value.clone()))];
 		super::nodes::filled(EACH_ANY_TEMPLATE, bindings)
 	}
 
@@ -1068,9 +1073,9 @@ impl Broadcast {
 		is_range(node)
 			|| is_broadcast(node)
 			|| element_wise_parts(node.ungrouped()).is_some_and(|(receiver, _, _)| self.is_list(receiver.ungrouped()))
-			|| node.symbol_name().is_some_and(|variable| {
-				self.list_variables.contains(variable) && !self.is_shadowed(variable)
-			})
+			|| node
+				.symbol_name()
+				.is_some_and(|variable| self.list_variables.contains(variable) && !self.is_shadowed(variable))
 	}
 
 	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
@@ -1244,7 +1249,8 @@ impl Broadcast {
 /// (`sum(a .* b)`) or min and max (of vectors, vector_extremum)
 pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
 	let implying = [DOT_WORD].into_iter().chain(EXTREMUM_WORDS);
-	(element_wise_parts(node).is_some() || implying.into_iter().any(|word| node.is_symbol(word))).then_some(ELEMENT_WISE_ANY)
+	(element_wise_parts(node).is_some() || implying.into_iter().any(|word| node.is_symbol(word)))
+		.then_some(ELEMENT_WISE_ANY)
 }
 
 /// P166 (user): an element-wise operator on a plain number is the plain operator, `6 ./ 2` is 3. The parser wrote

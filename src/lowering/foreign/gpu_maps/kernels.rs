@@ -263,7 +263,12 @@ impl Translation {
 	fn expression(&mut self, body: &Node) -> Option<String> {
 		let (code, width) = self.typed(body)?;
 		if width != 1 {
-			self.refuse(body, &format!(": a vector of {width} where WGSL needs a number (the dotted operators .+ .- .* ./ take vectors)"));
+			self.refuse(
+				body,
+				&format!(
+					": a vector of {width} where WGSL needs a number (the dotted operators .+ .- .* ./ take vectors)"
+				),
+			);
 			return None;
 		}
 		Some(code)

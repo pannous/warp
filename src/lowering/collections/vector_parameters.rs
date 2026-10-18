@@ -27,9 +27,8 @@ pub(crate) fn vector_parameters(
 		let mut passed = lists_passed(program, definitions, &|argument| is_list(argument), broadcasting);
 		for definition in definitions {
 			let inside = vectors.get(&definition.name).cloned().unwrap_or_default();
-			let reaching = |argument: &Node| {
-				is_list(argument) || argument.symbol_name().is_some_and(|name| inside.contains(name))
-			};
+			let reaching =
+				|argument: &Node| is_list(argument) || argument.symbol_name().is_some_and(|name| inside.contains(name));
 			passed.extend(lists_passed(&definition.body, definitions, &reaching, broadcasting));
 		}
 		let mut changed = false;
@@ -75,7 +74,9 @@ fn untyped_names(definition: &Definition) -> impl Iterator<Item = String> + '_ {
 /// `name .* 2`, `2 .- name`, `name#2`, `name.xy`: the body reads name as a vector
 fn used_as_vector(body: &Node, name: &str) -> bool {
 	let element_wise_operand = |part: &Node| {
-		element_wise_parts(part).is_some_and(|(receiver, _, operand)| [receiver, operand].iter().any(|side| side.ungrouped().is_symbol(name)))
+		element_wise_parts(part).is_some_and(|(receiver, _, operand)| {
+			[receiver, operand].iter().any(|side| side.ungrouped().is_symbol(name))
+		})
 	};
 	reads_components(body, name) || any_part(body, element_wise_operand)
 }
