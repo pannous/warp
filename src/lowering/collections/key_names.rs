@@ -78,7 +78,11 @@ struct KeyScope {
 
 impl KeyScope {
 	fn of(program: &Node, statements: &[Node]) -> Self {
-		KeyScope { own: main_level_variables(statements), bound: crate::program_names::Bindings::of(program).bound(), escape: Cell::new(false) }
+		KeyScope {
+			own: main_level_variables(statements),
+			bound: crate::program_names::Bindings::of(program).bound(),
+			escape: Cell::new(false),
+		}
 	}
 
 	/// The key a comparison names, Escape noted

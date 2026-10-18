@@ -7,7 +7,7 @@
 //! rest)`), up to a cap.
 
 use super::inlining::renamed_names;
-use super::nodes::{children_rewritten, key, parameter_name};
+use super::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -100,21 +100,10 @@ fn visit_uses(node: &Node, name: &str, found: &mut dyn FnMut(Use)) {
 	}
 }
 
-/// Every name the program binds other than by a top-level definition: assigned, a parameter, a lambda's parameter
-fn bound_names(program: &Node) -> HashSet<String> {
-	let mut bound = HashSet::new();
-	program.visit(&mut |part| match part {
-		Node::Key(target, Op::Assign | Op::Arrow, _) if target.symbol_name().is_some() => {
-			bound.extend(target.symbol_name().map(String::from));
-		}
-		Node::Key(head, Op::Define | Op::Assign, _) => {
-			if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
-				bound.extend(items.iter().skip(1).filter_map(parameter_name));
-			}
-		}
-		_ => {}
-	});
-	bound
+/// Bound other than by a definition: assigned a value, a parameter, a loop variable
+fn bound_as_value(bindings: &crate::program_names::Bindings, name: &str) -> bool {
+	use crate::program_names::Meaning::{Loop, Parameter, Variable};
+	[Variable, Parameter, Loop].into_iter().any(|meaning| bindings.binds_as(name, meaning))
 }
 
 struct Specialiser {
@@ -219,9 +208,10 @@ pub fn lower(program: Node) -> Node {
 	for definition in &found {
 		*counts.entry(&definition.name).or_default() += 1;
 	}
-	let bound = bound_names(&program);
+	let bindings = crate::program_names::Bindings::of(&program);
 	let once: Vec<&Definition> = found.iter().filter(|definition| counts[definition.name.as_str()] == 1).collect();
-	let passable = once.iter().map(|definition| definition.name.clone()).filter(|name| !bound.contains(name)).collect();
+	let passable =
+		once.iter().map(|definition| definition.name.clone()).filter(|name| !bound_as_value(&bindings, name)).collect();
 	let higher_order: HashMap<String, Definition> = once
 		.into_iter()
 		.filter(|definition| (0..definition.params.len()).any(|index| definition.takes_function_at(index)))

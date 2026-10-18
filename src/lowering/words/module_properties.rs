@@ -150,7 +150,8 @@ pub fn lower(program: Node) -> Node {
 	// before tuples::lower the analyzer reads `[p, q] = …` as a definition of p: a destructured name is a value
 	let functions = crate::analyzer::function_definitions(&original).user_functions;
 	let destructured = destructured_variables(&original);
-	let values: HashSet<String> = crate::program_names::Bindings::of(&original).bound()
+	let values: HashSet<String> = crate::program_names::Bindings::of(&original)
+		.bound()
 		.into_iter()
 		.filter(|name| destructured.contains(name) || !functions.contains_key(name))
 		.collect();
