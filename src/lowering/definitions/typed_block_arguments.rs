@@ -71,8 +71,8 @@ fn taking_functions(program: &Node) -> Positions {
 /// The standard functions taking data, their definitions parsed once per thread and quietly: no hint about library code
 fn std_functions_taking() -> Positions {
 	thread_local!(static FUNCTIONS: Positions = crate::normalize::without_hints(|| {
-		let parse = |line: &&str| functions_taking(&crate::warp_parser::parse(line));
-		crate::modules::std_data_functions().iter().map(|(_, line)| line).flat_map(|line| parse(&line)).collect()
+		let functions = crate::modules::std_data_functions().iter();
+		functions.flat_map(|(_, line)| functions_taking(&crate::warp_parser::parse(line))).collect()
 	}));
 	FUNCTIONS.with(Clone::clone)
 }
