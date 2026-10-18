@@ -109,6 +109,10 @@ fn variable_list_type(name: &str, scope: &Scope) -> String {
 	match type_name {
 		Some(word) => match list_element_type(&word) {
 			Some(element) => format!("{LIST_OF_PREFIX}{element}"),
+			// `xs: list`, a parameter of no declared element type, as an untyped one: each caller may pass other elements
+			None if word == LIST_WORD && scope.binding(name).is_some_and(|local| local.is_param) => {
+				NODE_LIST_TYPE.to_string()
+			}
 			None if word.starts_with(LIST_WORD) || word.starts_with(MAP_WORD) => word,
 			None => LIST_WORD.to_string(),
 		},
