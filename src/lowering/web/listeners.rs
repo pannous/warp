@@ -3,7 +3,7 @@
 //! parser groups such a phrase as any other (`(on change) (s {…})`, `on every (5 seconds: print) n`, `a == (b {body})`,
 //! `(alarm = (whenever t) > 30) {…}`); the reader undoes the groups: the keyword, what it listens to, and the body.
 
-use super::nodes::{is_block, phrase_words};
+use super::nodes::{is_block, phrase_words, phrase_words_of};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -20,7 +20,7 @@ pub(crate) struct Listener {
 impl Listener {
 	/// The trigger's words in one row: `every 5 seconds` → [every, 5, seconds]
 	pub fn words(&self) -> Vec<Node> {
-		phrase_words(std::slice::from_ref(&self.trigger))
+		phrase_words_of(&self.trigger)
 	}
 
 	/// The listener as a statement of its own, without its name

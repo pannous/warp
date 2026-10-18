@@ -128,14 +128,10 @@ impl<'n> Holders<'_, 'n> {
 }
 
 /// The calls that change the list they are given: what `xs.pop()`, `xs.insert(…)` and `xs.remove(v)` lower to
-const IN_PLACE_CALLS: [&str; 4] = [
-	crate::list_mutations::LIST_DROP_LAST,
-	crate::list_mutations::LIST_BECOME,
-	crate::list_mutations::INSERT_EITHER_CALL,
-	crate::library_words::MAP_WITHOUT,
-];
+const IN_PLACE_CALLS: [&str; 3] =
+	[crate::list_mutations::LIST_BECOME, crate::list_mutations::INSERT_EITHER_CALL, crate::library_words::MAP_WITHOUT];
 
-/// `list_drop_last(xs)`, `list_become(xs, ys)`, `map_without(xs, v)`: a call that changes the list it is given
+/// `list_become(xs, ys)`, `map_without(xs, v)`: a call that changes the list it is given
 pub(in crate::wasm_emitter) fn changes_in_place(value: &Node) -> bool {
 	matches!(super::super::lists::list_abi::called_function(value), Some(name) if IN_PLACE_CALLS.contains(&name))
 }

@@ -36,7 +36,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let blocks = GoBlocks::default();
 	let node = blocks.lower(node, &[]);
-	crate::declarations::with_definitions_first(node, blocks.definitions.into_inner())
+	crate::lowering::nodes::with_statements_first(node, blocks.definitions.into_inner())
 }
 
 /// A function as a message names it: `go·block·1` is `go block 1`

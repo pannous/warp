@@ -227,10 +227,5 @@ pub(crate) fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 	let uses = modules
 		.into_iter()
 		.map(|module| Node::List(vec![symbol(USE_WORD), symbol(module)], Bracket::None, Separator::Space));
-	match program {
-		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List(uses.chain(statements).collect(), Bracket::None, separator)
-		}
-		single => Node::List(uses.chain(std::iter::once(single)).collect(), Bracket::None, Separator::Semicolon),
-	}
+	crate::lowering::nodes::with_statements_first(program, uses.collect())
 }

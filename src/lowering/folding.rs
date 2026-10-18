@@ -365,12 +365,7 @@ pub fn specialise_constant_arguments(program: Node) -> Node {
 		})
 		.map(|(_, definition)| definition.clone())
 		.collect();
-	match rewritten {
-		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			Node::List([variants, items].concat(), Bracket::None, separator)
-		}
-		single => Node::List([variants, vec![single]].concat(), Bracket::None, Separator::Semicolon),
-	}
+	crate::lowering::nodes::with_statements_first(rewritten, variants)
 }
 
 struct Specialiser {
