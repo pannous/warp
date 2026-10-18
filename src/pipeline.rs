@@ -128,7 +128,9 @@ pub const SUGAR_PASSES: &[Pass] = &[
 	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
 	// `post "/todos" { … }` as a route
 	crate::lowering::markup_tags::lower_form_routes,
-	crate::lowering::markup_tags::lower_html_attributes,
+	// `a{ href="/about" "About" }`, `Person{ class = "a" }`: `=` in a data block is an entry (tag_entries.rs), before
+	// soft_keywords reads `class = …` as a definition
+	crate::lowering::tag_entries::lower,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::lowering::soft_keywords::lower,
 	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
