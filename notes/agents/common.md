@@ -89,7 +89,7 @@ instead of bending the code.
   worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
   the stage programs (~90 s, prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
   and wrong values in seconds (most of the 39 sprint failures of batch B, 2026-10-19). It does not show whether
-  emitter.warp or the Rust fallback emitted the program (card emit-fallback-visible); the + emitter comparison
+  emitter.warp or the Rust fallback emitted the program (card cli-show); the + emitter comparison
   stays the check for that. Then the targeted tests via tests/queue.sh.
 - Samples: every major or semi-major feature (a new syntax form, library area, server/ORM/GPU
   capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
