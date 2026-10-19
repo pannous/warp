@@ -1,0 +1,10 @@
+# + - * near the i64 edge: equal to Rust below it; past it Rust grows the int and emitter.warp traps
+x = 3037000499
+print x * x
+print x * -x
+y = x * x + 5928526805
+print y + 1
+print 0 - y - 1
+s = 0
+for v in [1, 2.5, 3] { s += v }
+print s
