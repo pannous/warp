@@ -109,7 +109,8 @@ subscript(target: any, index: any): Node := {
 // The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
 // Rust twin: subscripts.rs slice_bounds
 slice_bounds(written: any): any := match written {
-	Key(start, Op.Colon, end): [start, end]
+	// an opaque view (a template `"k\(i)"`) or attribute layer is a key too, but no slice
+	Key(start, Op.Colon, end): { if is_pair_key(written) then [start, end] else ø }
 	Key(start, Op.Range, end): [start, end]
 	Key(start, Op.To, last): [start, if last === ø then ø else Key(last, Op.Add, 1)]
 	_: ø
