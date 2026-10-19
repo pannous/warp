@@ -24,13 +24,14 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 - the file's own globals in functions (PRINT, ARGUMENT_POWER, UNIT_WORDS, …): no root of its own, main was refused
   first (normal lane: the def heads, ae7663fc80, data/self_hosting/parser_gap_with_def.txt names none of them; pure
   lane: `symbol("print")`, warp-self-emitter's); globals read fine in functions (pure/28_global_tables.warp)
+- match arms of values (`1:`, `"hi":`, `'a':`, `Color.Red:`): match-arms a3499f85ac (warp-parsing; on pure-lane,
+  lands after it; enum cases run once enum lowering does)
 
 ## Open
 | root | owner |
 |---|---|
 | lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
 | `x is symbol/list/any` type tests, prelude defs on demand (is_digit) | warp-self-emitter |
-| match literal and enum-symbol arms | warp-parsing |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
 | class constructor `Point(2, 3)`, try | warp-self-analyzer |
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
