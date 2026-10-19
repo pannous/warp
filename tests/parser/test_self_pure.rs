@@ -39,3 +39,10 @@ fn for_loops_run_pure() {
 	runs_pure("for_list", "xs = [4, 5, 6]; t = 0; for x in xs { t += x }; t", "15");
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
+
+/// node_matches.warp: an arm of a number, text or character tests the subject equals it
+#[test]
+fn match_values_run_pure() {
+	runs_pure("match_number", "f(x) := match x { 1: 10; 2: 20; _: 0 }; f(2) + f(5)", "20");
+	runs_pure("match_text", "g(w) := match w { \"hi\": 1; \"hello\": 2; _: 0 }; g(\"hello\")", "2");
+}
