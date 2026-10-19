@@ -1,12 +1,26 @@
 # is! tests as warp files (card warp-is-tests, decision warp-is-tests)
 
-The Rust tests' `is!("code", expected)` assertions also live as warp files beside their Rust file
-(tests/numbers/test_math.rs → tests/numbers/test_math.warp), one line each:
+The Rust tests' `is!("code", expected)` assertions also live as warp files beside their Rust file, two kinds, never
+mixed: a pairs file of pure data with the short tests (tests/numbers/test_math.rs → tests/numbers/test_math.pairs.warp),
+one `'code' expected` pair a line, the code alone when it expects ø:
 
 ```warp
-is! '2+3*4' 14
+'2+3*4' 14
+'0-1' (-1)
+'x=0'
+```
+
+and an ordinary warp file (tests/numbers/test_math.warp) with an `is!` line for each test whose pair would be longer
+than 80 characters, whose code spans lines, or whose expectation is computed (`1 + pi`):
+
+```warp
 is! 'use sin;sin π' 0
 ```
+
+- Pairs: under `warp test` a file whose every statement is a pair, or `test_pairs = {…}` holding them, becomes is!
+  checks (test_blocks.rs `pairs_checked`). Write no `'y' ø` pair: a line ending in ø swallows the next line (card
+  line-ending); the code alone means the same.
+- Matching is permissive (lib/prelude.warp is!): `got == expected`, or both empty/falsy (0 ≈ ø ≈ [] ≈ no).
 
 - `is!` is lib/prelude.warp's `is!(warp: text, expected: any)`: `eval(warp) == expected`; a failure prints
   `✗ is! "3+3" 7: got 6`. Programs may define it the user's way, `def is!(warp: text, expected: any) := …`; the prelude
