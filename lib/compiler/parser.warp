@@ -14,8 +14,12 @@ def tree(source) := view_of(parsed(source))
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
 def parsed(source) {
-	written = written_tree(source)
-	counted(written, scope_of(written), [])
+	try {
+		written = written_tree(source)
+		counted(written, scope_of(written), [])
+	} catch failure {
+		error_node(failure.message)
+	}
 }
 
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
@@ -78,23 +82,22 @@ def items(p, closer, bracket) {
 	p.grouped = p.grouped or closer != ' '
 	while true {
 		skip_blanks(p)
-		if p.at >= p.n { break }
+		if p.at >= p.n {
+			if closer != ' ' { raise "`" + closer + "` is missing: the group opened at " + line_and_column(p.code, opener) + " runs to the end of the input" }
+			break
+		}
 		c = p.code[p.at]
 		if c == closer {
 			p.at = p.at + 1
 			break
 		}
 		stray = c == ')' or c == ']' or c == '}'
-		if stray and closer != ' ' {
-			p.at = p.at + 1
-			p.branch = outer_branch
-			p.grouped = outer_grouped
-			return failed("`" + c + "` closes the group opened at " + line_and_column(p.code, opener) + ", which needs `" + closer + "`")
-		}
+		if stray and closer != ' ' { raise "`" + c + "` closes the group opened at " + line_and_column(p.code, opener) + ", which needs `" + closer + "`" }
 		// the lines indented inside a group end at its closer: `{ for x in xs:⏎    a }`
 		if stray and p.grouped { break }
+		if stray { raise "`" + c + "` closes no group" }
 		before = p.at
-		item = if stray then stray_closer(p, c) else if follows_clause_word(found) then header_expression(p, 0) else expression(p, 0)
+		item = if follows_clause_word(found) then header_expression(p, 0) else expression(p, 0)
 		newline = skip_blanks(p)
 		if bracket == "" and newline and line_indent(p) > p.indent {
 			body = lines_below(p)
@@ -120,14 +123,6 @@ def follows_clause_word(found) {
 	previous = found#(found.length)#1
 	previous is symbol and keyword_form(name_of(previous)) == "clause"
 }
-
-def stray_closer(p, c) {
-	p.at = p.at + 1
-	failed("`" + c + "` closes no group")
-}
-
-// An error node with its message, as the Rust parser writes one into the tree
-def failed(message) := error_node(message)
 
 // `line:column` of the character at `at`, both from 1
 def line_and_column(code, at) {
@@ -1194,8 +1189,7 @@ def atom(p) {
 		if c == 'ø' { p.at = p.at + 1 }
 		return ø
 	}
-	p.at = p.at + 1
-	failed("Unexpected character '" + c + "'")
+	raise "Unexpected character '" + c + "'"
 }
 
 // The URL after its scheme word, up to a blank, a separator, a closer or a quote
@@ -1265,10 +1259,7 @@ def shader_block(p, word) {
 	while open < p.n and (p.code[open] == ' ' or p.code[open] == '\t') { open = open + 1 }
 	if not is_at(p.code, open, '{', p.n) { return ø }
 	end = closing_brace(p.code, open + 1, p.n)
-	if end < 0 {
-		p.at = p.n
-		return failed("the { of `" + word + " { … }` is never closed")
-	}
+	if end < 0 { raise "the { of `" + word + " { … }` is never closed" }
 	p.at = end + 1
 	shader_text(dedented(p.code[open + 1 .. end]))
 }
@@ -1882,7 +1873,7 @@ def sum_type(p, name, start, parameters) {
 	while true {
 		p.at = space_end(p.code, p.at, p.n)
 		end = symbol_end(p.code, p.at, p.n)
-		if end == p.at { return failed("a variant of " + view_of(name)#2 + " needs a name") }
+		if end == p.at { raise "a variant of " + view_of(name)#2 + " needs a name" }
 		variant = p.code[p.at .. end]
 		p.at = end
 		payload = []
@@ -1951,7 +1942,7 @@ def enum_with_values(p) {
 		} else if is_symbol(case) {
 			bare += [case]
 		} else {
-			return failed("a case of enum " + name_of(name) + " is a name with optional values")
+			raise "a case of enum " + name_of(name) + " is a name with optional values"
 		}
 	}
 	sum_type_of(name, bare, classes)
