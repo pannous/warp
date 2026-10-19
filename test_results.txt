@@ -1033,14 +1033,8 @@ PASSED:
   ✓ ffi::test_builtin_lines::a_builtin_line_declares_and_imports_nothing
   ✓ ffi::test_builtin_lines::a_builtin_words_signature_is_its_line
   ✓ ffi::test_builtin_lines::a_programs_builtin_line_must_be_warps
-  ✓ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
-  ✓ ffi::test_cargo_crates::test_cargo_crate_free_functions
   ✓ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
-  ✓ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource
-  ✓ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes
   ✓ ffi::test_cargo_crates::test_cargo_crate_trap_names_rust_functions
-  ✓ ffi::test_cargo_crates::test_cargo_crate_type_functions_fields_and_display
-  ✓ ffi::test_cargo_crates::test_cargo_crate_without_callable_functions_is_refused
   ✓ ffi::test_component_drop::a_dropped_handle_is_refused
   ✓ ffi::test_component_drop::dropping_a_handle_runs_the_destructor
   ✓ ffi::test_component_exports_anywhere::a_components_exports_in_every_host
@@ -1063,8 +1057,6 @@ PASSED:
   ✓ ffi::test_components::test_handles_of_another_thread_do_not_shift_the_numbering
   ✓ ffi::test_components::test_resource_failures_are_loud
   ✓ ffi::test_components::test_resources_of_a_component_are_handles
-  ✓ ffi::test_crate_errors::an_uncaught_crate_error_says_only_what_the_crate_said
-  ✓ ffi::test_crate_errors::try_catches_a_crate_error
   ✓ ffi::test_download::a_failed_download_is_an_error_value
   ✓ ffi::test_download::download_fetches_like_fetch
   ✓ ffi::test_fetch_computed_url::fetch_of_a_parameter_and_a_concatenation
@@ -1871,6 +1863,7 @@ PASSED:
   ✓ functions::test_property_access::test_of_and_possessive
   ✓ functions::test_property_access::test_of_lookup_is_an_assignment_target
   ✓ functions::test_property_access::test_print_of_lookup_prints_the_field
+  ✓ functions::test_property_assign::test_a_map_entry_named_like_a_class_stays_an_entry
   ✓ functions::test_property_assign::test_a_one_entry_object_counts_one_pair
   ✓ functions::test_property_assign::test_assign_a_field
   ✓ functions::test_property_assign::test_assign_a_nested_field
@@ -2228,6 +2221,7 @@ PASSED:
   ✓ lists::test_list_parameters::implicit_it_indexed_as_list
   ✓ lists::test_list_parameters::indexed_parameter_can_be_called_repeatedly_and_combined
   ✓ lists::test_list_parameters::named_parameter_indexed_as_list
+  ✓ lists::test_list_passed_to_function_value::a_list_passed_to_a_function_value_is_changed_in_place
   ✓ lists::test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ lists::test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ lists::test_list_plus_number::each_reading_has_its_explicit_form
@@ -3735,7 +3729,6 @@ PASSED:
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
-  ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
@@ -3961,7 +3954,6 @@ PASSED:
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_2
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_3
-  ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_4
   ✓ programs::test_samples_run_cleanly::samples_keep_their_stored_values_out_of_the_checkout
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
@@ -6311,7 +6303,20 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ INCOMPLETE: 1 test binaries ended without a result (crashed or killed)
+    RERUN of tests/main.rs: 33 unfinished or failed tests
+    ✗ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud: (no output)
+    ✗ ffi::test_cargo_crates::test_cargo_crate_free_functions: (no output)
+    ✗ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource: (no output)
+    ✗ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes: (no output)
+    ✗ ffi::test_cargo_crates::test_cargo_crate_type_functions_fields_and_display: (no output)
+    ✗ ffi::test_cargo_crates::test_cargo_crate_without_callable_functions_is_refused: (no output)
+    ✗ ffi::test_crate_errors::an_uncaught_crate_error_says_only_what_the_crate_said: (no output)
+    ✗ ffi::test_crate_errors::try_catches_a_crate_error: (no output)
+    ✗ parser::test_self_analyzer::matching_sources_keep_matching: (no output)
+    ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it: (no output)
+    ✗ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_4: (no output)
+    rerun: 33 passed, 11 failed
 
 SUMMARY:
-11 ignored, 6308 passed, 1 failed, 6309 total tested
+11 ignored, 6300 passed, 1 failed, 6301 total tested
