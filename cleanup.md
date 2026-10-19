@@ -187,3 +187,10 @@
 - State the actual dispatch rule and the preferred action in one plain sentence: the library word handles lists, while the user's definition handles other values and should be renamed when that split was unintended.
 - Reuse the existing `library-words-typed` diagnostic and acknowledgement topic; do not add another hint path.
 - Add a focused outcome test in its own test module, then run that filter, formatting, clippy, the style lint, and the wasm32 check.
+
+# Julia floor-division alias cleanup
+
+- Upgrade the existing Unicode-operator regression from the obsolete `÷` plain-division decision before changing production code.
+- Route `÷` and `÷=` through the existing `FloorDiv` and `FloorDivAssign` operators; do not add a parallel arithmetic path.
+- Emit one shared newcomer note that explains Julia-compatible floor division and names `/` for plain division.
+- Keep the Rust and self-hosted parser operator tables aligned, update the two specified wiki sections, and run the focused parser tests, clippy, and wasm32 check.
