@@ -328,7 +328,9 @@ text_offset(t: text): int := {
 # a GC instruction with its immediates
 def gc_code(name: text, immediates: any): list { [gc_prefix] + uleb(gc_ops[name]) + joined(immediates.map(uleb)) }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
-def node(kind_code: int, payload: any): list { [op.i64_const] + sleb(kind_code) + payload + [ref_null, gc.node] + gc_code("struct_new", [gc.node]) }
+def node(kind_code: int, payload: any): list { node_code([op.i64_const] + sleb(kind_code), payload) }
+# a $Node of the kind field the code gives
+def node_code(kind: any, payload: any): list { kind + payload + [ref_null, gc.node] + gc_code("struct_new", [gc.node]) }
 # a text as its bytes; one character as its codepoint, as warp holds a literal "a"
 def text_value(t: text): list {
 	if #t == 1 { return ["char", [op.i32_const] + sleb(ord(t))] }
@@ -514,6 +516,8 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	if name == "keyed" { return ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code("struct_new", [gc.node])] }
 	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [gc.node])] }
 	if name == "symbol_of" { return ["node", node(node_kind_codes.symbol, values#1#2)] }
+	# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
+	if name == "list_node" { return ["node", node_code(converted(values#1, "int"), values#2#2)] }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "same_text" { return ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
@@ -537,12 +541,13 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, 
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, same_text: 2}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, list_node: 2, same_text: 2}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
+	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with",
 	trim: "node_trim", map_get_or: "map_get_or"}
