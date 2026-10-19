@@ -1029,7 +1029,15 @@ key_expression(body: Body, n: any) := {
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø { return refuse("the operator " + operator) }
+	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
 	operation(body, operator, expression(body, left), expression(body, right))
+}
+# `xs#i` of a list whose elements analyzer.warp knows: the element as that kind, else as a node
+analyzed_element(body: Body, list: any, index: any) := {
+	value = operation(body, "#", expression(body, list), expression(body, index))
+	kind = analyzed_element_kind(body.function, name_of(list))
+	if kind == ø or value#1 != "node" { return value }
+	[kind, converted(value, kind)]
 }
 right_of_if(n: any) := value_of(n)
 
@@ -1083,7 +1091,7 @@ held_kind(kind: any) := if kind in held_kinds then kind else ø
 # what analyzer.warp found for the program's function f, main's being the program's variables and value; ø if nothing
 analyzed_function(f: Function) := {
 	if f.is_runtime or not analyzed_program() { return ø }
-	if f.name == "main" { return {params: [], result: module.kinds["value"], locals: module.kinds["variables"]} }
+	if f.name == "main" { return {params: [], result: module.kinds["value"], locals: module.kinds["variables"], elements: module.kinds["elements"]} }
 	functions = module.kinds["functions"]
 	if functions == ø or not (f.name in functions) { return ø }
 	functions[f.name]
@@ -1104,6 +1112,14 @@ analyzed_local_kind(f: Function, name: text) := {
 	found = analyzed_function(f)
 	if found == ø or found["locals"] == ø or not (name in found["locals"]) { return ø }
 	held_kind(found["locals"][name])
+}
+# the kind of the elements analyzer.warp found for f's list `name`, if the emitter unboxes it from a node
+unboxed_element_kinds = {int: 1, float: 1, text: 1, list: 1}
+analyzed_element_kind(f: Function, name: text) := {
+	found = analyzed_function(f)
+	if found == ø or found["elements"] == ø or not (name in found["elements"]) { return ø }
+	kind = found["elements"][name]
+	if kind in unboxed_element_kinds then kind else ø
 }
 
 compile_function(f: Function, argument_kinds: any) := {
