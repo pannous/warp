@@ -543,7 +543,7 @@ fn converted_to_unit(items: &[Node]) -> bool {
 	}
 }
 
-fn time_data(node: &Node) -> bool {
+pub(crate) fn time_data(node: &Node) -> bool {
 	match node {
 		Node::Data(data) => data.downcast_ref::<TimeLiteral>().is_some() || data.downcast_ref::<Duration>().is_some(),
 		_ => false,

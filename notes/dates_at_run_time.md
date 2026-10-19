@@ -49,7 +49,12 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
 - `civil_from_days`, `days_from_civil`: Hinnant's civil calendar. `time_parts(form, position) -> (days, nanos)`.
 - `time_field(node, index of TIME_FIELDS) -> i64`, a zoned time's on its own wall clock, `offset` its seconds east of
   UTC. The call site (`emit_time_field_lookup`) first refuses the fields a form lacks, with the message of
-  `TimeForm::refusal(name)` (`date has no hour`, `duration has no field year`).
+  `TimeForm::refusal(name)` (`date has no hour`, `duration has no field year`). time_field itself only finds the wall
+  clock position (zone offset, the host's local_offset); the calendar is lib/prelude.warp `time_field_of(form, wall,
+  offset, field)`, called late (card time-fields-warp), over the warp twins of time_parts (`time_days`, `time_nanos`)
+  and of the civil calendar (`civil_year/month/day`, `civil_days`). A program making a time loads the word through
+  times.rs implied_word (`now`, a time call, a date or time literal). The Rust time_parts and civil functions stay for
+  time_text, time arithmetic and zones.
 - `time_text(node) -> text`: RFC 3339 like calendar.rs `Display` (seconds left out when zero, fraction trimmed, `Z`
   only on an instant, a zoned time's offset and `[Zone]`); list_join calls it (print, `+` with a text, `str`).
   `duration_text` shows a duration as `Display for Duration` (`1 month 2 days 3 hours`, `-1.5 seconds`). The zone

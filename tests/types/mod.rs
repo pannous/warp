@@ -166,6 +166,7 @@ mod test_text_as_bool; // card yes-print
 mod test_text_as_number; // card units-dynamic
 mod test_text_defaults; // card empty-text-default
 mod test_text_of_text; // text(text(5)) is "5"
+mod test_time_fields_warp; // card time-fields-warp
 mod test_time_kinds_are_types; // card anchor-time
 mod test_time_now; // cards print-time, time-now
 mod test_time_programs_run; // card run-time-dates, stage B4
