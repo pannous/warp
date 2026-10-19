@@ -740,11 +740,14 @@ widens(body: Body, name: text, held: text, kind: text): bool := {
 def global_declaration(body: Body, declaration: any): list {
 	if declaration is symbol {
 		entry = declared_global(name_of(declaration), "node")
+		# (a runtime word sees the globals it declares itself)
+		if body.intrinsics { module.runtime_globals += [name_of(declaration)] }
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
 	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
+	if body.intrinsics { module.runtime_globals += [name_of(key_of(declaration))] }
 	declare_global(name_of(key_of(declaration)), expression(body, value_of(declaration)))
 }
 def declare_global(name: text, value: any): list {
@@ -1141,6 +1144,7 @@ def key_expression(body: Body, n: any): list {
 		# `7/2 as int`: an exact rational truncated toward 0
 		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
 		if name_of(right) == "text" { return shown_text(value) }
+		if name_of(right) == "bool" and (value#1 == "node" or value#1 == "text" or value#1 == "char") { return runtime_call("node_as_bool", [["node", boxed(value)]]) }
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
