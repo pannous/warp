@@ -1,0 +1,10 @@
+# emitter: a main-level variable a function reads is a module global; one a function assigns stays its own local
+limit = 3
+words = ["a", "b"]
+above(x) := x > limit
+known(w) := w in words
+own(x) := {
+	limit = 10
+	x > limit
+}
+[above(5), above(1), known("b"), own(5), limit]

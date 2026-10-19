@@ -47,10 +47,9 @@ fn test_an_unknown_noun_is_an_untyped_name() {
 
 #[test]
 fn test_a_declared_class_types_its_noun() {
-	let definition = warp::warp_parser::parse("class photo{width:int}; to keep a photo: photo").serialize();
-	assert!(definition.contains("keep photo:photo"), "{definition}");
-	let untyped = warp::warp_parser::parse("to keep a photo: photo").serialize();
-	assert!(!untyped.contains("photo:photo"), "{untyped}");
+	crate::common::fails_with("class photo{width:int}; to keep a photo: photo; keep 3", "keep needs a photo");
+	is!("class photo{width:int}; to keep a photo: photo.width; keep photo{width:4}", 4);
+	is!("to keep a photo: photo; keep 3", 3);
 }
 
 #[test]

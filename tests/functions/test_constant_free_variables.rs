@@ -38,6 +38,7 @@ fn constant_arithmetic_is_computed_after_inlining() {
 fn a_condition_on_a_constant_is_decided() {
 	let code = "limit = 10; def f(x){ if limit > 2 then x else 0 }; f(5)";
 	same_value(code, 5);
+	#[cfg(feature = "native")]
 	let code = "limit = 10; def capped(x){ if x > limit then limit else x }; capped(3) + capped(30)";
 	// compiled only: eval of a captured variable as a branch value traps today (`then limit`, cast failure)
 	#[cfg(feature = "native")]

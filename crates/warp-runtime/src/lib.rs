@@ -4,6 +4,8 @@
 pub mod c_calls;
 pub mod c_signatures;
 #[cfg(feature = "engine")]
+pub mod c_structs;
+#[cfg(feature = "engine")]
 pub mod engine;
 pub mod floats;
 #[cfg(feature = "engine")]

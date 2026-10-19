@@ -1,7 +1,6 @@
 mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
-mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def

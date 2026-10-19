@@ -16,9 +16,16 @@ listed_range(start: Node, end: Node, condition: any): Node := {
 	List([Key(made, Op.Assign, ø), Key(at, Op.Assign, start), Key(last, Op.Assign, end), loop, made], Bracket.Round, Separator.Semicolon)
 }
 
+# (`match n { Empty: … }` does not take ø, card match-silently)
+is_given(n: Node): bool := not (n is ø)
+
+# a range with both ends; `rest...`, a list pattern's rest, has none after it
+bounded(start: Node, end: Node, condition: any, n: Node): Node :=
+	if is_given(start) and is_given(end) then listed_range(start, end, condition) else n
+
 range_value(n: Node): Node := match n {
-	Key(start, Op.To, end): listed_range(start, end, Op.Le)
-	Key(start, Op.Range, end): listed_range(start, end, Op.Lt)
+	Key(start, Op.To, end): bounded(start, end, Op.Le, n)
+	Key(start, Op.Range, end): bounded(start, end, Op.Lt, n)
 	_: n
 }
 

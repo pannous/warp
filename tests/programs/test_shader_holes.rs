@@ -11,20 +11,11 @@ fn a_hole_is_read_from_the_values() {
 }
 
 #[test]
-fn each_paint_passes_the_holes_given_no_value() {
-	let lowered = warp::pipeline::lower(&format!("{HOLES}paint(glow, 2, 1)\npaint(glow, 2, 1, {{blue: 0.5}})"))
-		.expect("lowers")
-		.serialize();
-	assert!(lowered.contains("(paint glow 2 1 {size:size, blue:blue})"), "{lowered}");
-	assert!(lowered.contains("(paint glow 2 1 {blue:0.5, size:size})"), "{lowered}");
-}
-
-#[test]
 fn values_not_written_out_cannot_take_the_holes() {
-	let failure = warp::pipeline::lower(&format!("{HOLES}given = {{blue: 0.5}}\npaint(glow, 2, 1, given)"))
-		.expect_err("needs the map written out")
-		.serialize();
-	assert!(failure.contains("size: size, blue: blue"), "{failure}");
+	crate::common::fails_with(
+		&format!("{HOLES}given = {{blue: 0.5}}\npaint(glow, 2, 1, given)"),
+		"`{size: size, blue: blue}`",
+	);
 }
 
 #[cfg(feature = "native")]

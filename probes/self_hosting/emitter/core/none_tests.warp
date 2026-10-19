@@ -1,0 +1,5 @@
+# emitter: `x == ø` and `x != ø`: a reference tests for null, a number never is ø
+text_present(t) := t != ø
+number_present(n) := n != ø
+absent(x) := x == ø
+[text_present("ab"), number_present(3), absent(ø), absent([1])]
