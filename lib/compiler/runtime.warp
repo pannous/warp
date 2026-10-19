@@ -220,10 +220,12 @@ map_index(m: any, name: text): int := {
 	for i in 1 to #entries { if text_order(key_name(entries#i), name) == 0 { return i } }
 	0
 }
-# `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
+# 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
+has_fields(m: any): int := if is_null(m) == 0 and is_null(fields_of(m)) == 0 and kind_code(fields_of(m)) == 8 then 1 else 0
+# `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: any, name: text): any := {
-	at = map_index(m, name)
-	if at == 0 { fail() }
+	at = if has_fields(m) == 1 then map_index(m, name) else 0
+	if at == 0 { missing_field(name) }
 	key_value(unboxed_list(fields_of(m))#at)
 }
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
@@ -1230,6 +1232,12 @@ int_overflow() := {
 	0
 }
 index_must_be_an_integer(): int := {
+	fail()
+	0
+}
+# `m.name` of a value without the field `name` known only at run time: "no field name"
+missing_field(name: text): int := {
+	global trap_detail = held(name)
 	fail()
 	0
 }
