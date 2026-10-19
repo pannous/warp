@@ -1,0 +1,2 @@
+class person{name age:int}; compare(a:person, b:person) := a.age - b.age
+xs = [person("Ann" 40) person("Bob" 30)]; first = (sort xs)#1; first.name
