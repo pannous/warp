@@ -348,3 +348,27 @@ display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
+// Howard Hinnant's calendar over day numbers (days since 1970-01-01, proleptic Gregorian), the one warp copy of
+// src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on them
+days_from_civil(year: int, month: int, day: int): int := {
+	march_year = if month <= 2 then year - 1 else year
+	era = march_year /! 400
+	year_of_era = march_year - era * 400
+	march_month = if month > 2 then month - 3 else month + 9
+	day_of_year = (153 * march_month + 2) /! 5 + day - 1
+	day_of_era = year_of_era * 365 + year_of_era /! 4 - year_of_era /! 100 + day_of_year
+	era * 146097 + day_of_era - 719468
+}
+// the date of a day number as {year, month, day}
+civil_from_days(day_count: int) := {
+	shifted = day_count + 719468
+	era = shifted /! 146097
+	day_of_era = shifted - era * 146097
+	year_of_era = (day_of_era - day_of_era /! 1460 + day_of_era /! 36524 - day_of_era /! 146096) /! 365
+	day_of_year = day_of_era - (365 * year_of_era + year_of_era /! 4 - year_of_era /! 100)
+	march_month = (5 * day_of_year + 2) /! 153
+	day = day_of_year - (153 * march_month + 2) /! 5 + 1
+	month = if march_month < 10 then march_month + 3 else march_month - 9
+	year = if month <= 2 then year_of_era + era * 400 + 1 else year_of_era + era * 400
+	{year: year, month: month, day: day}
+}

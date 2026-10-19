@@ -79,3 +79,16 @@ no months or days. `1 month 2 days` is lexed as one duration
   (reject: a day landing on a skipped or repeated wall time fails). `a - b` of two zoned times is their elapsed time.
 - Not yet: `add(t, d, disambiguation: …)` and a zone name held in a variable at run time.
 
+
+## One calendar copy in warp (card civil-days-dup)
+Howard Hinnant's days_from_civil / civil_from_days were written three times: src/time/calendar.rs (compile time),
+src/wasm_emitter/time/times.rs (the run-time functions, ~75 lines of instructions) and lib/time.warp (date_of,
+days_from_date). The warp copy is now lib/prelude.warp `days_from_civil(year: int, month: int, day: int): int` and
+`civil_from_days(day_count: int)` → {year, month, day}; lib/time.warp's date_of / days_from_date call them.
+Next (needs a tested build): times.rs CIVIL_FROM_DAYS / DAYS_FROM_CIVIL become late_call shims
+(functions/late_calls.rs) into those prelude words. civil_from_days returns three i64s, which a warp word cannot, so
+the shim calls a scalar word (e.g. `civil_packed(day_count: int): int := (year * 16 + month) * 32 + day`, decoded with
+`& 31`, `>> 5 & 15`, `>> 9`, arithmetic shift for years before 0) and an implied_word row (needed_definitions.rs) for
+the forms that emit the time runtime (date literals, `now`, time fields). Measure first: every date program then
+loads the words (notes/self_hosting.md "Load order"), and a late call traps before main fills the global (a host
+calling an exported time function). src/time/calendar.rs stays: the compiler folds dates at compile time.
