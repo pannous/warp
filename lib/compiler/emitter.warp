@@ -1097,7 +1097,6 @@ key_expression(body: Body, n: any) := {
 	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
 	operation(body, operator, expression(body, left), expression(body, right))
 }
-<<<<<<< HEAD
 # `x == ø`, `x != ø`: ø is the null reference, which a text, list or node may be; a number or bool never is
 none_test(operator: text, value: any) := {
 	if not (value#1 in references) { return ["bool", dropped(value) + [op.i32_const, if operator == "==" then 0 else 1]] }
