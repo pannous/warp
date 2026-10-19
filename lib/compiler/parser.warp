@@ -1152,7 +1152,7 @@ def wasm_instruction_after(p) {
 	if end == type_end + 1 { return ø }
 	name = p.code[p.at + 1 .. end]
 	p.at = end
-	listed("(", "", [["symbol", "wasm_instruction"], ["text", name]])
+	listed("(", "", [symbol("wasm_instruction"), name])
 }
 
 // A case of an enum, no constant: `Node.True`, `Node::Empty`, `None` in `enum Bracket { Round, None }`
