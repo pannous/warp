@@ -66,6 +66,9 @@ fn operation_required(ctx: &mut Context, key: &Node, op: &Op, value: &Node) {
 		if *op == Op::As {
 			conversion_required(ctx, value);
 		}
+		if *op == Op::Colon {
+			codepoint_required(ctx, value); // `g(c: codepoint)` given `s#2`
+		}
 		match op {
 			Op::Pow => {
 				ctx.required_functions.insert("i64_pow");
@@ -95,6 +98,14 @@ fn conversion_required(ctx: &mut Context, value: &Node) {
 	if value.name().to_lowercase() == "list" {
 		ctx.required_functions.extend([crate::library_words::TEXT_GRAPHEMES, "list_reverse", "text_reverse"]);
 		// `x as list` of a text
+	}
+	codepoint_required(ctx, value);
+}
+
+/// `s#2 as codepoint`, `g(c: codepoint)`: a character of a text, held as a one-character text, read as its code point
+fn codepoint_required(ctx: &mut Context, type_name: &Node) {
+	if crate::type_tests::canonical_spec_word(&type_name.name().to_lowercase()) == crate::words::CODEPOINT {
+		ctx.required_functions.extend([crate::wasm_emitter::reflection::library_ops::CODEPOINT_OF, "get_int_value"]);
 	}
 }
 
