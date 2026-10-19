@@ -1,6 +1,0 @@
-def hi: {sleep(1000 ms);print('hi')}
-
-go {
-  hi()
-  }
-print('faster')

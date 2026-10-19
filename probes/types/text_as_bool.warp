@@ -1,2 +1,0 @@
-// card yes-print: a text converts to bool at run time, "No" and "false" are no; prints yes no yes no
-for t in ["yes", "No", "abc", "false"] { print t as bool }

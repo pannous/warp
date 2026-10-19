@@ -3,3 +3,6 @@
 # a_lambda_changing_an_enclosing_variable_shares_it
 is! 'def counter(){ n=0; return () => { n = n + 1; return n } }; c=counter(); c(); c(); c()' 3
 is! 'def counter(){ n=0; ()=>{ n+=1; n } }; a=counter(); b=counter(); a(); a(); b()' 1
+
+# a_lambda_may_declare_nonlocal
+is! 'def counter(){ n=0; ()=>{ nonlocal n; n+=1; n } }; c=counter(); c(); c()' 2

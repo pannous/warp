@@ -2,3 +2,6 @@
 
 # a_member_of_a_call_result_is_set
 is! 'use js Map; m = Map(); m.set("k", Map()); m.get("k").answer = 3; m.get("k").answer' 3
+
+# a_python_attribute_is_set
+is! 'use python "types"; n = types.SimpleNamespace(); n.answer = 4; n.answer' 4

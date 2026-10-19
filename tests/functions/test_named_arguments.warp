@@ -11,6 +11,7 @@ is! 'global i = 0; g() := { i = i * 10 + 1; i }; h() := { i = i * 10 + 2; i }; f
 is! 'global i = 0; g() := { i = i * 10 + 1; i }; h() := { i = i * 10 + 2; i }; f(a, b) := a * 100 + b; k() := f(b=h(), a=g()); k()' 2102
 
 # a_bare_flag_name_in_a_call_sets_it
+is! 'f(a, loud = false) := if loud then a * 10 else a; loud = false; f(3, loud)' 3
 is! 'f(a, loud = false) := if loud then a * 10 else a; g(loud) := f(2, loud); g(false)' 2
 
 # a_shallow_copy_of_an_instance_shares_its_lists

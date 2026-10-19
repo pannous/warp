@@ -63,6 +63,9 @@ is! 'class Dog { name: text; bark() := "wuff " + name }
 d = Dog("rex")
 [m.name for m in methods(Dog)]' ['bark']
 
+# methods_of_a_class_with_an_outside_method_read_without_a_crash
+is! 'class P{}; def x(_:P):="hi"; print methods(P); print methods(P).count; 1' 1
+
 # the_type_of_a_function_names_its_signature
 is! 'use math
 type(gcd)' 'function: (a: int, b: int) -> int'

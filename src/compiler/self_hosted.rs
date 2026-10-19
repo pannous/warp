@@ -8,7 +8,7 @@
 use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
 use std::path::PathBuf;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
 const SWITCH: &str = "WARP_SELF_HOSTED";
@@ -91,10 +91,13 @@ thread_local! {
 /// One request to a worker: its JSON, and where the result's view goes as JSON
 type Request = (String, Sender<String>);
 
+/// The JSON text a stage program reads as one of its setup files, or why it could not be made
+type Setup = fn() -> Result<String, Node>;
+
 /// A stage program, the JSON texts a worker writes once for it to read as `args#2`, `args#3`…, and its idle workers
 struct Stage {
 	program: &'static str,
-	setup: &'static [fn() -> String],
+	setup: &'static [Setup],
 	workers: Mutex<Vec<Sender<Request>>>,
 }
 
@@ -255,7 +258,7 @@ fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 
 /// The words a module imports from the host (src/host.rs), as JSON: {name: [[parameter kind…], [result kind…]]}, a kind
 /// as emitter.warp names it (an anyref is a "node")
-fn host_words() -> String {
+fn host_words() -> Result<String, Node> {
 	use wasm_encoder::ValType;
 	let kind = |value_type: &ValType| match value_type {
 		ValType::I64 => "int",
@@ -267,19 +270,19 @@ fn host_words() -> String {
 	let words = crate::host::HOST_WORD_SIGNATURES
 		.iter()
 		.map(|(name, parameters, results)| (name.to_string(), serde_json::json!([kinds(parameters), kinds(results)])));
-	serde_json::Value::Object(words.collect()).to_string()
+	Ok(serde_json::Value::Object(words.collect()).to_string())
 }
 
 /// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
-/// keeps its result's kind)
-fn runtime_words() -> String {
-	let lowered = std::fs::read_to_string(RUNTIME_WORDS)
+/// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
+fn runtime_words() -> Result<String, Node> {
+	std::fs::read_to_string(RUNTIME_WORDS)
 		.map_err(|failure| crate::node::error(&failure.to_string()))
-		.and_then(|source| crate::pipeline::lower(&source));
-	match lowered {
-		Ok(lowered) => view_json(&analysis_view(&lowered)),
-		Err(failure) => panic!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()),
-	}
+		.and_then(|source| crate::pipeline::lower(&source))
+		.map(|lowered| view_json(&analysis_view(&lowered)))
+		.map_err(|failure| {
+			crate::node::error(&format!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()))
+		})
 }
 
 /// The node of the view the stage gives, its data handles the nodes in `handles`; a warp failure is an error node, so the program fails as it should
@@ -332,9 +335,13 @@ struct StageProgram {
 
 impl StageProgram {
 	fn new(stage: &Stage, input: PathBuf) -> Self {
-		let setup_file = |(index, setup): (usize, &fn() -> String)| {
+		let mut failed_setup = None;
+		let setup_file = |(index, setup): (usize, &Setup)| {
 			let file = input.with_extension(format!("setup-{index}.json"));
-			let _ = std::fs::write(&file, kept_setup(&format!("{}\nsetup {index}", stage.program), *setup));
+			match kept_setup(&format!("{}\nsetup {index}", stage.program), *setup) {
+				Ok(json) => drop(std::fs::write(&file, json)),
+				Err(failure) => failed_setup = Some(failure),
+			}
 			file
 		};
 		let setup: Vec<PathBuf> = stage.setup.iter().enumerate().map(setup_file).collect();
@@ -345,7 +352,10 @@ impl StageProgram {
 		);
 		use crate::compiler::compile_context::scoped;
 		// the stage reads warp's lib/ alone, whatever folder warp runs in (a program's text.warp is no `text` of it)
-		let module = scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(stage.program));
+		let module = match failed_setup {
+			Some(failure) => Err(failure),
+			None => scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(stage.program)),
+		};
 		StageProgram { module, input, setup }
 	}
 
@@ -373,23 +383,23 @@ impl Drop for StageProgram {
 
 /// The setup JSON `setup` makes, or the one kept under `name` (lowering the runtime words takes seconds)
 #[cfg(feature = "native")]
-fn kept_setup(name: &str, setup: fn() -> String) -> String {
+fn kept_setup(name: &str, setup: Setup) -> Result<String, Node> {
 	use crate::run::module_cache::{keep_bytes, kept_bytes};
 	let key = stage_key(name);
 	let kept = key.as_deref().and_then(|key| kept_bytes(key, SETUP_EXTENSION));
 	if let Some(json) = kept.and_then(|bytes| String::from_utf8(bytes).ok()) {
-		return json;
+		return Ok(json);
 	}
-	let json = setup();
+	let json = setup()?;
 	if let Some(key) = key {
 		keep_bytes(&key, SETUP_EXTENSION, json.as_bytes());
 	}
-	json
+	Ok(json)
 }
 
 /// The setup JSON of a stage program made; the browser build keeps nothing
 #[cfg(not(feature = "native"))]
-fn kept_setup(_name: &str, setup: fn() -> String) -> String {
+fn kept_setup(_name: &str, setup: Setup) -> Result<String, Node> {
 	setup()
 }
 

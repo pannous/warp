@@ -115,6 +115,9 @@ impl WarpParser {
 		let mut previous_comparand: Option<Node> = None;
 		let heads_definition = std::mem::take(&mut self.continues_definition_head);
 		loop {
+			if self.at_tab_separator() {
+				break;
+			}
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
 			// a whole statement or assigned value, never an operand inside it: `ys = xs.map(f) @parallel` marks the map call
