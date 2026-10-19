@@ -52,19 +52,6 @@ text_count(t: text): int := {
 	counted = count
 	count
 }
-# `t.lower()`, `t.upper()`: t with its ASCII letters first…last moved by shift; a text beyond ASCII fails loudly
-# (non_ascii_text): Rust's case table (src/wasm_emitter/text/text_unicode.rs) is not ported yet (card unicode-case)
-ascii_case(t: text, first: int, last: int, shift: int): text := {
-	out = new_text(byte_count(t))
-	for i in 0..byte_count(t) {
-		b = byte_at(t, i)
-		if b >= 128 { non_ascii_text() }
-		set_byte(out, i, if b >= first and b <= last then b + shift else b)
-	}
-	out
-}
-text_lower(t: text): text := ascii_case(t, 65, 90, 32)
-text_upper(t: text): text := ascii_case(t, 97, 122, 0 - 32)
 # the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
 code_point_count(t: text): int := {
 	count = 0
@@ -225,8 +212,12 @@ list_equal(a: list, b: list): bool := {
 	yes
 }
 # a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
-# its class name and the map of its fields
-fields_of(m: any): any := if kind_code(m) == 6 then key_value(m) else m
+# its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's keys(n:20) is [n]
+fields_of(m: any): any := {
+	if kind_code(m) != 6 { return m }
+	fields = key_value(m)
+	if is_null(fields) == 0 and kind_code(fields) == 8 then fields else map_of([m])
+}
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: any, name: text): int := {
 	entries = unboxed_list(fields_of(m))
@@ -1220,10 +1211,6 @@ not_a_text(): int := {
 	fail()
 	0
 }
-non_ascii_text(): int := {
-	fail()
-	0
-}
 not_an_int(): int := {
 	fail()
 	0
@@ -1406,7 +1393,8 @@ time_form(n: any): int := int_remainder(int_quotient(marked_kind(n), 256), 8)
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
 time_text(n: any): text := {
 	form = time_form(n)
-	if form == duration_form() or form == zoned_form() { time_form_not_in_warp() }
+	if form == duration_form() { return duration_text(n) }
+	if form == zoned_form() { time_form_not_in_warp() }
 	position = unboxed_int(n)
 	if form == date_form() { return date_text(position) }
 	days = floor_quotient(position, day_nanos())
@@ -1449,7 +1437,7 @@ fraction_text(fraction: int): text := {
 }
 # n with leading zeros to count digits
 padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
-# a duration or a zoned time in time_text: "time form not in warp"
+# a zoned time in time_text: "time form not in warp" (its zone names are Rust's alone)
 time_form_not_in_warp() := {
 	fail()
 	0

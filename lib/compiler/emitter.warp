@@ -974,12 +974,12 @@ def unmatched(c: any, a: any, numeric: bool): list {
 }
 # `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the
 # outer block's end, a `continue` to the inner one's, so the step a `for` lowering appends (`loop·step: i++`) still runs.
-# Its value is that of the body's last run, ø when it never ran (a local of the loop keeps it)
+# Its value is that of the body's last run, ø when it never ran (the local `last` keeps it)
 def loop_of(body: Body, test: any, block: any): list {
 	last = fresh_local(body, "node")
 	["node", loop_code(body, test, block, last) + [op.local_get] + uleb(last)]
 }
-# the loop's code; its body's value goes to the local `last`, or is never made when last is below 0 (a statement)
+# the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
 def loop_code(body: Body, test: any, block: any, last: int): list {
 	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
 	parts = statements_of(block)
@@ -989,21 +989,12 @@ def loop_code(body: Body, test: any, block: any, last: int): list {
 	body.exits += [body.depth + 1]
 	body.continuable += [has_step or continued_safely(test, parts)]
 	body.depth += 3
-	looped = loop_body(body, parts, last)
+	looped = if #parts == 0 then [no_kind, []] else if last < 0 then [no_kind, effects(body, parts)] else sequence(body, parts)
 	body.depth -= 3
 	body.exits = body.exits[0..<(#body.exits - 1)]
 	body.continuable = body.continuable[0..<(#body.continuable - 1)]
-	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + looped + [op.end] + again + [op.end, op.end]
-}
-def loop_body(body: Body, parts: any, last: int): list {
-	code = []
-	if last < 0 {
-		for part in parts { code += effect(body, part) }
-		return code
-	}
-	if #parts == 0 { return code }
-	looped = sequence(body, parts)
-	if looped#1 == no_kind then looped#2 else boxed(looped) + [op.local_set] + uleb(last)
+	kept = if looped#1 == no_kind then looped#2 else boxed(looped) + [op.local_set] + uleb(last)
+	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
 }
 is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
 # whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
@@ -1019,9 +1010,7 @@ continued_safely(test: any, parts: any): bool := {
 def effect(body: Body, n: any): list {
 	if is_group(n) {
 		if not is_block(n) { return dropped(statement(body, n)) }
-		code = []
-		for item in n.map(x => x) { code += effect(body, item) }
-		return code
+		return effects(body, n.map(x => x))
 	}
 	if not (type(n) is key) { return dropped(statement(body, n)) }
 	operator = op_of(n)
@@ -1035,6 +1024,11 @@ def effect(body: Body, n: any): list {
 	}
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_code(body, value_of(left), value_of(n), -1) }
 	dropped(statement(body, n))
+}
+def effects(body: Body, items: any): list {
+	code = []
+	for item in items { code += effect(body, item) }
+	code
 }
 # a group of statements: a block, not a map or the spaced `y = 2 x`
 is_block(n: any): bool := #n > 0 and separator_of(n) != " " and (bracket_of(n) == "{" or bracket_of(n) == "" or separator_of(n) == ";") and not n.all(is_entry)
@@ -1076,26 +1070,12 @@ appended(body: Body, target_name: any, addition: any): any := {
 	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, expression(body, addition)])) }
 	ø
 }
-# the statements in order, the value that of the last; the value of a loop body is that of the item before the step a `for`
-# appends to it (`loop·step: i++`)
+# the statements in order, the value that of the last
 def sequence(body: Body, items: any): list {
 	if #items == 0 { return refuse("an empty block") }
-	stepped = #items > 1 and is_loop_step(items#(#items))
-	count = if stepped then #items - 1 else #items
-	code = []
-	for item in items[0..<(count - 1)] { code += effect(body, item) }
-	last = statement(body, items#count)
-	code += last#2
-	if not stepped { return [last#1, code] }
-	if last#1 == no_kind {
-		code += effect(body, items#(#items))
-		return [no_kind, code]
-	}
-	held = fresh_local(body, last#1)
-	code += [op.local_set] + uleb(held)
-	code += effect(body, items#(#items))
-	code += [op.local_get] + uleb(held)
-	[last#1, code]
+	code = effects(body, items[0..<(#items - 1)])
+	last = statement(body, items#(#items))
+	[last#1, code + last#2]
 }
 # a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
 # simpler); a fresh list makes it unshared, a list made inside a block of the statement does not outlast it
@@ -1644,6 +1624,8 @@ nanos_per_milli = 1000000
 # index (8 bits) above the form, its offset in minutes above that
 form_bits = 3
 form_mask = 7
+# the form of a zoned time: its text names its zone, which only Rust's zone table knows
+zoned_form = 4
 months_shift = 35
 zone_mask = 255
 offset_shift = 11
@@ -1660,6 +1642,7 @@ makes_time(program: any): bool := mentions(program, "instant_at") or mentions(pr
 # time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
 def time_call(body: Body, name: text, arguments: any): list {
 	if #arguments != time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
+	if name == "time_of" and arguments#1 is number and arguments#1 % (form_mask + 1) == zoned_form { return refuse("a zoned time") }
 	values = arguments.map(a => expression(body, a))
 	if name == "instant_at" {
 		nanos = converted(values#1, "int") + [op.i64_const] + sleb(nanos_per_milli) + [shift_ops.i64_mul]
