@@ -19,8 +19,9 @@ report=$root/data/self_hosting/$report_name.txt
 FOLDERS=${FOLDERS:-samples probes}
 PARALLEL_RUNS=4
 TIMEOUT_SECONDS=15
+RAN_PURE="pure: ran" # the line the pure lane writes for a program it compiled (src/compiler/self_hosted.rs)
 rm -rf "$work/runs" && mkdir -p "$work/runs" "$(dirname "$report")"
-export WARP=$warp WORK=$work ROOT=$root TIMEOUT_SECONDS
+export WARP=$warp WORK=$work ROOT=$root TIMEOUT_SECONDS RAN_PURE
 [ -n "${SURVEY:-}" ] && export WARP_EMIT_SURVEY=1
 export WARP_SELF_HOSTED=${WARP_SELF_HOSTED:-1} WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_MODULE_CACHE=$work/cache
 "$warp" "3 + 4" >/dev/null 2>&1 # compiles the stage programs once, into the cache every run shares
@@ -40,8 +41,8 @@ refusals_of() { # <program>: its distinct refusals in runs/<n>.txt, "inside" whe
 	local name output rust_output
 	name=$(echo "$1" | tr '/' '_')
 	output=$(run "$1" WARP_EMIT_REFUSALS="$WORK/runs/$name.txt")
-	[ -s "$WORK/runs/$name.txt" ] && return
-	echo inside >"$WORK/runs/$name.txt"
+	grep -qvx "$RAN_PURE" "$WORK/runs/$name.txt" 2>/dev/null && return # refused: compiled the usual way
+	[ -s "$WORK/runs/$name.txt" ] || echo inside >"$WORK/runs/$name.txt"
 	rust_output=$(run "$1" -u WARP_SELF_HOSTED)
 	[ "$output" == "$rust_output" ] ||
 		echo "DIFFERENT $(difference_kind "$output" "$rust_output") ${1#$ROOT/}" >"$WORK/runs/$name.different"
@@ -52,10 +53,11 @@ for folder in $FOLDERS; do folders+=("$root/$folder"); done
 find "${folders[@]}" -name "*.warp" | grep -E -- "$filter" | grep -vE "raylib|sdl" | sort |
 	xargs -P "$PARALLEL_RUNS" -I{} bash -c 'refusals_of "$1"' _ {}
 programs=$(ls "$work/runs"/*.txt | wc -l | tr -d ' ')
-inside=$(grep -lx inside "$work/runs"/*.txt | wc -l | tr -d ' ')
+inside=$(grep -Lvx -e inside -e "$RAN_PURE" "$work/runs"/*.txt | wc -l | tr -d ' ')
+ran_pure=$(grep -lx "$RAN_PURE" "$work/runs"/*.txt | wc -l | tr -d ' ')
 different=$(cat "$work/runs"/*.different 2>/dev/null)
 {
-	echo "$programs programs, $inside inside the core (or no emit), $(echo -n "$different" | grep -c .) of them printing otherwise than Rust's"
+	echo "$programs programs, $inside inside the core (or no emit), $ran_pure of them ran pure, $(echo -n "$different" | grep -c .) printing otherwise than Rust's"
 	[ -n "$different" ] && echo "$different" | awk '{print $2}' | sort | uniq -c && echo "$different" | sort
 	if [ -n "${SURVEY:-}" ]; then
 		refused=$(cat "$work/runs"/*.txt | grep -vx inside | sort -u)
@@ -65,7 +67,7 @@ different=$(cat "$work/runs"/*.different 2>/dev/null)
 		echo "$refused"
 	else
 		echo "refusals, once per program:"
-		for run in "$work/runs"/*.txt; do sort -u "$run"; done | grep -vx inside | sort | uniq -c | sort -rn
+		for run in "$work/runs"/*.txt; do sort -u "$run"; done | grep -vx -e inside -e "$RAN_PURE" | sort | uniq -c | sort -rn
 	fi
 } >"$report"
 head -40 "$report"

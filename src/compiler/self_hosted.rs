@@ -51,6 +51,8 @@ const HOST_MODULE: &str = "host";
 const OUTSIDE_THE_CORE: &str = "outside the core: ";
 /// The file each refusal of emitter.warp goes to as a line, when set
 const REFUSALS_FILE: &str = "WARP_EMIT_REFUSALS";
+/// The REFUSALS_FILE line of a program the pure lane compiled: the denominator of a run's refusals
+const RAN_PURE: &str = "pure: ran";
 /// Set: emitter.warp refuses with every refused function's first form, a line each (its survey_setting)
 #[cfg(feature = "native")]
 const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
@@ -190,6 +192,7 @@ pub fn pure_module(code: &str) -> Option<crate::pipeline::CompiledModule> {
 	}
 	match pure_bytes(code) {
 		Ok(bytes) => {
+			record_lines(&format!("{RAN_PURE}\n"));
 			let needs_host = imports_from(&bytes, HOST_MODULE);
 			Some(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false })
 		}
@@ -204,17 +207,27 @@ pub fn pure_module(code: &str) -> Option<crate::pipeline::CompiledModule> {
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
 fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
 	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}]", json_text(code)))?;
-	let kinds: String = serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
+	let kinds: String =
+		serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
 	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
 }
 
 /// The refusal's lines (one, or one per refused function under SURVEY_SETTING) in the file REFUSALS_FILE names, when
 /// set: a run over many programs ranks what keeps them outside the core (`sort | uniq -c | sort -rn`)
 fn record_refusal(refusal: &str) {
+	record_lines(
+		&refusal
+			.lines()
+			.filter(|line| line.starts_with(OUTSIDE_THE_CORE))
+			.map(|line| format!("{line}\n"))
+			.collect::<String>(),
+	);
+}
+
+/// Appends the lines to the file REFUSALS_FILE names, when set
+fn record_lines(lines: &str) {
 	use std::io::Write;
 	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
-	let lines: String =
-		refusal.lines().filter(|line| line.starts_with(OUTSIDE_THE_CORE)).map(|line| format!("{line}\n")).collect();
 	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
