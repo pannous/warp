@@ -204,11 +204,13 @@ def warp_number(written):
 
 def warp_text(text):
     """A warp text literal holding `text` as it is: in single quotes, where nothing interpolates"""
-    if "'" not in text and "»" not in text and "«" not in text and "\\" not in text:
+    plain = "\\" not in text and "\r" not in text and "\0" not in text
+    if plain and "'" not in text and "»" not in text and "«" not in text:
         return "'" + text + "'"
-    if "»" not in text and "\\" not in text:
+    if plain and "»" not in text:
         return "«" + text + "»"
-    return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
+    escaped = text.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "\\r").replace("\0", "\\u{0}")
+    return "'" + escaped + "'"
 
 
 def expected_of(expression, consts):
