@@ -3,7 +3,6 @@
 //! The twin tests (tests/common/twins.rs) and the self-hosted pipeline (self_hosted.rs) both cross this bridge.
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::Op;
 
 /// A list as warp writes it: the empty list is ø
 pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
