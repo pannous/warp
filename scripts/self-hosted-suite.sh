@@ -22,7 +22,9 @@
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
 SWITCHES=("$SWITCH=front"        # VAR=value lines of .cargo/config.toml [env]: the front end alone, unless --stage adds
-	"WARP_EMIT_REFUSALS=/dev/stderr") # each refusal of a warp stage (and pure's "pure: ran") as a log line, ranked
+	"WARP_EMIT_REFUSALS=/tmp/warp-emit-refusals.txt") # each refusal of a warp stage (and pure's "pure: ran") as a
+	                                 # line of the VM's file, which cloud-test.sh appends to the log; ranked from there
+	                                 # (on stderr, the lines reached the output the CLI tests check)
 STAGE=""                         # the later stages switched on too (--stage), as the run's name suffix
 SKIPPED=parser::test_self_       # the twins compare warp with Rust themselves
 SCRATCH_PREFIX=self-hosted       # the throwaway branches
@@ -33,8 +35,10 @@ SPEED_PROFILE=$'\n[profile.test.package.warp-lang]\nopt-level = 2'
 # 2400 s limit (6020 tests of ~6300), and a killed run prints no failure messages; the third part of ~2000 outgrew it
 # too (8f8d6dc8). Filters match anywhere in a test's path (lists:: also takes control::test_job_lists), so a test
 # may run in two parts: rank counts each test once.
+# control/functions/ffi grew to ~2150 tests and its job was killed in 6 of 8 runs (2026-10-19): split in two
 TEST_GROUPS=(
-	"control:: functions:: ffi::"
+	"control::"
+	"functions:: ffi::"
 	"types:: lists:: modules:: node:: numbers:: operators::"
 	"parser:: programs:: scope:: sweeps::"
 	"text:: wasm:: web:: welcoming::"
@@ -116,10 +120,11 @@ refusals() {
 
 local_run() {
 	mkdir -p "$REPORTS"
-	local log=$REPORTS/local.log
-	env "${SWITCHES[@]}" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
+	local log=$REPORTS/local.log local_refusals=$REPORTS/local-refusals.txt
+	rm -f "$local_refusals"
+	env "${SWITCHES[@]}" WARP_EMIT_REFUSALS="$local_refusals" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
 	rank "$log"
-	refusals "$log"
+	refusals "$local_refusals"
 	echo "(log: $log)"
 }
 

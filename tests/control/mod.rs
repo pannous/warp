@@ -7,6 +7,7 @@ mod test_await_any_unwarned; // card await-warns
 mod test_await_any_values;
 mod test_await_any_variables;
 mod test_await_go;
+mod test_bang_words; // card warp-is-tests
 mod test_bare_try; // card failed-raised
 mod test_block_assigns_outer;
 mod test_block_parameter_calls; // card repeats-loop

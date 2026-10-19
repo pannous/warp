@@ -32,6 +32,9 @@ Each round should leave src/ smaller or better placed, and preferably both.
 - **Merges and generalisations** are measured in lines: each merge request states its net src/ delta (decision
   cleanup-means-fewer-lines). Splitting alone is no goal. Move code only when its new place is clearly the right
   concept.
+  Split a file only into separate concepts, never for length (500 lines is fine); name each new file's concept in
+  the commit message. After moves or reformatting run `python3 web/playground/keywords.py` (it regex-reads Rust
+  sources) and grep web/ and scripts/ for the moved paths.
 - **Behaviour stays.** Samples, the tour and the common forms keep passing. An edge case that only a special
   case carried may fail: mark it `#[ignore = "refactor-edge: <card>: <what no longer works>"]` (assertions untouched),
   list it in the merge request, and tell the Interviewer, who asks the user whether it is worth its code.

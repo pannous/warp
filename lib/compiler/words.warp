@@ -29,7 +29,7 @@ selector_words = ["chars", "characters", "glyphs", "graphemes", "codepoints", "b
 	"keys", "values"]
 # the operators a dotted spelling applies to each element, `xs .* 2` (Rust twin: operators/spellings.rs
 # ELEMENT_WISE_OPERATORS)
-element_wise_operators = ["+", "-", "*", "/", "^"]
+element_wise_operators = ["+", "-", "*", "/", "^", "%"]
 
 # the kind a call of a library or runtime word gives (Rust twin: analyzer builtin_word_kind and library_call_kind,
 # checked by tests/parser/test_self_words.rs call_kinds_are_rusts)
