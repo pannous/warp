@@ -1,0 +1,14 @@
+# emitter core: values known only at run time as conditions and in and/or, by Rust's is_truthy; read where a text,
+# list or yes/no is needed (runtime.warp node_truthy, text_of_node, list_of_node, bool_of_node)
+xs = [0, "", "b", [], [3], ø, 2]
+for x in xs { print(if x then "yes" else "no") }
+print(xs#1 or xs#3)
+print(xs#7 and xs#3)
+shout(t: text) := t + "!"
+print shout(xs#3)
+size(ys: list) := #ys
+print size(xs#5) + size(xs#6)
+m = {name: "x"}
+n = 3
+while n and m.name { n -= 1 }
+n

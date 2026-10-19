@@ -789,19 +789,36 @@ int_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
 	unboxed_int(n)
 }
-# a node the analysis holds a list where a list is needed: ø is the empty list (`xs = ø; xs += [x]`); any other value
-# traps
+# a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
+# empty one) where a list is needed; any other value traps, as Rust fails on it
+text_of_node(n: any): text := {
+	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 5) { return unboxed_text(n) }
+	if is_null(n) == 0 and kind_code(n) == 4 { return char_text(unboxed_char(n)) }
+	fail()
+	""
+}
+bool_of_node(n: any): bool := {
+	if is_null(n) == 1 or marked_kind(n) != 257 { fail() }
+	unboxed_int(n) != 0
+}
 list_of_node(n: any): list := {
 	if is_null(n) == 1 { return new_list(0) }
 	if kind_code(n) != 8 { fail() }
 	unboxed_list(n)
 }
-# a node the analysis holds a text where a text is needed: a text, or a character as its text; any other value traps
-text_of_node(n: any): text := {
-	if is_null(n) == 1 { fail() }
-	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
-	if kind_code(n) != 3 { fail() }
-	unboxed_text(n)
+# a value known only at run time as a condition, the rule of Rust's is_truthy (Node::is_falsy): ø and errors are no, a
+# list or map yes when it has items, a key when its key or value is, a number, character or text when not 0 or empty
+node_truthy(n: any): bool := {
+	if is_null(n) == 1 { return no }
+	kind = kind_code(n)
+	if kind == 0 or kind == 11 { return no }
+	if kind == 7 or kind == 8 { return #unboxed_list(n) > 0 }
+	if kind == 6 { return node_truthy(entry_key(n)) or node_truthy(key_value(n)) }
+	if kind == 1 { return is_ratio(n) == 1 or unboxed_int(n) != 0 }
+	if kind == 2 { return unboxed_float(n) != 0 }
+	if kind == 4 { return code_of(unboxed_char(n)) != 0 }
+	if kind == 3 or kind == 5 { return byte_count(unboxed_text(n)) > 0 }
+	yes
 }
 # `n as int` of a boxed int or exact rational, truncated toward 0
 truncated_int(n: any): int := {
