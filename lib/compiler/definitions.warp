@@ -36,12 +36,12 @@ definition(n: Node): Node := match n {
 		n
 	}
 	Key(head, Op.Assign, body): { if is_head(head) then Key(head, Op.Define, body) else n }
-	Key(annotated, Op.Define, body): result_typed(annotated, body, n)
+	Key(annotated, Op.Define, body): result_held(annotated, body, n)
 	_: n
 }
 
 # `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
-result_typed(annotated: Node, body: Node, n: Node): Node := match annotated {
+result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
 	Key(head, Op.Colon, result_type): {
 		if not is_call(head) { return n }
 		result = symbol("the result")
