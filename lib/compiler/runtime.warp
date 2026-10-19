@@ -186,7 +186,7 @@ text_index(t: text, part: text) := {
 }
 # `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
 node_get(n: any, key: any) := {
-	if kind_code(key) == 1 { return node_at(n, unboxed_int(key) + 1) }
+	if kind_code(key) == 1 and marked_kind(n) != 8 { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, node_text(key))
 }
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)

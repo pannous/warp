@@ -641,6 +641,8 @@ assignment(body: Body, target: any, value: any) := {
 		subscript = expression(body, key_of(value_of(target)))
 		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
 		if subscript#1 == "text" or subscript#1 == "char" { return entry_assignment(body, expression(body, key_of(target)), subscript, value) }
+		# `m[1] = v` of a value known only at run time: a list's item or a map's entry keyed by the int 1
+		if expression(body, key_of(target))#1 == "node" { return refuse("an int-keyed write to a list or map known only at run time") }
 	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
