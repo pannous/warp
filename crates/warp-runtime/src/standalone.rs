@@ -3,6 +3,7 @@
 //! Mach-O executable, its code signature: the machine code lies inside the __LINKEDIT segment, so the executable signs
 //! and verifies cleanly (`codesign --verify --strict`, macho.rs). At start the executable looks for the trailer where
 //! its program would end and runs what it carries.
+use crate::c_calls::CHandles;
 use crate::engine::{limited_store, metered_config, ticking};
 use crate::fuel::{time_limit_from_environment, DEFAULT_FUEL};
 use crate::host_words::{FOREIGN_CALL, HANDLER_PREFIX};
@@ -150,9 +151,10 @@ fn show_site(_: &Path, _: Vec<crate::site_files::SiteFile>) -> i32 {
 	1
 }
 
-/// Run machine code compiled with warp's settings (`warp build`): its host words, libm and print are linked, its
-/// result is what it printed (build makes the program print its value)
-pub fn run(machine_code: &[u8]) -> Result<()> {
+/// Run machine code compiled with warp's settings (`warp build`): its host words, libm, libc, print and the C functions
+/// it carries are linked, its result is what it printed (build makes the program print its value)
+pub fn run(carried: &[u8]) -> Result<()> {
+	let (c_functions, machine_code) = crate::c_signatures::split_c_functions(carried).map_err(wasmtime::Error::msg)?;
 	// an executable is the user's app (a game, a server): it runs without a time limit unless WARP_TIME_LIMIT sets one
 	let time_limit = time_limit_from_environment();
 	let engine = match time_limit {
@@ -165,14 +167,18 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 	crate::host_words::link_host_words(&mut linker)?;
 	crate::output::link_output(&mut linker)?;
 	crate::libm::link_libm(&mut linker)?;
+	crate::c_calls::link_libc_functions(&mut linker)?;
+	for function in &c_functions {
+		crate::c_calls::link_carried_function(&mut linker, &engine, function)?;
+	}
 	linker.func_wrap(
 		crate::host_words::HOST_LIBRARY,
 		FOREIGN_CALL,
-		|mut caller: wasmtime::Caller<'_, ()>, runtime, module, member, call, arguments| {
+		|mut caller: wasmtime::Caller<'_, CHandles>, runtime, module, member, call, arguments| {
 			crate::gc_values::foreign_call(&mut caller, [runtime, module, member, call, arguments])
 		},
 	)?;
-	let mut store = limited_store(&engine, (), DEFAULT_FUEL, time_limit.unwrap_or(Duration::MAX));
+	let mut store = limited_store(&engine, CHandles::default(), DEFAULT_FUEL, time_limit.unwrap_or(Duration::MAX));
 	let instance = linker.instantiate(&mut store, &module)?;
 	let main = ENTRY_POINTS
 		.iter()
@@ -194,12 +200,12 @@ pub fn run(machine_code: &[u8]) -> Result<()> {
 	outcome.map(|_| ())
 }
 
-/// The imports a standalone executable provides: (module, name)
+/// The imports a standalone executable provides: (module, name); C functions beyond them it carries (c_signatures.rs)
 pub fn provided_imports() -> impl Iterator<Item = (&'static str, &'static str)> {
 	let host_words =
 		crate::host_words::BASIC_HOST_WORDS.into_iter().map(|word| (crate::host_words::HOST_LIBRARY, word));
 	let libm = crate::libm::libm_names().map(|name| (crate::libm::LIBM, name));
-	host_words.chain(libm).chain([
+	host_words.chain(libm).chain(crate::c_calls::libc_names()).chain([
 		(crate::output::WASI_LIBRARY, crate::output::FD_WRITE),
 		(crate::host_words::HOST_LIBRARY, FOREIGN_CALL),
 	])
