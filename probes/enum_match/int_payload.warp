@@ -1,0 +1,7 @@
+# card enum-int-payload: an enum case holding an int matched by binding gives 1, not the int: [4 0] expected
+enum T { C(count: int), D(x: int) }
+f(t: T): int := match t {
+	C(n) => n
+	_ => 0
+}
+[f(T::C(4)), f(T::D(5))]

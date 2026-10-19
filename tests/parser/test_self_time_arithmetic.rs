@@ -22,10 +22,10 @@ fn dates_shift_by_months_then_days() {
 #[test]
 fn a_missing_day_is_refused() {
 	is!(
-		&arithmetic("start = Moment(TimeForm::Date, days_from_date(2024, 1, 31))\ntry { shift_time(start, Span(1, 0, 0)) } catch e { e == no_such_day }"),
+		&arithmetic("start = Moment(TimeForm::Date, days_from_date(2024, 1, 31))\ntry { shift_time(start, Span(1, 0, 0)) } catch e { e.message == no_such_day }"),
 		true
 	);
-	is!(&date("try { shift_time(start, Span(0, 0, hour_nanos)) } catch e { e == no_time_of_day }"), true);
+	is!(&date("try { shift_time(start, Span(0, 0, hour_nanos)) } catch e { e.message == no_time_of_day }"), true);
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn clocks_go_round_and_instants_have_no_calendar() {
 		true
 	);
 	is!(
-		&arithmetic("try { shift_time(Moment(TimeForm::Instant, 0), Span(0, 1, 0)) } catch e { e == no_calendar }"),
+		&arithmetic("try { shift_time(Moment(TimeForm::Instant, 0), Span(0, 1, 0)) } catch e { e.message == no_calendar }"),
 		true
 	);
 }
@@ -66,12 +66,12 @@ fn operands_swap_scale_and_subtract() {
 		&date("r = time_arithmetic(Operand::Lasting(Span(0, 1, 0)), Operand::At(start), TimeOperator::Add)\nmatch r { At(moment) => moment.position - start.position; _ => 0 }"),
 		1
 	);
-	is!(&date("try { time_arithmetic(Operand::At(start), Operand::At(start), TimeOperator::Add) } catch e { e == not_arithmetic }"), true);
+	is!(&date("try { time_arithmetic(Operand::At(start), Operand::At(start), TimeOperator::Add) } catch e { e.message == not_arithmetic }"), true);
 }
 
 #[test]
 fn durations_order_when_every_date_agrees() {
 	is!(&arithmetic("duration_order(Span(1, 0, 0), Span(0, 27, 0))"), 1);
 	is!(&arithmetic("duration_order(Span(0, 0, 3), Span(0, 0, 5))"), -1);
-	is!(&arithmetic("try { duration_order(Span(1, 0, 0), Span(0, 30, 0)) } catch e { e == lengths_vary }"), true);
+	is!(&arithmetic("try { duration_order(Span(1, 0, 0), Span(0, 30, 0)) } catch e { e.message == lengths_vary }"), true);
 }

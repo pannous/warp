@@ -53,13 +53,13 @@ class Moment {
 enum Operand { At(moment: Moment), Lasting(span: Span), Whole(count: int) }
 
 # the floor quotient and the remainder (0 ≤ r < divisor) of value by a positive divisor
-floor_split(value: int, divisor: int): [int] := {
+floor_split(value: int, divisor: int): list := {
 	quotient = value /! divisor
 	[quotient, value - quotient * divisor]
 }
 
 # the day since 1970 and the nanoseconds into it of a date or local time (times.rs time_parts)
-day_and_nanos(moment: Moment): [int] := if moment.form == TimeForm::Date then [moment.position, 0] else floor_split(moment.position, day_nanos)
+day_and_nanos(moment: Moment): list := if moment.form == TimeForm::Date then [moment.position, 0] else floor_split(moment.position, day_nanos)
 
 # `moment + span`, the span already signed: calendar.rs `Time::add`. The month count first, then the days: 2024-01-31
 # + 1 month is refused, + 1 month 2 days too (no 2024-02-31 to add the days to)
@@ -104,7 +104,7 @@ time_arithmetic(a: Operand, b: Operand, op: TimeOperator): Operand := match a {
 		time_arithmetic(b, a, op)
 	}
 	Lasting(span) => lasting_arithmetic(span, b, op)
-	At(moment) => moment_arithmetic(moment, b, op)
+	At(time) => moment_arithmetic(time, b, op)
 }
 
 lasting_arithmetic(span: Span, b: Operand, op: TimeOperator): Operand := match b {
@@ -123,9 +123,9 @@ lasting_arithmetic(span: Span, b: Operand, op: TimeOperator): Operand := match b
 }
 
 moment_arithmetic(moment: Moment, b: Operand, op: TimeOperator): Operand := match b {
-	Lasting(span) => {
+	Lasting(shift) => {
 		if op == TimeOperator::Mul { raise not_arithmetic }
-		Operand::At(shift_time(moment, span.scaled(sign_of(op))))
+		Operand::At(shift_time(moment, shift.scaled(sign_of(op))))
 	}
 	At(other) => {
 		if op != TimeOperator::Sub { raise not_arithmetic }
