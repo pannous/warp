@@ -36,5 +36,6 @@ is! 'written(code: data) := str(code)
 written{ x = 1 }' '{x=1}'
 
 # a_library_function_takes_data
+is! 'str(div{ style{ ul > li { margin: 0 } } })' '{div:style{"ul > li":{margin:0}}}'
 is! 'style(n) := n * 2
 style(4)' 8

@@ -8,8 +8,8 @@
                                                     logs in data/is_tests/, warp binary $WARP or scratch/warp
 
 Writes beside each Rust file holding a translatable is! two files, under a `# fn name` line per Rust test:
-tests/<topic>/test_x.pairs.warp, pure data, one `'code' expected` pair a line (the code alone when it expects ø) for the
-short tests (one line of code, a literal expectation, at most PAIR_WIDTH characters), and tests/<topic>/test_x.warp
+tests/<topic>/test_x.pairs.warp, pure data, one `'code'⇥expected` pair a line (tab separated, a list of lists to warp's
+reader) for the short tests (one line of code, a literal expectation, at most PAIR_WIDTH characters), and tests/<topic>/test_x.warp
 with an `is! 'code' expected` line for each other one. Prints the counts of written and skipped assertions, skips by
 reason.
 The code must be a string literal, a const of the file or a format! of those; the expected value a literal, a list of
@@ -297,11 +297,11 @@ def argument(value):
 
 
 def pair_line(code, expected):
-    """The pairs file's `'code' expected` line, the code alone when it expects ø; None for a test that stays an is!"""
-    if "\n" in code or computed(expected):
+    """The pairs file's `'code'⇥expected` line; None for a test that stays an is!"""
+    if "\n" in code or "\t" in code or computed(expected):
         return None
-    line = warp_text(code) + ("" if expected == "ø" else " " + argument(expected))
-    return line if len(line) <= PAIR_WIDTH else None
+    line = warp_text(code) + "\t" + expected
+    return line if len(line.expandtabs()) <= PAIR_WIDTH else None
 
 
 def pairs_path(rust_test):
@@ -400,7 +400,7 @@ def tested(file, lane, warp):
         output = f"timed out after {FILE_SECONDS} s"
     summary = ([None] + list(SUMMARY.finditer(output)))[-1]
     if not summary:
-        tests = sum(bool(line.strip()) and not line.startswith("#") for line in file.read_text().splitlines())
+        tests = sum(bool(line.strip()) and not line.startswith(("#", "//")) for line in file.read_text().splitlines())
         return 0, 0, tests, output
     if summary.group(1):
         return int(summary.group(1)), 0, 0, output

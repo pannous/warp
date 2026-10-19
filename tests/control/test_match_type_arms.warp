@@ -5,6 +5,7 @@ is! 'kind_of(v) := match v { int => "number"; text => "words" }; kind_of(3)' 'nu
 is! 'kind_of(v) := match v { int => "number"; text => "words" }; kind_of("a")' 'words'
 
 # a_named_type_binds_the_subject
+is! 'describe(v) := match v { i: int => i + 1; t: text => t + "!" }; describe(3)' 4
 is! 'describe(v) := match v { i: int => i + 1; t: text => t + "!" }; describe("a")' 'a!'
 
 # a_class_name_tests_its_instances

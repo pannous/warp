@@ -11,15 +11,19 @@ is! 'p = {age: 1, name: "a"}; n = 0; on set p.age {n += 1}; p.name = "b"; p.age 
 # rxjs_node_qt_events
 is! 'total = 0; on price {total += event.value}; emit price{value: 5}; emit price{value: 7}; total' 12
 is! 'evens = 0; on number {if event.n % 2 == 0 {evens += 1}}; for i in 1 to 6 {emit number{n: i}}; evens' 3
+is! 'n = 0; on pressed {emit clicked}; on clicked {n += 1}; emit pressed; n' 1
 is! 'seen = 0; def show(v){ global seen; seen = v }; x = 0; on set x : show(value); x = 9; seen' 9
 
 # a_named_listener_is_removed_and_shares_variables
 is! 'x = 0; n = 0; s = on set x {n += 1}; x = 1; remove s from listeners of x; x = 2; n' 1
+is! 'x = 0; n = 0; h = on set x {n += 1}; x = 1; listeners of x -= h; x = 2; n' 1
 
 # a_once_handler_runs_at_the_first_raise
+is! 'n = 0; once alarm {n += 1}; on alarm {n += 10}; emit alarm; emit alarm; n' 21
 is! 'level = 0; once alarm {level = event.level}; emit alarm{level: 3}; emit alarm{level: 5}; level' 3
 
 # a_change_listener_reads_the_old_value
+is! 'x = 1; log = 0; on change x {log = log*10 + previous}; x = 2; x = 3; log' 12
 is! 'watch(s) := on change s {print old}
 x = 1
 watch(x)
@@ -53,5 +57,9 @@ is! 'n = 0; on alarm {n += 1}; on alarm {n += 10}; emit alarm; clear listeners o
 is! 'on alarm {1}; on alarm {2}; clear listeners of alarm; count listeners of alarm' 0
 is! 'taken = 0; h = on tick {taken += 1; if taken == 2 {remove h from listeners of tick}}; for i in 1 to 5 {emit tick}; taken' 2
 
+# a_raise_carries_a_plain_value
+is! 'xs = []; on item {xs = xs + [event]}; emit item 1; emit item 2; count xs' 2
+
 # a_handler_in_a_block_subscribes_each_pass
+is! 'log = 0; for i in 1 to 3 { on tick {log = log*10 + i} }; emit tick; log' 123
 is! 'n = 0; on alarm {n += 100}; if 1 { on alarm {n += event} }; emit alarm 5; n' 105

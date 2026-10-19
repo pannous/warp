@@ -10,6 +10,7 @@ is! 'hb = [random() for j in 0..4]; def g() { global hb; hb[1] = hb[1] + 0.5 }; 
 is! 'hb = []; for j in 0..4 { hb.push(random()) }; def g() { global hb; hb[1] = hb[1] + 0.5 }; g(); hb[1] >= 0.5 and hb[1] < 1.5' true
 is! 'hb = [0.0, 0.0, 0.0]; for j in 0..3 { hb[j] = random() }; def g() { global hb; hb[1] = hb[1] + 0.5 }; g(); hb[1] >= 0.5 and hb[1] < 1.5' true
 is! 'hb = [random() for j in 0..4]; def f() { t = hb[1]; t + 1 }; def g() { global hb; hb[1] = 0.25 }; g(); f()' 1.25
+is! 'hb = [random() for j in 0..4]; def g() { global hb; hb[1] = 0.75 }; g()' 0.75
 
 # a_global_array_a_function_writes_stays_an_array
 is! 'global s = int[20000]; def f() { for i in 0..20000 { s[i] = i } }; f(); s[19999]' 19999

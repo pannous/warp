@@ -14,7 +14,11 @@ is! 'type T { value: int, left?, right? }
 def ins(tree, v) { if tree == ø { return T { value: v } }; if v < tree.value { tree.left = ins(tree.left, v) } else { tree.right = ins(tree.right, v) }; return tree }
 t = ø; for v in [5, 3, 8, 1] { t = ins(t, v) }; t.left.value + t.right.value + t.left.left.value' 12
 
+# test_returns
+is! 'type T { value: int }; mk(v) := { return T { value: v } }; mk(5).value' 5
+
 # test_recursive_list_function
+is! 'def io(t) { if t == 0 { return [] }; return io(t - 1) + [t] }; count(io(3))' 3
 is! 'type T { value: int, left?, right? }
 def ins(tree, v) { if tree == ø { return T { value: v } }; if v < tree.value { tree.left = ins(tree.left, v) } else { tree.right = ins(tree.right, v) }; return tree }
 def io(tree) { if tree == ø { return [] }; return io(tree.left) + [tree.value] + io(tree.right) }; t = ø; for v in [5, 3, 8] { t = ins(t, v) }; io(t)#3' 8
