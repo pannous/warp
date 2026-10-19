@@ -31,17 +31,17 @@ fn daylight_saving_starts_on_the_last_sunday_of_march_at_one_utc() {
 #[test]
 fn zone_instant_resolves_wall_times() {
 	let berlin = "use time; berlin = zone_named(\"Europe/Berlin\")";
-	is!(&format!("{berlin}; zone_instant(berlin, 43200, Disambiguation.Reject)"), 39600);
+	is!(&format!("{berlin}; zone_instant(berlin, 43200, Disambiguation::Reject)"), 39600);
 	// 02:30 on 2026-03-29 is skipped: earlier and later are the wall time read in summer and in winter time
 	let skipped = "days_from_date(2026, 3, 29) * 86400 + 9000";
-	is!(&format!("{berlin}; zone_instant(berlin, {skipped}, Disambiguation.Earlier) - ({skipped})"), -7200);
-	is!(&format!("{berlin}; zone_instant(berlin, {skipped}, Disambiguation.Later) - ({skipped})"), -3600);
-	fails_with(&format!("{berlin}; zone_instant(berlin, {skipped}, Disambiguation.Reject)"), "does not exist");
+	is!(&format!("{berlin}; zone_instant(berlin, {skipped}, Disambiguation::Earlier) - ({skipped})"), -7200);
+	is!(&format!("{berlin}; zone_instant(berlin, {skipped}, Disambiguation::Later) - ({skipped})"), -3600);
+	fails_with(&format!("{berlin}; zone_instant(berlin, {skipped}, Disambiguation::Reject)"), "does not exist");
 	// 02:30 on 2026-10-25 occurs twice
 	let repeated = "days_from_date(2026, 10, 25) * 86400 + 9000";
-	is!(&format!("{berlin}; zone_instant(berlin, {repeated}, Disambiguation.Earlier) - ({repeated})"), -7200);
-	is!(&format!("{berlin}; zone_instant(berlin, {repeated}, Disambiguation.Later) - ({repeated})"), -3600);
-	fails_with(&format!("{berlin}; zone_instant(berlin, {repeated}, Disambiguation.Reject)"), "ambiguous");
+	is!(&format!("{berlin}; zone_instant(berlin, {repeated}, Disambiguation::Earlier) - ({repeated})"), -7200);
+	is!(&format!("{berlin}; zone_instant(berlin, {repeated}, Disambiguation::Later) - ({repeated})"), -3600);
+	fails_with(&format!("{berlin}; zone_instant(berlin, {repeated}, Disambiguation::Reject)"), "ambiguous");
 }
 
 #[test]

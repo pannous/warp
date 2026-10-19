@@ -121,21 +121,26 @@ nth_sunday(year: int, month: int, n: int): int := {
 }
 // the year (UTC) of seconds since 1970
 year_of_seconds(seconds: int): int := date_of(seconds * 1000).year
+// European summer time: from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last Sunday of October
+european_summer(year: int, seconds: int): bool := {
+	start = last_sunday(year, 3) * day_seconds + hour_seconds
+	end = last_sunday(year, 10) * day_seconds + hour_seconds
+	seconds >= start and seconds < end
+}
+// US daylight time: from 02:00 local standard time on the second Sunday of March to 02:00 local daylight time on the
+// first Sunday of November
+united_states_summer(year: int, seconds: int, standard: int): bool := {
+	start = nth_sunday(year, 3, 2) * day_seconds + 2 * hour_seconds - standard
+	end = nth_sunday(year, 11, 1) * day_seconds + 2 * hour_seconds - standard - hour_seconds
+	seconds >= start and seconds < end
+}
 // seconds east of UTC in effect in a zone at seconds since 1970
 zone_offset(zone: Zone, seconds: int): int := {
 	year = year_of_seconds(seconds)
 	summer = match zone.dst {
 		Never: false
-		Europe: {
-			start = last_sunday(year, 3) * day_seconds + hour_seconds
-			end = last_sunday(year, 10) * day_seconds + hour_seconds
-			seconds >= start and seconds < end
-		}
-		UnitedStates: {
-			start = nth_sunday(year, 3, 2) * day_seconds + 2 * hour_seconds - zone.standard
-			end = nth_sunday(year, 11, 1) * day_seconds + 2 * hour_seconds - zone.standard - hour_seconds
-			seconds >= start and seconds < end
-		}
+		Europe: european_summer(year, seconds)
+		UnitedStates: united_states_summer(year, seconds, zone.standard)
 	}
 	if summer then zone.standard + hour_seconds else zone.standard
 }

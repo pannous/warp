@@ -286,6 +286,8 @@ pub fn insert_module_classes(program: Node) -> Node {
 	// sum_variants met before its declaration was in front
 	let enums: Vec<Node> = std_classes.iter().chain(&file_classes).cloned().collect();
 	let program = crate::lowering::sum_variants::with_types_of(program, &enums);
+	// `Disambiguation::Earlier` of a used module's enum, which plain_enums met before its declaration was in front
+	let program = crate::lowering::plain_enums::with_cases_of(program, &enums);
 	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
 	with_statements_first(program, file_classes)
 }
