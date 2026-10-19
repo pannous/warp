@@ -18,8 +18,11 @@ pub enum CPointer {
 	Memory,
 	/// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
 	Handle,
-	/// `sqlite3 **ppDb`: left out of the warp call; the first one becomes the result, the others receive NULL
+	/// `sqlite3 **ppDb`: left out of the warp call; the first one becomes the result unless a struct output is, the others
+	/// receive NULL
 	Out,
+	/// `wasmtime_instance_t *instance` as the call's output: the struct read back as a map (c_structs.rs)
+	Struct,
 }
 
 /// A C parameter: a number by its wasm type, or a pointer by what it crosses as
@@ -38,14 +41,32 @@ pub enum ParamType {
 	/// `const uint8_t *module, size_t length`: a warp text or list of byte values, copied for the call; its length
 	/// fills the Length after it
 	Bytes,
-	/// the `size_t` after Bytes: left out of the warp call
+	/// the `size_t` after Bytes or StructsIn: left out of the warp call
 	Length,
+	/// `const wasmtime_instance_t *`: a map written into the struct's bytes (or a handle id, its pointer)
+	StructIn,
+	/// `const wasmtime_val_t *args, size_t nargs`: a list of maps; its length fills the Length after it
+	StructsIn,
+	/// a trailing `wasmtime_instance_t *`: left out of the warp call, the call's result (CPointer::Struct)
+	StructOut,
+	/// `wasm_trap_t **trap`, an error-shaped out-pointer (is_error_type): left out, non-NULL after the call fails it
+	ErrorOut,
+	/// a trailing `wasmtime_val_t *results, size_t nresults`: left out, the size_t after it says how many, the call's
+	/// result is their list
+	StructsOut,
 }
 
 impl ParamType {
 	/// Whether the warp call passes this parameter: out-pointers and lengths are filled by the call
 	pub fn is_passed(self) -> bool {
-		!matches!(self, ParamType::Out | ParamType::Length)
+		!matches!(
+			self,
+			ParamType::Out | ParamType::ErrorOut | ParamType::Length | ParamType::StructOut | ParamType::StructsOut
+		)
+	}
+
+	pub fn is_struct_output(self) -> bool {
+		matches!(self, ParamType::StructOut | ParamType::StructsOut)
 	}
 }
 
@@ -60,7 +81,7 @@ pub enum RetType {
 	Bool,
 }
 
-const PARAM_NAMES: [(ParamType, &str); 9] = [
+const PARAM_NAMES: [(ParamType, &str); 14] = [
 	(ParamType::I32, "i32"),
 	(ParamType::I64, "i64"),
 	(ParamType::F32, "f32"),
@@ -70,6 +91,11 @@ const PARAM_NAMES: [(ParamType, &str); 9] = [
 	(ParamType::Out, "out"),
 	(ParamType::Bytes, "bytes"),
 	(ParamType::Length, "length"),
+	(ParamType::StructIn, "struct_in"),
+	(ParamType::StructsIn, "structs_in"),
+	(ParamType::StructOut, "struct_out"),
+	(ParamType::StructsOut, "structs_out"),
+	(ParamType::ErrorOut, "error_out"),
 ];
 const RET_NAMES: [(RetType, &str); 6] = [
 	(RetType::Void, "void"),
@@ -80,8 +106,13 @@ const RET_NAMES: [(RetType, &str); 6] = [
 	(RetType::Bool, "bool"),
 ];
 /// The pointers a result crosses as; a number result is "number"
-const RESULT_NAMES: [(Option<CPointer>, &str); 3] =
-	[(None, "number"), (Some(CPointer::Text), "text"), (Some(CPointer::Handle), "handle")];
+const RESULT_NAMES: [(Option<CPointer>, &str); 4] = [
+	(None, "number"),
+	(Some(CPointer::Text), "text"),
+	(Some(CPointer::Handle), "handle"),
+	(Some(CPointer::Struct), "struct"),
+];
+const LAYOUT_SEPARATOR: char = ';';
 
 fn name_of<T: PartialEq + Copy>(names: &[(T, &'static str)], value: T) -> &'static str {
 	names.iter().find(|(known, _)| *known == value).map_or("?", |(_, name)| name)
@@ -104,6 +135,27 @@ pub struct CFunction {
 	pub ret_type: RetType,
 	/// what the first out-pointer points to (`sqlite3_stmt` of `sqlite3_stmt **ppStmt`), for the error of a NULL there
 	pub out_pointee: Option<String>,
+	/// the layout text of each struct parameter (c_structs.rs), "" for the others; empty without struct parameters
+	pub layouts: Vec<String>,
+	/// whether the C result reports a failure instead of being the result
+	pub failure: Failure,
+}
+
+/// How a C result reports a failure: an error-shaped pointer (`wasmtime_error_t *`) when not NULL, a bool of a function
+/// with an output when false
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Failure {
+	None,
+	NotNull,
+	False,
+}
+const FAILURE_NAMES: [(Failure, &str); 3] =
+	[(Failure::None, ""), (Failure::NotNull, "not_null"), (Failure::False, "false")];
+
+/// An error-shaped C type: a non-NULL one reports a failure (`wasmtime_error_t *`, `wasm_trap_t **`)
+pub fn is_error_type(c_type: &str) -> bool {
+	let lower = c_type.to_lowercase();
+	["error", "trap", "status", "exception"].iter().any(|word| lower.contains(word))
 }
 
 impl CFunction {
@@ -119,12 +171,14 @@ impl CFunction {
 			name_of(&RET_NAMES, self.ret_type),
 			name_of(&RESULT_NAMES, self.result),
 			self.out_pointee.as_deref().unwrap_or_default(),
+			&self.layouts.join(&LAYOUT_SEPARATOR.to_string()),
+			name_of(&FAILURE_NAMES, self.failure),
 		]
 		.join(&FIELD_SEPARATOR.to_string())
 	}
 
 	pub fn of_line(line: &str) -> Option<CFunction> {
-		let [module, library, name, params, ret_type, result, out_pointee] =
+		let [module, library, name, params, ret_type, result, out_pointee, layouts, failure] =
 			line.split(FIELD_SEPARATOR).collect::<Vec<_>>().try_into().ok()?;
 		let param_types = params
 			.split(LIST_SEPARATOR)
@@ -139,6 +193,8 @@ impl CFunction {
 			result: value_of(&RESULT_NAMES, result)?,
 			ret_type: value_of(&RET_NAMES, ret_type)?,
 			out_pointee: (!out_pointee.is_empty()).then(|| out_pointee.to_string()),
+			layouts: layouts.split(LAYOUT_SEPARATOR).filter(|_| !layouts.is_empty()).map(str::to_string).collect(),
+			failure: value_of(&FAILURE_NAMES, failure)?,
 		})
 	}
 }
