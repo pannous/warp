@@ -7,12 +7,15 @@
 use super::nodes::{key, matched};
 use crate::node::{call, Bracket, Node};
 use crate::operators::{Op, OP_CODES};
+use std::collections::HashMap;
 
 pub const NODE_DECLARATION: &str = include_str!("../../../lib/compiler/node.warp");
 pub const NODE_TYPE: &str = "Node";
 /// The enums of node.warp whose cases are spelled, in its order
 pub const SPELLED_ENUMS: [&str; 3] = ["Op", "Bracket", "Separator"];
 const ANY_TYPE: &str = crate::words::ANY_TYPE;
+/// The types a spelled case converts to its spelling: `op as text`
+pub const TEXT_TYPES: [&str; 2] = [crate::words::TEXT_WORD, "string"];
 const OTHER_ARM: &str = "_";
 const SPELLED_VALUE: &str = "spelled";
 /// `Op·text(c)`: the spelling of a case; `Op·case(t)`: the case spelled so
@@ -207,7 +210,8 @@ fn qualified_cases(node: Node) -> Node {
 }
 
 /// After the patterns took theirs apart (destructuring.rs): `Key(a, op, b)` builds the key, `List(items, bracket,
-/// separator)` the list, with the program's own function or class of that name winning
+/// separator)` the list, with the program's own function or class of that name winning; `op as text` of a pattern's
+/// op field is its spelling
 pub fn lower_constructions(program: Node) -> Node {
 	let own: Vec<String> = crate::modules::statements_of(&program)
 		.iter()
@@ -215,15 +219,35 @@ pub fn lower_constructions(program: Node) -> Node {
 		.chain(own_types(&program))
 		.collect();
 	let builds = |case: &str| !own.iter().any(|name| name == case);
-	if !builds("Key") && !builds("List") {
-		return program;
-	}
-	constructions(program, &builds)
+	let spelled = spelled_bindings(&program);
+	constructions(program, &builds, &spelled)
 }
 
-fn constructions(node: Node, builds: &dyn Fn(&str) -> bool) -> Node {
+/// The names a pattern bound to a spelled case, `op` of `Key(left, op, right)`, by the enum of each
+fn spelled_bindings(program: &Node) -> HashMap<String, String> {
+	let mut spelled = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(name, Op::Assign, value) = node {
+			if let (Some(name), Some(enum_name)) = (name.symbol_name(), spelled_case_call(value)) {
+				spelled.insert(name.to_string(), enum_name);
+			}
+		}
+	});
+	spelled
+}
+
+/// `Op·case(…)`: Op
+fn spelled_case_call(value: &Node) -> Option<String> {
+	let Node::List(items, Bracket::Round, _) = value.drop_meta() else { return None };
+	let function = items.first()?.symbol_name()?;
+	let enum_name = function.strip_suffix(&format!("·{CASE_FUNCTION}"))?;
+	SPELLED_ENUMS.contains(&enum_name).then(|| enum_name.to_string())
+}
+
+fn constructions(node: Node, builds: &dyn Fn(&str) -> bool, spelled: &HashMap<String, String>) -> Node {
 	let as_text = |enum_name: &str, value: Node| call(&spelled_function(enum_name, TEXT_FUNCTION), vec![value]);
-	match node.map_children(|child| constructions(child, builds)) {
+	let spelled_enum_of = |value: &Node| value.symbol_name().and_then(|name| spelled.get(name));
+	match node.map_children(|child| constructions(child, builds, spelled)) {
 		Node::List(items, Bracket::Round, separator) => match items.as_slice() {
 			[head, left, op, right] if head.is_symbol("Key") && builds("Key") => {
 				call("key", vec![left.clone(), as_text("Op", op.clone()), right.clone()])
@@ -234,6 +258,12 @@ fn constructions(node: Node, builds: &dyn Fn(&str) -> bool) -> Node {
 			}
 			_ => Node::List(items, Bracket::Round, separator),
 		},
+		Node::Key(value, Op::As, target)
+			if spelled_enum_of(&value).is_some() && TEXT_TYPES.contains(&target.drop_meta().name().as_str()) =>
+		{
+			let enum_name = spelled_enum_of(&value).expect("guarded").clone();
+			as_text(&enum_name, *value)
+		}
 		other => other,
 	}
 }

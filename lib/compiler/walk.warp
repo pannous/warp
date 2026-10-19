@@ -38,41 +38,44 @@ node_of(view: any): any := {
 	kind = kind_of(view)
 	if kind == "symbol" { return symbol(view#2) }
 	if kind == "text" or kind == "char" { return view#2 }
-	if kind == "key" { return key(node_of(view#3), view#2, node_of(view#4)) }
-	if kind == "list" { return separated(bracketed(view[3..].map(node_of), view#2), view#3) }
+	if kind == "key" { return Key(node_of(view#3), view#2 as Op, node_of(view#4)) }
+	if kind == "list" { return List(view[3..].map(node_of), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
-	if kind == "attribute" { return key(symbol(attribute_word), ":", [view#2, node_of(view#3), node_of(view#4)]) }
+	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, node_of(view#3), node_of(view#4)]) }
 	if kind == "" { return view }
-	key(symbol(opaque_word), ":", view)
+	Key(symbol(opaque_word), Op.Colon, view)
 }
 
 # the view of a node
-view_of(n: any): any := {
-	if type(n) is key {
-		if key_of(n) == symbol(opaque_word) { return value_of(n) }
-		if key_of(n) == symbol(attribute_word) {
-			layer = value_of(n)
-			return ["attribute", layer#1, view_of(layer#2), view_of(layer#3)]
-		}
-		return ["key", op_of(n), view_of(key_of(n)), view_of(value_of(n))]
-	}
-	if n is symbol { return ["symbol", name_of(n)] }
-	if n is text { return ["text", n] }
-	if is_group(n) { return ["list", bracket_of(n), separator_of(n)] + n.map(view_of) }
-	n
+view_of(n: Node): any := match n {
+	Key(left, op, right): key_view(left, op as text, right)
+	Symbol(name): ["symbol", name]
+	Text(t): ["text", t]
+	List(items, bracket, separator): ["list", bracket as text, separator as text] + items.map(view_of)
+	_: n
+}
+
+# the view of a key: an opaque view and an attribute layer as they were written
+key_view(left: Node, op: text, right: Node): any := {
+	if left == symbol(opaque_word) { return right }
+	if left == symbol(attribute_word) { return ["attribute", right#1, view_of(right#2), view_of(right#3)] }
+	["key", op, view_of(left), view_of(right)]
 }
 
 # a group of the items, bracketed and separated as n
-group_like(n: any, items: any): any := separated(bracketed(items, bracket_of(n)), separator_of(n))
+group_like(n: Node, items: list): Node := match n {
+	List(_, bracket, separator): List(items, bracket, separator)
+	_: separated(bracketed(items, bracket_of(n)), separator_of(n))
+}
 
 # the call `name(arguments…)`
 call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
 
 # a node with f applied to each of its children
-children(n: any, f: function): any := {
-	if type(n) is key and key_of(n) != symbol(opaque_word) { return key(f(key_of(n)), op_of(n), f(value_of(n))) }
-	if is_group(n) { return separated(bracketed(n.map(f), bracket_of(n)), separator_of(n)) }
-	n
+children(n: Node, f: function): Node := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then n else Key(f(left), op, f(right)) }
+	List(items, bracket, separator): List(items.map(f), bracket, separator)
+	_: n
 }
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
