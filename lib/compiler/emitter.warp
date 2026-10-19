@@ -219,9 +219,34 @@ condition(value: any) := {
 }
 
 number_value(n: any) := {
+	if n is float and exact_decimal(n) != ø { return exact_decimal(n) }
 	if n is float { return ["float", [op.f64_const] + le64(float_bits(n))] }
 	if n < smallest_int or n > largest_int { return refuse("an int beyond 64 bits") }
 	["int", [op.i64_const] + sleb(n)]
+}
+
+# a decimal literal as Rust reads it: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
+# 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float (Number::is_exact_decimal)
+exact_decimal_digits = 15
+exact_decimal(n: float) := {
+	shown = "" + n
+	if shown.contains("e") or not shown.contains(".") { return ø }
+	negative = shown.starts_with("-")
+	unsigned = if negative then shown[1..] else shown
+	parts = unsigned.split(".")
+	digits = parts#1 + parts#2
+	significant = digits
+	while #significant > 1 and significant.starts_with("0") { significant = significant[1..] }
+	if #significant > exact_decimal_digits { return ø }
+	numerator = int(digits)
+	if negative { numerator = -numerator }
+	denominator = 1
+	for i in 0..#parts#2 { denominator = denominator * 10 }
+	divisor = gcd(numerator, denominator)
+	if divisor < 0 { divisor = -divisor }
+	if divisor == denominator { return number_value(numerator / divisor) }
+	box = x => [op.i64_const] + sleb(x) + gc_code("struct_new", [gc.int_box])
+	["node", node(node_kind_codes.int, box(numerator / divisor) + box(denominator / divisor) + gc_code("struct_new", [gc.ratio]))]
 }
 
 # the offset of a text's bytes in the data segment, each text stored once
