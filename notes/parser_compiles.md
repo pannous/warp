@@ -12,6 +12,8 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 - bracket_of, separator_of, bracketed, separated as runtime words, n.op / n.bracket fields: emit-enum-match d717c74deb
 - node into a variable declared list/int: runtime-declared 3a700ae
 - match with node patterns: pure-lane 54dabdd10 (node_matches.warp)
+- bare `return` (`{ return ø }`) and `continue` in while loops: pure-lane ec8cd7ade (a for whose body continues stays
+  with Rust: its step must not be skipped)
 
 ## Open
 | root | owner |
@@ -20,6 +22,6 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | `x is symbol/list/any` type tests, prelude defs on demand (is_digit) | warp-self-emitter |
 | match literal and enum-symbol arms | warp-parsing |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
-| return/continue in expression position, class constructor, the file's own globals, try, `===` | warp-self-analyzer |
+| class constructor `Point(2, 3)`, the file's own globals, try, `===` | warp-self-analyzer |
 | int(x), positioned, `op as Op` (keyed), an instance inside a map, a node into a typed Parser field, a write by a run-time key, pending kinds in recursive functions, `branch` called with a missing argument | warp-emitter-structures |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
