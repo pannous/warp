@@ -39,7 +39,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
 | prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
 | "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | warp-self-analyzer |
-| enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
+| enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache: `Op.Colon` gives Colon on main (87062eb624); the stage's 'not an object' once a stage program has Op (a one-entry map named like a class read as an instance): enum-decls 24a46fd732, Ready (card class-named-entry); a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd; `use "lib/compiler/node.warp"` itself: card node-op-field-type, Later |
 | try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
 | a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps), a write by a run-time key (remember), pending kinds in recursive functions | warp-runtime |
