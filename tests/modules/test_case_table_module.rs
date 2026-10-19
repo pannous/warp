@@ -25,12 +25,13 @@ fn case_words_match_the_builtins() {
 	}
 }
 
-/// The ints of the list `name = [ … ]` of lib/case_tables.warp
+/// The ints of the table `name = ints_of("…")` of lib/case_tables.warp
 fn table_numbers(name: &str) -> Vec<i64> {
 	let source = include_str!("../../lib/case_tables.warp");
-	let start = source.find(&format!("{name} = [")).expect("the table") + name.len() + 4;
-	let end = start + source[start..].find(']').expect("its end");
-	source[start..end].split(',').map(|number| number.trim().parse().expect("an int")).collect()
+	let opening = format!("{name} = ints_of(\"");
+	let start = source.find(&opening).expect("the table") + opening.len();
+	let end = start + source[start..].find('"').expect("its end");
+	source[start..end].split(' ').map(|number| number.parse().expect("an int")).collect()
 }
 
 /// The code points `code` maps to by `ranges` (sorted by start): itself when no range covers it

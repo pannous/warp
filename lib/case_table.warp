@@ -44,7 +44,7 @@ class CaseTable { ranges: list
 	}
 	map_text(t: text): text := {
 		out = ""
-		for code in codepoints(t) { for mapped_code in mapped(code) { out = out + chr(mapped_code) } }
+		for code in codepoints(t) { for mapped_code in mapped(ord(code)) { out = out + chr(mapped_code) } }
 		out
 	}
 }
