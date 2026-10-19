@@ -77,7 +77,7 @@ skips_step(n: Node): bool := match n {
 	_: no
 }
 
-for_loop(n: Node): Node := match n {
+lowered_for(n: Node): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if skips_step(n) { return n }
 		if #parts == 5 and parts#1 == symbol("for") and parts#3 == symbol("in") and is_name(parts#2) {
@@ -89,4 +89,4 @@ for_loop(n: Node): Node := match n {
 	_: n
 }
 
-for_loops(program: any): any := bottom_up(program, for_loop)
+for_loops(program: any): any := bottom_up(program, lowered_for)
