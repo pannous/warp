@@ -577,6 +577,8 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
 	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
+	# a negative exponent gives an exact rational, so the power is a boxed value
+	if symbol == "^" and kind == "int" { return runtime_call("exact_pow", [["node", boxed(a)], ["node", boxed(b)]]) }
 	ops = if kind == "float" then float_ops else int_ops
 	if not (symbol in ops) { return refuse("the operator " + symbol + " on " + kind) }
 	if kind == "int" and symbol in checked_words and not body.intrinsics {

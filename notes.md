@@ -70,3 +70,5 @@
 - 2026-10-19 warp-cache: Rust's list semantics: `+=` and push change the list every alias holds; `xs = xs + [x]` makes a new list (emitter.warp appends in place only while xs is unshared).
 
 - card time-zones-warp (sprint, blind): lib/time.warp has the zone rules in warp (Zone class, Dst enum, time_zones table, zone_offset, zone_instant over whole seconds); src/wasm_emitter/time/time_zones.rs stays until the emitter calls these words; time_in_zone waits for card time-primitives (form/position of a time value)
+
+- exact-pow-warp (2026-10-19): runtime.warp exact_pow/int_pow; emitter.warp int ^ → exact_pow (node result). i64 only: a power beyond the int range fails in int_overflow where Rust gives a big int (probes/ratio_text.warp 2^70, samples with 2^100 may now enter the core and differ instead of being refused). A ratio or float base (node kind) is still refused (floats have no ^).

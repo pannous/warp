@@ -61,6 +61,8 @@ mod test_self_float_text; // card float-text-warp
 #[cfg(feature = "native")]
 mod test_self_emitter_times; // card time-primitives
 #[cfg(feature = "native")]
+mod test_self_exact_pow; // card exact-pow-warp
+#[cfg(feature = "native")]
 mod test_self_hosted_analysis; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_cache; // card End-end
