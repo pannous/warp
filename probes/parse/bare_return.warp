@@ -1,5 +1,0 @@
-fun f(x) {
-  if x > 1 { return }
-  x
-}
-f(1)

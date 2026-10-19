@@ -1,0 +1,3 @@
+// `xs[:k]` slices from the start: the lowered slice(xs, ø, k), whose ø start runtime.warp read as an int
+xs = [1, 2, 3, 4]
+[xs[:1], xs[1:], xs[1:3], "hello"[:2]]

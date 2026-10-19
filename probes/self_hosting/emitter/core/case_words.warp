@@ -1,0 +1,3 @@
+# emitter core: upper and lower by the Unicode case ranges (runtime.warp node_cased over lib/case_tables.warp)
+# out: "STRASSE àb helloHELLO FFI ǆ"
+"straße".upper() + " " + lower("ÀB") + " " + "Hello".lower() + upper("Hello") + " " + "ﬃ".upper() + " " + "ǅ".lower()

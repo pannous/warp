@@ -1,4 +1,0 @@
-fun f() {
-  return -1
-}
-f()

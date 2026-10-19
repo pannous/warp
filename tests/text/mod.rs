@@ -2,6 +2,7 @@ mod test_add_to_text;
 mod test_ascii_index_costs;
 mod test_backtick_templates;
 mod test_brace_hole; // card brace-hole
+mod test_byte_at_type_error; // card traps-wasm-trap
 mod test_byte_loop_inline; // card loop-calls
 mod test_case_table;
 mod test_cast_to_string;

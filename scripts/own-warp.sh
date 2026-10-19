@@ -8,20 +8,11 @@ set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo"
 
-# Optional: warn when a worktree still has the plain shared version (notes/build_speed.md).
-if [[ "$repo" == *.worktrees.noindex/* ]]; then
-	version="$(python3 -c '
-import re, pathlib
-text = pathlib.Path("Cargo.toml").read_text()
-m = re.search(r"(?m)^version\s*=\s*\"([^\"]+)\"", text)
-print(m.group(1) if m else "")
-')"
-	if [ "$version" = "0.1.1" ]; then
-		name="$(basename "$repo")"
-		# semver pre-release: alphanumeric and hyphen
-		safe="$(printf '%s' "$name" | tr -c 'A-Za-z0-9-' '-')"
-		echo "own-warp: Cargo.toml version is still 0.1.1 in worktree '$name'; set version = \"0.1.1-$safe\" (uncommitted) so this copy does not share lib artifacts" >&2
-	fi
+# A worktree builds only with its build tweak (scripts/version-tweak.sh): untweaked, the shared target dir links
+# another checkout's warp, whose lib/ path the binary then reads (env! CARGO_MANIFEST_DIR)
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ] && ! grep -qE '^version = "[^"]*-[^"]*"' Cargo.toml; then
+	echo "own-warp: $repo has no build tweak; run scripts/version-tweak.sh $(git branch --show-current) first" >&2
+	exit 1
 fi
 
 target_dir="$(cargo metadata --offline --format-version 1 --no-deps | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
@@ -39,7 +30,8 @@ for attempt in 1 2 3; do
 	tmp="scratch/warp.tmp.$$"
 	cp "$src" "$tmp"
 	chmod +x "$tmp"
-	if "$tmp" version 2>/dev/null | grep -qF "$own_version"; then
+	# the whole version word: an untweaked 1.3.0 is no match for another checkout's 1.3.0-<branch>
+	if [ "$("$tmp" version 2>/dev/null | head -1 | awk '{print $NF}')" = "$own_version" ]; then
 		mv -f "$tmp" scratch/warp
 		echo "$repo/scratch/warp"
 		exit 0

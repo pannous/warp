@@ -1,0 +1,14 @@
+# What parser.warp refuses (card pure-front): each program it reads with an error in its tree, with the first error
+# message; then the count read
+use "../../lib/compiler/parser.warp"
+use os
+refused = 0
+for path in args {
+	view = try tree(read(path)) else ["error", ["text", "parser.warp failed"]]
+	errors = lists_in(view).filter(part => kind_of(part) == "error")
+	if #errors > 0 {
+		refused = refused + 1
+		print path + ": " + errors#1#2#2
+	}
+}
+print "read " + #args + ", refused " + refused
