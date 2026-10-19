@@ -186,7 +186,8 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 fn record_refusal(refusal: &str) {
 	use std::io::Write;
 	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
-	let lines: String = refusal.lines().filter(|line| line.starts_with(OUTSIDE_THE_CORE)).map(|line| format!("{line}\n")).collect();
+	let lines: String =
+		refusal.lines().filter(|line| line.starts_with(OUTSIDE_THE_CORE)).map(|line| format!("{line}\n")).collect();
 	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
