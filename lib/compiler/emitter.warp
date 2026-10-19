@@ -847,6 +847,9 @@ key_expression(body: Body, n: any) := {
 	if operator == "and" or operator == "or" { return logical(body, operator, left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
+	if operator == "as" and right is symbol and name_of(right) in type_words and type_words[name_of(right)] == "rational" {
+		return as_rational(expression(body, left))
+	}
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
 		value = expression(body, left)
 		# `7/2 as int`: an exact rational truncated toward 0
@@ -859,6 +862,11 @@ key_expression(body: Body, n: any) := {
 	operation(body, operator, expression(body, left), expression(body, right))
 }
 right_of_if(n: any) := value_of(n)
+# `x as rational` of a float: the runtime's float_as_exact (decision float-as-rational); other kinds Rust takes
+as_rational(value: any) := {
+	if value#1 == "float" { return runtime_call("float_as_exact", [value]) }
+	refuse("a " + value#1 + " as rational")
+}
 
 # -value; a value known only at run time as 0 - value
 negation(body: Body, value: any) := {
