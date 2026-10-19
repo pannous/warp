@@ -114,7 +114,7 @@ pub(crate) fn defined_function_name(target: &Node) -> Option<String> {
 /// `f={it*2}` defines a function like `f:={it*2}`: a name assigned a block that uses `it`; other blocks are data
 pub(crate) fn is_function_block(name: &Node, block: &Node) -> bool {
 	matches!(name.drop_meta(), Node::Symbol(_))
-		&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
+		&& block.is_block()
 		&& mentions(block, crate::words::IMPLICIT_PARAMETER)
 }
 

@@ -143,7 +143,7 @@ pub fn shows_page(code: &str) -> bool {
 	let is_page_tag = |tag: &Node| tag.symbol_name().is_some_and(crate::web::markup::is_element_tag);
 	top_level_statements(code).last().is_some_and(|last| match last.drop_meta() {
 		Node::Key(tag, Op::Colon, _) => is_page_tag(tag),
-		Node::List(items, _, _) => matches!(items.as_slice(), [tag, body] if is_page_tag(tag) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))),
+		Node::List(items, _, _) => matches!(items.as_slice(), [tag, body] if is_page_tag(tag) && body.is_block()),
 		_ => false,
 	})
 }
@@ -631,11 +631,11 @@ fn is_markup_or_block(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => true,
 		Node::List(items, _, _) => {
-			items.last().is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _)))
+			items.last().is_some_and(|last| last.is_block())
 				&& items.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(_)))
 		}
 		Node::Key(tag, _, block) => {
-			matches!(tag.drop_meta(), Node::Symbol(_)) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
+			matches!(tag.drop_meta(), Node::Symbol(_)) && block.is_block()
 		}
 		_ => false,
 	}

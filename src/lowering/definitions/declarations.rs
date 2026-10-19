@@ -4,7 +4,7 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::nodes::{
-	assign, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_block, is_call_head,
+	assign, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_call_head,
 	is_kinded_type_word, key, word_headed, Counter,
 };
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -506,7 +506,7 @@ pub(crate) fn glued_block(method: &Node) -> Option<(Node, Node)> {
 		return None;
 	};
 	let _ = word.symbol_name()?;
-	matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
+	block.is_block()
 		.then(|| (word.as_ref().clone(), block.as_ref().clone()))
 }
 
@@ -691,7 +691,7 @@ fn keyword_form(items: &[Node]) -> Option<(&Node, Node, Option<Node>)> {
 		// `def f(x) as int { … }`: the result type before a block body, read as `-> int { … }` is (user 2026-10-12, return-as)
 		[keyword, head, body]
 			if let Node::Key(head, Op::As, result_type) = head.drop_meta()
-				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+				&& body.is_block() =>
 		{
 			let typed_body =
 				Node::List(vec![result_type.as_ref().clone(), body.clone()], Bracket::None, Separator::Space);
@@ -729,7 +729,7 @@ fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
 		}
 		// `def hello {…}` without parentheses has no parameters, as `def hello() {…}`
 		Node::List(parts, Bracket::Round, _)
-			if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if parts.len() == 2 && parts[1].is_block() =>
 		{
 			let head = match parts[0].drop_meta() {
 				Node::Symbol(_) => parens(vec![parts[0].clone()]),
@@ -936,7 +936,7 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 	match node {
 		Node::List(items, bracket, separator) => {
 			// `fun f(_) {…}`: the head glued to its block stays a head, as in `f(_) := …`
-			let glued_definition = matches!(items.as_slice(), [head, body] if is_call_head(head) && is_block(body));
+			let glued_definition = matches!(items.as_slice(), [head, body] if is_call_head(head) && body.is_block());
 			let items: Vec<Node> = items
 				.into_iter()
 				.enumerate()
@@ -986,7 +986,7 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	}
 	let (head, body) = match definition.drop_meta() {
 		Node::List(parts, Bracket::Round, _) => match parts.as_slice() {
-			[head, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => (head, body),
+			[head, body] if body.is_block() => (head, body),
 			_ => return None,
 		},
 		// C#'s expression-bodied member `int Add(int a, int b) => a + b`

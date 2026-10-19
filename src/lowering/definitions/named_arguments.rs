@@ -343,7 +343,7 @@ fn bodies(node: &Node) -> HashMap<String, Node> {
 				Node::List(items, Bracket::Round, _) if !items.is_empty() => {
 					bodies.insert(items[0].name(), body.as_ref().clone());
 				}
-				Node::Symbol(name) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+				Node::Symbol(name) if body.is_block() => {
 					bodies.insert(name.clone(), body.as_ref().clone());
 				}
 				_ => {}
@@ -457,7 +457,7 @@ impl Rewrite {
 				let items = items.iter().cloned().chain(extras.into_iter().map(Node::Symbol)).collect();
 				key(Node::List(items, Bracket::Round, separator.clone()), op, body)
 			}
-			Node::Symbol(name) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			Node::Symbol(name) if body.is_block() => {
 				match self.functions.get(name) {
 					Some(function) if !function.extras.is_empty() => {
 						let items = std::iter::once(Node::Symbol(callable_name(name)))
