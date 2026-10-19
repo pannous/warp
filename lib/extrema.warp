@@ -19,7 +19,7 @@ beats(candidate: number, best: number, extremum: Extremum): bool := match extrem
 }
 
 // the first candidate, replaced by every later one beating it
-extreme_of(candidates: list, extremum: Extremum): element of candidates := {
+extreme_of(candidates: list, extremum: Extremum) := {
 	if count(candidates) == 0 { raise extremum_word(extremum) + " of an empty list" }
 	best = candidates#1
 	for candidate in candidates { if beats(candidate, best, extremum) { best = candidate } }
@@ -27,10 +27,10 @@ extreme_of(candidates: list, extremum: Extremum): element of candidates := {
 }
 
 // the least of a list's candidates
-min(xs: list): element of xs := extreme_of(xs, Extremum.Least)
+min(xs: list) := extreme_of(xs, Extremum.Least)
 // the least of two or more values
 min(a: number, b: number, more...): number := extreme_of([a, b] + more, Extremum.Least)
 // the greatest of a list's candidates
-max(xs: list): element of xs := extreme_of(xs, Extremum.Greatest)
+max(xs: list) := extreme_of(xs, Extremum.Greatest)
 // the greatest of two or more values
 max(a: number, b: number, more...): number := extreme_of([a, b] + more, Extremum.Greatest)
