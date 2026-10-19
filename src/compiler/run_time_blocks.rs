@@ -64,10 +64,10 @@ pub(crate) fn assignment(name: &str, value: Node) -> Node {
 	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Assign, Box::new(value))
 }
 
-/// A value written into the block's program: a number, text or character as itself, anything else as data
+/// A value written into the block's program: a number, bool, text or character as itself, anything else as data
 pub(crate) fn as_written(value: Node) -> Node {
 	match value.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
+		Node::Number(_) | Node::True | Node::False | Node::Text(_) | Node::Char(_) | Node::Empty => value,
 		_ => Node::List(
 			vec![Node::Symbol(crate::lowering::blocks::DATA_WORD.to_string()), value],
 			Bracket::None,

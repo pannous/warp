@@ -179,8 +179,9 @@ pub fn defined_function_name(line: &str) -> &str {
 pub fn std_function_names() -> &'static std::collections::HashSet<String> {
 	static NAMES: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
 	NAMES.get_or_init(|| {
+		// `ls(…) := …`, and a bang word `is!(…) := …` (card warp-is-tests)
 		let defined = |line: &str| {
-			let name: String = line.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+			let name: String = line.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '!').collect();
 			(!name.is_empty() && line[name.len()..].starts_with('(') && line.contains(":=")).then_some(name)
 		};
 		STD_MODULES.iter().flat_map(|(_, source)| source.lines().filter_map(defined)).collect()
