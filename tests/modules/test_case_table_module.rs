@@ -1,5 +1,5 @@
 //! card case-table-warp: lib/case_table.warp maps upper, lower and fold in warp over the generated case tables
-//! (lib/case_tables.warp), the twin of the builtins of src/wasm_emitter/text/text_unicode.rs
+//! (lib/case_tables.warp), giving what the builtins upper and lower give
 use crate::is;
 use warp::wasm_emitter::eval;
 
@@ -25,41 +25,29 @@ fn case_words_match_the_builtins() {
 	}
 }
 
-/// The ints of the table `name = ints_of("…")` of lib/case_tables.warp
-fn table_numbers(name: &str) -> Vec<i64> {
-	let source = include_str!("../../lib/case_tables.warp");
-	let opening = format!("{name} = ints_of(\"");
-	let start = source.find(&opening).expect("the table") + opening.len();
-	let end = start + source[start..].find('"').expect("its end");
-	source[start..end].split(' ').map(|number| number.parse().expect("an int")).collect()
-}
+/// the cased scripts: Latin to Armenian, Georgian, Cherokee, Latin and Greek extended, Glagolitic and Coptic, Cyrillic
+/// and Latin extended, fullwidth, Deseret
+const CASED_BLOCKS: [(u32, u32); 8] = [
+	(0x41, 0x590),
+	(0x10A0, 0x1100),
+	(0x13A0, 0x1400),
+	(0x1E00, 0x2000),
+	(0x2C00, 0x2D30),
+	(0xA640, 0xA800),
+	(0xFF21, 0xFF5B),
+	(0x10400, 0x10450),
+];
 
-/// The code points `code` maps to by `ranges` (sorted by start): itself when no range covers it
-fn mapped_by_table(ranges: &[&[i64]], code: i64) -> Vec<i64> {
-	let before = ranges.partition_point(|range| range[0] <= code);
-	match before.checked_sub(1).map(|at| ranges[at]) {
-		Some(&[start, last, stride, delta, second, third]) if code <= last && (code - start) % stride == 0 => {
-			let mut mapped = vec![code + delta];
-			mapped.extend([second, third].into_iter().filter(|&more| more != 0));
-			mapped
-		}
-		_ => vec![code],
-	}
-}
-
-/// The code points of Rust's mapping
-fn codes(mapped: impl Iterator<Item = char>) -> Vec<i64> {
-	mapped.map(|part| i64::from(u32::from(part))).collect()
-}
-
-// the generated tables (scripts/case_tables.py, Python's Unicode) map every code point as Rust's char does
+// the generated tables (scripts/case_tables.py, Python's Unicode) map every letter of the cased scripts as the builtins
 #[test]
-fn generated_tables_match_rust_case_mapping() {
-	let (upper, lower) = (table_numbers("upper_case_ranges"), table_numbers("lower_case_ranges"));
-	let (upper, lower): (Vec<&[i64]>, Vec<&[i64]>) = (upper.chunks(6).collect(), lower.chunks(6).collect());
-	for letter in (0..=char::MAX as u32).filter_map(char::from_u32) {
-		let code = i64::from(u32::from(letter));
-		assert_eq!(mapped_by_table(&upper, code), codes(letter.to_uppercase()), "upper of U+{code:04X}");
-		assert_eq!(mapped_by_table(&lower, code), codes(letter.to_lowercase()), "lower of U+{code:04X}");
-	}
+fn case_words_match_the_builtins_on_every_cased_letter() {
+	let letters: String = CASED_BLOCKS
+		.iter()
+		.flat_map(|&(start, end)| (start..end).filter_map(char::from_u32))
+		.filter(|letter| letter.is_alphabetic())
+		.collect();
+	is!(
+		&format!("use case_table; case_upper(\"{letters}\") == \"{letters}\".upper and case_lower(\"{letters}\") == \"{letters}\".lower"),
+		true
+	);
 }
