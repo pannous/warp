@@ -29,13 +29,14 @@ const ANALYSIS_PROGRAM: &str = concat!(
 	env!("CARGO_MANIFEST_DIR"),
 	"/lib/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(kinds(node_of(json(read(args#1)))))"
 );
-/// emitter.warp `hosted_wasm_module` of the lowered program's view in the worker's input file, the runtime words' view
-/// and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
+/// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
+/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
 const EMIT_PROGRAM: &str = concat!(
 	"use \"",
 	env!("CARGO_MANIFEST_DIR"),
 	"/lib/compiler/emitter.warp\"\nuse os\n",
-	"hosted_wasm_module(node_of(json(read(args#1))), node_of(json(read(args#2))), json(read(args#3)))"
+	"request = json(read(args#1))\n",
+	"typed_wasm_module(node_of(request#1), node_of(json(read(args#2))), json(read(args#3)), request#2)"
 );
 /// The runtime words emitter.warp compiles into a module, lowered like a program
 const RUNTIME_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/runtime.warp");
@@ -131,19 +132,18 @@ pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
 	enabled().then(|| kinds_of(view))
 }
 
-/// With ANALYSIS_SWITCH on, the lowered program as analyzer.warp analyzes it: an error when the stage fails or a kind
-/// it finds is narrower than src/analyzer's (analyzer::covers); for now the Rust kinds still feed the emitter
-pub fn check_analysis(program: &Node) -> Result<(), Node> {
+/// With ANALYSIS_SWITCH on, the kinds analyzer.warp finds in the lowered program, which emitter.warp then reads: an
+/// error when the stage fails or a kind it finds is narrower than src/analyzer's (analyzer::uncovered); None when off
+pub fn checked_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> {
 	static ANALYZES: OnceLock<bool> = OnceLock::new();
 	if !enabled() || !*ANALYZES.get_or_init(|| std::env::var_os(ANALYSIS_SWITCH).is_some()) {
-		return Ok(());
+		return Ok(None);
 	}
 	use crate::analyzer::{inferred_kinds, json_kind_slots, kind_slots, uncovered};
-	let warp = kinds_of(&analysis_view(program)).map(|kinds| json_kind_slots(&kinds));
-	let warp = warp.map_err(|failure| crate::node::error(&failure))?;
-	let differing = uncovered(&warp, &kind_slots(&inferred_kinds(program)));
+	let kinds = kinds_of(&analysis_view(program)).map_err(|failure| crate::node::error(&failure))?;
+	let differing = uncovered(&json_kind_slots(&kinds), &kind_slots(&inferred_kinds(program)));
 	if differing.is_empty() {
-		return Ok(());
+		return Ok(Some(kinds));
 	}
 	Err(crate::node::error(&format!("the self-hosted analysis disagrees with Rust's: {}", differing.join("; "))))
 }
@@ -159,11 +159,13 @@ pub fn kinds_of(view: &Node) -> Result<serde_json::Value, String> {
 /// The module emitter.warp emits for the lowered `node`; None when it does not emit (not self-hosted, or the front end
 /// only) or the program is outside its core,
 /// an error when emitter.warp fails
-pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
+pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
 	if !emits() {
 		return None;
 	}
-	let module = answer(&EMIT, view_json(&plain_view(node))).and_then(|answer| module_of(&answer));
+	let kinds = kinds.map_or_else(|| "{}".to_string(), serde_json::Value::to_string);
+	let request = format!("[{}, {kinds}]", view_json(&plain_view(node)));
+	let module = answer(&EMIT, request).and_then(|answer| module_of(&answer));
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
 			log::trace!("self-hosted emit: {refusal}");

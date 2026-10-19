@@ -16,6 +16,7 @@ rm -rf "$work/runs" && mkdir -p "$work/runs" "$(dirname "$report")"
 export WARP=$warp WORK=$work ROOT=$root TIMEOUT_SECONDS
 export WARP_SELF_HOSTED=1 WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_MODULE_CACHE=$work/cache
 "$warp" "3 + 4" >/dev/null 2>&1 # compiles the stage programs once, into the cache every run shares
+[ -n "${WARP_SELF_ANALYSIS:-}" ] && "$warp" "x = 3; x + 4" >/dev/null 2>&1 # the analysis stage too (the first program the emitter meets)
 run() { # <program> [setting…]: its output and exit status
 	(cd "$(dirname "$1")" && env "${@:2}" timeout "$TIMEOUT_SECONDS" "$WARP" "$1" </dev/null 2>&1; echo "exit $?")
 }

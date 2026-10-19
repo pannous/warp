@@ -125,7 +125,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {} }
+# kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; kinds: any = {} }
 
 module = Module({}, [])
 
@@ -822,12 +823,25 @@ new_scope(f: Function) := {
 	scope
 }
 
+# the analyzer's kinds as the emitter's, where they name one it holds unboxed or as a typed reference; others ø
+analyzed_kinds = {int: "int", float: "float", text: "text", list: "list", codepoint: "char"}
+# the kind the analyzer found for f's i-th parameter (counted from 0), as the emitter's; ø when it found none it holds
+analyzed_parameter_kind(f: Function, i: int) := {
+	if f.is_runtime or module.kinds == ø or not ("functions" in module.kinds) { return ø }
+	functions = module.kinds["functions"]
+	if not (f.name in functions) { return ø }
+	parameters = functions[f.name]["params"]
+	if i >= #parameters or not (parameters[i] in analyzed_kinds) { return ø }
+	analyzed_kinds[parameters[i]]
+}
+
 compile_function(f: Function, argument_kinds: any) := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
 	parameter_kinds = []
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
+		if annotation == ø { annotation = analyzed_parameter_kind(f, i) }
 		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
@@ -944,7 +958,11 @@ host_argument(value: any, kind: text) := if kind == "i32" then converted(value, 
 wasm_module(program: any, runtime: any) := hosted_wasm_module(program, runtime, {})
 
 # as wasm_module, the host words `host` names importable (src/compiler/self_hosted.rs passes src/host.rs's)
-hosted_wasm_module(program: any, runtime: any, host: any) := {
+hosted_wasm_module(program: any, runtime: any, host: any) := typed_wasm_module(program, runtime, host, {})
+
+# as hosted_wasm_module, an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS)
+typed_wasm_module(program: any, runtime: any, host: any, kinds: any) := {
+	module.kinds = kinds
 	module.functions = {}
 	module.order = []
 	module.runtime = {}
