@@ -111,7 +111,7 @@ def positions(source: any, kind: text): list {
 }
 
 // A raised letter continues a name as in Rust (`xⁿ`), a raised digit ends it (`x²` squares x)
-def is_name_char(c: any): bool := is_alphanumeric(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
+def is_name_char(c: any): bool := is_alphanumeric(c) or is_letter_beyond_ascii(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
 
 // The superscript digits in digit order, the raised letters in the order of the letters they raise (no raised q)
 // Rust twin: warp_parser/mod.rs SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS
@@ -273,7 +273,14 @@ def possessive(source: any, at: int, n: int): bool {
 	at > 0 and is_name_char(source[at - 1]) and is_at(source, at + 1, 's', n) and is_at(source, at + 2, ' ', n) and at + 3 < n and is_name_start(source[at + 3])
 }
 
-def is_name_start(c: any): bool := is_alpha(c) or c == '_'
+def is_name_start(c: any): bool := is_alpha(c) or is_letter_beyond_ascii(c) or c == '_'
+
+// `π`, `σ`, `é`, `名`: a letter beyond ASCII names as a Latin one does (Rust's is_alphabetic), a cased one or one of
+// the CJK, kana and Hangul blocks
+def is_letter_beyond_ascii(c: any): bool {
+	if c <= '~' { return false }
+	upper(c) != lower(c) or (c >= '\u{3040}' and c <= '\u{30ff}') or (c >= '\u{4e00}' and c <= '\u{9fff}') or (c >= '\u{ac00}' and c <= '\u{d7af}')
+}
 
 // `# note`, `#!`, `##`, `#use lib`: a comment; `#s`, `#a-1`, `#f(x)` count
 def hash_comment(source: any, at: int, n: int): bool {
