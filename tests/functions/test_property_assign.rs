@@ -56,3 +56,10 @@ fn test_a_one_entry_object_counts_one_pair() {
 	is!("p={a:1}; count p", 1);
 	is!("p={a:1 b:2}; count p", 2);
 }
+
+#[test]
+fn test_a_map_entry_named_like_a_class_stays_an_entry() {
+	// `Box: yes` is the one entry of a map, no instance of Box: an instance's body is its fields
+	let program = "class Box{names: any = {}}; b = Box(); b.names[\"Box\"] = yes; b.names[\"Other\"] = yes";
+	assert_eq!(printed(&format!("{program}; b.names")), "{Box:yes Other:yes}");
+}

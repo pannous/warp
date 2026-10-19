@@ -85,22 +85,18 @@ fn test_of<'a>(statement: &'a Node, words: &[&str]) -> Option<Test<'a>> {
 	phrase(rest).map(Test::Soft)
 }
 
-/// A file of test pairs (decision warp-is-tests): code and its expected value a line each, `'1+1' 2`, bare or as the
-/// map `test_pairs = { … }`; each pair runs as `is!(code, expected)`. Any other program stays as it is
+/// A file of test pairs (decision warp-is-tests): a line each, code ⇥ expected value ⇥ an optional note,
+/// `"1+1"⇥2`, warp's reader takes it as a list of lists; bare or as the map `test_pairs = { … }`. Each pair runs as
+/// `is!(code, expected)`. Any other program stays as it is (a text alone too)
 fn pairs_checked(program: Node) -> Node {
 	let statements = program.body_statements();
-	let named_pairs = match statements.as_slice() {
+	let pairs = match statements.as_slice() {
 		[single] => match single.drop_meta() {
-			Node::Key(name, Op::Assign, map) if name.is_symbol(TEST_PAIRS) => Some(map.body_statements()),
-			_ => None,
+			Node::Key(name, Op::Assign, map) if name.is_symbol(TEST_PAIRS) => map.body_statements(),
+			_ => statements,
 		},
-		_ => None,
+		_ => statements,
 	};
-	// texts alone ("hello", the guide's first program) are a value, not a file of tests: one pair must expect something
-	if named_pairs.is_none() && !statements.iter().any(|statement| pair_parts(statement).is_some()) {
-		return program;
-	}
-	let pairs = named_pairs.unwrap_or(statements);
 	let checks: Option<Vec<Node>> = pairs.iter().map(pair_check).collect();
 	match checks {
 		Some(checks) if !checks.is_empty() => sequence(checks),
@@ -108,25 +104,45 @@ fn pairs_checked(program: Node) -> Node {
 	}
 }
 
-/// `'1+1' 2` as `is!("1+1", 2)`; a code alone expects ø
+/// `"1+1"⇥2` as `is!("1+1", 2)`
 fn pair_check(pair: &Node) -> Option<Node> {
-	let (code, expected) = pair_parts(pair).unwrap_or((pair.drop_meta(), Node::Empty));
-	let code = match code.drop_meta() {
-		Node::Text(code) => code.clone(),
-		Node::Char(code) => code.to_string(),
-		_ => return None,
-	};
+	let (code, expected) = pair_parts(pair)?;
 	Some(Node::List(vec![symbol(CHECK_WORDS[0]), Node::Text(code), expected], Bracket::Round, Separator::None))
 }
 
-/// `'1+1' 2`: the code and the value it expects
-fn pair_parts(pair: &Node) -> Option<(&Node, Node)> {
-	match pair.drop_meta() {
-		Node::List(items, Bracket::None | Bracket::Square, Separator::Space) if items.len() == 2 => {
-			Some((&items[0], items[1].clone()))
-		}
+/// A pair's code and expected value; its note is a remark
+fn pair_parts(pair: &Node) -> Option<(String, Node)> {
+	let Node::List(items, Bracket::None, Separator::Tab) = pair.drop_meta() else {
+		return None; // a text alone is a program, no pair
+	};
+	let (code, expected) = match items.as_slice() {
+		[code, expected] | [code, expected, _] => (code, expected.clone()),
+		_ => return None,
+	};
+	match code.drop_meta() {
+		Node::Text(code) => Some((code.clone(), expected)),
+		Node::Char(code) => Some((code.to_string(), expected)),
 		_ => None,
 	}
+}
+
+/// The commented-out pairs of a pairs file, `// "fib 10"⇥55⇥card fib-memo: regression`, as the lines `warp test`
+/// reports skipped: `"fib 10" 55: card fib-memo: regression`
+pub fn skipped_pairs(source: &str) -> Vec<String> {
+	source
+		.lines()
+		.filter_map(|line| line.trim_start().strip_prefix("//").or_else(|| line.trim_start().strip_prefix('#')))
+		.filter(|commented| commented.contains('\t'))
+		.filter_map(|commented| {
+			let (code, expected) = pair_parts(&parse(commented))?;
+			let pair = format!("{} {}", Node::Text(code).serialize(), expected.serialize());
+			// the note as written: a remark, no data
+			Some(match commented.split('\t').nth(2).map(str::trim) {
+				Some(note) => format!("{pair}: {note}"),
+				None => pair,
+			})
+		})
+		.collect()
 }
 
 /// `is! "3+3" 6`, `is!("3+3", 6)`: a call of a check word

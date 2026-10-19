@@ -58,6 +58,7 @@ mod test_list_methods; // card list-methods
 mod test_list_number_comparison;
 mod test_list_of_objects;
 mod test_list_parameters;
+mod test_list_passed_to_function_value; // card fixnow-builtin-function-add
 mod test_list_plus_number;
 mod test_list_retype;
 mod test_list_times_list;

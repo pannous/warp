@@ -244,9 +244,10 @@ def defined_names(program: any): list {
 ## one function's locals while its body is read
 # a runtime word's body may use the intrinsics
 # function: the one compiled, returned: the kinds its `return`s give, declared: the kind of each `x: T = v` local
-# depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block
+# depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block,
+# continuable: whether each takes a continue (continued_safely)
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; unshared: any }
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; continuable: any; unshared: any }
 
 local_index(body: Body, name: text, kind: text): int := {
 	if name in body.names { return body.names[name] }
@@ -1031,13 +1032,31 @@ def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else
 	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
 	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
 }
-# `while c do body`: block { loop { exit unless c; body; again } }; a `break` in body branches to the block's end
+# `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the
+# outer block's end, a `continue` to the inner one's, so the step a `for` lowering appends (`loop·step: i++`) still runs
 def loop_of(body: Body, test: any, block: any): list {
 	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
+	parts = statements_of(block)
+	has_step = #parts > 0 and is_loop_step(parts#(#parts))
+	again = if has_step then dropped(nested(body, value_of(parts#(#parts)), 2)) + [op.br, 0] else [op.br, 0]
+	if has_step { parts = parts[0..<(#parts - 1)] }
 	body.exits += [body.depth + 1]
-	looped = nested(body, block, 2)
+	body.continuable += [has_step or continued_safely(test, parts)]
+	body.depth += 3
+	looped = if #parts == 0 then [no_kind, []] else sequence(body, parts)
+	body.depth -= 3
 	body.exits = body.exits[0..<(#body.exits - 1)]
-	[no_kind, [op.block, no_value, op.loop, no_value] + exit_unless + dropped(looped) + [op.br, 0, op.end, op.end]]
+	body.continuable = body.continuable[0..<(#body.continuable - 1)]
+	[no_kind, [op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + dropped(looped) + [op.end] + again + [op.end, op.end]]
+}
+is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
+# whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
+# lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
+step_operators = ["=", "+=", "-=", "++", "--"]
+continued_safely(test: any, parts: any): bool := {
+	if #parts == 0 { return yes }
+	final_statement = parts#(#parts)
+	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions(test, name_of(key_of(final_statement))))
 }
 
 # the code of n read inside `blocks` more blocks, loops or ifs
@@ -1052,6 +1071,13 @@ def nested(body: Body, n: any, blocks: int): list {
 def loop_exit(body: Body): list {
 	if #body.exits == 0 { return refuse("a break outside a loop") }
 	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits))]
+}
+
+# `continue`: to the end of the block around the innermost loop's body, before its step
+def loop_again(body: Body): list {
+	if #body.exits == 0 { return refuse("a continue outside a loop") }
+	if not body.continuable#(#body.continuable) { return refuse("a continue in a loop whose last statement may be its step") }
+	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits) - 2)]
 }
 
 # a statement's code, its value dropped
@@ -1117,6 +1143,9 @@ def expression(body: Body, n: any): list {
 	if n is text { return text_value(n) }
 	if n is ø { return ["node", [ref_null, gc.node]] }
 	if n == symbol("break") { return loop_exit(body) }
+	if n == symbol("continue") { return loop_again(body) }
+	# `{ return ø }`: the block keeps a bare return, its ø no item of the group
+	if n == symbol("return") { return return_value(body, expression(body, ø)) }
 	if n is symbol and name_of(n) in module.host and not (name_of(n) in body.names) { return host_call(body, name_of(n), []) }
 	if n is symbol { return local_value(body, n) }
 	if type(n) is key { return key_expression(body, n) }
@@ -1214,7 +1243,7 @@ def key_expression(body: Body, n: any): list {
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration(body, right) }
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
-	if operator == ":" and left == symbol("loop·step") { return expression(body, right) }
+	if is_loop_step(n) { return expression(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
 	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
@@ -1329,7 +1358,7 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function): Body := {
-	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [])
+	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }

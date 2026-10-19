@@ -63,12 +63,15 @@ pub(super) fn is_embedded_std_file(path: &Path) -> bool {
 		return false;
 	};
 	let folder = path.parent().unwrap_or(Path::new(""));
-	if !cfg!(feature = "native") {
-		return folder == Path::new(STD_FOLDER);
-	}
-	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
-	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
-		|| std::fs::read_to_string(path).is_ok_and(|text| text == source)
+	let is_standard_folder = match cfg!(feature = "native") {
+		true => {
+			let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
+			standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
+		}
+		false => folder == Path::new(STD_FOLDER),
+	};
+	// a verbatim copy is the standard module, its aliases (HashSet) included, natively and in the browser alike
+	is_standard_folder || crate::web::read_text(&path.to_string_lossy()).is_some_and(|text| text == source)
 }
 
 /// A file changed after the running warp was built: a standard module being edited in a checkout, not a stale copy

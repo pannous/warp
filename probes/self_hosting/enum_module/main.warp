@@ -1,0 +1,3 @@
+// an enum declared in a used module, its cases used by the module's function (goal parser-compiles): want yes
+use "colors.warp"
+is_green(Color.Green)

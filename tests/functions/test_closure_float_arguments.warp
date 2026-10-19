@@ -2,3 +2,4 @@
 
 # a_closure_takes_a_float_element_after_narrowing
 is! 'h(x: any, f) := if x is list then f(x#1) else 0; h([sqrt(2.25), 1], a => a * a)' 2.25
+is! 'h(x: any, f) := if x is list then f(x#1) else 0; h([0.5, 1], a => a * a)' 0.25
