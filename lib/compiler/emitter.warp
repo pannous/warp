@@ -605,6 +605,12 @@ node_operation(body: Body, symbol: text, a: any, b: any) := {
 	textual = x => condition(runtime_call("textual_node", [x]))
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + chosen(kind, texts, [kind, numbers])]
 }
+# `x == ø`, `x != ø` (a match's `ø:` case): ø and an empty list are nothing, as Rust's equality takes them
+nothing_test(body: Body, symbol: text, n: any) := {
+	held_nothing = runtime_call("is_nothing", [["node", boxed(expression(body, n))]])
+	if symbol == "==" { return held_nothing }
+	["bool", condition(held_nothing) + [op.i32_eqz]]
+}
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
 equality(body: Body, symbol: text, a: any, b: any) := {
 	equal = runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]])
@@ -1025,7 +1031,10 @@ key_expression(body: Body, n: any) := {
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
-	if left == ø or right == ø { return refuse("the operator " + operator) }
+	if left == ø or right == ø {
+		if operator in equalities { return nothing_test(body, operator, if left == ø then right else left) }
+		return refuse("the operator " + operator)
+	}
 	operation(body, operator, expression(body, left), expression(body, right))
 }
 right_of_if(n: any) := value_of(n)

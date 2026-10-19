@@ -77,29 +77,32 @@ text_order(a: text, b: text): int := {
 	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then -1 else 1
 }
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
-node_text(n: any): text := {
-	# ø, a one-character text, is a character literal
-	if is_null(n) == 1 { return char_text("ø") }
-	if marked_kind(n) == 257 {
-		if unboxed_int(n) == 0 { return "no" }
-		return "yes"
-	}
-	if kind_code(n) == 1 { return exact_text(n) }
-	if kind_code(n) == 2 { return float_text(unboxed_float(n)) }
-	if kind_code(n) == 3 or kind_code(n) == 5 { return unboxed_text(n) }
-	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
-	if kind_code(n) == 6 { return key_text(n) }
+node_text(n: any): text := match n {
+	ø: char_text("ø")
+	Number(_): number_text(n)
+	Char(_): char_text(unboxed_char(n))
+	Text(_): unboxed_text(n)
+	Symbol(_): unboxed_text(n)
+	Key(_, _, _): key_text(n)
+	True: "yes"
+	False: "no"
+	_: collection_text(n)
+}
+number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
+# a map in braces, a list as list_text shows it
+collection_text(n: any): text := {
 	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
 	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
-node_code(n: any): text := {
-	# a one-character text reads as the character it is (src/node/serialization.rs)
-	if is_null(n) == 0 and kind_code(n) == 3 and code_point_count(unboxed_text(n)) != 1 { return quoted_text(unboxed_text(n)) }
-	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) { return "'" + node_text(n) + "'" }
-	node_text(n)
+node_code(n: any): text := match n {
+	Char(_): "'" + node_text(n) + "'"
+	Text(_): text_code(unboxed_text(n))
+	_: node_text(n)
 }
+# a one-character text reads as the character it is (src/node/serialization.rs)
+text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
 quoted_text(t: text): text := {
 	escapes = 0
@@ -257,6 +260,8 @@ field_with(m: any, name: text, value: any): any := {
 	m
 }
 # 1 for a boxed text or character, else 0
+# `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
+is_nothing(n: any): bool := if is_null(n) == 1 then yes else kind_code(n) == 8 and #unboxed_list(n) == 0
 textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
 # the bytes of the code point whose UTF-8 starts with the byte lead
 code_point_width(lead: int): int := if lead < 128 then 1 else if lead < 224 then 2 else if lead < 240 then 3 else 4
