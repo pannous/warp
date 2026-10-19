@@ -3825,6 +3825,8 @@ PASSED:
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
   ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
+  ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
@@ -6485,4 +6487,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-16 ignored, 6480 passed, 0 failed, 6480 total tested
+16 ignored, 6482 passed, 0 failed, 6482 total tested
