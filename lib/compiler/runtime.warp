@@ -6,6 +6,9 @@ text_join(a: text, b: text): text := {
 	out = new_text(byte_count(a) + byte_count(b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
+	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
+	if same_text(a, walked_text) == 1 { walked_text = out }
+	if same_text(a, other_text) == 1 { other_text = out }
 	out
 }
 # the text counted last, its size then and its count; the two texts `t#i` walked last, each with its size then, the
@@ -315,9 +318,10 @@ text_char(t: text, index: int): any := {
 	}
 	character_between(t, walked_at, character_end(t, walked_at))
 }
-# 1 when the current walk is over t as it is now and stands at index, before it or one past it
+# 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one
+# past it
 walk_reaches(t: text, index: int): int := {
-	if same_text(t, walked_text) == 0 or byte_count(t) != walked_bytes or index < walked_index - 1 { return 0 }
+	if same_text(t, walked_text) == 0 or byte_count(t) < walked_bytes or index < walked_index - 1 { return 0 }
 	if index == walked_index - 1 and walked_before < 0 { return 0 }
 	1
 }
