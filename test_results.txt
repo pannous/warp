@@ -2765,6 +2765,7 @@ PASSED:
   ✓ node::test_node_api::rebuilt_lists_equal_the_written_ones
   ✓ node::test_node_cases::a_case_builds_the_node
   ✓ node::test_node_cases::a_pattern_takes_the_node_apart
+  ✓ node::test_node_cases::a_patterns_op_is_spelled_as_text
   ✓ node::test_node_cases::a_programs_own_names_win
   ✓ node::test_node_cases::an_enum_case_in_a_pattern_compares
   ✓ node::test_node_cases::an_operator_case_is_spelled_as_the_node_carries_it
@@ -6477,4 +6478,4 @@ FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
 
 SUMMARY:
-16 ignored, 6471 passed, 1 failed, 6472 total tested
+16 ignored, 6472 passed, 1 failed, 6473 total tested
