@@ -13,14 +13,14 @@ RANGE_FIELDS = 6
 
 class CaseTable { ranges: list
 	range_count(): int := count(ranges) /! RANGE_FIELDS
-	field(range: int, index: int): int := ranges[range * RANGE_FIELDS + index]
-	start(range: int): int := field(range, 0)
-	last(range: int): int := field(range, 1)
-	stride(range: int): int := field(range, 2)
-	delta(range: int): int := field(range, 3)
-	second(range: int): int := field(range, 4)
-	third(range: int): int := field(range, 5)
-	// binary search: the last range starting at or before code, -1 when none does
+	field(at: int, index: int): int := ranges[at * RANGE_FIELDS + index]
+	start(at: int): int := field(at, 0)
+	last(at: int): int := field(at, 1)
+	stride(at: int): int := field(at, 2)
+	delta(at: int): int := field(at, 3)
+	second(at: int): int := field(at, 4)
+	third(at: int): int := field(at, 5)
+	// binary search: the index of the last range starting at or before code, -1 when none does
 	range_before(code: int): int := {
 		low = 0
 		high = range_count()
@@ -30,31 +30,31 @@ class CaseTable { ranges: list
 		}
 		low - 1
 	}
-	covers(range: int, code: int): bool := range >= 0 and code <= last(range) and (code - start(range)) % stride(range) == 0
+	covers(at: int, code: int): bool := at >= 0 and code <= last(at) and (code - start(at)) % stride(at) == 0
 	// the code points code maps to: itself unless a range covers it
 	mapped(code: int): list := {
-		range = range_before(code)
-		if not covers(range, code) { return [code] }
-		out = [code + delta(range)]
-		if second(range) != 0 { out = out + [second(range)] }
-		if third(range) != 0 { out = out + [third(range)] }
+		at = range_before(code)
+		if not covers(at, code) { return [code] }
+		out = [code + delta(at)]
+		if second(at) != 0 { out = out + [second(at)] }
+		if third(at) != 0 { out = out + [third(at)] }
 		out
 	}
 	map_text(t: text): text := {
 		out = ""
-		for code in codepoints(t) { for each in mapped(code) { out = out + chr(each) } }
+		for code in codepoints(t) { for mapped_code in mapped(code) { out = out + chr(mapped_code) } }
 		out
 	}
 }
 
 case_table_of(mapping: CaseMapping): CaseTable := match mapping {
-	CaseMapping.Upper: CaseTable(upper_case_ranges)
-	CaseMapping.Lower: CaseTable(lower_case_ranges)
-	CaseMapping.Fold: CaseTable(fold_case_ranges)
+	CaseMapping::Upper => CaseTable(upper_case_ranges),
+	CaseMapping::Lower => CaseTable(lower_case_ranges),
+	CaseMapping::Fold => CaseTable(fold_case_ranges)
 }
 
 case_map(t: text, mapping: CaseMapping): text := case_table_of(mapping).map_text(t)
-case_upper(t: text): text := case_map(t, CaseMapping.Upper)
-case_lower(t: text): text := case_map(t, CaseMapping.Lower)
+case_upper(t: text): text := case_map(t, CaseMapping::Upper)
+case_lower(t: text): text := case_map(t, CaseMapping::Lower)
 // lower case without accents (`É` is `e`), for `≈`
-case_fold(t: text): text := case_map(t, CaseMapping.Fold)
+case_fold(t: text): text := case_map(t, CaseMapping::Fold)
