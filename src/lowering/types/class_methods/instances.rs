@@ -101,6 +101,7 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 	let finder = InstanceFinder { classes, returned: returned_classes(node, classes) };
 	let mut instances: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 	let mut assigned = std::collections::HashSet::new();
+	let mut ambiguous = std::collections::HashSet::new();
 	node.visit(&mut |part| {
 		let Node::Key(target, op, value) = part else { return };
 		if let (Some(variable), Op::Assign) = (target.symbol_name(), op) {
@@ -118,9 +119,13 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 			return;
 		};
 		if let Some(class) = finder.assigned_class(op, value, &instances).filter(|class| classes.contains(class)) {
-			instances.insert(variable.clone(), class);
+			if instances.insert(variable.clone(), class.clone()).is_some_and(|before| before != class) {
+				ambiguous.insert(variable.clone());
+			}
 		}
 	});
+	// `b = as_interval(o)` in one method, `b = as_gaussian(o)` in another: b is neither class
+	instances.retain(|variable, _| !ambiguous.contains(variable));
 	finder.iterated(node, &mut instances);
 	let module_instances = crate::compiler::compile_context::read(|context| context.module_instance_classes.clone());
 	for (variable, class) in module_instances {
@@ -233,7 +238,8 @@ impl InstanceFinder<'_> {
 }
 
 /// The functions whose value is an instance of one of `classes`, with its class: `make(n) := V(n)`, a body ending in
-/// a construction, or in a call of another such function; a used module's such functions too (module_returned_classes)
+/// a construction, or in a call of another such function, or declaring the class as its result `make(n): V := …`; a
+/// used module's such functions too (module_returned_classes)
 pub(crate) fn returned_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let mut definitions = vec![];
 	node.visit(&mut |part| {
@@ -243,10 +249,19 @@ pub(crate) fn returned_classes(node: &Node, classes: &[String]) -> std::collecti
 			}
 		}
 	});
+	// the program's functions only: a class's methods (`plus(o): Interval` of Interval and Gaussian) are no such calls
+	let declared = crate::modules::statements_of(node).iter().filter_map(|statement| {
+		let Node::Key(target, Op::Define, _) = statement.drop_meta() else { return None };
+		let (head, result) = crate::lowering::nodes::result_typed(target)?;
+		let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
+		let class = Some(result.drop_meta().name()).filter(|class| classes.contains(class))?;
+		Some((items.first()?.drop_meta().name(), class))
+	});
 	let mut returned: std::collections::HashMap<String, String> =
 		crate::compiler::compile_context::read(|context| context.module_returned_classes.clone())
 			.into_iter()
 			.filter(|(function, class)| classes.contains(class) && !definitions.iter().any(|(own, _)| own == function))
+			.chain(declared)
 			.collect();
 	// a function returning another's result: until no function is added
 	loop {
