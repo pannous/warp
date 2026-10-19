@@ -201,6 +201,9 @@ node_equal(a: any, b: any): bool := {
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_order(a, b) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
+	# times: the same form at the same position; any other value besides a number is none of the numbers
+	if kind_code(a) == 18 and kind_code(b) == 18 { return marked_kind(a) == marked_kind(b) and unboxed_int(a) == unboxed_int(b) }
+	if numeric_node(a) + numeric_node(b) < 2 { return no }
 	float_of_node(a) == float_of_node(b)
 }
 list_equal(a: list, b: list): bool := {
@@ -474,10 +477,11 @@ text_trim(t: text): text := {
 	bytes_between(t, start, stop)
 }
 # the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
-# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; to ø or beyond the end stops at the
-# end, a negative from or to fails, as Rust's "index out of range"
-node_slice(x: any, from: int, to: any): any := {
-	stop = if is_null(to) == 1 then node_length(x) else unboxed_int(to)
+# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at the start, to ø or
+# beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
+node_slice(x: any, start: any, to: any): any := {
+	from = if is_null(start) == 1 then 0 else index_of_node(start)
+	stop = if is_null(to) == 1 then node_length(x) else index_of_node(to)
 	if from < 0 or stop < 0 { index_out_of_range() }
 	if kind_code(x) == 3 { return character_slice(unboxed_text(x), from, stop) }
 	if kind_code(x) == 8 { return items_slice(unboxed_list(x), from, stop) }
@@ -853,6 +857,11 @@ truncated_int(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
 	int_quotient(exact_numerator(n), exact_denominator(n))
 }
+# `x as int`, `int(x)` of a value known only at run time: a text the int it spells, a number truncated
+int_cast(n: any): int := if is_text_node(n) then text_as_int(unboxed_text(n)) else truncated_int(n)
+# `x as float`, `float(x)` of a value known only at run time: a text the float it spells
+float_cast(n: any): float := if is_text_node(n) then text_as_float(unboxed_text(n)) else float_of_node(n)
+is_text_node(n: any): bool := is_null(n) == 0 and kind_code(n) == 3
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int): text := {
 	sign = if n < 0 then 1 else 0
@@ -1132,6 +1141,11 @@ int_overflow() := {
 	0
 }
 index_must_be_an_integer(): int := {
+	fail()
+	0
+}
+# `t as int`, `t as float` of a text that spells no number
+invalid_number(): int := {
 	fail()
 	0
 }
@@ -1446,7 +1460,7 @@ min_int(a: int, b: int): int := if a < b then a else b
 
 ## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
 ## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
-## that spells no number traps, where Rust's fails with invalid_number
+## that spells no number fails with invalid_number, as Rust's
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
 sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or byte_at(t, 0) == 43) then 1 else 0
 # t starts with -
@@ -1463,7 +1477,7 @@ digit_run(t: text, start: int): int := {
 text_as_int(t: text): int := {
 	start = sign_length(t)
 	count = digit_run(t, start)
-	if count == 0 or start + count != byte_count(t) { fail() }
+	if count == 0 or start + count != byte_count(t) { invalid_number() }
 	value = 0
 	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
 	if is_negative_text(t) then -value else value
@@ -1479,14 +1493,14 @@ text_as_float(t: text): float := {
 		fraction = digit_run(t, at + 1)
 		at += 1 + fraction
 	}
-	if whole + fraction == 0 { fail() }
+	if whole + fraction == 0 { invalid_number() }
 	stop = at
 	exponent = 0
 	if at < byte_count(t) and (byte_at(t, at) == 101 or byte_at(t, at) == 69) {
 		exponent = text_as_int(bytes_between(t, at + 1, byte_count(t)))
 		at = byte_count(t)
 	}
-	if at != byte_count(t) { fail() }
+	if at != byte_count(t) { invalid_number() }
 	found = decimal_digits(t, start, stop)
 	magnitude = decimal_float(unboxed_int(found#1), unboxed_int(found#2) + exponent - fraction)
 	if is_negative_text(t) then -magnitude else magnitude

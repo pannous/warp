@@ -144,7 +144,6 @@ class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; b
 
 module = Module({}, [])
 
-
 refuse(why: text): any := {
 	throw outside_the_core + why
 }
@@ -248,6 +247,14 @@ def converted(value: any, to: text): list {
 	if from == "char" and to == "text" { return runtime_call("char_text", [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
+}
+# `x as int`, `float(x)`: a text read as the number it spells, as Rust's ("invalid number" for one it doesn't)
+number_casts = {int: "int_cast", float: "float_cast"}
+text_numbers = {int: "text_as_int", float: "text_as_float"}
+def number_cast(value: any, to: text): list {
+	if value#1 == "text" { return [to, runtime_call(text_numbers[to], [value])#2] }
+	if value#1 == "node" { return [to, runtime_call(number_casts[to], [value])#2] }
+	[to, converted(value, to)]
 }
 # a value as a yes/no condition: non-zero is yes
 def condition(value: any): list {
@@ -529,7 +536,7 @@ def shown_text(value: any): list {
 	if kind == "int" { return runtime_call("int_text", [value]) }
 	if kind == "float" { return runtime_call("float_text", [value]) }
 	if kind == "char" { return runtime_call("char_text", [value]) }
-	if kind == "node" { return runtime_call("node_text", [value]) }
+	if kind == "node" or kind == "time" { return runtime_call("node_text", [value]) }
 	if kind != "bool" { return refuse("the text of a " + kind) }
 	["text", value#2 + [op.if] + references.text + text_value("yes")#2 + [op.else] + text_value("no")#2 + [op.end]]
 }
@@ -1066,7 +1073,7 @@ def group_expression(body: Body, n: any): list {
 		return length(expression(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("float") { return ["float", converted(expression(body, n#2), "float")] }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in number_casts { return number_cast(expression(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("global") { return global_declaration(body, n#2) }
@@ -1141,8 +1148,8 @@ def key_expression(body: Body, n: any): list {
 	}
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
 		value = expression(body, left)
-		# `7/2 as int`: an exact rational truncated toward 0
-		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
+		# `7/2 as int`: an exact rational truncated toward 0; `"12" as int`: the int the text spells
+		if name_of(right) in number_casts { return number_cast(value, name_of(right)) }
 		if name_of(right) == "text" { return shown_text(value) }
 		if name_of(right) == "bool" and (value#1 == "node" or value#1 == "text" or value#1 == "char") { return runtime_call("node_as_bool", [["node", boxed(value)]]) }
 		return [name_of(right), converted(value, name_of(right))]
