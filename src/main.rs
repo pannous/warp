@@ -4,6 +4,7 @@ use node::Node;
 use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
+use warp::compiler::node_views;
 use warp::node;
 use warp::run::module_cache::COMPILED_EXTENSION;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
@@ -62,6 +63,9 @@ const APP_CHECK: &str = "--check";
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
+/// `warp lower --json <code>`: the lowered program as the JSON node view lib/compiler reads with `node_of(json(…))`,
+/// lossless where the serialized text is not (probes/self_hosting/emitter/emit_lowered.sh)
+const LOWER_JSON_COMMAND: &str = "lower --json";
 /// The first words the command line takes as commands, for unknown_command's suggestion
 const COMMAND_WORDS: [&str; 30] = [
 	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
@@ -336,6 +340,11 @@ fn run_command(args: &[String]) {
 	} else if let Some(code) = command_argument(&arg_string, "eval") {
 		diagnostic::show_lines_of(code);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
+	} else if let Some(code) = command_argument(&arg_string, LOWER_JSON_COMMAND) {
+		match warp::pipeline::lower(code) {
+			Ok(lowered) => println!("{}", node_views::view_json(&node_views::plain_view(&lowered))),
+			Err(final_value) => println!("no module needed: {}", final_value.serialize()),
+		}
 	} else if let Some(code) = command_argument(&arg_string, "lower") {
 		match wasm_emitter::lower(code) {
 			Ok(lowered) => println!("{}", lowered.serialize()),
@@ -436,7 +445,7 @@ fn usage() {
 	println!("  warp run <file.warp> Run a warp file, never an executable");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
-	println!("  warp lower <code>    Show the program after the lowering passes");
+	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
 	println!("  warp parse <code>    Show the parsed AST");
 	println!("  warp verify <file>   Test and prove the laws of a file");
 	println!("  {FORMAT_USAGE}");
