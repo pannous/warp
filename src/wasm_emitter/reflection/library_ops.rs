@@ -1,6 +1,6 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Node, Separator};
 use crate::operators::{op_to_code, Op};
 use crate::type_kinds::{Kind, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
 use crate::type_kinds::{CURLY_LIST_KIND, KIND_BITS, SQUARE_LIST_KIND};
@@ -365,7 +365,7 @@ pub(in crate::wasm_emitter) fn mentions_quoted_tag(node: &Node) -> bool {
 
 fn mentions_tag(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(_, Op::Colon, value) if matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)) => true,
+		Node::Key(_, Op::Colon, value) if value.is_block() => true,
 		Node::Key(left, _, right) => mentions_tag(left) || mentions_tag(right),
 		Node::List(items, _, _) => items.iter().any(mentions_tag),
 		_ => false,

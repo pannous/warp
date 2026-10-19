@@ -1176,7 +1176,7 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 /// `f(a, b) := body`, `def f(a, b) {body}`, `def (f a b) {body}`
 fn definition(node: &Node) -> Option<Definition> {
 	let definition = function_head(node)?;
-	let is_block = matches!(definition.body.drop_meta(), Node::List(_, Bracket::Curly, _));
+	let is_block = definition.body.is_block();
 	let read = match definition.form {
 		DefinitionForm::Operator(Op::Define) => definition.result.is_none() && is_round_head(definition.head),
 		DefinitionForm::KeywordBlock => {
