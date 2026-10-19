@@ -236,9 +236,10 @@ def defined_names(program: any): list {
 ## one function's locals while its body is read
 # a runtime word's body may use the intrinsics
 # function: the one compiled, returned: the kinds its `return`s give, declared: the kind of each `x: T = v` local
-# depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block
+# depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block,
+# continuable: whether each takes a continue (continued_safely)
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; unshared: any }
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; continuable: any; unshared: any }
 
 local_index(body: Body, name: text, kind: text): int := {
 	if name in body.names { return body.names[name] }
@@ -918,35 +919,45 @@ def unmatched(c: any, a: any, numeric: bool): list {
 	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc.node]
 	["node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end]]
 }
-# `while c do body`: block { loop { exit unless c; body; again } }; a `break` in body branches to the block's end.
-# Its value is that of the body's last run, ø when it never ran (a local of the loop keeps it)
+# `while c do body`: block { loop { exit unless c; block { body }; step; again } }; a `break` in body branches to the
+# outer block's end, a `continue` to the inner one's, so the step a `for` lowering appends (`loop·step: i++`) still runs.
+# Its value is that of the body's last run, ø when it never ran (the local `last` keeps it)
 def loop_of(body: Body, test: any, block: any): list {
 	last = fresh_local(body, "node")
-	exit_unless = entered_loop(body, test)
-	looped = nested(body, block, 2)
+	["node", loop_code(body, test, block, last) + [op.local_get] + uleb(last)]
+}
+# the code of a loop; each run of its body sets the local `last` to its value, or, with last -1, runs it for its effect
+def loop_code(body: Body, test: any, block: any, last: int): list {
+	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
+	parts = statements_of(block)
+	has_step = #parts > 0 and is_loop_step(parts#(#parts))
+	again = if has_step then dropped(nested(body, value_of(parts#(#parts)), 2)) + [op.br, 0] else [op.br, 0]
+	if has_step { parts = parts[0..<(#parts - 1)] }
+	body.exits += [body.depth + 1]
+	body.continuable += [has_step or continued_safely(test, parts)]
+	body.depth += 3
+	looped = if #parts == 0 then [no_kind, []] else if last < 0 then [no_kind, effects(body, parts)] else sequence(body, parts)
+	body.depth -= 3
+	body.exits = body.exits[0..<(#body.exits - 1)]
+	body.continuable = body.continuable[0..<(#body.continuable - 1)]
 	kept = if looped#1 == no_kind then looped#2 else boxed(looped) + [op.local_set] + uleb(last)
-	["node", left_loop(body, exit_unless, kept) + [op.local_get] + uleb(last)]
+	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
 }
 is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
-# the exit test of a loop, the loop entered: a `break` in its body ends it
-def entered_loop(body: Body, test: any): list {
-	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
-	body.exits += [body.depth + 1]
-	exit_unless
-}
-# the loop of its exit test and body code, the loop left
-def left_loop(body: Body, exit_unless: any, looped: any): list {
-	body.exits = body.exits[0..<(#body.exits - 1)]
-	[op.block, no_value, op.loop, no_value] + exit_unless + looped + [op.br, 0, op.end, op.end]
+# whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
+# lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
+step_operators = ["=", "+=", "-=", "++", "--"]
+continued_safely(test: any, parts: any): bool := {
+	if #parts == 0 { return yes }
+	final_statement = parts#(#parts)
+	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions(test, name_of(key_of(final_statement))))
 }
 # n for its effect alone, its value never made: a statement, so an `if` or a loop only runs its branches or body as
 # statements too (no value boxed for nothing)
 def effect(body: Body, n: any): list {
 	if is_group(n) {
 		if not is_block(n) { return dropped(statement(body, n)) }
-		code = []
-		for item in n.map(x => x) { code += effect(body, item) }
-		return code
+		return effects(body, n.map(x => x))
 	}
 	if not (type(n) is key) { return dropped(statement(body, n)) }
 	operator = op_of(n)
@@ -958,11 +969,13 @@ def effect(body: Body, n: any): list {
 		c = condition(expression(body, right_of_if(key_of(left))))
 		return c + [op.if, no_value] + nested_effect(body, value_of(left), 1) + [op.else] + nested_effect(body, value_of(n), 1) + [op.end]
 	}
-	if operator == "do" and type(left) is key and op_of(left) == "while" {
-		exit_unless = entered_loop(body, value_of(left))
-		return left_loop(body, exit_unless, nested_effect(body, value_of(n), 2))
-	}
+	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_code(body, value_of(left), value_of(n), -1) }
 	dropped(statement(body, n))
+}
+def effects(body: Body, items: any): list {
+	code = []
+	for item in items { code += effect(body, item) }
+	code
 }
 # a group of statements: a block, not a map or the spaced `y = 2 x`
 is_block(n: any): bool := #n > 0 and separator_of(n) != " " and (bracket_of(n) == "{" or bracket_of(n) == "" or separator_of(n) == ";") and not n.all(is_entry)
@@ -987,6 +1000,13 @@ def loop_exit(body: Body): list {
 	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits))]
 }
 
+# `continue`: to the end of the block around the innermost loop's body, before its step
+def loop_again(body: Body): list {
+	if #body.exits == 0 { return refuse("a continue outside a loop") }
+	if not body.continuable#(#body.continuable) { return refuse("a continue in a loop whose last statement may be its step") }
+	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits) - 2)]
+}
+
 # a statement's code, its value dropped
 def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
 
@@ -997,26 +1017,12 @@ appended(body: Body, target_name: any, addition: any): any := {
 	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, expression(body, addition)])) }
 	ø
 }
-# the statements in order, the value that of the last; the value of a loop body is that of the item before the step a `for`
-# appends to it (`loop·step: i++`)
+# the statements in order, the value that of the last
 def sequence(body: Body, items: any): list {
 	if #items == 0 { return refuse("an empty block") }
-	stepped = #items > 1 and is_loop_step(items#(#items))
-	count = if stepped then #items - 1 else #items
-	code = []
-	for item in items[0..<(count - 1)] { code += effect(body, item) }
-	last = statement(body, items#count)
-	code += last#2
-	if not stepped { return [last#1, code] }
-	if last#1 == no_kind {
-		code += effect(body, items#(#items))
-		return [no_kind, code]
-	}
-	held = fresh_local(body, last#1)
-	code += [op.local_set] + uleb(held)
-	code += effect(body, items#(#items))
-	code += [op.local_get] + uleb(held)
-	[last#1, code]
+	code = effects(body, items[0..<(#items - 1)])
+	last = statement(body, items#(#items))
+	[last#1, code + last#2]
 }
 # a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
 # simpler); a fresh list makes it unshared, a list made inside a block of the statement does not outlast it
@@ -1063,6 +1069,9 @@ def expression(body: Body, n: any): list {
 	if n is text { return text_value(n) }
 	if n is ø { return ["node", [ref_null, gc.node]] }
 	if n == symbol("break") { return loop_exit(body) }
+	if n == symbol("continue") { return loop_again(body) }
+	# `{ return ø }`: the block keeps a bare return, its ø no item of the group
+	if n == symbol("return") { return return_value(body, expression(body, ø)) }
 	if n is symbol and name_of(n) in module.host and not (name_of(n) in body.names) { return host_call(body, name_of(n), []) }
 	if n is symbol { return local_value(body, n) }
 	if type(n) is key { return key_expression(body, n) }
@@ -1266,7 +1275,7 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function): Body := {
-	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [])
+	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }

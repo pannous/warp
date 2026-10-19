@@ -6,6 +6,7 @@ is! 'class Person { name: text; friend: Person? }; b = Person{name:"bo" friend: 
 
 # gc_struct_and_ref_are_wasm_spellings
 is! 'type N: gc struct { tag: i32 value: i64 }; n = N { tag: 1 value: 42 }; n.value' 42
+is! 'type N: gc struct { tag: i32 left: ref N? }; n = N { tag: 7 left: ø }; n.tag' 7
 
 # ref_fields_on_their_own_lines
 is! 'type Node: gc struct {
