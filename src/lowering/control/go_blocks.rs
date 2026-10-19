@@ -226,12 +226,7 @@ fn after_task(condition: Node, value: Node, phrases: &Phrases) -> Node {
 
 /// `go { … }` among the items of a list: the index of the block
 fn starts_block_at(items: &[Node]) -> Option<usize> {
-	items
-		.windows(2)
-		.position(|pair| {
-			pair[0].drop_meta().name() == GO_WORD && matches!(pair[1].drop_meta(), Node::List(_, Bracket::Curly, _))
-		})
-		.map(|go| go + 1)
+	items.windows(2).position(|pair| pair[0].drop_meta().name() == GO_WORD && pair[1].is_block()).map(|go| go + 1)
 }
 
 fn has_go_block(node: &Node) -> bool {

@@ -532,7 +532,7 @@ fn function_call_arguments(node: &Node) -> Option<&[Node]> {
 /// `a: x` passes x; `a{"home"}` (parsed alike, its content a block) stays the element passed
 fn argument_value(argument: &Node) -> &Node {
 	match argument.drop_meta() {
-		Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)) => value,
+		Node::Key(_, Op::Colon, value) if !value.is_block() => value,
 		_ => argument,
 	}
 }
