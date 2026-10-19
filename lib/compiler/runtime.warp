@@ -272,6 +272,7 @@ node_length(n: any): int := {
 	if is_null(n) == 1 { return 0 }
 	if kind_code(n) == 8 { return #unboxed_list(n) }
 	if kind_code(n) == 3 { return text_count(unboxed_text(n)) }
+	if kind_code(n) == 4 { return 1 }
 	fail()
 }
 # `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
