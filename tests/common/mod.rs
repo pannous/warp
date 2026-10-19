@@ -440,6 +440,13 @@ pub fn printed(code: &str) -> String {
 	String::from_utf8_lossy(&output.stdout).to_string()
 }
 
+/// What `warp eval` of `code` says, stdout then stderr: its value, hints and errors as the user sees them
+#[cfg(feature = "native")]
+pub fn said(code: &str) -> String {
+	let run = warp_command().env("WARP_NO_WINDOW", "1").args(["--no-ask", "eval", code]).output().expect("warp runs");
+	format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr))
+}
+
 /// The warp-runtime stub executables are built from (P104: warp never copies itself into one): built once per test run
 /// and kept as this checkout's own copy, as warp_command keeps its warp. Never the shared target/debug/warp-runtime:
 /// another checkout's build replaces it at any moment (card stub-race); this checkout's build in deps is found by
