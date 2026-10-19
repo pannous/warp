@@ -782,10 +782,11 @@ dispatcher_code(f: Function) := {
 }
 
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
-conditional(body: Body, test: any, yes_branch: any, no_branch: any) := {
+# has_else: `else ø` is a branch giving ø, no missing one
+conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else: bool) := {
 	c = condition(expression(body, test))
 	a = nested(body, yes_branch, 1)
-	if no_branch == ø { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.end]] }
+	if not has_else { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.end]] }
 	b = nested(body, no_branch, 1)
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
@@ -933,10 +934,10 @@ key_expression(body: Body, n: any) := {
 	operator = op_of(n)
 	left = key_of(n)
 	right = value_of(n)
-	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
-	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
+	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
+	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø, no) }
 	# `c ? a : b`: the keys ?(c, :(a, b))
-	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right)) }
+	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right), yes) }
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
 	if operator == "=" and left is symbol and name_of(left) in body.unshared and self_append_name(n) != ø {
 		grown = appended(body, left, value_of(right))
