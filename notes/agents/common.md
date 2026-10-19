@@ -98,6 +98,10 @@ instead of bending the code.
   capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in a `todo note` on the card.
+- Forward crunch (decision forward-crunch, 2026-10-19): send a branch once it builds and its quick check works; tests
+  failing in its own area don't hold it back: the Integrator ignores them onto your card and you fix forward. Only a
+  branch that doesn't build or breaks other areas' tests is bounced. More than ~20 ignored tests of yours: fix
+  those before new work.
 - Before `todo ready`: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
   both.
   .warp files you wrote or changed (samples/, lib/, probes/): `scratch/warp format <files>` (your own build,
