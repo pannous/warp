@@ -39,3 +39,24 @@ fn for_loops_run_pure() {
 	runs_pure("for_list", "xs = [4, 5, 6]; t = 0; for x in xs { t += x }; t", "15");
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
+
+/// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
+/// read, as parser.warp's expression, atom and continued do
+#[test]
+fn recursive_results_run_pure() {
+	let passed_on =
+		"def expression(p, depth) { if depth > 2 { return p }; continued(p, expression(p, depth + 1), depth) }";
+	runs_pure(
+		"passed_on",
+		&format!("{passed_on}; def continued(p, left, depth) := left + p * depth; expression(3, 0)"),
+		"12",
+	);
+	let mutual =
+		"def expression(p, depth) { if depth > 2 { return p }; left = atom(p, depth); continued(p, left, depth) }";
+	let atom = "def atom(p, depth) := if depth > 1 then p else expression(p, depth + 1)";
+	runs_pure(
+		"mutual",
+		&format!("{mutual}; {atom}; def continued(p, left, depth) := left + p * depth; expression(3, 0)"),
+		"12",
+	);
+}

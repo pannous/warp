@@ -135,14 +135,15 @@ def section(id: int, content: any): list { [id] + uleb(#content) + content }
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {} }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; finding: bool = no; settled: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {} }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {} }
+# reading: the function being compiled, whose calls of another one still being read settle its result (call_values)
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; reading: text = ""; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {} }
 
 module = Module({}, [])
 
@@ -812,10 +813,19 @@ def return_value(body: Body, value: any): list {
 
 def call(body: Body, f: Function, arguments: any): list {
 	if #arguments != #f.parameters { return refuse("a call of " + f.name + " with " + #arguments + " arguments") }
-	call_values(f, arguments.map(a => expression(body, a)))
+	values = arguments.map(a => expression(body, a))
+	# a first reading passing the result of a call not known yet (a recursive one) compiles f in its last reading
+	if f.kinds == ø and body.function.finding and pending in values.map(v => v#1) { return [pending, []] }
+	call_values(f, values)
 }
 def call_values(f: Function, values: any): list {
 	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
+	# another function calling f while f's readings still look for its result (mutual recursion): f gives the kind it
+	# declares, else the one analyzer.warp found, else a node
+	if f.result == pending and f.finding and f.name != module.reading {
+		f.settled = declared_result(f) ?? analyzed_result_kind(f) ?? "node"
+	}
+	if f.settled != ø { f.result = f.settled }
 	code = []
 	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
 	[f.result, code + [op.call] + uleb(f.index)]
@@ -1215,6 +1225,12 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	if found == ø or i >= #found["params"] { return ø }
 	held_kind(found["params"][i])
 }
+# the kind a definition declares it gives, `f(x): text := …`, its body `… as text` once lowered
+declared_result(f: Function): any := {
+	if not (type(f.body) is key and op_of(f.body) == "as" and value_of(f.body) is symbol) { return ø }
+	word = name_of(value_of(f.body))
+	if word in type_bytes or word in references then word else "node"
+}
 analyzed_result_kind(f: Function): any := {
 	found = analyzed_function(f)
 	if found == ø { return ø }
@@ -1236,13 +1252,18 @@ analyzed_element_kind(f: Function, name: text): any := {
 }
 
 compile_function(f: Function, argument_kinds: any): any := {
-	if not module.surveying { return function_compiled(f, argument_kinds) }
-	try { function_compiled(f, argument_kinds) } catch refusal {
-		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
-		module.refusals += [outside_the_core + f.name + ": " + ("" + refusal)[(#outside_the_core)..]]
-		if f.kinds == ø { f.kinds = argument_kinds.map(k => "node") }
-		f.result = "node"
+	caller = module.reading
+	module.reading = f.name
+	if not module.surveying { function_compiled(f, argument_kinds) } else {
+		try { function_compiled(f, argument_kinds) } catch refusal {
+			if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+			module.refusals += [outside_the_core + f.name + ": " + ("" + refusal)[(#outside_the_core)..]]
+			if f.kinds == ø { f.kinds = argument_kinds.map(k => "node") }
+			f.result = "node"
+			f.finding = no
+		}
 	}
+	module.reading = caller
 }
 function_compiled(f: Function, argument_kinds: any): any := {
 	f.index = #module.imports + #module.order
@@ -1258,14 +1279,17 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	# the first readings find the result kind and the kinds of locals assigned values of two kinds (`widens`), the
 	# last gives the code with every recursive call knowing the result
 	widened = -1
+	f.finding = yes
 	while widened != #f.widened.keys {
 		widened = #f.widened.keys
-		f.result = pending
+		f.result = if f.settled == ø then pending else f.settled
 		first = new_scope(f)
 		result = expression(first, f.body)#1
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
+	f.finding = no
 	if result != no_kind and analyzed_result_kind(f) != ø { result = analyzed_result_kind(f) }
+	if f.settled != ø { result = f.settled }
 	if result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
 	# a body ending in a statement (a loop, a print) gives ø, as Rust's does
 	f.result = if result == no_kind then "node" else result
