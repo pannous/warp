@@ -15,7 +15,7 @@ result_types = {}
 scopes = {}
 
 arithmetic_ops = {"+": 1, "-": 1, "*": 1, "/": 1, "%": 1, "^": 1, "**": 1, "//": 1, "mod": 1}
-comparison_ops = {"==": 1, "!=": 1, "<": 1, ">": 1, "<=": 1, ">=": 1, "≤": 1, "≥": 1, "≠": 1, "is": 1, "in": 1, "not": 1}
+comparison_ops = {"==": 1, "!=": 1, "<": 1, ">": 1, "<=": 1, ">=": 1, "≤": 1, "≥": 1, "≠": 1, "is": 1, "in": 1}
 compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%", "^=": "^"}
 # the kinds held as plain numbers; every other kind is held as a node (a reference)
 primitive_kinds = {"int": 1, "float": 1, "codepoint": 1, "i32": 1, "f32": 1, "pointer": 1}
@@ -106,12 +106,23 @@ choice_kind(then: any, otherwise: any, scope: any): text := {
 	if raises_error(otherwise) and not raises_error(then) { return error_or(branch_kind(then, scope)) }
 	branches_kind(branch_kind(then, scope), branch_kind(otherwise, scope))
 }
-error_or(kind: text): text := if kind == "int" or kind == "float" then "data" else kind
+# the kind of a node as written, not run (Rust Node::kind; a block is a list)
+written_kind(n: any): text := match n {
+	Key(_, _, _): "key"
+	List(_, _, _): "list"
+	Symbol(_): "symbol"
+	Text(_): "text"
+	_: { if n is int then "int" else if n is number then "float" else "empty" }
+}
+error_or(kind: text): text :=if kind == "int" or kind == "float" then "data" else kind
 
 kind_of_list(n: any, scope: any): text := {
 	name = head_name(n)
 	if name == "return" and #n == 2 { return kind_of(n#2, scope) }
 	if name != "" and name in results and not (name in scope.parameters) { return results[name] }
+	# `data a and b` never runs: it is the node written, here a key
+	if name == "data" and #n == 2 and bracket_of(n) == "" { return written_kind(n#2) }
+	if name == "as_code" and #n == 2 { return kind_of(n#2, scope) }
 	if (name == "slice" or name == "reverse") and #n >= 2 {
 		element = kind_of(n#2, scope)
 		return if element == "text" or element == "codepoint" then "text" else if element == "empty" then "empty" else "list"
@@ -191,11 +202,23 @@ converted_kind(n: any, scope: any): text := {
 
 # a loop is its last body value: a text or list as such, ø after a print, else a number or ø decided at run time
 loop_kind(body: any, scope: any): text := {
-	last = last_statement(body)
-	if head_name(last) == "print" { return "empty" }
-	kind = kind_of(body, scope)
+	statements = without_step(body)
+	# `{print x}` holds the words of its one statement, the call
+	last = if is_block(statements) and separator_of(statements) == " " and #statements > 1 then statements else last_statement(statements)
+	if #last == 2 and head_name(last) in output_words { return "empty" }
+	kind = kind_of(statements, scope)
 	if kind == "" or kind == "text" or kind == "codepoint" or kind == "list" { kind } else { "data" }
 }
+
+output_words = ["print", "puts", "puti", "putl", "putf"]
+
+# a loop body without the step a `for` lowering appended, shown as `loop·step: i++` (Rust split_step; node_views.rs
+# SHOWN_STEP)
+without_step(body: any): any := {
+	if not is_group(body) or #body == 0 or not is_step(body#(#body)) { return body }
+	group_like(body, items_of(body)[0 ..< #body - 1])
+}
+is_step(n: any): bool := is_key(n, ":") and key_of(n) == symbol("loop·step")
 
 # `xs#i`: an element of a list of known elements, a character of a text
 subscript_kind(indexed: any, index: any, scope: any): text := {
@@ -380,7 +403,14 @@ takes_it(n: any): bool := {
 	any_of(node_parts(n), part => takes_it(part))
 }
 is_digits(t: text): bool := #t > 0 and #t.chars().filter(c => c >= '0' and c <= '9') == #t
-is_sequence_block(n: any): bool := is_block(n) and (separator_of(n) == ";" or separator_of(n) == "\n")
+# `{a;b;c}`, and `{x=x+1}`, `{n++}`: statements to run, unlike the value list `{1 2 3}` (Rust is_statement_block)
+is_sequence_block(n: any): bool := is_block(n) and (separator_of(n) == ";" or separator_of(n) == "\n" or (#n == 1 and is_update(n#1)))
+
+# `x = x + 1`, `n++`, `s += t`: a statement changing a variable by its own value
+is_update(n: any): bool := {
+	if is_key(n, "=") { return key_of(n) is symbol and mentions(value_of(n), name_of(key_of(n))) }
+	(is_key(n, "++") or is_key(n, "--") or op_of(n) in compound_ops) and key_of(n) is symbol
+}
 
 # the kind a slot holding both a and b has: equal kinds stay, an int widens to a float, a character to a text,
 # ø (nil) to a list, a number of run-time kind takes either number, any other pair is a node (empty)
@@ -522,7 +552,8 @@ result_values(name: text): list := {
 	values = []
 	for value in returns(body, []) { if not raises_error(value) { values += [value] } }
 	last = last_statement(body)
-	if not raises_error(last) { values += [last] }
+	# a function that only fails gives ø
+	if not raises_error(last) { values += [last] } else if #values == 0 { values += [ø] }
 	values
 }
 
@@ -561,6 +592,8 @@ is_sequence(n: any): bool := is_group(n) and bracket_of(n) == "" and (separator_
 # --- flows: ["variable" | "element" | "parameter", scope name, target, value]; a parameter's target is [function, index] ---
 
 gather(n: any, context: text, flows: any): list := {
+	# `f := …` defines a variable as well (Rust define_new in collect_variables)
+	if is_definition(n) and is_key(n, ":=") and key_of(n) is symbol { flows += [["variable", context, name_of(key_of(n)), value_of(n)]] }
 	if is_definition(n) { return flows }
 	if type(n) is key and (op_of(n) == "=" or op_of(n) == ":=") {
 		gather(value_of(n), context, flows)
