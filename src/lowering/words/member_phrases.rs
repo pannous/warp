@@ -16,7 +16,7 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	};
 	// `xs.sum { |x| x * 2 }`: a trailing block, which the block passes read
-	let trailing_block = matches!(arguments, [block] if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)));
+	let trailing_block = matches!(arguments, [block] if block.is_block());
 	// `"äb".size in bytes`, `chars.number of x`: an operator word joins the member's value, it is no argument
 	let operator_word = arguments.iter().any(|argument| {
 		argument.drop_meta().symbol_name().is_some_and(|word| {
