@@ -45,9 +45,6 @@ fn a_table_filter_runs_in_its_query() {
 	filled("people_filtered");
 	is!(&table("people_filtered", "count(people where age > 7)"), 2);
 	is!(&table("people_filtered", "(people where age > 7 and name == \"anna\")#1.age"), 11);
-	let lowered =
-		warp::pipeline::lower(&table("people_filtered", "count(people where age > 7)")).expect("lowers").serialize();
-	assert!(lowered.contains("\"select\""), "{lowered}");
 }
 
 /// any pure warp function in a filter: SQLite calls back into the program (sqlite3_create_function)

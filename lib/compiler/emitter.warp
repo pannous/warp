@@ -54,7 +54,7 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_ge_u: 90, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
-	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209}
+	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -132,7 +132,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = [] }
+# kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = [] }
 
 module = Module({}, [])
 
@@ -237,6 +238,7 @@ def converted(value: any, to: text): list {
 	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
 	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
 	if from == "node" and to in node_readers { return runtime_call(node_readers[to], [value])#2 }
+	if from == "char" and to == "text" { return runtime_call("char_text", [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
@@ -431,6 +433,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [gc.node])] }
 	if name == "symbol_of" { return ["node", node(node_kind_codes.symbol, values#1#2)] }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
+	if name == "same_text" { return ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
 	if name == "is_ratio" { return ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]] }
 	if name == "ratio_of" {
@@ -461,13 +464,15 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, same_text: 2}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
-	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_chars", reverse: "reversed", list_sum: "list_sum",
+	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by"}
+	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
+	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with",
+	trim: "node_trim", map_get_or: "map_get_or"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
@@ -552,7 +557,8 @@ record_type(name: any): any := {
 }
 
 # whether name is the program's global variable here: never in a runtime word, whose locals are its own
-is_global(body: Body, name: text): bool := not body.intrinsics and not (name in body.names) and name in module.globals
+# a runtime word sees only the globals runtime.warp declares, never those of the program
+is_global(body: Body, name: text): bool := not (name in body.names) and name in module.globals and (not body.intrinsics or name in module.runtime_globals)
 def local_value(body: Body, n: any): list {
 	name = name_of(n)
 	if is_global(body, name) {
@@ -585,6 +591,7 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	}
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
+	if symbol == "%" { return runtime_call("float_mod", [["float", converted(a, kind)], ["float", converted(b, kind)]]) }
 	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
 	# a negative exponent gives an exact rational, so the power is a boxed value
 	if symbol == "^" and kind == "int" { return runtime_call("exact_pow", [["node", boxed(a)], ["node", boxed(b)]]) }
@@ -615,6 +622,12 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	texts = operation(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + chosen(kind, texts, [kind, numbers])]
+}
+# `x == ø`, `x != ø` (a match's `ø:` case): ø and an empty list are nothing, as Rust's equality takes them
+def nothing_test(body: Body, symbol: text, n: any): list {
+	held_nothing = runtime_call("is_nothing", [["node", boxed(expression(body, n))]])
+	if symbol == "==" { return held_nothing }
+	["bool", condition(held_nothing) + [op.i32_eqz]]
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
 def equality(body: Body, symbol: text, a: any, b: any): list {
@@ -673,6 +686,7 @@ def assignment(body: Body, target: any, value: any): list {
 	kind = value#1
 	if is_global(body, name) { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
+	if not (name in body.names) and analyzed_local_kind(body.function, name) != ø { kind = analyzed_local_kind(body.function, name) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		held = body.kinds#(body.names[name] + 1)
 		if widens(body, name, held, kind) {
@@ -964,11 +978,12 @@ def group_expression(body: Body, n: any): list {
 	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
-		if library_words[name_of(n#1)] in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
+		word = library_words[name_of(n#1)]
+		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
 		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
-		if name_of(n#1) == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
-		if not body.intrinsics and library_words[name_of(n#1)] in text_words { module.shows_values = yes }
-		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
+		if word == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
+		if not body.intrinsics and word in text_words { module.shows_values = yes }
+		return call(body, module.runtime[word], n[1..].map(x => x))
 	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
@@ -1010,6 +1025,8 @@ def key_expression(body: Body, n: any): list {
 	}
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration(body, right) }
+	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
+	if operator == ":" and left == symbol("loop·step") { return expression(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
 	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
@@ -1056,8 +1073,19 @@ def key_expression(body: Body, n: any): list {
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
-	if left == ø or right == ø { return refuse("the operator " + operator) }
+	if left == ø or right == ø {
+		if operator in equalities { return nothing_test(body, operator, if left == ø then right else left) }
+		return refuse("the operator " + operator)
+	}
+	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
 	operation(body, operator, expression(body, left), expression(body, right))
+}
+# `xs#i` of a list whose elements analyzer.warp knows: the element as that kind, else as a node
+def analyzed_element(body: Body, list: any, index: any): list {
+	value = operation(body, "#", expression(body, list), expression(body, index))
+	kind = analyzed_element_kind(body.function, name_of(list))
+	if kind == ø or value#1 != "node" { return value }
+	[kind, converted(value, kind)]
 }
 right_of_if(n: any): any := value_of(n)
 # `x as rational` of a float: the runtime's float_as_exact (decision float-as-rational); other kinds Rust takes
@@ -1106,6 +1134,45 @@ new_scope(f: Function): Body := {
 	scope
 }
 
+# is the program analyzed (WARP_SELF_ANALYSIS): then a node meeting a list or text holds one, as analyzer.warp found
+analyzed_program(): bool := module.kinds != ø and "value" in module.kinds
+# the kinds analyzer.warp finds that the emitter holds as found; a node stays the emitter's own reading of the value
+held_kinds = {int: 1, float: 1, char: 1, text: 1, list: 1}
+held_kind(kind: any): any := if kind in held_kinds then kind else ø
+# what analyzer.warp found for the program's function f, main's being the program's variables and value; ø if nothing
+analyzed_function(f: Function): any := {
+	if f.is_runtime or not analyzed_program() { return ø }
+	if f.name == "main" { return {params: [], result: module.kinds["value"], locals: module.kinds["variables"], elements: module.kinds["elements"]} }
+	functions = module.kinds["functions"]
+	if functions == ø or not (f.name in functions) { return ø }
+	functions[f.name]
+}
+# the kind analyzer.warp found for f's i-th parameter (counted from 0), its result, a local, if the emitter holds it
+analyzed_parameter_kind(f: Function, i: int): any := {
+	found = analyzed_function(f)
+	if found == ø or i >= #found["params"] { return ø }
+	held_kind(found["params"][i])
+}
+analyzed_result_kind(f: Function): any := {
+	found = analyzed_function(f)
+	if found == ø { return ø }
+	held_kind(found["result"])
+}
+# (an empty map of locals comes as null: card lib-json)
+analyzed_local_kind(f: Function, name: text): any := {
+	found = analyzed_function(f)
+	if found == ø or found["locals"] == ø or not (name in found["locals"]) { return ø }
+	held_kind(found["locals"][name])
+}
+# the kind of the elements analyzer.warp found for f's list `name`, if the emitter unboxes it from a node
+unboxed_element_kinds = {int: 1, float: 1, text: 1, list: 1}
+analyzed_element_kind(f: Function, name: text): any := {
+	found = analyzed_function(f)
+	if found == ø or found["elements"] == ø or not (name in found["elements"]) { return ø }
+	kind = found["elements"][name]
+	if kind in unboxed_element_kinds then kind else ø
+}
+
 compile_function(f: Function, argument_kinds: any): any := {
 	if not module.surveying { return function_compiled(f, argument_kinds) }
 	try { function_compiled(f, argument_kinds) } catch refusal {
@@ -1121,6 +1188,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	parameter_kinds = []
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
+		if annotation == ø { annotation = analyzed_parameter_kind(f, i) }
 		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
@@ -1135,10 +1203,13 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		result = expression(first, f.body)#1
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
-	if result == no_kind or result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
-	f.result = result
+	if result != no_kind and analyzed_result_kind(f) != ø { result = analyzed_result_kind(f) }
+	if result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
+	# a body ending in a statement (a loop, a print) gives ø, as Rust's does
+	f.result = if result == no_kind then "node" else result
 	scope = new_scope(f)
-	f.code = converted(expression(scope, f.body), result)
+	value = expression(scope, f.body)
+	f.code = if result == no_kind then value#2 + [ref_null, gc.node] else converted(value, result)
 	f.locals = scope.kinds[(#f.parameters)..]
 	f.local_names = scope.order
 }
@@ -1243,16 +1314,31 @@ def host_int(value: any): list {
 	converted(value, "int")
 }
 
+# `global name = 0` or `= ""` at the top of runtime.warp: a module variable of that kind its words share, from the
+# kind's zero (ø for a text)
+runtime_global(n: any): any := {
+	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
+	name = name_of(key_of(value_of(n)))
+	module.globals[name] = [#module.global_order, if value_of(value_of(n)) is number then "int" else "text"]
+	module.runtime_globals += [name]
+	module.global_order += [name]
+}
+
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
 # lib/compiler/runtime.warp lowered by the same pipeline
 wasm_module(program: any, runtime: any): any := hosted_wasm_module(program, runtime, {})
 
 # as wasm_module, the host words `host` names importable (src/compiler/self_hosted.rs passes src/host.rs's)
-hosted_wasm_module(program: any, runtime: any, host: any): any := {
+hosted_wasm_module(program: any, runtime: any, host: any): any := typed_wasm_module(program, runtime, host, {})
+
+# as hosted_wasm_module, an unannotated parameter of the kind analyzer.warp found in `kinds` (WARP_SELF_ANALYSIS)
+typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
+	module.kinds = kinds
 	module.functions = {}
 	module.order = []
 	module.runtime = {}
 	module.globals = {}
+	module.runtime_globals = []
 	module.global_order = []
 	module.texts = {}
 	module.bytes = []
@@ -1273,7 +1359,7 @@ hosted_wasm_module(program: any, runtime: any, host: any): any := {
 	for name in module.host.keys {
 		if mentions(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
 	}
-	collect_functions(runtime, module.runtime)
+	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	for name in module.runtime.keys {
 		word = module.runtime[name]
 		word.is_runtime = yes

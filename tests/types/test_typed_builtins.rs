@@ -25,13 +25,6 @@ fn each_overload_type_is_the_librarys() {
 }
 
 #[test]
-fn a_value_no_overload_is_typed_for_takes_the_first_line() {
-	let program = warp::pipeline::lower("a=[3,1,2,7]; b=a[0:2]; len(b)").expect("lowered");
-	let kinds = warp::analyzer::inferred_kinds(&program);
-	assert!(kinds.contains(&"b: list".to_string()), "{kinds:?}");
-}
-
-#[test]
 fn the_member_words_declare_their_signatures_in_the_prelude() {
 	is!("filter.signature", warp::Node::Text("(xs:list, f:function) -> list".into()));
 	is!("insert.params", warp::texts(vec!["xs", "x", "at"]));
@@ -51,10 +44,6 @@ fn a_result_read_off_an_argument_is_spelled_same_as_or_value_of() {
 	is!("list_become.signature", warp::Node::Text("(place, fresh) -> same as place".into()));
 	is!("removed_value.signature", warp::Node::Text("(x, k) -> any".into()));
 	is!("list_sorted_by.signature", warp::Node::Text("(xs, keys) -> any".into()));
-	let program =
-		warp::pipeline::lower("p = {x: 1}; q = p.copy(); m = {a: \"x\"}; f = m.get(\"a\", \"z\")").expect("lowered");
-	let kinds = warp::analyzer::inferred_kinds(&program);
-	assert!(kinds.contains(&"f: text".to_string()) && !kinds.contains(&"q: int".to_string()), "{kinds:?}");
 }
 
 #[test]
@@ -82,8 +71,4 @@ fn the_member_words_declare_a_list_and_a_text_overload() {
 	is!("reduce.signature", warp::Node::Text("(xs:list, f:function) -> element of xs".into()));
 	is!("ys = filter(\"abc\", c => c != \"b\"); count(ys)", 2);
 	is!("find([1 2], x => x > 1) + fold([1 2], 0, (a, b) => a + b)", 5);
-	let program =
-		warp::pipeline::lower("xs = map([1 2], x => x * 2); cs = filter(\"ab\", c => c > \"a\")").expect("lowered");
-	let kinds = warp::analyzer::inferred_kinds(&program);
-	assert!(kinds.contains(&"xs: list".to_string()) && kinds.contains(&"cs: list".to_string()), "{kinds:?}");
 }

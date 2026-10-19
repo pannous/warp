@@ -13,9 +13,11 @@ results = {}
 # name → the list type of a function giving a list (`list of int`), so a call's elements keep their type
 result_types = {}
 scopes = {}
+# [name, captured] of each function a closure is made of
+closure_targets = []
 
 arithmetic_ops = {"+": 1, "-": 1, "*": 1, "/": 1, "%": 1, "^": 1, "**": 1, "//": 1, "mod": 1}
-comparison_ops = {"==": 1, "!=": 1, "<": 1, ">": 1, "<=": 1, ">=": 1, "≤": 1, "≥": 1, "≠": 1, "is": 1, "in": 1, "not": 1}
+comparison_ops = {"==": 1, "!=": 1, "<": 1, ">": 1, "<=": 1, ">=": 1, "≤": 1, "≥": 1, "≠": 1, "is": 1, "in": 1}
 compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%", "^=": "^"}
 # the kinds held as plain numbers; every other kind is held as a node (a reference)
 primitive_kinds = {"int": 1, "float": 1, "codepoint": 1, "i32": 1, "f32": 1, "pointer": 1}
@@ -96,9 +98,12 @@ branch_kind(branch: any, scope: any): text := {
 	held_kind(branch, scope)
 }
 
+raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
+
+# the branch ends in an error raised: `error "…"`, `raise …`, `throw …`
 raises_error(branch: any): bool := {
 	last = last_statement(branch)
-	head_name(last) == "error" or head_name(last) == "raise"
+	is_group(last) and #last == 2 and (head_name(last) == "error" or head_name(last) in raise_words)
 }
 
 choice_kind(then: any, otherwise: any, scope: any): text := {
@@ -106,12 +111,23 @@ choice_kind(then: any, otherwise: any, scope: any): text := {
 	if raises_error(otherwise) and not raises_error(then) { return error_or(branch_kind(then, scope)) }
 	branches_kind(branch_kind(then, scope), branch_kind(otherwise, scope))
 }
-error_or(kind: text): text := if kind == "int" or kind == "float" then "data" else kind
+# the kind of a node as written, not run (Rust Node::kind; a block is a list)
+written_kind(n: any): text := match n {
+	Key(_, _, _): "key"
+	List(_, _, _): "list"
+	Symbol(_): "symbol"
+	Text(_): "text"
+	_: { if n is int then "int" else if n is number then "float" else "empty" }
+}
+error_or(kind: text): text :=if kind == "int" or kind == "float" then "data" else kind
 
 kind_of_list(n: any, scope: any): text := {
 	name = head_name(n)
 	if name == "return" and #n == 2 { return kind_of(n#2, scope) }
 	if name != "" and name in results and not (name in scope.parameters) { return results[name] }
+	# `data a and b` never runs: it is the node written, here a key
+	if name == "data" and #n == 2 and bracket_of(n) == "" { return written_kind(n#2) }
+	if name == "as_code" and #n == 2 { return kind_of(n#2, scope) }
 	if (name == "slice" or name == "reverse") and #n >= 2 {
 		element = kind_of(n#2, scope)
 		return if element == "text" or element == "codepoint" then "text" else if element == "empty" then "empty" else "list"
@@ -119,6 +135,8 @@ kind_of_list(n: any, scope: any): text := {
 	if name != "" and name in call_kinds and (#n >= 2 or bracket_of(n) == "(") and binding(scope, name) == ø { return call_kinds[name] }
 	typed = typed_call_kind(n, scope)
 	if typed != ø { return typed }
+	# a call of a function parameter: no closure is known to flow in, any value of run-time kind (Rust closure_call_kind)
+	if called_closure(n) in scope.parameters { return "data" }
 	# a word nothing defines or tables (a function value, a host word): any value
 	if bracket_of(n) == "(" and #n >= 2 and separator_of(n) != "," and name != "" { return "empty" }
 	if bracket_of(n) == "(" and #n == 1 {
@@ -126,6 +144,8 @@ kind_of_list(n: any, scope: any): text := {
 		return kind_of(n#1, scope)
 	}
 	statements = separator_of(n) == ";" or separator_of(n) == "\n"
+	# `(a, b)` computes its elements
+	if bracket_of(n) == "(" and separator_of(n) == "," { return "list" }
 	if bracket_of(n) == "[" or (not (statements and bracket_of(n) == "") and all_of(n, is_data)) { return "list" }
 	kind_of(n#(#n), scope)
 }
@@ -186,16 +206,29 @@ converted_kind(n: any, scope: any): text := {
 	if target == "hex" or target == "binary" or target == "octal" or target == "byte" { return "int" }
 	if target == "number" and kind_of(key_of(n), scope) != "float" { return "data" }
 	if type_kinds.get(target) == "float" { return "float" }
-	kind_of(key_of(n), scope)
+	# `as int`, `as exact` stay exact ints; any other conversion gives a value of run-time kind
+	if type_kinds.get(target) == "int" { "int" } else { "empty" }
 }
 
 # a loop is its last body value: a text or list as such, ø after a print, else a number or ø decided at run time
 loop_kind(body: any, scope: any): text := {
-	last = last_statement(body)
-	if head_name(last) == "print" { return "empty" }
-	kind = kind_of(body, scope)
+	statements = without_step(body)
+	# `{print x}` holds the words of its one statement, the call
+	last = if is_block(statements) and separator_of(statements) == " " and #statements > 1 then statements else last_statement(statements)
+	if #last == 2 and head_name(last) in output_words { return "empty" }
+	kind = kind_of(statements, scope)
 	if kind == "" or kind == "text" or kind == "codepoint" or kind == "list" { kind } else { "data" }
 }
+
+output_words = ["print", "puts", "puti", "putl", "putf"]
+
+# a loop body without the step a `for` lowering appended, shown as `loop·step: i++` (Rust split_step; node_views.rs
+# SHOWN_STEP)
+without_step(body: any): any := {
+	if not is_group(body) or #body == 0 or not is_step(body#(#body)) { return body }
+	group_like(body, items_of(body)[0 ..< #body - 1])
+}
+is_step(n: any): bool := is_key(n, ":") and key_of(n) == symbol("loop·step")
 
 # `xs#i`: an element of a list of known elements, a character of a text
 subscript_kind(indexed: any, index: any, scope: any): text := {
@@ -231,7 +264,12 @@ element_kind(indexed: any, scope: any): any := {
 	kind = kind_of(indexed, scope)
 	if kind == "text" or kind == "symbol" { return "text" }
 	if kind == "empty" { return "empty" }
-	type_name = list_type(indexed, scope)
+	typed_element_kind(list_type(indexed, scope))
+}
+
+# the kind of an element of a list or map type (list of int: int), ø when the type names none
+typed_element_kind(type_name: any): any := {
+	if type_name == ø { return ø }
 	if type_name == "map" or type_name == "list of node" { return "empty" }
 	element = if type_name.starts_with("list of ") then type_name[8..] else if type_name.starts_with("map of ") then type_name[7..] else ""
 	if element == "" { return ø }
@@ -380,7 +418,14 @@ takes_it(n: any): bool := {
 	any_of(node_parts(n), part => takes_it(part))
 }
 is_digits(t: text): bool := #t > 0 and #t.chars().filter(c => c >= '0' and c <= '9') == #t
-is_sequence_block(n: any): bool := is_block(n) and (separator_of(n) == ";" or separator_of(n) == "\n")
+# `{a;b;c}`, and `{x=x+1}`, `{n++}`: statements to run, unlike the value list `{1 2 3}` (Rust is_statement_block)
+is_sequence_block(n: any): bool := is_block(n) and (separator_of(n) == ";" or separator_of(n) == "\n" or (#n == 1 and is_update(n#1)))
+
+# `x = x + 1`, `n++`, `s += t`: a statement changing a variable by its own value
+is_update(n: any): bool := {
+	if is_key(n, "=") { return key_of(n) is symbol and mentions(value_of(n), name_of(key_of(n))) }
+	(is_key(n, "++") or is_key(n, "--") or op_of(n) in compound_ops) and key_of(n) is symbol
+}
 
 # the kind a slot holding both a and b has: equal kinds stay, an int widens to a float, a character to a text,
 # ø (nil) to a list, a number of run-time kind takes either number, any other pair is a node (empty)
@@ -405,6 +450,8 @@ joined_word(a: text, b: text): text := {
 declared_kind(type_node: any): any := {
 	name = if type_node is symbol then name_of(type_node) else ""
 	if name.ends_with("?") or name in node_types or name.starts_with("map") { return "empty" }
+	# an inline union `int or text` and `number` hold a value of any of their kinds as a node
+	if name == "number" or name.contains(" or ") and not name.starts_with("list of ") { return "empty" }
 	if name.starts_with("list") or name.ends_with("s") and type_kinds.get(name[0..(#name - 1)]) != ø { return "list" }
 	type_kinds.get(name)
 }
@@ -432,13 +479,14 @@ pinned_kind(parameter: any): text := {
 # what a body does with a name: calls it (a function), uses it as a sequence (a list, a text when also joined to a text)
 used_as(name: text, used: any): any := {
 	if name in used.called { return "function" }
+	if name in used.celled or name in used.foreign { return "data" }
 	if name in used.sequences { return if name in used.texts then "text" else "list" }
 	ø
 }
 
-# the names a body calls, uses as sequences and joins to texts (Rust Usages)
+# the names a body calls, keeps in cells, gives to foreign code, uses as sequences and joins to texts (Rust Usages)
 usages(body: any): any := {
-	used = {called: {}, sequences: {}, texts: {}, tested: {}, aliases: []}
+	used = {called: {}, celled: {}, foreign: {}, sequences: {}, texts: {}, tested: {}, aliases: []}
 	record_usages(body, used)
 	# `for x in xs` walks the copy `x·items = xs`: the source of a used sequence is one too
 	grown = yes
@@ -457,6 +505,8 @@ usages(body: any): any := {
 record_usages(n: any, used: any): any := {
 	called = called_closure(n)
 	if called != "" { used.called[called] = yes }
+	record_word_call(n, used)
+	for given in given_to_foreign_code(n) { used.foreign[given] = yes }
 	counted = used_sequence(n)
 	if counted is symbol { used.sequences[name_of(counted)] = yes }
 	listed = joined_name(n, is_list_literal)
@@ -476,6 +526,26 @@ kind_tested(n: any): text := if is_group(n) and #n == 3 and head_name(n) == "is_
 
 # `closure_call_2(f, a, b)`: the function value called
 called_closure(n: any): text := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then name_of(n#2) else ""
+
+cell_words = {cell_new: 1, cell_get: 1, cell_set: 1, signal_new: 1, signal_listeners: 1, signal_listeners_set: 1}
+map_words = {map_keys: 1, map_values: 1, map_entries: 1, collection_contains: 1, collection_position: 1, map_get_or: 1, map_without: 1, map_of_entry: 1, field_with: 1}
+
+# `(word map …)`: a map word reads map as a map (a sequence), a cell word as a cell
+record_word_call(n: any, used: any): any := {
+	if not (is_group(n) and bracket_of(n) == "(" and #n >= 2 and n#2 is symbol) { return ø }
+	if head_name(n) in map_words { used.sequences[name_of(n#2)] = yes }
+	if head_name(n) in cell_words { used.celled[name_of(n#2)] = yes }
+}
+
+# `foreign_call(library, word, receiver, …, (arguments))`: the names given to foreign code
+given_to_foreign_code(n: any): any := {
+	if not (bracket_of(n) == "(" and head_name(n) == "foreign_call" and #n >= 3) { return [] }
+	given = [n#3]
+	if #n == 6 and is_group(n#6) { for argument in n#6 { given += [argument] } }
+	names = []
+	for value in given { if value is symbol { names += [name_of(value)] } }
+	names
+}
 
 counting_words = {size: 1, count: 1, len: 1, length: 1}
 
@@ -522,7 +592,8 @@ result_values(name: text): list := {
 	values = []
 	for value in returns(body, []) { if not raises_error(value) { values += [value] } }
 	last = last_statement(body)
-	if not raises_error(last) { values += [last] }
+	# a function that only fails gives ø
+	if not raises_error(last) { values += [last] } else if #values == 0 { values += [ø] }
 	values
 }
 
@@ -561,6 +632,8 @@ is_sequence(n: any): bool := is_group(n) and bracket_of(n) == "" and (separator_
 # --- flows: ["variable" | "element" | "parameter", scope name, target, value]; a parameter's target is [function, index] ---
 
 gather(n: any, context: text, flows: any): list := {
+	# `f := …` defines a variable as well (Rust define_new in collect_variables)
+	if is_definition(n) and is_key(n, ":=") and key_of(n) is symbol { flows += [["variable", context, name_of(key_of(n)), value_of(n)]] }
 	if is_definition(n) { return flows }
 	if type(n) is key and (op_of(n) == "=" or op_of(n) == ":=") {
 		gather(value_of(n), context, flows)
@@ -573,9 +646,14 @@ gather(n: any, context: text, flows: any): list := {
 	# `global x = 1`, `global x`: a variable of the main scope
 	if is_key(n, ":") and key_of(n) == symbol("global") {
 		declared = value_of(n)
-		if is_key(declared, "=") and key_of(declared) is symbol {
+		target = if is_key(declared, "=") then key_of(declared) else ø
+		if target is symbol {
 			gather(value_of(declared), context, flows)
-			flows += [["variable", "", name_of(key_of(declared)), value_of(declared)]]
+			flows += [["variable", "", name_of(target), value_of(declared)]]
+		} else if is_key(target, ":") and key_of(target) is symbol {
+			# `global level: int = 0`, how the analysis view shows a typed global
+			gather(value_of(declared), context, flows)
+			declare(name_of(key_of(target)), value_of(target), "")
 		} else if declared is symbol { flows += [["variable", "", name_of(declared), 0]] }
 		# through a local: `scopes[""].declared_globals[name] = yes` errors "not an int" (card for `m[k][i] = v`)
 		main = scopes[""]
@@ -591,8 +669,36 @@ gather(n: any, context: text, flows: any): list := {
 		arguments = n[1..]
 		for index in 0..<min(#arguments, #parameters_of(name_of(n#1))) { flows += [["parameter", context, [name_of(n#1), index], arguments[index]]] }
 	}
+	# `closure_new(f, a, b)`: the captured values flow into the first parameters of f
+	if head_name(n) == "closure_new" and #n >= 2 and n#2 is symbol and name_of(n#2) in definitions {
+		target = name_of(n#2)
+		captured = n[2..]
+		for index in 0..<min(#captured, #parameters_of(target)) { flows += [["parameter", context, [target, index], captured[index]]] }
+	}
+	# `closure_call_2(f, a, b)` passes a and b weakly to every function value of its arity (Rust closure_flows)
+	arity = closure_arity(head_name(n))
+	if arity > 0 {
+		for made in closure_targets {
+			if made#1 in definitions and #parameters_of(made#1) == made#2 + arity {
+				for index in 0..<arity { flows += [["weak", context, [made#1, made#2 + index], n[index + 2]]] }
+			}
+		}
+	}
 	for part in node_parts(n) { gather(part, context, flows) }
 	flows
+}
+
+# `closure_call_2`: 2, else 0
+closure_arity(name: text): int := if name.starts_with("closure_call_") and is_digits(name[13..]) then int(name[13..]) else 0
+
+# every function a closure is made of, with the number of values it captures: [name, captured], each once
+closure_targets_in(n: any, found: list): list := {
+	if head_name(n) == "closure_new" and #n >= 2 and n#2 is symbol {
+		made = [name_of(n#2), #n - 2]
+		if not (made in found) { found += [made] }
+	}
+	for part in node_parts(n) { closure_targets_in(part, found) }
+	found
 }
 
 # `x: T = v`: the slot is pinned to T
@@ -618,6 +724,7 @@ apply(flow: any): bool := {
 	target = flow#3
 	value = flow#4
 	scope = scopes[context]
+	if flow#1 == "weak" { return no }
 	if flow#1 == "parameter" {
 		parameter = parameters_of(target#1)[target#2]
 		if parameter_name(parameter) in scopes[target#1].pinned { return no }
@@ -704,18 +811,34 @@ forwarded_kinds(name: text): any := {
 	forwarded
 }
 
+# slot `f(index)` → the kinds the closure calls pass that parameter, joined: those of the values the caller knows
+weak_kinds(flows: list): any := {
+	passed = {}
+	for flow in flows {
+		if flow#1 == "weak" {
+			kind = flowing_kind(flow#4, scopes[flow#2])
+			slot = flow#3#1 + "(" + "${flow#3#2}" + ")"
+			if kind != "" { passed[slot] = joined_kind(passed.get(slot) ?? "", if kind == "nil" then "empty" else kind) }
+		}
+	}
+	passed
+}
+
 # the slots no value flowed into: a parameter takes what its body does with it, else what it is passed on as, anything
 # else an int
-defaults(): any := {
+defaults(flows: list): any := {
+	weak = weak_kinds(flows)
 	forwarded = {}
 	for name in definitions.keys() { forwarded[name] = forwarded_kinds(name) }
 	for name in definitions.keys() {
 		scope = scopes[name]
 		used = usages(value_of(definitions[name]))
-		for parameter in parameters_of(name) {
-			own = parameter_name(parameter)
+		parameters = parameters_of(name)
+		for index in 0..<#parameters {
+			own = parameter_name(parameters[index])
+			agreed = weak.get(name + "(" + "${index}" + ")")
 			if scope.kinds[own] == "" {
-				kind = used_as(own, used) ?? forwarded[name].get(own)
+				kind = used_as(own, used) ?? forwarded[name].get(own) ?? agreed
 				scope.kinds[own] = if kind != ø then kind else "int"
 			}
 		}
@@ -747,6 +870,8 @@ analyze(program: any): any := {
 	global results
 	global result_types
 	global scopes
+	global closure_targets
+	closure_targets = closure_targets_in(program, [])
 	definitions = {}
 	results = {}
 	result_types = {}
@@ -774,7 +899,7 @@ analyze(program: any): any := {
 	for name in definitions.keys() { gather(value_of(definitions[name]), name, flows) }
 	register(flows)
 	settle(flows)
-	defaults()
+	defaults(flows)
 	settle(flows)
 	program
 }
@@ -791,6 +916,41 @@ kinds(program: any): any := {
 	variables = {}
 	for name in main.kinds.keys() { if not (name in main.declared_globals) { variables[name] = main.kinds[name] } }
 	{functions: functions, variables: variables, value: kind_of(program, main)}
+}
+
+# the kinds emitter.warp holds values as: int, float, char, text, list, any other value a boxed node
+emitter_kind(kind: any): text := if kind == "codepoint" then "char" else if kind in emitter_kept_kinds then kind else "node"
+emitter_kept_kinds = {int: 1, float: 1, text: 1, list: 1}
+
+# the variables of a scope but its parameters, each with its emitter kind
+emitter_locals(scope: any, parameters: list): any := {
+	locals = {}
+	for name in scope.kinds.keys() { if not (name in parameters) and not (name in scope.declared_globals) { locals[name] = emitter_kind(scope.kinds[name]) } }
+	locals
+}
+
+# the element kinds of the lists a scope knows the type of: name → emitter kind
+emitter_elements(scope: any): any := {
+	elements = {}
+	for name in scope.types.keys() {
+		element = typed_element_kind(scope.types[name])
+		if element != ø and scope.kinds.get(name) == "list" { elements[name] = emitter_kind(element) }
+	}
+	elements
+}
+
+# what emitter.warp reads (card emitter-takes): {functions: {f: {params: [kind…], result, locals: {x: kind}, elements:
+# {xs: kind}}}, variables: {x: kind}, elements: {xs: kind}, value: kind}, kinds as emitter_kind names them
+emitter_kinds(program: any): any := {
+	analyze(program)
+	functions = {}
+	for name in definitions.keys() {
+		scope = scopes[name]
+		parameters = parameters_of(name).map(parameter_name)
+		functions[name] = {params: parameters.map(own => emitter_kind(scope.kinds[own])), result: emitter_kind(results[name]), locals: emitter_locals(scope, parameters), elements: emitter_elements(scope)}
+	}
+	main = scopes[""]
+	{functions: functions, variables: emitter_locals(main, []), elements: emitter_elements(main), value: emitter_kind(kind_of(program, main))}
 }
 
 inferred_kinds(program: any): list := {

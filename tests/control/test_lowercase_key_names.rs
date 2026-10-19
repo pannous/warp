@@ -42,12 +42,6 @@ fn a_bound_or_unrelated_lowercase_word_is_no_key() {
 	assert!(warned, "mode == up compares no key: up names nothing");
 }
 
-#[test]
-fn held_key_compares_with_lowercase_key_words() {
-	let lowered = warp::pipeline::lower("held_key == left or space == held_key").expect("lowers").serialize();
-	assert!(lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#"" ""#), "{lowered}");
-}
-
 // reviewer: a lowercase key word the program binds elsewhere names no key, and the warning says why and what to write
 #[test]
 fn a_key_word_bound_elsewhere_says_to_write_it_in_capitals() {

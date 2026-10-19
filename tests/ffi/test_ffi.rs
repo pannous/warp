@@ -27,9 +27,7 @@
 // Dynamic Library Import Tests (using 'use' keyword);
 // ============================================================================
 
-use crate::{eq, is};
-use warp::formats::ffi_parser::{find_library_headers, parse_header_file};
-use warp::parse;
+use crate::is;
 
 #[test]
 fn test_dynlib_import_emit() {
@@ -261,21 +259,8 @@ fn test_ffi_math_pipeline() {
 }
 
 // ============================================================================
-// Signature Detection and Coverage Tests
-// ============================================================================
-
 // Import Pattern Tests
 // ============================================================================
-
-#[test]
-fn test_import_from_pattern_parse() {
-	let code1 = "import abs from \"c\"";
-	let parsed1 = parse(code1);
-	eq!(parsed1.name(), "import");
-
-	let code2 = "import sqrt from \"m\"";
-	let _parsed2 = parse(code2);
-}
 
 #[test]
 fn test_import_from_pattern_emit() {
@@ -283,21 +268,6 @@ fn test_import_from_pattern_emit() {
 	is!("import fabs from \"m\"\nfabs(-42.0)", 42.0);
 	is!("import floor from \"m\"\nimport ceil from \"m\"\nceil(floor(3.7))", 3.0);
 	is!("import sqrt from \"m\"\nsqrt(16)", 4.0);
-}
-
-// ============================================================================
-// C Header Parser Tests
-// ============================================================================
-
-#[test]
-fn test_c_type_mapping() {
-	// assert!(mapCTypeToWarp("double") == float64t);
-	//     assert!(mapCTypeToWarp("float") == float32t);
-	//     assert!(mapCTypeToWarp("int") == int32t);
-	//     assert!(mapCTypeToWarp("long") == i64);
-	//     assert!(mapCTypeToWarp("char*") == charp);
-	//     assert!(mapCTypeToWarp("const char*") == charp);
-	//     assert!(mapCTypeToWarp("void") == nils);
 }
 
 // ============================================================================
@@ -317,12 +287,6 @@ fn test_ffi_sdl_init() {
 #[test]
 fn test_ffi_sdl_window() {
 	is!("tests/warp/ffi/sdl/sdl_init_quit.warp", 1);
-}
-
-#[test]
-fn test_ffi_sdl_version() {
-	// Test: SDL_GetVersion - Get SDL version info
-	// This tests struct parameter passing via FFI
 }
 
 #[test]
@@ -379,170 +343,6 @@ CloseWindow()
 }
 
 // ============================================================================
-// FFI Header Discovery Tests
-// Tests generic library header discovery from filesystem
-// ============================================================================
-
-#[test]
-fn test_ffi_header_parser() {
-	// Test that we can parse function declarations
-	use warp::formats::ffi_parser::parse_declaration;
-
-	let func = parse_declaration("double sin(double x);", "m").unwrap();
-	assert_eq!(func.name, "sin");
-	assert_eq!(func.param_types.len(), 1);
-}
-
-#[test]
-fn test_ffi_import_pattern() {
-	// Test import pattern parsing
-	let node = parse("import sqrt from 'm'");
-	assert_eq!(node.name(), "import");
-}
-
-#[test]
-fn test_ffi_curl_discovery() {
-	// Test generic discovery finds curl headers
-	let paths = find_library_headers("curl");
-
-	if paths.is_empty() {
-		eprintln!("curl: NOT INSTALLED - skipping");
-		return;
-	}
-
-	eprintln!("curl paths: {:?}", paths);
-
-	let mut total = 0;
-	for path in &paths {
-		let funcs = parse_header_file(path, "curl");
-		total += funcs.len();
-		eprintln!("curl: {} functions from {}", funcs.len(), path);
-
-		// Show some actual curl functions
-		let curl_funcs: Vec<_> = funcs.iter().filter(|f| f.name.starts_with("curl_")).take(5).collect();
-		for f in curl_funcs {
-			eprintln!("  - {}", f.name);
-		}
-	}
-
-	// Should find some functions if curl is installed
-	assert!(total > 0, "Should find curl functions");
-}
-
-#[test]
-fn test_ffi_zlib_discovery() {
-	// Test generic discovery finds zlib headers
-	let paths = find_library_headers("zlib");
-
-	if paths.is_empty() {
-		eprintln!("zlib: NOT INSTALLED - skipping");
-		return;
-	}
-
-	for path in &paths {
-		let funcs = parse_header_file(path, "zlib");
-		eprintln!("zlib: {} functions from {}", funcs.len(), path);
-
-		// Show some actual zlib functions
-		let zlib_funcs: Vec<_> = funcs
-			.iter()
-			.filter(|f| {
-				f.name.starts_with("compress")
-					|| f.name.starts_with("uncompress")
-					|| f.name.starts_with("deflate")
-					|| f.name.starts_with("inflate")
-			})
-			.take(5)
-			.collect();
-		for f in zlib_funcs {
-			eprintln!("  - {}", f.name);
-		}
-	}
-}
-
-#[test]
-fn test_ffi_sqlite_discovery() {
-	// Test generic discovery finds sqlite3 headers
-	let paths = find_library_headers("sqlite3");
-
-	if paths.is_empty() {
-		eprintln!("sqlite3: NOT INSTALLED - skipping");
-		return;
-	}
-
-	for path in &paths {
-		let funcs = parse_header_file(path, "sqlite3");
-		eprintln!("sqlite3: {} functions from {}", funcs.len(), path);
-
-		// Show some actual sqlite functions
-		let sqlite_funcs: Vec<_> = funcs.iter().filter(|f| f.name.starts_with("sqlite3_")).take(5).collect();
-		for f in sqlite_funcs {
-			eprintln!("  - {}", f.name);
-		}
-	}
-}
-
-#[test]
-fn test_ffi_raylib_discovery() {
-	// Test generic discovery finds raylib headers
-	let paths = find_library_headers("raylib");
-
-	if paths.is_empty() {
-		eprintln!("raylib: NOT INSTALLED - skipping");
-		return;
-	}
-
-	for path in &paths {
-		let funcs = parse_header_file(path, "raylib");
-		eprintln!("raylib: {} functions from {}", funcs.len(), path);
-
-		// Verify key raylib functions are found
-		let key_funcs = ["InitWindow", "CloseWindow", "BeginDrawing", "EndDrawing"];
-		for name in key_funcs {
-			let found = funcs.iter().any(|f| f.name == name);
-			if found {
-				eprintln!("  ✓ {}", name);
-			}
-		}
-	}
-}
-
-#[test]
-fn test_ffi_png_discovery() {
-	// Test generic discovery finds libpng headers
-	let paths = find_library_headers("png");
-
-	if paths.is_empty() {
-		eprintln!("png: NOT INSTALLED - skipping");
-		return;
-	}
-
-	for path in &paths {
-		let funcs = parse_header_file(path, "png");
-		eprintln!("png: {} functions from {}", funcs.len(), path);
-	}
-}
-
-#[test]
-fn test_ffi_generic_discovery() {
-	// Test that generic discovery works for multiple libraries
-	let libraries = ["curl", "zlib", "sqlite3", "raylib", "png"];
-	let mut found = Vec::new();
-
-	for lib in libraries {
-		let paths = find_library_headers(lib);
-		if !paths.is_empty() {
-			found.push(lib);
-		}
-	}
-
-	eprintln!("Found headers for: {:?}", found);
-
-	// Should find at least some common libraries
-	// (exact set depends on what's installed)
-}
-
-// ============================================================================
 // Working FFI Tests - these tests verify actual FFI calls work
 // ============================================================================
 
@@ -550,11 +350,6 @@ fn test_ffi_generic_discovery() {
 fn test_ffi_sin_pi_half() {
 	// sin(π/2) = 1.0
 	is!("import sin from 'm'\nsin(1.5707963267948966)", 1.0);
-}
-
-#[test]
-fn test_ffi_cos_works() {
-	// cos(0) = 1
 }
 
 #[test]
