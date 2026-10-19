@@ -52,6 +52,7 @@ mod test_std_coverage; // card std-word
 mod test_std_docs_comment_association; // card help-markdown
 #[cfg(feature = "native")] // runs a process: not in the browser
 mod test_std_exec;
+mod test_std_extrema; // card min-max-lib
 mod test_std_file;
 mod test_std_file_bytes; // card path-list
 mod test_std_file_copy; // card std-file

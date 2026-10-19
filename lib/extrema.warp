@@ -1,0 +1,36 @@
+// The standard library module extrema: min and max written in warp (card min-max-lib), of two or more values,
+// `max(3, 7, 5)`, or of one list of candidates, `max([3 7 5])` or `max(xs)`. `use extrema` takes them instead of the
+// builtin src/lowering/collections/min_max.rs expands (a defined min or max turns that lowering off); once measured
+// as fast as the builtin (min and max are hot, notes/self_hosting.md), they move into the prelude and min_max.rs goes
+
+// which end of the order a word picks
+enum Extremum { Least, Greatest }
+
+// the word naming an extremum, as in its errors: "min of an empty list"
+extremum_word(extremum: Extremum): text := match extremum {
+	Least: "min"
+	Greatest: "max"
+}
+
+// does a candidate lie further towards the extremum than the best so far
+beats(candidate: number, best: number, extremum: Extremum): bool := match extremum {
+	Least: candidate < best
+	Greatest: candidate > best
+}
+
+// the first candidate, replaced by every later one beating it
+extreme_of(candidates: list, extremum: Extremum): element of candidates := {
+	if count(candidates) == 0 { raise extremum_word(extremum) + " of an empty list" }
+	best = candidates#1
+	for candidate in candidates { if beats(candidate, best, extremum) { best = candidate } }
+	best
+}
+
+// the least of a list's candidates
+min(xs: list): element of xs := extreme_of(xs, Extremum.Least)
+// the least of two or more values
+min(a: number, b: number, more...): number := extreme_of([a, b] + more, Extremum.Least)
+// the greatest of a list's candidates
+max(xs: list): element of xs := extreme_of(xs, Extremum.Greatest)
+// the greatest of two or more values
+max(a: number, b: number, more...): number := extreme_of([a, b] + more, Extremum.Greatest)
