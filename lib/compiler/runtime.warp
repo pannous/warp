@@ -463,6 +463,51 @@ text_trim(t: text): text := {
 	while stop > start and is_space_byte(byte_at(t, stop - 1)) { stop -= 1 }
 	bytes_between(t, start, stop)
 }
+# the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
+# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; to ø or beyond the end stops at the
+# end, a negative from or to fails, as Rust's "index out of range"
+node_slice(x: any, from: int, to: any): any := {
+	stop = if is_null(to) == 1 then node_length(x) else unboxed_int(to)
+	if from < 0 or stop < 0 { index_out_of_range() }
+	if kind_code(x) == 3 { return character_slice(unboxed_text(x), from, stop) }
+	if kind_code(x) == 8 { return items_slice(unboxed_list(x), from, stop) }
+	not_a_list()
+}
+character_slice(t: text, from: int, to: int): text := {
+	start = character_offset_of(t, from)
+	stop = character_offset_of(t, to)
+	if stop <= start { return "" }
+	bytes_between(t, start, stop)
+}
+# the byte offset after t's first count characters (grapheme clusters); past the last, the byte count
+character_offset_of(t: text, count: int): int := {
+	at = 0
+	for i in 0..<count { if at < byte_count(t) { at = character_end(t, at) } }
+	at
+}
+items_slice(items: list, from: int, to: int): list := {
+	count = min_int(to, #items) - from
+	if count < 0 { count = 0 }
+	out = new_list(count)
+	copy_items(out, 0, items, from, count)
+	out
+}
+# `starts_with(t, part)`, `ends_with(t, part)`: 1 when part's bytes begin or end t, else 0, as Rust's give an int
+node_starts_with(t: any, part: any): int := if text_starts_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
+node_ends_with(t: any, part: any): int := if text_ends_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
+node_trim(t: any): text := text_trim(text_of_textual(t))
+# a text or a character as its text; anything else fails
+text_of_textual(n: any): text := {
+	if textual_node(n) == 0 { not_a_text() }
+	node_text(n)
+}
+# `map_get_or(m, key, fallback)`: the value of m's entry key, fallback when m has none
+map_get_or(m: any, key: any, fallback: any): any := {
+	if is_null(m) == 1 { return fallback }
+	at = map_index(m, node_text(key))
+	if at == 0 { return fallback }
+	key_value(unboxed_list(fields_of(m))#at)
+}
 # a space, a tab, a line feed or a carriage return
 is_space_byte(b: int): bool := b == 32 or b == 9 or b == 10 or b == 13
 # the bytes start..<stop of t
@@ -1013,6 +1058,19 @@ divide_by_zero(): int := {
 	0
 }
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
+# the runtime errors of the library words, named for src/wasm_emitter/control/traps.rs to read off the trace
+index_out_of_range(): int := {
+	fail()
+	0
+}
+not_a_list(): int := {
+	fail()
+	0
+}
+not_a_text(): int := {
+	fail()
+	0
+}
 index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
 	fail()
