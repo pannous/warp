@@ -768,6 +768,9 @@ function showReport(report) {
 		...notes.filter(topic => !inline.has(topic) && isShown("hint")).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
 	$("diagnostics").replaceChildren(...items);
+	// the level select shows where there is something it filters, shown or not
+	const filtered = [report.warnings, report.runtime_warnings, report.hints, notes].some(list => list?.length);
+	$("diagnostics-level").hidden = !filtered;
 	markPositions(report);
 	showAcknowledged();
 	setStatus(report.crashed ? "the compiler crashed; reloaded" : `${Math.round(report.milliseconds ?? 0)} ms`, report.crashed);
@@ -1221,6 +1224,11 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runPressed;
+	// an empty editor to start over; the editor's undo brings the program back (card there-should)
+	$("clear-code").onclick = () => {
+		editor.setValue("");
+		editor.focus();
+	};
 	$("full-screen").onclick = toggleFullScreen;
 	$("shown-from").value = stored(SHOWN_FROM_KEY) ?? (stored(HINTS_KEY) === "off" ? "weak" : "hint");
 	store(HINTS_KEY, null);

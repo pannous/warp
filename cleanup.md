@@ -159,3 +159,24 @@
   symbols and assignments valid outside that context.
 - Reuse the existing balanced block-closing scan and parser path instead of adding an `if`-only rewrite.
 - Run the focused `fi` and existing `end` block tests, formatting, clippy, and the wasm32 check.
+
+# like-tea
+
+- Reproduce the labelled method-call form with one focused regression before changing the prelude.
+- Reuse the general preposition-label machinery by declaring `with new`; keep positional calls working.
+- Keep reflected parameter names label-free through the shared library-signature extractor.
+- Update the existing sample and call guide, then run targeted tests and the worker gates.
+
+# Text builtin argument errors
+
+- Reproduce `byte_at(3, 0)` in a new focused text test before changing production code.
+- Route every non-literal `byte_at` text operand through the existing text-argument conversion so wrong kinds become the standard `not a text` error instead of a raw `ref.cast` trap.
+- Preserve the inline byte-loop fast path, character-to-text conversion, error propagation, and bounds checking.
+- Run the focused test before and after, then formatting, clippy, and the wasm32 check.
+
+# Package sub-build workspace cleanup
+
+- Reproduce the fresh-checkout package-tool failure with the existing focused package tests before changing production configuration.
+- Keep runtime-fetched packages outside Warp's Cargo workspace without changing or copying a fetched package's sources.
+- Cover the workspace boundary with one focused regression test under `tests/modules/`.
+- Run the focused package filters, formatting, clippy, and the wasm32 check; keep the worktree-only version suffix uncommitted.
