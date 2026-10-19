@@ -464,13 +464,14 @@ pinned_kind(parameter: any): text := {
 # what a body does with a name: calls it (a function), uses it as a sequence (a list, a text when also joined to a text)
 used_as(name: text, used: any): any := {
 	if name in used.called { return "function" }
+	if name in used.celled or name in used.foreign { return "data" }
 	if name in used.sequences { return if name in used.texts then "text" else "list" }
 	ø
 }
 
-# the names a body calls, uses as sequences and joins to texts (Rust Usages)
+# the names a body calls, keeps in cells, gives to foreign code, uses as sequences and joins to texts (Rust Usages)
 usages(body: any): any := {
-	used = {called: {}, sequences: {}, texts: {}, tested: {}, aliases: []}
+	used = {called: {}, celled: {}, foreign: {}, sequences: {}, texts: {}, tested: {}, aliases: []}
 	record_usages(body, used)
 	# `for x in xs` walks the copy `x·items = xs`: the source of a used sequence is one too
 	grown = yes
@@ -489,6 +490,8 @@ usages(body: any): any := {
 record_usages(n: any, used: any): any := {
 	called = called_closure(n)
 	if called != "" { used.called[called] = yes }
+	record_word_call(n, used)
+	for given in given_to_foreign_code(n) { used.foreign[given] = yes }
 	counted = used_sequence(n)
 	if counted is symbol { used.sequences[name_of(counted)] = yes }
 	listed = joined_name(n, is_list_literal)
@@ -508,6 +511,26 @@ kind_tested(n: any): text := if is_group(n) and #n == 3 and head_name(n) == "is_
 
 # `closure_call_2(f, a, b)`: the function value called
 called_closure(n: any): text := if is_group(n) and #n >= 2 and head_name(n).starts_with("closure_call_") and n#2 is symbol then name_of(n#2) else ""
+
+cell_words = {cell_new: 1, cell_get: 1, cell_set: 1, signal_new: 1, signal_listeners: 1, signal_listeners_set: 1}
+map_words = {map_keys: 1, map_values: 1, map_entries: 1, collection_contains: 1, collection_position: 1, map_get_or: 1, map_without: 1, map_of_entry: 1, field_with: 1}
+
+# `(word map …)`: a map word reads map as a map (a sequence), a cell word as a cell
+record_word_call(n: any, used: any): any := {
+	if not (is_group(n) and bracket_of(n) == "(" and #n >= 2 and n#2 is symbol) { return ø }
+	if head_name(n) in map_words { used.sequences[name_of(n#2)] = yes }
+	if head_name(n) in cell_words { used.celled[name_of(n#2)] = yes }
+}
+
+# `foreign_call(library, word, receiver, …, (arguments))`: the names given to foreign code
+given_to_foreign_code(n: any): any := {
+	if not (bracket_of(n) == "(" and head_name(n) == "foreign_call" and #n >= 3) { return [] }
+	given = [n#3]
+	if #n == 6 and is_group(n#6) { for argument in n#6 { given += [argument] } }
+	names = []
+	for value in given { if value is symbol { names += [name_of(value)] } }
+	names
+}
 
 counting_words = {size: 1, count: 1, len: 1, length: 1}
 
