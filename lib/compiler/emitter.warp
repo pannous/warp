@@ -1061,6 +1061,10 @@ def key_expression(body: Body, n: any): list {
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
 	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
+		# `div{ a: 1 }` of no class is Rust's `div:a:1`: a block of one entry is that entry
+		if #right == 1 and not (name_of(left) in module.classes) {
+			return ["node", keyed_code(name_node(left), boxed(expression(body, right#1)))]
+		}
 		return instance_value(body, name_of(left), right.map(x => x))
 	}
 	# a function value as an operand: Rust's type error `1 + (x => x)`, its reflection `f.name` read as `(closure_new f)#("name"+1)`
