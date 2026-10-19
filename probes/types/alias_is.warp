@@ -1,7 +1,0 @@
-# x is Age tests the type an alias names, enums too (card age-alias)
-type Age = int
-enum Color { red green }
-type Paint = Color
-x = 3
-c = red
-[x is Age, x is an Age, "a" is Age, c is Paint, 3 is Paint]

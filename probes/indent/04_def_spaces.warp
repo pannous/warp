@@ -1,4 +1,0 @@
-def f(x):
-    y = x * 2
-    return y + 1
-f(3)

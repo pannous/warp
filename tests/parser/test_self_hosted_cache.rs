@@ -39,7 +39,6 @@ fn the_stage_program_is_compiled_once() {
 
 /// emitter.warp emits a program inside its core, so the Rust emitter never runs; one beyond it falls back to Rust
 #[test]
-#[ignore = "card emit-closures: a closure over a variable is now inside the core, the test still expects the Rust emitter"]
 fn the_warp_emitter_emits_inside_its_core() {
 	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
 	self_hosted_run(&cache, "3 + 4"); // the stage programs compile with the Rust emitter, once
@@ -49,9 +48,12 @@ fn the_warp_emitter_emits_inside_its_core() {
 	let (class, phases) = self_hosted_run(&cache, "class Point { x: int }; p = Point(3); p.x + 4");
 	assert!(class.contains('7'), "{class}");
 	assert!(!phases.contains("emit ("), "a class instance is inside the core: {phases}");
-	let (beyond, phases) = self_hosted_run(&cache, "x = 3; f = y => x + y; f(4)");
-	assert!(beyond.contains('7'), "{beyond}");
-	assert!(phases.contains("emit ("), "a closure over a variable is beyond the core: {phases}");
+	let (closure, phases) = self_hosted_run(&cache, "x = 3; f = y => x + y; f(4)");
+	assert!(closure.contains('7'), "{closure}");
+	assert!(!phases.contains("emit ("), "a closure over a variable is inside the core: {phases}");
+	let (beyond, phases) = self_hosted_run(&cache, "x = 3; g = y => z => x + y + z; g(1)(2)");
+	assert!(beyond.contains('6'), "{beyond}");
+	assert!(phases.contains("emit ("), "a closure giving a closure is beyond the core: {phases}");
 }
 
 /// The stage programs compile from warp's lib/ alone: a folder whose text.warp and list.warp would shadow the standard

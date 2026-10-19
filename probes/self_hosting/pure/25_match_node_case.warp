@@ -1,0 +1,18 @@
+// out: 2
+// out: 1
+// out: 0
+// out: 0
+def node_rank(n) := match n {
+	Symbol(name): 1
+	Key(left, Op.Colon, right): 2
+	_: 0
+}
+def first_positive(xs) {
+	for x in xs { if x > 0 { return x } }
+	0
+}
+a = symbol("a")
+print node_rank(Key(a, Op.Colon, a))
+print node_rank(a)
+print node_rank(Key(a, Op.Add, a))
+print first_positive([-1, -2])

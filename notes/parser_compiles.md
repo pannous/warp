@@ -20,21 +20,31 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 - `Parser{code: c, at: 0}` of a declared type read as the key `Parser: {…}` (p.branch became a call of branch):
   pure-front d8bc25e098 (warp-parsing; lands with the pure-front merge)
 - `x === ø`, `x !== ø`: pure-lane (warp-self-analyzer); `x in xs` → collection_contains: pure-lane
+- class constructor `Point(2, 3)`: pure-lane 046b2947d (warp-self-analyzer)
 
 - the file's own globals in functions (PRINT, ARGUMENT_POWER, UNIT_WORDS, …): no root of its own, main was refused
   first (normal lane: the def heads, ae7663fc80, data/self_hosting/parser_gap_with_def.txt names none of them; pure
   lane: `symbol("print")`, warp-self-emitter's); globals read fine in functions (pure/28_global_tables.warp)
+- match arms of values (`1:`, `"hi":`, `'a':`, `Color.Red:`): match-arms a3499f85ac (warp-parsing; on pure-lane,
+  lands after it; enum cases run once enum lowering does)
+
+- `x is int/list/symbol` type tests: pure-lane 02f878456e (type_tests.warp, rung 29)
+- int(x), float(x), `x as int` of texts, characters, floats and ratios; positioned(n, line, column) as a $MetaNode
+  read by n.line / n.column; `op as Op` in keyed (shapes.warp's keyed shadowed runtime.warp's keyed intrinsic inside
+  key_node): emit-enum-match 45bc9a01bf, 12702665ba (survey 25 → 14 with main merged)
 
 ## Open
 | root | owner |
 |---|---|
 | lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
-| `x is symbol/list/any` type tests, prelude defs on demand (is_digit) | warp-self-emitter |
-| match literal and enum-symbol arms | warp-parsing |
-| enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
-| class constructor `Point(2, 3)`, try | warp-self-analyzer |
+| prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
+| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | open |
+| enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
+| try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
-| int(x), positioned, `op as Op` (keyed), a node into a typed Parser field, `branch` called with a missing argument | warp-emitter-structures |
+| a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps), a write by a run-time key (remember), pending kinds in recursive functions | warp-runtime |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
+| user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
+| two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
