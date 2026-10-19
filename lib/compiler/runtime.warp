@@ -368,6 +368,8 @@ node_is_type(n: any, type: text) := {
 	if type == "text" { return kind == 3 or kind == 4 }
 	if type == "char" { return kind == 4 }
 	if type == "list" { return kind == 8 or kind == 7 }
+	if type == "key" { return kind == 6 }
+	if type == "symbol" { return kind == 5 }
 	no
 }
 # `x is Name` of a class: an instance is an entry keyed by its class's name
@@ -650,3 +652,19 @@ floor_quotient(a: int, b: int) := {
 	}
 	q
 }
+# the built-in node's parts (lib/compiler/node.warp): a key's operator is its code above the kind bits, the
+# position of its spelling here (src/operators/codes.rs OP_CODES)
+operator_spellings() := ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
+	"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
+	"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
+	"|", "↑", "↓", "/!", "/!="]
+operator_code(spelled: text) := {
+	spellings = operator_spellings()
+	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
+	0
+}
+key_node(left: any, operator: any, right: any) := keyed(operator_code(node_text(operator)) * 256 + 6, left, right)
+key_left(n: any) := entry_key(n)
+key_right(n: any) := key_value(n)
+key_operator(n: any) := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
+symbol_node(name: any) := symbol_of(node_text(name))

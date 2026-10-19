@@ -358,6 +358,10 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 2])] }
 	if name == "map_of" { return ["node", node(node_kind_codes.map, values#1#2)] }
 	if name == "new_key" { return ["node", entry_code(values#1#2, values#2#2)] }
+	# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
+	if name == "keyed" { return ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code("struct_new", [gc.node])] }
+	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [gc.node])] }
+	if name == "symbol_of" { return ["node", node(node_kind_codes.symbol, values#1#2)] }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
 	if name == "is_ratio" { return ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]] }
@@ -389,20 +393,21 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
-	collection_contains: "collection_contains"}
+	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
+	name_of: "node_text", Symbol: "symbol_node"}
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
-	char: ["char"], bool: ["bool"], list: ["list"]}
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: []}
 type_test(body: Body, subject: any, spec: text) := {
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression(body, subject))], text_value(spec)]) }
 	if not (spec in type_words) { return refuse("a test of the type " + spec) }
@@ -760,6 +765,7 @@ key_expression(body: Body, n: any) := {
 		value = expression(body, left)
 		# `7/2 as int`: an exact rational truncated toward 0
 		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
+		if name_of(right) == "text" { return shown_text(value) }
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
