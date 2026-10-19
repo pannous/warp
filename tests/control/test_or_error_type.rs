@@ -36,3 +36,11 @@ fn test_every_builtin_type_joins_a_union() {
 		fails_with(&format!("x: {other} or int = 2.5\nx"), "cannot assign float 2.5");
 	}
 }
+
+/// `: text?`, `: float?`: every optional result is checked, a value or ø (card text-type)
+#[test]
+fn test_an_optional_result_of_any_type_holds_its_value_or_none() {
+	is!("f(x: bool): text? := if x then \"a\" else ø; f(yes)", "a");
+	is!("f(x: bool): text? := if x then \"a\" else ø; if f(no) is ø then 1 else 2", 1);
+	is!("f(x: bool): float? := if x then 2.5 else ø; f(yes)", 2.5);
+}

@@ -492,6 +492,13 @@ impl WasmGcEmitter {
 			Some(character) => {
 				func.instruction(&I32Const(character as i32));
 			}
+			// a character of a text (`s#2`) is held as a one-character text: its code point, a longer text an error
+			None if self.get_type(value) == Kind::Text && !value.is_text_literal() => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, crate::wasm_emitter::reflection::library_ops::CODEPOINT_OF);
+				self.emit_call(func, "get_int_value");
+				func.instruction(&I::I32WrapI64);
+			}
 			None => {
 				self.emit_numeric_value(func, value);
 				self.emit_code_point_of_int(func);
