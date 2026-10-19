@@ -767,13 +767,13 @@ def euclidean_remainder(body: Body, a: any, b: any): list {
 
 def assignment(body: Body, target: any, value: any): list {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
-		return map_assignment(body, expression(body, key_of(target)), subscript_name(value_of(target)), value)
+		return map_assignment(body, key_of(target), subscript_name(value_of(target)), value)
 	}
 	# `m[k] = v`, lowered `m#(k+1) = v`: a text k names an entry; a k known only at run time may be either
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and op_of(value_of(target)) == "+" and value_of(value_of(target)) == 1 {
 		subscript = expression(body, key_of(value_of(target)))
 		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
-		if subscript#1 == "text" or subscript#1 == "char" { return entry_assignment(body, expression(body, key_of(target)), subscript, value) }
+		if subscript#1 == "text" or subscript#1 == "char" { return entry_assignment(body, key_of(target), subscript, value) }
 		# `m[1] = v` of a value known only at run time: a list's item or a map's entry keyed by the int 1
 		if expression(body, key_of(target))#1 == "node" { return refuse("an int-keyed write to a list or map known only at run time") }
 	}
@@ -826,15 +826,20 @@ def whole(value: any): list { admitted(value, "int") }
 
 # `m.x = v` as lowered, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: any, name: text, value: any): list {
-	if not field_admits(name, value#1) { return refuse("a " + value#1 + " written to a typed field " + name) }
+	if checks_fields(body, target) and not field_admits(name, value#1) { return refuse("a " + value#1 + " written to a typed field " + name) }
 	entry_assignment(body, target, text_value_of(name), value)
 }
-# the entry named by the text `name` of the map set to value; the assignment gives the value
+# the entry named by the text `name` of the map `target` set to value; the assignment gives the value
 def entry_assignment(body: Body, target: any, name: any, value: any): list {
-	if name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
+	if checks_fields(body, target) and name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
-	set = dropped(field_assignment(target, name, [value#1, held]))
+	set = dropped(field_assignment(expression(body, target), name, [value#1, held]))
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
+# Rust checks a field write against the field's type only on a local it holds as an instance of the class
+# (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
+def checks_fields(body: Body, target: any): bool {
+	not (target is symbol and name_of(target) in body.names and body.names[name_of(target)] < #body.function.parameters)
 }
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
 # its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float
@@ -1130,7 +1135,7 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("map_of_entry") { return expression(body, n#2) }
 	if bracket_of(n) == "(" and #n == 4 and n#1 == symbol("field_with") {
 		value = expression(body, n#4)
-		if not (n#3 is text and field_admits(n#3, value#1)) and #module.classes.keys > 0 { return refuse("a field write a typed field may refuse") }
+		if checks_fields(body, n#2) and not (n#3 is text and field_admits(n#3, value#1)) and #module.classes.keys > 0 { return refuse("a field write a typed field may refuse") }
 		return field_assignment(expression(body, n#2), expression(body, n#3), value)
 	}
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
