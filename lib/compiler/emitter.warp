@@ -575,6 +575,7 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 	}
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
+	if symbol == "%" { return runtime_call("float_mod", [["float", converted(a, kind)], ["float", converted(b, kind)]]) }
 	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
 	ops = if kind == "float" then float_ops else int_ops
 	if not (symbol in ops) { return refuse("the operator " + symbol + " on " + kind) }
