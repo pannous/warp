@@ -21,8 +21,9 @@ lowered_node(n: any): any := {
 lowered(source: text): any := view_of(lowered_node(node_of(plain(tree(source)))))
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
-# parse tree's view, [i, view] the view after passes#i
+# parse tree's view, [i, view] the view after passes#i, ["pure", source] the view after all of them (card pure-runs)
 stage(request: any): any := {
+	if request#1 == "pure" { return lowered(request#2) }
 	if request#1 == 0 { return bridged(tree(request#2)) }
 	pass = passes#(request#1)
 	view_of(pass(node_of(request#2)))

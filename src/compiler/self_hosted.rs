@@ -16,6 +16,11 @@ use std::sync::{Mutex, OnceLock};
 const SWITCH: &str = "WARP_SELF_HOSTED";
 /// WARP_SELF_HOSTED=front: parser.warp and the pass twins, the Rust emitter (a suite count of the front end alone)
 const FRONT_END_ONLY: &str = "front";
+/// WARP_SELF_HOSTED=pure (card pure-runs): parser.warp, the warp passes, analyzer.warp and emitter.warp compile the
+/// source, Rust only carrying each stage's JSON to the next; a program the lane refuses compiles the usual way
+const PURE: &str = "pure";
+/// The passes.warp request of the pure lane's front end: the view after parser.warp and every warp pass
+const PURE_STAGE: &str = "\"pure\"";
 /// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too and emitter.warp
 /// reads its kinds (a suite count of + analyzer)
 const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
@@ -175,6 +180,32 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
 		}
 	}
+}
+
+/// The module the pure lane compiles the source to; None when the lane is off or refuses the program, the refusal then
+/// recorded (REFUSALS_FILE) and logged, and the program compiled the usual way
+pub fn pure_module(code: &str) -> Option<crate::pipeline::CompiledModule> {
+	if switch() != Some(PURE) {
+		return None;
+	}
+	match pure_bytes(code) {
+		Ok(bytes) => {
+			let needs_host = imports_from(&bytes, HOST_MODULE);
+			Some(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false })
+		}
+		Err(refusal) => {
+			log::info!("pure lane refused: {refusal}");
+			record_refusal(&format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE)));
+			None
+		}
+	}
+}
+
+/// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
+fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
+	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}]", json_text(code)))?;
+	let kinds: String = serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
+	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
 }
 
 /// The refusal's lines (one, or one per refused function under SURVEY_SETTING) in the file REFUSALS_FILE names, when
