@@ -11,6 +11,7 @@ mod test_node;
 mod test_node_add;
 mod test_node_api;
 mod test_node_cases; // card node-enum
+mod test_node_is_block; // card node-replace
 mod test_node_operators;
 mod test_node_todo;
 mod test_normalization;

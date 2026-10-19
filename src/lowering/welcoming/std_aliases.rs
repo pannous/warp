@@ -5,6 +5,7 @@
 //! already turned into calls) keeps its meaning. Runs before welcome_forms' module_calls: Python's json is also the
 //! name of warp's module.
 
+use crate::modules::USE_KEYWORD;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::program_names::ProgramNames;
@@ -59,7 +60,6 @@ const WARP_FORMS: [StdAlias; 1] = [alias("json", "parse", "json", "parse_json", 
 const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])];
 /// Standard words read as a member of any value, `value.member`: `x.json` is to_json(x) (card node-json)
 const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
-pub(crate) const USE_WORD: &str = "use";
 /// Old names of standard words, still working, and how warp writes them now: called by hand, a got-it note names it
 const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as: file")];
 
@@ -226,6 +226,6 @@ pub(crate) fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 	modules.sort();
 	let uses = modules
 		.into_iter()
-		.map(|module| Node::List(vec![symbol(USE_WORD), symbol(module)], Bracket::None, Separator::Space));
+		.map(|module| Node::List(vec![symbol(USE_KEYWORD), symbol(module)], Bracket::None, Separator::Space));
 	crate::lowering::nodes::with_statements_first(program, uses.collect())
 }
