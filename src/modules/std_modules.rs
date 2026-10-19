@@ -315,7 +315,8 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		let parameters = parsed_statements(source)
 			.iter()
 			.filter_map(|statement| match statement.drop_meta() {
-				Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
+				Node::Key(head, Op::Define, _) if matches!(called_head(head).drop_meta(), Node::List(..)) => {
+					let head = called_head(head);
 					let (fewest, most) = head_arities(head);
 					Some((leftmost_symbol(head)?, most, most - fewest))
 				}
@@ -326,6 +327,14 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		parameters
 	});
 	Some(parameters)
+}
+
+/// A definition's head without its declared result type: `f(x): int` → `f(x)`
+fn called_head(head: &Node) -> &Node {
+	match head.drop_meta() {
+		Node::Key(called, Op::Colon, _) => called,
+		_ => head,
+	}
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or
