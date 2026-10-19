@@ -1,0 +1,6 @@
+# an enum: a bare case is its name at run time, a case with fields a class instance; match tests and reads them
+enum Color { Red, Green, Rgb(r: int, g: int) }
+name(c: Color) := match c { Red: "red"; Green: "green"; Rgb(r, g): "mix" + (r + g) }
+d = Green
+print d
+[name(Red), name(d), name(Rgb(3, 4)), Red == Green, d != Red, Rgb(1, 2) == Rgb(1, 2), Rgb(1, 2)]

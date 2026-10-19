@@ -121,7 +121,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {} }
+# classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {} }
 
 module = Module({}, [])
 
@@ -403,6 +404,7 @@ type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
 	char: ["char"], bool: ["bool"], list: ["list"]}
 type_test(body: Body, subject: any, spec: text) := {
+	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression(body, subject))], text_value(spec)]) }
 	if not (spec in type_words) { return refuse("a test of the type " + spec) }
 	type = type_words[spec]
 	value = expression(body, subject)
@@ -455,6 +457,18 @@ mentions(n: any, name: text) := {
 	no
 }
 runtime_call(name: text, values: any) := call_values(module.runtime[name], values)
+# the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
+# ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
+collect_types(n: any) := {
+	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2) }
+	if is_group(n) { for x in n { collect_types(x) } }
+}
+record_type(name: any) := {
+	if kind_of(name) == "symbol" { return module.classes[name#2] = yes }
+	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
+	if name#2 == "variants" { for variant in name#3[3..] { module.variants[variant#2] = yes } }
+	record_type(name#4)
+}
 
 local_value(body: Body, n: any) := {
 	name = name_of(n)
@@ -462,6 +476,8 @@ local_value(body: Body, n: any) := {
 		entry = module.globals[name]
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
+	# a bare enum case is its name, a symbol, at run time
+	if not (name in body.names) and name in module.variants { return ["node", node(node_kind_codes.symbol, text_bytes(name))] }
 	if not (name in body.names) { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -686,6 +702,8 @@ group_expression(body: Body, n: any) := {
 		return call(body, module.runtime[name_of(n#1)], n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test(body, n#2, n#3) }
+	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
 	}
@@ -780,7 +798,7 @@ compile_function(f: Function, argument_kinds: any) := {
 	parameter_kinds = []
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
-		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" then "node" else annotation]
+		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
@@ -902,6 +920,9 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 	module.texts = {}
 	module.bytes = []
 	module.host = host
+	module.classes = {}
+	module.variants = {}
+	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
 	for name in host.keys { if mentions(program, name) { module.imports += [host_import(name)] } }

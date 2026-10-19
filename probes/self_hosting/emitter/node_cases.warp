@@ -1,0 +1,3 @@
+# emit-enum-match: the built-in node's cases in a match (lib/compiler/node.warp)
+f(n: Node) := match n { Key(left, op, right): op as text; Symbol(name): name; _: "other" }
+[f(Key(Symbol("a"), Op.Add, Symbol("b"))), f(Symbol("x")), f(3)]

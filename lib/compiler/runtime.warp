@@ -120,6 +120,7 @@ node_equal(a: any, b: any) := {
 		return kind_code(a) == kind_code(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
 	}
 	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
+	if kind_code(a) == 5 or kind_code(b) == 5 { return kind_code(a) == kind_code(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
 	float_of_node(a) == float_of_node(b)
@@ -368,6 +369,11 @@ node_is_type(n: any, type: text) := {
 	if type == "char" { return kind == 4 }
 	if type == "list" { return kind == 8 or kind == 7 }
 	no
+}
+# `x is Name` of a class: an instance is an entry keyed by its class's name
+instance_of(n: any, name: text) := {
+	if is_null(n) == 1 or kind_code(n) != 6 { return no }
+	text_order(key_name(n), name) == 0
 }
 # `round(x)`: the nearest int, half to even as wasm rounds (f64.nearest)
 rounded(x: float) := truncated(float_nearest(x))
