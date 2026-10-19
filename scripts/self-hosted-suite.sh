@@ -11,7 +11,8 @@
 #                                                      (value 1 by default; WARP_SELF_HOSTED's own replaces "front"),
 #                                                      counted apart as run <tip>+<name>; notes/self_hosting.md
 #                                                      "Back-end focus": front end only, + emitter (--stage
-#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer
+#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer (--stage
+#                                                      analyzer=WARP_SELF_ANALYSIS: analyzer.warp checks each program)
 #   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh (after --stage …: with that stage,
 #                                                      e.g. --stage emitter=WARP_SELF_HOSTED=1 --local lists::)
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs

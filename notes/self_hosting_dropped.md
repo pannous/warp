@@ -206,3 +206,7 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   are equal in Rust (its kind carries the written form's class), different here. A program giving a closure's text
   (print, `as text`, join) is refused: the lowered view holds no written form. Back: a direct call where the analyzer
   knows the one target; the written form in the closure.
+- A tag over a one-item block: `div{ divv{ "hi" } }` gives warp's module the value `div{divv:"hi"}` (the block a map of
+  its one entry), Rust's `div:divv:"hi"` (the block dropped around its item). The rendered HTML is the same
+  (`<div>{divv:&quot;hi&quot;}</div>`). Source: probes/unknown_tag.warp (accepted by the Integrator with --flaky,
+  2026-10-19). Back: the lowered view marks a block that holds one item as that item, as Rust's eval reads it.
