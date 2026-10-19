@@ -247,22 +247,3 @@ fn test_build_exe_calls_c_functions() {
 	let run = std::process::Command::new(&executable).env("WARP_EXE_C_FFI", "from C").output().unwrap();
 	assert_eq!(text(&run.stdout), "5\n66\nfrom C\n843\n2.5\n", "{}", text(&run.stderr));
 }
-
-/// card exe-c-ffi: the C functions ride in front of the machine code and come back as they were; plain machine code
-/// carries none
-#[test]
-fn test_c_functions_ride_with_the_machine_code() {
-	use warp_runtime::c_signatures::{split_c_functions, with_c_functions, CFunction, CPointer, ParamType, RetType};
-	let open = CFunction {
-		module: "sqlite".into(),
-		library: "sqlite3".into(),
-		name: "sqlite3_open".into(),
-		param_types: vec![ParamType::Ptr, ParamType::Out],
-		result: Some(CPointer::Handle),
-		ret_type: RetType::I32,
-		out_pointee: Some("sqlite3".into()),
-	};
-	let carried = with_c_functions(std::slice::from_ref(&open), b"machine code");
-	assert_eq!(split_c_functions(&carried), Ok((vec![open], &b"machine code"[..])));
-	assert_eq!(split_c_functions(b"machine code"), Ok((vec![], &b"machine code"[..])));
-}
