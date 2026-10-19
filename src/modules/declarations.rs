@@ -78,6 +78,26 @@ pub(crate) fn name_declared_by(statement: &Node) -> Option<String> {
 	}
 }
 
+/// What tells declarations of one name apart: a function's parameter types, `half(int)` and `half(float)` are
+/// overloads; anything else by its name alone
+pub(crate) fn declared_signature(statement: &Node) -> Option<String> {
+	let name = name_declared_by(statement)?;
+	let Some(head) = crate::lowering::nodes::function_head(statement) else {
+		return Some(name);
+	};
+	let types: Vec<String> = head.parameters().into_iter().map(parameter_type).collect();
+	Some(format!("{name}({})", types.join(", ")))
+}
+
+/// `x: int` → int, `x: int = 1` → int, an untyped `x` → any
+fn parameter_type(parameter: &Node) -> String {
+	match parameter.drop_meta() {
+		Node::Key(_, Op::Colon, kind) => kind.serialize(),
+		Node::Key(typed, Op::Assign, _) => parameter_type(typed),
+		_ => "any".to_string(),
+	}
+}
+
 /// `alias pow = power`: another name of a module's word (wiki/alias.md), as (alias, word); it declares nothing
 pub(crate) fn word_alias(statement: &Node) -> Option<(String, String)> {
 	let Node::List(items, _, _) = statement.drop_meta() else {
