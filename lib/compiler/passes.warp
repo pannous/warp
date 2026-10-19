@@ -13,12 +13,13 @@ use "multiple_assignments.warp"
 use "phrase_blocks.warp"
 use "for_loops.warp"
 use "ranges.warp"
+use "list_methods.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [definitions, multiple_assignments] + passes + [phrase_blocks, for_loops, ranges]
+pure_passes = [definitions, multiple_assignments] + passes + [phrase_blocks, for_loops, ranges, list_methods]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
