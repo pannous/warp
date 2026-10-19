@@ -147,7 +147,10 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
 		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
 	});
-	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}.json", std::process::id()));
+	// one file per call: tests running at once rewrote a shared file while another read it (truncated JSON)
+	static RUNTIME_FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+	let number = RUNTIME_FILES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}-{number}.json", std::process::id()));
 	let runtime_source = std::fs::read_to_string(Path::new(COMPILER_FOLDER).join(RUNTIME_WORDS)).unwrap();
 	let lowered_runtime = warp::pipeline::lower(&runtime_source).expect("lib/compiler/runtime.warp lowers");
 	std::fs::create_dir_all(INPUT_FOLDER).unwrap();
