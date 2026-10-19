@@ -1163,16 +1163,16 @@ def shader_text(wgsl) {
 			text = text + c
 			at = at + 1
 		} else {
-			written = wgsl[at + 1 .. end]
-			read = if HOLE_ALIASES.contains(written) then HOLE_ALIASES[written] else written
+			written_name = wgsl[at + 1 .. end]
+			read = if HOLE_ALIASES.contains(written_name) then HOLE_ALIASES[written_name] else written_name
 			text = text + "values." + read
-			hole = read.split(".")#1
-			if not names.contains(hole) { names += [hole] }
+			hole_name = read.split(".")#1
+			if not names.contains(hole_name) { names += [hole_name] }
 			at = end
 		}
 	}
 	if #names == 0 { return text }
-	attributed("shader_holes", listed("[", " ", [symbol(hole) for hole in names]), text)
+	attributed("shader_hole_names", listed("[", " ", [symbol(hole_name) for hole_name in names]), text)
 }
 
 // `@name` or `@name(value)` marks the atom after it: `@version(2) @draft tee{a:1}`; `@name: value` is the meta entry
