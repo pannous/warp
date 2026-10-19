@@ -7,6 +7,7 @@ mod test_dir;
 mod test_dir_any_value;
 mod test_dir_builtin_members; // card dir-lists
 mod test_dir_value_methods; // card list-methods: dir([1 2]) lists its methods
+mod test_english_phrases; // card set-set
 mod test_folder_scope;
 mod test_from_import; // card std-import
 mod test_header_search;
