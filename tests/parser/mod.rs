@@ -59,6 +59,7 @@ mod test_self_hosted_analysis; // card End-end
 mod test_self_hosted_cache; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_views; // card warp-pipeline-suite
+mod test_self_time_text; // card time-text-warp
 #[cfg(feature = "native")]
 mod test_self_lexer; // card self-lexer
 #[cfg(feature = "native")]
