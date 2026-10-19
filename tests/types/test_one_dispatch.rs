@@ -152,7 +152,7 @@ fn the_library_word_keeps_a_lists_call_with_a_hint() {
 	let code = "add(a, b) := a + b; xs = [1]; add(xs, 2); xs";
 	let (value, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
 	assert_eq!(value, warp::ints(vec![1, 2]));
-	let hint = "add of a list stays the library word";
+	let hint = "`add` on a list uses Warp's standard `add`";
 	assert!(hints.iter().any(|said| said.reason.contains(hint)), "no hint {hint:?}: {hints:?}");
 }
 

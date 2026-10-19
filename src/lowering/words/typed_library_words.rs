@@ -142,7 +142,9 @@ fn untyped_redefinitions(program: &Node) -> HashMap<String, Redefined> {
 			continue;
 		}
 		let types_text = crate::analyzer::with_article(&types.join(" or "));
-		let reason = format!("{name} of {types_text} stays the library word; yours takes the other values");
+		let reason = format!(
+			"`{name}` on {types_text} uses Warp's standard `{name}`; your `{name}` handles other values. Prefer a different name, such as `my_{name}`, if it should handle {types_text} too."
+		);
 		crate::errors::diagnostic::say(Diagnostic::at(&definition, reason).level(Level::Hint).about(TOPIC, &name));
 		redefined.entry(name).or_insert_with(|| Redefined { types, arities: vec![] }).arities.push(arity);
 	}

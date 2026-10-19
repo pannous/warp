@@ -43,6 +43,7 @@ mod test_item_list_cast_hint;
 mod test_keys_of_a_map_parameter;
 mod test_left_arrow;
 mod test_let_const_changes;
+mod test_library_word_hint; // card hint-makes
 mod test_list_phrases;
 mod test_lone_words;
 mod test_lowered_error_text;

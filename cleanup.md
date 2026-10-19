@@ -180,3 +180,10 @@
 - Keep runtime-fetched packages outside Warp's Cargo workspace without changing or copying a fetched package's sources.
 - Cover the workspace boundary with one focused regression test under `tests/modules/`.
 - Run the focused package filters, formatting, clippy, and the wasm32 check; keep the worktree-only version suffix uncommitted.
+
+# Library-word hint wording cleanup
+
+- Reproduce the `add` redefinition hint through the public diagnostic capture path before changing production code.
+- State the actual dispatch rule and the preferred action in one plain sentence: the library word handles lists, while the user's definition handles other values and should be renamed when that split was unintended.
+- Reuse the existing `library-words-typed` diagnostic and acknowledgement topic; do not add another hint path.
+- Add a focused outcome test in its own test module, then run that filter, formatting, clippy, the style lint, and the wasm32 check.
