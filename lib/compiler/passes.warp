@@ -17,6 +17,7 @@ use "ranges.warp"
 use "list_methods.warp"
 use "node_matches.warp"
 use "type_tests.warp"
+use "prelude_words.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
@@ -37,9 +38,10 @@ lowered_program(source: text): Node := lowered_node(plain_node(parsed(source)))
 lowered(source: text): any := view_of(lowered_program(source))
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
-# parse tree's view, [i, view] the view after passes#i, ["pure", source] the view after all of them (card pure-runs)
-stage(request: any): any := {
-	if request#1 == "pure" { return lowered(request#2) }
+# parse tree's view, [i, view] the view after passes#i, ["pure", source] the view after all of them, with the
+# definitions of the prelude's text it reaches (card pure-runs)
+stage(request: any, prelude: text): any := {
+	if request#1 == "pure" { return lowered(with_prelude(request#2, prelude)) }
 	if request#1 == 0 { return bridged(tree(request#2)) }
 	pass = passes#(request#1)
 	view_of(pass(node_of(request#2)))

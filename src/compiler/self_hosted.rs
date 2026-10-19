@@ -24,9 +24,12 @@ const PURE_STAGE: &str = "\"pure\"";
 /// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too and emitter.warp
 /// reads its kinds (a suite count of + analyzer)
 const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
-/// passes.warp `stage` of the request in the worker's input file
-const PASSES_PROGRAM: &str =
-	concat!("use \"", env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)))");
+/// passes.warp `stage` of the request in the worker's input file, with the prelude's text in its setup file
+const PASSES_PROGRAM: &str = concat!(
+	"use \"",
+	env!("CARGO_MANIFEST_DIR"),
+	"/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)), read(args#2))"
+);
 /// analyzer.warp `emitter_kinds` of the view in the worker's input file, as JSON (shape: notes/self_hosting.md): a
 /// program of its own, as analyzer.warp's names clash with parser.warp's (its local `digits`, its field `.separator`)
 const ANALYSIS_PROGRAM: &str = concat!(
@@ -100,7 +103,7 @@ struct Stage {
 	workers: Mutex<Vec<Sender<Request>>>,
 }
 
-static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
+static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: &[prelude_text], workers: Mutex::new(Vec::new()) };
 static ANALYSIS: Stage = Stage { program: ANALYSIS_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
 static EMIT: Stage =
 	Stage { program: EMIT_PROGRAM, setup: &[runtime_words, host_words], workers: Mutex::new(Vec::new()) };
@@ -270,6 +273,11 @@ fn host_words() -> String {
 		.iter()
 		.map(|(name, parameters, results)| (name.to_string(), serde_json::json!([kinds(parameters), kinds(results)])));
 	serde_json::Value::Object(words.collect()).to_string()
+}
+
+/// The prelude's source, whose definitions a pure program reaches (lib/compiler/prelude_words.warp)
+fn prelude_text() -> String {
+	crate::modules::std_module(crate::modules::PRELUDE_MODULE).unwrap_or_default().to_string()
 }
 
 /// The view of lib/compiler/runtime.warp lowered, as JSON
