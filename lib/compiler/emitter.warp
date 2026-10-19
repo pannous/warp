@@ -699,6 +699,9 @@ def assignment(body: Body, target: any, value: any): list {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, expression(body, key_of(target)), subscript_name(value_of(target)), value)
 	}
+	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
+		return map_assignment(body, expression(body, key_of(target)), name_of(value_of(target)), value)
+	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
 	}
@@ -743,7 +746,7 @@ def admitted(value: any, kind: text): list {
 }
 def whole(value: any): list { admitted(value, "int") }
 
-# `m.x = v` as lowered, `m#("x"+1) = v`: the assignment gives v
+# `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, map: any, name: text, value: any): list {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
 	set = dropped(field_assignment(map, text_value_of(name), [value#1, held]))
