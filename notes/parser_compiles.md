@@ -58,4 +58,10 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing |
 | "a parameter of kind ?" and "a node where a ? is needed" (7 refusals), lines_below/braced_items (gives ?) (data/self_hosting/parser_gap_map_instances.txt) | warp-cache: pending-kinds 3998b7a62d, Ready (emitter.warp settles recursive results): all 9 gone; 4 now show their case name (typed_default Assign, superscript_power Sub, conditioned Do, global_declaration Colon) and continued shows `the unknown name continue`; 65 refusals left (data/self_hosting/parser_gap_pending3.txt) |
 | a field named `header` read as the host word response_header (`p.header` → "header needs 2 arguments", Rust lane too; cards field-named, front-lane-header), the text of a closure (key_node: done on emit-enum-match 12702665ba) | warp-list-result-type (branch parser-roots) |
+| survey on pending-kinds 3998b7a62d (main merged): 16 refusals left, the case names are gone (data/self_hosting/parser_gap_pending4.txt) | warp-cache |
+| continued: "a text where a char is needed" (the `continue` refusal is gone) | warp-cache |
+| blank_end giving a mixed | warp-cache |
+| dedented: `min(written.map(indent_width))` (empty_extremum unknown) | warp-cache |
+| plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache |
+| gaps: "a block or map holding an instance" is back on main | warp-cache |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
