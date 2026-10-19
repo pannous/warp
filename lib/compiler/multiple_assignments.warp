@@ -1,0 +1,64 @@
+# `a, b = b, a + b` (card pure-runs; Rust twin: src/lowering/types/tuples.rs): the parser reads the comma loosest, so
+# the statement arrives as the list `a, (b = b), a + b`. Every value is evaluated before any name is assigned:
+# `a·value = b; b·value = a + b; a = a·value; b = b·value`. One value for several names, `x, y = [1, 2]`, gives its
+# elements in order: `x·values = [1, 2]; x = x·values#1; y = x·values#2`. Tuple returns (`return 1, 2`) are not here yet.
+use "walk.warp"
+use "phrase_blocks.warp"
+
+held(name: Node, suffix: text): Node := match name {
+	Symbol(text): symbol(text + "·" + suffix)
+	_: name
+}
+
+statements(list: list): Node := List(list, Bracket.Round, Separator.Semicolon)
+
+assigned(names: list, values: list): Node := {
+	places = 1 to #names
+	if #values == 1 {
+		whole = held(names#1, "values")
+		return statements([Key(whole, Op.Assign, values#1)] + places.map(i => Key(names#i, Op.Assign, Key(whole, Op.Hash, i))))
+	}
+	firsts = places.map(i => Key(held(names#i, "value"), Op.Assign, values#i))
+	statements(firsts + places.map(i => Key(names#i, Op.Assign, held(names#i, "value"))))
+}
+
+all_names(parts: list): bool := {
+	for part in parts { if not is_name(part) { return no } }
+	yes
+}
+
+# the names before the `=` and the values after it, when the comma list is a multiple assignment at `parts#at`
+split_at_assignment(parts: list, at: int): Node := assignment_at(parts, at, parts#at)
+
+# (a Node parameter: `match parts#at { Key(…) }` itself never matches, card match-silently)
+assignment_at(parts: list, at: int, candidate: Node): Node := match candidate {
+	Key(target, Op.Assign, given): {
+		names = parts[0..<(at - 1)] + [target]
+		values = [given] + parts[at..]
+		if all_names(names) and (#values == #names or #values == 1) then assigned(names, values) else ø
+	}
+	_: ø
+}
+
+# the comma list regrouped at its first `=`, when names lead up to it; else ø
+regrouped(parts: list): any := {
+	if not is_name(parts#1) { return ø }
+	for at in 2 to #parts {
+		split = split_at_assignment(parts, at)
+		if not (split is ø) { return split }
+		if not is_name(parts#at) { return ø }
+	}
+	ø
+}
+
+multiple_assignment(n: Node): Node := match n {
+	List(parts, Bracket.None, Separator.Comma): regrouped(parts) ?? n
+	# `{a, b = b, a + b}`: the braces hold the comma list, a block of the regrouped statements
+	List(parts, Bracket.Curly, Separator.Comma): {
+		statements = regrouped(parts)
+		if statements is ø then n else List([statements], Bracket.Curly, Separator.Semicolon)
+	}
+	_: n
+}
+
+multiple_assignments(program: any): any := bottom_up(program, multiple_assignment)
