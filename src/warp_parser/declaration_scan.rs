@@ -171,7 +171,7 @@ pub(crate) fn code_only(source: &str) -> String {
 
 /// Where the comments and texts of a source start and end, in characters; the lexer's first pass (card self-lexer,
 /// lib/compiler/lexer.warp spans is its warp twin)
-pub fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
+pub(crate) fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
 	let chars: Vec<char> = source.chars().collect();
 	let mut spans = Vec::new();
 	let mut at = 0;

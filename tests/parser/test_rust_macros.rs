@@ -2,17 +2,13 @@
 //! warp form (decision rust-forms-welcome): `{}` placeholders filled in order, `vec!` a list, `assert!` an assert
 use crate::is;
 use warp::wasm_emitter::eval;
-use warp::{parse, Node};
+use warp::Node;
 
 fn error_text(code: &str) -> String {
 	match eval(code) {
 		Node::Error(reason) => format!("{reason:?}"),
 		other => panic!("{code}: expected an error, got {other:?}"),
 	}
-}
-
-fn reads_as(rust: &str, warp: &str) {
-	assert_eq!(parse(rust).serialize(), parse(warp).serialize(), "{rust} reads as {warp}");
 }
 
 #[test]
@@ -29,11 +25,18 @@ fn format_reads_inline_names_and_positions() {
 	is!("let n = \"n\"; format!(\"{} {n} {}\", 1, 2)", "1 n 2");
 }
 
+/// What running `code` writes to stdout
+#[cfg(feature = "native")]
+fn printed(code: &str) -> String {
+	warp::host::with_captured_stdout(|| eval(code)).1
+}
+
+#[cfg(feature = "native")]
 #[test]
 fn println_prints_the_formatted_text() {
-	reads_as("println!(\"{} {}\", a, b)", "print(format(\"{} {}\", [a, b]))");
-	reads_as("print!(\"{}\", a)", "print(format(\"{}\", [a]))");
-	reads_as("println!(\"hi\")", "print(\"hi\")");
+	assert_eq!(printed("println!(\"{} {}\", 1, 2)"), "1 2\n");
+	assert_eq!(printed("a = 3; print!(\"{}\", a)"), "3");
+	assert_eq!(printed("println!(\"hi\")"), "hi\n");
 }
 
 #[test]
