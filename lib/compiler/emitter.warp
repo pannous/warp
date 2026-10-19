@@ -1225,11 +1225,16 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	if found == ø or i >= #found["params"] { return ø }
 	held_kind(found["params"][i])
 }
-# the kind a definition declares it gives, `f(x): text := …`, its body `… as text` once lowered
-declared_result(f: Function): any := {
-	if not (type(f.body) is key and op_of(f.body) == "as" and value_of(f.body) is symbol) { return ø }
-	word = name_of(value_of(f.body))
-	if word in type_bytes or word in references then word else "node"
+# the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
+# `… as text`
+declared_result(f: Function): any := declared_kind(f.body)
+declared_kind(n: any): any := {
+	if type(n) is key and op_of(n) == "as" and value_of(n) is symbol {
+		word = name_of(value_of(n))
+		return if word in type_bytes or word in references then word else "node"
+	}
+	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
+	declared_kind(n#(#n))
 }
 analyzed_result_kind(f: Function): any := {
 	found = analyzed_function(f)
