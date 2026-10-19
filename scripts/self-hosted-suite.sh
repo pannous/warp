@@ -41,7 +41,23 @@ TEST_GROUPS=(
 	"functions:: ffi::"
 	"types:: lists:: modules:: node:: numbers:: operators::"
 	"parser:: programs:: scope:: sweeps::"
-	"text:: wasm:: web:: welcoming::"
+	"text:: wasm:: web:: welcoming:: formats::"
+)
+# The pure lane (--stage …=WARP_SELF_HOSTED=pure) takes ~2.3 s a test against ~0.2 s: 3 of 5 parts outgrew the limit
+# (e5d5a6b7+pure), so its parts hold ≤ ~650 tests (counts of 2026-10-19), big folders split by their files' letters
+PURE_TEST_GROUPS=(
+	"$(echo control::test_{a..i})"
+	"$(echo control::test_{j..z})"
+	"$(echo functions::test_{a..l})"
+	"$(echo functions::test_{m..z}) ffi::"
+	"lists:: formats:: node::"
+	"modules:: operators:: scope:: sweeps::"
+	"numbers::"
+	"$(echo types::test_{a..l})"
+	"$(echo types::test_{m..z})"
+	"parser:: programs::"
+	"text:: wasm:: web::"
+	"welcoming::"
 )
 REPORTS=/Users/me/dev/angles/warp/data/self-hosted
 COUNTS=/Users/me/dev/angles/warp/data/self_hosting/suite_counts.txt   # the count over time, one line per cloud run
@@ -151,7 +167,7 @@ folder_name() { printf %s "$1" | tr -c 'A-Za-z0-9._-' '-'; }
 # The tests failing now that passed in the last recorded run (a regression check), from the logs both runs left
 newly_failed() {
 	local previous=$1; shift
-	local previous_logs=("$CLOUD_RESULTS/$(folder_name "$SCRATCH_PREFIX/$previous")"-[0-9]-*/log.txt.gz)
+	local previous_logs=("$CLOUD_RESULTS/$(folder_name "$SCRATCH_PREFIX/$previous")"-[0-9]*-*/log.txt.gz)
 	[ -e "${previous_logs[0]}" ] || return 0
 	echo "newly failing since $previous:"
 	LC_ALL=C comm -13 <(failed_tests "${previous_logs[@]}") <(failed_tests "$@")
@@ -170,17 +186,29 @@ switched_on() {
 	echo "$commit"
 }
 
+push_branch() {
+	local attempt
+	for attempt in 1 2 3; do
+		git push -q -f origin "$1:refs/heads/$2" && return 0
+		sleep $((attempt * 20))
+	done
+	return 1
+}
+
 cloud_run() {
 	local tip run group number branch commit logs=() branches=() commits=()
 	tip=$(git rev-parse "${1:-HEAD}") || fail "no tip ${1:-HEAD}"
 	run=${tip:0:8}${STAGE:++$STAGE}
 	git branch -r --contains "$tip" | grep -q . || fail "tip $tip is not pushed"
 	[ "$(git show "$tip:$CONFIG" | grep '^\[' | tail -1)" = "[env]" ] || fail "$CONFIG of $tip does not end with its [env] table"
-	for number in "${!TEST_GROUPS[@]}"; do
-		group=${TEST_GROUPS[$number]}
+	local groups=("${TEST_GROUPS[@]}")
+	[[ " ${SWITCHES[*]} " == *" $SWITCH=pure "* ]] && groups=("${PURE_TEST_GROUPS[@]}")
+	for number in "${!groups[@]}"; do
+		group=${groups[$number]}
 		branch=$SCRATCH_PREFIX/$run-$number
 		commit=$(switched_on "$tip" "$group")
-		git push -q -f origin "$commit:refs/heads/$branch" || fail "push of $branch failed"
+		# GitHub now and then answers "remote rejected (failed)" (9741669b, e5d5a6b7): tried again before giving up
+		push_branch "$commit" "$branch" || fail "push of $branch failed"
 		# shellcheck disable=SC2086 # the group is a list of filters
 		scripts/cloud-test.sh --no-wait "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
 		branches+=("$branch") commits+=("$commit")
