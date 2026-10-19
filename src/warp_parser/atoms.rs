@@ -599,7 +599,9 @@ impl WarpParser {
 		self.advance();
 		let name = self.take_chars(type_length + 1 + operation_length);
 		if crate::wasm_emitter::functions::wasm_bodies::instruction(&name).is_none() {
-			return Some(error(&format!("wasm {name} is no instruction warp takes: the ones on i64 and f64, e.g. wasm f64.sqrt")));
+			return Some(error(&format!(
+				"wasm {name} is no instruction warp takes: the ones on i64 and f64, e.g. wasm f64.sqrt"
+			)));
 		}
 		Some(crate::node::call(WASM_INSTRUCTION_CALL, vec![Node::Text(name)]))
 	}

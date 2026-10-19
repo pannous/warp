@@ -366,7 +366,8 @@ impl WasmGcEmitter {
 			self.emit_trap_position(&mut func);
 		}
 		// Compile the function body - use node instructions for Node-returning functions
-		if let Some(instruction) = wasm_bodies::wasm_body_instruction(&user_fn.body).and_then(wasm_bodies::instruction) {
+		if let Some(instruction) = wasm_bodies::wasm_body_instruction(&user_fn.body).and_then(wasm_bodies::instruction)
+		{
 			(0..num_params).for_each(|param| _ = func.instruction(&I::LocalGet(param)));
 			func.instruction(&instruction);
 		} else if self.struct_results.contains_key(name) {
