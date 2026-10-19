@@ -14,7 +14,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
 use std::path::Path;
 use std::time::Duration;
-use wasmtime::{Engine, Linker, Module, Result, Val};
+use wasmtime::{Engine, Instance, Linker, Module, Result, Store, Val};
 
 const TRAILER_MAGIC: &[u8; 8] = b"WRPCwasm";
 const TRAILER_BYTES: usize = 16;
@@ -157,19 +157,46 @@ pub fn run(carried: &[u8]) -> Result<()> {
 	let (c_functions, machine_code) = crate::c_signatures::split_c_functions(carried).map_err(wasmtime::Error::msg)?;
 	// an executable is the user's app (a game, a server): it runs without a time limit unless WARP_TIME_LIMIT sets one
 	let time_limit = time_limit_from_environment();
-	let engine = match time_limit {
-		Some(_) => ticking(standalone_engine()?),
-		None => standalone_engine()?,
-	};
+	let engine = running_engine(time_limit)?;
 	// SAFETY: the machine code is warp's own output, appended to this executable by `warp build`
 	let module = unsafe { Module::deserialize(&engine, machine_code)? };
-	let mut linker = Linker::new(&engine);
+	if let Ran::Exited = run_module(&engine, &module, &c_functions, time_limit)? {
+		use std::io::Write;
+		let _ = std::io::stdout().flush();
+		std::process::exit(crate::system_signals::take_exit_code().unwrap_or(0)); // `exit(code)` (P121)
+	}
+	Ok(())
+}
+
+/// The standalone engine, ticking when a time limit ends the run
+pub fn running_engine(time_limit: Option<Duration>) -> Result<Engine> {
+	Ok(match time_limit {
+		Some(_) => ticking(standalone_engine()?),
+		None => standalone_engine()?,
+	})
+}
+
+/// How a program's run ended: main returned its results, or the program called `exit(code)`
+pub enum Ran {
+	Returned { store: Store<CHandles>, instance: Instance, results: Vec<Val> },
+	Exited,
+}
+
+/// Run `module` with the stub's host words, libm, libc, print and `c_functions` linked: from main through the handlers
+/// it listens with
+pub fn run_module(
+	engine: &Engine,
+	module: &Module,
+	c_functions: &[crate::c_signatures::CFunction],
+	time_limit: Option<Duration>,
+) -> Result<Ran> {
+	let mut linker = Linker::new(engine);
 	crate::host_words::link_host_words(&mut linker)?;
 	crate::output::link_output(&mut linker)?;
 	crate::libm::link_libm(&mut linker)?;
 	crate::c_calls::link_libc_functions(&mut linker)?;
-	for function in &c_functions {
-		crate::c_calls::link_carried_function(&mut linker, &engine, function)?;
+	for function in c_functions {
+		crate::c_calls::link_carried_function(&mut linker, engine, function)?;
 	}
 	linker.func_wrap(
 		crate::host_words::HOST_LIBRARY,
@@ -178,8 +205,8 @@ pub fn run(carried: &[u8]) -> Result<()> {
 			crate::gc_values::foreign_call(&mut caller, [runtime, module, member, call, arguments])
 		},
 	)?;
-	let mut store = limited_store(&engine, CHandles::default(), DEFAULT_FUEL, time_limit.unwrap_or(Duration::MAX));
-	let instance = linker.instantiate(&mut store, &module)?;
+	let mut store = limited_store(engine, CHandles::default(), DEFAULT_FUEL, time_limit.unwrap_or(Duration::MAX));
+	let instance = linker.instantiate(&mut store, module)?;
 	let main = ENTRY_POINTS
 		.iter()
 		.find_map(|name| instance.get_func(&mut store, name))
@@ -191,13 +218,11 @@ pub fn run(carried: &[u8]) -> Result<()> {
 		.and_then(|_| crate::system_signals::stay_while_listening(&mut store, &instance));
 	let outcome = crate::system_signals::with_exit_handler(outcome, &mut store, |store, name| {
 		instance.get_func(&mut *store, name)
-	});
-	if let Ok(None) = outcome {
-		use std::io::Write;
-		let _ = std::io::stdout().flush();
-		std::process::exit(crate::system_signals::take_exit_code().unwrap_or(0)); // `exit(code)` (P121)
-	}
-	outcome.map(|_| ())
+	})?;
+	Ok(match outcome {
+		Some(()) => Ran::Returned { store, instance, results },
+		None => Ran::Exited,
+	})
 }
 
 /// The imports a standalone executable provides: (module, name); C functions beyond them it carries (c_signatures.rs)

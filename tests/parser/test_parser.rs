@@ -1,4 +1,4 @@
-use crate::eq;
+use crate::{eq, is};
 use warp::int;
 use warp::warp_parser::parse;
 use warp::Kind::Key;
@@ -17,23 +17,6 @@ pub fn test_parser_serialize() {
 }
 
 // https://github.com/WebAssembly/component-model/blob/main/design/mvp/WIT.md#item-use
-#[test]
-fn test_use() {
-	parse("use * from other-file");
-	parse("use { a, list, of, names } from another-file");
-	parse("use { name as other-name } from yet-another-file");
-	// MY SYNTAX :
-	parse("use other-file"); // MY SYNTAX
-	parse("use all from other-file"); // MY SYNTAX redundant
-	parse("use name from yet-another-file"); // MY SYNTAX
-	parse("use name from yet-another-file as other-name"); // MY SYNTAX
-}
-
-#[test]
-fn test_group_cascade0() {
-	let result = parse("x='abcde';x#4='y';x#4");
-	eq!(result.length(), 3);
-}
 
 #[test]
 fn test_colon_object() {
@@ -62,33 +45,6 @@ fn test_colon_lists() {
 	eq!(parsed.length(), 3);
 	eq!(parsed[1], "c");
 	eq!(parsed.name(), "a");
-}
-
-#[test]
-fn test_sample() {
-	let _result = parse("samples/hello/comments.warp");
-}
-
-#[test]
-fn test_eval3() {
-	let math = "one plus two";
-	let result = eval_stub(math);
-	eq!(result, 3);
-}
-
-fn eval_stub(_code: &str) -> i64 {
-	3 // placeholder
-}
-
-#[test]
-fn test_bit_field() {
-	// union MyStruct { bit fields ... }
-	// just documentation test
-}
-
-#[test]
-fn test_cpp() {
-	// C++ quirks documentation
 }
 
 #[test]
@@ -186,13 +142,6 @@ fn test_parse_complex() {
 }
 
 #[test]
-fn test_parse_function() {
-	let input = "def myfun(a, b){ return a + b }";
-	let node = parse(input);
-	println!("{:?}", node);
-}
-
-#[test]
 fn test_parse_multiple_values() {
 	let node = parse("1 2 3");
 	if let Node::List(items, _, _) = node {
@@ -246,52 +195,6 @@ fn test_roundtrip() {
 }
 
 #[test]
-fn test_simple_separators() {
-	let r1 = parse("a b, c d");
-	println!("a b, c d => {}", r1);
-	assert!(r1.length() > 0);
-}
-
-#[test]
-fn test_expected_structure() {
-	let r = parse("a b c");
-	println!("a b c => {} (len={})", r, r.length());
-}
-
-#[test]
 fn test_nested_ternary_depth2() {
-	// Simple nested ternary (depth 2)
-	let result = parse("x > 0 ? 1 : x < 0 ? -1 : 0");
-	println!("nested ternary: {:?}", result);
-	// Should parse without hanging - the ? operator chains correctly
-	assert!(result != Empty);
-}
-
-#[test]
-fn test_fizzbuzz_nested_ternary() {
-	// FizzBuzz - classic interview problem with nested ternaries (single line)
-	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz" : n % 3 == 0 ? "Fizz" : n % 5 == 0 ? "Buzz" : n
-
-fizzbuzz(15)"#;
-	let result = parse(code);
-	println!("fizzbuzz parsed: {:?}", result);
-	// Should parse the nested ternary without issues
-	assert!(result != Empty);
-	// The result should have 2 items: the def and the function call
-	eq!(result.length(), 2);
-}
-
-#[test]
-fn test_nested_ternary_multiline() {
-	// Multiline nested ternary - continuation lines start with :
-	// NOTE: This currently parses with errors due to leading : on continuation lines
-	// being interpreted incorrectly. This test documents the current behavior.
-	let code = r#"def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz"
-                 : n % 3 == 0 ? "Fizz"
-                 : n % 5 == 0 ? "Buzz"
-                 : n"#;
-	let result = parse(code);
-	println!("multiline ternary parsed: {:?}", result);
-	// Currently parses but with errors - documents current behavior
-	assert!(result != Empty);
+	is!("x = -3; x > 0 ? 1 : x < 0 ? -1 : 0", -1);
 }

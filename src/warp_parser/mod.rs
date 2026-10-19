@@ -18,7 +18,7 @@ use std::fs::read_to_string;
 
 use crate::node::ATTRIBUTE_MARK;
 mod declaration_scan;
-pub use declaration_scan::*;
+pub(crate) use declaration_scan::*;
 mod collections;
 mod context;
 pub use collections::*;
@@ -58,7 +58,6 @@ pub(crate) use expressions::*;
 pub(crate) use literals::*;
 pub use literals::{shader_blocks, without_shader_texts, PathLiteral};
 use lookahead::*;
-pub use scanning::read_atoms;
 use scanning::*;
 mod annotations;
 mod math_notation;
@@ -287,9 +286,6 @@ pub struct WarpParser {
 	/// repeated elements in XML/HTML (`ul{ li: "a" li: "b" }`), no duplicate key; a plain `{…}` is a map that reports
 	/// one (user decision P176, card g-_bGo). Taken by the list it opens, so blocks inside it are not tag blocks
 	tag_block: bool,
-	/// The atoms read so far, in source order: the lexer's view of the source (read_atoms); a rewind forgets those read
-	/// after its mark
-	atoms: Vec<Atom>,
 	/// A comment between two statements: it belongs to the next one (parse_value attaches it)
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
@@ -376,7 +372,6 @@ impl WarpParser {
 			signed_list_element: None,
 			generic_names: None,
 			tag_block: false,
-			atoms: vec![],
 			pending_comment: None,
 			after_function_keyword: false,
 			continues_definition_head: false,
@@ -413,22 +408,6 @@ impl WarpParser {
 			program
 		}
 	}
-}
-
-/// What the lexer reads (card self-lexer, lib/compiler/lexer.warp is its warp twin)
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum AtomKind {
-	Number,
-	Text,
-}
-
-/// An atom the parser read: where it starts (line and column from 1, a column per character) and what was written
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Atom {
-	pub kind: AtomKind,
-	pub line: usize,
-	pub column: usize,
-	pub written: String,
 }
 
 /// The one element of `items`, moved out (cloning it copied a whole subtree, the whole program at the top)

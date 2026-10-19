@@ -135,3 +135,16 @@ under `warp run`.
 - A plain run that builds an executable (`WARP_EXECUTABLE=1`) pays for the printing variant compiled once more and its
   machine code written; unchanged files skip it (the executable is newer).
 - Test-suite time: notes/test_speed.md.
+
+## libwarp_runtime: the runtime as a C library (card run-wasm-lib)
+`cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library` builds libwarp_runtime (6.2 MB
+release, Cranelift inside: it compiles what it is given). One C function, crates/warp-runtime/include/warp_runtime.h:
+`const char *run_wasm(const uint8_t *module, size_t length)`: compiles and runs the module with the stub's host words,
+libm, libc and fd_write (standalone::run_module, shared with the stub), gives main's result as a text (numbers'
+digits, a GC value through gc_values::json_of, "" for none), NULL on failure with `run_wasm: <reason>` on stderr.
+From warp it is any C library: `use warp_runtime; run_wasm(bytes)` (probes/run_wasm_bytes.warp). The general FFI rule
+it needed: a `const T *` of bytes (uint8_t, int8_t, char, void, Bytef) followed by a `size_t` takes ONE warp value, a
+text or a list of byte values, copied for the call, its length filled in (ParamType::Bytes / Length).
+Found through the usual paths: the header via the include dirs (or WARP_INCLUDE), the library via dlopen's search
+(DYLD_LIBRARY_PATH / LD_LIBRARY_PATH; tests/common runtime_library_dir). Two wasmtimes in one process (warp's and the
+library's) work, each with its own trap handling.

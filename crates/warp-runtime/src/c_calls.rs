@@ -181,7 +181,8 @@ fn wasm_param(param: ParamType) -> Option<ValType> {
 		ParamType::I64 => Some(ValType::I64),
 		ParamType::F32 => Some(ValType::F32),
 		ParamType::F64 => Some(ValType::F64),
-		ParamType::Out => None,
+		ParamType::Bytes => Some(ValType::ANYREF),
+		ParamType::Out | ParamType::Length => None,
 		ParamType::I32 | ParamType::Ptr | ParamType::Handle => Some(ValType::I32),
 	}
 }
@@ -235,7 +236,9 @@ fn call_c_function<T: CallsC>(
 ) -> Result<()> {
 	// lives through the call: a `char **` out-pointer (strtod's endptr) is written there
 	let mut out_slot: usize = 0;
-	let args = native_arguments(caller, &function.name, params, &function.param_types, &mut out_slot)?;
+	// live through the call too: the copies of the byte parameters
+	let mut buffers: Vec<Vec<u8>> = vec![];
+	let args = native_arguments(caller, &function.name, params, &function.param_types, &mut out_slot, &mut buffers)?;
 	let returned = unsafe { call_native_function(func_ptr, &args, function.ret_type) };
 	if let Some(pointee) = &function.out_pointee {
 		if out_slot == 0 {
@@ -275,13 +278,14 @@ struct NativeArguments {
 
 /// The arguments of a native call, one per C parameter: numbers as they are (a `float` in the low half of its
 /// register), a memory pointer as the address of its text in linear memory, a handle id as its C pointer; the first
-/// out-pointer gets `out_slot`, others NULL
+/// out-pointer gets `out_slot`, others NULL; a byte parameter points to its copy in `buffers`, its length follows
 fn native_arguments<T: CallsC>(
 	caller: &mut Caller<'_, T>,
 	name: &str,
 	params: &[Val],
 	param_types: &[ParamType],
 	out_slot: &mut usize,
+	buffers: &mut Vec<Vec<u8>>,
 ) -> Result<NativeArguments> {
 	let mut args = NativeArguments::default();
 	let (mut integer, mut float) = (0, 0);
@@ -290,6 +294,8 @@ fn native_arguments<T: CallsC>(
 	for ptype in param_types {
 		let value = if *ptype == ParamType::Out {
 			Some(out_slot.take().map_or(0, |slot| slot as *mut usize as u64))
+		} else if *ptype == ParamType::Length {
+			Some(buffers.last().map_or(0, Vec::len) as u64)
 		} else {
 			let Some(param) = warp_params.next() else { break };
 			match ptype {
@@ -318,7 +324,11 @@ fn native_arguments<T: CallsC>(
 					float += 1;
 					None
 				}
-				ParamType::Out => unreachable!("out-pointers are filled above"),
+				ParamType::Bytes => {
+					buffers.push(byte_values(caller, name, param)?);
+					buffers.last().map(|bytes| bytes.as_ptr() as u64)
+				}
+				ParamType::Out | ParamType::Length => unreachable!("out-pointers and lengths are filled above"),
 			}
 		};
 		if let Some(value) = value {
@@ -330,6 +340,27 @@ fn native_arguments<T: CallsC>(
 		}
 	}
 	Ok(args)
+}
+
+/// The bytes a warp value gives a `const uint8_t *`: a text's UTF-8, a list's byte values (each 0 to 255)
+fn byte_values<T>(caller: &mut Caller<'_, T>, name: &str, value: &Val) -> Result<Vec<u8>> {
+	let memory = caller
+		.get_export(crate::gc_values::MEMORY)
+		.and_then(|export| export.into_memory())
+		.ok_or_else(|| wasmtime::Error::msg(format!("{name}: the program exports no memory")))?;
+	let value = crate::gc_values::json_of(value, &mut wasmtime::AsContextMut::as_context_mut(caller), memory)?;
+	let not_bytes = |what: &dyn std::fmt::Display| {
+		wasmtime::Error::msg(format!("{name} takes bytes: a text or a list of 0 to 255, not {what}"))
+	};
+	match value {
+		serde_json::Value::String(text) => Ok(text.into_bytes()),
+		serde_json::Value::Null => Ok(vec![]),
+		serde_json::Value::Array(items) => items
+			.iter()
+			.map(|item| item.as_u64().and_then(|byte| u8::try_from(byte).ok()).ok_or_else(|| not_bytes(item)))
+			.collect(),
+		other => Err(not_bytes(&other)),
+	}
 }
 
 /// The address of `offset` in the module's linear memory, NULL without one

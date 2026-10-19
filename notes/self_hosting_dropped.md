@@ -12,10 +12,9 @@ Where to find things:
 
 Two kinds of entry:
 - Dropped form: a form the warp part leaves out (the cleanest, most minimal compiler, not a copy of the Rust one),
-  with the sources that show it, why, and how to bring it back. The harnesses skip the named sources:
-  tests/parser/self_parser_dropped.txt (path, tab, form) for the parser survey `parser_differences`
-  (tests/parser/test_self_parser_survey.rs), and the `dropped` list of tests/common/twins.rs pass_differential, which
-  refuses a dropped source this file does not name. A pass that looks like bloat as a whole goes to the Supervisor
+  with the sources that show it, why, and how to bring it back. The emitter twin (tests/common/twins.rs twin_sources)
+  skips the named sources and refuses a dropped source this file does not name; the parser and pass twins are gone
+  (outcome tests only, 2026-10-19). A pass that looks like bloat as a whole goes to the Supervisor
   instead of being ported. `probes/self_hosting/parser/sort_differences.py` sorts remaining parser differences.
 - Deviation: where the warp part keeps a cleaner result than its Rust twin, with an example and the card or question
   for the Rust side. The differentials read them as expected.
@@ -211,3 +210,7 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   its one entry), Rust's `div:divv:"hi"` (the block dropped around its item). The rendered HTML is the same
   (`<div>{divv:&quot;hi&quot;}</div>`). Source: probes/unknown_tag.warp (accepted by the Integrator with --flaky,
   2026-10-19). Back: the lowered view marks a block that holds one item as that item, as Rust's eval reads it.
+- Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
+  Comparable witness), times and uncertain values trap there, where Rust's node_order orders them. A sorted list is a
+  plain list, where Rust's keeps the bracket kind of the sorted one. Back: node_order asks the witness table and the
+  time words once emitter.warp lays those out; the result takes the kind of xs.

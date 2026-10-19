@@ -55,7 +55,7 @@ pub(crate) fn dedented_lines(source: &str) -> Vec<DedentedLine> {
 
 impl WarpParser {
 	pub(crate) fn parse_string(&mut self) -> Node {
-		self.reading_atom(AtomKind::Text, Self::read_text)
+		self.read_text()
 	}
 
 	fn read_text(&mut self) -> Node {

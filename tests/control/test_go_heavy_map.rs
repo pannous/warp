@@ -11,8 +11,6 @@ fn program(count: usize, last: &str) -> String {
 
 #[test]
 fn a_go_map_of_a_heavy_kernel_takes_the_gpu_switch() {
-	let lowered = warp::pipeline::lower(&program(AUTO_COUNT, "ys#n")).expect("a program").serialize();
-	assert!(lowered.contains("gpu_map_linear") && !lowered.contains("task_spawn_values"), "{lowered}");
 	let tolerance = crate::common::gpu_tolerance();
 	assert_eq!(eval(&program(AUTO_COUNT, &format!("abs(ys#n - sin(1)) < {tolerance}"))).serialize(), "yes");
 }

@@ -1,0 +1,4 @@
+# card enum-match-in-used-file: the same match works in the main file (gives 3); through `use` its binding `box` is an
+# undefined variable
+use "used_cases.warp"
+f(Thing::Holds(Box(3)), Thing::Counts(2))

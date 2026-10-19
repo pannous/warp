@@ -49,13 +49,25 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
 - `civil_from_days`, `days_from_civil`: Hinnant's civil calendar. `time_parts(form, position) -> (days, nanos)`.
 - `time_field(node, index of TIME_FIELDS) -> i64`, a zoned time's on its own wall clock, `offset` its seconds east of
   UTC. The call site (`emit_time_field_lookup`) first refuses the fields a form lacks, with the message of
-  `TimeForm::refusal(name)` (`date has no hour`, `duration has no field year`).
+  `TimeForm::refusal(name)` (`date has no hour`, `duration has no field year`). time_field itself only finds the wall
+  clock position (zone offset, the host's local_offset); the calendar is lib/prelude.warp `time_field_of(form, wall,
+  offset, field)`, called late (card time-fields-warp), over the warp twins of time_parts (`time_days`, `time_nanos`)
+  and of the civil calendar (`civil_year/month/day`, `days_from_civil`, one copy with civil-days-dup's `civil_from_days`). A program making a time loads the word through
+  times.rs implied_word (`now`, a time call, a date or time literal). The Rust time_parts and civil functions stay for
+  time_text, time arithmetic and zones.
 - `time_text(node) -> text`: RFC 3339 like calendar.rs `Display` (seconds left out when zero, fraction trimmed, `Z`
   only on an instant, a zoned time's offset and `[Zone]`); list_join calls it (print, `+` with a text, `str`).
   `duration_text` shows a duration as `Display for Duration` (`1 month 2 days 3 hours`, `-1.5 seconds`). The zone
   names enter linear memory only when a zoned constant requires `ZONE_NAMES` (analyzer/imports.rs).
 - node_order compares two times of one form by position; two forms trap with "no implicit conversion between kinds
   of time", durations with "cannot order durations".
+- warp twins (card duration-warp): lib/compiler/runtime.warp `## durations` has `duration_text(n)` and
+  `duration_order(a, b)`, each unpacking the node (months above bit 43 of the kind word, days the signed 32 bits
+  above bit 11, nanoseconds in the box) into `duration_parts_text` / `duration_parts_order` over the three amounts,
+  checked against calendar.rs by tests/numbers/test_duration_words.rs. emitter.warp compiles no time yet, so the
+  Rust functions stay until it does; then the call sites call the warp words, traps.rs maps
+  `durations_compare_differently_on_different_dates` to the "cannot order durations" message, and the Rust goes.
+  lib/time.warp `format_duration(ms)` is a different, compact form (`1h 30m 30s`) of plain milliseconds, kept apart.
 
 ## Arithmetic (wasm_emitter/time_arithmetic.rs)
 node_add, node_sub and node_mul hand over to `time_arithmetic(a, b, operator)` when an operand is a time, as calendar.rs
@@ -64,6 +76,10 @@ month is a run-time error naming `add(…, overflow: clamp)`), duration ± durat
 round), `a - b` of two times of one form (days between dates, else a duration). A date takes no time of day, an instant
 no months or days. `1 month 2 days` is lexed as one duration
 (literals.rs `with_time_unit`).
+- warp twin (card time-arithmetic-warp): lib/compiler/time_arithmetic.warp, the same arithmetic typed over plain
+  integers (enum TimeForm, class Span of month/day/nano counts, class Moment of form and position, enum Operand);
+  test tests/parser/test_self_time_arithmetic.rs. Not wired yet: node_add/sub/mul still call the Rust function until
+  card time-primitives reads a node's form, position and parts. Zoned times are refused there (card time-zones-warp).
 
 ## Zones (wasm_emitter/time_zones.rs)
 - `zone_rule(zone)` (winter offset, Dst) is a table of calendar::ZONES; `zone_offset_at(zone, seconds)` applies the Europe
@@ -79,3 +95,16 @@ no months or days. `1 month 2 days` is lexed as one duration
   (reject: a day landing on a skipped or repeated wall time fails). `a - b` of two zoned times is their elapsed time.
 - Not yet: `add(t, d, disambiguation: …)` and a zone name held in a variable at run time.
 
+
+## One calendar copy in warp (card civil-days-dup)
+Howard Hinnant's days_from_civil / civil_from_days were written three times: src/time/calendar.rs (compile time),
+src/wasm_emitter/time/times.rs (the run-time functions, ~75 lines of instructions) and lib/time.warp (date_of,
+days_from_date). The warp copy is now lib/prelude.warp `days_from_civil(year: int, month: int, day: int): int` and
+`civil_from_days(day_count: int)` → {year, month, day}; lib/time.warp's date_of / days_from_date call them.
+Next (needs a tested build): times.rs CIVIL_FROM_DAYS / DAYS_FROM_CIVIL become late_call shims
+(functions/late_calls.rs) into those prelude words. civil_from_days returns three i64s, which a warp word cannot, so
+the shim calls a scalar word (e.g. `civil_packed(day_count: int): int := (year * 16 + month) * 32 + day`, decoded with
+`& 31`, `>> 5 & 15`, `>> 9`, arithmetic shift for years before 0) and an implied_word row (needed_definitions.rs) for
+the forms that emit the time runtime (date literals, `now`, time fields). Measure first: every date program then
+loads the words (notes/self_hosting.md "Load order"), and a late call traps before main fills the global (a host
+calling an exported time function). src/time/calendar.rs stays: the compiler folds dates at compile time.
