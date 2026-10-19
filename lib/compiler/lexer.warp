@@ -284,7 +284,8 @@ def possessive(source: any, at: int, n: int): bool {
 	at > 0 and is_name_char(source[at - 1]) and is_at(source, at + 1, 's', n) and is_at(source, at + 2, ' ', n) and at + 3 < n and is_name_start(source[at + 3])
 }
 
-def is_name_start(c: any): bool := is_alpha(c) or is_letter_beyond_ascii(c) or c == '_'
+// `ø` is the empty value, never a name's start (Rust's atom reads it before names)
+def is_name_start(c: any): bool := is_alpha(c) or (is_letter_beyond_ascii(c) and c != 'ø') or c == '_'
 
 // `π`, `σ`, `é`, `名`: a letter beyond ASCII names as a Latin one does (Rust's is_alphabetic), a cased one or one of
 // the CJK, kana and Hangul blocks
