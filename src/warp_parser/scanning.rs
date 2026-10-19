@@ -184,6 +184,22 @@ impl WarpParser {
 		}
 	}
 
+	/// A tab between two items of a line separates columns: `"1+1"⇥2` is a list of two (tab-separated test pairs,
+	/// decision warp-is-tests). The blanks around the cursor hold the tab; indentation and a tab before a comment
+	/// or the line's end separate nothing.
+	pub(super) fn at_tab_separator(&self) -> bool {
+		let is_blank = |c: &&char| matches!(c, ' ' | '\t');
+		let behind = self.chars[..self.pos].iter().rev().take_while(is_blank).count();
+		let ahead = self.chars[self.pos..].iter().take_while(is_blank).count();
+		let blanks = &self.chars[self.pos - behind..self.pos + ahead];
+		let content_before = self.pos > behind && self.chars[self.pos - behind - 1] != '\n';
+		let content_after = match (self.peek_char(ahead), self.peek_char(ahead + 1)) {
+			('\n' | '\r' | '\0', _) | ('/', '/' | '*') | ('#', ' ' | '\t' | '\n' | '\0') => false,
+			_ => true,
+		};
+		blanks.contains(&'\t') && content_before && content_after
+	}
+
 	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
 	pub(super) fn skip_spaces(&mut self) {
 		loop {

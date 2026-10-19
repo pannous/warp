@@ -85,8 +85,9 @@ fn test_of<'a>(statement: &'a Node, words: &[&str]) -> Option<Test<'a>> {
 	phrase(rest).map(Test::Soft)
 }
 
-/// A file of test pairs (decision warp-is-tests): code and its expected value a line each, `'1+1' 2`, bare or as the
-/// map `test_pairs = { … }`; each pair runs as `is!(code, expected)`. Any other program stays as it is
+/// A file of test pairs (decision warp-is-tests): a line each, code ⇥ expected value ⇥ an optional note,
+/// `"1+1"⇥2`, warp's reader takes it as a list of lists; bare or as the map `test_pairs = { … }`. Each pair runs as
+/// `is!(code, expected)`, a code alone expects ø. Any other program stays as it is
 fn pairs_checked(program: Node) -> Node {
 	let statements = program.body_statements();
 	let pairs = match statements.as_slice() {
@@ -103,20 +104,45 @@ fn pairs_checked(program: Node) -> Node {
 	}
 }
 
-/// `'1+1' 2` as `is!("1+1", 2)`; a code alone expects ø
+/// `"1+1"⇥2` as `is!("1+1", 2)`
 fn pair_check(pair: &Node) -> Option<Node> {
+	let (code, expected) = pair_parts(pair)?;
+	Some(Node::List(vec![symbol(CHECK_WORDS[0]), Node::Text(code), expected], Bracket::Round, Separator::None))
+}
+
+/// A pair's code and expected value; its note is a remark
+fn pair_parts(pair: &Node) -> Option<(String, Node)> {
 	let (code, expected) = match pair.drop_meta() {
-		Node::List(items, Bracket::None | Bracket::Square, Separator::Space) if items.len() == 2 => {
-			(&items[0], items[1].clone())
-		}
+		Node::List(items, Bracket::None, Separator::Tab) => match items.as_slice() {
+			[code, expected] | [code, expected, _] => (code, expected.clone()),
+			_ => return None,
+		},
 		code => (code, Node::Empty),
 	};
-	let code = match code.drop_meta() {
-		Node::Text(code) => code.clone(),
-		Node::Char(code) => code.to_string(),
-		_ => return None,
-	};
-	Some(Node::List(vec![symbol(CHECK_WORDS[0]), Node::Text(code), expected], Bracket::Round, Separator::None))
+	match code.drop_meta() {
+		Node::Text(code) => Some((code.clone(), expected)),
+		Node::Char(code) => Some((code.to_string(), expected)),
+		_ => None,
+	}
+}
+
+/// The commented-out pairs of a pairs file, `// "fib 10"⇥55⇥card fib-memo: regression`, as the lines `warp test`
+/// reports skipped: `"fib 10" 55: card fib-memo: regression`
+pub fn skipped_pairs(source: &str) -> Vec<String> {
+	source
+		.lines()
+		.filter_map(|line| line.trim_start().strip_prefix("//").or_else(|| line.trim_start().strip_prefix('#')))
+		.filter(|commented| commented.contains('\t'))
+		.filter_map(|commented| {
+			let (code, expected) = pair_parts(&parse(commented))?;
+			let pair = format!("{} {}", Node::Text(code).serialize(), expected.serialize());
+			// the note as written: a remark, no data
+			Some(match commented.split('\t').nth(2).map(str::trim) {
+				Some(note) => format!("{pair}: {note}"),
+				None => pair,
+			})
+		})
+		.collect()
 }
 
 /// `is! "3+3" 6`, `is!("3+3", 6)`: a call of a check word

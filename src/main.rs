@@ -162,6 +162,9 @@ fn run_tests_of(path: &str) -> (usize, usize) {
 			return (failed, failed);
 		}
 	};
+	for skipped in warp::lowering::test_blocks::skipped_pairs(&source_of(path)) {
+		println!("⊘ skipped {skipped}");
+	}
 	println!("{summary}");
 	test_counts(&summary).unwrap_or((1, 1))
 }
