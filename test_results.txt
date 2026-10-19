@@ -3826,6 +3826,7 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
@@ -6476,4 +6477,4 @@ FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
 
 SUMMARY:
-16 ignored, 6470 passed, 1 failed, 6471 total tested
+16 ignored, 6471 passed, 1 failed, 6472 total tested
