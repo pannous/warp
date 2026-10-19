@@ -140,7 +140,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = [] }
 
 module = Module({}, [])
 
@@ -475,7 +475,9 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by"}
+	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
+	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with",
+	trim: "node_trim", map_get_or: "map_get_or"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
@@ -560,7 +562,8 @@ record_type(name: any): any := {
 }
 
 # whether name is the program's global variable here: never in a runtime word, whose locals are its own
-is_global(body: Body, name: text): bool := not body.intrinsics and not (name in body.names) and name in module.globals
+# a runtime word sees only the globals runtime.warp declares, never those of the program
+is_global(body: Body, name: text): bool := not (name in body.names) and name in module.globals and (not body.intrinsics or name in module.runtime_globals)
 def local_value(body: Body, n: any): list {
 	name = name_of(n)
 	if is_global(body, name) {
@@ -624,6 +627,12 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	texts = operation(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + chosen(kind, texts, [kind, numbers])]
+}
+# `x == ø`, `x != ø` (a match's `ø:` case): ø and an empty list are nothing, as Rust's equality takes them
+def nothing_test(body: Body, symbol: text, n: any): list {
+	held_nothing = runtime_call("is_nothing", [["node", boxed(expression(body, n))]])
+	if symbol == "==" { return held_nothing }
+	["bool", condition(held_nothing) + [op.i32_eqz]]
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
 def equality(body: Body, symbol: text, a: any, b: any): list {
@@ -975,11 +984,12 @@ def group_expression(body: Body, n: any): list {
 	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
-		if library_words[name_of(n#1)] in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
+		word = library_words[name_of(n#1)]
+		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
 		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
-		if name_of(n#1) == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
-		if not body.intrinsics and library_words[name_of(n#1)] in text_words { module.shows_values = yes }
-		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
+		if word == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
+		if not body.intrinsics and word in text_words { module.shows_values = yes }
+		return call(body, module.runtime[word], n[1..].map(x => x))
 	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
@@ -1069,7 +1079,10 @@ def key_expression(body: Body, n: any): list {
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
-	if left == ø or right == ø { return refuse("the operator " + operator) }
+	if left == ø or right == ø {
+		if operator in equalities { return nothing_test(body, operator, if left == ø then right else left) }
+		return refuse("the operator " + operator)
+	}
 	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
 	operation(body, operator, expression(body, left), expression(body, right))
 }
@@ -1313,6 +1326,7 @@ runtime_global(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":" and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
 	module.globals[name] = [#module.global_order, if value_of(value_of(n)) is number then "int" else "text"]
+	module.runtime_globals += [name]
 	module.global_order += [name]
 }
 
@@ -1330,6 +1344,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.order = []
 	module.runtime = {}
 	module.globals = {}
+	module.runtime_globals = []
 	module.global_order = []
 	module.texts = {}
 	module.bytes = []

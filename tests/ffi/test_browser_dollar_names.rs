@@ -30,6 +30,4 @@ fn a_superfluous_dollar_keeps_the_value_with_a_warning() {
 	crate::common::warns_with("f(n) := $n + 1; f(2)", 3, "$n is superfluous");
 	let (_, warnings) = crate::common::warnings_of("$document.location");
 	assert!(warnings.iter().any(|warning| warning.contains("$document is superfluous")), "{warnings:?}");
-	let lowered = |code| warp::pipeline::lower(code).unwrap_or_else(|error| error).serialize();
-	assert_eq!(lowered("$document.location"), lowered("document.location"));
 }

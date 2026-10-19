@@ -3,10 +3,7 @@
 // program's own (`on submit {…}`) still draws it
 
 fn warns_never_raised(code: &str) -> bool {
-	warp::errors::diagnostic::take_warnings();
-	let lowered = warp::pipeline::lower(code);
-	assert!(lowered.is_ok(), "{lowered:?}");
-	warp::errors::diagnostic::take_warnings().iter().any(|warning| warning.message.contains("never raises it"))
+	crate::common::warnings_of(code).1.iter().any(|warning| warning.contains("never raises it"))
 }
 
 #[test]

@@ -2,37 +2,6 @@
 use super::super::*;
 
 impl WasmGcEmitter {
-	/// Emit with user-defined types from a TypeRegistry
-	/// Order: memory, gc_types, user_types, kind_globals, constructors, user_constructors
-	pub fn emit_with_types(&mut self, registry: &TypeRegistry) {
-		// Memory
-		self.emit_memory();
-
-		// Core GC types (String, Node, i64box, f64box)
-		self.emit_gc_types();
-
-		// User-defined struct types (before any functions!)
-		self.emit_user_types(registry);
-
-		// Kind globals
-		if self.config.emit_kind_globals {
-			self.emit_kind_globals();
-		}
-
-		// Core Node constructors
-		self.emit_constructors();
-
-		// User type constructors
-		self.emit_user_type_constructors(registry);
-	}
-
-	/// Emit constructor functions for user-defined types
-	pub(in crate::wasm_emitter) fn emit_user_type_constructors(&mut self, registry: &TypeRegistry) {
-		for type_def in registry.types() {
-			self.emit_user_type_constructor(type_def);
-		}
-	}
-
 	/// Emit a constructor function for a single user type: new_TypeName(fields...) -> ref $TypeName
 	pub(in crate::wasm_emitter) fn emit_user_type_constructor(&mut self, type_def: &TypeDef) {
 		let type_idx = match self.ctx.user_type_indices.get(&type_def.name) {
