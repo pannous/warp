@@ -1,0 +1,20 @@
+// card match-silently: a match whose scrutinee is an index expression, `match parts#at {…}`, takes no case; the same
+// element through a Node parameter does. Prints "assign" twice once fixed (prints "assign", "other" on 2026-10-19).
+// out: assign
+// out: assign
+use "../lib/compiler/passes.warp"
+program = node_of(plain(tree("a, b = b, a")))
+parts = match program {
+	List(parts, bracket, separator): parts
+	_: ø
+}
+kind(k: Node): text := match k {
+	Key(t, Op.Assign, g): "assign"
+	_: "other"
+}
+indexed(list: any, at: int): text := match list#at {
+	Key(t, Op.Assign, g): "assign"
+	_: "other"
+}
+print kind(parts#2)
+print indexed(parts, 2)

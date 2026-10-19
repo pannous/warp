@@ -1,0 +1,17 @@
+# emitter core: `x as rational` of a run-time float is the exact value of its shortest digits, reduced (runtime.warp
+# float_as_exact, decision float-as-rational); 0.1 is 1/10, -2.5 is -5/2
+tenth = float(1) / 10
+print tenth as rational
+negative = float(-5) / 2
+print negative as rational
+third = float(1) / 3
+print third as rational
+whole = float(123456789)
+print whole as rational
+large = float(1)
+for i in 1 to 18 { large = large * 10 }
+print large as rational
+zero = float(0)
+print zero as rational
+r = tenth as rational
+r * 10 == 1

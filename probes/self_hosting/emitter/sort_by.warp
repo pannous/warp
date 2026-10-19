@@ -1,0 +1,3 @@
+# emitter: sort_by keys through runtime.warp's sorted_node_by, stable for equal keys (outside the core while lambdas are)
+words = ["bb", "a", "cc", "d", "eee"]
+print words.sort_by(w => #w)

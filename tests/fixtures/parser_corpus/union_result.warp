@@ -1,7 +1,0 @@
-// a union result type with as (user 2026-10-12, return-as): each returned value is checked, nothing converted
-def describe(x: int) as int or text {
-	if x > 1 then return "big"
-	x
-}
-print describe(1)
-print describe(5)

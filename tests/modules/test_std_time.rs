@@ -51,3 +51,15 @@ fn use_time_knows_leap_years_and_month_lengths() {
 		warp::ints(vec![29, 28, 30, 31])
 	);
 }
+
+// card civil-days-dup: the calendar over day numbers is one warp copy, lib/prelude.warp, which lib/time.warp builds on
+#[test]
+fn civil_days_are_prelude_words() {
+	is!("days_from_civil(1970, 1, 1)", 0);
+	is!("days_from_civil(2000, 2, 29)", 11016);
+	is!("days_from_civil(1969, 12, 31)", -1);
+	is!("d = civil_from_days(11016); [d.year, d.month, d.day]", parse("[2000 2 29]"));
+	is!("d = civil_from_days(-719468); [d.year, d.month, d.day]", parse("[0 3 1]"));
+	is!("d = civil_from_days(days_from_civil(1600, 12, 31)); [d.year, d.month, d.day]", parse("[1600 12 31]"));
+	is!("use time; days_from_date(2026, 10, 7)", 20733);
+}

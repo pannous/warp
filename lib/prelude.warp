@@ -348,3 +348,65 @@ display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
+// The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
+// time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its wall
+// clock position, its zone offset in seconds east of UTC and the index of the field in times.rs TIME_FIELDS
+time_field_of(form: int, wall: int, offset: int, field: int): int := {
+	days = time_days(form, wall)
+	nanos = time_nanos(form, wall)
+	match field {
+		0 => civil_year(days)
+		1 => civil_month(days)
+		2 => civil_day(days)
+		// ISO weekday: 1970-01-01 was a Thursday, Monday is 1
+		3 => floor_mod(days + 3, 7) + 1
+		4 => days - days_from_civil(civil_year(days), 1, 1) + 1
+		5 => nanos /! 3600000000000
+		6 => nanos /! 60000000000 % 60
+		7 => nanos /! 1000000000 % 60
+		8 => days * 86400 + nanos /! 1000000000
+		9 => offset
+		// the time of day in whole seconds, as calendar::Time::part: 22:27:46
+		10 => nanos /! 1000000000 * 1000000000
+		_ => days
+	}
+}
+// time_parts(form, position): the calendar day of a position and the nanoseconds into it; a date has no clock
+time_days(form: int, position: int): int := if form == 1 then position else position /! 86400000000000
+time_nanos(form: int, position: int): int := if form == 1 then 0 else floor_mod(position, 86400000000000)
+floor_mod(n: int, divisor: int): int := n - n /! divisor * divisor
+// Howard Hinnant's calendar over day numbers (days since 1970-01-01, proleptic Gregorian), the one warp copy of
+// src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on it.
+// civil_from_days: eras of 400 years from 0000-03-01, a year from March
+civil_era(days: int): int := (days + 719468) /! 146097
+civil_day_of_era(days: int): int := days + 719468 - civil_era(days) * 146097
+civil_year_of_era(day_of_era: int): int := (day_of_era - day_of_era /! 1460 + day_of_era /! 36524 - day_of_era /! 146096) /! 365
+civil_day_of_year(day_of_era: int): int := {
+	year_of_era = civil_year_of_era(day_of_era)
+	day_of_era - (365 * year_of_era + year_of_era /! 4 - year_of_era /! 100)
+}
+// the month counted from March: months 10 and 11 of the year are January and February
+civil_march_month(day_of_year: int): int := (5 * day_of_year + 2) /! 153
+civil_month(days: int): int := {
+	march_month = civil_march_month(civil_day_of_year(civil_day_of_era(days)))
+	if march_month < 10 then march_month + 3 else march_month - 9
+}
+civil_day(days: int): int := {
+	day_of_year = civil_day_of_year(civil_day_of_era(days))
+	day_of_year - (153 * civil_march_month(day_of_year) + 2) /! 5 + 1
+}
+civil_year(days: int): int := {
+	year = civil_year_of_era(civil_day_of_era(days)) + civil_era(days) * 400
+	if civil_month(days) <= 2 then year + 1 else year
+}
+// the date of a day number as {year, month, day}
+civil_from_days(day_count: int) := {year: civil_year(day_count), month: civil_month(day_count), day: civil_day(day_count)}
+// the day number of a proleptic Gregorian date
+days_from_civil(year: int, month: int, day: int): int := {
+	march_year = if month <= 2 then year - 1 else year
+	era = march_year /! 400
+	year_of_era = march_year - era * 400
+	march_month = if month > 2 then month - 3 else month + 9
+	day_of_year = (153 * march_month + 2) /! 5 + day - 1
+	era * 146097 + year_of_era * 365 + year_of_era /! 4 - year_of_era /! 100 + day_of_year - 719468
+}

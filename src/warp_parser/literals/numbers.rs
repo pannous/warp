@@ -179,7 +179,7 @@ impl WarpParser {
 	}
 
 	pub(crate) fn parse_number_value(&mut self) -> Node {
-		self.reading_atom(AtomKind::Number, Self::read_number_value)
+		self.read_number_value()
 	}
 
 	fn read_number_value(&mut self) -> Node {

@@ -16,26 +16,32 @@ use std::sync::{Mutex, OnceLock};
 const SWITCH: &str = "WARP_SELF_HOSTED";
 /// WARP_SELF_HOSTED=front: parser.warp and the pass twins, the Rust emitter (a suite count of the front end alone)
 const FRONT_END_ONLY: &str = "front";
-/// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too, a disagreement
-/// with src/analyzer failing it (a suite count of + analyzer)
+/// WARP_SELF_HOSTED=pure (card pure-runs): parser.warp, the warp passes, analyzer.warp and emitter.warp compile the
+/// source, Rust only carrying each stage's JSON to the next; a program the lane refuses compiles the usual way
+const PURE: &str = "pure";
+/// The passes.warp request of the pure lane's front end: the view after parser.warp and every warp pass
+const PURE_STAGE: &str = "\"pure\"";
+/// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too and emitter.warp
+/// reads its kinds (a suite count of + analyzer)
 const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
 /// passes.warp `stage` of the request in the worker's input file
 const PASSES_PROGRAM: &str =
 	concat!("use \"", env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)))");
-/// analyzer.warp `kinds` of the view in the worker's input file, as JSON: a program of its own, as analyzer.warp's
-/// names clash with parser.warp's (its local `digits`, its field `.separator`)
+/// analyzer.warp `emitter_kinds` of the view in the worker's input file, as JSON (shape: notes/self_hosting.md): a
+/// program of its own, as analyzer.warp's names clash with parser.warp's (its local `digits`, its field `.separator`)
 const ANALYSIS_PROGRAM: &str = concat!(
 	"use \"",
 	env!("CARGO_MANIFEST_DIR"),
-	"/lib/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(kinds(node_of(json(read(args#1)))))"
+	"/lib/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))"
 );
-/// emitter.warp `hosted_wasm_module` of the lowered program's view in the worker's input file, the runtime words' view
-/// and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
+/// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
+/// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
 const EMIT_PROGRAM: &str = concat!(
 	"use \"",
 	env!("CARGO_MANIFEST_DIR"),
 	"/lib/compiler/emitter.warp\"\nuse os\n",
-	"hosted_wasm_module(node_of(json(read(args#1))), node_of(json(read(args#2))), json(read(args#3)))"
+	"request = json(read(args#1))\n",
+	"typed_wasm_module(node_of(request#1), node_of(json(read(args#2))), json(read(args#3)), request#2)"
 );
 /// The runtime words emitter.warp compiles into a module, lowered like a program
 const RUNTIME_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/runtime.warp");
@@ -45,6 +51,8 @@ const HOST_MODULE: &str = "host";
 const OUTSIDE_THE_CORE: &str = "outside the core: ";
 /// The file each refusal of emitter.warp goes to as a line, when set
 const REFUSALS_FILE: &str = "WARP_EMIT_REFUSALS";
+/// The REFUSALS_FILE line of a program the pure lane compiled: the denominator of a run's refusals
+const RAN_PURE: &str = "pure: ran";
 /// Set: emitter.warp refuses with every refused function's first form, a line each (its survey_setting)
 #[cfg(feature = "native")]
 const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
@@ -128,27 +136,20 @@ pub fn pass(pass: Pass, node: &Node) -> Option<Node> {
 	Some(stage(*index, &view_json(&view), &handles))
 }
 
-/// The kinds analyzer.warp finds in the program `view` shows: {functions: {f: {params: [kind…], result: kind}},
-/// variables: {x: kind}, value: kind}; None when not self-hosted, the failure when warp fails
+/// The kinds analyzer.warp finds in the program `view` shows, as emitter.warp reads them (`emitter_kinds`); None when
+/// not self-hosted, the failure when warp fails
 pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
 	enabled().then(|| kinds_of(view))
 }
 
-/// With ANALYSIS_SWITCH on, the lowered program as analyzer.warp analyzes it: an error when the stage fails or a kind
-/// it finds is narrower than src/analyzer's (analyzer::covers); for now the Rust kinds still feed the emitter
-pub fn check_analysis(program: &Node) -> Result<(), Node> {
+/// With ANALYSIS_SWITCH on, the kinds analyzer.warp finds in the lowered program, which emitter.warp then reads (warp's
+/// kinds alone, never compared with src/analyzer's: decision ignore-rust); an error when the stage fails; None when off
+pub fn program_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> {
 	static ANALYZES: OnceLock<bool> = OnceLock::new();
 	if !enabled() || !*ANALYZES.get_or_init(|| std::env::var_os(ANALYSIS_SWITCH).is_some()) {
-		return Ok(());
+		return Ok(None);
 	}
-	use crate::analyzer::{inferred_kinds, json_kind_slots, kind_slots, uncovered};
-	let warp = kinds_of(&analysis_view(program)).map(|kinds| json_kind_slots(&kinds));
-	let warp = warp.map_err(|failure| crate::node::error(&failure))?;
-	let differing = uncovered(&warp, &kind_slots(&inferred_kinds(program)));
-	if differing.is_empty() {
-		return Ok(());
-	}
-	Err(crate::node::error(&format!("the self-hosted analysis disagrees with Rust's: {}", differing.join("; "))))
+	kinds_of(&analysis_view(program)).map(Some).map_err(|failure| crate::node::error(&failure))
 }
 
 /// The kinds analyzer.warp finds in the program `view` shows, self-hosted or not
@@ -162,11 +163,13 @@ pub fn kinds_of(view: &Node) -> Result<serde_json::Value, String> {
 /// The module emitter.warp emits for the lowered `node`; None when it does not emit (not self-hosted, or the front end
 /// only) or the program is outside its core,
 /// an error when emitter.warp fails
-pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
+pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
 	if !emits() {
 		return None;
 	}
-	let module = answer(&EMIT, view_json(&analysis_view(node))).and_then(|answer| module_of(&answer));
+	let kinds = kinds.map_or_else(|| "{}".to_string(), serde_json::Value::to_string);
+	let request = format!("[{}, {kinds}]", view_json(&analysis_view(node)));
+	let module = answer(&EMIT, request).and_then(|answer| module_of(&answer));
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
 			log::trace!("self-hosted emit: {refusal}");
@@ -181,13 +184,50 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 	}
 }
 
+/// The module the pure lane compiles the source to; None when the lane is off or refuses the program, the refusal then
+/// recorded (REFUSALS_FILE) and logged, and the program compiled the usual way
+pub fn pure_module(code: &str) -> Option<crate::pipeline::CompiledModule> {
+	if switch() != Some(PURE) {
+		return None;
+	}
+	match pure_bytes(code) {
+		Ok(bytes) => {
+			record_lines(&format!("{RAN_PURE}\n"));
+			let needs_host = imports_from(&bytes, HOST_MODULE);
+			Some(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false })
+		}
+		Err(refusal) => {
+			log::info!("pure lane refused: {refusal}");
+			record_refusal(&format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE)));
+			None
+		}
+	}
+}
+
+/// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
+fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
+	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}]", json_text(code)))?;
+	let kinds: String =
+		serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
+	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
+}
+
 /// The refusal's lines (one, or one per refused function under SURVEY_SETTING) in the file REFUSALS_FILE names, when
 /// set: a run over many programs ranks what keeps them outside the core (`sort | uniq -c | sort -rn`)
 fn record_refusal(refusal: &str) {
+	record_lines(
+		&refusal
+			.lines()
+			.filter(|line| line.starts_with(OUTSIDE_THE_CORE))
+			.map(|line| format!("{line}\n"))
+			.collect::<String>(),
+	);
+}
+
+/// Appends the lines to the file REFUSALS_FILE names, when set
+fn record_lines(lines: &str) {
 	use std::io::Write;
 	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
-	let lines: String =
-		refusal.lines().filter(|line| line.starts_with(OUTSIDE_THE_CORE)).map(|line| format!("{line}\n")).collect();
 	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }

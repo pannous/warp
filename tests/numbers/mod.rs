@@ -17,6 +17,7 @@ mod test_dimension_types; // card dimensions-units
 mod test_div_assign;
 mod test_division_by_zero;
 mod test_duration_text;
+mod test_duration_words; // card duration-warp
 mod test_dynamic_units; // card units-dynamic
 mod test_exact_parameters;
 mod test_exponent_texts; // card int-text

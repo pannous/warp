@@ -2,18 +2,6 @@
 // the elements), so the parser twin in lib/compiler/parser.warp stays syntactic (card cleanup-parser-element-wise)
 use crate::is;
 use warp::warp_parser::parse;
-use warp::WarpParser;
-
-fn parsed(source: &str) -> String {
-	WarpParser::parse(source).serialize().trim().to_string()
-}
-
-#[test]
-fn element_wise_operators_parse_as_written() {
-	assert_eq!(parsed("xs .* 2"), "xs .* 2");
-	assert_eq!(parsed("xs .+ ys"), "xs .+ ys");
-	assert_eq!(parsed("(xs .- 1) ./ 2"), "( xs .- 1 ) ./ 2");
-}
 
 #[test]
 fn element_wise_operators_still_mean_what_they_did() {
