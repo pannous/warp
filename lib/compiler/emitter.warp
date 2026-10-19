@@ -44,7 +44,8 @@ gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node",
 node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6, function: 16}
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
-references = {text: [99, gc.text], list: [99, gc.list], node: [110]}
+# a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
+references = {text: [99, gc.text], list: [99, gc.list], node: [110], time: [110]}
 passive_segment = 1
 # block type of a block that leaves nothing
 no_value = 64
@@ -300,7 +301,7 @@ text_bytes(t: text) := [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + 
 boxed(value: any) := {
 	kind = value#1
 	code = value#2
-	if kind == "node" { return code }
+	if kind == "node" or kind == "time" { return code }
 	if kind == "text" { return node(node_kind_codes.text, code) }
 	if kind == "list" { return node(node_kind_codes.list, code) }
 	if kind == "char" { return node(node_kind_codes.codepoint, code + gc_code("ref_i31", [])) }
@@ -939,6 +940,12 @@ group_expression(body: Body, n: any) := {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and body.intrinsics {
 		return intrinsic(body, name_of(n#1), n[1..].map(x => x))
 	}
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in time_intrinsics and body.intrinsics {
+		return time_intrinsic(body, name_of(n#1), n[1..].map(x => x))
+	}
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in time_words {
+		return time_call(body, name_of(n#1), n[1..].map(x => x))
+	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.runtime and body.intrinsics {
 		return call(body, module.runtime[name_of(n#1)], n[1..].map(x => x))
 	}
@@ -1132,7 +1139,7 @@ zero_of(kind: text) := {
 	if kind == "float" { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
 	if kind == "node" { return boxed(number_value(0)) }
-	if kind in references { return [ref_null] + uleb(references[kind]#2) }
+	if kind in references { return [ref_null] + (if kind == "time" then [110] else uleb(references[kind]#2)) }
 	[op.i32_const, 0]
 }
 global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
@@ -1251,7 +1258,9 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
-	for name in module.host.keys { if mentions(program, name) { module.imports += [host_import(name)] } }
+	for name in module.host.keys {
+		if mentions(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
+	}
 	collect_functions(runtime, module.runtime)
 	for name in module.runtime.keys {
 		word = module.runtime[name]
@@ -1287,4 +1296,65 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 		if #module.refusals > 0 and text != module.refusals.join("\n") { return (module.refusals + [text]).join("\n") }
 		text
 	}
+}
+
+## times (card time-primitives; Rust twin: src/wasm_emitter/time, layout: src/time/mod.rs TimeForm): a $Node of the
+## Kind time, its info (form, then a duration's days and months or a zoned time's zone and offset) above the kind
+## bits, its data an $i64box of the position (days since 1970 for a date, nanoseconds for the others)
+time_kind_code = 18
+kind_bits = 8
+nanos_per_milli = 1000000
+# the info bits: a duration's days (32 bits, unsigned) above the form, its months above them; a zoned time's zone
+# index (8 bits) above the form, its offset in minutes above that
+form_bits = 3
+form_mask = 7
+months_shift = 35
+zone_mask = 255
+offset_shift = 11
+seconds_per_minute = 60
+shift_ops = {i64_or: 132, i64_shl: 134, i64_shr_s: 135, i64_shr_u: 136, i64_mul: 126}
+# the calls a lowered program makes a time with (src/time/mod.rs: `now` is instant_at(clock()), a constant time_of)
+time_words = {time_of: 2, instant_at: 1}
+# the words runtime.warp reads a time with, one or two instructions each (runtime words only, as `intrinsics`)
+time_intrinsics = {time_form: 1, time_position: 1, duration_months: 1, duration_days: 1, zone_index: 1, zone_offset: 1}
+# the host words runtime words over times call, imported when the program makes a time (Rust: imports.rs makes_instant)
+time_host_words = ["local_offset"]
+makes_time(program: any): bool := mentions(program, "instant_at") or mentions(program, "time_of")
+
+# time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
+time_call(body: Body, name: text, arguments: any) := {
+	if #arguments != time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
+	values = arguments.map(a => expression(body, a))
+	if name == "instant_at" {
+		nanos = converted(values#1, "int") + [op.i64_const] + sleb(nanos_per_milli) + [shift_ops.i64_mul]
+		return ["time", time_node([op.i64_const, 0], nanos)]
+	}
+	["time", time_node(converted(values#1, "int"), converted(values#2, "int"))]
+}
+time_node(info: any, position: any) := {
+	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(time_kind_code) + [shift_ops.i64_or]
+	kind + position + gc_code("struct_new", [gc.int_box]) + [ref_null, gc.node] + gc_code("struct_new", [gc.node])
+}
+# the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical
+kind_word_shifted(code: any, shift: int, signed: bool) := {
+	shifted = as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(shift)
+	shift_op = if signed then shift_ops.i64_shr_s else shift_ops.i64_shr_u
+	shifted + [shift_op]
+}
+masked(code: any, mask: int) := code + [op.i64_const] + sleb(mask) + [op.i64_and]
+time_intrinsic(body: Body, name: text, arguments: any) := {
+	t = expression(body, arguments#1)#2
+	if name == "time_form" { return ["int", masked(kind_word_shifted(t, kind_bits, no), form_mask)] }
+	if name == "time_position" { return ["int", unboxed(t, gc.int_box)] }
+	if name == "duration_months" { return ["int", kind_word_shifted(t, kind_bits + months_shift, yes)] }
+	# the 32 days bits, sign-extended: shifted to the top of the word, then down again
+	if name == "duration_days" {
+		top = 64 - kind_bits - months_shift
+		days = as_node(t) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(top) + [shift_ops.i64_shl]
+		return ["int", days + [op.i64_const] + sleb(32) + [shift_ops.i64_shr_s]]
+	}
+	if name == "zone_index" { return ["int", masked(kind_word_shifted(t, kind_bits + form_bits, no), zone_mask)] }
+	# seconds east of UTC
+	offset = kind_word_shifted(t, kind_bits + offset_shift, yes)
+	["int", offset + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul]]
 }
