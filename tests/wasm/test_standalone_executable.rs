@@ -238,14 +238,14 @@ fn test_plain_run_with_warp_executable_leaves_it() {
 
 /// card exe-c-ffi: an executable calls C as warp does, with the signatures warp read from the headers at build time:
 /// libc's hand-linked strlen, toupper and getenv (a text result) from the process, strtod (a `char **` out-pointer),
-/// libm's erf, which the stub's own libm lacks
+/// libm's erf, which the stub's own libm lacks (rounded: glibc and macOS differ in its last digit)
 #[test]
 fn test_build_exe_calls_c_functions() {
-	let source = "use c\nprint strlen(\"hello\")\nprint toupper(98)\nprint getenv(\"WARP_EXE_C_FFI\")\nimport erf from \"m\"\nprint erf(1.0)\nstrtod(\"2.5\")";
+	let source = "use c\nprint strlen(\"hello\")\nprint toupper(98)\nprint getenv(\"WARP_EXE_C_FFI\")\nimport erf from \"m\"\nprint round(erf(1.0) * 1000)\nstrtod(\"2.5\")";
 	let (build, executable) = build_executable("standalone_c_ffi", source);
 	assert!(build.status.success(), "{}", text(&build.stderr));
 	let run = std::process::Command::new(&executable).env("WARP_EXE_C_FFI", "from C").output().unwrap();
-	assert_eq!(text(&run.stdout), "5\n66\nfrom C\n0.8427007929497148\n2.5\n", "{}", text(&run.stderr));
+	assert_eq!(text(&run.stdout), "5\n66\nfrom C\n843\n2.5\n", "{}", text(&run.stderr));
 }
 
 /// card exe-c-ffi: the C functions ride in front of the machine code and come back as they were; plain machine code
