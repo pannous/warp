@@ -211,6 +211,11 @@ pub fn chrome_runs_here(test_module: &str) -> bool {
 	in_ci
 }
 
+/// `effects of function` after `code`, as printed: `Pure`, `IO`, `(IO Unsafe)`
+pub fn effects_of(code: &str, function: &str) -> String {
+	warp::wasm_emitter::eval(&format!("{code}\neffects of {function}")).serialize()
+}
+
 pub fn fails_with(code: &str, needle: &str) {
 	match eval(code) {
 		Node::Error(message) => assert!(format!("{message}").contains(needle), "{message}"),
@@ -607,67 +612,6 @@ fn checkout_build(
 		.map(|info| info.with_extension(""))
 		.filter(|binary| binary.is_file())
 		.max_by_key(|binary| binary.metadata().and_then(|metadata| metadata.modified()).ok())
-}
-
-/// The index of the function `name` in the module `code` compiles to (by the wasm name section)
-pub fn function_index(code: &str, name: &str) -> Option<u32> {
-	use wasmparser::{KnownCustom, Name, Parser, Payload};
-	let bytes =
-		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
-	let names = Parser::new(0).parse_all(&bytes).filter_map(|payload| match payload.expect("valid module") {
-		Payload::CustomSection(section) => match section.as_known() {
-			KnownCustom::Name(names) => Some(names.into_iter().flatten().collect::<Vec<_>>()),
-			_ => None,
-		},
-		_ => None,
-	});
-	let functions: Vec<(u32, String)> = (names.flatten())
-		.filter_map(|subsection| match subsection {
-			Name::Function(map) => {
-				Some(map.into_iter().flatten().map(|naming| (naming.index, naming.name.to_string())))
-			}
-			_ => None,
-		})
-		.flatten()
-		.collect();
-	functions.into_iter().find(|(_, function)| function == name).map(|(index, _)| index)
-}
-
-/// How many calls the module of `code` makes to the function `name` (by the wasm name section)
-pub fn calls_to(code: &str, name: &str) -> usize {
-	use wasmparser::{KnownCustom, Name, Operator, Parser, Payload};
-	let bytes =
-		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
-	let mut index = None;
-	let mut calls = Vec::new();
-	for payload in Parser::new(0).parse_all(&bytes) {
-		match payload.expect("valid module") {
-			Payload::CustomSection(section) => {
-				if let KnownCustom::Name(names) = section.as_known() {
-					for subsection in names {
-						if let Ok(Name::Function(map)) = subsection {
-							index = map
-								.into_iter()
-								.flatten()
-								.find(|naming| naming.name == name)
-								.map(|naming| naming.index)
-								.or(index);
-						}
-					}
-				}
-			}
-			Payload::CodeSectionEntry(body) => {
-				let mut reader = body.get_operators_reader().expect("operators");
-				while !reader.eof() {
-					if let Operator::Call { function_index } = reader.read().expect("operator") {
-						calls.push(function_index);
-					}
-				}
-			}
-			_ => {}
-		}
-	}
-	index.map_or(0, |index| calls.iter().filter(|called| **called == index).count())
 }
 
 /// The (module, name) of every import of the module `code` compiles to

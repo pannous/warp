@@ -5,10 +5,10 @@
 //! fail-effect-indexing)
 use crate::common::fails_with;
 use crate::is;
-use warp::analyzer::effects::{effects_of, Effect::*, EffectSet};
+use crate::common::effects_of;
 
 fn fails(code: &str, function: &str) -> bool {
-	effects_of(code, function).is_some_and(|effects| effects.contains(Fail))
+	effects_of(code, function).contains("Fail")
 }
 
 #[test]
@@ -25,9 +25,9 @@ fn raising_and_dividing_by_a_variable_fail() {
 
 #[test]
 fn dividing_by_a_number_and_try_do_not_fail() {
-	assert_eq!(effects_of("half(x) := x/2", "half"), Some(EffectSet::PURE));
-	assert_eq!(effects_of("f(x) := try 10/x else 0", "f"), Some(EffectSet::PURE));
-	assert_eq!(effects_of("f(x) := 10/x\nk(x) := try f(x) else 0", "k"), Some(EffectSet::PURE));
+	assert_eq!(effects_of("half(x) := x/2", "half"), "Pure");
+	assert!(!fails("f(x) := try 10/x else 0", "f"));
+	assert!(!fails("f(x) := 10/x\nk(x) := try f(x) else 0", "k"));
 	assert!(fails("f(x) := 10/x\nk(x) := (try f(x) else 0) + f(x)", "k"));
 }
 

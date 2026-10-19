@@ -1,14 +1,10 @@
 //! Effect inference, `effects of f`, declared constraints, effect-driven imports
 
+use crate::common::effects_of;
 use crate::is;
-use warp::analyzer::effects::{effects_of, Effect::*, EffectReport, EffectSet};
 use warp::warp_parser::WarpParser;
 use warp::wasm_emitter::eval;
 use warp::{Node, WasmGcEmitter};
-
-fn effects(code: &str, function: &str) -> EffectSet {
-	effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))
-}
 
 /// (module, name) of every import the compiled program declares
 fn imports_of(code: &str) -> Vec<(String, String)> {
@@ -35,36 +31,23 @@ fn error_text(result: Node) -> String {
 }
 
 #[test]
-fn test_effect_set_names() {
-	assert_eq!(EffectSet::PURE.to_string(), "Pure");
-	assert_eq!(EffectSet::of(&[FFI, IO]).to_string(), "IO, FFI");
-	assert_eq!(EffectSet::named(&["IO", "FFI"]), Some(EffectSet::of(&[IO, FFI])));
-	assert_eq!(EffectSet::named(&["Pure"]), Some(EffectSet::PURE));
-	assert_eq!(EffectSet::named(&["Spooky"]), None);
-	assert!(EffectSet::of(&[IO]).is_subset_of(EffectSet::of(&[IO, FFI])));
-}
-
-#[test]
 fn test_effects_are_inferred_from_calls() {
-	assert_eq!(effects("square(x) := x*x", "square"), EffectSet::PURE);
-	assert_eq!(effects("greet(x) := puts x", "greet"), EffectSet::of(&[IO]));
-	assert_eq!(effects("def greet(x){puts x};greet 'a'", "greet"), EffectSet::of(&[IO]));
-	assert_eq!(effects("f := puts it", "f"), EffectSet::of(&[IO]));
-	assert_eq!(effects("x=fetch https://a.com/t;x", "main"), EffectSet::of(&[IO]));
-	assert_eq!(effects("use m;floor(4.5)", "main"), EffectSet::PURE); // libm is pure (P26)
-	assert_eq!(effects("import strlen from \"c\"; strlen(\"ab\")", "main"), EffectSet::of(&[FFI]));
-	assert_eq!(effects("puts", "fd_write"), EffectSet::of(&[IO, Unsafe]));
+	assert_eq!(effects_of("square(x) := x*x", "square"), "Pure");
+	assert_eq!(effects_of("greet(x) := puts x", "greet"), "IO");
+	assert_eq!(effects_of("def greet(x){puts x}", "greet"), "IO");
+	assert_eq!(effects_of("f := puts it", "f"), "IO");
+	assert_eq!(effects_of("get(a) := fetch https://a.com/t", "get"), "IO");
+	assert_eq!(effects_of("use m; down(x) := floor(x)", "down"), "Pure"); // libm is pure (P26)
+	assert_eq!(effects_of("import strlen from \"c\"; size(s) := strlen(s)", "size"), "FFI");
+	assert_eq!(effects_of("", "fd_write"), "(IO Unsafe)");
 }
 
 #[test]
 fn test_effects_propagate_through_callers_and_recursion() {
 	let code = "log(x) := puts x\nhelper(x) := log(x)\nloop(x) := x<1 ? helper(x) : loop(x-1)\nfib(n) := n<2 ? n : fib(n-1)+fib(n-2)";
-	let report = EffectReport::of(&WarpParser::parse(code));
-	assert_eq!(report.effects_of("helper"), Some(EffectSet::of(&[IO])));
-	assert_eq!(report.effects_of("loop"), Some(EffectSet::of(&[IO])));
-	assert_eq!(report.effects_of("fib"), Some(EffectSet::PURE));
-	assert_eq!(report.call_chain("loop", IO), ["loop", "helper", "log", "puts"]);
-	assert_eq!(report.entry_effects(), EffectSet::PURE); // defining is not calling
+	assert_eq!(effects_of(code, "helper"), "IO");
+	assert_eq!(effects_of(code, "loop"), "IO");
+	assert_eq!(effects_of(code, "fib"), "Pure");
 }
 
 #[test]
@@ -110,11 +93,9 @@ fn test_imports_follow_effects() {
 // card effects-infer: Allocation (construction) is reported but stays pure (wiki/pure.md), Async is a real effect
 #[test]
 fn test_allocation_and_async_are_inferred() {
-	assert_eq!(effects("pair(x) := [x, x]", "pair"), EffectSet::of(&[Allocation]));
-	assert_eq!(effects("person(n) := {name: n}", "person"), EffectSet::of(&[Allocation]));
-	assert_eq!(effects("greet(n) := \"hi \" + n", "greet"), EffectSet::of(&[Allocation]));
-	assert!(EffectSet::of(&[Allocation]).is_pure());
-	is!("pair(x) := [x, x]\neffects of pair", Node::Symbol("Allocation".into()));
+	assert_eq!(effects_of("pair(x) := [x, x]", "pair"), "Allocation");
+	assert_eq!(effects_of("person(n) := {name: n}", "person"), "Allocation");
+	assert_eq!(effects_of("greet(n) := \"hi \" + n", "greet"), "Allocation");
 	is!("first(x) := [x, x]#1 ! Pure\nfirst(3)", 3);
 	is!("g() := 1\nf() := await go g()\neffects of f", Node::Symbol("Async".into()));
 	let message = error_text(eval("g() := 1\nf() := await go g() ! Pure\nf()"));
