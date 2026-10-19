@@ -85,13 +85,15 @@ quoted_text(t: text) := {
 }
 # 1 for the bytes of `"` and `\`, which a quoted text escapes
 escaped_byte(b: int) := if b == 34 or b == 92 then 1 else 0
-list_text(xs: list) := {
+list_text(xs: list) := "[" + items_text(xs) + "]"
+# the items of a list as a list shows them, a space between: `print a 3` writes its values so
+items_text(xs: list) := {
 	inner = ""
 	for x in xs {
 		if #inner > 0 { inner += " " }
 		inner += node_code(x)
 	}
-	"[" + inner + "]"
+	inner
 }
 # `a + b` of values known only at run time: ø adds nothing, lists and texts join, numbers add
 node_add(a: any, b: any) := {
