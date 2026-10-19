@@ -457,17 +457,15 @@ impl Rewrite {
 				let items = items.iter().cloned().chain(extras.into_iter().map(Node::Symbol)).collect();
 				key(Node::List(items, Bracket::Round, separator.clone()), op, body)
 			}
-			Node::Symbol(name) if body.is_block() => {
-				match self.functions.get(name) {
-					Some(function) if !function.extras.is_empty() => {
-						let items = std::iter::once(Node::Symbol(callable_name(name)))
-							.chain(function.extras.iter().cloned().map(Node::Symbol))
-							.collect();
-						key(parens(items), Op::Define, body)
-					}
-					_ => key(head, op, body),
+			Node::Symbol(name) if body.is_block() => match self.functions.get(name) {
+				Some(function) if !function.extras.is_empty() => {
+					let items = std::iter::once(Node::Symbol(callable_name(name)))
+						.chain(function.extras.iter().cloned().map(Node::Symbol))
+						.collect();
+					key(parens(items), Op::Define, body)
 				}
-			}
+				_ => key(head, op, body),
+			},
 			_ => key(head, op, body),
 		}
 	}

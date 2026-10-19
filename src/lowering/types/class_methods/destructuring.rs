@@ -196,8 +196,7 @@ pub(super) fn field_of(path: &Node, field: &str) -> Node {
 pub(super) fn is_class_pattern(pattern: &Node, fields: &ClassFields) -> bool {
 	match pattern.drop_meta() {
 		Node::Key(class, Op::Colon | Op::None, parts) => {
-			fields.contains_key(&class.drop_meta().name())
-				&& parts.is_block()
+			fields.contains_key(&class.drop_meta().name()) && parts.is_block()
 		}
 		Node::List(items, Bracket::Round, _) => {
 			items.len() > 1

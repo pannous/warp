@@ -497,9 +497,7 @@ fn is_word_head(head: &Node) -> bool {
 /// `int {…}` or `int: body` after `def f(x):` or `->`: the result type and the body; anything else is the body
 fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
 	match written_body.drop_meta() {
-		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2 && parts[1].is_block() =>
-		{
+		Node::List(parts, _, Separator::Space) if parts.len() == 2 && parts[1].is_block() => {
 			(Some(&parts[0]), &parts[1])
 		}
 		Node::Key(result, Op::Colon, body) => (Some(result), body),

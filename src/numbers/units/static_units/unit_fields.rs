@@ -176,9 +176,7 @@ fn with_field_values(
 			});
 			Node::List(items.collect(), Bracket::Round, separator)
 		}
-		Node::Key(class, op @ (Op::Colon | Op::None), body)
-			if class_fields(&class).is_some() && body.is_block() =>
-		{
+		Node::Key(class, op @ (Op::Colon | Op::None), body) if class_fields(&class).is_some() && body.is_block() => {
 			let (name, fields) = class_fields(&class).unwrap();
 			let body = body.map_children(|entry| named(&name, &fields, entry.clone()).unwrap_or_else(|| walk(entry)));
 			Node::Key(class, op, Box::new(body))

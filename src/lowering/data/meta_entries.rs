@@ -171,9 +171,7 @@ fn with_entry(object: Node, entry: Node) -> Result<Node, Node> {
 			items.push(entry);
 			Ok(Node::List(items, Bracket::Curly, separator))
 		}
-		Node::Key(name, op @ (Op::Colon | Op::None), fields)
-			if fields.is_block() =>
-		{
+		Node::Key(name, op @ (Op::Colon | Op::None), fields) if fields.is_block() => {
 			with_entry(*fields, entry).map(|fields| Node::Key(name, op, Box::new(fields)))
 		}
 		other => Err(other),

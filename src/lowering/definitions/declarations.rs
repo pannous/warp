@@ -506,8 +506,7 @@ pub(crate) fn glued_block(method: &Node) -> Option<(Node, Node)> {
 		return None;
 	};
 	let _ = word.symbol_name()?;
-	block.is_block()
-		.then(|| (word.as_ref().clone(), block.as_ref().clone()))
+	block.is_block().then(|| (word.as_ref().clone(), block.as_ref().clone()))
 }
 
 /// The function of a call: a name `f`, or a method `xs.map`
@@ -728,9 +727,7 @@ fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
 			(*head, Op::Define, *body)
 		}
 		// `def hello {…}` without parentheses has no parameters, as `def hello() {…}`
-		Node::List(parts, Bracket::Round, _)
-			if parts.len() == 2 && parts[1].is_block() =>
-		{
+		Node::List(parts, Bracket::Round, _) if parts.len() == 2 && parts[1].is_block() => {
 			let head = match parts[0].drop_meta() {
 				Node::Symbol(_) => parens(vec![parts[0].clone()]),
 				_ => parts[0].clone(),

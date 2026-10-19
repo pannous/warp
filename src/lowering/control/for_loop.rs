@@ -368,9 +368,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 	};
 	let is_object =
 		iterable.symbol_name().is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
-	let Some(name) =
-		variable.symbol_name().filter(|_| is_object && body.is_block())
-	else {
+	let Some(name) = variable.symbol_name().filter(|_| is_object && body.is_block()) else {
 		return node;
 	};
 	let iterator = symbol(&format!("{name}{ITERATOR_SUFFIX}"));

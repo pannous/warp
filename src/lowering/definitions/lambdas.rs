@@ -886,8 +886,7 @@ fn trailing_closure(items: &[Node]) -> Option<Vec<Node>> {
 		return None;
 	};
 	let (word, arguments) = call_items.split_first()?;
-	if !matches!(word.drop_meta(), Node::Symbol(_)) || !closure.is_block()
-	{
+	if !matches!(word.drop_meta(), Node::Symbol(_)) || !closure.is_block() {
 		return None;
 	}
 	let arguments = match arguments {

@@ -59,8 +59,7 @@ pub(super) fn with_render_aliases(node: Node) -> Node {
 pub(super) fn with_rendered_children(node: Node, components: &[String]) -> Node {
 	match node {
 		Node::Key(tag, op @ (Op::None | Op::Colon), children)
-			if crate::web::markup::is_element_tag(&tag.drop_meta().name())
-				&& children.is_block() =>
+			if crate::web::markup::is_element_tag(&tag.drop_meta().name()) && children.is_block() =>
 		{
 			let Node::List(items, bracket, separator) = children.drop_meta().clone() else { unreachable!("guarded") };
 			let items =

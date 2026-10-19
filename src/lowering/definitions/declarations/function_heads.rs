@@ -10,9 +10,7 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 	let (head, typed_body) = result_typed_head(definition).filter(|(head, _)| is_call_head(head))?;
 	let (result_type, body) = match typed_body.drop_meta() {
 		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2
-				&& is_result_type(&parts[0])
-				&& parts[1].is_block() =>
+			if parts.len() == 2 && is_result_type(&parts[0]) && parts[1].is_block() =>
 		{
 			(parts[0].clone(), parts[1].clone())
 		}
@@ -73,9 +71,7 @@ pub(super) fn union_result(typed_body: &Node) -> Option<(Node, Node)> {
 			Some((key(part.as_ref().clone(), Op::Or, rest), body))
 		}
 		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2
-				&& matches!(parts[0].drop_meta(), Node::Symbol(_))
-				&& parts[1].is_block() =>
+			if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && parts[1].is_block() =>
 		{
 			Some((parts[0].clone(), parts[1].clone()))
 		}
@@ -140,9 +136,7 @@ pub(super) fn function_typed_result(definition: Node) -> Node {
 	};
 	match parts.as_slice() {
 		[result_type, body]
-			if types.iter().all(is_kinded_type_word)
-				&& is_kinded_type_word(result_type)
-				&& body.is_block() =>
+			if types.iter().all(is_kinded_type_word) && is_kinded_type_word(result_type) && body.is_block() =>
 		{
 			parens(vec![head.as_ref().clone(), body.clone()])
 		}

@@ -634,9 +634,7 @@ fn is_markup_or_block(node: &Node) -> bool {
 			items.last().is_some_and(|last| last.is_block())
 				&& items.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(_)))
 		}
-		Node::Key(tag, _, block) => {
-			matches!(tag.drop_meta(), Node::Symbol(_)) && block.is_block()
-		}
+		Node::Key(tag, _, block) => matches!(tag.drop_meta(), Node::Symbol(_)) && block.is_block(),
 		_ => false,
 	}
 }

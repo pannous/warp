@@ -384,9 +384,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 			_ => return None,
 		},
 		// `trait Shape { area }` spaced
-		[keyword, name, requirements] if requirements.is_block() => {
-			(keyword, name, requirements)
-		}
+		[keyword, name, requirements] if requirements.is_block() => (keyword, name, requirements),
 		_ => return None,
 	};
 	let keyword_name = keyword.drop_meta().name();

@@ -410,10 +410,7 @@ pub(super) fn with_init_constructors(node: Node, called: &std::collections::Hash
 /// The name a constructor-like member is written with: `constructor` of `constructor(x){…}`, `Point` of `Point(x) := …`
 pub(super) fn constructor_alias(item: &Node) -> Option<String> {
 	match item.drop_meta() {
-		Node::Key(word, Op::None | Op::Colon, block)
-			if block.is_block()
-				&& constructor_parameters(word).is_some() =>
-		{
+		Node::Key(word, Op::None | Op::Colon, block) if block.is_block() && constructor_parameters(word).is_some() => {
 			Some(leading_name(word))
 		}
 		_ => method_parts(item).map(|(method, _, _)| method),
@@ -580,9 +577,7 @@ pub(super) fn constructor_parameters(word: &Node) -> Option<Vec<Node>> {
 pub(super) fn constructor_parts(item: &Node) -> Option<(Vec<Node>, &Node)> {
 	match item.drop_meta() {
 		// glued `init{…}` arrives as the key `init:{…}`
-		Node::Key(word, Op::None | Op::Colon, block)
-			if block.is_block() =>
-		{
+		Node::Key(word, Op::None | Op::Colon, block) if block.is_block() => {
 			Some((constructor_parameters(word)?, block))
 		}
 		_ => None,

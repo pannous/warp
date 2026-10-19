@@ -765,9 +765,7 @@ pub(crate) fn emitted(node: &Node, verbs: &[String]) -> Option<(String, Node)> {
 		return None;
 	}
 	let (last_word, data) = match last.drop_meta() {
-		Node::Key(name, Op::Colon, data) if data.is_block() => {
-			(name.as_ref().clone(), data.as_ref().clone())
-		}
+		Node::Key(name, Op::Colon, data) if data.is_block() => (name.as_ref().clone(), data.as_ref().clone()),
 		// `emit item 1`, `emit said "hi"`: a value after the words is the data (EventEmitter's emit("item", 1))
 		Node::Number(_) | Node::Text(_) | Node::Char(_) if !words.is_empty() => {
 			return Some((event_name(words.iter())?, last.clone()))
