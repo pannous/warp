@@ -2,8 +2,8 @@
 //! assertions that other test files already make were dropped here.
 //! Passing tests back the "Solved" section; `#[ignore = "next"]` tests are the "NOT YET" section's clear-cut fixes.
 
-use crate::common::{fails_with, serve};
 use crate::common::effects_of;
+use crate::common::{fails_with, serve};
 use crate::is;
 use warp::wasm_emitter::{eval, eval_untrusted};
 use warp::{parse_data, Node};

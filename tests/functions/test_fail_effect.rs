@@ -3,9 +3,9 @@
 //! (raise, throw, fail, panic, error "…"), divides by what may be 0 (/ // div % rem), or calls a library word or crate
 //! that answers with an Error, indexes (an index out of range, a missing key) or casts to a number (card
 //! fail-effect-indexing)
+use crate::common::effects_of;
 use crate::common::fails_with;
 use crate::is;
-use crate::common::effects_of;
 
 fn fails(code: &str, function: &str) -> bool {
 	effects_of(code, function).contains("Fail")

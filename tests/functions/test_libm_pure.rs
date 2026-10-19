@@ -1,7 +1,7 @@
 // P26 (user, 2026-10-05): libm (sin, exp, …) counts as pure: no Ffi capability, allowed in eval_untrusted and inside
 // `! Pure` functions. Other foreign functions keep the FFI effect.
-use crate::is;
 use crate::common::effects_of;
+use crate::is;
 use warp::wasm_emitter::eval_untrusted;
 use warp::Node;
 
