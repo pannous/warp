@@ -465,7 +465,9 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by"}
+	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
+	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with",
+	trim: "node_trim", map_get_or: "map_get_or"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
@@ -964,11 +966,12 @@ group_expression(body: Body, n: any) := {
 	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
-		if library_words[name_of(n#1)] in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
+		word = library_words[name_of(n#1)]
+		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
 		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
-		if name_of(n#1) == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
-		if not body.intrinsics and library_words[name_of(n#1)] in text_words { module.shows_values = yes }
-		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
+		if word == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
+		if not body.intrinsics and word in text_words { module.shows_values = yes }
+		return call(body, module.runtime[word], n[1..].map(x => x))
 	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
