@@ -65,6 +65,8 @@ instead of bending the code.
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is
   upgraded to the working value in its own commit, and `#[ignore]` is dropped from a test that passes unedited; a
   change of meaning, or editing an un-ignored test's assertions, still goes to the Interviewer.
+- Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
+  intermediate; a test pinning one may be deleted or rewritten as one is! line.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
