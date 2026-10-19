@@ -1243,7 +1243,8 @@ def key_expression(body: Body, n: any): list {
 	if is_loop_step(n) { return expression(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
-	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
+	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
+	if (operator == ":" or operator == "") and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
 		# `div{ a: 1 }` of no class is Rust's `div:a:1`: a block of one entry is that entry
 		if #right == 1 and not (name_of(left) in module.classes) {
 			return ["node", keyed_code(name_node(left), boxed(expression(body, right#1)))]
