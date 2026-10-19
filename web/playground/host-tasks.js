@@ -112,7 +112,7 @@ self.liveCycleStarted = name => {
 	const handedOver = self.liveHandover[name];
 	if (handedOver && voice.loop !== name) voice = { ...voice, end: liveStart(handedOver, self.voiceMoment()) };
 	voice = { ...voice, loop: name };
-	self.liveCycled(name, self.voiceMoment());
+	self.liveCycled?.(name, self.voiceMoment()); // a run without a page (tests, node) has no live loops to tell
 };
 // the first start on the grid of the old run's cycles at or after the moment (a cycle of an unknown period: its start)
 const liveStart = ({ start, period }, moment) =>

@@ -47,10 +47,19 @@ expectations (Node::Symbol, error values, texts of lists, divisions: `1.0 / 3.0`
 expectations). Comments are `#` lines (warp format's hint).
 
 ## The fast lane
-`scripts/is_tests.py run [normal|emitter|pure] [-- files]`: `warp test` per file, 4 at once, WARP_EMIT_REFUSALS per
-lane; counts and logs in data/is_tests/. Lanes: normal (Rust), emitter (WARP_SELF_HOSTED=1), pure
-(WARP_SELF_HOSTED=pure). A file without its summary (crash, timeout, a lane that missed the is! lines) counts its
-lines as unrun. One lane takes ~25 min (4 processes).
+`scripts/is_tests.py run [normal|emitter|pure|pure-only] [-- files]`: `warp test` per file, 4 at once,
+WARP_EMIT_REFUSALS per lane; counts and logs in data/is_tests/. Lanes: normal (Rust), emitter (WARP_SELF_HOSTED=1),
+pure (WARP_SELF_HOSTED=pure, a refused program still compiles the Rust way, so its "passed" includes that fallback).
+A file without its summary (crash, timeout, a lane that missed the is! lines) counts its lines as unrun. One lane
+takes ~25 min (4 processes).
+- pure-only (WARP_SELF_HOSTED=pure-only: no Rust compile behind the warp compiler, a refusal is the program's error
+  `outside the core: pure: …`, src/compiler/self_hosted.rs PURE_ONLY) counts what the warp compiler compiles alone. The
+  unit is the pair: each pair of the pairs files runs as its own program (so one refused pair sinks no other), its
+  print against the expected column, matched like the prelude's is! (bools as 1/0, every falsy value alike):
+  passed / wrong / refused / error, a line per pair in data/is_tests/pure-only.log. The is! files are not in it.
+- 2026-10-19 pure-only, 102 random pairs files (1169 pairs): 400 passed, 39 wrong, 711 refused, 19 error, 3.5 min.
+  Wrong: parser.warp's text escapes (`"\x41"`, `"\e"`); errors: wasm traps on map writes; refusals mostly unknown
+  names (definitions outside the core) and operators.
 - 2026-10-19 normal: 9114 passed, ~1329 failed, 32 unrun (two files over 300 s, one crash: card py-run) of 10475.
   Most frequent failures: π / time literals can't cross into eval's block (card eval-code), prelude words "called but
   not loaded" inside eval (card code-run), "no implicit conversion" (Rust's is! compares a text expectation loosely).
