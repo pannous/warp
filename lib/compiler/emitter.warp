@@ -638,20 +638,29 @@ widens(body: Body, name: text, held: text, kind: text) := {
 }
 
 # `global name = value` declares the module's variable name, which every function reads and writes; a bare
-# `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, ø until assigned
+# `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, 0 until assigned,
+# and reads it: a function declaring it on each call keeps its value
 global_declaration(body: Body, declaration: any) := {
-	if declaration is symbol { return declare_global(name_of(declaration), ["node", [ref_null, gc.node]]) }
+	if declaration is symbol {
+		entry = declared_global(name_of(declaration), "node")
+		return [entry#2, [op.global_get] + uleb(entry#1)]
+	}
 	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
 	declare_global(name_of(key_of(declaration)), expression(body, value_of(declaration)))
 }
 declare_global(name: text, value: any) := {
+	declared_global(name, value#1)
+	global_assignment(name, value)
+}
+# the module's global name: [its index, its kind], the kind of its first declaration
+declared_global(name: text, kind: text) := {
 	if not (name in module.globals) {
-		module.globals[name] = [#module.global_order, value#1]
+		module.globals[name] = [#module.global_order, kind]
 		module.global_order += [name]
 	}
-	global_assignment(name, value)
+	module.globals[name]
 }
 global_assignment(name: text, value: any) := {
 	entry = module.globals[name]
@@ -1005,7 +1014,9 @@ value_type(kind: text) := if kind in references then references[kind] else [type
 zero_of(kind: text) := {
 	if kind == "int" { return [op.i64_const, 0] }
 	if kind == "float" { return [op.f64_const] + le64(0) }
-	if kind in references { return [ref_null] + (if kind == "node" then [110] else uleb(references[kind]#2)) }
+	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
+	if kind == "node" { return boxed(number_value(0)) }
+	if kind in references { return [ref_null] + uleb(references[kind]#2) }
 	[op.i32_const, 0]
 }
 global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
