@@ -333,9 +333,10 @@ text_offset(t: text): int := {
 def gc_code(name: text, immediates: any): list { [gc_prefix] + uleb(gc_ops[name]) + joined(immediates.map(uleb)) }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: any): list { [op.i64_const] + sleb(kind_code) + payload + [ref_null, gc.node] + gc_code("struct_new", [gc.node]) }
-# a text as its bytes; one character as its codepoint, as warp holds a literal "a"
+# a text as its bytes; one code point as its codepoint, as warp holds a literal "a" (a grapheme of more, "👍🏽", is a text)
+one_code_point(t: text): bool := #t == 1 and #codepoints(t) == 1
 def text_value(t: text): list {
-	if #t == 1 { return ["char", [op.i32_const] + sleb(ord(t))] }
+	if one_code_point(t) { return ["char", [op.i32_const] + sleb(ord(t))] }
 	["text", text_bytes(t)]
 }
 def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code("array_new_data", [gc.text, 0]) }
@@ -366,7 +367,7 @@ def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] 
 # an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 def name_node(name: any): list {
 	if name is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(name))) }
-	if #name == 1 { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code("ref_i31", [])) }
+	if one_code_point(name) { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code("ref_i31", [])) }
 	node(node_kind_codes.text, text_bytes(name))
 }
 is_entry(n: any): bool := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text)
