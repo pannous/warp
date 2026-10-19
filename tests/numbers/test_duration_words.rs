@@ -14,7 +14,6 @@ const STAND_INS: &str = r#"
 int_text(n: int): text := "" + n
 int_quotient(a: int, b: int): int := if a < 0 and a % b != 0 then a /! b + 1 else a /! b
 int_remainder(a: int, b: int): int := a - int_quotient(a, b) * b
-floor_quotient(a: int, b: int): int := a /! b
 byte_count(t: text): int := #t
 zeros(count: int): text := {
 	out = ""
