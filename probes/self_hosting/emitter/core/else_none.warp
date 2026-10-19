@@ -1,0 +1,4 @@
+# emitter: `else ø` is a branch giving ø (a match's `_: ø` lowers to it), not a missing else
+same_or_none(n: any): any := if n == 1 then n else ø
+big_or_none(x: int) := if x > 1 then 5 else ø
+[same_or_none(1), same_or_none(2), big_or_none(3)]

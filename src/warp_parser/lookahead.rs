@@ -178,6 +178,13 @@ impl WarpParser {
 		let after = self.peek_char(length);
 		spelling.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
 			&& !(spelling.ends_with(char::is_alphabetic) && (is_identifier_char(after) || after == '('))
+			&& !(after == BANG && self.peek_char(length + 1) != '=' && self.defines_bang_word(spelling))
+	}
+
+	/// The program or a standard module defines the bang word `word!` (`is!`, card warp-is-tests)
+	pub(super) fn defines_bang_word(&self, word: &str) -> bool {
+		let word = format!("{word}{BANG}");
+		self.program_functions.contains(&word) || crate::modules::std_function_names().contains(&word)
 	}
 
 	/// The operator a fitting spelling is here, None where the context reads it otherwise

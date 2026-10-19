@@ -1,0 +1,4 @@
+// card unique-traps: `x in []` is no; the empty list is the null node, which collection_contains read as a list
+out = []
+for x in [1, 2, 1, 3] { if not (x in out) { out = out + [x] } }
+[3 in [], out]

@@ -226,8 +226,8 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
-Small or non-conflicting changes may go straight onto main without a worktree (notes/roles.md
-"Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
+Small or non-conflicting changes may go straight onto main without a worktree (notes/agents/common.md
+"Where to work"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 (/Volumes/Worktrees/warp is cowtree's donor, never removed;
 /Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md), or work on the same branch for small changes.
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).

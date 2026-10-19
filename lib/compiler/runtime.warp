@@ -245,6 +245,7 @@ map_values(m: any): list := {
 }
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
 collection_contains(c: any, x: any): bool := {
+	if is_null(c) == 1 { return no } # `[]` is the null node
 	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, node_text(x)) > 0 }
 	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) >= 0 }
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
@@ -418,7 +419,7 @@ node_at(n: any, index: int): any := {
 	if kind_code(n) == 3 { return text_char(unboxed_text(n), index) }
 	fail()
 }
-# `#n` of a value known only at run time: a list's items, a text's characters
+# `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: any): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) == 1 { return 0 }
@@ -803,6 +804,17 @@ int_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
 	unboxed_int(n)
 }
+# a value known only at run time given to a variable declared int: a float or a fraction is no whole number, as Rust's
+int_admitted(n: any): int := {
+	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { not_an_int() }
+	if kind_code(n) == 2 or is_ratio(n) == 1 { an_int_must_be_a_whole_number() }
+	unboxed_int(n)
+}
+# … given to a variable declared list: ø or a list (a map is kind 8 in curly braces, no list), kept as it is, as Rust's
+list_admitted(n: any): any := {
+	if is_null(n) == 0 and (kind_code(n) != 8 or marked_kind(n) == 8) { not_a_list() }
+	n
+}
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
 # empty one) where a list is needed; any other value traps, as Rust fails on it
 text_of_node(n: any): text := {
@@ -1122,6 +1134,14 @@ not_a_list(): int := {
 	0
 }
 not_a_text(): int := {
+	fail()
+	0
+}
+not_an_int(): int := {
+	fail()
+	0
+}
+an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
 }

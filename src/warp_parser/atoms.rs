@@ -271,6 +271,7 @@ impl WarpParser {
 			return Node::Symbol(literal);
 		}
 		let symbol = or_return_error!(self.parse_symbol());
+		let symbol = self.bang_word(symbol);
 		let symbol = self.joined_type_name(symbol);
 		let symbol = self.print_spelled(symbol);
 
@@ -580,6 +581,19 @@ impl WarpParser {
 		}
 	}
 
+	/// `is!`: a name glued to `!` is one word when the program or a standard module defines it so (card warp-is-tests);
+	/// otherwise the `!` stays a suffix (`x!`, `name! email?`), a macro (`println!(…)`) or `!=`
+	fn bang_word(&mut self, symbol: String) -> String {
+		if self.current_char() != BANG || self.peek_char(1) == '=' || self.options.data_mode {
+			return symbol;
+		}
+		if !self.defines_bang_word(&symbol) {
+			return symbol;
+		}
+		self.advance();
+		format!("{symbol}{BANG}")
+	}
+
 	/// `wasm f64.floor`, the word wasm and an instruction name (a type, a dot, its operation): the call
 	/// `wasm_instruction("f64.floor")`; any other `wasm` stays a word
 	fn wasm_instruction_after(&mut self, symbol: &str) -> Option<Node> {
@@ -599,7 +613,9 @@ impl WarpParser {
 		self.advance();
 		let name = self.take_chars(type_length + 1 + operation_length);
 		if crate::wasm_emitter::functions::wasm_bodies::instruction(&name).is_none() {
-			return Some(error(&format!("wasm {name} is no instruction warp takes: the ones on i64 and f64, e.g. wasm f64.sqrt")));
+			return Some(error(&format!(
+				"wasm {name} is no instruction warp takes: the ones on i64 and f64, e.g. wasm f64.sqrt"
+			)));
 		}
 		Some(crate::node::call(WASM_INSTRUCTION_CALL, vec![Node::Text(name)]))
 	}
