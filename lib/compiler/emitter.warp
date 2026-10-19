@@ -893,7 +893,9 @@ logical_words = {and: "and", or: "or", "|": "or"}
 logical(body: Body, symbol: text, left: any, right: any) := {
 	a = expression(body, left)
 	b = nested(body, right, 1)
-	if a#1 == "bool" and b#1 == "bool" {
+	# a value whose kind the first reading of a recursive function does not know yet (pending) beside a yes/no is one
+	yes_no = kind => kind == "bool" or kind == pending
+	if yes_no(a#1) and yes_no(b#1) and (a#1 == "bool" or b#1 == "bool") {
 		a = condition(a)
 		b = condition(b)
 		if symbol == "and" { return ["bool", a + [op.if, type_bytes.bool] + b + [op.else, op.i64_const, 0, op.i64_eqz, op.i32_eqz, op.end]] }
