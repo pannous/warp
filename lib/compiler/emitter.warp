@@ -79,6 +79,7 @@ length_words = {length: yes, count: yes}
 characters = {text: yes, char: yes}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
 equalities = {"==": yes, "!=": yes}
+identities = {"===": "==", "!==": "!="}
 compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 steps = {"++": "+", "--": "-"}
 smallest_int = -9223372036854775808
@@ -1032,6 +1033,7 @@ def group_expression(body: Body, n: any): list {
 		return length(expression(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression(body, n#2)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("text") { return shown_text(expression(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("float") { return ["float", converted(expression(body, n#2), "float")] }
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
@@ -1122,7 +1124,9 @@ def key_expression(body: Body, n: any): list {
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø {
-		if operator in equalities { return nothing_test(body, operator, if left == ø then right else left) }
+		# `x === ø` is `x == ø`: ø is one value, as Rust's identity of it
+		equality = if operator in identities then identities[operator] else operator
+		if equality in equalities { return nothing_test(body, equality, if left == ø then right else left) }
 		return refuse("the operator " + operator)
 	}
 	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }

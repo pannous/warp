@@ -42,6 +42,9 @@ fn is_kebab_name(word: &str) -> bool {
 	word.contains('-') && word.split('-').all(is_plain_name)
 }
 
+/// The mark ending a bang word's name: `is!`
+pub(crate) const BANG: char = '!';
+
 pub(crate) fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
@@ -85,19 +88,36 @@ pub(super) fn parameter_names(list: &str) -> Vec<String> {
 	list.split([',', '(', ')', ' ', '\t']).map(leading_name).filter(|name| is_plain_name(name)).collect()
 }
 
-/// The name of the function `statement` defines: `def f(x)`, `f(x) := …`, `f = x => …`
+/// The name a definition's head starts with: `f`, or a bang word `is!` (card warp-is-tests)
+fn defined_name(text: &str) -> String {
+	let name = leading_name(text);
+	let after = &text.trim_start()[name.len()..];
+	let bang = !name.is_empty() && after.starts_with(BANG) && !after[BANG.len_utf8()..].starts_with('=');
+	if bang {
+		format!("{name}{BANG}")
+	} else {
+		name
+	}
+}
+
+/// A name the program may define: a plain one, or a plain one ending in `!` (`is!`), a word of its own
+pub(crate) fn is_definable_name(name: &str) -> bool {
+	is_plain_name(name.strip_suffix(BANG).unwrap_or(name))
+}
+
+/// The name of the function `statement` defines: `def f(x)`, `f(x) := …`, `f = x => …`, `def is!(…) := …`
 fn definition_in(statement: &str) -> Option<String> {
 	let statement = statement.trim();
 	let first = statement.split_whitespace().next()?;
 	let name = if crate::operators::is_function_keyword(first) {
-		leading_name(&statement[first.len()..])
+		defined_name(&statement[first.len()..])
 	} else if let Some((head, _)) = statement.split_once(":=") {
-		leading_name(head)
+		defined_name(head)
 	} else {
 		let (head, value) = statement.split_once('=')?;
 		starts_as_function(value.trim_start()).then(|| head.trim().to_string())?
 	};
-	is_plain_name(&name).then_some(name)
+	is_definable_name(&name).then_some(name)
 }
 
 /// A value that starts as a function: `x => …`, `(a, b) -> …`, `function (a) {…}`

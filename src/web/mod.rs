@@ -263,7 +263,8 @@ pub fn eval_block_report(request: &Value) -> Value {
 		Some(text) => node_from_tree(text)
 			.text_value()
 			.ok_or_else(|| format!("{}: needs a text", crate::host::PARSE_CODE))
-			.and_then(|source| crate::lowering::parse_word::code_of(&source)),
+			.and_then(|source| crate::lowering::parse_word::code_of(&source))
+			.map(crate::compiler::run_time_blocks::held_code),
 		None => crate::compiler::run_time_blocks::eval_block(
 			tree("block"),
 			&tree("names"),
