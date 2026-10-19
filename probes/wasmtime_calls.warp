@@ -1,0 +1,10 @@
+use wasmtime
+engine = wasm_engine_new()
+store = wasmtime_store_new(engine, 0, 0)
+context = wasmtime_store_context(store)
+linker = wasmtime_linker_new(engine)
+wasi_error = wasmtime_linker_define_wasi(linker)
+config = wasi_config_new()
+wasi_config_inherit_stdout(config)
+set_error = wasmtime_context_set_wasi(context, config)
+print "engine \(engine) store \(store) context \(context) linker \(linker) wasi \(wasi_error) set \(set_error)"

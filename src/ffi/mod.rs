@@ -160,6 +160,7 @@ mod header;
 mod header_cache;
 #[cfg(feature = "native")]
 mod link;
+mod macros;
 pub use header::*;
 #[cfg(feature = "native")]
 pub use link::*;

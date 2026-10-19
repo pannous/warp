@@ -126,11 +126,19 @@ fn parameters(params_str: &str) -> Vec<(String, String)> {
 	if params_str.trim() == "void" {
 		return vec![];
 	}
-	params_str.split(',').map(str::trim).filter(|param| *param != "...").filter_map(parameter).collect()
+	super::macros::split_arguments(params_str)
+		.into_iter()
+		.filter(|param| *param != "...")
+		.filter_map(parameter)
+		.collect()
 }
 
-/// "type *name" or "type* name" or "type name", or a type alone
+/// "type *name" or "type* name" or "type name", or a type alone; a function pointer `void (*finalizer)(void *)` is a
+/// `void *` named finalizer
 fn parameter(param: &str) -> Option<(String, String)> {
+	if let Some(name) = param.split_once("(*").and_then(|(_, rest)| rest.split_once(')')).map(|(name, _)| name.trim()) {
+		return Some(("void *".to_string(), name.to_string()));
+	}
 	let parts: Vec<&str> = param.split_whitespace().collect();
 	let (last, type_words) = parts.split_last()?;
 	if type_words.is_empty() {
@@ -257,7 +265,9 @@ pub fn expand_glibc_math_macros(source: &str) -> String {
 
 /// Parse a header file and extract all function signatures
 pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
-	let Some(content) = crate::web::read_text(path).map(|text| with_glibc_mathcalls(text, path)) else {
+	let Some(content) =
+		crate::web::read_text(path).map(|text| super::macros::preprocessed(&with_glibc_mathcalls(text, path), library))
+	else {
 		return Vec::new();
 	};
 	let mut struct_types = StructTypes::default();
