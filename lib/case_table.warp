@@ -13,31 +13,33 @@ RANGE_FIELDS = 6
 
 class CaseTable { ranges: list
 	range_count(): int := count(ranges) /! RANGE_FIELDS
-	field(at: int, index: int): int := ranges[at * RANGE_FIELDS + index]
-	start(at: int): int := field(at, 0)
-	last(at: int): int := field(at, 1)
-	stride(at: int): int := field(at, 2)
-	delta(at: int): int := field(at, 3)
-	second(at: int): int := field(at, 4)
-	third(at: int): int := field(at, 5)
+	range_field(at: int, index: int): int := ranges[at * RANGE_FIELDS + index]
+	range_start(at: int): int := range_field(at, 0)
+	range_last(at: int): int := range_field(at, 1)
+	range_stride(at: int): int := range_field(at, 2)
+	range_delta(at: int): int := range_field(at, 3)
+	range_second(at: int): int := range_field(at, 4)
+	range_third(at: int): int := range_field(at, 5)
 	// binary search: the index of the last range starting at or before code, -1 when none does
 	range_before(code: int): int := {
 		low = 0
 		high = range_count()
 		while low < high {
 			middle = (low + high) /! 2
-			if start(middle) <= code { low = middle + 1 } else { high = middle }
+			if range_start(middle) <= code { low = middle + 1 } else { high = middle }
 		}
 		low - 1
 	}
-	covers(at: int, code: int): bool := at >= 0 and code <= last(at) and (code - start(at)) % stride(at) == 0
+	// up to its last code point, a stride apart (at is a range, not -1)
+	covers(at: int, code: int): bool := code <= range_last(at) and (code - range_start(at)) % range_stride(at) == 0
 	// the code points code maps to: itself unless a range covers it
 	mapped(code: int): list := {
 		at = range_before(code)
+		if at < 0 { return [code] }
 		if not covers(at, code) { return [code] }
-		out = [code + delta(at)]
-		if second(at) != 0 { out = out + [second(at)] }
-		if third(at) != 0 { out = out + [third(at)] }
+		out = [code + range_delta(at)]
+		if range_second(at) != 0 { out = out + [range_second(at)] }
+		if range_third(at) != 0 { out = out + [range_third(at)] }
 		out
 	}
 	map_text(t: text): text := {
