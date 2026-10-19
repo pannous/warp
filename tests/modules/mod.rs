@@ -1,6 +1,7 @@
 #[cfg(feature = "native")] // the process environment's key: the browser reads the page's key setting instead
 mod test_agent; // card g_X_F0
 mod test_agent_types; // card int-let
+mod test_case_table_module; // card case-table-warp
 #[cfg(feature = "native")] // another checkout's lib/ on disk and file times: not in the browser build
 mod test_checkout_std_lib; // card local-lib
 mod test_dir;

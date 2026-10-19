@@ -4,7 +4,7 @@ use super::*;
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
 /// `sheet: data` in a definition's head
 const DATA_PARAMETER: &str = ": data";
-pub(crate) const STD_MODULES: [(&str, &str); 32] = [
+pub(crate) const STD_MODULES: [(&str, &str); 34] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
@@ -37,6 +37,8 @@ pub(crate) const STD_MODULES: [(&str, &str); 32] = [
 	("channels", include_str!("../../lib/channels.warp")),
 	("extrema", include_str!("../../lib/extrema.warp")),
 	("english", include_str!("../../lib/english.warp")),
+	("case_table", include_str!("../../lib/case_table.warp")),
+	("case_tables", include_str!("../../lib/case_tables.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
