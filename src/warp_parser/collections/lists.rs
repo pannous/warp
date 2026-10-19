@@ -116,6 +116,7 @@ impl WarpParser {
 		let tag_block = std::mem::take(&mut self.tag_block);
 		// Collect all items with their following separators
 		let mut items_with_seps: Vec<(Node, Separator)> = Vec::new();
+		let mut skipped_empty = false;
 		let scope_at_entry = self.parameters_in_scope.len();
 
 		loop {
@@ -127,10 +128,12 @@ impl WarpParser {
 			let (had_newline, line_indent) = self.skip_whitespace();
 			// a skipped ø at a line's end (`'y' ø⏎'z'`) still ends its line
 			match items_with_seps.last_mut() {
-				Some((_, separator)) if had_newline && separator.precedence() < Separator::Newline.precedence() => {
+				Some((_, separator))
+					if had_newline && std::mem::take(&mut skipped_empty) && *separator == Separator::Space =>
+				{
 					*separator = Separator::Newline
 				}
-				_ => {}
+				_ => skipped_empty = false,
 			}
 
 			// Check for dedent - exit this block if we're back to lower indent
@@ -209,6 +212,7 @@ impl WarpParser {
 				if !consumed_input {
 					self.advance();
 				}
+				skipped_empty = consumed_input;
 				continue;
 			}
 

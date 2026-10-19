@@ -4,11 +4,12 @@ use crate::is;
 use warp::node::Node;
 use warp::pipeline::{eval, for_tests};
 
-const PAIRS: &str = "# arithmetic\n'1+1'\t2\n'0-1'\t-1\tnegative\n'x=0'\n\n'[1,2]'\t[1, 2]\n'3>1'\tyes\t";
+const PAIRS: &str = "# arithmetic\n'1+1'\t2\n'0-1'\t-1\tnegative\n'x=0'\tø\n\n'[1,2]'\t[1, 2]\n'3>1'\tyes\t";
 const SKIPPING: &str = "'1+1'\t2\n// 'fib 10'\t55\tcard fib-memo: regression\n'2*3'\t6\n";
 
 #[test]
 fn each_pair_is_a_test() {
+	assert_eq!(for_tests(|| eval("'a text alone is a program'")), Node::Text("a text alone is a program".into()));
 	assert_eq!(for_tests(|| eval(PAIRS)), Node::Text("✓ 5 tests passed".into()));
 	match for_tests(|| eval("'1+1'\t3\n'2'\t2")) {
 		Node::Error(message) => assert!(message.serialize().contains("1 of 2 failed"), "{message:?}"),

@@ -87,7 +87,7 @@ fn test_of<'a>(statement: &'a Node, words: &[&str]) -> Option<Test<'a>> {
 
 /// A file of test pairs (decision warp-is-tests): a line each, code ⇥ expected value ⇥ an optional note,
 /// `"1+1"⇥2`, warp's reader takes it as a list of lists; bare or as the map `test_pairs = { … }`. Each pair runs as
-/// `is!(code, expected)`, a code alone expects ø. Any other program stays as it is
+/// `is!(code, expected)`. Any other program stays as it is (a text alone too)
 fn pairs_checked(program: Node) -> Node {
 	let statements = program.body_statements();
 	let pairs = match statements.as_slice() {
@@ -112,12 +112,12 @@ fn pair_check(pair: &Node) -> Option<Node> {
 
 /// A pair's code and expected value; its note is a remark
 fn pair_parts(pair: &Node) -> Option<(String, Node)> {
-	let (code, expected) = match pair.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Tab) => match items.as_slice() {
-			[code, expected] | [code, expected, _] => (code, expected.clone()),
-			_ => return None,
-		},
-		code => (code, Node::Empty),
+	let Node::List(items, Bracket::None, Separator::Tab) = pair.drop_meta() else {
+		return None; // a text alone is a program, no pair
+	};
+	let (code, expected) = match items.as_slice() {
+		[code, expected] | [code, expected, _] => (code, expected.clone()),
+		_ => return None,
 	};
 	match code.drop_meta() {
 		Node::Text(code) => Some((code.clone(), expected)),
