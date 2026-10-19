@@ -613,7 +613,9 @@ impl WasmGcEmitter {
 				.annotation
 				.as_ref()
 				.is_some_and(|annotation| crate::analyzer::is_map_type(&annotation.drop_meta().name()));
-			let declared_misfit = declared_misfit || (declared_map && PLAIN_KINDS.contains(&given));
+			// `{}` is the empty map, though its kind reads Int (card needs-map)
+			let is_empty_map = matches!(argument.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty());
+			let declared_misfit = declared_misfit || (declared_map && PLAIN_KINDS.contains(&given) && !is_empty_map);
 			// `f(b: bool)` refuses 2 but takes yes, no, 1 and 0 (card bool-assign, P199)
 			let annotated_bool =
 				param.annotation.as_ref().map(Node::name).filter(|type_name| crate::analyzer::is_bool_type(type_name));
