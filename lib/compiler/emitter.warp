@@ -369,6 +369,9 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 2])] }
 	if name == "map_of" { return ["node", node(node_kind_codes.map, values#1#2)] }
 	if name == "new_key" { return ["node", entry_code(values#1#2, values#2#2)] }
+	# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
+	if name == "item_room" { return ["int", values#1#2 + gc_code("struct_get", [gc.list, 1]) + gc_code("array_len", []) + [op.i64_extend_i32_u]] }
+	if name == "set_count" { return [no_kind, values#1#2 + index_code(values#2) + gc_code("struct_set", [gc.list, 0])] }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
 	if name == "is_ratio" { return ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]] }
@@ -398,7 +401,7 @@ intrinsic(body: Body, name: text, arguments: any) := {
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
@@ -750,6 +753,7 @@ key_expression(body: Body, n: any) := {
 	if operator == "+=" {
 		target = expression(body, left)
 		if target#1 == "list" { return runtime_call("list_append", [target, expression(body, right)]) }
+		if target#1 == "node" { return assignment(body, left, runtime_call("node_append", [target, expression(body, right)])) }
 	}
 	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
