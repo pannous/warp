@@ -415,6 +415,11 @@ impl<'a> Loader<'a> {
 		let Some(path) = self.find(name) else {
 			if let Some(source) = std_module(name) {
 				return match import {
+					Import::Use if crate::ffi::is_installed_c_library(name) => {
+						let mut statements = self.use_std_module(name, source)?;
+						statements.push(as_use(statement));
+						Ok(statements)
+					}
 					Import::Use => self.use_std_module(name, source),
 					// `include math`: the whole module spliced in place, as an included file is
 					Import::Include => crate::normalize::without_hints(|| {

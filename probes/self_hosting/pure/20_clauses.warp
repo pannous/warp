@@ -1,0 +1,10 @@
+// out: 55
+// out: 11
+fib(0) := 0
+fib(1) := 1
+fib(n) := fib(n - 1) + fib(n - 2)
+print fib(10)
+mul(0, y) := 0
+mul(x, 1) := x
+mul(x, y) := x * y
+mul(0, 9) + mul(5, 1) + mul(2, 3)

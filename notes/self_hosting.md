@@ -9,6 +9,25 @@ Milestones:
   language, never the other way round: no program, test or lib code is rewritten into primitive syntax to fit it
   (decisions compiler-high-level, no-primitive-rewrites).
 
+## Growing the pure lane (card pure-runs)
+Loop (user via supervisor, 2026-10-19): `probes/self_hosting/refusals.sh --pure <own warp binary>` runs the ladder
+probes/self_hosting/pure/*.warp (simplest first, expected output in `// out:` lines) and the samples with
+WARP_SELF_HOSTED=pure; it counts the programs that ran pure ("pure: ran" lines in WARP_EMIT_REFUSALS) and how many of
+them were right, names the first rung not right and ranks the lane's own refusals → data/self_hosting/pure.txt.
+Fix the top refusal (or any wrong output first), repeat; suite counts only at milestones (warp-steward).
+Counts: 21 ran / 17 right (morning) → 31 / 30 (afternoon). The pure lane's passes come first in lib/compiler/passes.warp
+`pure_passes`, around the twinned `passes` Rust drives by index: definitions (def/fun), clauses (pattern clauses),
+multiple_assignments, then phrase_blocks ({print x}), for_loops (for → while), ranges (range values), list_methods
+(xs.push). Not core, skipped: `on` handlers, `stored` tables, shaders, canvas.
+Traps writing passes in warp (cards match-silently and others):
+- `match xs#i { Key(…): … }` takes no case: pass the element through a Node parameter. `Empty:` does not take ø: `n is ø`.
+- a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
+  function: pick names no lib/compiler file defines.
+- `[]` is ø, so `acc = []; acc + more` is refused statically: build lists with map/filter over `1 to n`.
+- the stage programs are cached per binary and lib/ contents; a cold compile takes 2-5 min, so the first run after a
+  lib/compiler edit is slow (the loop warms it with `3 + 4`). Run the binary by an absolute path or a build that
+  canonicalizes it (self_hosted.rs stage_key), else each folder compiles them anew.
+
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
@@ -213,6 +232,25 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 | 17 | f64-const | float_bits / bits_float: a float's IEEE bits as an int | gap (float_bits) | |
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
+
+### Bootstrap gap (card bootstrap-gap)
+`SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
+every refused function of lib/compiler once, by the first form refused (a fixed family uncovers the next one behind
+it; totals vary between runs under load, compare runs on one state). 2026-10-19: 262 refused functions, 8 of 22 files
+inside the core; after `x == ø` / `x != ø` and main-level variables read by functions as module globals: 185, 9 inside.
+runtime.warp's calls of the intrinsics (`is_null`, `byte_count`, `kind_code`, `new_list`, `fail`, `unboxed_*`, ~60) are
+the survey compiling it as a program, no gap.
+| family | functions | owner |
+| --- | --- | --- |
+| a value known only at run time as a condition, text, list or bool (`if node`, `"a" + node`) | 37 | self-emitter |
+| calls of node API words emitter.warp lacks: `bracket_of`, `symbol`, `separated`, `node_of` | ~27 | emitter-structures |
+| calls of text and library words: `slice`, `starts_with`, `ends_with`, `trim`, `is_name_char`, `is_name_start`, `is_hex_digit`, `code_point_list`, `map_get_or`, `ran_without_error`; another file's `peek`, `is_at` | ~30 | runtime |
+| the unknown name left: a constant assigned from a refused call (`switch_words = [symbol("switch"), …]`, `none_word`, `alias_pairs`) | 3 | clears with the node API and library-word families |
+| parser.warp: `w is not symbol` lowered to `w == not symbol`, `def f(…): T :=` keeps `def` | 3 | card self-hosted-parser |
+
+Done in the cache family (branch closure-values): `x == ø` / `x != ø`; main-level variables a function reads as
+module globals; bool parameters; parameters declared `function` (a closure is a node); `else ø` as a branch giving ø
+(a match's `_: ø`, which made functions "giving a none").
 
 ## Emitter core (card emits-wasm, step 15)
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp

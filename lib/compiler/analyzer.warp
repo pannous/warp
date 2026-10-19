@@ -65,6 +65,8 @@ arithmetic_kind(left: text, op: text, right: text): text := {
 	if op == "*" and texts and (left == "int" or right == "int") { return "text" }
 	if texts or left == "list" or right == "list" or left == "error" or right == "error" or left == "function" or right == "function" { return "error" }
 	if left == "float" or right == "float" { return "float" }
+	# 7 / 2 is the ratio 7/2, not an int (6 / 2 is 3, known only when it runs)
+	if op == "/" { return "rational" }
 	"int"
 }
 
@@ -146,6 +148,8 @@ kind_of_list(n: any, scope: any): text := {
 	statements = separator_of(n) == ";" or separator_of(n) == "\n"
 	# `(a, b)` computes its elements
 	if bracket_of(n) == "(" and separator_of(n) == "," { return "list" }
+	# `{a: 1, b: 2}`: a map, a node at run time
+	if bracket_of(n) == "{" and #n > 0 and all_of(n, part => is_key(part, ":")) { return "data" }
 	if bracket_of(n) == "[" or (not (statements and bracket_of(n) == "") and all_of(n, is_data)) { return "list" }
 	kind_of(n#(#n), scope)
 }

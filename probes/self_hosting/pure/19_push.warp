@@ -1,0 +1,4 @@
+// out: 9
+squares = []
+for i in 1 to 3 { squares.push(i * i) }
+squares#3

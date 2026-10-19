@@ -1,0 +1,7 @@
+// out: 120
+// out: 10
+def factorial(n) = if n <= 1 then 1 else n * factorial(n - 1)
+print factorial(5)
+var total = 0
+for i in 1 to 4 { total += i }
+total

@@ -20,6 +20,8 @@ mod test_end_and_def_blocks; // cards std-module-swallowed, end-indented, def-in
 mod test_english_operator_words;
 mod test_error_excerpt;
 mod test_error_positions;
+#[cfg(feature = "native")] // runs the warp binary
+mod test_fi_block_end; // card allow-stupid
 mod test_fixits;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_footguns;
