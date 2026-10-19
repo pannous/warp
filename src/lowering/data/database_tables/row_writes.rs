@@ -126,7 +126,7 @@ pub(super) fn in_transaction(node: &Node, file: &str, open: &[String]) -> Option
 		return None;
 	};
 	let [word, block] = parts.as_slice() else { return None };
-	if word.drop_meta().name() != TRANSACTION_WORD || !matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if word.drop_meta().name() != TRANSACTION_WORD || !block.is_block() {
 		return None;
 	}
 	let code = format!("std_io(\"table\", \"begin\", [{file:?}])\n\

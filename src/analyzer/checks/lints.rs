@@ -39,7 +39,7 @@ pub(super) fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 	let (Node::Symbol(name), Node::Symbol(parameter)) = (name.drop_meta(), parameter.drop_meta()) else {
 		return None;
 	};
-	if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) || !uses_it_outside_loops(body) {
+	if !body.is_block() || !uses_it_outside_loops(body) {
 		return None;
 	}
 	// a one-statement block reads without its braces: `x => x*k`
