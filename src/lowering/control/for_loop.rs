@@ -208,7 +208,7 @@ fn counted_start(start: &Node) -> Node {
 fn counting_range(iterable: &Node) -> Node {
 	match iterable.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => counting_range(&items[0]),
-		Node::List(items, _, _) if items[0].is_symbol(RANGE_CALL) => match &items[1..] {
+		Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(RANGE_CALL)) => match &items[1..] {
 			[end] => key(int(FIRST_INDEX), Op::Range, end.clone()),
 			[start, end] => key(start.clone(), Op::Range, end.clone()),
 			_ => iterable.clone(),

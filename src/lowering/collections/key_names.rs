@@ -23,7 +23,7 @@ use warp_runtime::host_words::{HELD_KEY, KEY_HELD};
 const HANDLER_WORDS: [&str; 2] = ["on", "once"];
 const KEY_EVENT: &str = "key";
 /// Each key word and the KeyboardEvent.key it names; F1 … F12 name themselves
-const KEY_WORDS: [(&str, &str); 22] = [
+const KEY_WORDS: [(&str, &str); 34] = [
 	("Escape", "Escape"),
 	("ESC", "Escape"),
 	("ESCAPE", "Escape"),
@@ -46,6 +46,18 @@ const KEY_WORDS: [(&str, &str); 22] = [
 	("RIGHT", "ArrowRight"),
 	("Delete", "Delete"),
 	("DELETE", "Delete"),
+	("Shift", "Shift"),
+	("SHIFT", "Shift"),
+	("Control", "Control"),
+	("CONTROL", "Control"),
+	("CTRL", "Control"),
+	("Alt", "Alt"),
+	("ALT", "Alt"),
+	("OPTION", "Alt"),
+	("Meta", "Meta"),
+	("META", "Meta"),
+	("COMMAND", "Meta"),
+	("CMD", "Meta"),
 ];
 /// The key a program keeps once it compares with it (card escape-window)
 const ESCAPE_NAME: &str = "Escape";

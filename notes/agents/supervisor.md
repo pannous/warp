@@ -31,8 +31,25 @@ notes/agents/common.md.
   card appears and again every 30 minutes while it stays untaken (at most 3 times: a prompt typed into a busy session
   can get lost). Take such a card at once (`todo key` it, `todo take`) and assign it ahead of other work. A card you
   add yourself into Now needs an immediate `todo take`, or the watcher reports it.
-- Idle workers: whenever a worker reports idle, run
-  `todo list Next` and give it the real cards of its area, the user's drafts marked "(user)" first, before letting it idle.
+- Idle workers: whenever a worker reports idle, run `todo list Next` and give it the real cards of its area, the
+  user's drafts marked "(user)" first: rate the cards easy / medium / hard and hand out the easy ones before a big
+  card. Quiet hours are not idle hours: refill from Next, then Soon and Later, the cleanup by area, ignored tests and
+  module extractions (sound, graphics, host functions, units into warp modules, topic self-hosted).
+- Before moving a card someone holds, check for its branch and worktree (`git branch -r --list '*<key>*'`, grep
+  /Volumes/Worktrees/*/tests for the key) or ask the owner: an "idle" report doesn't free the session's other cards.
+- Before forwarding a question, grep notes/decisions.md: a question a recorded decision answers is an assignment.
+- Talk to workers by SendMessage with `notify_when_idle: true`, never tmux send-keys; tmux only to look at a screen.
+- Quick checks of what warp can do: the installed binary with the program inline, `WARP_NO_WINDOW=1 warp 'use math;
+  dir(math)'`; never rebuild for it.
+- Do not disturb: `date -v+1d -v8H -v0M -v0S +%s > ~/.claude/quiet-until` (a PreToolUse hook then blocks questions
+  and notifications until then) and stop warp-interviewer's tmux; resume it in the morning.
+- Replacing stale sessions without a handover: never message them (an uncached transcript re-read); build the
+  handover from their worktree's git state and the last messages of their transcript (peek-session skill), kill the
+  old tmux by exact name, respawn with start.sh. After a crash resume instead: README.md "Start".
+- Releases (version bump, tag, tap formula) need no approval but are occasional: try lines use
+  /Users/me/dev/bin/warp, nothing waits for brew.
+- Unexplained direct pushes to main may be the user's Grok Bot app (g-* cards, the user's git identity): ask the user;
+  it is not reachable by SendMessage. Never assign @copilot: our own sessions do all tasks.
 - No web research in my own context: a quick search or side question goes to an
   Agent-tool subagent (background) that returns a short answer with sources; larger research that writes notes goes
   to a warp-research session. I relay only the short answer.
@@ -40,5 +57,8 @@ notes/agents/common.md.
   Integrator. Relay user decisions you hear directly to the Interviewer so it records them verbatim.
 - Report to the user at the end of each answer: what merged (suite count), what runs, what needs them. Delete merged
   or stale things without asking; hand the user a one-line `!` command when a hook blocks it.
-- Cloud: claude --cloud sessions spend the user's cloud session credits, not plan limits (notes/cloud_development.md);
-  use them for self-contained tasks when the Mac is loaded.
+- Cloud: `claude --cloud "<task>"` sessions (run inside tmux: --cloud needs a TTY) spend the user's Cloud session
+  credit, not plan limits (notes/cloud_development.md); use them for self-contained tasks when the Mac is loaded or
+  when the user asks for cloud sessions (then never local ones). Follow-ups only via `claude -p "msg" --cloud <id>`
+  (SendMessage to a cloud session is held for approval); they push their work, merge from git. Routines
+  (RemoteTrigger) bill the plan limits: at most 3–4 at once, each pushing after every step.

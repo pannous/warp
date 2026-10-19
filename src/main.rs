@@ -142,10 +142,38 @@ fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
 	Some((only_run, path.as_str(), &args[file + 1..]))
 }
 
-/// `warp test file.warp`: the program file whose tests run
-fn test_file(args: &[String]) -> Option<&str> {
-	let path = args.get(2).filter(|path| has_warp_extension(path))?;
-	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(path.as_str())
+/// `warp test a.warp b.warp …`: the program files whose tests run
+fn test_files(args: &[String]) -> Option<&[String]> {
+	let paths = args.get(2..).filter(|paths| !paths.is_empty() && paths.iter().all(|path| has_warp_extension(path)))?;
+	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(paths)
+}
+
+/// The tests of one file run, its summary printed: (tests run, failed)
+fn run_tests_of(path: &str) -> (usize, usize) {
+	diagnostic::show_lines_of(&source_of(path));
+	let result = warp::pipeline::for_tests(|| eval(path));
+	let summary = match result.drop_meta() {
+		Node::Text(summary) => summary.clone(),
+		Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => summary.drop_meta().name(),
+		// a program without tests shows its value; one that fails outright counts as one failed test
+		other => {
+			show(other, "");
+			let failed = usize::from(matches!(other, Node::Error(_)));
+			return (failed, failed);
+		}
+	};
+	println!("{summary}");
+	test_counts(&summary).unwrap_or((1, 1))
+}
+
+/// "✓ 3 tests passed" → (3, 0), "2 of 4 failed" → (4, 2)
+fn test_counts(summary: &str) -> Option<(usize, usize)> {
+	let numbers: Vec<usize> = summary.split(' ').filter_map(|word| word.parse().ok()).collect();
+	match numbers.as_slice() {
+		[failed, run] if summary.ends_with(" failed") => Some((*run, *failed)),
+		[run] if summary.ends_with(" passed") => Some((*run, 0)),
+		_ => None,
+	}
 }
 
 /// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
@@ -284,19 +312,24 @@ fn run_command(args: &[String]) {
 				Err(failure) => fail(format!("warp build: {failure}")),
 			}
 		}
-	} else if let Some(path) = test_file(args) {
-		// P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
-		diagnostic::show_lines_of(&source_of(path));
-		let result = warp::pipeline::for_tests(|| eval(path));
-		let failed = matches!(result, Node::Error(_));
-		match result.drop_meta() {
-			Node::Text(summary) => println!("{summary}"),
-			Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => {
-				println!("{}", summary.drop_meta())
+	} else if let Some(paths) = test_files(args) {
+		// P209, P210: the files' `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero;
+		// several files each print their summary under their name, and the total last
+		let several = paths.len() > 1;
+		let (mut run, mut failed) = (0, 0);
+		for path in paths {
+			if several {
+				println!("{path}:");
 			}
-			other => show(other, ""),
+			let (file_run, file_failed) = run_tests_of(path);
+			(run, failed) = (run + file_run, failed + file_failed);
 		}
-		std::process::exit(if failed { 1 } else { 0 });
+		if several {
+			let total =
+				if failed > 0 { format!("{failed} of {run} failed") } else { format!("✓ {run} tests passed") };
+			println!("{total} in {} files", paths.len());
+		}
+		std::process::exit(if failed > 0 { 1 } else { 0 });
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`

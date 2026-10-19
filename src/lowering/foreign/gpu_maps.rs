@@ -52,8 +52,10 @@ const KERNEL_FUNCTIONS_OF_TWO: [&str; 3] = ["min", "max", "atan2"];
 /// Shader math WGSL computes on numbers and vectors alike (card compile-shaders, lib/math.warp and the prelude's norm):
 /// the warp word, WGSL's, its number of arguments and the result's width (0: the arguments' width)
 /// round: a half to the even neighbour in both
-const VECTOR_FUNCTIONS: [(&str, &str, usize, usize); 16] = [
+const VECTOR_FUNCTIONS: [(&str, &str, usize, usize); 18] = [
 	("fract", "fract", 1, 0),
+	("binary_log", "log2", 1, 0),
+	("log2", "log2", 1, 0),
 	("round", "round", 1, 0),
 	("sign", "sign", 1, 0),
 	("normalize", "normalize", 1, 0),
@@ -99,6 +101,8 @@ const COLOR_SUFFIX: &str = "_color";
 const SHADER_VALUES: &str = "values";
 /// `x^k` for a whole k up to this is a product (pow of a negative base is NaN in WGSL, a number on the CPU)
 const LARGEST_MULTIPLIED_POWER: i64 = 8;
+/// The longest excerpt of the construct a refusal names (card kernel-refusal-reason)
+const REFUSAL_EXCERPT: usize = 60;
 
 /// `xs.map(f) @gpu` or `@gpu xs.map(f)`: xs and f; a chain `xs.map(f).map(g)` is xs and g after f, one kernel
 pub(crate) fn gpu_map(value: &Node) -> Option<(Node, Node)> {
@@ -476,8 +480,9 @@ fn unapplied(value: &Node) -> Option<String> {
 		));
 	}
 	kernel(&lambda).is_none().then(|| {
+		let refused = kernel_refusal(&lambda).map(|reason| format!(", here {reason}")).unwrap_or_default();
 		format!(
-			"@gpu: WGSL cannot compute `{}` (only + - * / ^ √ and math words of the item and numbers)",
+			"@gpu: WGSL cannot compute `{}` (only + - * / ^ √ and math words of the item and numbers{refused})",
 			lambda.serialize().trim()
 		)
 	})

@@ -34,6 +34,9 @@ Spawned sessions get generated names (warp-6c …). Find them with ListAgents: t
 Sessions in tmux survive the supervisor; check `tmux ls | grep warp-` and ListAgents before spawning duplicates.
 Open questions are queued in notes/open_decisions.md ("Pending questions"), the cards on the board
 (`todo list`, GitHub project pannous/projects/1), the merge history in `git log`. A role that died is simply started again with start.sh.
+After a Mac crash, resume every session instead of spawning fresh ones (`FORCE_SPAWN=1 CLAUDE_RESUME=<id>
+~/dev/bin/claude-remote.sh <role> /Users/me/dev/angles/warp "<RESUME prompt naming its worktrees>"`; ids: the newest
+`customTitle` per role in ~/.claude/projects/-Users-me-dev-angles-warp/*.jsonl).
 
 ## End of day
 Workers remove their worktrees after the merge; the Integrator deletes merged remote branches. Leftovers:
