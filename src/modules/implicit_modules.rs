@@ -186,7 +186,7 @@ pub(crate) fn calls_undefined(program: &Node, word: &str) -> bool {
 pub(crate) fn tags_or_calls(program: &Node, word: &str) -> bool {
 	let mut found = false;
 	program.visit(&mut |node| {
-		found |= matches!(node, Node::Key(tag, Op::Colon, block) if tag.is_symbol(word) && crate::lowering::nodes::is_block(block))
+		found |= matches!(node, Node::Key(tag, Op::Colon, block) if tag.is_symbol(word) && block.is_block())
 	});
 	found || called_names(statements_of(program)).contains(word)
 }

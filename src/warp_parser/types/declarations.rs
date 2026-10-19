@@ -563,7 +563,8 @@ impl WarpParser {
 				}
 				// the line `left: ref Node? right: ref Node?` among others: its fields are fields of the body
 				// a typed field, not a property with its block (`age:{2026 - birthday} set{…}`)
-				let is_field = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)));
+				let is_field =
+					|item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !value.is_block());
 				let row_of_fields = |item: &Node| matches!(item.drop_meta(), Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field));
 				if sep != Separator::Space && transformed.iter().any(row_of_fields) {
 					transformed = transformed

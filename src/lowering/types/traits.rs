@@ -242,7 +242,7 @@ fn declared_trait_name(node: &Node) -> Option<String> {
 				_ => return None,
 			},
 		),
-		[keyword, name, block] if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) => (keyword, name),
+		[keyword, name, block] if block.is_block() => (keyword, name),
 		_ => return None,
 	};
 	let is_keyword = TRAIT_KEYWORDS.contains(&keyword.drop_meta().name().as_str());
@@ -384,9 +384,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 			_ => return None,
 		},
 		// `trait Shape { area }` spaced
-		[keyword, name, requirements] if matches!(requirements.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			(keyword, name, requirements)
-		}
+		[keyword, name, requirements] if requirements.is_block() => (keyword, name, requirements),
 		_ => return None,
 	};
 	let keyword_name = keyword.drop_meta().name();
