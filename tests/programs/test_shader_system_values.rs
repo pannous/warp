@@ -1,6 +1,7 @@
 // card values-number (user): `$mouse_x` in a shader block failed "values.mouse_x is a number or a list of numbers, got
 // mouse_x", which read as a suggestion. `$mouse.x` is the pointer's x (the built-in hole $mouse, a vec2f); `$mouse_x`
 // works as its alias with a hint to write `$mouse.x` (user 2026-10-14: "mouse_x could just give a hint mouse.x")
+#[cfg(feature = "native")]
 const SHADER: &str = "s = shader {\n\t@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n\t\treturn vec4f(select(0.0, 1.0, $mouse.x == 0.0 && $mouse.y == 0.0), 0.0, 0.0, 1.0);\n\t}\n}\n";
 
 #[cfg(feature = "native")]

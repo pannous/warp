@@ -1,6 +1,7 @@
 // card shader-wheel: the mouse wheel is an input next to the pointer: the system value mouse_wheel and the shader's
 // built-in hole $mouse_wheel are the steps turned over the paint window (or the page's canvas) since the start, up
 // adding; `$wheel` is its alias with a hint, and compute_toy's mouse.zoom follows it, 5% a step, as compute.toys zooms
+#[cfg(feature = "native")]
 const READS_THE_WHEEL: &str = "s = shader {\n\t@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n\t\treturn vec4f(select(0.0, 1.0, $mouse_wheel == 2.0), 0.0, 0.0, 1.0);\n\t}\n}\n";
 
 #[cfg(feature = "native")]

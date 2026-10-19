@@ -1,6 +1,7 @@
 // card shader-builtins (user 2026-10-10): $width, $height, $size, $time, $frame, $mouse, $mouse_down and $key are there
 // in every shader block without warp variables of those names: the host fills them at each paint or gpu_render
 // (src/graphics/gpu.rs with_builtin_values, host-gpu.js); a program's own variable of such a name, or a values map entry, wins
+#[cfg(feature = "native")]
 const SHADER: &str = "s = shader {\n\t@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n\t\treturn vec4f($width / 255.0, $height / 255.0, select(0.0, 1.0, $time >= 0.0 && $time < 60.0 && $size.x == $width && $mouse.x == 0.0 && $mouse_down == 0.0 && $key == 0.0 && $frame >= 0.0), 1.0);\n\t}\n}\n";
 
 #[cfg(feature = "native")]
