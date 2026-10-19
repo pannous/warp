@@ -307,6 +307,8 @@ pub fn view_json(view: &Node) -> String {
 		Node::Empty => "null".into(),
 		Node::True => "true".into(),
 		Node::False => "false".into(),
+		// 1.0 crosses as 1.0, not 1: the lanes never change what a program computes (decision lane-floats)
+		Node::Number(Number::Float(float)) if float.is_finite() && float.fract() == 0.0 => format!("{float:.1}"),
 		number => number.serialize(),
 	}
 }
