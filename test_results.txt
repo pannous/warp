@@ -2773,6 +2773,7 @@ PASSED:
   ✓ node::test_node_cases::node_is_the_type_of_any_node
   ✓ node::test_node_cases::node_warp_declares_the_rust_node
   ✓ node::test_node_cases::node_warp_spells_each_operator_bracket_and_separator
+  ✓ node::test_node_is_block::test_node_is_block
   ✓ node::test_node_operators::test_chaining
   ✓ node::test_node_operators::test_complex_expression
   ✓ node::test_node_operators::test_mixed_types
@@ -6484,4 +6485,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-16 ignored, 6479 passed, 0 failed, 6479 total tested
+16 ignored, 6480 passed, 0 failed, 6480 total tested
