@@ -673,7 +673,7 @@ record_type(name: any, body: any): any := {
 	record_type(name#4, body)
 }
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion
-def admits(type: any, kind: text): bool { type == ø or type == "any" or (type in type_words and type_words[type] == kind) }
+def admits(type: any, kind: text): bool { type == ø or type == "any" or (type in core_type_words and core_type_words[type] == kind) }
 # a write to a field `name` of a value known only at run time: every class's field so named takes the kind
 def field_admits(name: text, kind: text): bool {
 	for class_name in module.classes.keys {
