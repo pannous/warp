@@ -1,6 +1,14 @@
 # Self-hosting: warp's compiler written in warp
 Roadmap card: self-hosted (board topic; its sub-cards are the steps below, notes/roadmaps.md).
 
+Milestones:
+- 2026-10-19 ~12:50: FIRST PURE RUN. With WARP_SELF_HOSTED=pure, programs run parser.warp → warp's own passes →
+  analyzer.warp → emitter.warp with no Rust pass in between (Rust only carries data between the stage workers):
+  `1 + 2`, `print "hi"`, `f(x) := x * 2; f(3)`, `while`, `xs#2`, `if … then … else` (card pure-runs,
+  warp-self-analyzer). Forms outside the lane are refused loudly and run the usual way. The lane grows to the
+  language, never the other way round: no program, test or lib code is rewritten into primitive syntax to fit it
+  (decisions compiler-high-level, no-primitive-rewrites).
+
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
