@@ -1,0 +1,8 @@
+// out: 3
+class Cursor { at: int; n: int }
+def step(p: Cursor) {
+	p.at = p.at + 1
+}
+c = Cursor{at: 2, n: 5}
+step(c)
+c.at
