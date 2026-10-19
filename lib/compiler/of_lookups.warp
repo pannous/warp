@@ -15,19 +15,19 @@ selecting_words = ["in", "from"]
 # the selector words the program at hand does not bind, set by of_lookups
 global selectors = []
 
-is_word(n: any, word: text) := n == symbol(word)
-is_bare_phrase(n: any) := is_group(n) and bracket_of(n) == "" and separator_of(n) == " "
-noun_phrase(words: any) := if #words == 1 then words#1 else separated(bracketed(words, ""), " ")
+is_word(n: any, word: text): bool := n == symbol(word)
+is_bare_phrase(n: any): bool := is_group(n) and bracket_of(n) == "" and separator_of(n) == " "
+noun_phrase(words: any): any := if #words == 1 then words#1 else separated(bracketed(words, ""), " ")
 
 # the words of a phrase that arrives grouped: `sum (of xs)`, `(((name of) q) with) a`
-flat_phrase(n: any) := {
+flat_phrase(n: any): list := {
 	if not is_bare_phrase(n) { return [n] }
 	words = []
 	for item in n { words += flat_phrase(item) }
 	words
 }
 
-as_one_phrase(n: any) := {
+as_one_phrase(n: any): any := {
 	if not is_bare_phrase(n) { return n }
 	words = flat_phrase(n)
 	for word in words {
@@ -37,7 +37,7 @@ as_one_phrase(n: any) := {
 }
 
 # `name words… last = body`: the words through last, else ø
-spaced_words(parts: any) := {
+spaced_words(parts: any): any := {
 	if #parts < 2 { return ø }
 	last = parts#(#parts)
 	if type(last) is not key or (op_of(last) != "=" and op_of(last) != ":=") { return ø }
@@ -51,7 +51,7 @@ spaced_words(parts: any) := {
 }
 
 # `square of a number = …`, `f x = …`: a definition head; `width of p = 12` without a type word assigns the lookup
-is_spaced_definition(parts: any) := {
+is_spaced_definition(parts: any): bool := {
 	words = spaced_words(parts)
 	if words == ø { return no }
 	if not (words contains of_word) { return yes }
@@ -62,13 +62,13 @@ is_spaced_definition(parts: any) := {
 }
 
 # `list of int`, `x: list of int`: the word before `of` names a collection type
-is_type_head(n: any) := {
+is_type_head(n: any): bool := {
 	if n is symbol { return is_collection_head(name_of(n)) }
 	type(n) is key and op_of(n) == ":"
 }
 
 # `object.member`, through the left operands of an operator: `p + 1` gives `p.name + 1`
-member_of(object: any, member: any) := {
+member_of(object: any, member: any): any := {
 	if type(object) is key and op_of(object) != "." and key_of(object) != ø {
 		return key(member_of(key_of(object), member), op_of(object), value_of(object))
 	}
@@ -76,7 +76,7 @@ member_of(object: any, member: any) := {
 }
 
 # `of` after anything but a type head, `in` and `from` after a selector word: `words in t`
-is_selection(parts: any, at: int) := {
+is_selection(parts: any, at: int): bool := {
 	word = parts[at]
 	before = parts[at - 1]
 	if is_word(word, of_word) { return not is_type_head(before) }
@@ -84,13 +84,13 @@ is_selection(parts: any, at: int) := {
 }
 
 # where the object starting at `at` ends: after its item, or with a qualifier at the end of the phrase
-phrase_end(parts: any, at: int) := {
+phrase_end(parts: any, at: int): int := {
 	if at + 1 < #parts and parts[at + 1] is symbol and qualifier_words contains name_of(parts[at + 1]) { return #parts }
 	at + 1
 }
 
 # the last `of` first: `a of b of c` is `a of c.b`, then `c.b.a`
-looked_up(parts: any) := {
+looked_up(parts: any): any := {
 	at = #parts - 2
 	while at >= 1 {
 		if is_selection(parts, at) {
@@ -113,7 +113,7 @@ looked_up(parts: any) := {
 }
 
 # the body of `type of …`, which the parser reads as a declaration head, else ø; `none` when it has none
-type_of_body(n: any) := {
+type_of_body(n: any): any := {
 	if type(n) is not key or key_of(n) != symbol(opaque_word) { return none_word }
 	view = value_of(n)
 	if kind_of(view) == "type" and view#2 == ["symbol", of_word] { return node_of(view#3) }
@@ -122,7 +122,7 @@ type_of_body(n: any) := {
 none_word = symbol("of·none")
 
 # `type of x` as `type(x)`, `print type of x` as `print type(x)`
-type_of_called(parts: any) := {
+type_of_called(parts: any): any := {
 	at = 0
 	while at < #parts and type_of_body(parts[at]) == none_word { at += 1 }
 	if at == #parts { return parts }
@@ -133,9 +133,9 @@ type_of_called(parts: any) := {
 	parts
 }
 
-is_phrase_group(n: any) := is_group(n) and ["", "(", "{"] contains bracket_of(n) and [" ", ""] contains separator_of(n)
+is_phrase_group(n: any): bool := is_group(n) and ["", "(", "{"] contains bracket_of(n) and [" ", ""] contains separator_of(n)
 
-rewrite(n: any) := {
+rewrite(n: any): any := {
 	n = children(as_one_phrase(n), rewrite)
 	if is_phrase_group(n) and not is_spaced_definition(items_of(n)) {
 		parts = looked_up(type_of_called(items_of(n)))
@@ -146,16 +146,16 @@ rewrite(n: any) := {
 	n
 }
 
-mentions_any(n: any, words: any) := {
+mentions_any(n: any, words: any): bool := {
 	for word in words {
 		if mentions(n, word) { return yes }
 	}
 	no
 }
 
-has_type_of(n: any) := view_has(view_of(n), part => kind_of(part) == "type" and part#2 == ["symbol", of_word])
+has_type_of(n: any): bool := view_has(view_of(n), part => kind_of(part) == "type" and part#2 == ["symbol", of_word])
 
-of_lookups(program: any) := {
+of_lookups(program: any): any := {
 	selecting = mentions_any(program, selector_words) and mentions_any(program, selecting_words)
 	if not mentions(program, of_word) and not selecting and not has_type_of(program) { return program }
 	scope = scope_of(program)

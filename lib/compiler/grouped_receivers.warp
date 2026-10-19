@@ -5,7 +5,7 @@ use "walk.warp"
 use "scope.warp"
 
 # `(p)`: the one name in parentheses, else ø
-grouped_name(n: any) := {
+grouped_name(n: any): any := {
 	if not is_group(n) or bracket_of(n) != "(" { return ø }
 	parts = items_of(n)
 	if #parts == 1 and parts#1 is symbol { return parts#1 }
@@ -13,17 +13,17 @@ grouped_name(n: any) := {
 }
 
 # a name the program binds to a value, never to a function
-is_variable(scope: any, name: text) := (binds_as(scope, name, "variable") or binds_as(scope, name, "loop")) and not binds_as(scope, name, "function")
+is_variable(scope: any, name: text): bool := (binds_as(scope, name, "variable") or binds_as(scope, name, "loop")) and not binds_as(scope, name, "function")
 
 # `(p).a` as `p.a` when p is a variable
-ungrouped(n: any, scope: any) := {
+ungrouped(n: any, scope: any): any := {
 	if type(n) is not key or op_of(n) != "." { return n }
 	name = grouped_name(key_of(n))
 	if name == ø or not is_variable(scope, name_of(name)) { return n }
 	key(name, ".", value_of(n))
 }
 
-grouped_receivers(program: any) := {
+grouped_receivers(program: any): any := {
 	if not view_has(view_of(program), part => kind_of(part) == "key" and part#2 == "." and grouped_name(node_of(part#3)) != ø) {
 		return program
 	}
