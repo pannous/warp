@@ -196,6 +196,7 @@ pub fn pure_module(code: &str) -> Option<crate::pipeline::CompiledModule> {
 	match pure_bytes(code) {
 		Ok(bytes) => {
 			record_lines(&format!("{RAN_PURE}\n"));
+			crate::wasm_emitter::write_debug_module(&bytes);
 			let needs_host = imports_from(&bytes, HOST_MODULE);
 			Some(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false })
 		}

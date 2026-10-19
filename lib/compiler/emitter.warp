@@ -731,10 +731,10 @@ def euclidean_remainder(body: Body, a: any, b: any): list {
 
 def assignment(body: Body, target: any, value: any): list {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
-		return map_assignment(body, expression(body, key_of(target)), subscript_name(value_of(target)), value)
+		return map_assignment(body, key_of(target), subscript_name(value_of(target)), value)
 	}
 	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
-		return map_assignment(body, expression(body, key_of(target)), name_of(value_of(target)), value)
+		return map_assignment(body, key_of(target), name_of(value_of(target)), value)
 	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
@@ -783,15 +783,19 @@ def admitted(value: any, kind: text): list {
 }
 def whole(value: any): list { admitted(value, "int") }
 
-# `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
-def map_assignment(body: Body, map: any, name: text, value: any): list {
+# `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v; a variable m holds the map field_with
+# gives, so `d = {}; d["A"] = 1` makes d a map
+def map_assignment(body: Body, receiver: any, name: text, value: any): list {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
-	set = dropped(field_assignment(map, text_value_of(name), [value#1, held]))
+	updated = field_assignment(expression(body, receiver), text_value_of(name), [value#1, held])
+	set = dropped(if receiver is symbol then assignment(body, receiver, updated) else updated)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
-# its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float
+# its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float; a local analyzer.warp gave a kind
+# keeps it for every value held as that kind (`x = "a"; x = "b"`: a text, though a one-letter literal is a character)
 widens(body: Body, name: text, held: text, kind: text): bool := {
+	if analyzed_local_kind(body.function, name) != ø and held_as(kind, analyzed_local_kind(body.function, name)) { return no }
 	# a yes/no stays one (a number given to it counts as yes when not 0), an int given a yes/no takes 1 or 0
 	if body.names[name] < #body.function.parameters or held == pending or kind == pending or held == "bool" or kind == "bool" { return no }
 	joint = joint_kind(held, kind)
@@ -804,6 +808,8 @@ widens(body: Body, name: text, held: text, kind: text): bool := {
 def global_declaration(body: Body, declaration: any): list {
 	if declaration is symbol {
 		entry = declared_global(name_of(declaration), "node")
+		# a runtime word's `global trap_detail = …` assigns that global, not a local of its own
+		if body.intrinsics and not (name_of(declaration) in module.runtime_globals) { module.runtime_globals += [name_of(declaration)] }
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
 	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
@@ -1257,6 +1263,9 @@ analyzed_program(): bool := module.kinds != ø and "value" in module.kinds
 # not int: analyzer.warp's int is warp's unbounded one, a node holding a big number would trap as an i64
 held_kinds = {float: 1, char: 1, text: 1, list: 1}
 held_kind(kind: any): any := if kind in held_kinds then kind else ø
+# whether a value of the emitter's kind `from` is held as the analyzed kind `to` without loss: a character as a text, an
+# int as a float; a node the emitter boxed (`if c then "a" else 2`, analyzer.warp's text) stays one
+held_as(from: text, to: text): bool := from == to or (from == "char" and to == "text") or (from == "int" and to == "float")
 # what analyzer.warp found for the program's function f, main's being the program's variables and value; ø if nothing
 analyzed_function(f: Function): any := {
 	if f.is_runtime or not analyzed_program() { return ø }
@@ -1321,7 +1330,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		result = expression(first, f.body)#1
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
-	if result != no_kind and analyzed_result_kind(f) != ø { result = analyzed_result_kind(f) }
+	if result != no_kind and analyzed_result_kind(f) != ø and (result == pending or held_as(result, analyzed_result_kind(f))) { result = analyzed_result_kind(f) }
 	if result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
 	# a body ending in a statement (a loop, a print) gives ø, as Rust's does
 	f.result = if result == no_kind then "node" else result
