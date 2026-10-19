@@ -797,10 +797,17 @@ def conditioned(word, condition, p) {
 		p.branch = word == "if"
 		body = colon_body(p, 1)
 		p.branch = outer
-	} else {
-		if not is_at(p.code, p.at, '{', p.n) { return keyed(word, ø, condition) }
+	} else if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
+	} else if word == "if" and is_list_of(condition, "(") and at_body_start(p) {
+		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
+		outer = p.branch
+		p.branch = true
+		body = expression(p, 0)
+		p.branch = outer
+	} else {
+		return keyed(word, ø, condition)
 	}
 	head = keyed(word, ø, condition)
 	if word == "while" { return Key(head, Op.Do, body) }
@@ -808,6 +815,13 @@ def conditioned(word, condition, p) {
 	otherwise = else_branch(p)
 	if otherwise.length == 0 { return branches }
 	Key(branches, Op.Else, otherwise#1)
+}
+
+// Whether a statement starts at the parser's position, no end of one, `then`, `else` or `do`
+// Rust twin: blocks.rs at_body_start
+def at_body_start(p) {
+	c = peek(p.code, p.at, p.n)
+	not (p.at >= p.n or "\n;,})]".contains(c)) and not keyword_at(p, "do") and not keyword_at(p, "then") and not keyword_at(p, "else")
 }
 
 // `else body`, also on the line after the branch, `else: body`, and `elif`/`elsif`/`elseif` chaining a new if; [] if
@@ -1019,6 +1033,10 @@ def atom(p) {
 		p.at = end
 		return hole
 	}
+	if EXACT_CONSTANTS.contains("" + c) {
+		p.at = p.at + 1
+		return exact_constant("" + c)
+	}
 	if c == '@' and is_name_start(peek(p.code, p.at + 1, p.n)) { return attribute(p) }
 	// `@1`: the node whose @id is 1
 	if c == '@' and is_digit(peek(p.code, p.at + 1, p.n)) {
@@ -1046,6 +1064,13 @@ def atom(p) {
 	p.at = p.at + 1
 	failed("Unexpected character '" + c + "'")
 }
+
+// The exact generators: `π` is the real π, not a float (src/extensions/reals.rs); a bare `e` or `i` stays a free name,
+// as `epsilon` does; and `∞`, the float infinity
+// Rust twin: literals/constants.rs check_constants, atoms.rs parse_atom (∞)
+EXACT_CONSTANTS = ["π", "pi", "τ", "tau", "euler", "ℯ", "ⅈ", "ε", "ω", "∞"]
+// no node of its own in warp yet (card node-more-cases): the number view, which the Rust side reads as written
+def exact_constant(word) := opaque(["number", word])
 
 // `shader { … }` (or `wgsl { … }`) after its word: WGSL as a sublanguage, the text between the braces without its
 // common indentation, braces in WGSL comments not counted; else ø
@@ -1284,6 +1309,7 @@ def named(p) {
 	if constant == "true" { return true }
 	if constant == "false" { return false }
 	if constant == "empty" { return ø }
+	if not names_case(p, word.length) and EXACT_CONSTANTS.contains(word.lower()) { return exact_constant(word) }
 	if SHADER_WORDS.contains(word) {
 		shader = shader_block(p, word)
 		if shader != ø { return shader }
