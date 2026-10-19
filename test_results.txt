@@ -3612,6 +3612,7 @@ PASSED:
   ✓ parser::test_braceless_range_argument::a_comparison_still_ends_the_argument
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
+  ✓ parser::test_comments::test_apostrophe_in_hash_comment_hides_no_code
   ✓ parser::test_comments::test_block_comments
   ✓ parser::test_comments::test_comment_metadata
   ✓ parser::test_comments::test_comment_with_metadata_accessor
@@ -3822,9 +3823,6 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
-  ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
@@ -6482,6 +6480,9 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
+  ✗ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
 
 SUMMARY:
-16 ignored, 6478 passed, 1 failed, 6479 total tested
+16 ignored, 6476 passed, 4 failed, 6480 total tested

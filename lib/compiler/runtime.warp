@@ -112,6 +112,13 @@ node_add(a: any, b: any): any := {
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) + unboxed_int(b) }
 	float_of_node(a) + float_of_node(b)
 }
+# `a += b` of values known only at run time: a list grows in place as list_append, anything else is a + b
+node_append(a: any, b: any) := {
+	if is_null(a) == 0 and is_null(b) == 0 and kind_code(a) == 8 and kind_code(b) == 8 {
+		return list_append(unboxed_list(a), unboxed_list(b))
+	}
+	node_add(a, b)
+}
 # `a == b` of values known only at run time: ø equals only ø, lists equal item by item, texts and characters as
 # texts, numbers as numbers (an int and a float alike)
 node_equal(a: any, b: any): bool := {
@@ -215,9 +222,18 @@ def list_join(a: list, b: list): list {
 	copy_items(out, #a, b, 0, #b)
 	out
 }
-# `a += b`: b's items after a's in a itself, so every alias of a sees them
+# `a += b`: b's items after a's in a itself, so every alias of a sees them; a full array is replaced by one twice
+# as large, so appending one item at a time copies each item a bounded number of times
 def list_append(a: list, b: list): list {
-	adopt_items(a, list_join(a, b))
+	start = #a
+	added = #b
+	if start + added > item_room(a) {
+		grown = new_list(max_int(start + added, 2 * item_room(a)))
+		copy_items(grown, 0, a, 0, start)
+		adopt_items(a, grown)
+	}
+	copy_items(a, start, b, 0, added)
+	set_count(a, start + added)
 	a
 }
 # `n#i` of a value known only at run time, counted from 1: a list's item, a text's character
