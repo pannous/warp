@@ -5,13 +5,13 @@
 //! Values cross as JSON; the result is any Node.
 
 use super::nodes::{any_part, call, children_rewritten, key, round_call, word_headed};
+use crate::modules::USE_KEYWORD;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::FOR_WORD;
 use std::collections::HashMap;
 use std::path::Path;
 
-const USE_WORD: &str = "use";
 /// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
 pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME];
 /// JavaScript: its browser globals are typed through WebIDL (src/formats/web_idl.rs)
@@ -79,7 +79,7 @@ fn component_uses(node: Node) -> Node {
 	match (module, node) {
 		(Some(Err(problem)), _) => crate::node::error(&problem),
 		(Some(Ok(module)), Node::List(_, bracket, separator)) => {
-			Node::List(vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module], bracket, separator)
+			Node::List(vec![symbol(USE_KEYWORD), symbol(COMPONENT_RUNTIME), module], bracket, separator)
 		}
 		(_, node) => node.map_children(component_uses),
 	}
@@ -118,7 +118,7 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 /// `use cargo regex`, `use crate "regex" as re`: the component src/modules/cargo_crates/ builds of the crate, `as` the crate's
 /// name by default
 fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node, String>> {
-	if !word.is_symbol(USE_WORD)
+	if !word.is_symbol(USE_KEYWORD)
 		|| !matches!(runtime.drop_meta(), Node::Symbol(runtime) if CRATE_RUNTIMES.contains(&runtime.as_str()))
 	{
 		return None;
@@ -233,7 +233,7 @@ fn has_component(path: &str, known: &[String]) -> bool {
 /// `use python "math"` → (alias math, (python, math)); `use python "os.path" as path` → (path, (python, os.path))
 fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	let [word, runtime, module] = items else { return None };
-	if !word.is_symbol(USE_WORD) {
+	if !word.is_symbol(USE_KEYWORD) {
 		return None;
 	}
 	let runtime = runtime.symbol_name()?;

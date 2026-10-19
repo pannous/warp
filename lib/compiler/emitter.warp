@@ -10,6 +10,7 @@
 # recursive call knows it.
 use "walk.warp"
 use math
+use os
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
 type_bytes = {int: 126, float: 124, bool: 127, char: 127}
@@ -40,7 +41,7 @@ gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5, ratio: 6}
 gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0]]
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
-node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6}
+node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6, function: 16}
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 references = {text: [99, gc.text], list: [99, gc.list], node: [110]}
@@ -81,6 +82,9 @@ outside_the_core = "outside the core: "
 no_kind = "none"
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
+# WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
+# refusal names each refused function's first refused form, a line each (probes/self_hosting/bootstrap_gap.sh)
+survey_setting = "WARP_EMIT_SURVEY"
 
 ## bytes
 uleb(n: int) := {
@@ -126,7 +130,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; kinds: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {} }
 
 module = Module({}, [])
 
@@ -476,6 +480,7 @@ shown_text(value: any) := {
 	kind = value#1
 	if kind == "text" { return value }
 	if kind == pending { return ["text", value#2] }
+	if kind == "list" or kind == "node" { module.shows_values = yes }
 	if kind == "list" { return runtime_call("list_text", [value]) }
 	if kind == "int" { return runtime_call("int_text", [value]) }
 	if kind == "float" { return runtime_call("float_text", [value]) }
@@ -635,20 +640,29 @@ widens(body: Body, name: text, held: text, kind: text) := {
 }
 
 # `global name = value` declares the module's variable name, which every function reads and writes; a bare
-# `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, ø until assigned
+# `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, 0 until assigned,
+# and reads it: a function declaring it on each call keeps its value
 global_declaration(body: Body, declaration: any) := {
-	if declaration is symbol { return declare_global(name_of(declaration), ["node", [ref_null, gc.node]]) }
+	if declaration is symbol {
+		entry = declared_global(name_of(declaration), "node")
+		return [entry#2, [op.global_get] + uleb(entry#1)]
+	}
 	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
 	declare_global(name_of(key_of(declaration)), expression(body, value_of(declaration)))
 }
 declare_global(name: text, value: any) := {
+	declared_global(name, value#1)
+	global_assignment(name, value)
+}
+# the module's global name: [its index, its kind], the kind of its first declaration
+declared_global(name: text, kind: text) := {
 	if not (name in module.globals) {
-		module.globals[name] = [#module.global_order, value#1]
+		module.globals[name] = [#module.global_order, kind]
 		module.global_order += [name]
 	}
-	global_assignment(name, value)
+	module.globals[name]
 }
 global_assignment(name: text, value: any) := {
 	entry = module.globals[name]
@@ -672,6 +686,71 @@ call_values(f: Function, values: any) := {
 	code = []
 	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
 	[f.result, code + [op.call] + uleb(f.index)]
+}
+
+## closures (Rust's lowering: src/lowering/definitions/closures.rs)
+# `closure_new(target, captured…)`: a Function $Node holding the list [the target's number, the captured values…], its
+# value the target's name, as Rust's reads back; module.closures holds [target name, captured count] by number.
+# `closure_call_<n>(f, a…)`: a function made once per arity n, its code written last (dispatcher_code), that calls the
+# target f's number names; `<target>·captured·<i>(f)`: f's i-th captured value
+closure_call_prefix = "closure_call_"
+captured_marker = "·captured·"
+# the runtime words that give a value's text: a program using one (or shown_text of a list or node) has no closures
+# here, whose text is the lambda as written
+text_words = ["node_text", "list_text", "joined"]
+closure_value(body: Body, target: any, captured: any) := {
+	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
+	number = closure_number(name_of(target), #captured)
+	items = [boxed(number_value(number))] + captured.map(c => boxed(expression(body, c)))
+	["node", key_code(node_kind_codes.function, vector_code(items), name_node(target))]
+}
+closure_number(name: text, captured: int) := {
+	for i in 0..<#module.closures { if module.closures[i]#1 == name { return i } }
+	module.closures += [[name, captured]]
+	#module.closures - 1
+}
+# the item i of a closure's list: 0 its number, then its captured values
+closure_item(closure: any, i: int) := ["node", payload(closure, gc.list) + gc_code("struct_get", [gc.list, 1]) + [op.i32_const] + sleb(i) + gc_code("array_get", [gc.items])]
+captured_index(name: text) := int(name.split(captured_marker)#2) + 1
+closure_call(body: Body, arity: int, arguments: any) := {
+	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
+	call_values(dispatcher(arity), arguments.map(a => expression(body, a)))
+}
+dispatcher(arity: int) := {
+	name = closure_call_prefix + arity
+	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
+	for known in module.dispatchers { if known.name == name { return known } }
+	f = Function(name, [], [], ø)
+	f.index = #module.imports + #module.order
+	module.order += [f]
+	f.kinds = range_list(arity + 1).map(i => "node")
+	f.result = "node"
+	f.locals = []
+	f.local_names = ["closure"] + range_list(arity).map(i => "argument" + (i + 1))
+	f.code = [op.unreachable]
+	module.dispatchers += [f]
+	f
+}
+# a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
+# its own, the target's call on the captured values and the arguments; a closure of another arity fails in
+# wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)
+dispatcher_code(f: Function) := {
+	arity = #f.kinds - 1
+	closure = [op.local_get, 0]
+	number = unboxed(closure_item(closure, 0)#2, gc.int_box)
+	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
+	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
+	code += kind_code_of(closure) + [op.i64_const] + sleb(node_kind_codes.function) + [int_ops["!="], op.if, no_value] + not_a_function + [op.end]
+	for k in 0..<#module.closures {
+		target = module.functions[module.closures[k]#1]
+		captured = module.closures[k]#2
+		if #target.parameters - captured == arity {
+			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => ["node", [op.local_get] + uleb(j + 1)])
+			called = boxed(call_values(target, values))
+			code += number + [op.i64_const] + sleb(k) + [int_ops["=="], op.if, no_value] + called + [op.return, op.end]
+		}
+	}
+	f.code = code + dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable]
 }
 
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
@@ -779,6 +858,13 @@ expression(body: Body, n: any) := {
 }
 
 group_expression(body: Body, n: any) := {
+	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, n[2..].map(x => x)) }
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
+		return closure_call(body, int(name_of(n#1)[(#closure_call_prefix)..]), n[1..].map(x => x))
+	}
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1).contains(captured_marker) {
+		return closure_item(expression(body, n#2)#2, captured_index(name_of(n#1)))
+	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions {
 		return call(body, module.functions[name_of(n#1)], n[1..].map(x => x))
 	}
@@ -795,6 +881,7 @@ group_expression(body: Body, n: any) := {
 	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
+		if not body.intrinsics and library_words[name_of(n#1)] in text_words { module.shows_values = yes }
 		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
 	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(expression(body, n#2)) }
@@ -903,6 +990,15 @@ analyzed_parameter_kind(f: Function, i: int) := {
 }
 
 compile_function(f: Function, argument_kinds: any) := {
+	if not module.surveying { return function_compiled(f, argument_kinds) }
+	try { function_compiled(f, argument_kinds) } catch refusal {
+		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+		module.refusals += [outside_the_core + f.name + ": " + ("" + refusal)[(#outside_the_core)..]]
+		if f.kinds == ø { f.kinds = argument_kinds.map(k => "node") }
+		f.result = "node"
+	}
+}
+function_compiled(f: Function, argument_kinds: any) := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
 	parameter_kinds = []
@@ -937,7 +1033,9 @@ value_type(kind: text) := if kind in references then references[kind] else [type
 zero_of(kind: text) := {
 	if kind == "int" { return [op.i64_const, 0] }
 	if kind == "float" { return [op.f64_const] + le64(0) }
-	if kind in references { return [ref_null] + (if kind == "node" then [110] else uleb(references[kind]#2)) }
+	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
+	if kind == "node" { return boxed(number_value(0)) }
+	if kind in references { return [ref_null] + uleb(references[kind]#2) }
 	[op.i32_const, 0]
 }
 global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
@@ -1052,6 +1150,11 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any) := {
 	for name in host.keys { if not (name in defined) { module.host[name] = host[name] } }
 	module.classes = {}
 	module.variants = {}
+	module.closures = []
+	module.dispatchers = []
+	module.shows_values = no
+	module.surveying = env(survey_setting) != ø
+	module.refusals = []
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
@@ -1071,13 +1174,24 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any) := {
 			f = module.functions[name]
 			if f.kinds == ø and not name.starts_with(prelude_prefix) { compile_function(f, f.parameters.map(p => "node")) }
 		}
+		# a dispatcher's call may compile a target that makes more closures or dispatchers: again until none is new
+		seen = -1
+		while seen != #module.closures + #module.dispatchers {
+			seen = #module.closures + #module.dispatchers
+			for f in module.dispatchers { dispatcher_code(f) }
+		}
+		# a closure's text is its lambda as written, which the lowered program no longer holds
+		if #module.closures > 0 and module.shows_values { refuse("the text of a closure") }
 		if main.result != "int" and main.result != "float" {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
 		}
+		if #module.refusals > 0 { throw module.refusals.join("\n") }
 		module_bytes(module.order)
 	} catch refusal {
 		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
-		"" + refusal
+		text = "" + refusal
+		if #module.refusals > 0 and text != module.refusals.join("\n") { return (module.refusals + [text]).join("\n") }
+		text
 	}
 }

@@ -2,7 +2,7 @@
 //! `f64::sqrt(x)` is `sqrt(x)`, `i32::MAX` its number, `String::from("hi")` the text, `Vec::new()` `[]`, and
 //! `xs.iter()` / `.collect()` the list itself. An enum's `C::Red` and a path of the program's own names stay.
 
-use super::std_aliases::USE_WORD;
+use crate::modules::USE_KEYWORD;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -70,7 +70,7 @@ fn mentions_rust_path(node: &Node) -> bool {
 
 fn rewritten(node: Node, own: &HashSet<String>) -> Node {
 	// `use std::collections::HashMap` names what it brings, the module loader reads the path
-	if matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.is_symbol(USE_WORD)))
+	if matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.is_symbol(USE_KEYWORD)))
 	{
 		return node;
 	}

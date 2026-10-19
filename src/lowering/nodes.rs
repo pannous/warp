@@ -105,7 +105,7 @@ pub(crate) fn in_block_as_written(bracket: &Bracket, call: Node) -> Node {
 
 /// `x = {a b}` assigns the data `{a b}`, no block of the statement `a b`: `x = {abs -3}` is that list
 pub(crate) fn is_assigned_data(target: &Node, value: &Node) -> bool {
-	matches!(target.drop_meta(), Node::Symbol(_)) && matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _))
+	matches!(target.drop_meta(), Node::Symbol(_)) && value.is_block()
 }
 
 /// The parts of a node rewritten, the node itself kept as written
@@ -149,10 +149,6 @@ pub(crate) fn is_place(node: &Node) -> bool {
 		Node::Key(object, Op::Hash, _) => is_place(object),
 		_ => false,
 	}
-}
-
-pub(crate) fn is_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
 }
 
 /// The words `for i in …` or `for each i in …` of a loop: i
@@ -501,9 +497,7 @@ fn is_word_head(head: &Node) -> bool {
 /// `int {…}` or `int: body` after `def f(x):` or `->`: the result type and the body; anything else is the body
 fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
 	match written_body.drop_meta() {
-		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
-		{
+		Node::List(parts, _, Separator::Space) if parts.len() == 2 && parts[1].is_block() => {
 			(Some(&parts[0]), &parts[1])
 		}
 		Node::Key(result, Op::Colon, body) => (Some(result), body),
