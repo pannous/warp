@@ -1,6 +1,14 @@
 # Self-hosting: warp's compiler written in warp
 Roadmap card: self-hosted (board topic; its sub-cards are the steps below, notes/roadmaps.md).
 
+Milestones:
+- 2026-10-19 ~12:50: FIRST PURE RUN. With WARP_SELF_HOSTED=pure, programs run parser.warp → warp's own passes →
+  analyzer.warp → emitter.warp with no Rust pass in between (Rust only carries data between the stage workers):
+  `1 + 2`, `print "hi"`, `f(x) := x * 2; f(3)`, `while`, `xs#2`, `if … then … else` (card pure-runs,
+  warp-self-analyzer). Forms outside the lane are refused loudly and run the usual way. The lane grows to the
+  language, never the other way round: no program, test or lib code is rewritten into primitive syntax to fit it
+  (decisions compiler-high-level, no-primitive-rewrites).
+
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
@@ -358,8 +366,8 @@ keep its reads far from O(i) here; the gain is the plain array.get.
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
 (wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
 `warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
-(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
-(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+(Python/JS over JSON lines) and, since card exe-c-ffi, C functions: the bridge is crates/warp-runtime/src/c_calls.rs,
+shared with warp's host, and `warp build` carries the header signatures with the machine code (notes/aot.md).
 Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
 modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
 shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads

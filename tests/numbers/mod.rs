@@ -85,6 +85,7 @@ mod test_quantity_tolerance; // card quantity-tolerance
 mod test_range_tolerance_compare;
 mod test_ratio_compare_shortcut;
 mod test_ratio_float_division;
+mod test_ratio_gcd_warp; // card ratio-gcd-warp
 mod test_rational_quantities;
 mod test_rational_type;
 mod test_recursive_law; // card recursive-laws

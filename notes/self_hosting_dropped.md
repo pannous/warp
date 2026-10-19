@@ -56,9 +56,10 @@ Per form: the form, the sources showing it, why it is left out, how to bring it 
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
   (`if o != ø`, `o ?? d`, `o ?? raise(m)`). The Rust compiler dropped it too (decision rust-cleanup-drops). Back:
   src/lowering/welcoming/rust_options.rs from git history, as a pass before the match arms.
-- `set x to 5`, `set width of p to 12` (decision setter-calls: `p.width = 12` with a style hint). Sources:
-  probes/english_setter.warp. Comes back as a library code template, not a pass (card set-set). The Rust compiler
-  dropped it too (rust-cleanup-drops); its lower_set_phrases is in git history.
+- `set x to 5` dropped for good (user 2026-10-19: extra syntax, `x = 5` says it). `set width of p to 12` (decision
+  setter-calls: `p.width = 12`). Sources: probes/english_setter.warp. Back as library code (card set-set): lib/english.warp's rewrite rule, in the Rust
+  compiler; the warp compiler gets them once it reads rewrite rules (src/modules/rewrites.rs). The style hint
+  "warp doesn't do prose" is gone: a rule has no hints (test_set_to_hints_the_assignment stays ignored).
 - `print words in t` (the walk `for part in t.words {print part}`) and `byte count of t` (the count in a unit,
   `t.bytes`) in of_lookups (decision sugar-triage). Sources: none in today's corpus differs. The Rust compiler dropped
   them too (rust-cleanup-drops). Back: of_lookups.rs print_walk and the text_unit branch of looked_up from git history.
@@ -81,7 +82,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 2 | match arms | welcome_forms | 15 | keep (ported) |
 | 3 | arrow result types | welcome_forms | 0 | keep (ported, merged into welcome_forms.warp) |
 | 4 | of_lookups | 241 | 22 | keep `a of b` and `in`/`from` after a selector word; drop print walks, unit counts (decided, sugar-triage) |
-| 5 | set phrases | welcome_forms | 1 | dropped in both compilers (card set-set, rust-cleanup-drops) |
+| 5 | set phrases | welcome_forms | 1 | library: lib/english.warp rewrite rules (card set-set) |
 | 6 | grouped_receivers | 69 | 1 | keep |
 | 7 | module_properties | 467 | 3 | core: the property accessors (definitions/property_accessors.rs, supervisor 2026-10-18); its graphics tables (display aliases, bare width) asked at warp-interviewer |
 | 8 | times_phrases | 57 | 26 | keep (ported) |
