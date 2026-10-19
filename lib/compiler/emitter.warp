@@ -986,6 +986,8 @@ key_expression(body: Body, n: any) := {
 	}
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration(body, right) }
+	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
+	if operator == ":" and left == symbol("loop·step") { return expression(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
 	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
