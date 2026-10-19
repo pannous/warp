@@ -10,9 +10,7 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 	let (head, typed_body) = result_typed_head(definition).filter(|(head, _)| is_call_head(head))?;
 	let (result_type, body) = match typed_body.drop_meta() {
 		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2
-				&& is_result_type(&parts[0])
-				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if parts.len() == 2 && is_result_type(&parts[0]) && parts[1].is_block() =>
 		{
 			(parts[0].clone(), parts[1].clone())
 		}
@@ -35,9 +33,10 @@ pub(crate) fn result_typed_head(target: &Node) -> Option<(Node, Node)> {
 	as_union_result(target).or_else(|| result_typed(target).map(|(head, result)| (head.clone(), result.clone())))
 }
 
-/// A built-in type, or `any`: a Node of whatever kind the paths return (`def f(w) as any`, card def)
+/// A built-in type, a collection, a class (`def g(): G {…}`, card def-int), or `any`: a Node of whatever kind the
+/// paths return (`def f(w) as any`, card def)
 fn is_result_type(result_type: &Node) -> bool {
-	is_kinded_type_word(result_type) || result_type.is_symbol(ANY_TYPE)
+	result_type.symbol_name().is_some_and(crate::warp_parser::names_a_type) || result_type.is_symbol(ANY_TYPE)
 }
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`
@@ -72,9 +71,7 @@ pub(super) fn union_result(typed_body: &Node) -> Option<(Node, Node)> {
 			Some((key(part.as_ref().clone(), Op::Or, rest), body))
 		}
 		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2
-				&& matches!(parts[0].drop_meta(), Node::Symbol(_))
-				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && parts[1].is_block() =>
 		{
 			Some((parts[0].clone(), parts[1].clone()))
 		}
@@ -139,9 +136,7 @@ pub(super) fn function_typed_result(definition: Node) -> Node {
 	};
 	match parts.as_slice() {
 		[result_type, body]
-			if types.iter().all(is_kinded_type_word)
-				&& is_kinded_type_word(result_type)
-				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if types.iter().all(is_kinded_type_word) && is_kinded_type_word(result_type) && body.is_block() =>
 		{
 			parens(vec![head.as_ref().clone(), body.clone()])
 		}

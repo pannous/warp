@@ -5,7 +5,9 @@
 //! warp compiler already compiles.
 //! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
-use crate::compiler::node_views::{handled_plain_view, json_text, node_of_handled_view, plain_view, view_json};
+use crate::compiler::node_views::{
+	analysis_view, handled_plain_view, json_text, node_of_handled_view, plain_view, view_json,
+};
 use crate::node::Node;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
@@ -14,6 +16,9 @@ use std::sync::{Mutex, OnceLock};
 const SWITCH: &str = "WARP_SELF_HOSTED";
 /// WARP_SELF_HOSTED=front: parser.warp and the pass twins, the Rust emitter (a suite count of the front end alone)
 const FRONT_END_ONLY: &str = "front";
+/// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too, a disagreement
+/// with src/analyzer failing it (a suite count of + analyzer)
+const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
 /// passes.warp `stage` of the request in the worker's input file
 const PASSES_PROGRAM: &str =
 	concat!("use \"", env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)))");
@@ -40,9 +45,12 @@ const HOST_MODULE: &str = "host";
 const OUTSIDE_THE_CORE: &str = "outside the core: ";
 /// The file each refusal of emitter.warp goes to as a line, when set
 const REFUSALS_FILE: &str = "WARP_EMIT_REFUSALS";
+/// Set: emitter.warp refuses with every refused function's first form, a line each (its survey_setting)
+#[cfg(feature = "native")]
+const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
 /// The WARP_ settings that change no stage program's compile, so not its kept module either
 #[cfg(feature = "native")]
-const SETTINGS_BESIDE_STAGES: [&str; 2] = [SWITCH, REFUSALS_FILE];
+const SETTINGS_BESIDE_STAGES: [&str; 4] = [SWITCH, ANALYSIS_SWITCH, REFUSALS_FILE, SURVEY_SETTING];
 /// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
 #[cfg(feature = "native")]
 const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
@@ -126,6 +134,23 @@ pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
 	enabled().then(|| kinds_of(view))
 }
 
+/// With ANALYSIS_SWITCH on, the lowered program as analyzer.warp analyzes it: an error when the stage fails or a kind
+/// it finds is narrower than src/analyzer's (analyzer::covers); for now the Rust kinds still feed the emitter
+pub fn check_analysis(program: &Node) -> Result<(), Node> {
+	static ANALYZES: OnceLock<bool> = OnceLock::new();
+	if !enabled() || !*ANALYZES.get_or_init(|| std::env::var_os(ANALYSIS_SWITCH).is_some()) {
+		return Ok(());
+	}
+	use crate::analyzer::{inferred_kinds, json_kind_slots, kind_slots, uncovered};
+	let warp = kinds_of(&analysis_view(program)).map(|kinds| json_kind_slots(&kinds));
+	let warp = warp.map_err(|failure| crate::node::error(&failure))?;
+	let differing = uncovered(&warp, &kind_slots(&inferred_kinds(program)));
+	if differing.is_empty() {
+		return Ok(());
+	}
+	Err(crate::node::error(&format!("the self-hosted analysis disagrees with Rust's: {}", differing.join("; "))))
+}
+
 /// The kinds analyzer.warp finds in the program `view` shows, self-hosted or not
 pub fn kinds_of(view: &Node) -> Result<serde_json::Value, String> {
 	let kinds = answer(&ANALYSIS, view_json(view))?;
@@ -141,7 +166,7 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 	if !emits() {
 		return None;
 	}
-	let module = answer(&EMIT, view_json(&plain_view(node))).and_then(|answer| module_of(&answer));
+	let module = answer(&EMIT, view_json(&analysis_view(node))).and_then(|answer| module_of(&answer));
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
 			log::trace!("self-hosted emit: {refusal}");
@@ -156,14 +181,15 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 	}
 }
 
-/// The refusal as a line of the file REFUSALS_FILE names, when set: a run over many programs ranks what keeps them
-/// outside the core (`sort | uniq -c | sort -rn`)
+/// The refusal's lines (one, or one per refused function under SURVEY_SETTING) in the file REFUSALS_FILE names, when
+/// set: a run over many programs ranks what keeps them outside the core (`sort | uniq -c | sort -rn`)
 fn record_refusal(refusal: &str) {
 	use std::io::Write;
 	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
-	let line = refusal.lines().next().unwrap_or_default();
+	let lines: String =
+		refusal.lines().filter(|line| line.starts_with(OUTSIDE_THE_CORE)).map(|line| format!("{line}\n")).collect();
 	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
-	let _ = appended.and_then(|mut file| writeln!(file, "{line}"));
+	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
 
 /// Does the module import a function of `module`

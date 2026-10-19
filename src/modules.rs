@@ -186,8 +186,7 @@ fn as_constructions(node: Node, classes: &HashSet<String>) -> Node {
 	}
 	match node.map_children(|child| as_constructions(child, classes)) {
 		Node::Key(name, Op::Colon, block)
-			if name.symbol_name().is_some_and(|name| classes.contains(name))
-				&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if name.symbol_name().is_some_and(|name| classes.contains(name)) && block.is_block() =>
 		{
 			Node::Key(name, Op::None, block)
 		}
@@ -283,8 +282,10 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
 	let program = as_constructions(program, &inserted);
-	// `Node.True`, `x is Node` of a used file's enum, which sum_variants met before its declaration was in front
-	let program = crate::lowering::sum_variants::with_types_of(program, &file_classes);
+	// `Node.True`, `x is Node` of a used file's or standard module's enum (`Extremum.Least` of extrema), which
+	// sum_variants met before its declaration was in front
+	let enums: Vec<Node> = std_classes.iter().chain(&file_classes).cloned().collect();
+	let program = crate::lowering::sum_variants::with_types_of(program, &enums);
 	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
 	with_statements_first(program, file_classes)
 }

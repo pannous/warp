@@ -17,3 +17,12 @@ fn a_number_naming_no_code_point_is_an_error() {
 	}
 	is!("x = 55296; try (x as codepoint) else \"fallback\"", "fallback");
 }
+
+/// A character of a text is held as a one-character text: as codepoint it is that character (card text-char)
+#[test]
+fn a_character_of_a_text_casts_to_itself() {
+	is!("s = \"ab\"; s#2 as codepoint", 'b');
+	is!("s = \"ab\"; s[1] as char", 'b');
+	is!("h(s: text, at: int): codepoint := s[at]; h(\"ab\", 1)", 'b');
+	is!("g(c: codepoint): codepoint := c; s = \"ab\"; g(s#2)", 'b');
+}

@@ -189,9 +189,7 @@ impl Answer {
 /// no class wrapper in /api and /rpc JSON); an object's own entries stay, so a map field `address:{…}` keeps its name
 fn without_classes(value: &Node) -> Node {
 	match value.drop_meta() {
-		Node::Key(_, Op::None, body) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			without_classes(body)
-		}
+		Node::Key(_, Op::None, body) if body.is_block() => without_classes(body),
 		Node::List(items, Bracket::Curly, separator) => Node::List(
 			items
 				.iter()

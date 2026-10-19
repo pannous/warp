@@ -135,6 +135,8 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
 
 ## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+Since 2026-10-19 (decision passes-first-principles / ignore-rust): passes come from first principles, judged by the
+programs' results; the Rust passes are ignored, not ported or twinned. The shape below is a starting point only.
 parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
 per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
 table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
@@ -149,6 +151,10 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
 ## Back-end focus (user 2026-10-18 night, decisions self-hosting-back-end, compiler-typed, compiler-high-level)
 Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
 shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
+Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
+emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it). Before sending a tip that touches
+emitter.warp or runtime.warp, run the touched area's suite tests with WARP_SELF_HOSTED=1 (scripts/self-hosted-suite.sh
+--local <filters>, + emitter switch) and compare with the same filters on main: no new failures.
 | owner | part |
 |---|---|
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
@@ -352,8 +358,8 @@ keep its reads far from O(i) here; the gain is the plain array.get.
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
 (wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
 `warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
-(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
-(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+(Python/JS over JSON lines) and, since card exe-c-ffi, C functions: the bridge is crates/warp-runtime/src/c_calls.rs,
+shared with warp's host, and `warp build` carries the header signatures with the machine code (notes/aot.md).
 Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
 modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
 shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
@@ -388,6 +394,11 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
   binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
   with the Rust pipeline (that compile shows a Rust `emit` phase).
+- WARP_SELF_ANALYSIS=1 beside the switch (card pipeline-runs): emit_module first hands each lowered program to
+  analyzer.warp `kinds` (self_hosted::check_analysis) and fails it loud on a stage error or a slot where warp's kind
+  does not cover Rust's (`… disagrees with Rust's: html_items(): list, not empty`). Step one only checks: the emitter
+  still reads src/analyzer's kinds; later warp's kinds feed it. Suite count: self-hosted-suite.sh --stage
+  analyzer=WARP_SELF_ANALYSIS.
 - Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
   refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
   585 on 2026-10-18).
@@ -396,7 +407,7 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   | 59 | `view·opaque`: a class/type or error node kept whole | warp-emitter-structures (classes), warp-self-emitter (errors) |
   | 35+15+11 | untyped values: a text where an int is needed, a node where a list is needed, a node as a condition | warp-self-emitter with warp-self-analyzer's kinds |
   | 25+16 | the unknown name div; floor_quotient | warp-self-emitter |
-  | 22 | closure_new (lambdas, closures) | warp-cache |
+  | 22 | closure_new (lambdas, closures): compiled since emit-families, but for a closure's text | warp-cache |
   | 16 | the operator ‖ | open |
   | 15+14+12 | host words on nodes: std_io, foreign_call, task_spawn_values | warp-cache (low value: needs the module's node exports) |
   | 14+12 | is_type; map_entries (+ map_of_entry 6, field_with 5, collection_contains 8, key 4) | warp-emitter-structures |

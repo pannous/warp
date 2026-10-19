@@ -2,7 +2,7 @@
 //! `fibonacci number = …` → `fibonacci(number:number) := …`,
 //! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
-use super::nodes::{assign, block, call, is_block, is_call_head, key, spaced_statement};
+use super::nodes::{assign, block, call, is_call_head, key, spaced_statement};
 use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -154,7 +154,7 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 		}
 		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
 		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
-		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && is_block(body)) => {
+		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && body.is_block()) => {
 			Some(key(items[0].clone(), Op::Define, converted(&items[1], type_name)))
 		}
 		_ => None,
@@ -204,10 +204,10 @@ fn is_union(word: &str) -> bool {
 /// A result checked rather than converted, where converting could lose something: a union (user 2026-10-12, `-> int or
 /// text`), a whole-number type (decision float-result: `-> int { 2.5 }` is no 2) and a collection (`: list` of a text
 /// is no list of its characters, card list-result-type), optional too (`-> int?`: an int, ø or an Error, decision
-/// error-optional); `-> text { 3 }` still converts
+/// error-optional, any `T?`: ø converts to no type, card text-type); `-> text { 3 }` still converts
 pub(crate) fn is_checked_result(word: &str) -> bool {
-	let word = word.strip_suffix('?').unwrap_or(word);
-	is_union(word)
+	word.ends_with('?')
+		|| is_union(word)
 		|| is_collection_type(word)
 		|| (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
 }

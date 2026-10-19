@@ -11,8 +11,10 @@
 #                                                      (value 1 by default; WARP_SELF_HOSTED's own replaces "front"),
 #                                                      counted apart as run <tip>+<name>; notes/self_hosting.md
 #                                                      "Back-end focus": front end only, + emitter (--stage
-#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer
-#   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh
+#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer (--stage
+#                                                      analyzer=WARP_SELF_ANALYSIS: analyzer.warp checks each program)
+#   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh (after --stage …: with that stage,
+#                                                      e.g. --stage emitter=WARP_SELF_HOSTED=1 --local lists::)
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
@@ -167,9 +169,13 @@ cloud_run() {
 	local report=$REPORTS/$run.txt previous
 	rank "${logs[@]}" | tee "$report"
 	mkdir -p "$(dirname "$COUNTS")"
-	# against the last complete run of the same stages: a line noting "incomplete" lacks the tests of its killed part
+	# against the last complete run of the same stages on an ancestor of this tip (another session's branch run would
+	# count that branch's fixes as regressions): a line noting "incomplete" lacks the tests of its killed part
 	previous=$(grep -v -e '^#' -e incomplete "$COUNTS" 2>/dev/null | awk -v stage="$STAGE" '
-		{ plus = index($2, "+"); if ((plus ? substr($2, plus + 1) : "") == stage) last = $2 } END { print last }')
+		{ plus = index($2, "+"); if ((plus ? substr($2, plus + 1) : "") == stage) print $2 }' | tail -r |
+		while read -r candidate; do
+			git merge-base --is-ancestor "${candidate%%+*}" "$tip" 2>/dev/null && { echo "$candidate"; break; }
+		done)
 	[ -n "$previous" ] && newly_failed "$previous" "${logs[@]}" | tee -a "$report"
 	printf '%s  %s  %s  %s\n' "$(date +%F)" "$run" "$(head -1 "$report" | sed 's/^self-hosted: //; s/ passed//')" \
 		"data/self-hosted/$run.txt" >> "$COUNTS"
@@ -184,8 +190,8 @@ case "${1:-}" in
 			set_switch "$2"
 			shift 2
 		done
-		cloud_run "$@" ;;
+		if [ "${1:-}" = --local ]; then shift; local_run "$@"; else cloud_run "$@"; fi ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,17p' "$0"; exit 2 ;;
+	--*) sed -n '2,18p' "$0"; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac
