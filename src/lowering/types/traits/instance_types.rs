@@ -19,6 +19,8 @@ pub struct InstanceTypes {
 	final_round: bool,
 	/// The parameters of the definitions being rewritten, innermost last (in_definition)
 	parameters: RefCell<Vec<HashMap<String, Option<Shape>>>>,
+	/// The sum types by name (`enum T { C(count: int) }`): a `t: T` may hold any variant, whose fields are not T's
+	sum_types: std::collections::HashSet<String>,
 }
 
 /// Fixpoint rounds over the assignments, at most: each round learns one more link of a chain, a variable assigned from
@@ -37,6 +39,7 @@ impl InstanceTypes {
 			registry,
 			final_round: false,
 			parameters: RefCell::default(),
+			sum_types: crate::lowering::sum_variants::sum_types(node).into_keys().collect(),
 		};
 		if types.registry.types().is_empty() {
 			return types;
@@ -243,6 +246,12 @@ impl InstanceTypes {
 		};
 		let declared = self.registry.get_by_name(&type_name)?.fields.iter().find(|field| field.name == *name)?;
 		self.registry.get_by_name(&declared.type_name).is_some().then(|| declared.type_name.clone())
+	}
+
+	/// Is `node` known to be of a sum type, whose variant it holds is known only at run time: `t.count` of `t: T` may
+	/// read the field of `C(count: int)`
+	pub fn is_sum_typed(&self, node: &Node) -> bool {
+		matches!(self.shape(node), Some(Shape::Instance(type_name)) if self.sum_types.contains(&type_name))
 	}
 
 	fn has_field(&self, type_name: &str, name: &str) -> bool {

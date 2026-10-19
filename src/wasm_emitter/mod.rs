@@ -265,16 +265,6 @@ impl WasmGcEmitter {
 		self.highest_key_operator.max(crate::operators::op_to_code(&crate::operators::Op::Colon))
 	}
 
-	/// Enable/disable emitting Kind globals for documentation
-	pub fn set_emit_kind_globals(&mut self, enabled: bool) {
-		self.config.emit_kind_globals = enabled;
-	}
-
-	/// Enable/disable host function imports (fetch, run)
-	pub fn set_host_imports(&mut self, enabled: bool) {
-		self.config.emit_host_imports = enabled;
-	}
-
 	// ═══════════════════════════════════════════════════════════════════════════
 	// Type management helpers (delegate to type_manager)
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -282,11 +272,6 @@ impl WasmGcEmitter {
 	/// Get a RefType for Node with specified nullability
 	fn node_ref(&self, nullable: bool) -> RefType {
 		self.type_manager.node_ref(nullable)
-	}
-
-	/// Emit user-defined struct types from TypeRegistry
-	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
-		self.emit_struct_types(registry.types());
 	}
 
 	/// The struct types of the declared types, their indices noted in the context
@@ -297,11 +282,6 @@ impl WasmGcEmitter {
 				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
 			}
 		}
-	}
-
-	/// Get the WASM type index for a user-defined type
-	pub fn get_user_type_idx(&self, name: &str) -> Option<u32> {
-		self.type_manager.get_user_type_idx(name)
 	}
 
 	/// Emit core GC types (String, Node, i64box, f64box)
@@ -1065,8 +1045,8 @@ fn last_statement_items(program: &Node) -> usize {
 /// The module of `node`; `%` and `//` use the small int_* runtime unless the module makes ratios, which takes a
 /// second emission with the ratio-aware exact_* one (card int-i64)
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
-	crate::compiler::self_hosted::check_analysis(node)?;
-	if let Some(module) = crate::compiler::self_hosted::emit(node) {
+	let kinds = crate::compiler::self_hosted::program_kinds(node)?;
+	if let Some(module) = crate::compiler::self_hosted::emit(node, kinds.as_ref()) {
 		return module;
 	}
 	let (compiled, int_division) = crate::compiler::phase_times::timed("emit", || emit_module_with(node, false))?;

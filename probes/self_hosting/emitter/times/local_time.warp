@@ -1,0 +1,4 @@
+# emitter core: a local time at run time, time_of(2, nanoseconds since 1970 as if UTC) (card time-primitives)
+# 2024-01-31T10:30
+print 1
+2024-01-31T10:30

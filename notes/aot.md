@@ -43,8 +43,8 @@ an executable. `warp <file>.wasm` / `.cwasm` link host, WASI and FFI imports.
   declaration or a print stays), so the value is formatted by warp's own print (`[10 20 30]`, a lone text unquoted,
   texts in a container quoted, P126) and the stub needs no Node reader. Exit code 0, 1 on a trap.
 - The stub provides print (WASI fd_write), libm ("m": Rust's f64 functions), the host words sleep, random,
-  random_below, clock, and foreign_call. A program importing anything else (fetch, read, run_block, tasks, FFI
-  libraries, std_io: tables, json, regex, files) is refused at build time with the missing imports named; a plain run
+  random_below, clock, foreign_call and C functions (below). A program importing anything else (fetch, read, run_block,
+  tasks, std_io: tables, json, regex, files) is refused at build time with the missing imports named; a plain run
   says so once per version of the file and of warp (~/.cache/warp/standalone_notes).
 - Foreign calls (card exe-foreign): `use python`/`use js` work in an executable. It starts python3 or node from PATH
   when it runs and fails loudly naming a missing interpreter ("cannot start python3 (…); set WARP_PYTHON to an
@@ -53,7 +53,15 @@ an executable. `warp <file>.wasm` / `.cwasm` link host, WASI and FFI imports.
   components. warp-runtime/src/gc_values.rs reads a program's GC Node as JSON and builds JSON back through its
   constructor exports (new_text … exact_add); stub_calls_export_with_foreign_calls keeps those exports when the program
   imports foreign_call. Still refused in an executable, loudly: warp functions given as callbacks, components
-  (`use wasm`), C libraries; big integers and ratios cross to python as floats, as in warp.
+  (`use wasm`); big integers and ratios cross to python as floats, as in warp.
+- C functions (card exe-c-ffi): `use c`, `use sqlite3`, `import erf from "m"` work in an executable as in warp. One
+  bridge: warp-runtime/src/c_calls.rs (library loading, the hand-linked libc words, one register-passing wrapper per
+  C function, the run's CHandles) serves warp's host (src/ffi/link.rs) and the stub; c_signatures.rs describes a C
+  function without its header (CFunction: how each parameter and the result cross). `warp build` reads the headers
+  (src/ffi header_c_functions) and puts the table of the imported C functions in front of the machine code
+  (`WRPCcfun`, length, one tab-separated line per function); the stub links them, reading no header. The libraries are
+  loaded when the executable starts (missing one: "cannot load the C library …"). A C text result keeps the
+  constructor exports, as foreign calls do. Hello world 1.215 → 1.265 MB (+50 KB). No C callbacks yet.
 - One copy of the run-time code: crates/warp-runtime holds the engine settings (`deterministic_config`,
   `fueled_config`), the fuel default, the host words without compiler (`link_host_words`, which warp's host.rs links
   too), fd_write and libm for any store state, and the trailer format. warp depends on it with the `compiler` feature
@@ -127,3 +135,16 @@ under `warp run`.
 - A plain run that builds an executable (`WARP_EXECUTABLE=1`) pays for the printing variant compiled once more and its
   machine code written; unchanged files skip it (the executable is newer).
 - Test-suite time: notes/test_speed.md.
+
+## libwarp_runtime: the runtime as a C library (card run-wasm-lib)
+`cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library` builds libwarp_runtime (6.2 MB
+release, Cranelift inside: it compiles what it is given). One C function, crates/warp-runtime/include/warp_runtime.h:
+`const char *run_wasm(const uint8_t *module, size_t length)`: compiles and runs the module with the stub's host words,
+libm, libc and fd_write (standalone::run_module, shared with the stub), gives main's result as a text (numbers'
+digits, a GC value through gc_values::json_of, "" for none), NULL on failure with `run_wasm: <reason>` on stderr.
+From warp it is any C library: `use warp_runtime; run_wasm(bytes)` (probes/run_wasm_bytes.warp). The general FFI rule
+it needed: a `const T *` of bytes (uint8_t, int8_t, char, void, Bytef) followed by a `size_t` takes ONE warp value, a
+text or a list of byte values, copied for the call, its length filled in (ParamType::Bytes / Length).
+Found through the usual paths: the header via the include dirs (or WARP_INCLUDE), the library via dlopen's search
+(DYLD_LIBRARY_PATH / LD_LIBRARY_PATH; tests/common runtime_library_dir). Two wasmtimes in one process (warp's and the
+library's) work, each with its own trap handling.

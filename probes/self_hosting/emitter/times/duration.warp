@@ -1,0 +1,4 @@
+# emitter core: a duration at run time, its days and months in the info bits of time_of (card time-primitives)
+# 1 day 2 hours
+print 1
+1 day 2 hours

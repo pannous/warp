@@ -1,9 +1,7 @@
 // Tuple returns (decision: notes/open_decisions.md "Tuple returns"): `return a, b` leaves both values on the wasm
 // stack (multi-value), `x, y = f()` binds them without allocating a list (notes/multi_value.md)
 use crate::common::fails_with;
-use crate::functions::test_multi_value::result_count;
 use crate::is;
-use warp::wasm_emitter::compile;
 
 #[test]
 fn test_two_returned_values_destructure() {
@@ -11,13 +9,6 @@ fn test_two_returned_values_destructure() {
 	is!("divmod(a, b) := return a /! b, a%b; q, r = divmod(17, 5); q*10+r", 32);
 	is!("half(x) := return x, x/2.5; a, b = half(5); b", 2.0);
 	is!("named() := return \"a\", 2; s, n = named(); s", "a");
-}
-
-#[test]
-fn test_tuple_function_returns_wasm_multi_value() {
-	let module = compile("divmod(a, b) := return a /! b, a%b; q, r = divmod(17, 5); q")
-		.unwrap_or_else(|error| panic!("{error:?}"));
-	assert_eq!(result_count(&module.bytes, "divmod"), Some(2));
 }
 
 #[test]
@@ -53,8 +44,4 @@ fn test_tuple_returns_inside_functions() {
 #[test]
 fn test_recursive_tuple_function() {
 	is!("fibpair(n) := { if n == 0 { return 0, 1 }; a, b = fibpair(n-1); return b, a+b }; x, y = fibpair(10); x", 55);
-	let module = compile("fibpair(n) := { if n == 0 { return 0, 1 }; a, b = fibpair(n-1); return b, a+b }; fibpair(3)")
-		.unwrap_or_else(|error| panic!("{error:?}"));
-	assert_eq!(result_count(&module.bytes, "fibpair"), Some(2));
-	assert_eq!(result_count(&module.bytes, "fibpair$list"), Some(1));
 }

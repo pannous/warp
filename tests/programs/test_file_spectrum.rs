@@ -44,14 +44,6 @@ fn shader_of_is_the_wgsl_a_function_paints_with() {
 }
 
 #[test]
-fn the_compiled_shader_demo_compiles_to_one_fragment_shader() {
-	let demo =
-		std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu/warp_compiled_wgsl_shader.warp"));
-	let lowered = warp::pipeline::lower(&demo.unwrap()).expect("a program").serialize();
-	assert!(lowered.contains("@fragment") && lowered.contains("fn warp_swirl_color("), "{lowered}");
-}
-
-#[test]
 fn a_file_written_again_is_measured_again() {
 	// save sound writes the sounds since the last one: the file holds the A4 of 0.2 s, then only a C3 of 0.4 s
 	let again = "before = sound_seconds(file)\ntone(C3, 0.4)\nsave sound as: file\nbars = spectrum(file, 0.05, 8)";

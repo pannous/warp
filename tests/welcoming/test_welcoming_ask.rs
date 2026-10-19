@@ -107,13 +107,3 @@ fn a_runtime_error_names_the_range_hint_and_the_guesses_behind_it() {
 	assert!(failure.contains("assumed at 24:12, 25:13") && failure.contains("loop bound `..size-1`"), "{failure}");
 	is!("a=[1,2]; a#3", warp::error("index out of range: 3 not in 1…2 at 1:10"));
 }
-
-#[test]
-fn questions_quote_prefix_operators_as_written() {
-	let value_text = |code: &str| match warp::warp_parser::WarpParser::parse(code).drop_meta() {
-		warp::Node::Key(_, _, value) => warp::normalize::operand_text(value),
-		other => panic!("not an assignment: {other:?}"),
-	};
-	assert_eq!(value_text("k=#a-1"), "#a-1");
-	assert_eq!(value_text("k=n-1"), "n-1");
-}

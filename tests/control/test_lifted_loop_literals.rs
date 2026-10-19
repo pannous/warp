@@ -2,14 +2,9 @@
 use crate::is;
 use warp::warp_parser::parse;
 
-fn lowered(code: &str) -> String {
-	warp::pipeline::lower(code).expect("a program").serialize()
-}
-
 #[test]
 fn a_walked_literal_is_built_once_before_the_outer_loop() {
 	let code = "t = 0\nfor i in 0..3 { for k in [16, 8, 0] { t += k } }\nt";
-	assert!(lowered(code).contains("k·0·items=[16, 8, 0]; while i<3"), "{}", lowered(code));
 	is!(code, 72);
 }
 

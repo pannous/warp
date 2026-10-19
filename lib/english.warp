@@ -1,0 +1,5 @@
+// English phrases as library code: only `set field of object to value`; `set x to 5` is `x = 5` (user 2026-10-19)
+// (card set-set, decision setter-calls): rewrite rules (src/modules/rewrites.rs), so
+// every program mentioning their words gets them, no `use` needed, and a program defining `set` or `to` keeps its own.
+// The parser reads `set width of p to 12` as `set width of (p to 12)`: the field rule names the words before `to`.
+rewrite set $field of $object to $value => $object.$field = $value
