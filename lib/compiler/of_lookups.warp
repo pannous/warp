@@ -42,7 +42,7 @@ as_one_phrase(n: any) := {
 # `name words… last = body`: the words through last, else ø
 spaced_words(parts: any) := {
 	if #parts < 2 { return ø }
-	head = definition_head(parts#(#parts))
+	head = assignment_head(parts#(#parts))
 	if head == ø { return ø }
 	words = []
 	for at in 1 ..< #parts {
@@ -54,7 +54,7 @@ spaced_words(parts: any) := {
 }
 
 # the head of `head = body` and `head := body`, else ø
-definition_head(n: Node) := match n {
+assignment_head(n: Node) := match n {
 	Key(head, Op.Assign, body): head
 	Key(head, Op.Define, body): head
 	_: ø
