@@ -51,5 +51,6 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
 | two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing |
-| "a parameter of kind ?" and "a node where a ? is needed" (7 refusals); key_node (an int where a text is needed), lines_below (gives ?), `header` read as the host word response_header on nodes, the text of a closure (data/self_hosting/parser_gap_map_instances.txt) | warp-cache |
+| "a parameter of kind ?" and "a node where a ? is needed" (7 refusals), lines_below/braced_items (gives ?) (data/self_hosting/parser_gap_map_instances.txt) | warp-cache |
+| a field named `header` read as the host word response_header (`p.header` → "header needs 2 arguments", Rust lane too), key_node (an int where a text is needed), the text of a closure | warp-list-result-type (branch parser-roots) |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
