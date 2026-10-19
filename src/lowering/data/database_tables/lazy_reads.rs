@@ -90,7 +90,7 @@ impl LazyReads<'_> {
 					&& in_word.drop_meta().name() == IN_WORD
 					&& matches!(item.drop_meta(), Node::Symbol(_))
 					&& let Some(variable) = self.table_of(listed)
-					&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+					&& body.is_block() =>
 			{
 				paged_loop(&item.drop_meta().name(), &variable, &self.tables[&variable].class, self.read(body.clone()))
 			}

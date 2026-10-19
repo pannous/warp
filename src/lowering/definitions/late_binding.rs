@@ -466,16 +466,14 @@ fn getter_definition_left<'a>(statement: &'a Node, name: &str) -> Option<&'a Nod
 		Node::List(items, Bracket::None, Separator::Semicolon) => {
 			items.iter().find_map(|item| getter_definition_left(item, name))
 		}
-		Node::Key(left, Op::Define, body) if !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			match left.drop_meta() {
-				Node::List(items, Bracket::Round, _)
-					if items.len() == 1 && matches!(items[0].drop_meta(), Node::Symbol(head) if head == name) =>
-				{
-					Some(left)
-				}
-				_ => None,
+		Node::Key(left, Op::Define, body) if !body.is_block() => match left.drop_meta() {
+			Node::List(items, Bracket::Round, _)
+				if items.len() == 1 && matches!(items[0].drop_meta(), Node::Symbol(head) if head == name) =>
+			{
+				Some(left)
 			}
-		}
+			_ => None,
+		},
 		_ => None,
 	}
 }

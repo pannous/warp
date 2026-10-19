@@ -7,9 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{
-	assign, block, call, children_rewritten, is_block, is_call_head, is_kinded_type_word, is_return, key,
-};
+use super::nodes::{assign, block, call, children_rewritten, is_call_head, is_kinded_type_word, is_return, key};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -417,7 +415,7 @@ fn named_subject(item: &Node) -> Option<(Node, Node)> {
 		return None;
 	};
 	let (cases, expression) = parts.split_last()?;
-	if name.symbol_name().is_none() || !is_block(cases) || expression.is_empty() {
+	if name.symbol_name().is_none() || !cases.is_block() || expression.is_empty() {
 		return None;
 	}
 	let expression = Node::single_or_list(expression.to_vec(), bracket.clone(), separator.clone());
@@ -560,7 +558,7 @@ fn aliased_event(items: &[Node], own: &HashSet<String>) -> Option<Vec<Node>> {
 		if let Some((written, event, released)) =
 			attribute_event(attribute).filter(|(written, ..)| !own.contains(written))
 		{
-			if is_block(body) {
+			if body.is_block() {
 				note_event_alias(attribute, &written, &format!("{ON_WORD} {event}"), released);
 				return Some(vec![symbol(ON_WORD), symbol(event), body.clone()]);
 			}
@@ -629,7 +627,7 @@ fn when_arm(arm: &Node) -> Option<(Vec<Node>, Node)> {
 
 /// `loop { body }`, Ruby's `loop do body end`
 fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
-	if !word.is_symbol(LOOP_KEYWORD) || !is_block(body) {
+	if !word.is_symbol(LOOP_KEYWORD) || !body.is_block() {
 		return None;
 	}
 	let condition = key(Node::Empty, Op::While, Node::True);
@@ -644,7 +642,7 @@ fn lambda(parameters: Node, body: Node) -> Node {
 fn anonymous_function(items: &[Node]) -> Option<Node> {
 	let [head, rest @ ..] = items else { return None };
 	let [body] = without_result_type(rest) else { return None };
-	if !is_block(body) {
+	if !body.is_block() {
 		return None;
 	}
 	Some(lambda(function_parameters(head)?, forms(body.clone())))
@@ -734,7 +732,7 @@ fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
 	let mut merged: Vec<Node> = Vec::new();
 	for item in items {
 		// Go's function type `f func(int) int` is no lambda: its parameters and result are type words
-		let is_body = !is_block(&item) && !is_kinded_type_word(&item);
+		let is_body = !item.is_block() && !is_kinded_type_word(&item);
 		let parameters = merged
 			.last()
 			.filter(|head| is_body && matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)))
@@ -757,7 +755,7 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let &(reduction, iteration) = BLOCK_REDUCTIONS.iter().find(|(reduction, _)| word.is_symbol(reduction))?;
-	if !is_block(block) {
+	if !block.is_block() {
 		return None;
 	}
 	let call = |word: &str, arguments: Vec<Node>| call(word, arguments);
@@ -867,7 +865,7 @@ fn called_word(call: &Node) -> Option<String> {
 /// Go's `func(x int) int { … }`: the body without the result type before it
 fn without_result_type(rest: &[Node]) -> &[Node] {
 	match rest {
-		[result_type, body] if is_kinded_type_word(result_type) && is_block(body) => &rest[1..],
+		[result_type, body] if is_kinded_type_word(result_type) && body.is_block() => &rest[1..],
 		_ => rest,
 	}
 }
@@ -921,7 +919,7 @@ fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
 fn ruby_lambda(items: &[Node]) -> Option<Node> {
 	let [word, block] = items else { return None };
 	let is_lambda_word = RUBY_LAMBDA_WORDS.iter().any(|lambda_word| word.is_symbol(lambda_word));
-	(is_lambda_word && is_block(block)).then(|| block.clone())
+	(is_lambda_word && block.is_block()).then(|| block.clone())
 }
 
 fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
