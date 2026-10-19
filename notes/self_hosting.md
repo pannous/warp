@@ -356,8 +356,8 @@ keep its reads far from O(i) here; the gain is the plain array.get.
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
 (wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
 `warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
-(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
-(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+(Python/JS over JSON lines) and, since card exe-c-ffi, C functions: the bridge is crates/warp-runtime/src/c_calls.rs,
+shared with warp's host, and `warp build` carries the header signatures with the machine code (notes/aot.md).
 Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
 modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
 shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
