@@ -96,7 +96,7 @@
 '3⁴'	81
 
 # test_global_with_pi
-'pi'	pi
+'pi'	π
 
 # test_sqrt_alias
 'sqrt 9'	3
