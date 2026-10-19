@@ -2,14 +2,16 @@
 """The Rust tests' is!("code", expected) assertions as warp files (decision warp-is-tests, notes/is_tests.md).
 
     scripts/is_tests.py [tests/<topic>/test_x.rs …]   default: every tests/**/test_*.rs
-    scripts/is_tests.py run [normal|emitter|pure …] [-- tests/<topic>/test_x.warp …]
+    scripts/is_tests.py run [normal|emitter|pure|pure-only …] [-- tests/<topic>/test_x.warp …]
                                                     the fast lane: `warp test` of each file (default all) in each lane
-                                                    (default all three), passed / failed / refused counted per lane;
+                                                    (default all four), passed / failed / refused counted per lane;
+                                                    pure-only judges each pair of the pairs files on its own, no Rust
+                                                    behind it: passed / wrong / refused / error;
                                                     logs in data/is_tests/, warp binary $WARP or scratch/warp
 
 Writes beside each Rust file holding a translatable is! two files, under a `# fn name` line per Rust test:
-tests/<topic>/test_x.pairs.warp, pure data, one `'code' expected` pair a line (the code alone when it expects ø) for the
-short tests (one line of code, a literal expectation, at most PAIR_WIDTH characters), and tests/<topic>/test_x.warp
+tests/<topic>/test_x.pairs.warp, pure data, one `'code'⇥expected` pair a line (tab separated, a list of lists to warp's
+reader) for the short tests (one line of code, a literal expectation, at most PAIR_WIDTH characters), and tests/<topic>/test_x.warp
 with an `is! 'code' expected` line for each other one. Prints the counts of written and skipped assertions, skips by
 reason.
 The code must be a string literal, a const of the file or a format! of those; the expected value a literal, a list of
@@ -41,7 +43,13 @@ PI_WORDS = {"PI", "std::f64::consts::PI", "f64::consts::PI", "π"}
 ARITHMETIC_TOKEN = re.compile(r"\s*(" + UNSIGNED + r"|[\w:]+|<=|>=|==|!=|[-+*<>()])")
 EMPTY_VALUES = {"Empty", "Node::Empty", "warp::Node::Empty", "warp::node::Node::Empty", "ø"}
 # the lanes of the fast lane: the switches each sets (src/compiler/self_hosted.rs)
-LANES = {"normal": {}, "emitter": {"WARP_SELF_HOSTED": "1"}, "pure": {"WARP_SELF_HOSTED": "pure"}}
+LANES = {
+    "normal": {},
+    "emitter": {"WARP_SELF_HOSTED": "1"},
+    "pure": {"WARP_SELF_HOSTED": "pure"},
+    "pure-only": {"WARP_SELF_HOSTED": "pure-only"},
+}
+PAIR_LANES = {"pure-only"}  # a pair at a time: one refused pair sinks no other
 QUIET = {"WARP_NO_WINDOW": "1", "WARP_HINTS": "0"}
 REFUSALS = "WARP_EMIT_REFUSALS"
 REFUSED = "outside the core: "  # how a refusal line starts (self_hosted.rs OUTSIDE_THE_CORE)
@@ -49,6 +57,11 @@ REFUSAL_SHOWN = 60  # characters of a refusal that rank it
 RUN_DATA = REPO / "data" / "is_tests"
 JOBS = 4  # warp test processes at once: the Mac is shared (notes/roles.md)
 FILE_SECONDS = 300  # a file still running then counts as timed out
+PAIR_SECONDS = 60  # one pair's program
+PAIR_VERDICTS = ["passed", "wrong", "refused", "error"]
+FALSY = {"false", "no", "ø", "nil", "null", "[]", "()", "{}", ""}
+ERROR_PRINTED = "Error("  # how a program's error prints
+PAIRS_WORK = REPO / "scratch" / "is_pairs"
 # at a line's end: a program's print without a newline runs into it (`123✓ 2 tests passed`)
 SUMMARY = re.compile(r"(?:✓ (\d+) tests? passed|(\d+) of (\d+) failed)$", re.M)
 BOOLS = {"true": "true", "false": "false", "True": "true", "False": "false"}
@@ -276,7 +289,7 @@ def warp_arithmetic(expression):
         if NUMBER.fullmatch(word):
             tokens.append(warp_number(word))
         elif word in PI_WORDS:
-            tokens.append("pi")
+            tokens.append("π")
         elif re.fullmatch(r"<=|>=|==|!=|[-+*<>()]", word):
             tokens.append(word)
         else:
@@ -297,11 +310,11 @@ def argument(value):
 
 
 def pair_line(code, expected):
-    """The pairs file's `'code' expected` line, the code alone when it expects ø; None for a test that stays an is!"""
-    if "\n" in code or computed(expected):
+    """The pairs file's `'code'⇥expected` line; None for a test that stays an is!"""
+    if "\n" in code or "\t" in code or computed(expected):
         return None
-    line = warp_text(code) + ("" if expected == "ø" else " " + argument(expected))
-    return line if len(line) <= PAIR_WIDTH else None
+    line = warp_text(code) + "\t" + expected
+    return line if len(line.expandtabs()) <= PAIR_WIDTH else None
 
 
 def pairs_path(rust_test):
@@ -400,7 +413,7 @@ def tested(file, lane, warp):
         output = f"timed out after {FILE_SECONDS} s"
     summary = ([None] + list(SUMMARY.finditer(output)))[-1]
     if not summary:
-        tests = sum(bool(line.strip()) and not line.startswith("#") for line in file.read_text().splitlines())
+        tests = sum(bool(line.strip()) and not line.startswith(("#", "//")) for line in file.read_text().splitlines())
         return 0, 0, tests, output
     if summary.group(1):
         return int(summary.group(1)), 0, 0, output
@@ -416,6 +429,9 @@ def run_lanes(arguments):
     warp = os.environ.get("WARP", str(REPO / "scratch" / "warp"))
     RUN_DATA.mkdir(parents=True, exist_ok=True)
     for lane in lanes:
+        if lane in PAIR_LANES:
+            run_pairs(lane, files, warp)
+            continue
         (RUN_DATA / f"{lane}.refusals").write_text("")
         with ThreadPoolExecutor(JOBS) as pool:
             results = list(pool.map(lambda file: tested(file, lane, warp), files))
@@ -430,6 +446,68 @@ def run_lanes(arguments):
         total = passed + failed + unrun
         print(f"{lane}: {passed} passed, {failed} failed, {unrun} unrun (no summary from {unrun_files} files) of {total}"
               f" in {len(files)} files; refusals: {refused}")
+
+
+def code_of_literal(literal):
+    """The code a pairs line's warp_text literal holds"""
+    if literal.startswith("«"):
+        return literal[1:-1]
+    return re.sub(r"\\u\{0\}|\\(.)", lambda m: {"r": "\r", None: "\0"}.get(m.group(1), m.group(1)), literal[1:-1])
+
+
+def pair_rows(file):
+    """(code, expected) of each pair line"""
+    rows = (line.split("\t") for line in file.read_text().splitlines() if line[:1] in "'«")
+    return [(code_of_literal(row[0]), row[1].strip()) for row in rows if len(row) > 1]
+
+
+def printed(program, lane, warp, refusals=None):
+    """(exit code, stdout) of the program run in the lane; the exit code is the program's int value, None on timeout"""
+    environment = {**os.environ, **QUIET, **LANES[lane], **({REFUSALS: str(refusals)} if refusals else {})}
+    try:
+        run = subprocess.run([warp, str(program)], capture_output=True, text=True, timeout=PAIR_SECONDS, env=environment)
+        return run.returncode, run.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return None, ""
+
+
+def shown(value):
+    """A printed value or an expected column in one spelling: quotes, commas, spacing unified, bools as 1 and 0, every
+    falsy value 0 (the prelude's is!: `got == expected or (not got and not expected)`)"""
+    value = re.sub(r"[\s,]+", " ", value.strip().replace('"', "'"))
+    value = re.sub(r"'([^']*)'", r"\1", value)
+    words = {"true": 1.0, "yes": 1.0, **dict.fromkeys(FALSY, 0.0)}
+    try:
+        return float(value)
+    except ValueError:
+        return words.get(value, value)
+
+
+def pair_verdict(index, code, expected, lane, warp):
+    """refused (outside the warp compiler's core) / passed (printed the expected column) / wrong / error"""
+    program, refusals = PAIRS_WORK / f"{index}.warp", PAIRS_WORK / f"{index}.refusals"
+    program.write_text(code + "\n")
+    refusals.write_text("")
+    finished, output = printed(program, lane, warp, refusals)
+    failed = finished is None or output.startswith(ERROR_PRINTED)
+    verdict = "error" if failed else "passed" if shown(output) == shown(expected) else "wrong"
+    refused = any(line.startswith(REFUSED) for line in refusals.read_text().splitlines())
+    return ("refused" if refused else verdict), output
+
+
+def run_pairs(lane, files, warp):
+    """Each pair of the pairs files as its own program in the lane, its print against the expected column; a line per
+    pair in data/is_tests/<lane>.log: verdict, file, code, expected, printed"""
+    files = [file for file in files if file.name.endswith(PAIRS_SUFFIX)]
+    rows = [(file, *row) for file in files for row in pair_rows(file)]
+    PAIRS_WORK.mkdir(parents=True, exist_ok=True)
+    with ThreadPoolExecutor(JOBS) as pool:
+        results = list(pool.map(lambda job: pair_verdict(job[0], *job[1][1:], lane, warp), enumerate(rows)))
+    with open(RUN_DATA / f"{lane}.log", "w") as log:
+        for (file, code, expected), (verdict, output) in zip(rows, results):
+            log.write(f"{verdict}\t{file.relative_to(REPO)}\t{code}\t{expected}\t{output[-200:]!r}\n")
+    counts = Counter(verdict for verdict, _ in results)
+    print(f"{lane}: " + ", ".join(f"{counts[v]} {v}" for v in PAIR_VERDICTS) + f" of {len(rows)} pairs in {len(files)} files")
 
 
 def main():

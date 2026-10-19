@@ -5,9 +5,7 @@
 //! warp compiler already compiles.
 //! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
-use crate::compiler::node_views::{
-	analysis_view, handled_plain_view, json_text, node_of_handled_view, plain_view, view_json,
-};
+use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
@@ -19,6 +17,9 @@ const FRONT_END_ONLY: &str = "front";
 /// WARP_SELF_HOSTED=pure (card pure-runs): parser.warp, the warp passes, analyzer.warp and emitter.warp compile the
 /// source, Rust only carrying each stage's JSON to the next; a program the lane refuses compiles the usual way
 const PURE: &str = "pure";
+/// WARP_SELF_HOSTED=pure-only: the pure lane without the usual compile behind it, a refusal is the program's error (a
+/// count of what the warp compiler compiles alone)
+const PURE_ONLY: &str = "pure-only";
 /// The passes.warp request of the pure lane's front end: the view after parser.warp and every warp pass
 const PURE_STAGE: &str = "\"pure\"";
 /// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too and emitter.warp
@@ -188,21 +189,25 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 }
 
 /// The module the pure lane compiles the source to; None when the lane is off or refuses the program, the refusal then
-/// recorded (REFUSALS_FILE) and logged, and the program compiled the usual way
-pub fn pure_module(code: &str) -> Option<crate::pipeline::CompiledModule> {
-	if switch() != Some(PURE) {
+/// recorded (REFUSALS_FILE) and logged, and the program compiled the usual way; under PURE_ONLY the refusal is the error
+pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
+	let strict = switch() == Some(PURE_ONLY);
+	if !strict && switch() != Some(PURE) {
 		return None;
 	}
 	match pure_bytes(code) {
 		Ok(bytes) => {
 			record_lines(&format!("{RAN_PURE}\n"));
 			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false })
+			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
 		}
 		Err(refusal) => {
 			log::info!("pure lane refused: {refusal}");
-			record_refusal(&format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE)));
-			None
+			let refused = refusal.starts_with(OUTSIDE_THE_CORE);
+			let refusal = format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE));
+			record_refusal(&refusal);
+			let failure = if refused { refusal } else { format!("the pure lane failed: {refusal}") };
+			strict.then(|| Err(crate::node::error(&failure)))
 		}
 	}
 }
@@ -275,12 +280,13 @@ fn host_words() -> Result<String, Node> {
 	Ok(serde_json::Value::Object(words.collect()).to_string())
 }
 
-/// The view of lib/compiler/runtime.warp lowered, as JSON; a warp older than lib/ may fail to lower it (card crash-3)
+/// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
+/// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
 fn runtime_words() -> Result<String, Node> {
 	std::fs::read_to_string(RUNTIME_WORDS)
 		.map_err(|failure| crate::node::error(&failure.to_string()))
 		.and_then(|source| crate::pipeline::lower(&source))
-		.map(|lowered| view_json(&plain_view(&lowered)))
+		.map(|lowered| view_json(&analysis_view(&lowered)))
 		.map_err(|failure| {
 			crate::node::error(&format!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()))
 		})

@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+# Key(left, op as Op, right): the key of an operator given by its spelling (shapes.warp keyed). Gives a+b
+def keyed(op: text, left: any, right: any): Node := Key(left, op as Op, right)
+keyed("+", symbol("a"), symbol("b"))
