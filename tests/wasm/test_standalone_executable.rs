@@ -235,3 +235,34 @@ fn test_plain_run_with_warp_executable_leaves_it() {
 	let carried = std::process::Command::new(&executable).output().unwrap();
 	assert_eq!(text(&carried.stdout), "42\n", "{}", text(&carried.stderr));
 }
+
+/// card exe-c-ffi: an executable calls C as warp does, with the signatures warp read from the headers at build time:
+/// libc's hand-linked strlen, toupper and getenv (a text result) from the process, strtod (a `char **` out-pointer),
+/// libm's erf, which the stub's own libm lacks
+#[test]
+fn test_build_exe_calls_c_functions() {
+	let source = "use c\nprint strlen(\"hello\")\nprint toupper(98)\nprint getenv(\"WARP_EXE_C_FFI\")\nimport erf from \"m\"\nprint erf(1.0)\nstrtod(\"2.5\")";
+	let (build, executable) = build_executable("standalone_c_ffi", source);
+	assert!(build.status.success(), "{}", text(&build.stderr));
+	let run = std::process::Command::new(&executable).env("WARP_EXE_C_FFI", "from C").output().unwrap();
+	assert_eq!(text(&run.stdout), "5\n66\nfrom C\n0.8427007929497148\n2.5\n", "{}", text(&run.stderr));
+}
+
+/// card exe-c-ffi: the C functions ride in front of the machine code and come back as they were; plain machine code
+/// carries none
+#[test]
+fn test_c_functions_ride_with_the_machine_code() {
+	use warp_runtime::c_signatures::{split_c_functions, with_c_functions, CFunction, CPointer, ParamType, RetType};
+	let open = CFunction {
+		module: "sqlite".into(),
+		library: "sqlite3".into(),
+		name: "sqlite3_open".into(),
+		param_types: vec![ParamType::Ptr, ParamType::Out],
+		result: Some(CPointer::Handle),
+		ret_type: RetType::I32,
+		out_pointee: Some("sqlite3".into()),
+	};
+	let carried = with_c_functions(std::slice::from_ref(&open), b"machine code");
+	assert_eq!(split_c_functions(&carried), Ok((vec![open], &b"machine code"[..])));
+	assert_eq!(split_c_functions(b"machine code"), Ok((vec![], &b"machine code"[..])));
+}
