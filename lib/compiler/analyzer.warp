@@ -98,9 +98,14 @@ branch_kind(branch: any, scope: any): text := {
 	held_kind(branch, scope)
 }
 
+raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
+
+# the branch ends in `error("…")`, `raise(…)` or an unbracketed `raise …` (Rust returned_error_message)
 raises_error(branch: any): bool := {
 	last = last_statement(branch)
-	head_name(last) == "error" or head_name(last) == "raise"
+	if not (is_group(last) and #last == 2) { return no }
+	if bracket_of(last) == "(" { return head_name(last) == "error" or head_name(last) == "raise" }
+	bracket_of(last) == "" and head_name(last) in raise_words
 }
 
 choice_kind(then: any, otherwise: any, scope: any): text := {
@@ -141,6 +146,8 @@ kind_of_list(n: any, scope: any): text := {
 		return kind_of(n#1, scope)
 	}
 	statements = separator_of(n) == ";" or separator_of(n) == "\n"
+	# `(a, b)` computes its elements
+	if bracket_of(n) == "(" and separator_of(n) == "," { return "list" }
 	if bracket_of(n) == "[" or (not (statements and bracket_of(n) == "") and all_of(n, is_data)) { return "list" }
 	kind_of(n#(#n), scope)
 }
@@ -830,9 +837,14 @@ defaults(flows: list): any := {
 		parameters = parameters_of(name)
 		for index in 0..<#parameters {
 			own = parameter_name(parameters[index])
+			agreed = weak.get(name + "(" + "${index}" + ")")
 			if scope.kinds[own] == "" {
-				kind = used_as(own, used) ?? forwarded[name].get(own) ?? weak.get(name + "(" + "${index}" + ")")
+				kind = used_as(own, used) ?? forwarded[name].get(own) ?? agreed
 				scope.kinds[own] = if kind != ø then kind else "int"
+			} else if scope.kinds[own] == "int" and not (own in scope.pinned) {
+				# given only ints, it keeps what its use suggests, a list for xs#1 (Rust given_flows)
+				guess = used_as(own, used) ?? forwarded[name].get(own) ?? (if agreed == "empty" then ø else agreed)
+				if guess != ø { scope.kinds[own] = guess }
 			}
 		}
 		if results[name] == "" { results[name] = "int" }
