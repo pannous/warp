@@ -93,7 +93,7 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	let [init, test, step] = parts.as_slice() else {
 		return None;
 	};
-	if !keyword.is_symbol(FOR_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_WORD) || !body.is_block() {
 		return None;
 	}
 	let mut statements = body.body_statements();
@@ -368,9 +368,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 	};
 	let is_object =
 		iterable.symbol_name().is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
-	let Some(name) =
-		variable.symbol_name().filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)))
-	else {
+	let Some(name) = variable.symbol_name().filter(|_| is_object && body.is_block()) else {
 		return node;
 	};
 	let iterator = symbol(&format!("{name}{ITERATOR_SUFFIX}"));

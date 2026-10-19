@@ -1,0 +1,9 @@
+// `and`, `or` and `|` on numbers give one of their operands; a yes/no beside a number counts as 1 or 0
+x = 0
+y = 7
+print x | y
+print (1 == 1) and 5
+print (1 == 2) and 1
+print (not 0) and 7
+print 0.0 and 4.0
+not false and not false

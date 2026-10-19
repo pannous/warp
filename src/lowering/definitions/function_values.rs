@@ -448,7 +448,7 @@ impl FunctionArguments {
 			self.lambda_definitions.push(definition);
 			return Ok(Node::Symbol(lambda_name));
 		}
-		if may_be_function_value(argument) || matches!(argument.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		if may_be_function_value(argument) || argument.is_block() {
 			return Ok(argument.clone());
 		}
 		Err(crate::closures::needs_a_function(name, Some(param), argument, "a lambda like x => …"))

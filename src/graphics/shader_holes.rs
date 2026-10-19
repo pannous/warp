@@ -166,7 +166,7 @@ fn with_sizes(node: Node, sizes: &[Node; 2]) -> Node {
 	let rendering = renders(items);
 	let without_size = match items.len() {
 		2 => true,
-		3 => matches!(items[SIZE_INDEX].drop_meta(), Node::List(_, Bracket::Curly, _)),
+		3 => items[SIZE_INDEX].is_block(),
 		_ => false,
 	};
 	if !rendering || !without_size {
