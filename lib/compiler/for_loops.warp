@@ -3,7 +3,8 @@
 #   evaluated once, before the loop, and i is b (b+1) afterwards
 # `for x in xs body`   → `x·items = xs; x·index = 0; while x·index < #x·items { x = x·items#(x·index+1); body; x·index++ }`
 # `for i in b down to a body` (the parser's `reverse(a to b)`) → `i = b; while i >= a { body; i-- }`
-# `for xs body` loops with the variable `it`. Any other `for` stays as written and is refused downstream, loudly.
+# `for xs body` loops with the variable `it`. Any other `for`, and one whose body continues (which would skip the
+# step), stays as written and is refused downstream, loudly.
 use "walk.warp"
 use "phrase_blocks.warp"
 
@@ -20,7 +21,7 @@ body_statements(body: Node): list := match body {
 	_: [body]
 }
 
-sequence(statements: list): Node := List(statements, Bracket.Round, Separator.Semicolon)
+statement_sequence(statements: list): Node := List(statements, Bracket.Round, Separator.Semicolon)
 
 while_loop(condition: Node, statements: list): Node :=
 	Key(Key(ø, Op.While, condition), Op.Do, List(statements, Bracket.Curly, Separator.Semicolon))
@@ -38,7 +39,7 @@ stepped(variable: Node, start: Node, end: Node, condition: any, step: any, body:
 		limit = loop_name(variable, "end")
 		setup = setup + [Key(limit, Op.Assign, end)]
 	}
-	sequence(setup + [while_loop(Key(variable, condition, limit), body_statements(body) + [Key(variable, step, ø)])])
+	statement_sequence(setup + [while_loop(Key(variable, condition, limit), body_statements(body) + [Key(variable, step, ø)])])
 }
 
 # `reverse(a to b)`: from b down to a
@@ -58,7 +59,7 @@ walked(variable: Node, iterable: Node, body: Node): Node := {
 	item = Key(variable, Op.Assign, Key(items, Op.Hash, Key(index, Op.Add, 1)))
 	rounds = [item] + body_statements(body) + [Key(index, Op.Inc, ø)]
 	setup = [Key(items, Op.Assign, iterable), Key(index, Op.Assign, 0)]
-	sequence(setup + [while_loop(Key(index, Op.Lt, Key(ø, Op.Hash, items)), rounds)])
+	statement_sequence(setup + [while_loop(Key(index, Op.Lt, Key(ø, Op.Hash, items)), rounds)])
 }
 
 loop_over(variable: Node, iterable: Node, body: Node): Node := match iterable {
@@ -68,8 +69,17 @@ loop_over(variable: Node, iterable: Node, body: Node): Node := match iterable {
 	_: walked(variable, iterable, body)
 }
 
-loop_of(n: Node): Node := match n {
+# whether a `continue` is in n: it would skip the step a lowered loop appends to its body
+skips_step(n: Node): bool := match n {
+	Symbol(name): name == "continue"
+	Key(left, op, right): skips_step(left) or skips_step(right)
+	List(parts, bracket, separator): #parts.filter(skips_step) > 0
+	_: no
+}
+
+lowered_for(n: Node): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
+		if skips_step(n) { return n }
 		if #parts == 5 and parts#1 == symbol("for") and parts#3 == symbol("in") and is_name(parts#2) {
 			return loop_over(parts#2, parts#4, parts#5)
 		}
@@ -79,4 +89,4 @@ loop_of(n: Node): Node := match n {
 	_: n
 }
 
-for_loops(program: any): any := bottom_up(program, loop_of)
+for_loops(program: any): any := bottom_up(program, lowered_for)
