@@ -20,8 +20,8 @@ is! 'use sin;sin π' 0
 - Warp's own reader takes a pairs file as a list of lists: a tab between two items of a line separates columns
   (Separator::Tab, looser than `;`, tighter than a newline; scanning.rs `at_tab_separator`); indentation and a tab
   before a comment or the line's end separate nothing. An empty column keeps its place (`'y'⇥ø⇥note`).
-- Under `warp test` a file whose every statement is a pair (or the code alone, expecting ø), or `test_pairs = {…}`
-  holding them, becomes is! checks (test_blocks.rs `pairs_checked`).
+- Under `warp test` a file whose every statement is a pair, or `test_pairs = {…}` holding them, becomes is! checks
+  (test_blocks.rs `pairs_checked`). A text alone is a program, never a pair: an expected ø is written `'y'⇥ø`.
 - A commented-out pair is a skipped test, its note naming the card of the regression that broke it: `warp test` prints
   `⊘ skipped "fib 10" 55: card fib-memo: regression` (test_blocks.rs `skipped_pairs`). So a commit breaking a few lines
   can land: forward crunch per line.
