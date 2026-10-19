@@ -628,7 +628,8 @@ exact_text(n: any): text := {
 	fives = factor_count(denominator, 5)
 	if denominator != power(2, twos) * power(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
 	digits = max_int(twos, fives)
-	scaled = int_quotient(numerator * power(10, digits), denominator)
+	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
+	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
 	magnitude = int_text(if scaled < 0 then -scaled else scaled)
 	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
 	whole = byte_count(padded) - digits
@@ -661,7 +662,9 @@ float_as_exact(x: float): any := {
 	if x - x != 0 { not_a_finite_number() }
 	if x == 0 { return exact_ratio(0, 1) }
 	sign = if x < 0 then -1 else 1
-	found = float_digits(if x < 0 then -x else x)
+	# `then -x else` reads as a subtraction from then
+	magnitude = if x < 0 then 0 - x else x
+	found = float_digits(magnitude)
 	digits = unboxed_int(found#1)
 	shift = unboxed_int(found#2)
 	if shift <= 0 { return exact_ratio(sign * multiplied_within_64_bits(digits, 10, -shift), 1) }
