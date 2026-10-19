@@ -43,7 +43,8 @@ gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node",
 node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6}
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
-references = {text: [99, gc.text], list: [99, gc.list], node: [110]}
+# a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
+references = {text: [99, gc.text], list: [99, gc.list], node: [110], time: [110]}
 passive_segment = 1
 # block type of a block that leaves nothing
 no_value = 64
@@ -266,7 +267,7 @@ text_bytes(t: text) := [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + 
 boxed(value: any) := {
 	kind = value#1
 	code = value#2
-	if kind == "node" { return code }
+	if kind == "node" or kind == "time" { return code }
 	if kind == "text" { return node(node_kind_codes.text, code) }
 	if kind == "list" { return node(node_kind_codes.list, code) }
 	if kind == "char" { return node(node_kind_codes.codepoint, code + gc_code("ref_i31", [])) }
@@ -924,7 +925,7 @@ value_type(kind: text) := if kind in references then references[kind] else [type
 zero_of(kind: text) := {
 	if kind == "int" { return [op.i64_const, 0] }
 	if kind == "float" { return [op.f64_const] + le64(0) }
-	if kind in references { return [ref_null] + (if kind == "node" then [110] else uleb(references[kind]#2)) }
+	if kind in references { return [ref_null] + (if kind == "node" or kind == "time" then [110] else uleb(references[kind]#2)) }
 	[op.i32_const, 0]
 }
 global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
@@ -1096,9 +1097,9 @@ time_call(body: Body, name: text, arguments: any) := {
 	values = arguments.map(a => expression(body, a))
 	if name == "instant_at" {
 		nanos = converted(values#1, "int") + [op.i64_const] + sleb(nanos_per_milli) + [shift_ops.i64_mul]
-		return ["node", time_node([op.i64_const, 0], nanos)]
+		return ["time", time_node([op.i64_const, 0], nanos)]
 	}
-	["node", time_node(converted(values#1, "int"), converted(values#2, "int"))]
+	["time", time_node(converted(values#1, "int"), converted(values#2, "int"))]
 }
 time_node(info: any, position: any) := {
 	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(time_kind_code) + [shift_ops.i64_or]

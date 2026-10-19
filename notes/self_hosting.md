@@ -434,7 +434,8 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
 
 ## Time primitives (card time-primitives, 2026-10-19, untested sprint work)
 emitter.warp makes the time node of a lowered `time_of(info, position)` / `instant_at(ms)` call (Kind 18, info above
-the kind bits, an $i64box position) and gives runtime words the intrinsics time_form, time_position, duration_months,
+the kind bits, an $i64box position) of the emitter kind "time" (anyref like a node; boxed as itself, every
+other use refused, so a program printing a time stays outside the core until time-text lands) and gives runtime words the intrinsics time_form, time_position, duration_months,
 duration_days (sign-extended 32 bits), zone_index, zone_offset (seconds); runtime.warp adds is_time/is_date/…,
 duration_nanos, duration_of(months, days, nanos) and local_offset_at(t) over the host word local_offset, which a
 program making a time imports (Rust: imports.rs makes_instant). Names carry a time_/duration_/zone_ prefix instead of
