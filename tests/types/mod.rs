@@ -66,6 +66,7 @@ mod test_duration_units; // card time-module
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
+mod test_empty_reflection; // card crash-index
 mod test_empty_type_aliases;
 mod test_enum_cases;
 mod test_enum_parameter_type;

@@ -9,6 +9,28 @@ Milestones:
   language, never the other way round: no program, test or lib code is rewritten into primitive syntax to fit it
   (decisions compiler-high-level, no-primitive-rewrites).
 
+## Growing the pure lane (card pure-runs)
+Loop (user via supervisor, 2026-10-19): `probes/self_hosting/refusals.sh --pure <own warp binary>` runs the ladder
+probes/self_hosting/pure/*.warp (simplest first, expected output in `// out:` lines) and the samples with
+WARP_SELF_HOSTED=pure; it counts the programs that ran pure ("pure: ran" lines in WARP_EMIT_REFUSALS) and how many of
+them were right, names the first rung not right and ranks the lane's own refusals → data/self_hosting/pure.txt.
+Fix the top refusal (or any wrong output first), repeat; suite counts only at milestones (warp-steward).
+Counts: 21 ran / 17 right (morning) → 31 / 30 (afternoon). The pure lane's passes come first in lib/compiler/passes.warp
+`pure_passes`, around the twinned `passes` Rust drives by index: definitions (def/fun), clauses (pattern clauses),
+multiple_assignments, then phrase_blocks ({print x}), for_loops (for → while), ranges (range values), list_methods
+(xs.push). Not core, skipped: `on` handlers, `stored` tables, shaders, canvas.
+Traps writing passes in warp (cards match-silently and others):
+- `match xs#i { Key(…): … }` takes no case: pass the element through a Node parameter. `Empty:` does not take ø: `n is ø`.
+- a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
+  function: pick names no lib/compiler file defines.
+- a pass's top-level word named like another file's (for_loops.warp's `named`, `statements_of`, `repeated` were
+  parser.warp's) replaces it in every program that uses both, silently: passes.warp's `use` lines broke the front lane
+  (card suite-front-c993b941). Before adding a pass, check its words against the other lib/compiler files.
+- `[]` is ø, so `acc = []; acc + more` is refused statically: build lists with map/filter over `1 to n`.
+- the stage programs are cached per binary and lib/ contents; a cold compile takes 2-5 min, so the first run after a
+  lib/compiler edit is slow (the loop warms it with `3 + 4`). Run the binary by an absolute path or a build that
+  canonicalizes it (self_hosted.rs stage_key), else each folder compiles them anew.
+
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 

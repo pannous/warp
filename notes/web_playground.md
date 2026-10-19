@@ -53,6 +53,7 @@ with a `try ▶` button (window.playground.runCode) and the value the page shows
 x, y` line links tour examples and samples/ files, and choosing one of those shows a toolbar back-link "guide: <chapter>".
 tests/web/test_guide.rs checks every fence's value through warp::web::evaluate (the page's own report) and every linked
 example. Write snippets in canonical style (`^`, `\(name)`, `xs#1`, `if … then … else`): the page shows hints otherwise.
+Explanatory prose for a snippet belongs immediately before its fence, while the fence keeps the executable expected value.
 Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML like the CLI.
 
 ## Architecture

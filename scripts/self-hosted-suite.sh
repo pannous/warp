@@ -22,7 +22,9 @@
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
 SWITCHES=("$SWITCH=front"        # VAR=value lines of .cargo/config.toml [env]: the front end alone, unless --stage adds
-	"WARP_EMIT_REFUSALS=/dev/stderr") # each refusal of a warp stage (and pure's "pure: ran") as a log line, ranked
+	"WARP_EMIT_REFUSALS=/tmp/warp-emit-refusals.txt") # each refusal of a warp stage (and pure's "pure: ran") as a
+	                                 # line of the VM's file, which cloud-test.sh appends to the log; ranked from there
+	                                 # (on stderr, the lines reached the output the CLI tests check)
 STAGE=""                         # the later stages switched on too (--stage), as the run's name suffix
 SKIPPED=parser::test_self_       # the twins compare warp with Rust themselves
 SCRATCH_PREFIX=self-hosted       # the throwaway branches
@@ -116,10 +118,11 @@ refusals() {
 
 local_run() {
 	mkdir -p "$REPORTS"
-	local log=$REPORTS/local.log
-	env "${SWITCHES[@]}" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
+	local log=$REPORTS/local.log local_refusals=$REPORTS/local-refusals.txt
+	rm -f "$local_refusals"
+	env "${SWITCHES[@]}" WARP_EMIT_REFUSALS="$local_refusals" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
 	rank "$log"
-	refusals "$log"
+	refusals "$local_refusals"
 	echo "(log: $log)"
 }
 

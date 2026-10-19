@@ -210,6 +210,10 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   its one entry), Rust's `div:divv:"hi"` (the block dropped around its item). The rendered HTML is the same
   (`<div>{divv:&quot;hi&quot;}</div>`). Source: probes/unknown_tag.warp (accepted by the Integrator with --flaky,
   2026-10-19). Back: the lowered view marks a block that holds one item as that item, as Rust's eval reads it.
+- A symbol named like a type word: `type(symbol("key")) is key` gives no in warp's module (symbol(…) is the runtime
+  word symbol_node, a Symbol), yes in Rust's, whose type test reads the symbol's name (the source says so: "should be
+  no"). Source: probes/self_hosting/analyzer/symbol_named_key.warp. Back: Rust's `is` tests the value's kind, not a
+  symbol's name.
 - Big ints (card emitter-big-ints): an int is an i64 in emitter.warp's modules, and an int beyond 64 bits fails in
   runtime.warp int_overflow ("trap detail: 0"), where Rust's promotes it to a BigInt (`x = 2^62; x * 4`, factorial 25,
   Catalan numbers past the 35th). Sources: samples/golf/catalan-numbers.short.warp and
