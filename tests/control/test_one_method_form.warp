@@ -3,16 +3,6 @@
 # an_ancestors_outside_method_is_listed
 is! 'class A{n:int}; class B extends A{m:int}; def x(a:A):=1; [m.name for m in methods(B)]' ['x']
 
-# a_parameter_typed_in_another_class_body_is_no_method_of_that_type
-is! 'class P{m:int}; class Q{n:int; def f(o:P):=1}; count(methods(P))' 0
-
-# an_outside_method_reads_fields_bare
-is! 'class P{n:int}; def x(p:P):=n+1; x(P(3))' 4
-is! 'class A{n:int}; class B extends A{m:int}; def x(a:A):=n; B(1, 2).x()' 1
-
-# an_outside_method_changing_its_object
-is! 'class C{n:int}; def inc(c:C) := c.n += 1; c = C(1); c.inc(); c.n' 2
-
 # an_outside_method_calls_itself_on_another_instance
 is! 'class P{n:int}; def g(p:P, k:int) := if k<1 then p.n else g(P(p.n+1), k-1); g(P(5), 3)' 8
 

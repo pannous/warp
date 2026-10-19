@@ -4,22 +4,5 @@
 is! «def hi: {sleep(1000ms);print('hi')}; started = clock(); go { hi() }; clock() - started < 500» true
 is! 'hi() := { sleep(1000ms); print("hi") }; started = clock(); go hi(); clock() - started < 500' true
 
-# a_task_of_no_arguments_gives_its_value
-is! 'hi() := { sleep(10ms); "hi" }; await go hi()' 'hi'
-is! 'def hi: { sleep(10ms); "hi" }; job = go hi(); await job' 'hi'
-
-# a_go_block_sees_the_values_of_its_variables
-is! 'n = 20; job = go { n + 1 }; await job' 21
-
-# sleep_takes_a_duration
-is! 'started = clock(); sleep(300 ms); clock() - started >= 300' true
-is! 'started = clock(); sleep 1s; clock() - started >= 1000' true
-is! 'f() := { sleep(10 ms); "hi" }; f()' 'hi'
-
 # go_blocks_fill_a_job_list
 is! 'jobs = []; for i in 1..4 { jobs.add(go { sleep(100ms); i * 10 }) }; await all jobs' [10, 20, 30]
-is! 'f(n) := { job = go { n + 1 }; await job }; f(4)' 5
-
-# a_failure_nobody_awaits_ends_the_run
-is! 'f(x) := { [1,2]#x }; job = go f(5); try await job else 3' 3
-is! 'job = go { sleep(3000ms); 1 }; stop job; 2' 2

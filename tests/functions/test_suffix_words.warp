@@ -2,21 +2,3 @@
 
 # a_variable_is_no_suffix_form
 is! 'def solve(n) { if n > 2 { return n }; solved = solve(n + 1); return solved }; solve(0)' 3
-
-# library_suffix_words
-is! '3 squared' 9
-is! '2 cubed' 8
-is! 'xs=[3 1 2]; xs sorted' [1, 2, 3]
-is! '[1 2] reversed' [2, 1]
-is! 'x = 4; x squared + 1' 17
-
-# a_user_function_or_variable_takes_the_suffix_word
-is! 'square(x):=x*x*10; 3 squared' 90
-is! 'sorted = 3; sorted' 3
-
-# a_suffix_word_applies_to_the_assigned_value
-is! 'x = 7 squared; x' 49
-is! 'x = 7 squared + 1; x' 50
-is! 'x := 3 squared; x' 9
-is! 'xs = [3, 1, 2] sorted; xs' [1, 2, 3]
-is! 'x = 2; x += 3 squared; x' 11

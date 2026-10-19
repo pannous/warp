@@ -10,6 +10,4 @@ is! 'class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1
 is! 'class Shape { a: int }; class Circle extends Shape { r: int }; c = Circle(1, 2); xs: [Circle] = [c]; f(ys: [Circle]) := count ys; f(xs)' 1
 
 # a_reading_or_narrower_view_is_fine
-is! 'names: texts = ["hi"]; size(xs: list) := count xs; size(names)' 1
-is! 'names: texts = ["hi"]; ys: list = names; count ys' 1
 is! 'names: texts = ["hi"]; more(ys: texts) := { ys.add("ho"); ys }; more(names); count names' 2

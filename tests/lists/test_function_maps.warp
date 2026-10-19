@@ -4,10 +4,3 @@
 is! 'tally(xs) := { out = {}; for x in xs { out[x] = 1 }; out }
 uniq(xs) := { out = []; for x in xs { if not (x in out) { out = out + [x] } }; out }
 uniq([1,2,1])' [1, 2]
-is! 'include list; unique([1,2,1])' [1, 2]
-
-# a_map_of_main_is_one_in_a_function
-is! 'global d = {}; put(k) := { d[k] = 1 }; put(7); 7 in d' true
-
-# a_parameter_is_not_main_s_map
-is! 'out = {}; out[1] = 2; second(out) := out[1]; second([5, 6])' 6

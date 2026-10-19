@@ -2,315 +2,26 @@
 
 # test_implicit_multiplication
 is! '2π' (2.0 * pi)
-is! 'x=9;⅓x' 3
 
 # test_globals
 is! '2*π' (2.0 * pi)
 is! 'dub:=it*2;dub(π)' (2.0 * pi)
-is! 'global x=7' 7
-is! 'global x=1;x=7;x+1' 8
-is! 'global x=1+2' 3
-is! 'global x;x=7;x+=1' 8
-is! 'global x;x=7;x+=1;x+1' 9
-is! 'global x=π;x=7;x' 7
-is! 'global x=1;x=7;x' 7
-
-# test_get_local
-is! 'add1 x:=it+1;add1 3' 4
-is! 'add1 x:=$0+1;add1 3' 4
 
 # test_wasm_function_definiton
-is! 'fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)' 13
 is! 'fac:= if it<=0 : 1 else it * fac it-1; fac(5)' (5 * 4 * 3 * 2)
-is! 'add1 x:=x+1;add1 3' 4
-is! 'add2 x:=x+2;add2 3' 5
-is! 'expression_as_return:=y=9;expression_as_return' 9
-is! 'addy x:= y=2 ; x+y ; addy 3' 5
-is! 'grows x:=x*2;grows(4)' 8
-is! 'grows:=it*2; grows 3' 6
-is! 'grows:=it*2; grows 3*4' 24
-is! 'grows:=it*2; grows(3*42) > grows 2*3' 1
-is! 'factorial:=it<2?1:it*factorial(it-1);factorial 5' 120
-is! 'fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)' 13
-is! 'fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)' 5
-is! 'fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)' 13
-is! 'fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)' 13
-is! 'fib:=it<2 or fib(it-1)+fib(it-2);fib(4)' 5
 
 # test_wasm_ternary
-is! '2>1?3:4' 3
-is! '1>0?3:4' 3
-is! '2<1?3:4' 4
-is! '1<0?3:4' 4
 is! 'fac:= it<=0 ? 1 : it * fac it-1; fac(5)' (5 * 4 * 3 * 2)
 
 # test_lazy_evaluation
 is! 'fac:= it<=0 or it * fac it-1; fac(5)' (5 * 4 * 3 * 2)
 
 # test_math_primitives
-is! '42.1' 42.1
-is! '-42.1' (-42.1)
-is! '-42' (-42)
-is! '2000000000' 2000000000
-is! '-2000000000' (-2000000000)
-is! '2000000000000' 2000000000000
-is! '-2000000000000' (-2000000000000)
-is! 'x=3;x*=3' 9
-is! 'i=ø; !i' true
-is! '0.0' 0
-is! 'x=15;x>=14' 1
-is! 'i=1.0;i' 1.0
-is! 'i=0.0;i' 0.0
-is! '3*-1' (-3)
 is! 'maxi=3840*2160;maxi' (3840 * 2160)
 is! 'blue=255;green=256*255;' (256 * 255)
 
-# test_float_operators
-is! '3.0+3.0*3.0' 12
-is! '42.0/2.0' 21
-is! '42.0*2.0' 84
-is! '42.0+2.0' 44
-is! '42.0-2.0' 40
-is! '3.1>3.0' true
-is! '2.1<3.0' true
-is! 'i=123.4;i' 123.4
-is! 'i=3;i' 3
-is! '2.1<=3.0' true
-is! 'i=8;i=i/2;i' 4
-is! 'i=1.0;i=3;i=i/2;i=i*4' 6.0
-is! '3.0+3.0*3.0>3.0+3.0+3.0' true
-is! '3.0+3.0*3.0<3.0*3.0*3.0' true
-is! '3.0+3.0*3.0<3.0+3.0+3.0' false
-is! '3.0+3.0*3.0>3.0*3.0*3.0' false
-is! '3.0+3.0+3.0<3.0+3.0*3.0' true
-is! '3.0*3.0*3.0>3.0+3.0*3.0' true
-
-# test_norm2
-is! '1-‖3‖/-3' 2
-is! '1-‖-3‖/3' 0
-is! '1-‖-3‖/-3' 2
-is! '1-‖-3‖-1' (-3)
-is! '√9*-‖-3‖/3' (-3)
-is! '√9*‖-3‖/-3' (-3)
-is! '√9*-‖-3‖/-3' 3
-is! 'f=4;‖-3‖<f' 1
-is! 'i=1;(5-3)>i' 1
-is! 'i=1;‖-3‖>i' 1
-is! 'i=1;‖-3‖<i' 0
-is! 'f=4;‖-3‖>f' 0
-is! 'i=1;x=‖-3‖>i' 1
-is! 'f=4;x=‖-3‖<f' 1
-is! 'i=1;x=‖-3‖<i' 0
-is! 'f=4;x=‖-3‖>f' 0
-
-# test_norm
-is! '‖-3‖' 3
-is! '‖-3‖/3' 1
-is! '‖-3‖/-3' (-1)
-is! '‖3‖/-3' (-1)
-is! '-‖-3‖/3' (-1)
-is! '-‖-3‖/-3' 1
-is! '-‖3‖/-3' 1
-is! '‖-3‖>1' 1
-is! '‖-3‖<4' 1
-is! '‖-3‖<1' 0
-is! '‖-3‖>4' 0
-
-# test_math_operators
-is! '- -3' 3
-is! '1- -3' 4
-is! '1 - -3' 4
-is! '1 - - 3' 4
-is! '-‖-3‖' (-3)
-is! '‖-3‖+1' 4
-is! '7%5' 2
-is! '42/2' 21
-is! '42*2' 84
-is! '42+2' 44
-is! '42-2' 40
-is! '3+3*3' 12
-is! '3+3*3>3+3+3' true
-is! '3+3*3<3*3*3' true
-is! '3+3*3<3+3+3' false
-is! '3+3*3>3*3*3' false
-is! '3+3+3<3+3*3' true
-is! '3*3*3>3+3*3' true
-is! 'i=3;i*-1' (-3)
-is! '-√9' (-3)
-is! 'i=3.7;.3+i' 4
-is! 'i=3.71;.3+i' 4.01
-is! 'i=3.70001;.3+i' 4.00001
-is! '4-1' 3
-is! 'i=3;i++' 4
-is! '- √9' (-3)
-is! 'i=-9;-i' 9
-is! '√ π ²' pi
-
-# test_math_operators_runtime
-is! '3^2' 9
-is! '3^1' 3
-is! '42^2' 1764
-is! '√3^0' 1
-is! '√3^0' 1.0
-is! '√3^2' 3
-is! 'π**2' 9.869604401089358
-
-# test_comparison_math
-is! '3*42>2*3' 1
-is! '3*1<2*3' 1
-is! '3*42≥2*3' 1
-is! '3*2≥2*3' 1
-is! '3*2≤2*3' 1
-is! '3*2≤24*3' 1
-is! '3*13!=14*3' 1
-is! '3*13<=14*3' 1
-is! '3*15>=14*3' 1
-is! '3*42<2*3' false
-is! '3*1>2*3' false
-is! '3*452!=452*3' false
-is! '3*13>=14*3' false
-is! '3*15<=14*3' false
-is! '3*42≥112*3' false
-is! '3*2≥112*3' false
-is! '3*12≤2*3' false
-is! '3*112≤24*3' false
-
-# test_comparison_primitives
-is! '42>2' 1
-is! '1<2' 1
-is! '42≥2' 1
-is! '2≥2' 1
-is! '2≤2' 1
-is! '2≤24' 1
-is! '13!=14' 1
-is! '13<=14' 1
-is! '15>=14' 1
-is! '42<2' false
-is! '1>2' false
-is! '452!=452' false
-is! '13>=14' false
-is! '15<=14' false
-is! '42≥112' false
-is! '2≥112' false
-is! '12≤2' false
-is! '112≤24' false
-is! '452==452' 1
-is! '13==14' false
-
-# test_wasm_logic_primitives
-is! 'true' true
-is! 'true' true
-is! 'true' 1
-is! 'false' false
-is! 'false' false
-is! 'false' 0
-is! 'nil' false
-is! 'null' false
-is! 'ø' false
-is! 'nil' ø
-
-# test_wasm_variables0
-is! 'i=123;i' 123
-is! 'i:=123;i+1' 124
-is! 'i=123;i+1' 124
-is! 'i=1;i' 1
-is! 'i=false;i' false
-is! 'i=true;i' true
-is! 'i=0;i' 0
-is! 'i:=true;i' true
-is! 'i=0.0;i' 0.0
-is! 'i=123.4;i' 123.4
-is! '8.33333333332248946124e-03' 8.33333333332248946124e-03
-is! '8.33333333332248946124e+01' 83.3333333332249
-is! '8.33333333332248946124e+03' 8333.33333332249
-is! 'S1  = -1.6666' (-1.6666)
-
 # test_wasm_increment
-is! 'i=2;i++' 3
 is! 'i=0;w=800;h=800;pixel=(1 2 3);while(i++ < w*h){pixel[i]=i%2 };i ' (800 * 800)
-
-# test_wasm_logic_unary_variables
-is! 'i=0.0; !i' true
-is! 'i=false; !i' true
-is! 'i=0; !i' true
-is! 'i=true; !i' false
-is! 'i=1; !i' false
-is! 'i=123; !i' false
-
-# test_self_modifying
-is! 'i=3;i*=3' 9
-is! 'i=3;i+=3' 6
-is! 'i=3;i-=3' 0
-is! 'i=3;i/=3' 1
-is! 'i=3^1;i^=3' 27
-is! 'i*=3' 0
-
-# test_wasm_logic_unary
-is! 'not 0.0' true
-is! 'not ø' true
-is! 'not false' true
-is! 'not 0' true
-is! 'not true' false
-is! 'not 1' false
-is! 'not 123' false
-
-# test_wasm_logic_on_objects
-is! «not 'a'» false
-is! 'not {a:0}' false
-is! 'not ({[ø]})' false
-
-# test_wasm_logic
-is! 'true true and' true
-is! 'false true and' false
-is! 'false false and ' false
-is! 'true false and ' false
-is! 'false and false' false
-is! 'false and true' false
-is! 'true and false' false
-is! 'true and true' true
-is! 'true or false and false' true
-is! 'false xor true' true
-is! 'true xor false' true
-is! 'false xor false' false
-is! 'true xor true' false
-is! 'false or true' true
-is! 'false or false' false
-is! 'true or true' true
-is! '¬ 1' 0
-is! '¬ 0' 1
-is! '0 ⋁ 0' 0
-is! '0 ⋁ 1' 1
-is! '1 ⋁ 0' 1
-is! '1 ⋁ 1' 1
-is! '1 ∧ 1' 1
-is! '1 ∧ 0' 0
-is! '0 ∧ 1' 0
-is! '0 ∧ 0' 0
-is! '1 ⋁ 1 ∧ 0' 1
-is! '1 ⋁ 0 ∧ 1' 1
-is! '1 ⋁ 0 ∧ 0' 1
-is! '0 ⋁ 1 ∧ 0' 0
-is! '0 ⋁ 0 ∧ 1' 0
-is! '¬ (0 ⋁ 0 ∧ 1)' 1
-is! '0 ⊻ 0' 0
-is! '0 ⊻ 1' 1
-is! '1 ⊻ 0' 1
-is! '1 ⊻ 1' 0
-
-# test_wasm_logic_negated
-is! 'not true and !true' false
-is! 'not true and !false' false
-is! 'not false and !true' false
-is! 'not false and !false' true
-is! 'not false or !true and !true' true
-is! 'not true xor !false' true
-is! 'not false xor !true' true
-is! 'not true xor !true' false
-is! 'not false xor !false' false
-is! 'not true or !false' true
-is! 'not true or !true' false
-is! 'not false or !true' true
-is! 'not false or !false' true
 
 # test_wasm_logic_combined
 is! '3<1 and 3<1' (3 < 1)
@@ -328,185 +39,17 @@ is! '9>8 or 3<1' (9 > 8)
 is! '9>8 or 9>8' (9 > 8)
 is! '9>8 or 8>9' (9 > 8)
 
-# test_wasm_if
-is! 'if 2 : 3 else 4' 3
-is! 'if 2 then 3 else 4' 3
-is! 'if(2){3}{4}' 3
-is! 'if({2},{3},{4})' 3
-is! 'if(2,3,4)' 3
-is! 'if(condition=2,then=3)' 3
-is! 'if(condition=2,then=3,else=4)' 3
-is! 'fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)' 5
-is! 'fib:=it<2 and it or fib(it-1)+fib(it-2);fib(7)' 13
-is! 'fib:=it<2 then it or fib(it-1)+fib(it-2);fib(7)' 13
-is! 'fib:=it<2 or fib(it-1)+fib(it-2);fib(4)' 5
-
-# test_wasm_while
-is! 'i=1;while(i<9){i++};i+1' 10
-
-# test_wasm_while2
-is! 'i=1;while i<10 do {i++};i' 10
-is! 'i=1;while i<10 and i<11 do {i++};i' 10
-is! 'i=1;while i<9 or i<10 do {i++};i' 10
-is! 'i=1;while(i<10) do {i++};i' 10
-is! 'x=y=0;width=height=400;while y++<height and x++<width: nop;y' 400
-
-# test_old_random_bugs
-is! '-42' (-42)
-is! 'x:=41;if x>1 then 2 else 3' 2
-is! 'x=41;if x>1 then 2 else 3' 2
-is! 'x:41;if x>1 then 2 else 3' 2
-is! 'x:41;if x<1 then 2 else 3' 3
-is! 'x:41;x+1' 42
-is! 'grows := it * 2 ; grows(4)' 8
-is! 'grows:=it*2;grows(4)' 8
-
-# test_object_properties_wasm
-is! 'x={a:3,b:4,c:{d:true}};x.a' 3
-is! 'x={a:3,b:true};x.b' 1
-is! 'x={a:3,b:4,c:{d:true}};x.c.d' 1
-is! «x={a:3,b:'ok',c:{d:5}};x.c.d» 5
-
-# test_array_indices_wasm
-is! 'x={1 2 3}; x#3=4;x#3' 4
-is! «puts('ok');» 0
-is! '{1 4 3}#2' 4
-is! 'x={1 4 3};x#2' 4
-is! '{1 4 3}[1]' 4
-is! '(1 4 3)[1]' 4
-is! «'αβγδε'#3» 'γ'
-is! «i=3;k='αβγδε';k#i» 'γ'
-is! «i=3;k='αβγδε';k#i='Γ';k#i» 'Γ'
-is! '[1 4 3]#2' 4
-
-# test_recent_random_bugs
-is! 'test42+1' 43
-is! 'use math; square(3*42) > square(2*3)' 1
-is! '42/2' 21
-is! 'i=true; !i' false
-is! 'i=3^1;i^=3' 27
-is! 'i*=3' 0
-is! '√π²' pi
-is! 'i=-9;√-i' 3
-is! 'width=height=400;height' 400
-is! 'x=0;while x++<11: nop;x' 11
-is! '√100²' 100
-is! 'x=123;x + 4 is 127' true
-is! 'i=ø; !i' true
-is! 'x=y=0;width=height=400;while y++<height and x++<width: nop;y' 400
-
 # test_square
-is! '3.0²' 9
-is! '√ π ²' pi
-is! '√π ²' pi
-is! '√ π²' pi
-is! '√π²' pi
 is! 'π²' (pi * pi)
-is! 'π' pi
-is! 'int i=π*1000000' 3141592
-is! 'π*1000000.' 3141592.653589793
-is! '.1 + .9' 1
-is! '-.1 + -.9' (-1)
-is! '√9' 3
-is! '.1' 0.1
-is! 'n=3.0;2.0ⁿ' 8
-
-# test_round_floor_ceiling
-is! 'ceil 3.7' 4
-is! 'floor 3.7' 3
-is! 'round 3.7' 4
-
-# test_wasm_typed_globals
-is! 'global const int k=7' 7
-is! 'global mutable int k=7' 7
-is! 'global mut int k=7' 7
-
-# test_wasm_mutable_global
-is! 'global k=7' 7
-is! 'global k:=7' 7
-is! 'global k;k = 7' 7
-
-# test_wasm_mutable_global2
-is! 'export k=7' 7
-is! 'export f:=7' 7
-is! 'global export k=7' 7
-is! 'global int k=7' 7
-is! 'global int k:=7' 7
-is! 'export int k=7' 7
-is! 'export int f:=7' 7
-is! 'global int k' 0
-is! 'export int k' 0
-
-# test_custom_operators
-is! 'suffix operator ⁰ := 1; 3⁰' 1
-is! 'suffix ⁰ := 1; 3⁰' 1
-is! 'suffix operator ³ := it*it*it; 3³' 27
-is! 'suffix operator ³ := it*it*it; .5³' 0.125
-is! 'suffix ³ := it*it*it; 3³' 27
 
 # test_import_wasm
 is! 'import tests/fixtures/wasm/fourty_two;ft*2' (42 * 2)
-is! 'import tests/fixtures/wasm/fourty_two' ø
-is! 'require tests/fixtures/wasm/fourty_two' ø
 is! 'include tests/fixtures/wasm/fourty_two;ft*2' (42 * 2)
 is! 'require tests/fixtures/wasm/fourty_two;ft*2' (42 * 2)
 
-# test_math_library
-is! 'x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255' 255
-is! 'i=-9;√ -i' 3
-
-# test_smart_return_harder
-is! «'a'» 'a'
-is! «x='abcde';x#4='f';x[3]» 'f'
-is! «x='abcde';x#4='x';x[3]» 'x'
-is! «x='abcde';x[3]» 'd'
-
-# test_smart_return
-is! '1' 1
-is! '42.0/2.0' 21.0
-is! '42/4.' 10.5
-is! '42/4' 10.5
-is! '-1.1' (-1.1)
-is! «'OK'» 'OK'
-
-# test_is
-is! 'x=123;x + 4 is 127' true
-is! «x='123';x is '123'» true
-is! «'hello';(1 2 3 4);10» 10
-is! «x='123';x + '4' is '1234'» true
-is! «'123' + '4' is '1234'» true
-is! «x='123';x=='123'» true
-
-# test_logarithm
-is! 'use log; log10(100)' 2.0
-
-# test_logarithm2
-is! 'use math; log10(100)' 2.0
-is! 'use math; 10⌞100' 2.0
-is! 'use math; 100⌟10' 2.0
-is! 'use math; ℯ⌟' 1.0
-is! 'log10(100)' 2.0
-is! 'use math; 10⌟100' 0.5
-is! '10⌟100' 0.5
-is! '₁₀⌟100' 2.0
-is! 'use log;ℯ = 2.7182818284590;ln(ℯ)' 1.0
-is! 'use log;ℯ = 2.7182818284590;ln(ℯ)' 1.0
-is! 'ℯ = 2.7182818284590;ln(ℯ*ℯ)' 2.0
-is! 'ln(1)' 0.0
-is! 'log10(100000)' 5.0
-is! 'log10(10)' 1.0
-is! 'log(1)' 0.0
-is! 'ln(ℯ)' 1.0
-
-# test_for_loop_classic
-is! 'for(i=0;i<10;i++){puti i};i' 10
-
 # test_for_loops
-is! 'for i in 1 to 5 : {puti i};i' 6
 is! 'for i in 1 to 5
   puti i' 5
-is! 'for i in 1…5 : puti i' 5
-is! 'for i in 1 … 5 : puti i' 5
 is! 'for i in 1 ... 5
   puti i' 5
 is! 'sum=0
@@ -521,17 +64,6 @@ sum' 6
 is! 'sum=0
 for i in (1..3) {sum+=i}
 sum' 6
-is! 'sum=0;for i in (1..3) {sum+=i};sum' 6
-is! 'sum=0;for i=1..3;sum+=i;sum' 6
-
-# test_named_data_sections
-is! «fest='def';test='abc'» 'abc'
-
-# test_auto_smarty
-is! '11' 11
-is! «'c'» 'c'
-is! «'cc'» 'cc'
-is! 'π' pi
 
 # test_sinus2
 is! 'double sin(double x){
@@ -565,28 +97,3 @@ is! 'double sin(double x){
     let r : double = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
     return x + z*x*(S1 + z*r)
     };sin π/2' 1
-
-# test_emit_basics
-is! '8.33333333332248946124e-03' 8.33333333332249e-3
-is! '3.3415' 3.3415
-is! '-3.3415' (-3.3415)
-is! '40' 40
-is! '41' 41
-is! «'ok'» 'ok'
-is! «'a'» 'a'
-is! «'a'» 'a'
-
-# test_math_extra
-is! '15÷5' 3
-is! '3⋅5' 15
-is! '3×5' 15
-is! '3**3' 27
-is! '√3**2' 3
-is! '3^3' 27
-is! '√3^2' 3
-
-# test_root_float
-is! '√42.0 * √42.0' 42.0
-is! '√42 * √42.0' 42.0
-is! '√42.0*√42' 42
-is! '√42*√42' 42

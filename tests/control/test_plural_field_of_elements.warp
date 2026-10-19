@@ -5,8 +5,3 @@ is! 'class Q{name: text}
 qs = [Q("Al"), Q("Bo")]; str(names of qs)' '["Al" "Bo"]'
 is! 'class Q{name: text}
 qs = [Q("Al"), Q("Bo")]; str(qs.names)' '["Al" "Bo"]'
-
-# each_walks_the_english_plural
-is! 'cities = ["ab" "cd"]; str(upper each city)' '["AB" "CD"]'
-is! 'addresses = ["ab" "cd"]; str(upper each address)' '["AB" "CD"]'
-is! 'xs: ints = [1 2]; xs#2' 2

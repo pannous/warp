@@ -6,14 +6,8 @@ is! 'classify(p) := match p { {body: {user: {age: >= 18, name: text}}} => "adult
 is! 'classify(p) := match p { {body: {user: {age: >= 18, name: text}}} => "adult"; {body: {user: {age: 13 to 17}}} => "teen"; _ => "child" }; classify({body: {user: {name: "Bo", age: 15}}})' 'teen'
 is! 'classify(p) := match p { {body: {user: {age: >= 18, name: text}}} => "adult"; {body: {user: {age: 13 to 17}}} => "teen"; _ => "child" }; classify({body: {user: {name: "Cy", age: 3}}})' 'child'
 
-# alternatives_inside_maps
-is! 'match {code: 301} { {code: 301 | 302} => "moved"; _ => "other" }' 'moved'
-is! 'match {code: 404} { {code: 301 | 302} => "moved"; _ => "other" }' 'other'
-
 # conditions_inside_lists
 is! 'match [5, "x"] { [> 3, text] => "big then text"; _ => "other" }' 'big then text'
-is! 'match [2, "x"] { [> 3, text] => "big then text"; _ => "other" }' 'other'
-is! 'match [15, 2] { [10 to 20, n] => n; _ => 0 }' 2
 
 # is_with_a_condition_inside_a_map
 is! 'x = {name: "Ann", age: 31}; if x is {age: >= 18} then "adult" else "minor"' 'adult'

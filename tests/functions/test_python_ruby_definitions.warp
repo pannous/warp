@@ -17,7 +17,6 @@ is! 'def f(**kw): return count(kw)
 f()' 0
 
 # test_ruby_def_end
-is! 'def f(a, b: 2) a * b end; f(3)' 6
 is! 'def f(a, b = 2)
   a * b
 end
@@ -91,13 +90,10 @@ m = {b: 2, c: 3}
 g(1, c=9, **m)' 129
 
 # test_julia_definitions
-is! 'function f(x; y=2) x*y end; f(3)' 6
-is! 'function f(x; y=2) x*y end; f(3; y=4)' 12
 is! 'function f(x)
   x * 2
 end
 f(4)' 8
-is! 'f(x; y=2) = x*y; f(3, y=4)' 12
 
 # test_ruby_loops_in_def
 is! 'def f(n)

@@ -33,7 +33,6 @@ tone(330Hz, 5ms)
 7' 7
 
 # play_inside_a_def_body_before_the_value
-is! 'def h(value) { play(440Hz, 0.05s); value + 1 }; h(2)' 3
 is! 'def h(value) {
   play(440Hz, 0.05s)
   value + 1

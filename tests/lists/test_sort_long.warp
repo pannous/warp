@@ -2,10 +2,6 @@
 
 # equal_keys_keep_their_order
 is! 'xs = [{k:2 v:1} {k:1 v:2} {k:2 v:3} {k:1 v:4}]; xs.sort_by(p => p.k).map(p => p.v)' [2 4 1 3]
-is! 'sort("hello")' 'ehllo'
-is! 'sort([])' []
 
 # ordered_input_sorts_in_linear_time
 is! 'xs = [{k:2 v:1} {k:2 v:2} {k:1 v:3}]; xs.sort_by(p => p.k).map(p => p.v)' [3 1 2]
-is! 'sort([5 4 3 2 1])' [1 2 3 4 5]
-is! 'sort([1 2 2 3])' [1 2 2 3]

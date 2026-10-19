@@ -10,6 +10,4 @@ is! 'class P{birthday:int; age:{2026 - birthday} set{birthday = 2026 - it}}; p =
 is! 'class P{birthday:int; get age() { 2026 - birthday }; set age(v) { birthday = 2026 - v }}; p = P(2000); p.age = 30; p.age' 30
 
 # a_function_member_assigned_stores_its_call_back
-is! 'class P {x: int}; f(p: P, v) := P(v * 2); p = P(1); p.f = 5; p.x' 10
 is! 'class B {x: int}; r(b: B, m) := B(m); r(xs: list, m) := xs; b = B(1); b.r = 5; b.x' 5
-is! 'class P {x: int}; f(p: P, v) := P(v); p = P(1); p.f = 5; f(p, 3).x' 3

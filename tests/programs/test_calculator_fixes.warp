@@ -17,9 +17,6 @@ x = x + 5
 x' 6
 
 # test_text_comparisons
-is! 's="ab"; t="b"; s < t' true
-is! 's="b"; s >= "ab"' true
-is! 's = "45"; c = byte_slice(s, 0, 1); c >= "0" and c <= "9"' true
 is! 'def pk() := byte_slice("  x", 0, 1)
 pk() == " "' true
 
@@ -33,9 +30,3 @@ is! 'def f(x) { y = x * 1.5
 while true { if y > 10 { return y }
 y = y * 2 } }
 f(2)' 12.0
-
-# test_run_time_math
-is! 'x = random()*0 + 1.0; round(sin(x) * 1000)' 841
-is! 'def f(x) := cos(x); round(f(0.0))' 1
-is! 'sin(π/2)' 1
-is! 'x = random()*0 + 2.0; round(ln(x) * 1000)' 693

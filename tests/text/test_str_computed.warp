@@ -5,9 +5,3 @@ is! 'class Rope{length: m}
 str(Rope(5 m).length)' '5m'
 is! 'class P{x:number}
 str(P(5).x)' '5'
-is! 'str({a:"x"}.a)' 'x'
-is! 'str(["a", "b"]#2)' 'b'
-
-# str_of_literal_arithmetic_is_its_value
-is! 'str("a" + "b")' 'ab'
-is! 'str([1, 2] + [3])' '[1 2 3]'

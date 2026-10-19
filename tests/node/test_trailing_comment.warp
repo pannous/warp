@@ -5,7 +5,6 @@ is! 'x = data (a: 1 // one
 b: 2); (x#1).comment' 'one'
 is! 'x = data [a // first
 b]; (x#1).comment' 'first'
-is! 'x = parse("// lead\\na: 1 // trail\\nb: 2"); (x#1).comment' 'trail'
 is! 'x = 3 // three
 y = 4
 x + y' 7

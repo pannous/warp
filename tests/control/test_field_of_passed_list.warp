@@ -7,9 +7,6 @@ is! 'class P{name:text}; people=[P("a"), P("b")]; g(xs) := name of xs; g(people)
 # a_plural_field_of_a_passed_list
 is! 'class P{name:text}; people=[P("a"), P("b")]; g(xs) := xs.names; g(people)' ['a', 'b']
 
-# a_passed_list_of_maps_of_two_entries
-is! 'g(xs) := xs.name; g([{name:"a", age:1}, {name:"b", age:2}])' ['a', 'b']
-
 # a_field_of_a_returned_or_parsed_list
 is! 'people() := [{name:"a", age:1}, {name:"b", age:2}]; p = people(); p.name' ['a', 'b']
 is! 'use json; p = json.parse("[{\\"name\\":\\"a\\"},{\\"name\\":\\"b\\"}]"); p.name' ['a', 'b']

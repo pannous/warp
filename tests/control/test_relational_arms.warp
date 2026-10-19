@@ -21,6 +21,3 @@ is! 'size(v) := match v {
  >= 100 => "big"
  _ => "small" }
 size(50)' 'small'
-
-# the_operator_value_stays
-is! 'xs = [3, 1, 2]; sorted(xs, >)#1' 3

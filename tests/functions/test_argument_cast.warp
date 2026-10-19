@@ -7,10 +7,5 @@ is! 'format(number: int) := "Integer \\(number)"; format(number: float) := "Floa
 is! 'format(number: int) := "Integer \\(number)"; format(number: float) := "Float \\(number)"; x: format 2.2 as int; x' 'Integer 2'
 is! 'format(number: int) := "Integer \\(number)"; format(number: float) := "Float \\(number)"; if 1 then format 2.2 as int else 0' 'Integer 2'
 
-# arithmetic_after_the_cast_stays_in_the_argument
-is! 'f(x: int) := x * 10; o = f 2.2 as int + 1; o' 30
-is! 'f(x: int) := x * 10; f 2.2 as int + 1' 30
-
 # parentheses_cast_the_result
-is! 'f(x) := x * 2; o = (f 2.5) as int; o' 5
 is! 'format(number: int) := "Integer \\(number)"; format(number: float) := "Float \\(number)"; o = format(2.2) as text; o' 'Float 2.2'

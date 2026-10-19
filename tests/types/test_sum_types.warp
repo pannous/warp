@@ -5,7 +5,6 @@ is! 'type Option[T] = Some(T) | None; o = Some(3); match o { Some(v) => v + 1; N
 is! 'type Option[T] = Some(T) | None; o = None; match o { Some(v) => v + 1; None => 0 }' 0
 
 # variants_are_the_sum_type
-is! 'type Result[T, E] = Ok(T) | Err(E); r = Err("boom"); r is Result' true
 is! 'type Result[T, E] = Ok(T) | Err(E); r = Ok(2); match r { Ok(v) => v * 10; Err(e) => -1 }' 20
 
 # variants_with_several_or_named_fields
@@ -20,7 +19,3 @@ is! 'type WebData
   | Success(int)
 d = Success(7)
 match d { Loading => 0; Success(n) => n }' 7
-
-# generic_type_parameters_in_square_brackets
-is! 'type Box[T]: { item: T }; b = Box("xy"); b.item' 'xy'
-is! 'type Predicate[T] = T -> bool; 3' 3

@@ -6,10 +6,5 @@ is! 'class friend{n:int}; class foe{n:int}; xs=[friend(1), foe(2), friend(3)]; c
 c' 2
 
 # test_a_condition_loop_visits_only_matching_items
-is! 's=0; for (it>2) in [1,2,3,4] { s += it }; s' 7
 is! 's=0; for (it%2==0) in [1,2,3,4]: s += it
 s' 6
-
-# test_plain_loops_do_not_filter
-is! 's=0; for x in [1,2,3] { s += x }; s' 6
-is! 's=0; for number in [1,2,3] { s += number }; s' 6

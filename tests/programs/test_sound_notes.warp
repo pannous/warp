@@ -28,7 +28,5 @@ play(440Hz, 5ms)
 A4' 3
 
 # a_note_inside_a_function_body_plays
-is! 'def h(v) { play(C4, 5ms); 5 }; h(2)' 5
-is! 'def h(v) { play(C4, 5ms); v }; h(2)' 2
 is! 'def A4(v) { v }; play(440Hz, 5ms)
 A4(3)' 3

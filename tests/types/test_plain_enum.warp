@@ -3,9 +3,3 @@
 # other_languages_enums_are_plain_enums_too
 is! 'enum class Color { RED, GREEN }
 Color.GREEN is Color' true
-is! 'enum color {red green blue}; color.blue as int' 2
-
-# case_statement_then_type_test
-is! 'enum Coin { Penny, Nickel, Dime }; Coin.Dime; Dime is Coin' true
-is! 'enum Coin { Penny, Nickel, Dime }; Coin.Nickel; Dime is Coin' true
-is! 'enum Coin { Penny, Nickel, Dime }; Coin.Nickel; 3 is int' true

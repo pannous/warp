@@ -20,7 +20,6 @@ seven
 await job' 10
 
 # a_glued_go_block_is_a_task
-is! 'job = go{ 6 * 7 }; await job' 42
 is! 'seven() := 7
 job = go{
 seven

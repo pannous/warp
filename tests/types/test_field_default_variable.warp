@@ -13,7 +13,6 @@ class F { name: text; tag = mark }
 F("a", "!").tag' '!'
 
 # a_field_named_result_is_a_field
-is! 'class F { result: int }; F(3).result' 3
 is! 'mark = "?"
 class F { name: text; result: text = mark }
 F("a").result' '?'

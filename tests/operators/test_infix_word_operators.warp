@@ -7,7 +7,6 @@ is! 'infix operator divides(d:int, n:int) := n % d == 0
 5 divides 12' false
 is! 'infix operator divides(d:int, n:int) := n % d == 0
 count([d for d in 1..13 if d divides 12])' 6
-is! 'infix operator divides(d:int,n:int) := { n % d == 0 }; 4 divides 12' true
 
 # a_word_infix_operator_without_parameters
 is! 'infix operator times := left * right

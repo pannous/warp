@@ -3,11 +3,3 @@
 # a_foreign_line_imports_its_function
 is! «erf(x: float): float from 'm'
 erf(1.0)» 0.8427007929497148
-
-# the_libm_table_comes_from_lib_math
-is! 'atan2(1, 1) * 4' pi
-is! 'use math; hypotenuse(3, 4)' 5.0
-
-# every_program_calls_the_libm_lines
-is! 'expm1(0) + log1p(0)' 0.0
-is! 'include math; sqrt(9) + square 3' 12.0

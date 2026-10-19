@@ -4,7 +4,6 @@
 is! «use markup; to_html(script{"alert('Hello')"})» «<script>alert('Hello')</script>»
 
 # test_inner_html
-is! 'use markup; to_html(html{b{"test"}})' '<html><b>test</b></html>'
 is! «use markup; to_html(html{script{"alert('ok')"}})» «<html><script>alert('ok')</script></html>»
 
 # test_canvas

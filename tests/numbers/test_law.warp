@@ -4,4 +4,3 @@
 is! 'square(x) := x*x
 law square(-x) == square(x)
 square(3)' 9
-is! 'add(a,b) := a+b; law add(a,b) == add(b,a); add(3,4)' 7

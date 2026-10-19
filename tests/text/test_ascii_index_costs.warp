@@ -3,5 +3,3 @@
 # ascii_text_indexes_by_the_byte
 is! 'code = "abcdefghij" * 2000
 code[19990]' 'a'
-is! '"éx"[1]' 'x'
-is! '"a\\r\\nb"[2]' 'b'

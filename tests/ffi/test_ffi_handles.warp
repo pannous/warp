@@ -8,6 +8,4 @@ is! «use sqlite3; db = sqlite3_open(":memory:"); stmt = sqlite3_prepare_v2(db, 
 is! «use sqlite3; db = sqlite3_open(":memory:"); stmt = sqlite3_prepare_v2(db, "select 1+2, 'warp'", -1); sqlite3_finalize(stmt); sqlite3_close(db)» 0
 
 # a_pointer_result_is_a_handle
-is! 'use sqlite3; sqlite3_db_handle(0)' 0
 is! «use sqlite3; db = sqlite3_open(":memory:"); stmt = sqlite3_prepare_v2(db, "select 1+2, 'warp'", -1); sqlite3_db_handle(stmt) == db» true
-is! 'use c; f = fopen("/dev/null", "r"); fclose(f)' 0

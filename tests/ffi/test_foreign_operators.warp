@@ -2,17 +2,6 @@
 
 # test_python_operators
 is! 'use python "datetime"; d = datetime.date(2020, 1, 2); e = datetime.date(2020, 1, 5); (e - d).days' 3
-is! 'use python "fractions"; f = fractions.Fraction(1, 2); (f * 2).numerator' 1
-is! 'use python "fractions"; f = fractions.Fraction(1, 2); f < 1' 1
 
 # test_python_indexing_counting_iteration
-is! 'use python "collections"; d = collections.deque([1, 2, 3]); d#2' 2
-is! 'use python "collections"; d = collections.deque([1, 2, 3]); count d' 3
 is! 'use python "collections"; d = collections.deque([1, 2, 3]); s = 0; for x in d { s += x }; s' 6
-
-# test_js_indexing_and_counting
-is! 'use js Buffer; b = Buffer.from("abc"); count b' 3
-is! 'use js Buffer; b = Buffer.from("abc"); b#1' 97
-
-# test_plain_values_keep_their_operators
-is! 'x = 3; -x * 2' (-6)

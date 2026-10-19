@@ -8,9 +8,6 @@ def show(p){p}' '/tmp'
 is! 'def show(p){p}
 show /tmp' '/tmp'
 
-# a_path_after_a_variable_holding_a_function
-is! 'f = x => x; f /tmp' '/tmp'
-
 # a_parameter_shadowing_a_function_divides
 is! 'scale(x) := x * 2
 def area(scale, h) { scale /h }

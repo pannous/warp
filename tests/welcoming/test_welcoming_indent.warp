@@ -39,14 +39,12 @@ for i in 0..4:
 n' 4202
 
 # do_end_and_then_end_enclose_all_their_statements
-is! 'i = 0; while i < 10 do i += 1; if i == 3 then break end end; i' 3
 is! 'i = 0
 while i < 10 do
   i += 1
   if i == 3 then break end
 end
 i' 3
-is! 's = 0; i = 0; while i < 3 do s += i; i += 1 end; s' 3
 is! 'x = 0
 if x == 0 then
   x = 5

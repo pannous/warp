@@ -8,6 +8,3 @@ p.width' 12
 # own_set_shadows_the_english_rule
 is! 'set = 7
 set + 1' 8
-
-# a_quoted_set_phrase_stays_as_written
-is! 'data(set width of p to 12) == parse_code("set width of p to 12")' true

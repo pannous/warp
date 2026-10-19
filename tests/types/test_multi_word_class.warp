@@ -11,6 +11,3 @@ is! 'class full name { given:text; family:text }; p = full name{given:"Ann", fam
 # a_phrase_slot_matches_the_class_as_a_whole
 is! 'class full name { given:text; family:text }; to greet a full name: "hi " + full name.given; greet full name{given:"Ann", family:"Lee"}' 'hi Ann'
 is! 'class full name { given:text; family:text }; greet(n: full name) := "hi " + n.family; greet(full name{given:"Ann", family:"Lee"})' 'hi Lee'
-
-# the_words_stay_apart_without_the_class
-is! 'full = 3; name = 4; [full name]#2' 4

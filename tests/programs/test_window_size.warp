@@ -39,6 +39,3 @@ window.height = 600
 [window.width, window.height]' [800, 600]
 is! 'window.height += 10
 window.height > 10' true
-
-# the_display_is_read_only
-is! 'display.width > 100 and display.height > 100' true

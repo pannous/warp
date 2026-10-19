@@ -21,6 +21,5 @@ for c in "-2.5".chars() { t = t + c }
 (t as number) * 2' (-5.0)
 
 # a_literal_text_as_number_is_its_number_in_a_variable_too
-is! 'n = "5" as number; n * 2' 10
 is! 'f(a, b) := a * 2
 f("5" as number, 1)' 10

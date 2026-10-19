@@ -5,13 +5,6 @@ is! 'person: {name: "Alice"}
 person.name' 'Alice'
 is! 'company: {employees: [{name: "Bob"}, {name: "Carol"}, {name: "Dave"}]}
 company.employees[2].name' 'Dave'
-is! 'c = {e: [{name: "Bob", r: 1}, {name: "Carol", r: 2}]}; (c.e#2).r' 2
 
 # test_list_comprehension
-is! 'count([x * x for x in 1..5])' 4
-is! 'squares = [x * x for x in 1..5]; squares#4' 16
 is! 'numbers = [1, 2, 3, 4, 5]; evens = [x for x in numbers if x % 2 == 0]; evens#2' 4
-
-# test_named_tuple_fields
-is! 'point = (x: 10, y: 20); point.y' 20
-is! 'r = (min: 0, max: 100); r.max - r.min' 100

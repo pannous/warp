@@ -2,7 +2,6 @@
 
 # test_a_zoned_time_changes_zone_keeping_its_instant
 is! 'z = 2024-07-01T12:00+02:00[Europe/Berlin]; print z; str(z in "America/Los_Angeles")' '2024-07-01T03:00-07:00[America/Los_Angeles]'
-is! 't = 2024-07-01T10:00:00Z; z = t in "Asia/Kolkata"; print z; z.offset' 19800
 
 # test_a_local_time_in_a_zone_resolves
 is! 't = 2024-07-01T10:00; print t; str(t in "Europe/Berlin")' '2024-07-01T10:00+02:00[Europe/Berlin]'

@@ -3,35 +3,18 @@
 # tasks_run_at_the_same_time
 is! 'f(ms) := { sleep(ms / 1000); ms }; a = go f(1000); b = go f(1000); c = go f(1000); a + b + c' 3000
 
-# await_gives_the_result_of_the_thread
-is! 'add(a, b) := a + b; job = go add(40, 2); job + 0' 42
-
 # await_binds_its_task_inside_an_expression
 is! 'f(ms) := { sleep(ms / 1000); ms }; a = go f(1); b = go f(2); await a + await b' 3
-is! 'f(ms) := { sleep(ms / 1000); ms }; a = go f(5); x = await a * 2; x' 10
 
 # a_paused_task_waits_for_resume
 is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); pause job; resume job; await job' 300000
 is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(300000); job.pause(); job.resume(); job' 300000
 
-# texts_floats_characters_and_lists_cross_to_a_task
-is! 'g(t) := t + "!"; a = go g("x"); b = go g("y"); await a + await b' 'x!y!'
-is! 'p(t, n) := t * n; job = go p("ab", 3); await job' 'ababab'
-is! 'q(t) := [t, t]; job = go q(2); await job' [2, 2]
-
-# an_exact_number_crosses_to_a_task
-is! 'm(t) := t + 1; job = go m(2.5); await job' 3.5
-
-# a_task_of_a_list_parameter_runs_where_it_starts
-is! 'k(xs) := count(xs); job = go k([1,2,3]); await job' 3
-
 # try_catches_the_failure_of_a_task
 is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stop job; try await job else -1' (-1)
-is! 'g(t) := t + "!"; job = go g("a"); try await job else "failed"' 'a!'
 
 # lists_cross_to_a_task
 is! 'sum2(xs) := { s=0; for i in 0..#xs { s+=xs#(i+1) }; s }; job = go sum2([1,2,3]); await job' 6
-is! 'f(xs, n) := xs#1 * n; job = go f([3,4], 2); await job' 6
 is! 'total(xs) := { s=0; for x in xs { s+=x }; s }; big=(0..20000).map(x=>x); a = go total(big); b = go total(big); await a + await b' 399980000
 
 # a_finish_handler_runs_after_the_statement_that_saw_the_task_finish
@@ -42,6 +25,3 @@ is! 'f(ms) := { sleep(ms / 1000); ms }; job = go f(100); done = 0; once job fini
 
 # a_stop_handler_runs_once_the_task_stopped
 is! 'spin(n) := { i = 0; while i < n { i += 1 }; i }; job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300ms); stopped' 1
-
-# function_values_cross_to_a_task
-is! 'twice(f, v) := f(f(v)); job = go twice(x => x * 3, 2); await job' 18

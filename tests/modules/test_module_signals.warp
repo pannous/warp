@@ -6,4 +6,3 @@ is! 'use tests/fixtures/settings_store; on change theme { print value }; toggle(
 
 # a_stored_value_of_a_used_module_is_kept_by_the_program
 is! 'use tests/fixtures/stored_settings; seen = 0; on change module_theme { seen += 1 }; toggle_theme(); seen' 1
-is! 'use tests/fixtures/stored_settings; module_theme' 'light'

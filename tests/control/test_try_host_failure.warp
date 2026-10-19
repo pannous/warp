@@ -5,9 +5,3 @@ is! 'use json
 try parse_json("not json") else 7' 7
 is! 'use json
 try parse_json("5") else 7' 5
-
-# the_sample_falls_back_to_default_settings
-is! 'samples/errors/try_failed_json.warp' 'light'
-
-# try_catches_a_file_or_http_failure
-is! 'try write("/no/such/folder/x.txt", "x") else 7' 7

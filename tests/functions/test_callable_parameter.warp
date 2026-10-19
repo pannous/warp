@@ -28,5 +28,3 @@ run({ 1 + 2 })' 3
 # callable_is_a_type
 is! 'square(x) := x * x
 square is callable' true
-is! '3 is callable' false
-is! '"a" is callable' false

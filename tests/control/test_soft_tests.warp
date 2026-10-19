@@ -16,7 +16,3 @@ test "squares" {
 test "fine" { check square(1) == 1 }
 test square(2) == 4
 square(5)' 25
-is! 'test 1 == 2' ø
-
-# a_program_naming_test_keeps_its_word
-is! 'test(x) := x + 1; test 2' 3

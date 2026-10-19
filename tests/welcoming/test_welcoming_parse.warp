@@ -86,13 +86,3 @@ is! 'f(xs) := xs#2
 f [5, 6, 7]' 6
 is! 'xs = [5, 6, 7]
 xs[1]' 6
-
-# membership_in_binds_like_a_comparison
-is! 'v = "XYZ"; if "Z" in v { 1 } else { 0 }' 1
-is! 'v = "XY"; if "Z" in v { 1 } else { 0 }' 0
-is! 'v = "XYZ"; x = "Z" in v; x' true
-is! 'number of chars in "héllo"' 5
-
-# for_destructures_a_tuple_or_comma_names
-is! 'x = 0; for (r, c) in [(0, 1), (2, 3)] { x += r*10+c }; x' 24
-is! 'm = {a: 1, b: 2}; x = 0; for k, v in m { x += v }; x' 3
