@@ -1,20 +1,7 @@
-//! The self-hosted analysis stage (card End-end): analyzer.warp `kinds` of a lowered program, as the JSON data the
-//! Rust analyzer's self-hosted hand-off maps
-use warp::compiler::node_views::plain_view;
-use warp::compiler::self_hosted::kinds_of;
+//! The self-hosted analysis stage (card End-end): analyzer.warp analyzes each lowered program beside src/analyzer
 
 /// insertion sort and merge sort, merge growing its result from ø
 const SORTING_SAMPLE: &str = "samples/lists/sorting_idiomatic.warp";
-
-#[test]
-fn the_analysis_stage_gives_the_kinds_as_data() {
-	let program = warp::pipeline::lower("square(x: int) := x * x; y = square(3); \"square: ${y}\"").expect("lowers");
-	let kinds = kinds_of(&plain_view(&program)).expect("the analysis stage answers");
-	assert_eq!(kinds["functions"]["square"]["params"], serde_json::json!(["int"]), "{kinds}");
-	assert_eq!(kinds["functions"]["square"]["result"], "int", "{kinds}");
-	assert_eq!(kinds["variables"]["y"], "int", "{kinds}");
-	assert_eq!(kinds["value"], "text", "{kinds}");
-}
 
 fn self_analyzed_run(switch: &str, code: &str) -> (String, String) {
 	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("self_hosted_stage_cache");

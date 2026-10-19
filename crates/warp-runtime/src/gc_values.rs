@@ -277,7 +277,7 @@ impl Builders {
 				Some(integer) => self.integer(&integer.to_string(), store),
 				None => self.node(NEW_FLOAT, &[Val::F64(number.as_f64().unwrap_or(f64::NAN).to_bits())], store),
 			},
-			Value::String(text) => self.text(NEW_TEXT, text, store),
+			Value::String(text) => self.text(NEW_TEXT, text.as_bytes(), store),
 			Value::Array(items) => {
 				self.list(items.iter().map(|item| self.build(item, store)).collect::<Result<_>>()?, SQUARE, store)
 			}
@@ -289,7 +289,7 @@ impl Builders {
 				_ => {
 					let mut keys = vec![];
 					for (key, value) in entries {
-						let (key, value) = (self.text(NEW_SYMBOL, key, store)?, self.build(value, store)?);
+						let (key, value) = (self.text(NEW_SYMBOL, key.as_bytes(), store)?, self.build(value, store)?);
 						keys.push(self.node(NEW_KEY, &[key, value, Val::I64(COLON)], store)?);
 					}
 					self.list(keys, CURLY, store)
@@ -298,9 +298,17 @@ impl Builders {
 		}
 	}
 
-	fn text<T>(&self, constructor: &str, text: &str, store: &mut StoreContextMut<'_, T>) -> Result<Val> {
+	/// A text of `bytes` as they are (a C function's text needs no valid UTF-8), ø for none
+	pub fn text_node<T>(&self, bytes: Option<&[u8]>, store: &mut StoreContextMut<'_, T>) -> Result<Val> {
+		match bytes {
+			Some(bytes) => self.text(NEW_TEXT, bytes, store),
+			None => self.node(NEW_EMPTY, &[], store),
+		}
+	}
+
+	fn text<T>(&self, constructor: &str, text: &[u8], store: &mut StoreContextMut<'_, T>) -> Result<Val> {
 		let heap = self.heap.ok_or_else(|| wasmtime::Error::msg(format!("the program exports no {TEXT_HEAP}")))?;
-		let (pointer, length) = write_to_heap(&self.memory, heap, store, text.as_bytes())?;
+		let (pointer, length) = write_to_heap(&self.memory, heap, store, text)?;
 		self.node(constructor, &[Val::I32(pointer as i32), Val::I32(length as i32)], store)
 	}
 

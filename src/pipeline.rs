@@ -90,7 +90,7 @@ const SOURCE_PHASES: [&[Pass]; 5] = [SUGAR_PASSES, DECLARATION_PASSES, MODULE_PA
 const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 
 /// The written forms as the parser keeps them: sugar, markup and web words, blocks, before any pass reads a declaration
-pub const SUGAR_PASSES: &[Pass] = &[
+const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::text::interpolation::lower_program,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
@@ -425,42 +425,6 @@ pub(crate) fn lower_module_source(module: Node) -> Node {
 				})
 			},
 		)
-}
-
-/// The program just before and just after the source pass `pass`, the earlier passes run as compiling runs them: what
-/// a pass's warp twin gets and must give (card twin-harness, tests/common/twins.rs pass_differential). None for a
-/// program refused before the passes, or a pass that is no source pass.
-pub fn around_source_pass(code: &str, pass: Pass) -> Option<(Node, Node)> {
-	around_source_pass_reporting(code, pass).map(|(before, after, _)| (before, after))
-}
-
-/// `around_source_pass` with the hints and warnings the pass itself says, every one, printing none (card carries-line:
-/// a twin reports them too)
-pub fn around_source_pass_reporting(
-	code: &str,
-	pass: Pass,
-) -> Option<(Node, Node, Vec<crate::errors::diagnostic::Diagnostic>)> {
-	use crate::errors::diagnostic::{clear_shown_hints, every_hint_of, take_warnings};
-	crate::errors::diagnostic::begin_program();
-	let program = lawful_program(code).ok()?;
-	crate::errors::diagnostic::in_program_mode(program, |program| {
-		crate::lowering::nodes::numbering_fresh_names(|| {
-			let program = crate::lowering::for_loop::headers::lower(crate::modules::rewrites::lower(program));
-			let program = crate::lowering::data_items::lower(crate::lowering::blocks::seal_quoted(program));
-			let passes: Vec<Pass> = SOURCE_PHASES.iter().flat_map(|phase| phase.iter().copied()).collect();
-			let index = passes.iter().position(|each| std::ptr::fn_addr_eq(*each, pass))?;
-			let before = run_passes(program, &passes[..index]);
-			clear_shown_hints();
-			take_warnings();
-			let (after, mut reports) = every_hint_of(|| pass(before.clone()));
-			reports.extend(take_warnings());
-			Some((before, after, reports))
-		})
-	})
-}
-
-fn run_passes(node: Node, passes: &[Pass]) -> Node {
-	passes.iter().fold(node, |node, pass| pass(node))
 }
 
 /// `run_passes` with each pass's warp twin in its place when self-hosted (WARP_SELF_HOSTED, self_hosted.rs)

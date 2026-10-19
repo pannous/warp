@@ -9,39 +9,15 @@ pub(super) struct Mark {
 	line_nr: usize,
 	column: usize,
 	current_line: String,
-	atoms_read: usize,
 }
 
 impl WarpParser {
 	pub(super) fn mark(&self) -> Mark {
-		Mark {
-			pos: self.pos,
-			line_nr: self.line_nr,
-			column: self.column,
-			current_line: self.current_line.clone(),
-			atoms_read: self.atoms.len(),
-		}
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line.clone() }
 	}
 
 	pub(super) fn rewind(&mut self, mark: Mark) {
-		let atoms_read;
-		Mark {
-			pos: self.pos,
-			line_nr: self.line_nr,
-			column: self.column,
-			current_line: self.current_line,
-			atoms_read,
-		} = mark;
-		self.atoms.truncate(atoms_read);
-	}
-
-	/// `read` (an atom's parser) with the atom it reads logged: kind, where it starts, the characters it took
-	pub(super) fn reading_atom<T>(&mut self, kind: AtomKind, read: impl FnOnce(&mut Self) -> T) -> T {
-		let (start, line, column) = (self.pos, self.line_nr, self.column);
-		let value = read(self);
-		let written = self.chars[start..self.pos].iter().collect();
-		self.atoms.push(Atom { kind, line, column, written });
-		value
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line } = mark;
 	}
 
 	/// The next `length` characters, consumed
@@ -322,11 +298,4 @@ pub(crate) fn is_identifier_char(c: char) -> bool {
 /// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lib/sound.warp)
 pub(crate) fn is_music_accidental(c: char) -> bool {
 	matches!(c, '♯' | '♭')
-}
-
-/// The atoms the parser reads in a source, in order, as code: the token stream of this scannerless parser
-pub fn read_atoms(source: &str) -> Vec<Atom> {
-	let mut parser = WarpParser::new_with_options(source.to_string(), ParserOptions::default());
-	parser.parse_list_with_separators(None, Bracket::None);
-	parser.atoms
 }

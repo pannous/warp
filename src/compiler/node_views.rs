@@ -216,11 +216,6 @@ fn declared_types_shown(node: Node) -> Node {
 	}
 }
 
-/// The plain view with the positions: ["at", line, column, view] around each positioned node
-pub fn positioned_plain_view(node: &Node) -> Node {
-	plain(positioned_view(node))
-}
-
 fn plain(view: Node) -> Node {
 	without_layers(view, &["literal", "attribute"])
 }

@@ -89,6 +89,12 @@ impl Default for HostState {
 	}
 }
 
+impl warp_runtime::c_calls::CallsC for HostState {
+	fn c_handles(&mut self) -> &mut crate::ffi::CHandles {
+		&mut self.c_handles
+	}
+}
+
 impl HostState {
 	pub fn new() -> Self {
 		HostState {

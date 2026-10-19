@@ -1,0 +1,4 @@
+# emitter core: a date at run time, time_of(1, days since 1970) in the lowered program (card time-primitives)
+# 2024-02-29
+print 1
+2024-02-29
