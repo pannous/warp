@@ -1,6 +1,5 @@
 //! Lists: bracketed groups, separators and grouping by them, signed numbers starting a list, arrow bodies in lists
 use super::*;
-use crate::lowering::nodes::is_block;
 use crate::warp_parser::context::Context;
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
@@ -259,7 +258,7 @@ impl WarpParser {
 			let sep = self.parse_separator(close, had_newline, in_command || is_command(&item), in_item);
 
 			let item = match items_with_seps.last() {
-				Some((previous, Separator::Space)) if assigned_method_call(previous) && is_block(&item) => {
+				Some((previous, Separator::Space)) if assigned_method_call(previous) && item.is_block() => {
 					let (previous, _) = items_with_seps.pop().expect("guarded");
 					with_trailing_block(previous, item)
 				}

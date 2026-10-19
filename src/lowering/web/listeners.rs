@@ -3,7 +3,7 @@
 //! parser groups such a phrase as any other (`(on change) (s {…})`, `on every (5 seconds: print) n`, `a == (b {body})`,
 //! `(alarm = (whenever t) > 30) {…}`); the reader undoes the groups: the keyword, what it listens to, and the body.
 
-use super::nodes::{is_block, phrase_words, phrase_words_of};
+use super::nodes::{phrase_words, phrase_words_of};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -62,14 +62,14 @@ fn head_and_body(node: &Node) -> Option<(Node, Node)> {
 			Some((Node::Key(left.clone(), *op, Box::new(right)), body))
 		}
 		// `whenever big() {…}` arrives as `whenever ((big ø) {…})`
-		Node::List(items, Bracket::Round, _) if items.len() == 2 && is_block(&items[1]) => {
+		Node::List(items, Bracket::Round, _) if items.len() == 2 && items[1].is_block() => {
 			Some((items[0].clone(), items[1].clone()))
 		}
 		// a block of one listener, `{on click {…}}` as a loop's or function's body, is its words in braces
 		Node::List(items, Bracket::None | Bracket::Curly, Separator::Space) => {
 			let items = phrase_words(items);
 			let (last, words) = items.split_last()?;
-			if is_block(last) {
+			if last.is_block() {
 				return Some((row(words.to_vec()), last.clone()));
 			}
 			let colon = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
