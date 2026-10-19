@@ -62,6 +62,8 @@ gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_
 i31_type = 108
 ref_null = 208
 int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
+# where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
+checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
 # `xs.length`, `count xs`: `#xs`
 length_words = {length: yes, count: yes}
@@ -123,7 +125,7 @@ section(id: int, content: any) := [id] + uleb(#content) + content
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {} }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {} }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
@@ -151,6 +153,8 @@ form_of(n: any) := {
 parameter_symbol(p: any) := if type(p) is key and op_of(p) == ":" then key_of(p) else p
 annotation_of(p: any) := {
 	if type(p) is key and op_of(p) == ":" and value_of(p) is symbol { return name_of(value_of(p)) }
+	# `xs: [int]` and other type forms Rust checks at each call: no kind, so the function is refused
+	if type(p) is key and op_of(p) == ":" { return form_of(value_of(p)) }
 	ø
 }
 
@@ -196,10 +200,10 @@ defined_names(program: any) := {
 
 ## one function's locals while its body is read
 # a runtime word's body may use the intrinsics
-# function: the one compiled, returned: the kinds its `return`s give
+# function: the one compiled, returned: the kinds its `return`s give, declared: the kind of each `x: T = v` local
 # depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; depth: int; exits: any; unshared: any }
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; unshared: any }
 
 local_index(body: Body, name: text, kind: text) := {
 	if name in body.names { return body.names[name] }
@@ -228,6 +232,7 @@ converted(value: any, to: text) := {
 	if to == "node" { return boxed(value) }
 	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
 	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
+	if from == "int" and to == "bool" { return condition(value) }
 	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
 	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
 	if from == "node" and to in node_unboxings and analyzed_program() { return runtime_call(node_unboxings[to], [value])#2 }
@@ -245,9 +250,34 @@ condition(value: any) := {
 }
 
 number_value(n: any) := {
+	if n is float and exact_decimal(n) != ø { return exact_decimal(n) }
 	if n is float { return ["float", [op.f64_const] + le64(float_bits(n))] }
 	if n < smallest_int or n > largest_int { return refuse("an int beyond 64 bits") }
 	["int", [op.i64_const] + sleb(n)]
+}
+
+# a decimal literal as Rust reads it: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
+# 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float (Number::is_exact_decimal)
+exact_decimal_digits = 15
+exact_decimal(n: float) := {
+	shown = "" + n
+	if shown.contains("e") or not shown.contains(".") { return ø }
+	negative = shown.starts_with("-")
+	unsigned = if negative then shown[1..] else shown
+	parts = unsigned.split(".")
+	digits = parts#1 + parts#2
+	significant = digits
+	while #significant > 1 and significant.starts_with("0") { significant = significant[1..] }
+	if #significant > exact_decimal_digits { return ø }
+	numerator = int(digits)
+	if negative { numerator = -numerator }
+	denominator = 1
+	for i in 0..#parts#2 { denominator = denominator * 10 }
+	divisor = gcd(numerator, denominator)
+	if divisor < 0 { divisor = -divisor }
+	if divisor == denominator { return number_value(numerator / divisor) }
+	box = x => [op.i64_const] + sleb(x) + gc_code("struct_new", [gc.int_box])
+	["node", node(node_kind_codes.int, box(numerator / divisor) + box(denominator / divisor) + gc_code("struct_new", [gc.ratio]))]
 }
 
 # the offset of a text's bytes in the data segment, each text stored once
@@ -489,6 +519,11 @@ shown_text(value: any) := {
 	if kind != "bool" { return refuse("the text of a " + kind) }
 	["text", value#2 + [op.if] + references.text + text_value("yes")#2 + [op.else] + text_value("no")#2 + [op.end]]
 }
+# what `print` writes: `print a 3` each value as a list shows it, a space between
+printed_value(body: Body, n: any) := {
+	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression(body, n) }
+	runtime_call("items_text", [list_value(body, n.map(x => x))])
+}
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 printed(value: any) := ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]]
 # whether the symbol `name` occurs in n
@@ -545,6 +580,9 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 	if symbol == "/" and kind == "int" { return runtime_call("exact_ratio", [a, b]) }
 	ops = if kind == "float" then float_ops else int_ops
 	if not (symbol in ops) { return refuse("the operator " + symbol + " on " + kind) }
+	if kind == "int" and symbol in checked_words and not body.intrinsics {
+		return runtime_call(checked_words[symbol], [["int", converted(a, kind)], ["int", converted(b, kind)]])
+	}
 	result = if symbol in comparisons then "bool" else kind
 	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
 }
@@ -608,8 +646,12 @@ assignment(body: Body, target: any, value: any) := {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
 	}
+	if type(target) is key and op_of(target) == ":" and key_of(target) is symbol and value_of(target) is symbol {
+		return declaration(body, name_of(key_of(target)), name_of(value_of(target)), value)
+	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
+	if name in body.declared { value = admitted(value, body.declared[name]) }
 	kind = value#1
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
@@ -625,6 +667,22 @@ assignment(body: Body, target: any, value: any) := {
 	[kind, converted(value, kind) + [op.local_tee] + index]
 }
 
+# `x: T = v`: x holds T's kind from here on; a value Rust would check at run time (a boxed one, a fraction, a byte's
+# range) is refused, since a trap could not say what Rust's error says
+declared_kinds = {int: "int", float: "float", text: "text", list: "list"}
+declaration(body: Body, name: text, type_name: text, value: any) := {
+	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
+	body.declared[name] = declared_kinds[type_name]
+	assignment(body, symbol(name), value)
+}
+# a value as the declared kind takes it: an int widened to a float, else of that kind
+admitted(value: any, kind: text) := {
+	if value#1 == kind or value#1 == pending { return value }
+	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
+	refuse("a " + value#1 + " given to a variable declared " + kind)
+}
+whole(value: any) := admitted(value, "int")
+
 # `m.x = v` as lowered, `m#("x"+1) = v`: the assignment gives v
 map_assignment(body: Body, map: any, name: text, value: any) := {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
@@ -634,7 +692,8 @@ map_assignment(body: Body, map: any, name: text, value: any) := {
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
 # its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float
 widens(body: Body, name: text, held: text, kind: text) := {
-	if body.names[name] < #body.function.parameters or held == pending or kind == pending { return no }
+	# a yes/no stays one (a number given to it counts as yes when not 0), an int given a yes/no takes 1 or 0
+	if body.names[name] < #body.function.parameters or held == pending or kind == pending or held == "bool" or kind == "bool" { return no }
 	joint = joint_kind(held, kind)
 	joint != held and (joint in type_bytes or joint in references)
 }
@@ -881,11 +940,17 @@ group_expression(body: Body, n: any) := {
 	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
+		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
+		if name_of(n#1) == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
 		if not body.intrinsics and library_words[name_of(n#1)] in text_words { module.shows_values = yes }
 		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
 	}
-	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(expression(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words { return length(expression(body, n#2)) }
+	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
+		# `count = 0; count(users)`: Rust's "`count` is a variable here"
+		if name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
+		return length(expression(body, n#2))
+	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("float") { return ["float", converted(expression(body, n#2), "float")] }
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
@@ -898,6 +963,9 @@ group_expression(body: Body, n: any) := {
 		return field_assignment(expression(body, n#2), expression(body, n#3), expression(body, n#4))
 	}
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
+	# `y = 2 x`: Rust's "`x` after `y=2` does nothing"
+	assigns = x => type(x) is key and (op_of(x) == "=" or op_of(x) == ":=")
+	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
 	sequence(body, n.map(x => x))
 }
 
@@ -927,13 +995,27 @@ key_expression(body: Body, n: any) := {
 		if target#1 == "node" { return runtime_call("node_get", [target, ["node", boxed(expression(body, key_of(right)))]]) }
 	}
 	if operator == "+=" {
+		target = expression(body, left)
+		added = expression(body, right)
+		# Rust's `s += "ab"` on a number is its type error, though `s = s + "ab"` joins
+		# a number variable given boxed values by `+=` (a sum over a list's items) stays a sum after it widens
+		numeric = target#1 == "int" or target#1 == "float"
+		if numeric and added#1 in characters { return refuse("a number += a " + added#1) }
+		sum = left is symbol and (numeric or name_of(left) in body.function.sums)
+		if sum and added#1 == "node" {
+			body.function.sums[name_of(left)] = yes
+			return assignment(body, left, operation(body, "+", target, runtime_call("number_node", [added])))
+		}
 		grown = appended(body, left, right)
 		if grown != ø { return grown }
+	}
+	if operator == "/=" and left is symbol and name_of(left) in body.declared and body.declared[name_of(left)] == "int" {
+		return assignment(body, left, runtime_call("floor_quotient", [expression(body, left), whole(expression(body, right))]))
 	}
 	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
 	if operator == "-" and left == ø { return negation(body, expression(body, right)) }
-	if operator == "and" or operator == "or" { return logical(body, operator, left, right) }
+	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
@@ -957,18 +1039,34 @@ negation(body: Body, value: any) := {
 	["int", [op.i64_const, 0] + value#2 + [int_ops["-"]]]
 }
 # `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
+# on other values they give one of them, as Rust does: `a and b` is b when a holds, else a; `a or b` a when a holds,
+# else b (`(1==1) and 5` is 5, `x | y` with x 0 is y); a yes/no beside a number counts as 1 or 0
+logical_words = {and: "and", or: "or", "|": "or"}
 logical(body: Body, symbol: text, left: any, right: any) := {
-	a = condition(expression(body, left))
-	b = condition(nested(body, right, 1))
-	if symbol == "and" { return ["bool", a + [op.if, type_bytes.bool] + b + [op.else, op.i64_const, 0, op.i64_eqz, op.i32_eqz, op.end]] }
-	["bool", a + [op.if, type_bytes.bool, op.i64_const, 1, op.i64_eqz, op.i32_eqz, op.else] + b + [op.end]]
+	a = expression(body, left)
+	b = nested(body, right, 1)
+	# a value whose kind the first reading of a recursive function does not know yet (pending) beside a yes/no is one
+	yes_no = kind => kind == "bool" or kind == pending
+	if yes_no(a#1) and yes_no(b#1) and (a#1 == "bool" or b#1 == "bool") {
+		a = condition(a)
+		b = condition(b)
+		if symbol == "and" { return ["bool", a + [op.if, type_bytes.bool] + b + [op.else, op.i64_const, 0, op.i64_eqz, op.i32_eqz, op.end]] }
+		return ["bool", a + [op.if, type_bytes.bool, op.i64_const, 1, op.i64_eqz, op.i32_eqz, op.else] + b + [op.end]]
+	}
+	kind = if a#1 == "bool" then b#1 else if b#1 == "bool" then a#1 else joint_kind(a#1, b#1)
+	# on a float Rust fails: "is a float where an exact Int is expected"
+	if kind != "int" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
+	held = [a#1, [op.local_get] + uleb(fresh_local(body, a#1))]
+	test = condition([a#1, a#2 + [op.local_set] + held#2[1..] + held#2])
+	given = if symbol == "and" then [b, held] else [held, b]
+	[kind, test + [op.if] + value_type(kind) + converted(given#1, kind) + [op.else] + converted(given#2, kind) + [op.end]]
 }
 
 ## functions
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function) := {
-	scope = Body({}, [], [], 0, f.is_runtime, f, [], 0, [], [])
+	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }

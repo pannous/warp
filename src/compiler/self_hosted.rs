@@ -161,7 +161,7 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 		return None;
 	}
 	let kinds = kinds.map_or_else(|| "{}".to_string(), serde_json::Value::to_string);
-	let request = format!("[{}, {kinds}]", view_json(&plain_view(node)));
+	let request = format!("[{}, {kinds}]", view_json(&analysis_view(node)));
 	let module = answer(&EMIT, request).and_then(|answer| module_of(&answer));
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {

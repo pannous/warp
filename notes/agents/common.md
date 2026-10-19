@@ -65,6 +65,8 @@ instead of bending the code.
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is
   upgraded to the working value in its own commit, and `#[ignore]` is dropped from a test that passes unedited; a
   change of meaning, or editing an un-ignored test's assertions, still goes to the Interviewer.
+- Outcome tests only (AGENTS.md "Outcome tests only"): new tests check what warp code produces, never an
+  intermediate; a test pinning one may be deleted or rewritten as one is! line.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
@@ -88,9 +90,10 @@ instead of bending the code.
   `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 scratch/warp probes/<x>.warp` (=front: front end only). The stages load your
   worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
   the stage programs (~90 s, prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
-  and wrong values in seconds (most of the 39 sprint failures of batch B, 2026-10-19). It does not show whether
-  emitter.warp or the Rust fallback emitted the program (card cli-show); the + emitter comparison
-  stays the check for that. Then the targeted tests via tests/queue.sh.
+  and wrong values in seconds (most of the 39 sprint failures of batch B, 2026-10-19). Add
+  `WARP_EMIT_REFUSALS=/dev/stderr` to see whether emitter.warp refused the program (`outside the core: …`, then the
+  Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own warnings still show: card cli-show).
+  Then the targeted tests via tests/queue.sh.
 - Samples: every major or semi-major feature (a new syntax form, library area, server/ORM/GPU
   capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
