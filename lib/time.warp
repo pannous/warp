@@ -39,3 +39,121 @@ format_duration(ms) := {
 }
 is_leap_year(year) := year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 days_in_month(year, month) := if month == 2 then (if is_leap_year(year) then 29 else 28) else if month == 4 or month == 6 or month == 9 or month == 11 then 30 else 31
+
+// Time zones (card time-zones-warp; Rust twin: src/time/calendar.rs Zone, src/wasm_emitter/time/time_zones.rs): the
+// offset a zone has at an instant under the Europe and United States daylight saving rules, and the instant a wall
+// time means there. Times here are whole seconds since 1970; offsets are seconds east of UTC.
+hour_seconds = 3600
+day_seconds = 86400
+
+// the daylight saving rule of a zone
+enum Dst {
+	Never
+	// last Sunday of March to last Sunday of October, switching at 01:00 UTC (since 1996)
+	Europe
+	// second Sunday of March to first Sunday of November, switching at 02:00 local time (since 2007)
+	UnitedStates
+}
+// which instant a wall time means when a transition skips or repeats it
+enum Disambiguation { Reject, Earlier, Later }
+
+class Zone { name: text; standard: int; dst: Dst }
+
+// the embedded subset of the IANA database, in the order of calendar.rs ZONES (the run-time zone codes)
+time_zones = [
+	Zone("UTC", 0, Dst.Never),
+	Zone("Etc/UTC", 0, Dst.Never),
+	Zone("Europe/London", 0, Dst.Europe),
+	Zone("Europe/Dublin", 0, Dst.Europe),
+	Zone("Europe/Lisbon", 0, Dst.Europe),
+	Zone("Europe/Berlin", 3600, Dst.Europe),
+	Zone("Europe/Paris", 3600, Dst.Europe),
+	Zone("Europe/Madrid", 3600, Dst.Europe),
+	Zone("Europe/Rome", 3600, Dst.Europe),
+	Zone("Europe/Amsterdam", 3600, Dst.Europe),
+	Zone("Europe/Brussels", 3600, Dst.Europe),
+	Zone("Europe/Vienna", 3600, Dst.Europe),
+	Zone("Europe/Zurich", 3600, Dst.Europe),
+	Zone("Europe/Stockholm", 3600, Dst.Europe),
+	Zone("Europe/Oslo", 3600, Dst.Europe),
+	Zone("Europe/Copenhagen", 3600, Dst.Europe),
+	Zone("Europe/Warsaw", 3600, Dst.Europe),
+	Zone("Europe/Prague", 3600, Dst.Europe),
+	Zone("Europe/Budapest", 3600, Dst.Europe),
+	Zone("Europe/Athens", 7200, Dst.Europe),
+	Zone("Europe/Helsinki", 7200, Dst.Europe),
+	Zone("Europe/Kyiv", 7200, Dst.Europe),
+	Zone("Europe/Bucharest", 7200, Dst.Europe),
+	Zone("Europe/Istanbul", 10800, Dst.Never),
+	Zone("Europe/Moscow", 10800, Dst.Never),
+	Zone("Asia/Dubai", 14400, Dst.Never),
+	Zone("Asia/Kolkata", 19800, Dst.Never),
+	Zone("Asia/Shanghai", 28800, Dst.Never),
+	Zone("Asia/Singapore", 28800, Dst.Never),
+	Zone("Asia/Tokyo", 32400, Dst.Never),
+	Zone("Australia/Brisbane", 36000, Dst.Never),
+	Zone("America/Sao_Paulo", -10800, Dst.Never),
+	Zone("America/New_York", -18000, Dst.UnitedStates),
+	Zone("America/Chicago", -21600, Dst.UnitedStates),
+	Zone("America/Denver", -25200, Dst.UnitedStates),
+	Zone("America/Phoenix", -25200, Dst.Never),
+	Zone("America/Los_Angeles", -28800, Dst.UnitedStates),
+	Zone("America/Anchorage", -32400, Dst.UnitedStates),
+	Zone("Pacific/Honolulu", -36000, Dst.Never)
+]
+
+zone_named(name: text): Zone := {
+	for zone in time_zones { if zone.name == name { return zone } }
+	raise "unknown time zone " + name + ": not in the time zone rules (lib/time.warp time_zones)"
+}
+// ISO weekday of a day number: Monday 1 … Sunday 7
+weekday_of_day(days: int): int := (days + 3) % 7 + 1
+// the day number of the last Sunday of a month
+last_sunday(year: int, month: int): int := {
+	last = days_from_date(year, month, days_in_month(year, month))
+	last - weekday_of_day(last) % 7
+}
+// the day number of the n-th Sunday of a month, counting from 1
+nth_sunday(year: int, month: int, n: int): int := {
+	first = days_from_date(year, month, 1)
+	first + (7 - weekday_of_day(first)) % 7 + 7 * (n - 1)
+}
+// the year (UTC) of seconds since 1970
+year_of_seconds(seconds: int): int := date_of(seconds * 1000).year
+// seconds east of UTC in effect in a zone at seconds since 1970
+zone_offset(zone: Zone, seconds: int): int := {
+	year = year_of_seconds(seconds)
+	summer = match zone.dst {
+		Never: false
+		Europe: {
+			start = last_sunday(year, 3) * day_seconds + hour_seconds
+			end = last_sunday(year, 10) * day_seconds + hour_seconds
+			seconds >= start and seconds < end
+		}
+		UnitedStates: {
+			start = nth_sunday(year, 3, 2) * day_seconds + 2 * hour_seconds - zone.standard
+			end = nth_sunday(year, 11, 1) * day_seconds + 2 * hour_seconds - zone.standard - hour_seconds
+			seconds >= start and seconds < end
+		}
+	}
+	if summer then zone.standard + hour_seconds else zone.standard
+}
+// the instant (seconds since 1970) a wall time (seconds since 1970 on the zone's wall clock) means in a zone: of the
+// summer and the winter offset, those that hold at the instant they give; one is the answer, none (skipped by a
+// transition) or both (repeated) need the choice, else it fails as calendar.rs Zone::resolve does
+zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
+	later = wall - zone.standard
+	if zone.dst == Dst.Never { return later }
+	earlier = later - hour_seconds
+	earlier_holds = zone_offset(zone, earlier) == zone.standard + hour_seconds
+	later_holds = zone_offset(zone, later) == zone.standard
+	if earlier_holds != later_holds { return if earlier_holds then earlier else later }
+	match choice {
+		Earlier: earlier
+		Later: later
+		Reject: {
+			if earlier_holds { raise "that wall time is ambiguous in " + zone.name + ": it occurs twice, the clocks are set back by a daylight saving transition; choose disambiguation: earlier or later" }
+			raise "that wall time does not exist in " + zone.name + ": it is skipped by a daylight saving transition; choose disambiguation: earlier or later"
+		}
+	}
+}
