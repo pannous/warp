@@ -12,10 +12,9 @@ Where to find things:
 
 Two kinds of entry:
 - Dropped form: a form the warp part leaves out (the cleanest, most minimal compiler, not a copy of the Rust one),
-  with the sources that show it, why, and how to bring it back. The harnesses skip the named sources:
-  tests/parser/self_parser_dropped.txt (path, tab, form) for the parser survey `parser_differences`
-  (tests/parser/test_self_parser_survey.rs), and the `dropped` list of tests/common/twins.rs pass_differential, which
-  refuses a dropped source this file does not name. A pass that looks like bloat as a whole goes to the Supervisor
+  with the sources that show it, why, and how to bring it back. The emitter twin (tests/common/twins.rs twin_sources)
+  skips the named sources and refuses a dropped source this file does not name; the parser and pass twins are gone
+  (outcome tests only, 2026-10-19). A pass that looks like bloat as a whole goes to the Supervisor
   instead of being ported. `probes/self_hosting/parser/sort_differences.py` sorts remaining parser differences.
 - Deviation: where the warp part keeps a cleaner result than its Rust twin, with an example and the card or question
   for the Rust side. The differentials read them as expected.
