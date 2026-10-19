@@ -17,3 +17,13 @@ fn a_lossless_result_still_converts() {
 	is!("def f(x) as float { x / 2 }; f(3)", 1.5);
 	is!("def f(x) as bool { 1 }; f(2)", true);
 }
+
+/// A collection or class result before a block body, as `as int {…}` is (cards undefined-function, def-int)
+#[test]
+fn a_collection_or_class_result_type_before_a_block_body() {
+	is!("def f(n: int) as list { [n, n] }; #f(2)", 2);
+	is!("def f(n: int) -> list { [n, n] }; #f(2)", 2);
+	is!("def f(n: int) as map { {a: n} }; f(2).a", 2);
+	is!("class G { r: int }; def g(n: int): G { G{r: n} }; g(2).r", 2);
+	is!("class G { r: int }; def g(n: int) as G { G{r: n} }; g(2).r", 2);
+}
