@@ -31,7 +31,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
 | `x is symbol/list/any` type tests, prelude defs on demand (is_digit) | warp-self-emitter |
 | match literal and enum-symbol arms | warp-parsing |
-| enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
+| enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
 | class constructor `Point(2, 3)`, try | warp-self-analyzer |
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
 | int(x), positioned, `op as Op` (keyed), a node into a typed Parser field, `branch` called with a missing argument | warp-emitter-structures |
