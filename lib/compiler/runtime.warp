@@ -429,7 +429,7 @@ int_gcd(a: int, b: int) := {
 }
 # n/d in lowest terms, an int when d divides n; d 0 traps, as Rust's divide by zero fails
 exact_ratio(n: int, d: int) := {
-	if d == 0 { fail() }
+	if d == 0 { divide_by_zero() }
 	divisor = int_gcd(n, d)
 	if d < 0 { divisor = -divisor }
 	n = int_quotient(n, divisor)
@@ -492,3 +492,27 @@ zeros(count: int) := {
 	for i in 0..count { set_byte(out, i, 48) }
 	out
 }
+
+## runtime errors: each fails inside a function of its name, which src/wasm_emitter/control/traps.rs reads off the
+## trace as the error's message; the global trap_detail holds the value the message names
+divide_by_zero() := {
+	fail()
+	0
+}
+# `xs#i` outside 1…count: "index out of range: i not in 1…count"
+index_out_of_range_of(index: int, count: int) := {
+	global trap_detail = held([index, count])
+	fail()
+	0
+}
+# `xs#i` of an i known only at run time: an int, else "index must be an integer"
+index_of_node(n: any) := {
+	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
+	unboxed_int(n)
+}
+index_must_be_an_integer() := {
+	fail()
+	0
+}
+# a value as a boxed $Node
+held(value: any) := value
