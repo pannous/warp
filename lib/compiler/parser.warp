@@ -303,6 +303,8 @@ def continued(p, left, min_power) {
 	while true {
 		skip_spaces(p)
 		c = peek(p.code, p.at, p.n)
+		// `cd ~/notes`: a path after an operand is the next word, no operator
+		if starts_path(p) { return left }
 		if c == '@' and left != ø and min_power <= binding_powers("=")#2 {
 			marked = trailing_attribute(p, left)
 			if marked != ø {
@@ -624,9 +626,8 @@ def operator_at(p) {
 
 // An operand follows `width` characters on, after any blanks: `n >> 7` shifts, `list<list<int>>` closes two generics
 // Rust twin: lookahead.rs operand_follows
-def operand_follows(p, width) {
-	not "\n>)]},;=".contains(code_after(p, p.at + width))
-}
+def operand_follows(p, width) := operand_follows_at(p, p.at + width)
+def operand_follows_at(p, at) := not "\n>)]},;=".contains(code_after(p, at))
 
 // `word` at the parser's position as a whole word
 def keyword_at(p, word) := keyword_at_position(p, word, p.at)
@@ -671,6 +672,7 @@ def binding_powers(op) {
 // Rust twin: expressions.rs parse_expr (step 1), parse_prefix_operand, finish_prefix
 def prefixed(p) {
 	c = peek(p.code, p.at, p.n)
+	if starts_path(p) { return path_literal(p) }
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
 	word = word_at(p)
 	form = keyword_form(word)
@@ -972,7 +974,7 @@ def starts_atom(p) := starts_atom_at(p, p.at)
 
 def starts_atom_at(p, at) {
 	c = peek(p.code, at, p.n)
-	is_name_start(c) or is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{' or (c == '@' and is_name_start(peek(p.code, at + 1, p.n)))
+	is_name_start(c) or is_digit(c) or c == '"' or c == '\'' or c == '(' or c == '[' or c == '{' or (c == '@' and is_name_start(peek(p.code, at + 1, p.n))) or starts_path_at(p, at)
 }
 
 // `x`, `k, v` or `(k, v)`: the names a loop gives each item, else ø
@@ -1063,6 +1065,57 @@ def atom(p) {
 	}
 	p.at = p.at + 1
 	failed("Unexpected character '" + c + "'")
+}
+
+// The URL after its scheme word, up to a blank, a separator, a closer or a quote
+// Rust twin: literals/paths.rs parse_url, is_url_terminator
+def url_text(p, scheme) {
+	end = p.at
+	while end < p.n and not " \t\n\r;)]}>\"',«".contains(p.code[end]) { end = end + 1 }
+	url = scheme + p.code[p.at .. end]
+	p.at = end
+	url
+}
+
+// A file path without quotes starts here, glued to what follows and not to an operand before it: `./a.wav`,
+// `../songs/a.wav`, `./` alone, `~/notes.txt`, `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`);
+// after an operand `/` divides (`width /height`). `ls /tmp`, a path after a word taking one, waits for card path-words
+// Rust twin: literals/paths.rs starts_path_literal
+def starts_path(p) := starts_path_at(p, p.at)
+
+def starts_path_at(p, at) {
+	c = peek(p.code, at, p.n)
+	if at > 0 and is_operand_end(p.code[at - 1]) { return false }
+	if c == '.' {
+		dots = if is_at(p.code, at + 1, '.', p.n) then 2 else 1
+		after = peek(p.code, at + dots + 1, p.n)
+		return is_at(p.code, at + dots, '/', p.n) and (not ends_path(after) or not operand_follows_at(p, at + dots + 1))
+	}
+	// `cd ~` alone; `a ~ b` stays the comparison
+	if c == '~' { return is_at(p.code, at + 1, '/', p.n) or not operand_follows_at(p, at + 1) }
+	if c == '/' { return starts_path_name(peek(p.code, at + 1, p.n)) and not operand_before(p, at) }
+	false
+}
+
+// The path at the parser's position, up to a blank, a closer or a separator, as a text
+// Rust twin: literals/paths.rs parse_path_literal
+def path_literal(p) {
+	end = p.at
+	while end < p.n and not ends_path(p.code[end]) { end = end + 1 }
+	path = p.code[p.at .. end]
+	p.at = end
+	path
+}
+
+def is_operand_end(c) := is_name_char(c) or c == ')' or c == ']' or c == '}' or c == '"' or c == '\''
+def ends_path(c) := c == "" or is_blank(c) or c == ']' or c == ')' or c == '}' or c == ',' or c == ';'
+def starts_path_name(c) := is_name_start(c) or c == '.'
+
+// Whether an operand ends before the blanks before `start`
+def operand_before(p, start) {
+	at = start - 1
+	while at >= 0 and (p.code[at] == ' ' or p.code[at] == '\t') { at = at - 1 }
+	at >= 0 and is_operand_end(p.code[at])
 }
 
 // The exact generators: `π` is the real π, not a float (src/extensions/reals.rs); a bare `e` or `i` stays a free name,
@@ -1310,6 +1363,8 @@ def named(p) {
 	if constant == "false" { return false }
 	if constant == "empty" { return ø }
 	if not names_case(p, word.length) and EXACT_CONSTANTS.contains(word.lower()) { return exact_constant(word) }
+	// `https://pannous.com`, `ssh://host`: a URL, the rest of which reads as one text
+	if p.code[p.at .. min(p.at + 3, p.n)] == "://" { return url_text(p, word) }
 	if SHADER_WORDS.contains(word) {
 		shader = shader_block(p, word)
 		if shader != ø { return shader }
