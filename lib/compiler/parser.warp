@@ -6,7 +6,7 @@ use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source) := view_of(parsed(source))
@@ -21,7 +21,7 @@ def parsed(source) {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0}
 	items(p, ' ', "")
 }
 
@@ -670,6 +670,111 @@ def binding_powers(op) {
 	[60, 59]
 }
 
+// The words that guard a statement and the marker call each becomes: `check C` is `assert C` (card check-assert)
+// Rust twin: control/guards.rs GUARD_MARKERS, warp_parser TRY_MARKER, ASSERT_MARKER
+GUARD_MARKERS = {"try": "try·else", "assert": "assert·else", "check": "assert·else"}
+// The words that start the fallback of `try X else Y`: classical `catch`, Python's `except` (P60)
+FALLBACK_WORDS = ["else", "catch", "except"]
+// The hidden name `try X` binds X's Error to, to hand it on as the value
+UNCAUGHT_ERROR = "uncaught·error"
+
+// `try` or `assert` followed by an operand
+// Rust twin: guards.rs guard_word_ahead
+def guard_word_at(p, word) := word in GUARD_MARKERS and " \t{:".contains(peek(p.code, p.at + word.length, p.n))
+
+// `try X else Y`, `assert C else X`: the marker call `marker(X, Y)`; `try X catch e {e}` adds the caught name the
+// fallback reads, `r = try X` keeps X's Error as the value, `assert C` alone fails naming C as written
+// Rust twin: guards.rs parse_guard
+def guarded(p, word) {
+	marker = GUARD_MARKERS[word]
+	p.at = p.at + word.length
+	skip_spaces(p)
+	skip_python_colon(p)
+	start = p.at
+	guarded_part = guarded_phrase(p)
+	written_part = p.code[start .. p.at].trim()
+	skip_spaces(p)
+	caught = ""
+	fallback = ø
+	fallback_word = fallback_word_ahead(p)
+	if fallback_word != "" {
+		p.at = p.resumes[p.at] + fallback_word.length
+		skip_spaces(p)
+		if fallback_word != "else" { caught = caught_name(p, fallback_word) }
+		skip_python_colon(p)
+		fallback = guarded_phrase(p)
+	} else if word == "try" {
+		caught = UNCAUGHT_ERROR
+		fallback = symbol(UNCAUGHT_ERROR)
+	} else if marker == "assert·else" {
+		fallback = "assertion failed: " + written_part
+	}
+	parts = [symbol(marker), guarded_part, fallback]
+	if caught != "" and mentions(fallback, caught) { parts = parts + [symbol(caught)] }
+	with_finally(p, listed("(", "", parts))
+}
+
+// `try: x` as Python writes it
+def skip_python_colon(p) {
+	if is_at(p.code, p.at, ':', p.n) {
+		p.at = p.at + 1
+		skip_spaces(p)
+	}
+}
+
+// The fallback word after the blanks and line breaks ahead, else ""
+// Rust twin: guards.rs fallback_word_ahead
+def fallback_word_ahead(p) {
+	at = p.resumes[p.at]
+	for word in FALLBACK_WORDS { if keyword_at_position(p, word, at) { return word } }
+	""
+}
+
+// `catch e`, `except ValueError as e`: the name the error is bound to; `except ZeroDivisionError` names a type
+// Rust twin: guards.rs parse_caught_name
+def caught_name(p, fallback_word) {
+	if not is_name_start(peek(p.code, p.at, p.n)) { return "" }
+	name = word_at(p)
+	p.at = p.at + name.length
+	skip_spaces(p)
+	if keyword_at(p, "as") {
+		p.at = p.at + 2
+		skip_spaces(p)
+		name = word_at(p)
+		p.at = p.at + name.length
+		skip_spaces(p)
+		return name
+	}
+	if fallback_word == "catch" then name else ""
+}
+
+// Either part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else print 3`)
+// Rust twin: guards.rs parse_guarded_phrase
+def guarded_phrase(p) {
+	outer = p.branch
+	p.branch = true
+	phrase_parts = [expression(p, 0)]
+	while true {
+		skip_spaces(p)
+		if fallback_word_ahead(p) != "" or keyword_at(p, "finally") or not starts_atom(p) { break }
+		phrase_parts = phrase_parts + [expression(p, 0)]
+	}
+	p.branch = outer
+	if phrase_parts.length == 1 then phrase_parts#1 else listed("", " ", phrase_parts)
+}
+
+// `… finally {Z}` after a guard: `(finally·N = guard; Z; finally·N)`, Z runs and the guard's value stays
+// Rust twin: guards.rs with_finally
+def with_finally(p, guard) {
+	if not keyword_at_position(p, "finally", p.resumes[p.at]) { return guard }
+	p.at = p.resumes[p.at] + 7
+	skip_spaces(p)
+	cleanup = if is_at(p.code, p.at, ':', p.n) then colon_body(p, 1) else statement_words(p)
+	p.finally_blocks = p.finally_blocks + 1
+	value = symbol("finally·" + str(p.finally_blocks))
+	listed("(", ";", [Key(value, Op.Assign, guard), cleanup, value])
+}
+
 // An expression's start: a prefix operator and its operand, else an atom
 // Rust twin: expressions.rs parse_expr (step 1), parse_prefix_operand, finish_prefix
 def prefixed(p) {
@@ -679,6 +784,7 @@ def prefixed(p) {
 	word = word_at(p)
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
+	if guard_word_at(p, word) { return guarded(p, word) }
 	if form == "condition" {
 		p.at = p.at + word.length
 		skip_spaces(p)
