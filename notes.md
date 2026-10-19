@@ -64,3 +64,4 @@
 2026-10-17 interviewer: src/extensions.rs texts! Separator::Colon edit (unknown origin, user "fix it") reverted to Comma; backup data/patches/texts-macro-colon-2026-10-17.patch
 
 - 2026-10-17 parenthesized-first: parsing and lowering preserved `((try e else 0), 2)` as a round comma tuple, but inference treated it as the last element's type and list emission treated its control-flow element as a statement sequence. Round comma tuples must be classified and emitted as value collections at both boundaries.
+- 2026-10-19 traps-wasm-trap: `text_argument` propagated Error and converted Codepoint but never required Text, so `byte_at(3, 0)` reached `emit_text_bytes` and trapped on the payload cast. Validate the shared argument after conversion, before any text storage access.

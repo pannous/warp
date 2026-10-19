@@ -151,3 +151,10 @@
 - Keep the outer comma as the tuple separator; the inner parentheses group only the first value.
 - Reuse the general bracket/list parser and avoid a `try`-specific rewrite.
 - Run the focused parser/control tests, formatting, clippy, and the wasm32 check.
+
+# Text builtin argument errors
+
+- Reproduce `byte_at(3, 0)` in a new focused text test before changing production code.
+- Route every non-literal `byte_at` text operand through the existing text-argument conversion so wrong kinds become the standard `not a text` error instead of a raw `ref.cast` trap.
+- Preserve the inline byte-loop fast path, character-to-text conversion, error propagation, and bounds checking.
+- Run the focused test before and after, then formatting, clippy, and the wasm32 check.
