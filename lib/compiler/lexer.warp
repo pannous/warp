@@ -29,12 +29,15 @@ def code_only(source: any): text {
 	join(parts + [source[at .. source.length]], "")
 }
 
-// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `at`, else `at`
+// The end of the comment (`// …`, `# …`, `/* … */`, `/# … #/`) or text (`"…"`, `'…'`) starting at `at`, else `at`
 def span_end(source: any, at: int, n: int): int {
 	c = source[at]
 	next = peek(source, at + 1, n)
 	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') { return index_of(source, "\n", at, n) }
+	if c == '#' and (next == ' ' or next == '\t') { return index_of(source, "\n", at, n) }
+	if c == '#' and at_line_start(source, at) and hash_comment(source, at, n) { return index_of(source, "\n", at, n) }
 	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
+	if c == '/' and next == '#' { return after(source, "#/", at + 2, n) }
 	if c == '"' or c == '\'' { return quoted_end(source, at + 1, c, n) }
 	at
 }
@@ -120,6 +123,14 @@ SUPERSCRIPT_LETTERS = "ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘ�
 RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
 
 def is_blank(c: any): bool := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+
+// Only blanks stand before `at` on its line
+// Rust twin: declaration_scan.rs at_line_start
+def at_line_start(source: any, at: int): bool {
+	before = at - 1
+	while before >= 0 and (source[before] == ' ' or source[before] == '\t') { before = before - 1 }
+	before < 0 or source[before] == '\n'
+}
 
 // The end of what the parser skips at `at`, a comment as it reads one or a text, else `at`
 // Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_line_comment, at_hash_comment

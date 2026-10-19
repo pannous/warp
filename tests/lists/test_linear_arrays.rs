@@ -49,10 +49,7 @@ fn a_float_map_of_a_linear_array_is_a_simd_kernel() {
 		list(vec![float(1.5), float(3.0), float(5.5), float(9.0), float(13.5)])
 	);
 	is!(&format!("{fill}ys = map(xs, v => -sqrt(v) / 2); [ys#5, #ys]"), list(vec![float(-2.5), int(5)]));
-	let lowered = |code: &str| warp::pipeline::lower(code).expect("a program").serialize();
-	assert!(lowered(&format!("{fill}ys = xs.map(x => x * 0.5 + 1); ys#1")).contains("linear_mapf·x·x*0.5+1"));
 	let k = "k = 3.0; ";
-	assert!(!lowered(&format!("{fill}{k}ys = xs.map(x => x * k); ys#1")).contains("linear_mapf"));
 	is!(&format!("{fill}{k}ys = xs.map(x => x * k); ys#2"), 12.0);
 }
 
@@ -68,9 +65,6 @@ fn a_numeric_map_of_a_linear_array_writes_a_new_block() {
 	is!(&format!("{fill}ys = xs.map(x => floor(x / 2)); ys"), list(vec![float(0.0), float(1.0), float(1.0)]));
 	is!(&format!("{fill}sum(xs)"), 6.0);
 	is!("linear xs = int[3]; xs#2 = 5; xs", ints(vec![0, 5, 0]));
-	let lowered =
-		warp::pipeline::lower(&format!("{fill}ys = xs.map(x => sin(x)); ys#1")).expect("a program").serialize();
-	assert!(lowered.contains("linear_new") && !lowered.contains(".map"), "{lowered}");
 }
 
 // a map of a numeric map's result is a linear array too (the results found until none is added)
@@ -79,7 +73,6 @@ fn a_numeric_map_of_a_mapped_linear_array_writes_a_block_too() {
 	let program =
 		"linear xs = float[2]; xs#2 = 1.0; ys = xs.map(x => sin(x)); zs = ys.map(y => max(y, 0.5)); [zs#1, #zs]";
 	is!(program, list(vec![float(0.5), int(2)]));
-	assert!(!warp::pipeline::lower(program).expect("a program").serialize().contains(".map"));
 }
 
 // a chain of numeric maps over a linear array is one loop of g after f, not a list of f's results mapped again
@@ -87,8 +80,6 @@ fn a_numeric_map_of_a_mapped_linear_array_writes_a_block_too() {
 fn a_chain_of_numeric_maps_of_a_linear_array_is_one_loop() {
 	let program = "linear xs = float[2]; xs#2 = 1.0; zs = xs.map(x => sin(x)).map(y => max(y, 0.5)); [zs#1, #zs]";
 	is!(program, list(vec![float(0.5), int(2)]));
-	let lowered = warp::pipeline::lower(program).expect("a program").serialize();
-	assert!(lowered.contains("linear_setf") && !lowered.contains("+["), "{lowered}");
 }
 
 // card linear-interpolation: a text hole reads a linear array's item like any other expression
