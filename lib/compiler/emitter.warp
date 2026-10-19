@@ -236,6 +236,7 @@ converted(value: any, to: text) := {
 	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
 	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
 	if from == "node" and to in node_unboxings and analyzed_program() { return runtime_call(node_unboxings[to], [value])#2 }
+	if from == "char" and to == "text" { return runtime_call("char_text", [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
@@ -655,6 +656,7 @@ assignment(body: Body, target: any, value: any) := {
 	kind = value#1
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
+	if not (name in body.names) and analyzed_local_kind(body.function, name) != ø { kind = analyzed_local_kind(body.function, name) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		held = body.kinds#(body.names[name] + 1)
 		if widens(body, name, held, kind) {
@@ -1071,20 +1073,37 @@ new_scope(f: Function) := {
 	scope
 }
 
-# the analyzer's kinds as the emitter's, where they name one it holds unboxed or as a typed reference; others ø
-analyzed_kinds = {int: "int", float: "float", text: "text", list: "list", codepoint: "char"}
 # the runtime words taking a node where the analysis holds a list or a text (they trap on any other value)
 node_unboxings = {list: "list_of_node", text: "text_of_node"}
 # is the program analyzed (WARP_SELF_ANALYSIS): then a node meeting a list or text holds one, as analyzer.warp found
 analyzed_program() := module.kinds != ø and "value" in module.kinds
-# the kind the analyzer found for f's i-th parameter (counted from 0), as the emitter's; ø when it found none it holds
-analyzed_parameter_kind(f: Function, i: int) := {
+# the kinds analyzer.warp finds that the emitter holds as found; a node stays the emitter's own reading of the value
+held_kinds = {int: 1, float: 1, char: 1, text: 1, list: 1}
+held_kind(kind: any) := if kind in held_kinds then kind else ø
+# what analyzer.warp found for the program's function f, main's being the program's variables and value; ø if nothing
+analyzed_function(f: Function) := {
 	if f.is_runtime or not analyzed_program() { return ø }
+	if f.name == "main" { return {params: [], result: module.kinds["value"], locals: module.kinds["variables"]} }
 	functions = module.kinds["functions"]
 	if functions == ø or not (f.name in functions) { return ø }
-	parameters = functions[f.name]["params"]
-	if i >= #parameters or not (parameters[i] in analyzed_kinds) { return ø }
-	analyzed_kinds[parameters[i]]
+	functions[f.name]
+}
+# the kind analyzer.warp found for f's i-th parameter (counted from 0), its result, a local, if the emitter holds it
+analyzed_parameter_kind(f: Function, i: int) := {
+	found = analyzed_function(f)
+	if found == ø or i >= #found["params"] { return ø }
+	held_kind(found["params"][i])
+}
+analyzed_result_kind(f: Function) := {
+	found = analyzed_function(f)
+	if found == ø { return ø }
+	held_kind(found["result"])
+}
+# (an empty map of locals comes as null: card lib-json)
+analyzed_local_kind(f: Function, name: text) := {
+	found = analyzed_function(f)
+	if found == ø or found["locals"] == ø or not (name in found["locals"]) { return ø }
+	held_kind(found["locals"][name])
 }
 
 compile_function(f: Function, argument_kinds: any) := {
@@ -1117,6 +1136,7 @@ function_compiled(f: Function, argument_kinds: any) := {
 		result = expression(first, f.body)#1
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
+	if result != no_kind and analyzed_result_kind(f) != ø { result = analyzed_result_kind(f) }
 	if result == no_kind or result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
 	f.result = result
 	scope = new_scope(f)
