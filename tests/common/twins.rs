@@ -4,10 +4,13 @@
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
-pub use warp::compiler::node_views::{node_view, plain_view, positioned_plain_view, view_json, warp_list};
+use warp::analyzer::{covers, kind_slots};
+pub use warp::compiler::node_views::{
+	analysis_view, node_view, plain_view, positioned_plain_view, view_json, warp_list,
+};
 use warp::host::with_captured_stdout;
 use warp::warp_parser::parse;
-use warp::{Node, Number, Op};
+use warp::{Node, Number};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
@@ -272,57 +275,11 @@ pub fn analyzer_differential(paths: &[PathBuf]) {
 	report("inferred_kinds", &differing);
 }
 
-/// Each slot's kind in an inferred kinds text: `f(0)` for f's first parameter, `f()` its result, a variable by name,
-/// `=` the program's value
-fn kind_slots(lines: &[String]) -> std::collections::BTreeMap<String, String> {
-	let mut slots = std::collections::BTreeMap::new();
-	for line in lines {
-		if let Some(value) = line.strip_prefix("= ") {
-			slots.insert("=".to_string(), value.to_string());
-		} else if let Some((signature, result)) = line.split_once(") -> ") {
-			let (name, params) = signature.split_once('(').unwrap_or((signature, ""));
-			for (index, kind) in params.split(", ").filter(|kind| !kind.is_empty()).enumerate() {
-				slots.insert(format!("{name}({index})"), kind.to_string());
-			}
-			slots.insert(format!("{name}()"), result.to_string());
-		} else if let Some((name, kind)) = line.rsplit_once(": ") {
-			slots.insert(name.to_string(), kind.to_string());
-		}
-	}
-	slots
-}
-
-/// The same slots, each of warp's kinds Rust's or a more general one: a node (empty) holds any value, a number of
-/// run-time kind (data) any number; a narrower kind would hold a value Rust's may not fit
-fn covers(
-	warp: &std::collections::BTreeMap<String, String>,
-	rust: &std::collections::BTreeMap<String, String>,
-) -> bool {
-	let general = |warp: &str, rust: &str| {
-		warp == rust || warp == "empty" || (warp == "data" && (rust == "int" || rust == "float"))
-	};
-	warp.len() == rust.len()
-		&& rust.iter().all(|(slot, kind)| warp.get(slot).is_some_and(|warp_kind| general(warp_kind, kind)))
-}
-
 /// The view of the program after every lowering pass and the kinds the Rust analyzer infers in it; None for a program
 /// refused or answered before code generation
 pub fn analyzed(code: &str) -> Option<(Node, Vec<String>)> {
 	let program = std::panic::catch_unwind(|| warp::pipeline::lower(code).ok()).ok()??;
-	Some((plain_view(&declared_types_shown(program.clone())), warp::analyzer::inferred_kinds(&program)))
-}
-
-/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
-fn declared_types_shown(node: Node) -> Node {
-	match node {
-		Node::Key(target, Op::Assign, value)
-			if let Node::Meta { node: name, data } = *target.clone()
-				&& matches!(*data, Node::Symbol(_)) =>
-		{
-			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
-		}
-		other => other.map_children(declared_types_shown),
-	}
+	Some((analysis_view(&program), warp::analyzer::inferred_kinds(&program)))
 }
 
 /// The bridge every pass twin relies on: the view of each parsed source, made a node and viewed again, is itself
