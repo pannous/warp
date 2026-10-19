@@ -42,7 +42,8 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache: `Op.Colon` gives Colon on main (87062eb624); the stage's 'not an object' once a stage program has Op (a one-entry map named like a class read as an instance): enum-decls 24a46fd732, Ready (card class-named-entry); a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd; `use "lib/compiler/node.warp"` itself: card node-op-field-type, Later |
 | try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
 | a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
-| an instance inside a map (gaps), a write by a run-time key (remember) | warp-cache |
+| an instance inside a map (gaps) | warp-cache |
+| a write by a run-time key (`m#(k+1) = v`, remember() in scope.warp) | warp-runtime (node_put, in testing) |
 | pending kinds in recursive functions | warp-runtime |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
