@@ -488,9 +488,10 @@ text_trim(t: text): text := {
 	bytes_between(t, start, stop)
 }
 # the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
-# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; to ø or beyond the end stops at the
-# end, a negative from or to fails, as Rust's "index out of range"
-node_slice(x: any, from: int, to: any): any := {
+# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
+# or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
+node_slice(x: any, start: any, to: any): any := {
+	from = if is_null(start) == 1 then 0 else unboxed_int(start)
 	stop = if is_null(to) == 1 then node_length(x) else unboxed_int(to)
 	if from < 0 or stop < 0 { index_out_of_range() }
 	if kind_code(x) == 3 { return character_slice(unboxed_text(x), from, stop) }
@@ -840,6 +841,23 @@ list_of_node(n: any): list := {
 	if is_null(n) == 1 { return new_list(0) }
 	if kind_code(n) != 8 { fail() }
 	unboxed_list(n)
+}
+# `x as bool` of a value known only at run time, as Rust's cast: a text spelling a falsy word in any case ("No",
+# "false"; FALSY_TEXTS of src/wasm_emitter/mod.rs) is no, another value as a condition (card yes-print)
+bool_cast(n: any): bool := {
+	if is_null(n) == 1 or kind_code(n) != 3 { return node_truthy(n) }
+	t = unboxed_text(n)
+	falsy = byte_count(t) == 0 or spells(t, "0") or spells(t, "false") or spells(t, "no") or spells(t, "ø")
+	not (falsy or spells(t, "nil") or spells(t, "null") or spells(t, "none"))
+}
+# t is the lower-case word, any letter of t also in upper case
+spells(t: text, word: text): bool := {
+	if byte_count(t) != byte_count(word) { return no }
+	for i in 0..<byte_count(t) {
+		b = byte_at(t, i)
+		if (if b >= 65 and b <= 90 then b + 32 else b) != byte_at(word, i) { return no }
+	}
+	yes
 }
 # a value known only at run time as a condition, the rule of Rust's is_truthy (Node::is_falsy): ø and errors are no, a
 # list or map yes when it has items, a key when its key or value is, a number, character or text when not 0 or empty
