@@ -95,18 +95,20 @@ items_text(xs: list) := {
 	}
 	inner
 }
-# `a + b` of values known only at run time: ø adds nothing, lists and texts join, numbers add
+# `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any) := {
-	if is_null(a) == 1 { return b }
-	if is_null(b) == 1 { return a }
-	if kind_code(a) == 8 and kind_code(b) == 8 { return list_join(unboxed_list(a), unboxed_list(b)) }
+	# ø, also `[]` in the lowered program, beside a list is that list, beside a text "ø"; beside a number Rust fails
+	if is_null(a) == 1 and is_null(b) == 0 and kind_code(b) == 8 { return b }
+	if is_null(b) == 1 and is_null(a) == 0 and kind_code(a) == 8 { return a }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return node_text(a) + node_text(b) }
+	if is_null(a) + is_null(b) > 0 { fail() }
+	if kind_code(a) == 8 and kind_code(b) == 8 { return list_join(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_add(a, b) }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) + unboxed_int(b) }
 	float_of_node(a) + float_of_node(b)
 }
 # 1 for a boxed text or character, else 0
-textual_node(n: any) := if kind_code(n) == 3 or kind_code(n) == 4 then 1 else 0
+textual_node(n: any) := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
 # the index-th character of t, counted from 1: past index - 1 lead bytes, then the code point its bytes spell
 text_char(t: text, index: int) := {
 	at = 0
@@ -428,6 +430,11 @@ upper_half(v: float) := {
 float_of_node(n: any) := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
+}
+# a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
+number_node(n: any) := {
+	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { fail() }
+	n
 }
 # a boxed int where an int is needed; any other value traps, as Rust fails on it
 int_of_node(n: any) := {
