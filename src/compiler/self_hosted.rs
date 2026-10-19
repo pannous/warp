@@ -166,7 +166,7 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 	if !emits() {
 		return None;
 	}
-	let module = answer(&EMIT, view_json(&plain_view(node))).and_then(|answer| module_of(&answer));
+	let module = answer(&EMIT, view_json(&analysis_view(node))).and_then(|answer| module_of(&answer));
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
 			log::trace!("self-hosted emit: {refusal}");

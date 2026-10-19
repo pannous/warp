@@ -1,0 +1,7 @@
+// a decimal literal with at most 15 significant digits is exact, as Rust reads it: 0.1 + 0.2 == 0.3, 1.5 * 2 is 3
+print 0.1 + 0.2 == 0.3
+print 1.5 * 2
+x = 0.1
+print x * 3
+print 3.141592653589793 * 2
+-0.25 * 4

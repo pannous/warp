@@ -1,0 +1,9 @@
+// `print a b c` writes each value as a list shows it, a space between; a yes/no variable stays one when given 0 or 1
+a = 2
+print 1 2 3
+print a "x" 3.5
+b = yes
+b = 0
+print b
+b = 1
+b
