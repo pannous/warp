@@ -92,11 +92,6 @@ fn compiled_module_untimed(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 	Ok(module)
 }
 
-/// compiled_module with the cache in `directory` and without this process's modules, and where the module came from
-pub fn compiled_module_in(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Module, Origin)> {
-	compiled_in(directory, engine, bytes)
-}
-
 /// A component (`use lib.wasm`) compiled for `engine`, from the cache when it holds it: compiling uniscript's
 /// component takes most of a second (card takes-three)
 pub fn compiled_component(engine: &Engine, bytes: &[u8]) -> Result<Component> {
@@ -107,7 +102,7 @@ pub fn compiled_component(engine: &Engine, bytes: &[u8]) -> Result<Component> {
 }
 
 /// A module or component compiled for `engine` with the cache in `directory`, and where it came from
-pub fn compiled_in<Code: CompiledCode>(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Code, Origin)> {
+fn compiled_in<Code: CompiledCode>(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Code, Origin)> {
 	load_or_compile(directory, &cache_key(engine, bytes), engine, bytes)
 }
 
