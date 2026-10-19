@@ -20,6 +20,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 - `Parser{code: c, at: 0}` of a declared type read as the key `Parser: {…}` (p.branch became a call of branch):
   pure-front d8bc25e098 (warp-parsing; lands with the pure-front merge)
 - `x === ø`, `x !== ø`: pure-lane (warp-self-analyzer); `x in xs` → collection_contains: pure-lane
+- class constructor `Point(2, 3)`: pure-lane 046b2947d (warp-self-analyzer)
 
 - the file's own globals in functions (PRINT, ARGUMENT_POWER, UNIT_WORDS, …): no root of its own, main was refused
   first (normal lane: the def heads, ae7663fc80, data/self_hosting/parser_gap_with_def.txt names none of them; pure
@@ -36,7 +37,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
 | "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | open |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
-| class constructor `Point(2, 3)`, try | warp-self-analyzer |
+| try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
 | int(x), positioned, `op as Op` (keyed), a node into a typed Parser field, `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps), a write by a run-time key (remember), pending kinds in recursive functions | warp-runtime |
