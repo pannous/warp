@@ -54,6 +54,8 @@ mod test_self_differential; // card self-differential
 #[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
 #[cfg(feature = "native")]
+mod test_self_float_as_exact; // card float-as-exact-warp
+#[cfg(feature = "native")]
 mod test_self_float_text; // card float-text-warp
 #[cfg(feature = "native")]
 mod test_self_hosted_analysis; // card End-end
