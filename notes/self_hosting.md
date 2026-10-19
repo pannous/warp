@@ -227,8 +227,12 @@ function and local names.
   silently), a yes/no variable, a loop's value, slices, error values (a run-time error traps, without
   Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
-- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
-  (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp feeds it (card emitter-takes,
+  decision ignore-rust: no comparison with src/analyzer). analyzer.warp `emitter_kinds(program)` gives {functions: {f:
+  {params: [k…], result: k, locals: {x: k}, elements: {xs: k}}}, variables: {x: k}, elements: {xs: k}, value: k} with
+  k one of int float char text list node (node: any value held boxed, ø included); elements: the element kind of a
+  list whose type is known. An empty map comes as null (to_json, card lib-json). tests/parser/test_self_analyzer.rs
+  checks it runs on every source of tests/parser/analyzer_twin_sources.txt.
 
 ## Value layout (card emitter-gc; the Rust emitter follows: card rust-emitter)
 Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
