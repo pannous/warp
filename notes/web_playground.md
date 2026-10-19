@@ -53,6 +53,7 @@ with a `try ▶` button (window.playground.runCode) and the value the page shows
 x, y` line links tour examples and samples/ files, and choosing one of those shows a toolbar back-link "guide: <chapter>".
 tests/web/test_guide.rs checks every fence's value through warp::web::evaluate (the page's own report) and every linked
 example. Write snippets in canonical style (`^`, `\(name)`, `xs#1`, `if … then … else`): the page shows hints otherwise.
+Explanatory prose for a snippet belongs immediately before its fence, while the fence keeps the executable expected value.
 Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML like the CLI.
 
 ## Architecture
@@ -87,7 +88,8 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
   for the deploy) and host-files.js getSync answers an unlisted path "missing" without asking, so the compiler's module
   and header searches cause no 404s. Inline 🐝 favicon, CodeMirror fixedGutter off (Firefox's scroll-linked warning).
 - From the C++ version (~/wasp/docs, wasp.pannous.com): CodeMirror 5 + simple mode (web/playground/codemirror/), the
-  warp syntax mode (rewritten with word boundaries and warp's comment rules), example menu + `?example=`,
+  warp syntax mode (rewritten with word boundaries and the compiler's comment rules: every `//` starts a comment,
+  including `//note` without a space), example menu + `?example=`,
   run-while-typing, download wasm. Not taken: the C++ linear-memory node ABI, binaryen wasm→wat, deploy-to-lambda.
 - The first markup program a worker compiles pays a one-time cost (lib/markup.warp's to_html): after a run is shown
   the page asks its worker once to warm up (playground.js warmWorker → worker.js warmUp: `p{ "" }` evaluated with the

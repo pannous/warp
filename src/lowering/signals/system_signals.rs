@@ -57,7 +57,7 @@ const CLICKS_TEMPLATE: &str = "on frame {
 	}
 }";
 /// The keys the page names (src/graphics/paint_window.rs key_code, canvas.js KEY_CODES give these codes); 0 is none
-const KEY_NAMES: [(i64, &str); 9] = [
+const KEY_NAMES: [(i64, &str); 13] = [
 	(0, ""),
 	(0xF700, "ArrowUp"),
 	(0xF701, "ArrowDown"),
@@ -67,6 +67,10 @@ const KEY_NAMES: [(i64, &str); 9] = [
 	(27, "Escape"),
 	(8, "Backspace"),
 	(9, "Tab"),
+	(0xF750, "Shift"),
+	(0xF751, "Control"),
+	(0xF752, "Alt"),
+	(0xF753, "Meta"),
 ];
 const DAY_WORD: &str = "day";
 const WEEKDAY_WORD: &str = "weekday";

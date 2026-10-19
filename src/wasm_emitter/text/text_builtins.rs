@@ -643,8 +643,9 @@ impl WasmGcEmitter {
 		if self.should_emit_function(TEXT_ARGUMENT) {
 			self.runtime_function(TEXT_ARGUMENT, vec![node_ref], vec![node_ref], vec![], |s, f| {
 				s.emit_fail_if_error(f, 0);
+				s.emit_codepoint_as_text(f, 0);
+				s.emit_require_kind(f, 0, Kind::Text, "not_a_text");
 				f.instruction(&I::LocalGet(0));
-				s.call(f, TEXT_OF);
 			});
 		}
 	}

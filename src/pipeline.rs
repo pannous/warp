@@ -567,7 +567,7 @@ pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 /// `compile` again when code generation called prelude words the program never named, so resolve did not load them
 /// (`n times [x]` calls filled_list): the second time resolve loads them as if called (card lib-from-runtime). The
 /// first compile already hinted the program
-fn loading_compiler_words<T>(compile: impl Fn() -> Result<T, Node>) -> Result<T, Node> {
+pub(crate) fn loading_compiler_words<T>(compile: impl Fn() -> Result<T, Node>) -> Result<T, Node> {
 	use crate::compiler::compile_context::{change, scoped};
 	let compiled = compile();
 	let missing = change(|context| std::mem::take(&mut context.missing_compiler_words));

@@ -130,6 +130,12 @@ fn parameters(definition: &Node, untyped_only: bool) -> Vec<String> {
 		.collect()
 }
 
+/// `prelude·is!(…) := …`: a definition the standard module before the qualifier made
+fn is_std_module_function(definition: &Node) -> bool {
+	let name = definition.defined_name().unwrap_or_default();
+	name.split_once(crate::modules::QUALIFIER).is_some_and(|(module, _)| crate::modules::std_module(module).is_some())
+}
+
 /// `upper x!`: the `!` mutates x (D2, mutation.rs), it forces nothing
 fn is_mutating_call(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, separator) if items.len() == 2 && !matches!(separator, Separator::Semicolon | Separator::Newline)
@@ -236,14 +242,15 @@ impl Site {
 		self.each_part(node, &|site, part| site.forced(part, holders))
 	}
 
-	/// Inside a function body its parameters and every main-level variable are visible (late binding)
+	/// Inside a function body its parameters and every main-level variable are visible (late binding); a standard
+	/// module's function sees only its parameters, the program's variables are none of its business (`is!`'s eval)
 	fn in_body(&self, definition: &Node) -> Site {
 		let parameters = parameters(definition, false);
-		let variables = [
-			parameters.clone(),
-			self.all_variables.iter().filter(|name| !parameters.contains(name)).cloned().collect(),
-		]
-		.concat();
+		let main_level = match is_std_module_function(definition) {
+			true => vec![],
+			false => self.all_variables.iter().filter(|name| !parameters.contains(name)).cloned().collect(),
+		};
+		let variables = [parameters.clone(), main_level].concat();
 		Site {
 			blocks: self.blocks.clone(),
 			variables,

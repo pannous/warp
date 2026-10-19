@@ -135,7 +135,7 @@ bytes(t: text) := (0..byte_size(t)).map(offset => byte_at(t, offset))
 // another type declares its own `infix operator ↑(v: V, n: int) := …`
 infix operator ↑(x: number, n: number) := x ^ n
 infix operator ↓(x: number, b: number) := log(x, b)
-replace(t, old, new) := join(split(t, old), new)
+replace(t, old, with new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
 is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
@@ -409,4 +409,12 @@ days_from_civil(year: int, month: int, day: int): int := {
 	march_month = if month > 2 then month - 3 else month + 9
 	day_of_year = (153 * march_month + 2) /! 5 + day - 1
 	era * 146097 + year_of_era * 365 + year_of_era /! 4 - year_of_era /! 100 + day_of_year - 719468
+}
+// the check of the Rust tests' `is!("3+3", 6)`, written `is! "3+3" 6` (decision warp-is-tests): the code's value is
+// the expected one, permissively: equal, or both nothing-like (0, ø, [], no); a failure says what the code gave
+is!(warp: text, expected: any) := {
+	got = eval(warp)
+	passed = got == expected or (not got and not expected)
+	if not passed then print("✗ is! \"" + warp + "\" " + str(expected) + ": got " + str(got))
+	passed
 }

@@ -1,0 +1,4 @@
+// warp compiles lib/compiler/parser.warp (supervisor goal 2026-10-19): with WARP_SELF_HOSTED=1 emitter.warp compiles the parser
+// and it parses a program; WARP_EMIT_SURVEY=1 WARP_EMIT_REFUSALS=<file> lists each function it still refuses
+use "../../lib/compiler/parser.warp"
+tree("x = 1 + 2; f(n) := n * 2")

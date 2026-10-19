@@ -69,6 +69,8 @@ const CLOSED_LINE: &str = "closed";
 const ESCAPE_CODE: f32 = 27.0;
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
+/// The modifier keys' codes, beside the function keys': Shift, Control, Alt, Meta (card held-shift)
+const MODIFIER_CODES: [u32; 4] = [0xF750, 0xF751, 0xF752, 0xF753];
 /// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
 pub const TRACKING_OPTIONS: usize = TRACKING_MOUSE_MOVED | TRACKING_ACTIVE_ALWAYS | TRACKING_IN_VISIBLE_RECT;
 const TRACKING_MOUSE_MOVED: usize = 0x02;
@@ -110,8 +112,8 @@ fn end_the_run() -> ! {
 	std::process::exit(0)
 }
 
-/// The code of a pressed key: its character's, an arrow's ARROW_CODES, Enter, Escape, Backspace and Tab their control
-/// characters' (lowering/signals/system_signals.rs KEY_NAMES names them); None for the others
+/// The code of a pressed key: its character's, an arrow's ARROW_CODES, a modifier's MODIFIER_CODES, Enter, Escape,
+/// Backspace and Tab their control characters' (lowering/signals/system_signals.rs KEY_NAMES names them); None for the others
 fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 	use winit::keyboard::{Key, NamedKey};
 	match key {
@@ -125,6 +127,10 @@ fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 		Key::Named(NamedKey::Escape) => Some(0x1B),
 		Key::Named(NamedKey::Backspace) => Some(0x08),
 		Key::Named(NamedKey::Tab) => Some(u32::from('\t')),
+		Key::Named(NamedKey::Shift) => Some(MODIFIER_CODES[0]),
+		Key::Named(NamedKey::Control) => Some(MODIFIER_CODES[1]),
+		Key::Named(NamedKey::Alt) => Some(MODIFIER_CODES[2]),
+		Key::Named(NamedKey::Super | NamedKey::Meta) => Some(MODIFIER_CODES[3]),
 		_ => None,
 	}
 }

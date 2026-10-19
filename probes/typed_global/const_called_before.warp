@@ -1,4 +1,0 @@
-const wanted = "https://x.org/v1"
-ok = check("https://x.org/v1")
-def check(s){ s == wanted }
-ok

@@ -1,0 +1,11 @@
+// parse corpus of tests/parser/test_self_parser.rs: former type-topic probes, asserted in tests/types/ and tests/functions/
+// typed_global/const_called_before
+const wanted = "https://x.org/v1"
+ok = check("https://x.org/v1")
+def check(s){ s == wanted }
+ok
+
+// typed_list/upper
+names: texts = ["hi"]
+upper names  // ["HI"], as for the untyped names = ["hi"] (card typed-list-upper)
+

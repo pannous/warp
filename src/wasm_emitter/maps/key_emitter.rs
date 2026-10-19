@@ -198,8 +198,9 @@ impl WasmGcEmitter {
 			Op::Neg => {
 				// -x = 0 - x
 				let use_float = self.get_type(right).is_float();
-				if self.get_type(right) == crate::Kind::Data {
-					// a number known only at run time: node_sub decides
+				if matches!(self.get_type(right), crate::Kind::Data | crate::Kind::Empty) {
+					// a number known only at run time, or a value held as a Node (`-r.y` of a vector parameter): node_sub
+					// decides
 					func.instruction(&I::I64Const(0));
 					self.emit_call(func, "new_int");
 					self.emit_node_instructions(func, right);
