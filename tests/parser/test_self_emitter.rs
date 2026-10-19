@@ -6,11 +6,13 @@ use std::path::PathBuf;
 const CORE_PROGRAMS: &str = "probes/self_hosting/emitter/core";
 /// Programs of the checked share of samples and probes inside the core, at least (142 on 2026-10-18): a floor that only rises
 const LEAST_SOURCES_INSIDE: usize = 135;
-/// Sources whose lowered view lacks what Rust's result depends on, named in notes/self_hosting_dropped.md
-const DROPPED: [&str; 3] = [
+/// Sources the emitter twin skips (a lowered view lacking what Rust's result depends on, or a deviation), named in
+/// notes/self_hosting_dropped.md
+const DROPPED: [&str; 4] = [
 	"probes/variance/runtime_lax_alias.warp",
 	"probes/variance/runtime_unannotated_param.warp",
 	"probes/static_result.warp",
+	"probes/self_hosting/analyzer/symbol_named_key.warp",
 ];
 
 #[test]
