@@ -1240,13 +1240,20 @@ module_bytes(functions: any) := {
 	imported = section(section_ids.import, vector(range_list(#module.imports).map(i => import_entry(i))))
 	declared = section(section_ids.function, vector(functions.map(f => uleb(#gc_types + f.index))))
 	exports = [name_bytes("main") + [export_function_byte] + uleb(functions#1.index)]
-	memory = []
-	if #module.imports > 0 {
-		memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
-		exports += [name_bytes("memory") + [export_memory_byte, 0]]
-	} else { imported = [] }
+	# always a memory, exported as Rust's: the host of a program importing this module compiled reads it
+	memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
+	exports += [name_bytes("memory") + [export_memory_byte, 0]]
+	if #module.imports == 0 { imported = [] }
 	for name in exported_globals {
 		if name in module.globals { exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)] }
+	}
+	# the program's functions under the names left free, as Rust's export_names: a module imported compiled calls them
+	taken = ["main", "memory"] + exported_globals
+	for f in functions[1..] {
+		if not f.is_runtime and not (f.name in taken) {
+			exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
+			taken += [f.name]
+		}
 	}
 	exported = section(section_ids.export, vector(exports))
 	# the texts' bytes: one passive segment, which array.new_data reads
