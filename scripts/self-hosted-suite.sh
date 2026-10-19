@@ -173,15 +173,16 @@ newly_failed() {
 	LC_ALL=C comm -13 <(failed_tests "${previous_logs[@]}") <(failed_tests "$@")
 }
 
-# The tip with the speed profile: a commit of its own per group, so each job has its own run name; every stage
-# of a tip gets the same tree, so a warm VM builds it once
+# The tip with the speed profile, one commit for every part and stage of a tip (the tip's dates make it the same
+# commit each run): the build embeds its commit (WARP_COMMIT), so a warm VM builds a tip once
 switched_on() {
-	local tip=$1 group=$2 index blob commit
+	local tip=$1 index blob commit
 	index=$(mktemp "${TMPDIR:-/tmp}/self-hosted-index.XXXXXX")
 	GIT_INDEX_FILE=$index git read-tree "$tip"
 	blob=$({ git show "$tip:$CONFIG"; echo "$SPEED_PROFILE"; } | git hash-object -w --stdin)
 	GIT_INDEX_FILE=$index git update-index --cacheinfo "100644,$blob,$CONFIG"
-	commit=$(git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip: $group")
+	commit=$(GIT_AUTHOR_DATE=$(git log -1 --format=%aD "$tip") GIT_COMMITTER_DATE=$(git log -1 --format=%cD "$tip") \
+		git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip")
 	rm -f "$index"
 	echo "$commit"
 }
@@ -203,10 +204,10 @@ cloud_run() {
 	local groups=("${TEST_GROUPS[@]}") settings=() switch
 	for switch in "${SWITCHES[@]}"; do settings+=(--env "$switch"); done
 	[[ " ${SWITCHES[*]} " == *" $SWITCH=pure "* ]] && groups=("${PURE_TEST_GROUPS[@]}")
+	commit=$(switched_on "$tip")
 	for number in "${!groups[@]}"; do
 		group=${groups[$number]}
 		branch=$SCRATCH_PREFIX/$run-$number
-		commit=$(switched_on "$tip" "$group")
 		# GitHub now and then answers "remote rejected (failed)" (9741669b, e5d5a6b7): tried again before giving up
 		push_branch "$commit" "$branch" || fail "push of $branch failed"
 		# shellcheck disable=SC2086 # the group is a list of filters

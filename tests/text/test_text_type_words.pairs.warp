@@ -9,7 +9,7 @@
 'str(√2)'	'√2'
 
 # every_float_type_word_rounds_an_exact_real
-'π as float'	pi
-'π as double'	pi
+'π as float'	π
+'π as double'	π
 '(1/4) as float32'	0.25
 '(1/4) as f64'	0.25
