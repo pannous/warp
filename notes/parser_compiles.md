@@ -29,6 +29,9 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
   lands after it; enum cases run once enum lowering does)
 
 - `x is int/list/symbol` type tests: pure-lane 02f878456e (type_tests.warp, rung 29)
+- int(x), float(x), `x as int` of texts, characters, floats and ratios; positioned(n, line, column) as a $MetaNode
+  read by n.line / n.column; `op as Op` in keyed (shapes.warp's keyed shadowed runtime.warp's keyed intrinsic inside
+  key_node): emit-enum-match 45bc9a01bf, 12702665ba (survey 25 → 14 with main merged)
 
 ## Open
 | root | owner |
@@ -39,7 +42,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
 | try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
-| int(x), positioned, `op as Op` (keyed), a node into a typed Parser field, `branch` called with a missing argument | warp-emitter-structures |
+| a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps), a write by a run-time key (remember), pending kinds in recursive functions | warp-runtime |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
