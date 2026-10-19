@@ -4,7 +4,7 @@
 # replace their Rust passes, the rest stays Rust; =1 adds emitter.warp), the twin tests (parser::test_self_*) left out. Prints
 # "self-hosted: N passed / M" and the failures grouped by cause, the most frequent first.
 #   scripts/self-hosted-suite.sh [<tip>]               on the cloud lane: the pushed tip (default HEAD) plus a throwaway
-#                                                      commit switching self-hosting on (.cargo/config.toml [env]), one
+#                                                      commit with SPEED_PROFILE (the stage switches are --env settings), one
 #                                                      job per TEST_GROUPS entry at once, each on its own branch
 #                                                      SCRATCH_PREFIX/<tip>-<group>, deleted after the run
 #   scripts/self-hosted-suite.sh --stage <name>=<VAR>[=<value>]… [<tip>]   the same with a later stage's switch set too
@@ -21,7 +21,7 @@
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
-SWITCHES=("$SWITCH=front"        # VAR=value lines of .cargo/config.toml [env]: the front end alone, unless --stage adds
+SWITCHES=("$SWITCH=front"        # VAR=value settings of the test run (cloud-test.sh --env): the front end alone, unless --stage adds
 	"WARP_EMIT_REFUSALS=/tmp/warp-emit-refusals.txt") # each refusal of a warp stage (and pure's "pure: ran") as a
 	                                 # line of the VM's file, which cloud-test.sh appends to the log; ranked from there
 	                                 # (on stderr, the lines reached the output the CLI tests check)
@@ -41,7 +41,23 @@ TEST_GROUPS=(
 	"functions:: ffi::"
 	"types:: lists:: modules:: node:: numbers:: operators::"
 	"parser:: programs:: scope:: sweeps::"
-	"text:: wasm:: web:: welcoming::"
+	"text:: wasm:: web:: welcoming:: formats::"
+)
+# The pure lane (--stage …=WARP_SELF_HOSTED=pure) takes ~2.3 s a test against ~0.2 s: 3 of 5 parts outgrew the limit
+# (e5d5a6b7+pure), so its parts hold ≤ ~650 tests (counts of 2026-10-19), big folders split by their files' letters
+PURE_TEST_GROUPS=(
+	"$(echo control::test_{a..i})"
+	"$(echo control::test_{j..z})"
+	"$(echo functions::test_{a..l})"
+	"$(echo functions::test_{m..z}) ffi::"
+	"lists:: formats:: node::"
+	"modules:: operators:: scope:: sweeps::"
+	"numbers::"
+	"$(echo types::test_{a..l})"
+	"$(echo types::test_{m..z})"
+	"parser:: programs::"
+	"text:: wasm:: web::"
+	"welcoming::"
 )
 REPORTS=/Users/me/dev/angles/warp/data/self-hosted
 COUNTS=/Users/me/dev/angles/warp/data/self_hosting/suite_counts.txt   # the count over time, one line per cloud run
@@ -151,23 +167,32 @@ folder_name() { printf %s "$1" | tr -c 'A-Za-z0-9._-' '-'; }
 # The tests failing now that passed in the last recorded run (a regression check), from the logs both runs left
 newly_failed() {
 	local previous=$1; shift
-	local previous_logs=("$CLOUD_RESULTS/$(folder_name "$SCRATCH_PREFIX/$previous")"-[0-9]-*/log.txt.gz)
+	local previous_logs=("$CLOUD_RESULTS/$(folder_name "$SCRATCH_PREFIX/$previous")"-[0-9]*-*/log.txt.gz)
 	[ -e "${previous_logs[0]}" ] || return 0
 	echo "newly failing since $previous:"
 	LC_ALL=C comm -13 <(failed_tests "${previous_logs[@]}") <(failed_tests "$@")
 }
 
-# The tip with the switch on: a commit of its own per group, so each job has its own run name
+# The tip with the speed profile: a commit of its own per group, so each job has its own run name; every stage
+# of a tip gets the same tree, so a warm VM builds it once
 switched_on() {
 	local tip=$1 group=$2 index blob commit
 	index=$(mktemp "${TMPDIR:-/tmp}/self-hosted-index.XXXXXX")
 	GIT_INDEX_FILE=$index git read-tree "$tip"
-	blob=$({ git show "$tip:$CONFIG"; printf '%s\n' "${SWITCHES[@]}" | sed 's/^\([^=]*\)=\(.*\)$/\1 = "\2"/'; echo "$SPEED_PROFILE"; } |
-		git hash-object -w --stdin)
+	blob=$({ git show "$tip:$CONFIG"; echo "$SPEED_PROFILE"; } | git hash-object -w --stdin)
 	GIT_INDEX_FILE=$index git update-index --cacheinfo "100644,$blob,$CONFIG"
 	commit=$(git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip: $group")
 	rm -f "$index"
 	echo "$commit"
+}
+
+push_branch() {
+	local attempt
+	for attempt in 1 2 3; do
+		git push -q -f origin "$1:refs/heads/$2" && return 0
+		sleep $((attempt * 20))
+	done
+	return 1
 }
 
 cloud_run() {
@@ -175,14 +200,17 @@ cloud_run() {
 	tip=$(git rev-parse "${1:-HEAD}") || fail "no tip ${1:-HEAD}"
 	run=${tip:0:8}${STAGE:++$STAGE}
 	git branch -r --contains "$tip" | grep -q . || fail "tip $tip is not pushed"
-	[ "$(git show "$tip:$CONFIG" | grep '^\[' | tail -1)" = "[env]" ] || fail "$CONFIG of $tip does not end with its [env] table"
-	for number in "${!TEST_GROUPS[@]}"; do
-		group=${TEST_GROUPS[$number]}
+	local groups=("${TEST_GROUPS[@]}") settings=() switch
+	for switch in "${SWITCHES[@]}"; do settings+=(--env "$switch"); done
+	[[ " ${SWITCHES[*]} " == *" $SWITCH=pure "* ]] && groups=("${PURE_TEST_GROUPS[@]}")
+	for number in "${!groups[@]}"; do
+		group=${groups[$number]}
 		branch=$SCRATCH_PREFIX/$run-$number
 		commit=$(switched_on "$tip" "$group")
-		git push -q -f origin "$commit:refs/heads/$branch" || fail "push of $branch failed"
+		# GitHub now and then answers "remote rejected (failed)" (9741669b, e5d5a6b7): tried again before giving up
+		push_branch "$commit" "$branch" || fail "push of $branch failed"
 		# shellcheck disable=SC2086 # the group is a list of filters
-		scripts/cloud-test.sh --no-wait "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
+		scripts/cloud-test.sh --no-wait "${settings[@]}" "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
 		branches+=("$branch") commits+=("$commit")
 	done
 	for number in "${!branches[@]}"; do
