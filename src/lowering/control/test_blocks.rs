@@ -14,6 +14,8 @@ const TEST_WORD: &str = "test";
 const EXPECT_WORD: &str = "expect";
 /// Words whose top-level calls count as tests under `warp test` and print their own ✗ line (lib/prelude.warp `is!`)
 const CHECK_WORDS: [&str; 1] = ["is!"];
+/// The name of a map of test pairs: `test_pairs = { '1+1' 2 }`
+const TEST_PAIRS: &str = "test_pairs";
 const COUNT: (&str, &str) = ("tests_run_", "tests·run");
 const FAILED: (&str, &str) = ("tests_failed_", "tests·failed");
 const CAUGHT: (&str, &str) = ("test_error_", "test·error");
@@ -27,6 +29,10 @@ const CHECK: &str = r#"tests_run_ += 1; try { if not (condition_) then tests_fai
 const SUMMARY: &str = r#"if tests_failed_ > 0 then raise(str(tests_failed_) + " of " + str(tests_run_) + " failed"); "✓ " + str(tests_run_) + (if tests_run_ == 1 then " test" else " tests") + " passed""#;
 
 pub fn lower(program: Node) -> Node {
+	let program = match crate::pipeline::compile_mode().for_tests {
+		true => pairs_checked(program),
+		false => program,
+	};
 	// soft keywords: a program taking test or expect itself keeps that word
 	let names = crate::program_names::ProgramNames::of(&program);
 	let words: Vec<&str> = [TEST_WORD, EXPECT_WORD].into_iter().filter(|word| !names.takes(word)).collect();
@@ -77,6 +83,40 @@ fn test_of<'a>(statement: &'a Node, words: &[&str]) -> Option<Test<'a>> {
 		}
 	}
 	phrase(rest).map(Test::Soft)
+}
+
+/// A file of test pairs (decision warp-is-tests): code and its expected value a line each, `'1+1' 2`, bare or as the
+/// map `test_pairs = { … }`; each pair runs as `is!(code, expected)`. Any other program stays as it is
+fn pairs_checked(program: Node) -> Node {
+	let statements = program.body_statements();
+	let pairs = match statements.as_slice() {
+		[single] => match single.drop_meta() {
+			Node::Key(name, Op::Assign, map) if name.is_symbol(TEST_PAIRS) => map.body_statements(),
+			_ => statements,
+		},
+		_ => statements,
+	};
+	let checks: Option<Vec<Node>> = pairs.iter().map(pair_check).collect();
+	match checks {
+		Some(checks) if !checks.is_empty() => sequence(checks),
+		_ => program,
+	}
+}
+
+/// `'1+1' 2` as `is!("1+1", 2)`; a code alone expects ø
+fn pair_check(pair: &Node) -> Option<Node> {
+	let (code, expected) = match pair.drop_meta() {
+		Node::List(items, Bracket::None | Bracket::Square, Separator::Space) if items.len() == 2 => {
+			(&items[0], items[1].clone())
+		}
+		code => (code, Node::Empty),
+	};
+	let code = match code.drop_meta() {
+		Node::Text(code) => code.clone(),
+		Node::Char(code) => code.to_string(),
+		_ => return None,
+	};
+	Some(Node::List(vec![symbol(CHECK_WORDS[0]), Node::Text(code), expected], Bracket::Round, Separator::None))
 }
 
 /// `is! "3+3" 6`, `is!("3+3", 6)`: a call of a check word
