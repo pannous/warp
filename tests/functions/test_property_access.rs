@@ -63,7 +63,6 @@ fn test_of_lookup_is_an_assignment_target() {
 }
 
 #[test]
-#[ignore = "dropped: rust-cleanup-drops: the set x to y phrase; warp writes x = y (set x of y to z may come back as library code)"]
 fn test_set_to_phrases_assign() {
 	is!("p={width:3}; set width of p to 12; p.width", 12);
 	is!("p={width:3}\nwidth of p = 12\nset width of p to 7\np.width", 7);
