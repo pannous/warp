@@ -4,22 +4,17 @@
 # `for x in xs body`   → `x·items = xs; x·index = 0; while x·index < #x·items { x = x·items#(x·index+1); body; x·index++ }`
 # `for xs body` loops with the variable `it`. Any other `for` stays as written and is refused downstream, loudly.
 use "walk.warp"
+use "phrase_blocks.warp"
 
 implicit_variable = "it"
-
-is_name(n: Node): bool := match n {
-	Symbol(name): yes
-	_: no
-}
 
 named(variable: Node, suffix: text): Node := match variable {
 	Symbol(name): symbol(name + "·" + suffix)
 	_: variable
 }
 
-# the body's statements: a `{…}` block's lines, the phrase `{print i}` as one statement, a bare body as it is
+# the body's statements: a `{…}` block's lines (phrase_blocks made `{print i}` one), a bare body as it is
 statements_of(body: Node): list := match body {
-	List(items, Bracket.Curly, Separator.Space): { if #items == 1 then items else [List(items, Bracket.None, Separator.Space)] }
 	List(items, Bracket.Curly, separator): items
 	_: [body]
 }

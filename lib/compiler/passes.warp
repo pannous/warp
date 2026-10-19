@@ -8,9 +8,10 @@ use "number_words.warp"
 use "of_lookups.warp"
 use "grouped_receivers.warp"
 use "broadcasting.warp"
+use "phrase_blocks.warp"
 use "for_loops.warp"
 
-passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass, for_loops]
+passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass, phrase_blocks, for_loops]
 
 # a node after every pass, in order
 lowered_node(n: any): any := {
