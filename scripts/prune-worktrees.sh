@@ -8,11 +8,14 @@
 #   2. local and remote branches origin/main holds the same way, with no worktree checked out and a tip older than
 #      IDLE_HOURS
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
+#   4. unmerged branches nobody moves (a branch only merges once its card is Ready): remote ones `todo ready --stray`
+#      lists and local ones never pushed, with a tip older than STALE_HOURS, are typed to the supervisor (tmux
+#      SUPERVISOR_TMUX) to ready, merge or discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped
 # Detached worktrees (integrate, main-binary …) are never removed; DONOR, which cowtree clones new worktrees from on
 # the Worktrees volume (notes/churn_volume.md), is moved to origin/main when clean. Skips for untracked files are listed.
 #   prune-worktrees.sh            prune, print what it did
 #   prune-worktrees.sh --dry-run  only print what it would do
-# Run daily by cron.
+# Run every 12 hours by cron.
 WARP=/Users/me/dev/angles/warp
 # worktrees live on the Worktrees volume (notes/churn_volume.md); integrator/ there is a plain folder, not a worktree
 WORKTREE_ROOTS=(/Volumes/Worktrees)
@@ -22,6 +25,10 @@ TWEAK_FILES=(Cargo.toml Cargo.lock crates/warp-runtime/Cargo.toml)
 IDLE_HOURS=${IDLE_HOURS:-6}
 LEFTOVER_DAYS=2
 KEPT_BRANCHES=(main HEAD)
+STALE_HOURS=${STALE_HOURS:-12}
+SUPERVISOR_TMUX=warp-supervisor
+RESULT_BRANCHES='^cloud-(jobs|results)/'  # test-lane results the steward reads, never merged
+GH_TOKEN=${GH_TOKEN:-$(cat ~/.config/gh/cron-token 2>/dev/null)}; export GH_TOKEN
 
 dry_run=$([[ $1 == --dry-run ]] && echo yes)
 git=(git -C $WARP)
@@ -32,7 +39,7 @@ act() {  # print the action, run it unless dry run
 }
 
 merged() {  # origin/main holds the commit or, after a rebase or squash merge, an equal patch of each commit
-  $git merge-base --is-ancestor $1 origin/main 2>/dev/null || ! $git cherry origin/main $1 | grep -q '^+'
+  $git merge-base --is-ancestor $1 origin/main 2>/dev/null || ! $git cherry origin/main $1 2>/dev/null | grep -q '^+'
 }
 
 recently_written() {  # any file in the worktree written within IDLE_HOURS
@@ -41,7 +48,8 @@ recently_written() {  # any file in the worktree written within IDLE_HOURS
 
 in_worktree_roots() { for root in $WORKTREE_ROOTS; do [[ $1 == $root/* ]] && return 0; done; return 1 }
 
-old_tip() { (( $(date +%s) - $($git log -1 --format=%ct $1) > IDLE_HOURS * 3600 )) }
+older_than() { (( $(date +%s) - $($git log -1 --format=%ct $2) > $1 * 3600 )) }  # hours, ref
+old_tip() { older_than $IDLE_HOURS $1 }
 
 $git fetch --prune --quiet origin
 
@@ -73,6 +81,22 @@ done
 # the donor follows main, so new clones share most files with it
 if [[ -d $DONOR && -z $(git -C $DONOR status --porcelain --untracked-files=no 2>/dev/null) ]]; then
   [[ $(git -C $DONOR rev-parse HEAD) == $($git rev-parse origin/main) ]] || act git -C $DONOR checkout --quiet --detach origin/main
+fi
+
+stale=()
+todo ready --stray 2>/dev/null | awk '/^## unmerged/{on=1; next} /^##/{on=0} on && NF' |
+while read -r branch card; do
+  [[ $branch =~ $RESULT_BRANCHES ]] || ! older_than $STALE_HOURS origin/$branch || stale+=("$branch ($card)")
+done
+for branch in $($git for-each-ref --format='%(refname:short)' refs/heads); do
+  (( ${KEPT_BRANCHES[(Ie)$branch]} )) || $git rev-parse -q --verify origin/$branch >/dev/null || merged $branch ||
+    ! older_than $STALE_HOURS $branch || stale+=("$branch (local only, never pushed)")
+done
+if (( $#stale )); then
+  notice="[prune-worktrees] ${#stale} unmerged branches older than ${STALE_HOURS} h without a Ready card: ${(j:; :)stale}. Ready, merge or discard each (ask its owner)."
+  echo "$(date '+%F %T') $notice"
+  [[ -z $dry_run ]] && tmux has-session -t "=$SUPERVISOR_TMUX" 2>/dev/null &&
+    tmux send-keys -t "=$SUPERVISOR_TMUX:" -l "$notice" && tmux send-keys -t "=$SUPERVISOR_TMUX:" Enter
 fi
 
 mkdir -p $LEFTOVERS
