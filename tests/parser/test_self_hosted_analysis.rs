@@ -3,6 +3,9 @@
 use warp::compiler::node_views::plain_view;
 use warp::compiler::self_hosted::kinds_of;
 
+/// insertion sort and merge sort, merge growing its result from ø
+const SORTING_SAMPLE: &str = "samples/lists/sorting_idiomatic.warp";
+
 #[test]
 fn the_analysis_stage_gives_the_kinds_as_data() {
 	let program = warp::pipeline::lower("square(x: int) := x * x; y = square(3); \"square: ${y}\"").expect("lowers");
@@ -41,5 +44,15 @@ fn the_warp_emitter_reads_the_analyzed_parameter_kinds() {
 	self_analyzed_run("1", "x = 3; x + 4"); // the stage programs compile with the Rust emitter, once
 	let (value, phases) = self_analyzed_run("1", "h(n) := n % 3; xs = [4, 5]; h(xs#1)");
 	assert!(value.contains('1'), "{value}");
+	assert!(!phases.contains("emit ("), "the Rust emitter ran: {phases}");
+}
+
+/// A local starting as ø and grown by `+=` is a node, yet the analysis holds it a list where merge needs one, so
+/// emitter.warp unboxes it (runtime.warp list_of_node, trapping on anything else) instead of refusing the program
+#[test]
+fn the_warp_emitter_unboxes_a_node_the_analysis_holds_a_list() {
+	self_analyzed_run("1", "x = 3; x + 4"); // the stage programs compile with the Rust emitter, once
+	let (value, phases) = self_analyzed_run("1", SORTING_SAMPLE);
+	assert!(value.contains("-3,0,1,2,5,5,6,7,8,9"), "{value}");
 	assert!(!phases.contains("emit ("), "the Rust emitter ran: {phases}");
 }

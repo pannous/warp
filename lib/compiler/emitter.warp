@@ -216,6 +216,7 @@ converted(value: any, to: text) := {
 	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
 	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
 	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
+	if from == "node" and to in node_unboxings and analyzed_program() { return runtime_call(node_unboxings[to], [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
@@ -825,11 +826,15 @@ new_scope(f: Function) := {
 
 # the analyzer's kinds as the emitter's, where they name one it holds unboxed or as a typed reference; others ø
 analyzed_kinds = {int: "int", float: "float", text: "text", list: "list", codepoint: "char"}
+# the runtime words taking a node where the analysis holds a list or a text (they trap on any other value)
+node_unboxings = {list: "list_of_node", text: "text_of_node"}
+# is the program analyzed (WARP_SELF_ANALYSIS): its kinds agree with Rust's, so a node meeting a list or text holds one
+analyzed_program() := module.kinds != ø and "value" in module.kinds
 # the kind the analyzer found for f's i-th parameter (counted from 0), as the emitter's; ø when it found none it holds
 analyzed_parameter_kind(f: Function, i: int) := {
-	if f.is_runtime or module.kinds == ø or not ("functions" in module.kinds) { return ø }
+	if f.is_runtime or not analyzed_program() { return ø }
 	functions = module.kinds["functions"]
-	if not (f.name in functions) { return ø }
+	if functions == ø or not (f.name in functions) { return ø }
 	parameters = functions[f.name]["params"]
 	if i >= #parameters or not (parameters[i] in analyzed_kinds) { return ø }
 	analyzed_kinds[parameters[i]]
