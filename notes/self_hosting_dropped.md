@@ -57,8 +57,8 @@ Per form: the form, the sources showing it, why it is left out, how to bring it 
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
   (`if o != ø`, `o ?? d`, `o ?? raise(m)`). The Rust compiler dropped it too (decision rust-cleanup-drops). Back:
   src/lowering/welcoming/rust_options.rs from git history, as a pass before the match arms.
-- `set x to 5`, `set width of p to 12` (decision setter-calls: `p.width = 12`). Sources:
-  probes/english_setter.warp. Back as library code (card set-set): lib/english.warp's rewrite rules, in the Rust
+- `set x to 5` dropped for good (user 2026-10-19: extra syntax, `x = 5` says it). `set width of p to 12` (decision
+  setter-calls: `p.width = 12`). Sources: probes/english_setter.warp. Back as library code (card set-set): lib/english.warp's rewrite rule, in the Rust
   compiler; the warp compiler gets them once it reads rewrite rules (src/modules/rewrites.rs). The style hint
   "warp doesn't do prose" is gone: a rule has no hints (test_set_to_hints_the_assignment stays ignored).
 - `print words in t` (the walk `for part in t.words {print part}`) and `byte count of t` (the count in a unit,
