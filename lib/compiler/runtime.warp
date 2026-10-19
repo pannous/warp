@@ -757,7 +757,7 @@ letter_component(b: int): int := if b == 119 then 4 else b - 119
 swizzled_one(p: any, letter: text): any := unboxed_list(p)#letter_component(byte_at(letter, 0))
 swizzled(p: any, letters: text): list := {
 	items = unboxed_list(p)
-	out = []
+	out = new_list(0)
 	for i in 0..byte_count(letters) { out += [items#letter_component(byte_at(letters, i))] }
 	out
 }

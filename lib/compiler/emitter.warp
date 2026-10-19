@@ -306,6 +306,8 @@ map_value(body: Body, entries: any) := {
 # its field's kind already; a class not declared in the program (a markup tag, a module's) is refused
 instance_value(body: Body, class_name: text, fields: any) := {
 	if not (class_name in module.classes) { return refuse("an instance of " + class_name + ", a class not declared here") }
+	# methods (`S·init`, `C·put`) change their instance in place in Rust's: not yet compiled alike here
+	if module.functions.keys.any(name => name.starts_with(class_name + "·")) { return refuse("an instance of " + class_name + ", a class with methods") }
 	declared = module.classes[class_name]
 	if #fields != #declared.keys { return refuse("an instance of " + class_name + " not giving each field") }
 	for field in fields {
