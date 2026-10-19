@@ -129,7 +129,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = [] }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; shared: any = {} }
 
 module = Module({}, [])
 
@@ -182,6 +182,30 @@ collect_functions(program: any, functions: any) := {
 		}
 	}
 	kept
+}
+# the main-level variables a function reads and neither assigns nor takes (`limit = 3; f(x) := x > limit`): module
+# globals, main's assignment declaring each, as Rust's late_binding makes them
+shared_names(statements: any) := {
+	shared = {}
+	for s in statements {
+		if type(s) is key and op_of(s) == "=" and key_of(s) is symbol {
+			name = name_of(key_of(s))
+			for f_name in module.functions.keys { if reads_free(module.functions[f_name], name) { shared[name] = yes } }
+		}
+	}
+	shared
+}
+reads_free(f: Function, name: text) := {
+	if not mentions(f.body, name) or assigns(f.body, name) { return no }
+	for p in f.parameters { if name_of(p) == name { return no } }
+	yes
+}
+# whether n assigns the symbol `name` anywhere
+assigns(n: any, name: text) := {
+	if type(n) is key and op_of(n) == "=" and key_of(n) is symbol and name_of(key_of(n)) == name { return yes }
+	if type(n) is key { return assigns(key_of(n), name) or assigns(value_of(n), name) }
+	if is_group(n) { for x in n { if assigns(x, name) { return yes } } }
+	no
 }
 # the names of the functions the program defines
 defined_names(program: any) := {
@@ -609,6 +633,7 @@ assignment(body: Body, target: any, value: any) := {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	kind = value#1
+	if not (name in body.names) and name in module.shared and body.function.name == "main" { return declare_global(name, value) }
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
@@ -1158,6 +1183,7 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 	main = Function("main", [], [], ø)
 	try {
 		main.body = separated(bracketed(collect_functions(program, module.functions), ""), ";")
+		module.shared = shared_names(statements_of(main.body))
 		compile_function(main, [])
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
 		# a program with one it cannot compile fails there (not the prelude's helpers, compiled when called)
