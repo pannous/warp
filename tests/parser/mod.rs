@@ -53,6 +53,7 @@ mod test_self_analyzer; // card inferred-kinds
 mod test_self_differential; // card self-differential
 #[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
+mod test_self_exact_rounding; // card exact-rounding-warp
 #[cfg(feature = "native")]
 mod test_self_float_as_exact; // card float-as-exact-warp
 #[cfg(feature = "native")]
