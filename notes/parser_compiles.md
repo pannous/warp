@@ -15,6 +15,9 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 - bare `return` (`{ return ø }`) and `continue` in while loops: pure-lane ec8cd7ade (a for whose body continues stays
   with Rust: its step must not be skipped)
 
+- `Parser{code: c, at: 0}` of a declared type read as the key `Parser: {…}` (p.branch became a call of branch):
+  pure-front d8bc25e098 (warp-parsing; lands with the pure-front merge)
+
 ## Open
 | root | owner |
 |---|---|
@@ -24,5 +27,4 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
 | class constructor `Point(2, 3)`, the file's own globals, try, `===` | warp-self-analyzer |
 | int(x), positioned, `op as Op` (keyed), an instance inside a map, a node into a typed Parser field, a write by a run-time key, pending kinds in recursive functions, `branch` called with a missing argument | warp-emitter-structures |
-| `Parser{code: c, at: 0}` parses in parser.warp as the key `Parser: {…}`, in Rust as the group `(Parser {…})`: the front lane's lowering then misses the instance, so `p.branch` (a function branch exists) becomes the call `branch(p)` and `p.branch = no` `branch(p, no)` (the 3 "call of branch with 1 arguments" refusals; repro: WARP_SELF_HOSTED=front warp lower on a class with a field named like a function) | warp-parsing (found by warp-emitter-structures) |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
