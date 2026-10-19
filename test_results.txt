@@ -859,6 +859,7 @@ PASSED:
   ✓ control::test_text_patterns::a_text_pattern_needs_a_piece_between_holes
   ✓ control::test_text_patterns::a_typed_hole_reads_its_text
   ✓ control::test_text_patterns::pieces_and_holes_alternate
+  ✓ control::test_text_patterns::text_holes_fit_their_types
   ✓ control::test_threads::a_finish_handler_runs_after_the_statement_that_saw_the_task_finish
   ✓ control::test_threads::a_paused_task_waits_for_resume
   ✓ control::test_threads::a_stop_handler_runs_once_the_task_stopped
@@ -2553,6 +2554,7 @@ PASSED:
   ✓ modules::test_std_collections::other_languages_class_names_are_the_collections
   ✓ modules::test_std_collections::other_languages_method_names_are_the_collections_methods
   ✓ modules::test_std_collections::the_size_of_an_instance_through_len_and_count
+  ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
   ✓ modules::test_std_docs_comment_association::a_hand_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::the_comment_block_directly_above_is_the_doc_of_its_word
@@ -3720,6 +3722,7 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -5895,6 +5898,7 @@ PASSED:
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
   ✓ welcoming::test_error_positions::an_unterminated_text_names_where_it_opened
+  ✓ welcoming::test_fi_block_end::fi_closes_a_multiline_if_block
   ✓ welcoming::test_fixits::a_bare_label_fixes_to_its_colon
   ✓ welcoming::test_fixits::a_hint_offers_its_preferred_form
   ✓ welcoming::test_fixits::ambiguous_call_comparison_fixes
@@ -6289,7 +6293,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6286 passed, 1 failed, 6287 total tested
+11 ignored, 6290 passed, 0 failed, 6290 total tested
