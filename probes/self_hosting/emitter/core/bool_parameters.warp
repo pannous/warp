@@ -1,0 +1,5 @@
+# emitter: a bool parameter is an i32 like a condition, declared or given by the first call
+choose(b: bool) := if b then 1 else 2
+flipped(b) := not b
+sized(big: bool, n: int) := if big and n > 1 then "big" else "small"
+[choose(yes) + choose(no) * 10, flipped(3 > 2), sized(yes, 3)]

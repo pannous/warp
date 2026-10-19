@@ -1029,7 +1029,7 @@ function_compiled(f: Function, argument_kinds: any) := {
 		annotation = f.annotations[i]
 		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" or annotation in module.classes then "node" else annotation]
 	}
-	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
+	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
 	# the first readings find the result kind and the kinds of locals assigned values of two kinds (`widens`), the
 	# last gives the code with every recursive call knowing the result
