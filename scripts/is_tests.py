@@ -276,7 +276,7 @@ def warp_arithmetic(expression):
         if NUMBER.fullmatch(word):
             tokens.append(warp_number(word))
         elif word in PI_WORDS:
-            tokens.append("pi")
+            tokens.append("π")
         elif re.fullmatch(r"<=|>=|==|!=|[-+*<>()]", word):
             tokens.append(word)
         else:
