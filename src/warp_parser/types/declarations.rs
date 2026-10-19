@@ -383,25 +383,26 @@ impl WarpParser {
 		}
 	}
 
-	/// ` Shape { Circle(r), … }` after `enum`: a case followed by its values in parentheses
-	pub(crate) fn enum_with_values_ahead(&self) -> bool {
+	/// ` Shape { Circle(r), … }` after `enum`: whether a case is followed by its values in parentheses; none when no
+	/// name and braces follow
+	pub(crate) fn enum_body_ahead(&self) -> Option<bool> {
 		let mut offset = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let name_length = (offset..).take_while(|&at| is_identifier_char(self.peek_char(at))).count();
 		if name_length == 0 {
-			return false;
+			return None;
 		}
 		offset += name_length;
 		offset += (offset..).take_while(|&at| self.peek_char(at).is_whitespace()).count();
 		if self.peek_char(offset) != '{' {
-			return false;
+			return None;
 		}
 		let mut depth = 0;
 		loop {
 			match self.peek_char(offset) {
-				'\0' => return false,
-				'(' if depth == 1 && is_identifier_char(self.peek_char(offset - 1)) => return true,
+				'\0' => return None,
+				'(' if depth == 1 && is_identifier_char(self.peek_char(offset - 1)) => return Some(true),
 				'(' | '[' | '{' => depth += 1,
-				')' | ']' | '}' if depth == 1 => return false,
+				')' | ']' | '}' if depth == 1 => return Some(false),
 				')' | ']' | '}' => depth -= 1,
 				_ => {}
 			}
@@ -409,18 +410,34 @@ impl WarpParser {
 		}
 	}
 
+	/// The name and braced cases of an enum, each case named in the enum's scope (`None` a case of `enum Separator`)
+	fn enum_name_and_cases(&mut self) -> (Result<String, String>, Node) {
+		self.skip_spaces();
+		let type_name = self.parse_symbol();
+		self.skip_whitespace();
+		let cases = self.within(Context { in_enum_cases: true, ..self.context }, |parser| parser.parse_bracketed('{'));
+		(type_name, cases)
+	}
+
+	/// `enum Coin { Penny, Nickel }`: the plain enum as written, `enum Coin {…}`, for plain_enums.rs
+	pub(crate) fn parse_plain_enum(&mut self) -> Node {
+		let (type_name, cases) = self.enum_name_and_cases();
+		let type_name = or_return_error!(type_name);
+		let words = vec![Node::symbol(crate::warp_parser::ENUM_WORD), Node::Symbol(type_name), cases];
+		Node::List(words, Bracket::None, Separator::Space)
+	}
+
 	/// `enum Shape { Circle(r), Rect(w, h), Dot }`, Swift's `case circle(radius: Double)` lines: each case with values a
 	/// class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
 	pub(crate) fn parse_enum_with_values(&mut self) -> Node {
-		self.skip_spaces();
-		let type_name = or_return_error!(self.parse_symbol());
-		self.skip_whitespace();
-		let Node::List(cases, _, _) = self.parse_bracketed('{').drop_meta().clone() else {
+		let (type_name, cases) = self.enum_name_and_cases();
+		let type_name = or_return_error!(type_name);
+		let Node::List(cases, _, _) = cases.drop_meta().clone() else {
 			return error(&format!("enum {type_name} needs its cases in braces"));
 		};
 		let mut bare_variants = vec![];
 		let mut declarations = vec![];
-		for case in cases.iter().map(without_case_keyword) {
+		for case in crate::lowering::sum_variants::case_rows(&cases).iter().map(without_case_keyword) {
 			match case.drop_meta() {
 				Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
 					declarations.push(self.variant_class(

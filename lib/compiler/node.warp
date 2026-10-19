@@ -1,0 +1,39 @@
+# The built-in node: the value Rust hands over and the $Node struct in wasm, declared case for case as src/node/mod.rs
+# Node has them (decision compiler-node-enum). No class is made of it: a case is a kind of node and its fields are the
+# node's parts (src/lowering/types/node_cases.rs), so `f(n: Node): Node` takes any node, `Key(a, Op.Add, b)` builds
+# `a+b`, and `match n { Key(left, op, right): … }` tests the kind and reads the parts of the node itself.
+enum Node {
+	True
+	False
+	Empty
+	Number(value: number)
+	Char(value: codepoint)
+	Text(value: text)
+	Symbol(name: text)
+	Error(node: Node)
+	Key(left: Node, op: Op, right: Node)
+	List(items: list, bracket: Bracket, separator: Separator)
+	Data(value: any)
+	Meta(node: Node, data: Node)
+	Type(name: Node, body: Node)
+}
+
+# The operators a node carries (src/operators/mod.rs Op, those of src/operators/codes.rs OP_CODES), each its own value:
+# `Op.Add as text` is "+", `"+" as Op` is Add
+enum Op {
+	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, ArrowUp, ArrowDown
+	Add, Sub, Mul, Div, FloorDiv, Mod, Rem, Pow, LogBase, LogOf, Shl, Shr
+	AddAssign, SubAssign, MulAssign, DivAssign, FloorDivAssign, ModAssign, PowAssign, AndAssign, OrAssign, XorAssign
+	Lt, Gt, Le, Ge, Eq, Ne, Identical, NotIdentical, Similar, Rough
+	And, Or, Xor, Not, BitAnd, BitOr
+	Neg, Sqrt, Cbrt, Abs, Inc, Dec, Question
+	If, Then, Else, While, Do
+	Hash, Range, To, As, PlusMinus
+	None
+}
+
+# A list's bracket (src/node/mod.rs Bracket): `Bracket.Square as text` is "[", an unbracketed list's None is ""
+enum Bracket { Curly, Square, Round, Less, None }
+
+# A list's separator (src/node/mod.rs Separator): `Separator.Comma as text` is ","
+enum Separator { Space, Comma, Semicolon, Newline, Tab, None }

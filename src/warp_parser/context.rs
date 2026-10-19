@@ -39,6 +39,9 @@ pub(crate) struct Context {
 	pub(crate) pipe_takes_call: bool,
 	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
 	pub(crate) in_capture: bool,
+	/// Parsing the cases of `enum Node { True, False, Number(n) }`: a case is named in its enum's scope, so a constant
+	/// word there is the case's name, not the constant (card node-enum)
+	pub(crate) in_enum_cases: bool,
 }
 
 impl Context {

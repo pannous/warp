@@ -138,9 +138,21 @@ impl WarpParser {
 	/// The word of `length` characters just read (0: the one at the cursor) follows a `.`: `math.sqrt`, `math.pi` name
 	/// a member, no operator or constant
 	pub(super) fn at_member_name(&self, length: usize) -> bool {
+		self.word_follows(length, &['.'])
+	}
+
+	/// The word of `length` characters just read follows a capitalized `Type::`: `Node::True` names a case of the enum
+	/// Node, no constant (card node-enum); `f64::sqrt` keeps its operator word, `std::f64::consts::PI` its constant
+	pub(super) fn at_scoped_name(&self, length: usize) -> bool {
+		let scope_end = self.pos.saturating_sub(length + 2);
+		let scope_start = self.chars[..scope_end].iter().rposition(|c| !is_identifier_char(*c)).map_or(0, |i| i + 1);
+		self.word_follows(length, &[':', ':']) && self.chars.get(scope_start).is_some_and(|first| first.is_uppercase())
+	}
+
+	fn word_follows(&self, length: usize, prefix: &[char]) -> bool {
 		let start = self.pos.saturating_sub(length);
-		start > 0
-			&& self.chars.get(start - 1) == Some(&'.')
+		start >= prefix.len()
+			&& self.chars[start - prefix.len()..start] == *prefix
 			&& self.chars.get(start).is_some_and(|first| first.is_alphabetic())
 	}
 
