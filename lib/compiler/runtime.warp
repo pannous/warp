@@ -1144,11 +1144,17 @@ not_a_map(): int := {
 # `a == b` of two maps: the same names with equal values, in any order
 map_equal(a: any, b: any): bool := {
 	if #unboxed_list(a) != #unboxed_list(b) { return no }
-	# no local for the place: map_index may still be compiling here (node_text → node_equal → map_equal), its kind
-	# not known yet
+	# its own search, not map_index's: map_index may still be compiling here (map_index → key_name → node_text → …
+	# node_equal → map_equal), its result kind not known yet
 	for entry in unboxed_list(a) {
-		if map_index(b, key_name(entry)) == 0 { return no }
-		if not node_equal(key_value(entry), map_get(b, key_name(entry))) { return no }
+		found = no
+		for other in unboxed_list(b) {
+			if text_order(key_name(entry), key_name(other)) == 0 {
+				if not node_equal(key_value(entry), key_value(other)) { return no }
+				found = yes
+			}
+		}
+		if not found { return no }
 	}
 	yes
 }

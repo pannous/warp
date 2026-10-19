@@ -126,7 +126,7 @@ section(id: int, content: any) := [id] + uleb(#content) + content
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {} }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
@@ -1292,15 +1292,9 @@ function_compiled(f: Function, argument_kinds: any) := {
 	if result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
 	# a body ending in a statement (a loop, a print) gives ø, as Rust's does
 	f.result = if result == no_kind then "node" else result
-	f.gives_nothing = result == no_kind
-	body_code(f)
-}
-# the last reading of f, every call's result known but those of functions still compiling (map_get → map_index →
-# node_text → node_equal → map_equal → map_get): a local such a call assigns is still pending, read again at the end
-body_code(f: Function) := {
 	scope = new_scope(f)
 	value = expression(scope, f.body)
-	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
+	f.code = if result == no_kind then value#2 + [ref_null, gc.node] else converted(value, result)
 	f.locals = scope.kinds[(#f.parameters)..]
 	f.local_names = scope.order
 }
@@ -1483,7 +1477,6 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any) := {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
 		}
-		for f in module.order[0..] { if pending in f.locals { body_code(f) } }
 		if #module.refusals > 0 { throw module.refusals.join("\n") }
 		module_bytes(module.order)
 	} catch refusal {
