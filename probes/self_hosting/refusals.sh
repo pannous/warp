@@ -21,10 +21,10 @@ work=$root/scratch/refusals
 report_name=refusals
 [ -n "${SURVEY:-}" ] && report_name=bootstrap_gap
 LADDER=probes/self_hosting/pure
-[ -n "$PURE" ] && report_name=pure && WARP_SELF_HOSTED=pure && FOLDERS=${FOLDERS:-$LADDER samples}
+[ -n "$PURE" ] && report_name=pure && WARP_SELF_HOSTED=pure && FOLDERS=${FOLDERS:-$LADDER samples} && PARALLEL_RUNS=${PARALLEL_RUNS:-8}
 report=$root/data/self_hosting/$report_name.txt
 FOLDERS=${FOLDERS:-samples probes}
-PARALLEL_RUNS=4
+PARALLEL_RUNS=${PARALLEL_RUNS:-4}
 TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-15}
 RAN_PURE="pure: ran" # the line the pure lane writes for a program it compiled (src/compiler/self_hosted.rs)
 rm -rf "$work/runs" && mkdir -p "$work/runs" "$(dirname "$report")"
@@ -87,7 +87,10 @@ different=$(cat "$work/runs"/*.different 2>/dev/null)
 		echo "$refused"
 	else
 		echo "refusals, once per program:"
-		for run in "$work/runs"/*.txt; do sort -u "$run"; done | grep -vx -e inside -e "$RAN_PURE" | sort | uniq -c | sort -rn
+		ranked=$(for run in "$work/runs"/*.txt; do sort -u "$run"; done | grep -vx -e inside -e "$RAN_PURE")
+		# the pure lane's own refusals; a refused program's usual compile adds the others
+		[ -n "$PURE" ] && ranked=$(echo "$ranked" | grep "^outside the core: pure: ")
+		echo "$ranked" | sort | uniq -c | sort -rn
 	fi
 } >"$report"
 head -40 "$report"
