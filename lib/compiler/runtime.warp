@@ -852,7 +852,7 @@ float_checked(n: any): any := {
 	n
 }
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
-# empty one) where a list is needed; any other value traps, as Rust fails on it
+# empty one) where a list is needed, a boxed character where one is needed; any other value traps, as Rust fails on it
 text_of_node(n: any): text := {
 	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 5) { return unboxed_text(n) }
 	if is_null(n) == 0 and kind_code(n) == 4 { return char_text(unboxed_char(n)) }
@@ -862,6 +862,10 @@ text_of_node(n: any): text := {
 bool_of_node(n: any): bool := {
 	if is_null(n) == 1 or marked_kind(n) != 257 { fail() }
 	unboxed_int(n) != 0
+}
+char_of_node(n: any): char := {
+	if is_null(n) == 1 or kind_code(n) != 4 { not_a_character() }
+	unboxed_char(n)
 }
 list_of_node(n: any): list := {
 	if is_null(n) == 1 { return new_list(0) }
@@ -1173,6 +1177,10 @@ non_ascii_text(): int := {
 	0
 }
 not_an_int(): int := {
+	fail()
+	0
+}
+not_a_character(): int := {
 	fail()
 	0
 }

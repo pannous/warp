@@ -270,7 +270,7 @@ joint_kind(a: text, b: text): text := {
 	"node"
 }
 # code of kind `from` as kind `to`; a boxed value read as a text, yes/no or list by the runtime word checking it is one
-node_readers = {text: "text_of_node", bool: "bool_of_node", list: "list_of_node"}
+node_readers = {text: "text_of_node", bool: "bool_of_node", list: "list_of_node", char: "char_of_node"}
 def converted(value: any, to: text): list {
 	from = value#1
 	if to == "node" { return boxed(value) }
