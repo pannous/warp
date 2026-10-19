@@ -88,7 +88,6 @@ fn the_warp_emitter_imports_host_words() {
 /// A module of emitter.warp fails with the runtime error Rust's names (index range, fractional index, zero divisor),
 /// through runtime.warp words of the error's name and the exported trap_detail (src/wasm_emitter/control/traps.rs)
 #[test]
-#[ignore = "card node-conditions: xs#4 gives \"index out of range\" without Rust's \"4 not in 1…3\" (emit-closures/emitter-truthy batch)"]
 fn the_warp_emitter_fails_with_rusts_runtime_errors() {
 	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
 	self_hosted_run(&cache, "3 + 4");
