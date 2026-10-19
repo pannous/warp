@@ -1,0 +1,6 @@
+# card list-result-annotation: `f(…): [int] := …` loses the parameters (undefined variable: value); `: list` works
+f(value: int, divisor: int): [int] := {
+	q = value /! divisor
+	[q, value - q * divisor]
+}
+f(7, 3)

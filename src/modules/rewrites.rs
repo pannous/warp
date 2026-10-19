@@ -214,6 +214,10 @@ struct Rewrite<'a> {
 
 impl Rewrite<'_> {
 	fn rewritten(&mut self, node: Node) -> Node {
+		// `data(set a to 3)` stays as written: a quote is code, not a phrase to rewrite
+		if crate::lowering::blocks::written_quote(&node).is_some() {
+			return node;
+		}
 		let node = node.map_children(|child| self.rewritten(child));
 		let node = match node.drop_meta() {
 			Node::List(items, bracket, separator) if separator.separates_statements() => {

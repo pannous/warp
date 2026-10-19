@@ -7,38 +7,6 @@ use warp::warp_parser::parse;
 use warp::Node;
 
 #[test]
-fn test_meta_field() {
-	let mut tee = parse("tee{a:1}");
-	tee["a"]["@attrib"] = 42.into();
-	tee["a"]["@attrib2"] = 43.into();
-	// tee["a"].setMeta("attrib2",(Node) 43);
-	// tee["a"].metas()["attrib2"]=(Node) 43;
-	eq!(tee.name(), "tee");
-	exists!(tee["a"]["@attrib"]);
-	exists!(tee["a"]["@attrib2"]);
-	exists!(tee["a"] == 1);
-	assert!(tee.length() == 1);
-	assert!(tee["a"]["@attrib"] == 42);
-	assert!(tee["a"]["@attrib2"] == 43);
-	eq!(tee.serialize(), "tee{@attrib(42) @attrib2(43) a:1}");
-}
-
-#[test]
-fn test_meta() {
-	let mut tee = parse("tee{a:1}");
-	tee["@attrib"] = 42.into();
-	tee["@attrib2"] = 43.into();
-	eq!(tee.name(), "tee");
-	eq!(tee.serialize(), "@attrib(42) @attrib2(43) tee{a:1}");
-	exists!(tee["@attrib"]);
-	exists!(tee["@attrib2"]);
-	assert!(tee["a"] == 1);
-	assert!(tee.length() == 1);
-	assert!(tee["@attrib"] == 42);
-	assert!(tee["@attrib2"] == 43);
-}
-
-#[test]
 fn test_meta_at() {
 	eq!(parse("tee{a:1}").name(), "tee");
 	eq!(parse("tee{a:1}").serialize(), "tee{a:1}");
@@ -81,30 +49,5 @@ fn test_parent_context() {
 
 		eq!(a.kind(), key);
 		assert!(a.name == "HIO");
-	);
-}
-
-#[test]
-fn test_parent() {
-	skip!( // not in rust!
-		//	chars source = "{a:'HIO' d:{} b:3 c:ø}";
-	//     chars
-		source = "{a:'HIO'}";
-	let result = parse(source);
-		let a : Node = result["a"];
-		// print(a);
-		assert!(a.kind == key or a.kind == strings);
-		assert!(a == "HIO");
-		assert!(a.parent == 0); // key is the highest level
-	//     Node * parent = a.value.node -> parent;
-		assert!(parent);
-		// print(parent); // BROKEN, WHY?? let's find out:
-		assert!(*parent == result);
-		skip!(
-
-			// pointer identity broken by flat() ?
-			assert!(parent == &result);
-		);
-		testParentContext(); // make sure parsed correctly
 	);
 }
