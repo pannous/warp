@@ -267,16 +267,18 @@ vector_code(item_codes: any) := {
 }
 ## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
-entry_code(name_code: any, value_code: any) := keyed_code(node_kind_codes.symbol, name_code, value_code)
-# a quoted name `{"+": 1}` stays a text, as Rust's
-keyed_code(name_kind: int, name_code: any, value_code: any) := [op.i64_const] + sleb(node_kind_codes.entry) + node(name_kind, name_code) + as_node(value_code) + gc_code("struct_new", [gc.node])
-# the name of an entry `x: v` or a subscript's text "x"
-name_text(n: any) := if n is symbol then name_of(n) else n
+entry_code(name_code: any, value_code: any) := keyed_code(node(node_kind_codes.symbol, name_code), value_code)
+keyed_code(name_node: any, value_code: any) := [op.i64_const] + sleb(node_kind_codes.entry) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node])
+# an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
+name_node(name: any) := {
+	if name is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(name))) }
+	if #name == 1 { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code("ref_i31", [])) }
+	node(node_kind_codes.text, text_bytes(name))
+}
 is_entry(n: any) := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text)
 # `{a: 1, b: "x"}`: a map
 map_value(body: Body, entries: any) := {
-	name_kind = e => if key_of(e) is symbol then node_kind_codes.symbol else node_kind_codes.text
-	codes = entries.map(e => keyed_code(name_kind(e), text_bytes(name_text(key_of(e))), boxed(expression(body, value_of(e)))))
+	codes = entries.map(e => keyed_code(name_node(key_of(e)), boxed(expression(body, value_of(e)))))
 	["node", node(node_kind_codes.map, vector_code(codes))]
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
@@ -348,7 +350,8 @@ intrinsic(body: Body, name: text, arguments: any) := {
 		taken = field => to + from + gc_code("struct_get", [gc.list, field]) + gc_code("struct_set", [gc.list, field])
 		return [no_kind, code + taken(0) + taken(1)]
 	}
-	if name == "key_name" { return ["text", payload(as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]), gc.text)] }
+	# an entry's name, a symbol, text or character (name_node), as a text
+	if name == "key_name" { return ["text", runtime_call("node_text", [["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1])]])#2] }
 	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 2])] }
 	if name == "map_of" { return ["node", node(node_kind_codes.map, values#1#2)] }
 	if name == "new_key" { return ["node", entry_code(values#1#2, values#2#2)] }

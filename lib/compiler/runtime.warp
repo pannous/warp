@@ -52,7 +52,7 @@ node_text(n: any) := {
 	}
 	if kind_code(n) == 1 { return exact_text(n) }
 	if kind_code(n) == 2 { return float_text(unboxed_float(n)) }
-	if kind_code(n) == 3 { return unboxed_text(n) }
+	if kind_code(n) == 3 or kind_code(n) == 5 { return unboxed_text(n) }
 	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
 	if kind_code(n) == 6 { return key_text(n) }
 	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
