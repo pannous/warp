@@ -349,6 +349,7 @@ subscript_name(index: any) := {
 	ø
 }
 map_get(map: any, name: text) := runtime_call("map_get", [["node", boxed(map)], text_value_of(name)])
+field_of(value: any, name: text) := if value#1 == "node" then map_get(value, name) else refuse("the field " + name + " of a " + value#1)
 # `m.x = v`: the map with its entry x set to v
 field_assignment(map: any, name: any, value: any) := runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]])
 # a name as a text value, even of one character (text_value gives a "char" then)
@@ -1045,6 +1046,8 @@ key_expression(body: Body, n: any) := {
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
+	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
+	if operator == "." and right is symbol { return field_of(expression(body, left), name_of(right)) }
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)
 	if operator == "as" and right is symbol and name_of(right) == "rational" {
 		return as_rational(expression(body, left))
