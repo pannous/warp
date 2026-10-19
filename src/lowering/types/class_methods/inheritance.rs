@@ -217,14 +217,13 @@ pub(super) fn item_name(item: &Node) -> Option<String> {
 /// INHERITED_FROM it
 pub(super) fn with_inherited(node: Node, classes: &[(String, Option<String>, Vec<Node>)]) -> Result<Node, Node> {
 	match node {
-		Node::Type { name, body: _ } if let Some(parent) = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).cloned() => {
+		Node::Type { name, body: _ }
+			if let Some(parent) = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).cloned() =>
+		{
 			let class = name.drop_meta().name();
 			let items = inherited_items(&class, classes, &mut vec![])?;
 			let name = Node::Symbol(class).with_attribute(INHERITED_FROM, parent);
-			Ok(Node::Type {
-				name: Box::new(name),
-				body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)),
-			})
+			Ok(Node::Type { name: Box::new(name), body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)) })
 		}
 		Node::List(items, bracket, separator) => Ok(Node::List(
 			items.into_iter().map(|item| with_inherited(item, classes)).collect::<Result<_, _>>()?,

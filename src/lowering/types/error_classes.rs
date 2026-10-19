@@ -3,7 +3,7 @@
 use crate::node::{call, Bracket, Node};
 use crate::operators::Op;
 use crate::wasm_emitter::text::text_builtins::{RAISE_AS, TEXT_FORM};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The class every error is of: `except Error` catches all
 pub(crate) const ROOT_ERROR_CLASS: &str = "Error";
@@ -23,25 +23,28 @@ const RUNTIME_ERROR_CLASSES: [(&str, &str); 9] = [
 /// The field of an Error holding its message
 const MESSAGE_FIELD: &str = "message";
 
-/// Each class's parent
+/// Each class's parent, and the names of all the program's types
 #[derive(Default)]
 pub(crate) struct ErrorClasses {
 	parents: HashMap<String, String>,
+	types: HashSet<String>,
 }
 
 impl ErrorClasses {
 	pub(crate) fn of(program: &Node) -> Self {
 		let mut parents: HashMap<String, String> =
 			RUNTIME_ERROR_CLASSES.iter().map(|(class, parent)| (class.to_string(), parent.to_string())).collect();
+		let mut types = HashSet::new();
 		program.visit(&mut |part| {
 			if let Node::Type { name, .. } = part {
+				types.insert(name.drop_meta().name());
 				let marks = [crate::warp_parser::EXTENDS_KEYWORD, crate::class_methods::inheritance::INHERITED_FROM];
 				if let Some(parent) = marks.iter().find_map(|mark| name.attribute(mark)) {
 					parents.insert(name.drop_meta().name(), parent.drop_meta().name());
 				}
 			}
 		});
-		ErrorClasses { parents }
+		ErrorClasses { parents, types }
 	}
 
 	/// The class and its ancestors, nearest first
@@ -59,23 +62,38 @@ impl ErrorClasses {
 
 	/// The class and every class extending it, which `except class` catches
 	pub(crate) fn caught_by(&self, class: &str) -> Vec<String> {
-		let mut caught: Vec<String> =
-			self.parents.keys().filter(|known| self.lineage(known).any(|ancestor| ancestor == class)).cloned().collect();
+		let mut caught: Vec<String> = self
+			.parents
+			.keys()
+			.filter(|known| self.lineage(known).any(|ancestor| ancestor == class))
+			.cloned()
+			.collect();
 		caught.sort();
 		[vec![class.to_string()], caught.into_iter().filter(|known| known != class).collect()].concat()
 	}
 
 	/// `raise ParseError("bad")`, `raise ParseError{message: "bad"}`, `raise ParseError`: `raise_as(message, "ParseError")`,
 	/// an error of the class, its message the instance's (else the class name)
-	pub(crate) fn raised_instance(&self, raised: &Node) -> Option<Node> {
+	pub(crate) fn raised_instance(&self, raised: &Node, defined: impl Fn(&str) -> bool) -> Option<Node> {
 		let (class, message) = match raised.drop_meta() {
 			Node::Symbol(class) => (class.clone(), None),
 			Node::List(items, Bracket::Round, _) => (items.first()?.symbol_name()?.to_string(), items.get(1).cloned()),
-			Node::Key(class, Op::None | Op::Colon, body) => (class.symbol_name()?.to_string(), entry(body, MESSAGE_FIELD)),
+			Node::Key(class, Op::None | Op::Colon, body) => {
+				(class.symbol_name()?.to_string(), entry(body, MESSAGE_FIELD))
+			}
 			_ => return None,
 		};
 		if !self.is_error_class(&class) {
-			return None;
+			// `raise FooError("x")` of no type nor function: the class to declare
+			let undeclared = matches!(raised.drop_meta(), Node::List(..))
+				&& class.starts_with(char::is_uppercase)
+				&& !self.types.contains(&class)
+				&& !defined(&class);
+			return undeclared.then(|| {
+				crate::node::error(&format!(
+					"raise {class}(…): {class} is no error class: declare it with `class {class}: Error`"
+				))
+			});
 		}
 		let message = match message.map(|message| message.drop_meta().clone()) {
 			Some(Node::Text(message)) => Node::Text(message),

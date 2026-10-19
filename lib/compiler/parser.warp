@@ -754,10 +754,10 @@ def guarded(p, word) {
 def guarded_by(marker, guarded_part, fallback, caught) {
 	parts = [symbol(marker), guarded_part, fallback]
 	name = caught#1
-	class = caught#2
-	if class != "" {
+	caught_class = caught#2
+	if caught_class != "" {
 		bound = if name == "" then CAUGHT_ERROR else name
-		parts = parts + [keyed(":", symbol(bound), symbol(class))]
+		parts = parts + [keyed(":", symbol(bound), symbol(caught_class))]
 	} else if name != "" and mentions(fallback, name) {
 		parts = parts + [symbol(name)]
 	}

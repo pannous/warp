@@ -53,7 +53,9 @@ impl WarpParser {
 			// `except A: a except B: b`: an Error A does not catch passes on to the next one; an `else` after the
 			// fallback is an enclosing `if`'s
 			let mut first = true;
-			while let Some((word, ahead)) = self.fallback_word_ahead().filter(|(word, _)| first || *word != ELSE_KEYWORD) {
+			while let Some((word, ahead)) =
+				self.fallback_word_ahead().filter(|(word, _)| first || *word != ELSE_KEYWORD)
+			{
 				first = false;
 				self.advance_by(ahead + word.len());
 				self.skip_spaces();

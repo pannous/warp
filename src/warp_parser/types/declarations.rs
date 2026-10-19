@@ -241,8 +241,10 @@ impl WarpParser {
 		} else {
 			return None;
 		};
-		let names: String =
-			(start..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '{' | '\n' | '\0' | ';')).collect();
+		let names: String = (start..)
+			.map(|offset| self.peek_char(offset))
+			.take_while(|ch| !matches!(ch, '{' | '\n' | '\0' | ';'))
+			.collect();
 		let names_list: Vec<&str> = names.split(',').map(str::trim).collect();
 		let is_name = |name: &str| !name.is_empty() && name.chars().all(is_identifier_char);
 		// `class ParseError: Error` ending its line: the parent (decision error-classes), not Python's `class X: pass`
@@ -252,10 +254,8 @@ impl WarpParser {
 			}
 			_ => None,
 		};
-		let parent = names_list
-			.iter()
-			.find_map(|name| name.strip_suffix("()").filter(|parent| is_name(parent)))
-			.or(line_parent);
+		let parent =
+			names_list.iter().find_map(|name| name.strip_suffix("()").filter(|parent| is_name(parent))).or(line_parent);
 		let are_names = names_list.iter().all(|name| is_name(name.strip_suffix("()").unwrap_or(name)));
 		let ends_well = self.peek_char(start + names.chars().count()) == '{' || parent.is_some();
 		if !are_names || !ends_well {

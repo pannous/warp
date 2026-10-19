@@ -1,7 +1,7 @@
 //! `try X else Y`, `try X catch e { Y }` and `assert C else X` as templates
 use super::*;
-use crate::wasm_emitter::text::text_builtins::{ERROR_CLASS, RAISE_AS, TEXT_FORM};
 use crate::lowering::error_classes::ROOT_ERROR_CLASS;
+use crate::wasm_emitter::text::text_builtins::{ERROR_CLASS, RAISE_AS, TEXT_FORM};
 use crate::words::INSTANCE_OF;
 
 /// The placeholders of the `try`/`assert` templates
@@ -61,12 +61,16 @@ impl Lowering {
 		};
 		let handled = match class.filter(|class| class != ROOT_ERROR_CLASS) {
 			Some(class) if !self.error_classes.is_error_class(&class) => {
-				return crate::node::error(&format!("except {class}: {class} is no error class: declare it with `class {class}: Error`"));
+				return crate::node::error(&format!(
+					"except {class}: {class} is no error class: declare it with `class {class}: Error`"
+				));
 			}
 			Some(class) => {
 				let caught = self.error_classes.caught_by(&class);
-				let tests: Vec<String> =
-					caught.iter().map(|class| format!("{INSTANCE_OF}({CAUGHT_BINDING_PLACEHOLDER}, \"{class}\")")).collect();
+				let tests: Vec<String> = caught
+					.iter()
+					.map(|class| format!("{INSTANCE_OF}({CAUGHT_BINDING_PLACEHOLDER}, \"{class}\")"))
+					.collect();
 				format!(
 					"if {} {{{fallback_placeholder}}} else \
 					{{{RAISE_AS}({TEXT_FORM}({CAUGHT_BINDING_PLACEHOLDER}), {ERROR_CLASS}({CAUGHT_BINDING_PLACEHOLDER}))}}",

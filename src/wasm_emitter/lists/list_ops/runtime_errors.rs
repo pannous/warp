@@ -52,9 +52,17 @@ pub fn runtime_error_class(name: &str) -> &'static str {
 		"key_not_found" => "KeyError",
 		DIVIDE_BY_ZERO => "ZeroDivisionError",
 		"out_of_memory" => "MemoryError",
-		"invalid_number" | "min_of_an_empty_list" | "max_of_an_empty_list" | "reduce_of_an_empty_list" | "empty_separator"
-		| "non_ascii_text" | NOT_A_NUMBER | numbers::casts::INVALID_CODE_POINT | numbers::float_text::NOT_FINITE
-		| numbers::uncertain::NEGATIVE_UNCERTAINTY | numbers::uncertain::INTERVAL_AND_GAUSSIAN => "ValueError",
+		"invalid_number"
+		| "min_of_an_empty_list"
+		| "max_of_an_empty_list"
+		| "reduce_of_an_empty_list"
+		| "empty_separator"
+		| "non_ascii_text"
+		| NOT_A_NUMBER
+		| numbers::casts::INVALID_CODE_POINT
+		| numbers::float_text::NOT_FINITE
+		| numbers::uncertain::NEGATIVE_UNCERTAINTY
+		| numbers::uncertain::INTERVAL_AND_GAUSSIAN => "ValueError",
 		"float_out_of_int_range" => "OverflowError",
 		name if crate::numbers::fixed_width::FIXED_WIDTHS.iter().any(|width| width.trap == name) => "OverflowError",
 		name if name.starts_with(crate::switch::NO_CASE_PREFIX) => "ValueError",

@@ -456,13 +456,17 @@ fn arity_variant(name: &str, argument_count: usize) -> Option<&'static str> {
 }
 
 /// A word the program defines (`shadowed`) is its own
-fn raise_call(items: &[Node], shadowed: &HashSet<String>, error_classes: &crate::lowering::error_classes::ErrorClasses) -> Option<Node> {
+fn raise_call(
+	items: &[Node],
+	shadowed: &HashSet<String>,
+	error_classes: &crate::lowering::error_classes::ErrorClasses,
+) -> Option<Node> {
 	let [word, raised] = items else { return None };
 	let is_raise_word = |raise: &&str| word.is_symbol(raise) && !shadowed.contains(*raise);
 	if !crate::errors::run_time::RAISE_WORDS.iter().any(is_raise_word) {
 		return None;
 	}
-	if let Some(raised_as) = error_classes.raised_instance(raised) {
+	if let Some(raised_as) = error_classes.raised_instance(raised, |name| shadowed.contains(name)) {
 		return Some(raised_as);
 	}
 	let message = crate::errors::run_time::returned_error_message(raised).unwrap_or(raised).clone();
