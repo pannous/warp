@@ -126,12 +126,12 @@ section(id: int, content: any) := [id] + uleb(#content) + content
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {} }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
-# errors: the functions that only trap, by name (error_function)
+# errors: the indices of the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); variants its enums' bare cases
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
@@ -367,7 +367,7 @@ subscript_name(index: any) := {
 field_read(body: Body, target: any, name: text) := {
 	held = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	named = text_value_of(name)
-	missing = ["node", [op.call] + uleb(error_function("no_field_" + name).index) + [op.drop, op.unreachable]]
+	missing = ["node", [op.call] + uleb(error_function("no_field_" + name)) + [op.drop, op.unreachable]]
 	if is_swizzle(name) {
 		word = if #name == 1 then "swizzled_one" else "swizzled"
 		fits = condition(runtime_call("swizzle_fits", [held, named]))
@@ -377,8 +377,8 @@ field_read(body: Body, target: any, name: text) := {
 	["node", boxed(target) + [op.local_set] + held#2[1..] + found + chosen("node", runtime_call("map_get", [held, named]), missing)]
 }
 is_swizzle(name: text) := #name >= 1 and #name <= 4 and name.all(c => c in "xyzw")
-# a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
-error_function(name: text) := {
+# the index of a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
+error_function(name: text): int := {
 	if name in module.errors { return module.errors[name] }
 	f = Function(name, [], [], ø)
 	f.index = #module.imports + #module.order
@@ -388,8 +388,9 @@ error_function(name: text) := {
 	f.code = [op.unreachable]
 	f.locals = []
 	f.local_names = []
-	module.errors[name] = f
-	f
+	# the index, not the Function: a Function read back from the map fails with "key not found" (card error-index)
+	module.errors[name] = f.index
+	f.index
 }
 # `m.x = v`: the map with its entry x set to v
 field_assignment(map: any, name: any, value: any) := runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]])
@@ -1051,7 +1052,7 @@ group_expression(body: Body, n: any) := {
 	# as "no case for label"
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") {
 		label = if type(n#2) is key and key_of(n#2) is text then key_of(n#2) else "value"
-		return [pending, [op.call] + uleb(error_function("no_case_" + label).index) + [op.drop, op.unreachable]]
+		return [pending, [op.call] + uleb(error_function("no_case_" + label)) + [op.drop, op.unreachable]]
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		word = library_words[name_of(n#1)]
@@ -1291,9 +1292,15 @@ function_compiled(f: Function, argument_kinds: any) := {
 	if result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
 	# a body ending in a statement (a loop, a print) gives ø, as Rust's does
 	f.result = if result == no_kind then "node" else result
+	f.gives_nothing = result == no_kind
+	body_code(f)
+}
+# the last reading of f, every call's result known but those of functions still compiling (map_get → map_index →
+# node_text → node_equal → map_equal → map_get): a local such a call assigns is still pending, read again at the end
+body_code(f: Function) := {
 	scope = new_scope(f)
 	value = expression(scope, f.body)
-	f.code = if result == no_kind then value#2 + [ref_null, gc.node] else converted(value, result)
+	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.parameters)..]
 	f.local_names = scope.order
 }
@@ -1476,6 +1483,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any) := {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
 		}
+		for f in module.order[0..] { if pending in f.locals { body_code(f) } }
 		if #module.refusals > 0 { throw module.refusals.join("\n") }
 		module_bytes(module.order)
 	} catch refusal {
