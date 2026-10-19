@@ -86,6 +86,8 @@ mod test_self_signatures; // Back-end focus: the analyzer's signature table
 #[cfg(feature = "native")] // a lib/compiler file on disk
 mod test_self_time_arithmetic; // card time-arithmetic-warp
 #[cfg(feature = "native")]
+mod test_self_sort; // card sort-warp
+#[cfg(feature = "native")]
 mod test_self_words; // card library-word-tables
 mod test_semicolon_square;
 mod test_spaced_children;
