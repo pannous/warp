@@ -37,7 +37,9 @@ without_layers(view: any, attributes: bool): any := {
 node_of(view: any): any := {
 	kind = kind_of(view)
 	if kind == "symbol" { return symbol(view#2) }
-	if kind == "text" or kind == "char" { return view#2 }
+	if kind == "text" { return view#2 }
+	// lowering reads a one-character literal as a text, as the Rust lowering does
+	if kind == "char" { return "" + view#2 }
 	if kind == "key" { return Key(node_of(view#3), view#2 as Op, node_of(view#4)) }
 	if kind == "list" { return List(view[3..].map(node_of), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
@@ -50,6 +52,7 @@ node_of(view: any): any := {
 view_of(n: Node): any := match n {
 	Key(left, op, right): key_view(left, op as text, right)
 	Symbol(name): ["symbol", name]
+	Char(c): ["char", c]
 	Text(t): ["text", t]
 	List(items, bracket, separator): ["list", bracket as text, separator as text] + items.map(view_of)
 	_: n
