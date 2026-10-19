@@ -105,6 +105,7 @@ fn key(code: &str) -> Option<String> {
 	for folder in searched_folders(&program, &working) {
 		hasher.update(format!("{}\n{:?}\n", folder.display(), listing(&folder)));
 	}
+	hasher.update(crate::compiler::self_hosted::compiler_key().unwrap_or_default());
 	hasher.update(code);
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
