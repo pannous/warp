@@ -455,3 +455,8 @@ duration_nanos, duration_of(months, days, nanos) and local_offset_at(t) over the
 program making a time imports (Rust: imports.rs makes_instant). Names carry a time_/duration_/zone_ prefix instead of
 the card's bare form/position/days, which runtime words use as locals. The time cards (time-field, time-text,
 time-arithmetic, time-zones) move src/wasm_emitter/time onto these. Probes: probes/self_hosting/emitter/times.
+- Times in runtime.warp (card time-text-warp): `time_text(n)` (node_text's kind 18) writes a date, an instant, a local
+  time and a time of day as times.rs emit_time_text/emit_fraction do; a duration (card duration-warp) and a zoned time
+  (needs the zone names table) trap. Unreached yet: a time constant arrives in emitter.warp as an opaque
+  ["data", "Data(…)"] view (src/compiler/node_views.rs), so the emitter refuses it and Rust takes the program; the next
+  step is a view carrying the form and position (card emitter-emits).

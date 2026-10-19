@@ -57,6 +57,7 @@ node_text(n: any): text := {
 	if kind_code(n) == 6 { return key_text(n) }
 	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
 	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
+	if kind_code(n) == 18 { return time_text(n) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
@@ -936,3 +937,67 @@ duration_of(months: int, days: int, nanos: int): any := {
 }
 # the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
 local_offset_at(t: any): int := local_offset(floor_quotient(time_position(t), 1000000))
+
+## times (card time-text-warp; src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
+## of kind 18, its form in the info bits (src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
+## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
+instant_form() := 0
+date_form() := 1
+duration_form() := 3
+zoned_form() := 4
+clock_form() := 5
+second_nanos() := 1000000000
+day_nanos() := 86400000000000
+time_form(n: any): int := int_remainder(int_quotient(marked_kind(n), 256), 8)
+# RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
+# local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
+time_text(n: any): text := {
+	form = time_form(n)
+	if form == duration_form() or form == zoned_form() { time_form_not_in_warp() }
+	position = unboxed_int(n)
+	if form == date_form() { return date_text(position) }
+	days = floor_quotient(position, day_nanos())
+	clock = clock_text(position - days * day_nanos(), form)
+	if form == clock_form() { return clock }
+	zone = if form == instant_form() then "Z" else ""
+	date_text(days) + "T" + clock + zone
+}
+# Howard Hinnant's civil_from_days as `2026-10-10`, the proleptic Gregorian date of a day number
+date_text(days: int): text := {
+	z = days + 719468
+	era = floor_quotient(z, 146097)
+	day_of_era = z - era * 146097
+	year_of_era = int_quotient(day_of_era - int_quotient(day_of_era, 1460) + int_quotient(day_of_era, 36524) - int_quotient(day_of_era, 146096), 365)
+	day_of_year = day_of_era - (365 * year_of_era + int_quotient(year_of_era, 4) - int_quotient(year_of_era, 100))
+	shifted_month = int_quotient(5 * day_of_year + 2, 153)
+	day = day_of_year - int_quotient(153 * shifted_month + 2, 5) + 1
+	month = if shifted_month < 10 then shifted_month + 3 else shifted_month - 9
+	year = year_of_era + era * 400
+	if month <= 2 { year += 1 }
+	padded(year, 4) + "-" + padded(month, 2) + "-" + padded(day, 2)
+}
+# `14:43:33.682` of the nanoseconds of a day: the seconds only when there are any or it is a time of day (22:27:46)
+clock_text(nanos: int, form: int): text := {
+	hours = int_quotient(nanos, 3600 * second_nanos())
+	minutes = int_remainder(int_quotient(nanos, 60 * second_nanos()), 60)
+	seconds = int_remainder(int_quotient(nanos, second_nanos()), 60)
+	fraction = int_remainder(nanos, second_nanos())
+	out = padded(hours, 2) + ":" + padded(minutes, 2)
+	if seconds != 0 or fraction != 0 or form == clock_form() { out = out + ":" + padded(seconds, 2) }
+	out + fraction_text(fraction)
+}
+# `.5` of the nanoseconds below a second, without trailing zeros; "" for none
+fraction_text(fraction: int): text := {
+	if fraction == 0 { return "" }
+	digits = padded(fraction, 9)
+	stop = 9
+	while byte_at(digits, stop - 1) == 48 { stop -= 1 }
+	"." + bytes_between(digits, 0, stop)
+}
+# n with leading zeros to count digits
+padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
+# a duration or a zoned time in time_text: "time form not in warp"
+time_form_not_in_warp() := {
+	fail()
+	0
+}
