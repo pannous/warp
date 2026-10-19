@@ -265,16 +265,6 @@ impl WasmGcEmitter {
 		self.highest_key_operator.max(crate::operators::op_to_code(&crate::operators::Op::Colon))
 	}
 
-	/// Enable/disable emitting Kind globals for documentation
-	pub fn set_emit_kind_globals(&mut self, enabled: bool) {
-		self.config.emit_kind_globals = enabled;
-	}
-
-	/// Enable/disable host function imports (fetch, run)
-	pub fn set_host_imports(&mut self, enabled: bool) {
-		self.config.emit_host_imports = enabled;
-	}
-
 	// ═══════════════════════════════════════════════════════════════════════════
 	// Type management helpers (delegate to type_manager)
 	// ═══════════════════════════════════════════════════════════════════════════

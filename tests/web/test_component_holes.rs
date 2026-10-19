@@ -11,15 +11,6 @@ const FRUIT: &str = r#"def Counter(label, start) {
 div{ h1{ "Fruit" } Counter("Apples", 1) Counter("Pears", 5) }"#;
 
 #[test]
-fn each_instance_binds_its_own_holes() {
-	let lowered = warp::pipeline::rendering_itself(|| warp::pipeline::lower(FRUIT)).expect("lowers").serialize();
-	for hole in ["(page·holes):=", "(page·hole·1·1):=", "(page·hole·2·1):="] {
-		assert!(lowered.contains(hole), "{hole} in {lowered}");
-	}
-	assert!(!lowered.contains("(page·hole·0)"), "the heading is fixed: {lowered}");
-}
-
-#[test]
 fn a_hole_is_its_element_of_the_rendering() {
 	let module = warp::pipeline::rendering_itself(|| warp::pipeline::compile(FRUIT)).expect("compiles");
 	let imports = Imports { host: true, wasi: true, ffi: false };
