@@ -1,0 +1,6 @@
+// except T catches T only, other errors pass on to the next except (decision error-classes)
+a = try 1/0 except ZeroDivisionError: 7
+b = try (try 1/0 except IndexError: 1) except ZeroDivisionError: 2
+c = try [1 2]#5 except IndexError as e: e
+d = try (try [1 2]#5 except ZeroDivisionError: 1) except Error: 3
+print a b c d
