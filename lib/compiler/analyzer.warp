@@ -34,7 +34,16 @@ number_kind(n: any): text := {
 	if #digits <= 15 { "int" } else { "float" }
 }
 
-is_key(n: any, op: text): bool := type(n) is key and op_of(n) == op
+is_key(n: any, op: text): bool := match n {
+	Key(_, written, _): written as text == op
+	_: no
+}
+# the nodes a node holds: a key's two sides, a list's items
+parts(n: any): list := match n {
+	Key(left, _, right): [left, right]
+	List(items, _, _): items
+	_: []
+}
 is_empty(n: any): bool := n == ø
 is_block(n: any): bool := is_group(n) and bracket_of(n) == "{"
 head_name(n: any): text := if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
@@ -368,9 +377,7 @@ defined_parameters(n: any): any := {
 # whether a body reads the implicit parameter `it` or `$0`, `$1`…
 takes_it(n: any): bool := {
 	if n is symbol { return name_of(n) == "it" or (name_of(n).starts_with("$") and is_digits(name_of(n)[1..])) }
-	if type(n) is key { return takes_it(key_of(n)) or takes_it(value_of(n)) }
-	if is_group(n) { return any_of(n, item => takes_it(item)) }
-	no
+	any_of(parts(n), part => takes_it(part))
 }
 is_digits(t: text): bool := #t > 0 and #t.chars().filter(c => c >= '0' and c <= '9') == #t
 is_sequence_block(n: any): bool := is_block(n) and (separator_of(n) == ";" or separator_of(n) == "\n")
@@ -461,10 +468,7 @@ record_usages(n: any, used: any): any := {
 	if tested != "" { used.tested[tested] = yes }
 	if texted != "" { used.texts[texted] = yes }
 	if (is_key(n, "=") or is_key(n, ":=")) and key_of(n) is symbol and value_of(n) is symbol { used.aliases += [[name_of(key_of(n)), name_of(value_of(n))]] }
-	if type(n) is key {
-		record_usages(key_of(n), used)
-		record_usages(value_of(n), used)
-	} else if is_group(n) { for item in n { record_usages(item, used) } }
+	for part in parts(n) { record_usages(part, used) }
 }
 
 # `is_type(x, "list")`, what `x is list` lowers to: the name whose kind is tested, else ""
@@ -500,21 +504,14 @@ joined_name(n: any, joined: any): text := {
 calls(n: any, found: any): list := {
 	if is_definition(n) { return found }
 	if is_group(n) and head_name(n) in definitions and name_of(n#1) != "" { found += [[head_name(n), n[1..]]] }
-	if type(n) is key {
-		calls(key_of(n), found)
-		calls(value_of(n), found)
-	} else if is_group(n) { for item in n { calls(item, found) } }
+	for part in parts(n) { calls(part, found) }
 	found
 }
 
 
 returns(n: any, found: any): list := {
 	if head_name(n) == "return" and #n == 2 { found += [n#2] }
-	if type(n) is key {
-		returns(key_of(n), found)
-		returns(value_of(n), found)
-	}
-	else if is_group(n) { for item in n { returns(item, found) } }
+	for part in parts(n) { returns(part, found) }
 	found
 }
 
@@ -587,17 +584,14 @@ gather(n: any, context: text, flows: any): list := {
 	}
 	if type(n) is key and op_of(n) in compound_ops and key_of(n) is symbol {
 		gather(value_of(n), context, flows)
-		flows += [["variable", context, name_of(key_of(n)), key(key_of(n), compound_ops[op_of(n)], value_of(n))]]
+		flows += [["variable", context, name_of(key_of(n)), Key(key_of(n), compound_ops[op_of(n)] as Op, value_of(n))]]
 		return flows
 	}
 	if is_group(n) and head_name(n) in definitions {
 		arguments = n[1..]
 		for index in 0..<min(#arguments, #parameters_of(name_of(n#1))) { flows += [["parameter", context, [name_of(n#1), index], arguments[index]]] }
 	}
-	if type(n) is key {
-		gather(key_of(n), context, flows)
-		gather(value_of(n), context, flows)
-	} else if is_group(n) { for item in n { gather(item, context, flows) } }
+	for part in parts(n) { gather(part, context, flows) }
 	flows
 }
 
