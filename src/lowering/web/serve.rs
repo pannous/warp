@@ -8,6 +8,7 @@
 
 use super::nodes::{arguments_rewritten, assign, call, key};
 use crate::database_tables::{stored_table, table_store};
+use crate::modules::USE_KEYWORD;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
@@ -62,7 +63,6 @@ const WAGI_ANSWER: &str =
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
 const ROUTE_ARGUMENT: &str = "value";
-const USE_WORD: &str = "use";
 
 /// A route as written: its method (upper case), path and body
 type Route = (String, Node, Node);
@@ -279,7 +279,7 @@ fn function_route(statement: &Node) -> Option<(String, String)> {
 }
 
 fn is_use(statement: &Node) -> bool {
-	matches!(statement.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == USE_WORD))
+	matches!(statement.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == USE_KEYWORD))
 }
 
 /// The route with `body` in place of its block's ø
