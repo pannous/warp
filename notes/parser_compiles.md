@@ -33,6 +33,11 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
   read by n.line / n.column; `op as Op` in keyed (shapes.warp's keyed shadowed runtime.warp's keyed intrinsic inside
   key_node): emit-enum-match 45bc9a01bf, 12702665ba (survey 25 → 14 with main merged)
 
+- pending kinds in a cycle of functions (continued, header_expression, keyed, superscript_power, typed_default,
+  global_declaration: "kind ?"): a value of a call still compiling is a node, its readers read again at the end,
+  runtime-declared 5f7ca4f819
+- a write by a run-time key (`m#(k+1) = v`, remember() in scope.warp): runtime.warp node_put, runtime-declared b1076666be
+
 ## Open
 | root | owner |
 |---|---|
@@ -43,8 +48,6 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
 | a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps) | gone on main 57469d5a52: warp-cache's survey has no refusal naming gaps or an instance (68 refusals, data/self_hosting/parser_gap_map_instances.txt) |
-| a write by a run-time key (`m#(k+1) = v`, remember() in scope.warp) | warp-runtime (node_put, in testing) |
-| pending kinds in recursive functions | warp-runtime |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
 | two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing |
