@@ -36,10 +36,15 @@ mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
 # [storage type, mutable]. $text: the UTF-8 bytes; $list: a vector, its items boxed; $Node(kind i64, data anyref,
 # value ref null $Node) a boxed value (CLAUDE.md "Serialization"), its number in an $i64box or $f64box; an exact
-# rational an Int $Node holding a $Ratio(numerator, denominator) of two $i64box (src/run/wasm_reader.rs read_payload)
-gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5, ratio: 6}
-gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0]]
-gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]]]
+# rational an Int $Node holding a $Ratio(numerator, denominator) of two $i64box (src/run/wasm_reader.rs read_payload);
+# a positioned node a $MetaNode, the final subtype (79, one supertype) of the open $Node (80, none) adding its line,
+# column and comment (src/wasm_emitter/type_manager.rs emit_meta_node_type)
+gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5, ratio: 6, meta_node: 7}
+node_fields = [126, 0, 110, 0, 99, 3, 0]
+gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [80, 0, 95, 3] + node_fields, [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0],
+	[79, 1, 3, 95, 6] + node_fields + [126, 0, 126, 0, 99, 3, 0]]
+gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
+	["MetaNode", ["kind", "data", "value", "line", "column", "comment"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
 node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6, function: 16}
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
@@ -274,6 +279,17 @@ def converted(value: any, to: text): list {
 	if from == "char" and to == "text" { return runtime_call("char_text", [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
+}
+# int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
+text_readers = {int: "text_as_int", float: "text_as_float"}
+def cast(value: any, to: text): list {
+	if value#1 == "text" { return runtime_call(text_readers[to], [value]) }
+	# '7' as int is 7, the text it is
+	if value#1 == "char" { return cast(["text", converted(value, "text")], to) }
+	if value#1 == "float" and to == "int" { return ["int", value#2 + [op.i64_trunc_f64_s]] }
+	# `7/2 as int`: an exact rational truncated toward 0
+	if value#1 == "node" and to == "int" { return runtime_call("truncated_int", [value]) }
+	[to, converted(value, to)]
 }
 # a value as a yes/no condition: non-zero is yes
 def condition(value: any): list {
@@ -518,6 +534,16 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	if name == "symbol_of" { return ["node", node(node_kind_codes.symbol, values#1#2)] }
 	# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
 	if name == "list_node" { return ["node", node_code(converted(values#1, "int"), values#2#2)] }
+	# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
+	if name == "meta_node" {
+		held = [op.local_get] + uleb(fresh_local(body, "node"))
+		part = i => as_node(held) + gc_code("struct_get", [gc.node, i])
+		code = values#1#2 + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, "int") + converted(values#3, "int")
+		return ["node", code + [ref_null, gc.node] + gc_code("struct_new", [gc.meta_node])]
+	}
+	if name == "is_meta" { return ["int", values#1#2 + gc_code("ref_test", [gc.meta_node]) + [op.i64_extend_i32_u]] }
+	if name == "meta_line" { return ["int", values#1#2 + gc_code("ref_cast_null", [gc.meta_node]) + gc_code("struct_get", [gc.meta_node, 3])] }
+	if name == "meta_column" { return ["int", values#1#2 + gc_code("ref_cast_null", [gc.meta_node]) + gc_code("struct_get", [gc.meta_node, 4])] }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "same_text" { return ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
@@ -541,13 +567,13 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, 
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, list_node: 2, same_text: 2}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, list_node: 2, meta_node: 3, is_meta: 1, meta_line: 1, meta_column: 1, same_text: 2}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node",
+	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with",
 	trim: "node_trim", map_get_or: "map_get_or"}
@@ -1126,7 +1152,7 @@ def group_expression(body: Body, n: any): list {
 		return length(expression(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("float") { return ["float", converted(expression(body, n#2), "float")] }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_readers { return cast(expression(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("global") { return global_declaration(body, n#2) }
@@ -1215,8 +1241,7 @@ def key_expression(body: Body, n: any): list {
 	}
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
 		value = expression(body, left)
-		# `7/2 as int`: an exact rational truncated toward 0
-		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
+		if name_of(right) in text_readers { return cast(value, name_of(right)) }
 		if name_of(right) == "text" { return shown_text(value) }
 		return [name_of(right), converted(value, name_of(right))]
 	}

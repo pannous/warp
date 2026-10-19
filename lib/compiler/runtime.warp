@@ -220,6 +220,7 @@ map_index(m: any, name: text): int := {
 }
 # `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
 map_get(m: any, name: text): any := {
+	if is_position_part(m, name) { return position_part(m, name) }
 	if kind_code(m) == 5 { return node_text(m) }
 	if is_entry(m) and text_order(name, "name") == 0 { return key_name(m) }
 	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
@@ -853,8 +854,9 @@ node_truthy(n: any): bool := {
 	if kind == 3 or kind == 5 { return byte_count(unboxed_text(n)) > 0 }
 	yes
 }
-# `n as int` of a boxed int or exact rational, truncated toward 0
+# `n as int` of a boxed int, exact rational or float, truncated toward 0
 truncated_int(n: any): int := {
+	if is_null(n) == 0 and kind_code(n) == 2 { return truncated(unboxed_float(n)) }
 	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
 	int_quotient(exact_numerator(n), exact_denominator(n))
 }
@@ -1125,6 +1127,10 @@ not_an_int(): int := {
 	fail()
 	0
 }
+invalid_number(): int := {
+	fail()
+	0
+}
 an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
@@ -1247,12 +1253,21 @@ map_equal(a: any, b: any): bool := {
 # symbol's name
 has_field(m: any, name: text): bool := {
 	if is_null(m) == 1 { return no }
+	if is_position_part(m, name) { return is_meta(m) == 1 }
 	if kind_code(m) == 5 { return text_order(name, "name") == 0 }
 	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 or text_order(name, "op") == 0 }
 	if is_plain_list(m) { return text_order(name, "bracket") == 0 or text_order(name, "separator") == 0 }
 	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
 	map_index(m, name) > 0
 }
+# `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
+# node_api.rs POSITIONED); any other node without a field of that name has no field line
+positioned_node(n: any, line: int, column: int): any := meta_node(n, line, column)
+is_position_part(m: any, name: text): bool := {
+	if text_order(name, "line") != 0 and text_order(name, "column") != 0 { return no }
+	not ((marked_kind(m) == 8 or marked_kind(m) == 6) and map_index(m, name) > 0)
+}
+position_part(m: any, name: text): int := if text_order(name, "line") == 0 then meta_line(m) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
 is_entry(n: any): bool := kind_code(n) == 6 and marked_kind(n) != 6
 # a list that is no map: its fields are the node's parts, `n.bracket` and `n.separator`
@@ -1549,7 +1564,7 @@ min_int(a: int, b: int): int := if a < b then a else b
 
 ## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
 ## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
-## that spells no number traps, where Rust's fails with invalid_number
+## that spells no number fails with invalid_number
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
 sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or byte_at(t, 0) == 43) then 1 else 0
 # t starts with -
@@ -1566,7 +1581,7 @@ digit_run(t: text, start: int): int := {
 text_as_int(t: text): int := {
 	start = sign_length(t)
 	count = digit_run(t, start)
-	if count == 0 or start + count != byte_count(t) { fail() }
+	if count == 0 or start + count != byte_count(t) { invalid_number() }
 	value = 0
 	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
 	if is_negative_text(t) then -value else value
@@ -1582,14 +1597,14 @@ text_as_float(t: text): float := {
 		fraction = digit_run(t, at + 1)
 		at += 1 + fraction
 	}
-	if whole + fraction == 0 { fail() }
+	if whole + fraction == 0 { invalid_number() }
 	stop = at
 	exponent = 0
 	if at < byte_count(t) and (byte_at(t, at) == 101 or byte_at(t, at) == 69) {
 		exponent = text_as_int(bytes_between(t, at + 1, byte_count(t)))
 		at = byte_count(t)
 	}
-	if at != byte_count(t) { fail() }
+	if at != byte_count(t) { invalid_number() }
 	found = decimal_digits(t, start, stop)
 	magnitude = decimal_float(unboxed_int(found#1), unboxed_int(found#2) + exponent - fraction)
 	if is_negative_text(t) then -magnitude else magnitude
