@@ -27,11 +27,14 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 - match arms of values (`1:`, `"hi":`, `'a':`, `Color.Red:`): match-arms a3499f85ac (warp-parsing; on pure-lane,
   lands after it; enum cases run once enum lowering does)
 
+- `x is int/list/symbol` type tests: pure-lane 02f878456e (type_tests.warp, rung 29)
+
 ## Open
 | root | owner |
 |---|---|
 | lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
-| `x is symbol/list/any` type tests, prelude defs on demand (is_digit) | warp-self-emitter |
+| prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
+| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | open |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
 | class constructor `Point(2, 3)`, try | warp-self-analyzer |
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
