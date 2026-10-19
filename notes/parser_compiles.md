@@ -37,12 +37,14 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
   global_declaration: "kind ?"): a value of a call still compiling is a node, its readers read again at the end,
   runtime-declared 5f7ca4f819
 - a write by a run-time key (`m#(k+1) = v`, remember() in scope.warp): runtime.warp node_put, runtime-declared b1076666be
+- lower/upper (Unicode case tables), ran_without_error/try, is_error, contains alias, a missing field `try n.line else 0`
+  (walk.warp line_of): pure-builtins d1054cbdc2 (Ready)
+- `symbol("print")` in the pure lane: runs pure on pure-lane (rung check 2026-10-19 night)
 
 ## Open
 | root | owner |
 |---|---|
-| lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
-| prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
+| prelude defs on demand (is_digit) | warp-self-emitter |
 | "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | done on pure-lane 2c0201b4e9: `f(x): T := e` as `f(x) := {the result: T = e; the result}`, as Rust lowers it (warp-self-analyzer) |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache: `Op.Colon` gives Colon on main (87062eb624); the stage's 'not an object' once a stage program has Op (a one-entry map named like a class read as an instance): enum-decls 24a46fd732, Ready (card class-named-entry); a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd; `use "lib/compiler/node.warp"` itself: card node-op-field-type, Later |
 | try (Rust lowers it to ran_without_error/is_error: needs those builtins) | `try x else y` done on pure-lane 2c0201b4e9 (lib/compiler/tries.warp, builtins merged from pure-builtins); `try {…} catch e {…}` lowers too but waits on caught_error in emitter.warp (warp-self-emitter) (warp-self-analyzer) |
