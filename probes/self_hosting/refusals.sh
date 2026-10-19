@@ -6,7 +6,7 @@
 # usage: probes/self_hosting/refusals.sh <warp binary> [program path regex]   → data/self_hosting/refusals.txt
 # probes/self_hosting/refusals.sh --pure <warp binary> [regex]   → data/self_hosting/pure.txt: the pure lane's loop (card
 #   pure-runs) over the ladder probes/self_hosting/pure (simplest first) and the samples: how many ran pure, how many of
-#   those printed the right output (a program's `// out:` lines, else what it prints the usual way), the first rung not
+#   those printed the right output (a program's `// out:` lines, else what it prints the usual way), the rungs not
 #   right, the refusals ranked
 # SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh <warp binary>   → data/self_hosting/bootstrap_gap.txt:
 #   with WARP_EMIT_SURVEY, every refused function of the programs (warp's compiler itself, card bootstrap-gap) once,
@@ -75,7 +75,7 @@ different=$(cat "$work/runs"/*.different 2>/dev/null)
 	echo "$programs programs, $inside inside the core (or no emit), $ran_pure of them ran pure, $(ls "$work/runs"/*.right 2>/dev/null | grep -c .) of those right, $(echo -n "$different" | grep -c .) printing otherwise"
 	if [ -n "$PURE" ]; then
 		for rung in "$root/$LADDER"/*.warp; do
-			[ -e "$work/runs/$(echo "$rung" | tr '/' '_').right" ] || { echo "first rung not right: ${rung#$root/}"; break; }
+			[ -e "$work/runs/$(echo "$rung" | tr '/' '_').right" ] || echo "rung not right: ${rung#$root/}"
 		done
 	fi
 	[ -n "$different" ] && echo "$different" | awk '{print $2}' | sort | uniq -c && echo "$different" | sort
