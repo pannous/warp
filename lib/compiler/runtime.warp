@@ -767,7 +767,8 @@ exact_text(n: any): text := {
 	fives = factor_count(denominator, 5)
 	if denominator != power(2, twos) * power(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
 	digits = max_int(twos, fives)
-	scaled = int_quotient(numerator * power(10, digits), denominator)
+	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
+	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
 	magnitude = int_text(if scaled < 0 then -scaled else scaled)
 	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
 	whole = byte_count(padded) - digits
