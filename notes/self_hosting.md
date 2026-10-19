@@ -209,14 +209,17 @@ The bootstrap (warp compiling the warp-written compiler) is planned once 13–15
 ### Bootstrap gap (card bootstrap-gap)
 `SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
 every refused function of lib/compiler once, by the first form refused (a fixed family uncovers the next one behind
-it). 2026-10-19, after `x == ø` / `x != ø` (23 functions): 108 of the compiler's functions refused, 22 files.
+it; totals vary between runs under load, compare runs on one state). 2026-10-19: 262 refused functions, 8 of 22 files
+inside the core; after `x == ø` / `x != ø` and main-level variables read by functions as module globals: 185, 9 inside.
+runtime.warp's calls of the intrinsics (`is_null`, `byte_count`, `kind_code`, `new_list`, `fail`, `unboxed_*`, ~60) are
+the survey compiling it as a program, no gap.
 | family | functions | owner |
 | --- | --- | --- |
-| calls of host/runtime words emitter.warp lacks: node API `bracket_of`, `symbol`, `separated`, `node_of` | ~25 | emitter-structures |
+| a value known only at run time as a condition, text, list or bool (`if node`, `"a" + node`) | 37 | self-emitter |
+| calls of node API words emitter.warp lacks: `bracket_of`, `symbol`, `separated`, `node_of` | ~27 | emitter-structures |
 | calls of text and library words: `slice`, `starts_with`, `ends_with`, `trim`, `is_name_char`, `is_name_start`, `is_hex_digit`, `code_point_list`, `map_get_or`, `ran_without_error`; another file's `peek`, `is_at` | ~30 | runtime |
-| a value known only at run time as a condition, text, bool or list (`if node`, `"a" + node`) | 23 | self-emitter |
-| the unknown name: a module-level constant read in a function (`type_words`, `of_word`, `prelude_text`…) | 19 | cache |
-| a parameter of kind function / bool, a result of none | 7 | cache |
+| the unknown name left: another file's constant (`symbol`, `of_word`, `type_words` of `use words`) | ~12 | cache |
+| a parameter of kind function / bool, a result of none | 6 | cache |
 
 ## Emitter core (card emits-wasm, step 15)
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
