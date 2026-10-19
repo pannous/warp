@@ -9,23 +9,23 @@ use "phrase_blocks.warp"
 
 implicit_variable = "it"
 
-named(variable: Node, suffix: text): Node := match variable {
+loop_name(variable: Node, suffix: text): Node := match variable {
 	Symbol(name): symbol(name + "·" + suffix)
 	_: variable
 }
 
 # the body's statements: a `{…}` block's lines (phrase_blocks made `{print i}` one), a bare body as it is
-statements_of(body: Node): list := match body {
+loop_statements(body: Node): list := match body {
 	List(items, Bracket.Curly, separator): items
 	_: [body]
 }
 
 sequence(statements: list): Node := List(statements, Bracket.Round, Separator.Semicolon)
 
-repeated(condition: Node, statements: list): Node :=
+while_loop(condition: Node, statements: list): Node :=
 	Key(Key(ø, Op.While, condition), Op.Do, List(statements, Bracket.Curly, Separator.Semicolon))
 
-counted(variable: Node, start: Node, end: Node, inclusive: bool, body: Node): Node := {
+counted_loop(variable: Node, start: Node, end: Node, inclusive: bool, body: Node): Node := {
 	condition = if inclusive then Op.Le else Op.Lt
 	stepped(variable, start, end, condition, Op.Inc, body)
 }
@@ -35,10 +35,10 @@ stepped(variable: Node, start: Node, end: Node, condition: any, step: any, body:
 	limit = end
 	setup = [Key(variable, Op.Assign, start)]
 	if not (end is number) {
-		limit = named(variable, "end")
+		limit = loop_name(variable, "end")
 		setup = setup + [Key(limit, Op.Assign, end)]
 	}
-	sequence(setup + [repeated(Key(variable, condition, limit), statements_of(body) + [Key(variable, step, ø)])])
+	sequence(setup + [while_loop(Key(variable, condition, limit), loop_statements(body) + [Key(variable, step, ø)])])
 }
 
 # `reverse(a to b)`: from b down to a
@@ -53,17 +53,17 @@ reversed_range(variable: Node, call: list, body: Node): Node := {
 }
 
 walked(variable: Node, iterable: Node, body: Node): Node := {
-	items = named(variable, "items")
-	index = named(variable, "index")
+	items = loop_name(variable, "items")
+	index = loop_name(variable, "index")
 	item = Key(variable, Op.Assign, Key(items, Op.Hash, Key(index, Op.Add, 1)))
-	rounds = [item] + statements_of(body) + [Key(index, Op.Inc, ø)]
+	rounds = [item] + loop_statements(body) + [Key(index, Op.Inc, ø)]
 	setup = [Key(items, Op.Assign, iterable), Key(index, Op.Assign, 0)]
-	sequence(setup + [repeated(Key(index, Op.Lt, Key(ø, Op.Hash, items)), rounds)])
+	sequence(setup + [while_loop(Key(index, Op.Lt, Key(ø, Op.Hash, items)), rounds)])
 }
 
 loop_over(variable: Node, iterable: Node, body: Node): Node := match iterable {
-	Key(start, Op.Range, end): counted(variable, start, end, no, body)
-	Key(start, Op.To, end): counted(variable, start, end, yes, body)
+	Key(start, Op.Range, end): counted_loop(variable, start, end, no, body)
+	Key(start, Op.To, end): counted_loop(variable, start, end, yes, body)
 	List(call, Bracket.Round, Separator.None): reversed_range(variable, call, body)
 	_: walked(variable, iterable, body)
 }
