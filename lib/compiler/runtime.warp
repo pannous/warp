@@ -224,6 +224,9 @@ map_get(m: any, name: text): any := {
 	if is_entry(m) and text_order(name, "name") == 0 { return key_name(m) }
 	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
 	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
+	if is_entry(m) and text_order(name, "op") == 0 { return key_operator(m) }
+	if is_plain_list(m) and text_order(name, "bracket") == 0 { return list_bracket(m) }
+	if is_plain_list(m) and text_order(name, "separator") == 0 { return list_separator(m) }
 	at = map_index(m, name)
 	if at == 0 { fail() }
 	key_value(unboxed_list(fields_of(m))#at)
@@ -1245,12 +1248,15 @@ map_equal(a: any, b: any): bool := {
 has_field(m: any, name: text): bool := {
 	if is_null(m) == 1 { return no }
 	if kind_code(m) == 5 { return text_order(name, "name") == 0 }
-	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 }
+	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 or text_order(name, "op") == 0 }
+	if is_plain_list(m) { return text_order(name, "bracket") == 0 or text_order(name, "separator") == 0 }
 	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
 	map_index(m, name) > 0
 }
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
 is_entry(n: any): bool := kind_code(n) == 6 and marked_kind(n) != 6
+# a list that is no map: its fields are the node's parts, `n.bracket` and `n.separator`
+is_plain_list(n: any): bool := kind_code(n) == 8 and marked_kind(n) != 8
 # a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
 swizzle_fits(p: any, letters: text): bool := {
 	if is_null(p) == 1 or kind_code(p) != 8 or marked_kind(p) == 8 { return no }
