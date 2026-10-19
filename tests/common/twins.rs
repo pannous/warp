@@ -4,7 +4,6 @@
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
-use warp::analyzer::{covers, kind_slots};
 pub use warp::compiler::node_views::{
 	analysis_view, node_view, plain_view, positioned_plain_view, view_json, warp_list,
 };
@@ -247,38 +246,39 @@ fn mentions_error(view: &Node) -> bool {
 	}
 }
 
-/// The analyzer's twin (card inferred-kinds, notes/self_hosting.md step 14): each source the pipeline lowers goes to
-/// `inferred_kinds` of lib/compiler/analyzer.warp as a node, its kinds compared with src/analyzer/inferred_kinds.rs
-/// on the same program slot by slot: warp's kind is Rust's or a more general one (`covers`), never a narrower one
-pub fn analyzer_differential(paths: &[PathBuf]) {
-	let cases: Vec<(String, String, Vec<String>)> = paths
+/// The analyzer stage (card emitter-takes, decision ignore-rust): each source the pipeline lowers goes to
+/// `emitter_kinds` of lib/compiler/analyzer.warp as a node, which must give its kinds without failing; its kinds are
+/// judged by the programs emitter.warp runs with them, never compared with src/analyzer
+pub fn analyzer_runs(paths: &[PathBuf]) {
+	let cases: Vec<(String, String)> = paths
 		.iter()
 		.filter_map(|path| {
-			let (program, kinds) = analyzed(&std::fs::read_to_string(path).ok()?)?;
-			Some((path.display().to_string(), view_json(&program), kinds))
+			let program = lowered(&std::fs::read_to_string(path).ok()?)?;
+			Some((path.display().to_string(), view_json(&analysis_view(&program))))
 		})
 		.collect();
-	let twin = TwinProgram::new("analyzer", "inferred_kinds(node_of(json(argument)))");
-	let mut differing = vec![];
+	let twin = TwinProgram::new("analyzer", "{ emitter_kinds(node_of(json(argument))); \"ran\" }");
+	let mut failing = vec![];
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {
-		let arguments: Vec<&str> = cases.iter().map(|(_, argument, _)| argument.as_str()).collect();
-		for ((path, _, rust), value) in cases.iter().zip(twin.values(&arguments)) {
-			let warp: Vec<String> = match value.drop_meta() {
-				Node::List(items, ..) => items.iter().filter_map(Node::text_value).collect(),
-				other => vec![other.serialize()],
-			};
-			if !covers(&kind_slots(&warp), &kind_slots(rust)) {
-				differing.push((path.clone(), warp.join(" | "), rust.join(" | ")));
+		let arguments: Vec<&str> = cases.iter().map(|(_, argument)| argument.as_str()).collect();
+		for ((path, _), value) in cases.iter().zip(twin.values(&arguments)) {
+			if value.text_value().as_deref() != Some("ran") {
+				failing.push((path.clone(), value.serialize(), "ran".to_string()));
 			}
 		}
 	}
-	report("inferred_kinds", &differing);
+	report("emitter_kinds", &failing);
+}
+
+/// The program after every lowering pass; None for a program refused or answered before code generation
+fn lowered(code: &str) -> Option<Node> {
+	std::panic::catch_unwind(|| warp::pipeline::lower(code).ok()).ok()?
 }
 
 /// The view of the program after every lowering pass and the kinds the Rust analyzer infers in it; None for a program
 /// refused or answered before code generation
 pub fn analyzed(code: &str) -> Option<(Node, Vec<String>)> {
-	let program = std::panic::catch_unwind(|| warp::pipeline::lower(code).ok()).ok()??;
+	let program = lowered(code)?;
 	Some((analysis_view(&program), warp::analyzer::inferred_kinds(&program)))
 }
 

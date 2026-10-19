@@ -100,12 +100,10 @@ branch_kind(branch: any, scope: any): text := {
 
 raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
 
-# the branch ends in `error("…")`, `raise(…)` or an unbracketed `raise …` (Rust returned_error_message)
+# the branch ends in an error raised: `error "…"`, `raise …`, `throw …`
 raises_error(branch: any): bool := {
 	last = last_statement(branch)
-	if not (is_group(last) and #last == 2) { return no }
-	if bracket_of(last) == "(" { return head_name(last) == "error" or head_name(last) == "raise" }
-	bracket_of(last) == "" and head_name(last) in raise_words
+	is_group(last) and #last == 2 and (head_name(last) == "error" or head_name(last) in raise_words)
 }
 
 choice_kind(then: any, otherwise: any, scope: any): text := {
@@ -208,8 +206,8 @@ converted_kind(n: any, scope: any): text := {
 	if target == "hex" or target == "binary" or target == "octal" or target == "byte" { return "int" }
 	if target == "number" and kind_of(key_of(n), scope) != "float" { return "data" }
 	if type_kinds.get(target) == "float" { return "float" }
-	# `as int`, `as exact` stay exact ints; Rust infer_type gives every other conversion its default, an int
-	"int"
+	# `as int`, `as exact` stay exact ints; any other conversion gives a value of run-time kind
+	if type_kinds.get(target) == "int" { "int" } else { "empty" }
 }
 
 # a loop is its last body value: a text or list as such, ø after a print, else a number or ø decided at run time
@@ -744,8 +742,6 @@ apply(flow: any): bool := {
 	holder = owner(context, target)
 	kind = flowing_kind(value, scope)
 	if kind == "" or target in holder.pinned { return no }
-	# a variable starting as ø becomes a list only by appending to itself, `xs = xs + [1]` (Rust type_list_by_first_append)
-	if kind == "list" and holder.kinds.get(target) == "nil" and not appends_to_itself(target, value) { return no }
 	changed = set_slot(holder, target, kind)
 	if holder.kinds[target] == "list" and kind == "list" {
 		known = holder.types.get(target)
@@ -755,8 +751,6 @@ apply(flow: any): bool := {
 	}
 	changed
 }
-
-appends_to_itself(name: text, value: any): bool := is_key(value, "+") and key_of(value) == symbol(name) and is_list_literal(value_of(value))
 
 # the list type both known (ø: none yet) and given fit: their common elements, a plain list when they have none
 joined_list_type(known: any, given: text): any := {
@@ -846,10 +840,6 @@ defaults(flows: list): any := {
 			if scope.kinds[own] == "" {
 				kind = used_as(own, used) ?? forwarded[name].get(own) ?? agreed
 				scope.kinds[own] = if kind != ø then kind else "int"
-			} else if scope.kinds[own] == "int" and not (own in scope.pinned) {
-				# given only ints, it keeps what its use suggests, a list for xs#1 (Rust given_flows)
-				guess = used_as(own, used) ?? forwarded[name].get(own) ?? (if agreed == "empty" then ø else agreed)
-				if guess != ø { scope.kinds[own] = guess }
 			}
 		}
 		if results[name] == "" { results[name] = "int" }
