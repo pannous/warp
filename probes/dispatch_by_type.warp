@@ -1,0 +1,4 @@
+half(a: float): float := a / 2
+half(a: int): int := a - 1
+print half(3.0)
+print half(3)

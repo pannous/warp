@@ -214,6 +214,11 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   word symbol_node, a Symbol), yes in Rust's, whose type test reads the symbol's name (the source says so: "should be
   no"). Source: probes/self_hosting/analyzer/symbol_named_key.warp. Back: Rust's `is` tests the value's kind, not a
   symbol's name.
+- Big ints (card emitter-big-ints): an int is an i64 in emitter.warp's modules, and an int beyond 64 bits fails in
+  runtime.warp int_overflow ("trap detail: 0"), where Rust's promotes it to a BigInt (`x = 2^62; x * 4`, factorial 25,
+  Catalan numbers past the 35th). Source: samples/golf/catalan-numbers.short.warp (inside the core since a body ending
+  in a statement gives ø, 2026-10-19). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
+  handles into a big-number heap).
 - Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
   Comparable witness), times and uncertain values trap there, where Rust's node_order orders them. A sorted list is a
   plain list, where Rust's keeps the bracket kind of the sorted one. Back: node_order asks the witness table and the

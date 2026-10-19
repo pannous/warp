@@ -859,6 +859,7 @@ PASSED:
   ✓ control::test_text_patterns::a_text_pattern_needs_a_piece_between_holes
   ✓ control::test_text_patterns::a_typed_hole_reads_its_text
   ✓ control::test_text_patterns::pieces_and_holes_alternate
+  ✓ control::test_text_patterns::text_holes_fit_their_types
   ✓ control::test_threads::a_finish_handler_runs_after_the_statement_that_saw_the_task_finish
   ✓ control::test_threads::a_paused_task_waits_for_resume
   ✓ control::test_threads::a_stop_handler_runs_once_the_task_stopped
@@ -1087,7 +1088,6 @@ PASSED:
   ✓ ffi::test_ffi_warning_once::the_ffi_warning_is_printed_once
   ✓ ffi::test_ffi::test_a_lone_import_with_a_comment_is_empty
   ✓ ffi::test_ffi::test_a_program_of_imports_only_is_empty
-  ✓ ffi::test_ffi::test_c_type_mapping
   ✓ ffi::test_ffi::test_dynlib_import_emit
   ✓ ffi::test_ffi::test_ffi_abs_from_c
   ✓ ffi::test_ffi::test_ffi_atof
@@ -1096,8 +1096,6 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_ceil
   ✓ ffi::test_ffi::test_ffi_combined
   ✓ ffi::test_ffi::test_ffi_cos
-  ✓ ffi::test_ffi::test_ffi_cos_works
-  ✓ ffi::test_ffi::test_ffi_curl_discovery
   ✓ ffi::test_ffi::test_ffi_fabs
   ✓ ffi::test_ffi::test_ffi_fabs_from_m
   ✓ ffi::test_ffi::test_ffi_floor
@@ -1105,22 +1103,15 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_fmin
   ✓ ffi::test_ffi::test_ffi_fmin_warp_file
   ✓ ffi::test_ffi::test_ffi_fmod
-  ✓ ffi::test_ffi::test_ffi_generic_discovery
-  ✓ ffi::test_ffi::test_ffi_header_parser
-  ✓ ffi::test_ffi::test_ffi_import_pattern
   ✓ ffi::test_ffi::test_ffi_math_pipeline
   ✓ ffi::test_ffi::test_ffi_nested_calls
-  ✓ ffi::test_ffi::test_ffi_png_discovery
   ✓ ffi::test_ffi::test_ffi_rand
-  ✓ ffi::test_ffi::test_ffi_raylib_discovery
   ✓ ffi::test_ffi::test_ffi_sdl_combined
   ✓ ffi::test_ffi::test_ffi_sdl_init
   ✓ ffi::test_ffi::test_ffi_sdl_parallel_runs
-  ✓ ffi::test_ffi::test_ffi_sdl_version
   ✓ ffi::test_ffi::test_ffi_sdl_window
   ✓ ffi::test_ffi::test_ffi_sin
   ✓ ffi::test_ffi::test_ffi_sin_pi_half
-  ✓ ffi::test_ffi::test_ffi_sqlite_discovery
   ✓ ffi::test_ffi::test_ffi_sqrt_works
   ✓ ffi::test_ffi::test_ffi_strcmp
   ✓ ffi::test_ffi::test_ffi_string_comparison_logic
@@ -1130,9 +1121,7 @@ PASSED:
   ✓ ffi::test_ffi::test_ffi_tan
   ✓ ffi::test_ffi::test_ffi_text_arguments_known_at_run_time
   ✓ ffi::test_ffi::test_ffi_trigonometry_combined
-  ✓ ffi::test_ffi::test_ffi_zlib_discovery
   ✓ ffi::test_ffi::test_import_from_pattern_emit
-  ✓ ffi::test_ffi::test_import_from_pattern_parse
   ✓ ffi::test_foreign_bools::a_js_boolean_is_a_bool
   ✓ ffi::test_foreign_bools::a_python_boolean_is_a_bool
   ✓ ffi::test_foreign_handles::test_a_handle_goes_back_as_an_argument
@@ -1204,6 +1193,10 @@ PASSED:
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
+  ✓ ffi::test_wasmtime_ffi::a_macro_declared_function_is_called
+  ✓ ffi::test_wasmtime_ffi::a_module_emitter_warp_emitted_runs_through_libwasmtime
+  ✓ ffi::test_wasmtime_ffi::a_module_runs_through_libwasmtime
+  ✓ ffi::test_wasmtime_ffi::a_struct_output_reads_as_a_map
   ✓ ffi::test_web_idl::a_call_with_a_count_no_overload_takes_is_an_error
   ✓ ffi::test_web_idl::a_canvas_context_is_typed
   ✓ ffi::test_web_idl::a_constructor_is_a_plain_call
@@ -1212,7 +1205,6 @@ PASSED:
   ✓ ffi::test_web_idl::a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface
   ✓ ffi::test_web_idl::a_global_without_webidl_stays_unchecked
   ✓ ffi::test_web_idl::a_member_the_interface_lacks_is_an_error_with_its_near_miss
-  ✓ ffi::test_web_idl::a_nullable_result_is_optional
   ✓ ffi::test_web_idl::a_page_has_local_storage_and_the_clipboard
   ✓ ffi::test_web_idl::an_attribute_is_read_not_called
   ✓ ffi::test_web_idl::an_attributes_value_is_typed_by_its_interface
@@ -2511,7 +2503,6 @@ PASSED:
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
   ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
-  ✓ modules::test_package_pin::header_signatures_are_parsed_once
   ✓ modules::test_package_reexport::a_modules_own_use_reaches_its_users
   ✓ modules::test_package_registry::a_bare_name_or_version_is_the_default_registrys_folder
   ✓ modules::test_package_registry::a_folder_package_is_fetched_by_name
@@ -2563,6 +2554,7 @@ PASSED:
   ✓ modules::test_std_collections::other_languages_class_names_are_the_collections
   ✓ modules::test_std_collections::other_languages_method_names_are_the_collections_methods
   ✓ modules::test_std_collections::the_size_of_an_instance_through_len_and_count
+  ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
   ✓ modules::test_std_docs_comment_association::a_hand_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::the_comment_block_directly_above_is_the_doc_of_its_word
@@ -3739,9 +3731,9 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
-  ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
-  ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
+  ✓ parser::test_self_pure::for_loops_run_pure
+  ✓ parser::test_self_pure::the_core_runs_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
   ✓ parser::test_self_time_arithmetic::clocks_go_round_and_instants_have_no_calendar
@@ -3985,6 +3977,8 @@ PASSED:
   ✓ programs::test_save_painting::save_writes_the_canvas_as_a_png
   ✓ programs::test_save_painting::save_writes_the_gpu_canvas_as_a_png
   ✓ programs::test_shader_block_places::a_comment_naming_a_shader_block_is_no_block
+  ✓ programs::test_shader_block_places::a_shader_error_after_a_hole_counts_the_hole_as_written
+  ✓ programs::test_shader_block_places::a_text_naming_a_shader_block_is_no_block
   ✓ programs::test_shader_block_places::the_real_block_alone_places_the_error
   ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
@@ -3993,7 +3987,6 @@ PASSED:
   ✓ programs::test_shader_builtins::a_shader_reads_its_previous_frame
   ✓ programs::test_shader_builtins::a_word_for_the_previous_frame_hints_at_previous
   ✓ programs::test_shader_builtins::the_host_fills_the_builtin_holes
-  ✓ programs::test_shader_errors::a_shader_error_after_a_hole_counts_the_hole_as_written
   ✓ programs::test_shader_errors::a_shader_error_the_browser_wrapped_is_placed_too
   ✓ programs::test_shader_errors::a_wgsl_error_names_its_place_in_the_program
   ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
@@ -5019,6 +5012,7 @@ PASSED:
   ✓ types::test_same_identity::scalars_stay_type_and_value
   ✓ types::test_scoped_enum_cases::a_case_with_values_by_its_enum
   ✓ types::test_scoped_enum_cases::a_constant_word_is_a_case_in_its_enum
+  ✓ types::test_scoped_enum_cases::a_match_in_a_used_file_binds_its_cases
   ✓ types::test_scoped_enum_cases::a_used_files_enum
   ✓ types::test_scoped_enum_cases::cases_in_rows
   ✓ types::test_self_typed_field::a_required_field_of_the_own_class_is_an_error
@@ -5335,7 +5329,6 @@ PASSED:
   ✓ wasm::test_emitter::test_compact_float
   ✓ wasm::test_executable_foreign::a_missing_interpreter_is_named
   ✓ wasm::test_executable_foreign::an_executable_calls_python_and_node
-  ✓ wasm::test_executable_foreign::the_runtime_reads_and_builds_nodes_with_warps_codes
   ✓ wasm::test_executable_foreign::values_cross_both_ways_as_warp_does
   ✓ wasm::test_executable_output::test_executable_ending_in_a_print_prints_no_value
   ✓ wasm::test_executable_output::test_executable_shows_no_empty_value
@@ -5902,6 +5895,7 @@ PASSED:
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
   ✓ welcoming::test_error_positions::an_unterminated_text_names_where_it_opened
+  ✓ welcoming::test_fi_block_end::fi_closes_a_multiline_if_block
   ✓ welcoming::test_fixits::a_bare_label_fixes_to_its_colon
   ✓ welcoming::test_fixits::a_hint_offers_its_preferred_form
   ✓ welcoming::test_fixits::ambiguous_call_comparison_fixes
@@ -6296,8 +6290,9 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ modules::test_std_coverage::every_library_word_is_called_by_a_test
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✗ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
 
 SUMMARY:
-12 ignored, 6293 passed, 2 failed, 6295 total tested
+11 ignored, 6287 passed, 3 failed, 6290 total tested

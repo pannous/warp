@@ -59,6 +59,9 @@ pub struct CompileContext {
 	pub fast_functions: HashSet<String>,
 	/// the modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	pub early_class_modules: HashSet<PathBuf>,
+	/// the used files' classes it put in front: the loader's passes of a file read their fields (a match arm
+	/// `Holds(box) =>` binds box) though the declarations are left out of the file
+	pub early_file_classes: Vec<Node>,
 	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
 	/// class_methods reads `n + 2` of `n = note_value(C4)` as Note's plus before the module joins the program
 	pub module_returned_classes: HashMap<String, String>,
@@ -123,6 +126,7 @@ impl Default for CompileContext {
 			fast_program: false,
 			fast_functions: HashSet::new(),
 			early_class_modules: HashSet::new(),
+			early_file_classes: vec![],
 			module_returned_classes: HashMap::new(),
 			module_instance_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),

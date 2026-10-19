@@ -405,7 +405,7 @@ node_at(n: any, index: int): any := {
 	if kind_code(n) == 3 { return text_char(unboxed_text(n), index) }
 	fail()
 }
-# `#n` of a value known only at run time: a list's items, a text's characters
+# `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: any): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) == 1 { return 0 }

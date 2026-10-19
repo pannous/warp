@@ -1,0 +1,9 @@
+// out: 9
+// out: 7
+def square(x) := x * x
+fun sum(a, b) {
+	c = a + b
+	c
+}
+print square(3)
+sum(3, 4)

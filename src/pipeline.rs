@@ -30,6 +30,9 @@ fn eval_source(code: &str) -> Node {
 		return outcome;
 	}
 	crate::errors::diagnostic::begin_program(); // only the guesses made for this program explain its errors
+	if let Some(module) = crate::compiler::self_hosted::pure_module(code) {
+		return checked_markup(run_module(module));
+	}
 	match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);

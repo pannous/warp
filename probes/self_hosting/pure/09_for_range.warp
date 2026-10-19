@@ -1,0 +1,4 @@
+// out: 1
+// out: 2
+// out: 3
+for i in 1 to 3 { print i }
