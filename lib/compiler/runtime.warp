@@ -626,9 +626,9 @@ exact_text(n: any): text := {
 	denominator = ratio_denominator(n)
 	twos = factor_count(denominator, 2)
 	fives = factor_count(denominator, 5)
-	if denominator != power(2, twos) * power(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
+	if denominator != int_pow(2, twos) * int_pow(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
 	digits = max_int(twos, fives)
-	scaled = int_quotient(numerator * power(10, digits), denominator)
+	scaled = int_quotient(numerator * int_pow(10, digits), denominator)
 	magnitude = int_text(if scaled < 0 then -scaled else scaled)
 	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
 	whole = byte_count(padded) - digits
@@ -648,11 +648,6 @@ factor_count(n: int, factor: int): int := {
 	}
 	count
 }
-power(base: int, exponent: int): int := {
-	out = 1
-	for i in 0..exponent { out = out * base }
-	out
-}
 max_int(a: int, b: int): int := if a > b then a else b
 # a text of count zero digits
 zeros(count: int): text := {
@@ -668,6 +663,40 @@ floor_quotient(a: int, b: int): int := {
 	}
 	q
 }
+# `base ^ exponent` of exact numbers (src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
+# inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names
+exact_pow(base: any, exponent: any): any := {
+	if is_ratio(exponent) == 1 { fail() }
+	times = unboxed_int(exponent)
+	if times < 0 {
+		base = exact_ratio(exact_denominator(base), exact_numerator(base))
+		times = -times
+	}
+	if is_ratio(base) == 0 { return int_pow(unboxed_int(base), times) }
+	# a ratio in lowest terms stays in lowest terms raised to any power
+	ratio_of(int_pow(ratio_numerator(base), times), int_pow(ratio_denominator(base), times))
+}
+# base ^ exponent by squaring, exponent at least 0 (src/wasm_emitter/numbers/big_int/slow_paths.rs int_pow); a product
+# beyond the int range fails in int_overflow, where Rust's turns into a big int
+int_pow(base: int, exponent: int): int := {
+	if exponent < 0 { fail() }
+	result = 1
+	while exponent > 0 {
+		if int_remainder(exponent, 2) == 1 { result = checked_product(result, base) }
+		exponent = int_quotient(exponent, 2)
+		if exponent > 0 { base = checked_product(base, base) }
+	}
+	result
+}
+# a * b, failing in int_overflow when the product leaves the int range
+checked_product(a: int, b: int): int := {
+	product = a * b
+	# -1 · smallest leaves the range, and its quotient check would trap itself
+	overflowed = if a == -1 then b == least_int() else a != 0 and int_quotient(product, a) != b
+	if overflowed { int_overflow() }
+	product
+}
+least_int(): int := -9223372036854775807 - 1
 
 ## runtime errors: each fails inside a function of its name, which src/wasm_emitter/control/traps.rs reads off the
 ## trace as the error's message; the global trap_detail holds the value the message names
@@ -685,6 +714,11 @@ index_out_of_range_of(index: int, count: int) := {
 index_of_node(n: any) := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
 	unboxed_int(n)
+}
+# a product beyond the int range (Rust's would be a big int)
+int_overflow() := {
+	fail()
+	0
 }
 index_must_be_an_integer() := {
 	fail()
