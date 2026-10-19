@@ -166,3 +166,10 @@
 - Reuse the general preposition-label machinery by declaring `with new`; keep positional calls working.
 - Keep reflected parameter names label-free through the shared library-signature extractor.
 - Update the existing sample and call guide, then run targeted tests and the worker gates.
+
+# Text builtin argument errors
+
+- Reproduce `byte_at(3, 0)` in a new focused text test before changing production code.
+- Route every non-literal `byte_at` text operand through the existing text-argument conversion so wrong kinds become the standard `not a text` error instead of a raw `ref.cast` trap.
+- Preserve the inline byte-loop fast path, character-to-text conversion, error propagation, and bounds checking.
+- Run the focused test before and after, then formatting, clippy, and the wasm32 check.

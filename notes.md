@@ -77,3 +77,4 @@
 
 - 2026-10-18 like-tea: a prelude function gets the same natural call labels as user functions by declaring the parameter after its preposition (`replace(t, old, with new)`); positional calls keep working and `.replace "tea" with: "coffee"` uses the shared preposition-call lowering.
 - 2026-10-18 like-tea CI: prelude reflection reads signatures as text, so labelled parameters need the same label stripping as AST parameters; keep `replace.signature` labelled while `replace.params` returns the variable name `new`.
+- 2026-10-19 traps-wasm-trap: `text_argument` propagated Error and converted Codepoint but never required Text, so `byte_at(3, 0)` reached `emit_text_bytes` and trapped on the payload cast. Validate the shared argument after conversion, before any text storage access.
