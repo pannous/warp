@@ -2444,6 +2444,9 @@ PASSED:
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
   ✓ modules::test_agent::agent_without_a_key_says_where_to_set_it
+  ✓ modules::test_case_table_module::case_words_in_warp
+  ✓ modules::test_case_table_module::case_words_match_the_builtins
+  ✓ modules::test_case_table_module::case_words_match_the_builtins_on_every_cased_letter
   ✓ modules::test_checkout_std_lib::a_lib_file_edited_since_the_build_is_used_quietly
   ✓ modules::test_checkout_std_lib::a_stale_lib_file_shadows_the_standard_module_loudly
   ✓ modules::test_checkout_std_lib::another_checkout_lib_is_the_standard_module
@@ -2456,6 +2459,9 @@ PASSED:
   ✓ modules::test_dir_value_methods::dir_of_a_value_lists_its_types_methods
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
+  ✓ modules::test_english_phrases::a_quoted_set_phrase_stays_as_written
+  ✓ modules::test_english_phrases::own_set_shadows_the_english_rule
+  ✓ modules::test_english_phrases::set_phrases_come_from_the_english_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
   ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
@@ -2587,6 +2593,10 @@ PASSED:
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
   ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
+  ✓ modules::test_std_extrema::an_empty_list_has_no_extremum
+  ✓ modules::test_std_extrema::extrema_of_one_list_of_candidates
+  ✓ modules::test_std_extrema::extrema_of_two_or_more_values
+  ✓ modules::test_std_extrema::the_extremum_enum_names_its_word
   ✓ modules::test_std_file_bytes::a_value_that_is_no_byte_is_refused
   ✓ modules::test_std_file_bytes::bytes_and_texts_are_the_same_file
   ✓ modules::test_std_file_bytes::write_bytes_and_read_bytes_need_no_use
@@ -2681,6 +2691,11 @@ PASSED:
   ✓ modules::test_std_shadowed_names::a_parameter_named_like_a_module_word_needs_no_module
   ✓ modules::test_std_shadowed_names::a_program_function_named_like_a_module_helper_leaves_the_module_its_own
   ✓ modules::test_std_shadowed_names::a_program_function_of_another_arity_adds_to_the_module_word
+  ✓ modules::test_std_time_zones::an_unknown_zone_is_named_in_the_error
+  ✓ modules::test_std_time_zones::daylight_saving_starts_on_the_last_sunday_of_march_at_one_utc
+  ✓ modules::test_std_time_zones::zone_instant_resolves_wall_times
+  ✓ modules::test_std_time_zones::zone_offsets_match_the_rust_calendar_in_every_zone
+  ✓ modules::test_std_time::civil_days_are_prelude_words
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
   ✓ modules::test_std_time::format_duration_in_the_largest_units
@@ -2688,6 +2703,10 @@ PASSED:
   ✓ modules::test_std_time::use_time_formats_dates_and_times
   ✓ modules::test_std_time::use_time_knows_leap_years_and_month_lengths
   ✓ modules::test_std_time::use_time_parses_dates
+  ✓ modules::test_std_uncertain::a_gaussian_met_twice_is_one_error
+  ✓ modules::test_std_uncertain::gaussians_add_in_quadrature
+  ✓ modules::test_std_uncertain::intervals_compare_certainly
+  ✓ modules::test_std_uncertain::intervals_take_the_worst_case
   ✓ modules::test_std_words::an_ordered_map_keeps_insertion_order
   ✓ modules::test_std_words::draw_names_yellow_orange_purple
   ✓ modules::test_std_words::json_of_an_instance_given_its_classes
@@ -2736,30 +2755,16 @@ PASSED:
   ✓ modules::test_wasm_modules::xxhash_compiled_to_wasm
   ✓ modules::test_wasm_modules::zlib_compiled_to_wasm
   ✓ modules::test_wasm_modules::zlib_compresses_into_a_buffer_and_back
-  ✓ node::node_values_test::test_values_empty
-  ✓ node::node_values_test::test_values_key
-  ✓ node::node_values_test::test_values_list
-  ✓ node::node_values_test::test_values_meta
-  ✓ node::node_values_test::test_values_nested_key
-  ✓ node::node_values_test::test_values_number
   ✓ node::test_comment_meta::a_field_named_meta_stays_the_field
   ✓ node::test_comment_meta::a_missing_field_is_named_from_any_browsers_trace
   ✓ node::test_comment_meta::comments_are_meta_information_only_under_use_comments
   ✓ node::test_comment_meta::the_comment_of_a_binding_is_its_meta
   ✓ node::test_container_characters::a_character_in_a_container_serializes_with_double_quotes
-  ✓ node::test_empty_operands::a_condition_keyword_is_written_without_its_empty_left
-  ✓ node::test_empty_operands::a_missing_operand_is_not_written
-  ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
-  ✓ node::test_empty_operands::a_written_empty_value_stays
   ✓ node::test_eval_word::test_eval_word
-  ✓ node::test_float_node_text::a_float_node_writes_its_shortest_text
   ✓ node::test_grouped_parts::a_group_of_one_has_its_item_s_parts
-  ✓ node::test_index_serialization::a_bracket_index_roundtrips
-  ✓ node::test_index_serialization::a_bracket_index_serializes_with_its_parentheses
   ✓ node::test_list_separator::a_list_is_built_with_a_separator
   ✓ node::test_list_separator::a_list_read_back_keeps_its_separator
   ✓ node::test_list_separator::a_list_shows_its_separator
-  ✓ node::test_node_add::adding_unrelated_nodes_builds_the_unevaluated_sum
   ✓ node::test_node_api::a_key_shows_its_parts
   ✓ node::test_node_api::a_list_shows_its_bracket
   ✓ node::test_node_api::nodes_are_built_from_parts
@@ -2771,32 +2776,6 @@ PASSED:
   ✓ node::test_node_cases::an_enum_case_in_a_pattern_compares
   ✓ node::test_node_cases::an_operator_case_is_spelled_as_the_node_carries_it
   ✓ node::test_node_cases::node_is_the_type_of_any_node
-  ✓ node::test_node_cases::node_warp_declares_the_rust_node
-  ✓ node::test_node_cases::node_warp_spells_each_operator_bracket_and_separator
-  ✓ node::test_node_is_block::test_node_is_block
-  ✓ node::test_node_operators::test_chaining
-  ✓ node::test_node_operators::test_complex_expression
-  ✓ node::test_node_operators::test_mixed_types
-  ✓ node::test_node_operators::test_node_add_basic
-  ✓ node::test_node_operators::test_node_add_booleans
-  ✓ node::test_node_operators::test_node_add_empty
-  ✓ node::test_node_operators::test_node_div_basic
-  ✓ node::test_node_operators::test_node_div_booleans
-  ✓ node::test_node_operators::test_node_meta_preservation
-  ✓ node::test_node_operators::test_node_mul_basic
-  ✓ node::test_node_operators::test_node_mul_booleans
-  ✓ node::test_node_operators::test_node_mul_empty
-  ✓ node::test_node_operators::test_node_sub_basic
-  ✓ node::test_node_operators::test_node_sub_booleans
-  ✓ node::test_node_operators::test_operations_with_primitives_mixed
-  ✓ node::test_node_operators::test_type_mismatch_add
-  ✓ node::test_node_operators::test_type_mismatch_div
-  ✓ node::test_node_operators::test_type_mismatch_mul
-  ✓ node::test_node_operators::test_type_mismatch_sub
-  ✓ node::test_node_todo::todo_is_a_loud_error_naming_the_missing_feature
-  ✓ node::test_node::test_mark_as_map
-  ✓ node::test_node::test_remove
-  ✓ node::test_node::test_remove2
   ✓ node::test_normalization::a_mask_beside_and_or_hints_the_bit_word
   ✓ node::test_normalization::test_cast_constructor
   ✓ node::test_normalization::test_cast_style_constructor
@@ -2853,7 +2832,6 @@ PASSED:
   ✓ node::test_parsed_node_walks::quoted_definitions_define_nothing
   ✓ node::test_quote_as_written::quoted_code_is_the_code_parse_gives
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
-  ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ node::test_trailing_comment::comment_ending_a_line_belongs_to_its_item
   ✓ normalize::tests::test_hint_mode
   ✓ normalize::tests::test_hint_position
@@ -2924,6 +2902,8 @@ PASSED:
   ✓ numbers::test_division_by_zero::float_division_by_zero_is_infinity
   ✓ numbers::test_division_by_zero::int_division_by_zero_is_an_error
   ✓ numbers::test_duration_text::a_duration_and_a_date_have_their_text
+  ✓ numbers::test_duration_words::duration_order_holds_on_every_date
+  ✓ numbers::test_duration_words::duration_text_reads_as_calendar_shows_a_duration
   ✓ numbers::test_dynamic_units::a_quantity_read_from_text_carries_its_unit
   ✓ numbers::test_dynamic_units::only_a_program_calling_quantity_carries_the_units_module
   ✓ numbers::test_dynamic_units::quantities_multiply_divide_and_convert
@@ -3173,6 +3153,10 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
+  ✓ numbers::test_ratio_gcd_warp::euclidean_words_match_percent_and_floor_division
+  ✓ numbers::test_ratio_gcd_warp::exact_quotient_divides_as_slash
+  ✓ numbers::test_ratio_gcd_warp::gcd_is_never_negative
+  ✓ numbers::test_ratio_gcd_warp::lowest_terms_are_the_ratios_of_division
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
   ✓ numbers::test_rational_quantities::test_non_whole_results_are_exact
   ✓ numbers::test_rational_type::test_floats_are_not_rational
@@ -3599,7 +3583,6 @@ PASSED:
   ✓ parser::test_and_after_comparison::print_shows_the_joined_condition
   ✓ parser::test_as_prefixed_name::as_still_casts
   ✓ parser::test_as_prefixed_name::def_of_an_as_prefixed_name
-  ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
   ✓ parser::test_attributes::attribute_names_may_be_kebab_case
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ parser::test_bare_operator_block::a_bare_operator_block_names_the_fix
@@ -3613,19 +3596,12 @@ PASSED:
   ✓ parser::test_braceless_range_argument::a_comparison_still_ends_the_argument
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
-  ✓ parser::test_comments::test_block_comments
-  ✓ parser::test_comments::test_comment_metadata
-  ✓ parser::test_comments::test_comment_with_metadata_accessor
   ✓ parser::test_comments::test_comments
   ✓ parser::test_comments::test_comments_in_html_structure
-  ✓ parser::test_comments::test_comments2
-  ✓ parser::test_comments::test_inline_comments
-  ✓ parser::test_comments::test_line_comments
   ✓ parser::test_comments::test_nested_block_comments
   ✓ parser::test_dollar_names::dollar_digit_stays_a_parameter_reference
   ✓ parser::test_dollar_names::dollar_names_keep_their_sigil
   ✓ parser::test_dollar_names::dollar_names_survive_eval
-  ✓ parser::test_element_wise_phrase::element_wise_operators_parse_as_written
   ✓ parser::test_element_wise_phrase::element_wise_operators_still_mean_what_they_did
   ✓ parser::test_emoji_atoms::an_emoji_is_a_codepoint
   ✓ parser::test_emoji_atoms::an_emoji_sequence_is_one_atom
@@ -3680,25 +3656,10 @@ PASSED:
   ✓ parser::test_inline_comments::test_hash_comment_after_a_statement_keeps_the_newline_separator
   ✓ parser::test_inline_comments::test_hash_comment_ends_the_expression_not_the_program
   ✓ parser::test_inline_comments::test_hash_without_space_is_still_the_index_operator
-  ✓ parser::test_json::test_block_node_json
-  ✓ parser::test_json::test_complex_node_json
-  ✓ parser::test_json::test_data_node_json
-  ✓ parser::test_json::test_implicit_html_structure
-  ✓ parser::test_json::test_nested_node_json
-  ✓ parser::test_json::test_node_eq_json_curly_lists
-  ✓ parser::test_json::test_node_eq_json_keys
-  ✓ parser::test_json::test_node_eq_json_lists
-  ✓ parser::test_json::test_node_eq_json_meta
-  ✓ parser::test_json::test_node_eq_json_primitives
-  ✓ parser::test_json::test_node_from_json
-  ✓ parser::test_json::test_node_neq_json
-  ✓ parser::test_json::test_node_to_json_compact
-  ✓ parser::test_json::test_simple_values
   ✓ parser::test_juxtaposition::test_data_mode_never_multiplies
   ✓ parser::test_juxtaposition::test_julia_grouping_division
   ✓ parser::test_juxtaposition::test_number_times_parenthesis
   ✓ parser::test_juxtaposition::test_number_times_symbol
-  ✓ parser::test_juxtaposition::test_ordinals_are_not_products
   ✓ parser::test_juxtaposition::test_postfix_binds_to_the_symbol
   ✓ parser::test_juxtaposition::test_spaced_number_and_symbol_is_still_a_list
   ✓ parser::test_juxtaposition::test_undefined_symbol_is_the_normal_error
@@ -3715,11 +3676,8 @@ PASSED:
   ✓ parser::test_meta_attributes::test_meta_key_inside_a_literal_is_no_field
   ✓ parser::test_meta_attributes::test_meta_stays_reachable
   ✓ parser::test_meta_attributes::test_prefix_attribute_survives_emission
-  ✓ parser::test_meta::test_meta
   ✓ parser::test_meta::test_meta_at
   ✓ parser::test_meta::test_meta_at2
-  ✓ parser::test_meta::test_meta_field
-  ✓ parser::test_meta::test_parent
   ✓ parser::test_meta::test_parent_context
   ✓ parser::test_named_argument_lambda::a_listed_entry_holds_the_lambda
   ✓ parser::test_named_argument_lambda::a_named_argument_holds_the_lambda
@@ -3744,7 +3702,6 @@ PASSED:
   ✓ parser::test_operator_aliases::lib_math_with_its_alias_lines_still_loads
   ✓ parser::test_operator_aliases::set_glyphs_are_membership_and_set_words
   ✓ parser::test_operator_aliases::set_glyphs_bind_like_math
-  ✓ parser::test_operator_aliases::the_math_spellings_come_from_lib_math
   ✓ parser::test_operator_word_keys::a_prefix_operator_word_names_a_key
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
@@ -3762,21 +3719,13 @@ PASSED:
   ✓ parser::test_parser::parse_list_via_separator_semicolon
   ✓ parser::test_parser::parse_list_via_separator_space
   ✓ parser::test_parser::parse_list_via_separator3
-  ✓ parser::test_parser::test_bit_field
   ✓ parser::test_parser::test_colon_lists
   ✓ parser::test_parser::test_colon_object
-  ✓ parser::test_parser::test_cpp
   ✓ parser::test_parser::test_empty
-  ✓ parser::test_parser::test_eval3
-  ✓ parser::test_parser::test_expected_structure
-  ✓ parser::test_parser::test_fizzbuzz_nested_ternary
-  ✓ parser::test_parser::test_group_cascade0
   ✓ parser::test_parser::test_key_object_set
   ✓ parser::test_parser::test_nested_ternary_depth2
-  ✓ parser::test_parser::test_nested_ternary_multiline
   ✓ parser::test_parser::test_newline_groups
   ✓ parser::test_parser::test_parse_complex
-  ✓ parser::test_parser::test_parse_function
   ✓ parser::test_parser::test_parse_key_value
   ✓ parser::test_parser::test_parse_list
   ✓ parser::test_parser::test_parse_multiple_values
@@ -3786,10 +3735,7 @@ PASSED:
   ✓ parser::test_parser::test_parse_symbol
   ✓ parser::test_parser::test_parser_serialize
   ✓ parser::test_parser::test_roundtrip
-  ✓ parser::test_parser::test_sample
   ✓ parser::test_parser::test_semicolon_groups
-  ✓ parser::test_parser::test_simple_separators
-  ✓ parser::test_parser::test_use
   ✓ parser::test_path_after_function::a_parameter_shadowing_a_function_divides
   ✓ parser::test_path_after_function::a_path_after_a_function_defined_later
   ✓ parser::test_path_after_function::a_path_after_a_variable_holding_a_function
@@ -3810,7 +3756,6 @@ PASSED:
   ✓ parser::test_rust_macros::format_fills_the_placeholders_in_order
   ✓ parser::test_rust_macros::format_reads_inline_names_and_positions
   ✓ parser::test_rust_macros::panic_macros_fail
-  ✓ parser::test_rust_macros::println_prints_the_formatted_text
   ✓ parser::test_rust_macros::vec_is_a_list
   ✓ parser::test_rust_paths::a_turbofish_says_nothing_warp_needs
   ✓ parser::test_rust_paths::an_enum_path_stays_the_case
@@ -3821,58 +3766,35 @@ PASSED:
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
-  ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
-  ✓ parser::test_self_differential::line_widths_match_their_rust_twin
+  ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
+  ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
-  ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
-  ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
-  ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
-  ✓ parser::test_self_lexer::numbers_match_their_rust_twin
-  ✓ parser::test_self_lexer::texts_match_their_rust_twin
-  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
-  ✓ parser::test_self_pass_reports::a_built_node_carries_its_position
-  ✓ parser::test_self_pass_reports::a_source_pass_is_seen_with_its_hints
-  ✓ parser::test_self_pass_reports::every_positioned_source_is_a_node_and_back
-  ✓ parser::test_self_passes::a_source_pass_is_seen_before_and_after
-  ✓ parser::test_self_passes::arrow_result_types_match_their_rust_twin
-  ✓ parser::test_self_passes::element_wise_operators_match_their_rust_twin
-  ✓ parser::test_self_passes::every_source_is_a_node_and_back
-  ✓ parser::test_self_passes::grouped_receivers_match_their_rust_twin
-  ✓ parser::test_self_passes::interpolation_matches_its_rust_twin
-  ✓ parser::test_self_passes::match_arms_match_their_rust_twin
-  ✓ parser::test_self_passes::number_words_match_their_rust_twin
-  ✓ parser::test_self_passes::of_lookups_match_their_rust_twin
-  ✓ parser::test_self_passes::times_phrases_match_their_rust_twin
-  ✓ parser::test_self_pipeline::the_warp_pipeline_lowers_as_rust
-  ✓ parser::test_self_serializer::a_view_is_json
-  ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
-  ✓ parser::test_self_signatures::module_source_is_the_embedded_standard_module
-  ✓ parser::test_self_signatures::the_signature_table_answers_as_rust
-  ✓ parser::test_self_words::call_kinds_are_rusts
-  ✓ parser::test_self_words::copied_tables_are_their_rust_constants
-  ✓ parser::test_self_words::type_words_are_the_rust_type_words
+  ✓ parser::test_self_sort::sort_runs_as_rust_sorts
+  ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
+  ✓ parser::test_self_time_arithmetic::clocks_go_round_and_instants_have_no_calendar
+  ✓ parser::test_self_time_arithmetic::dates_shift_by_months_then_days
+  ✓ parser::test_self_time_arithmetic::durations_order_when_every_date_agrees
+  ✓ parser::test_self_time_arithmetic::local_times_keep_their_clock
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
   ✓ parser::test_spaced_optional_type::an_optional_type_before_a_spaced_assignment
   ✓ parser::test_spaced_required_fields::spaced_fields_keep_the_required_mark
-  ✓ parser::test_statement_phrases::after_reads_its_condition_up_to_return
   ✓ parser::test_statement_phrases::after_without_parentheses_waits_for_its_condition
-  ✓ parser::test_statement_phrases::after_without_return_stays_a_call_listener
   ✓ parser::test_statement_phrases::and_after_a_value_stays_logical
   ✓ parser::test_statement_phrases::and_before_an_infix_word_continues_the_condition
   ✓ parser::test_statement_phrases::and_between_statements_sequences_them
   ✓ parser::test_statement_phrases::and_not_continues_the_condition_after_let
-  ✓ parser::test_statement_terminators::semicolon_at_line_end_separates_statements_like_the_newline
-  ✓ parser::test_statement_terminators::semicolon_inside_a_line_still_groups
   ✓ parser::test_statements_after_type::a_type_declaration_alone_is_empty
   ✓ parser::test_statements_after_type::variables_assigned_next_to_a_type_declaration_keep_their_values
   ✓ parser::test_superscript_signs::a_negative_superscript_is_a_reciprocal_power
@@ -3891,10 +3813,7 @@ PASSED:
   ✓ parser::test_time_unit_keys::a_key_or_member_named_now_is_no_time
   ✓ parser::test_time_unit_keys::a_unit_word_after_a_number_is_still_a_unit
   ✓ parser::test_time_unit_keys::a_unit_word_before_a_colon_is_a_key
-  ✓ parser::test_times_phrase::times_parses_as_the_phrase_written
   ✓ parser::test_times_phrase::times_phrases_still_mean_what_they_did
-  ✓ parser::test_trailing_annotation::a_leading_annotation_still_marks_what_follows
-  ✓ parser::test_trailing_annotation::a_trailing_annotation_marks_the_expression_before_it
   ✓ parser::test_unary_plus::a_unary_plus_is_its_operand
   ✓ parser::test_uniscript_entities::an_unknown_entity_is_an_error
   ✓ parser::test_uniscript_entities::an_unknown_entity_stays_as_written_and_warns
@@ -3906,18 +3825,11 @@ PASSED:
   ✓ parser::test_url_literal::any_scheme_before_colon_slash_slash_starts_a_url
   ✓ parser::test_warp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_warp_format::test_empty_structures
-  ✓ parser::test_warp_format::test_function_syntax
   ✓ parser::test_warp_format::test_list_operations
   ✓ parser::test_warp_format::test_mixed_syntax
   ✓ parser::test_warp_format::test_nested_structures
   ✓ parser::test_warp_format::test_warp_roundtrip
   ✓ parser::test_warp_format::test_warp_to_json
-  ✓ parser::test_warp_position::test_column_tracking
-  ✓ parser::test_warp_position::test_multiline_structure
-  ✓ parser::test_warp_position::test_nested_position_tracking
-  ✓ parser::test_warp_position::test_position_in_json_output
-  ✓ parser::test_warp_position::test_position_tracking
-  ✓ parser::test_warp_position::test_position_with_comments
   ✓ parser::test_wisp_def_params::a_wisp_def_tells_the_parameters_from_the_body
   ✓ parser::test_wisp_malformed::malformed_wisp_is_an_error_not_a_repaired_value
   ✓ parser::test_wisp_malformed::malformed_wisp_never_panics
@@ -4286,6 +4198,7 @@ PASSED:
   ✓ programs::test_window_closed_by_user::the_closed_line_ends_the_run
   ✓ programs::test_window_size::a_bare_width_is_the_canvas_width
   ✓ programs::test_window_size::a_width_of_the_program_keeps_its_meaning
+  ✓ programs::test_window_size::canvas_size_by_a_set_phrase
   ✓ programs::test_window_size::canvas_size_is_a_property
   ✓ programs::test_window_size::the_display_is_read_only
   ✓ programs::test_window_size::the_viewer_reads_a_resize
@@ -5136,6 +5049,7 @@ PASSED:
   ✓ types::test_recursive_fields::gc_struct_and_ref_are_wasm_spellings
   ✓ types::test_recursive_fields::ref_fields_on_their_own_lines
   ✓ types::test_return_as_hint::the_arrow_hint_points_at_the_definition
+  ✓ types::test_returned_instances::a_declared_result_class_takes_its_class_operators
   ✓ types::test_returned_instances::a_parameter_shadows_an_instance_variable
   ✓ types::test_returned_instances::an_instance_returned_by_a_function_takes_its_class_operators
   ✓ types::test_returned_instances::an_operation_of_instances_is_an_instance_too
@@ -5230,6 +5144,8 @@ PASSED:
   ✓ types::test_text_defaults::a_text_default_is_no_type_name
   ✓ types::test_text_of_text::text_of_a_text_conversion_is_its_value
   ✓ types::test_text_of_text::text_of_data_stays_its_source
+  ✓ types::test_time_fields_warp::test_calendar_edges_at_run_time
+  ✓ types::test_time_fields_warp::test_time_field_of_a_position
   ✓ types::test_time_kinds_are_types::test_time_kinds_are_types
   ✓ types::test_time_now::test_a_time_of_day_goes_round_the_clock
   ✓ types::test_time_now::test_clock_reads_compare
@@ -5463,15 +5379,8 @@ PASSED:
   ✓ types::test_widened_list_views::a_reading_or_narrower_view_is_fine
   ✓ wasm::test_build_emits_wasm::build_exe_writes_both_and_build_wasm_only_the_module
   ✓ wasm::test_build_emits_wasm::build_writes_the_executable_and_the_module
-  ✓ wasm::test_compile_only::compile_command_emits_the_same_struct_module_as_eval
   ✓ wasm::test_compile_only::compile_command_writes_wasm_without_running
   ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
-  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_compiles_once_then_maps_the_compiled_module
-  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_compiled_programs
-  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_components
-  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
-  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
-  ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
   ✓ wasm::test_component_exports::a_components_exports_and_dir
   ✓ wasm::test_component_worlds::a_built_component_is_used_by_another_program
   ✓ wasm::test_component_worlds::a_component_calls_what_its_world_imports
@@ -5480,12 +5389,8 @@ PASSED:
   ✓ wasm::test_component_worlds::an_unknown_interface_is_named
   ✓ wasm::test_component_worlds::texts_cross_the_component_boundary
   ✓ wasm::test_component_worlds::the_world_as_wit
-  ✓ wasm::test_dead_functions::a_module_without_dead_functions_stays_as_it_is
-  ✓ wasm::test_dead_functions::compiled_programs_carry_no_dead_functions
-  ✓ wasm::test_dead_functions::unreachable_functions_are_dropped_and_the_rest_renumbered
   ✓ wasm::test_emitter::test_compact_empty
   ✓ wasm::test_emitter::test_compact_float
-  ✓ wasm::test_emitter::test_compact_int
   ✓ wasm::test_executable_foreign::a_missing_interpreter_is_named
   ✓ wasm::test_executable_foreign::an_executable_calls_python_and_node
   ✓ wasm::test_executable_foreign::the_runtime_reads_and_builds_nodes_with_warps_codes
@@ -5496,21 +5401,11 @@ PASSED:
   ✓ wasm::test_executable_output::test_executable_trap_names_main
   ✓ wasm::test_executable_size::test_executable_exports_only_what_the_stub_calls
   ✓ wasm::test_executable_size::test_executable_keeps_its_handlers
-  ✓ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken
-  ✓ wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
-  ✓ wasm::test_gc_struct::test_class_instance_raw
-  ✓ wasm::test_gc_struct::test_gc_object_index_access
-  ✓ wasm::test_gc_struct::test_gc_struct_macro
-  ✓ wasm::test_gc_struct::test_raw_person_struct
   ✓ wasm::test_memory_cap::linear_memory_stops_at_the_memory_cap
   ✓ wasm::test_memory_cap::the_gc_heap_stops_at_the_memory_cap
-  ✓ wasm::test_name_subsection_order::name_subsections_ascend_in_compiled_programs
-  ✓ wasm::test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules
   ✓ wasm::test_no_cwd_debris::eval_leaves_no_module_in_the_current_directory
   ✓ wasm::test_no_cwd_debris::the_last_module_is_kept_at_its_fixed_path
   ✓ wasm::test_own_runtime_stub::test_runtime_stub_is_this_checkouts
-  ✓ wasm::test_parameter_names::a_page_leaves_parameter_names_out
-  ✓ wasm::test_parameter_names::parameters_are_named_in_the_name_section
   ✓ wasm::test_read_bytes_plain_result::a_main_without_a_result_is_empty
   ✓ wasm::test_read_bytes_plain_result::a_null_result_is_empty
   ✓ wasm::test_read_bytes_plain_result::a_plain_f64_result_is_a_float
@@ -5521,6 +5416,7 @@ PASSED:
   ✓ wasm::test_runtime_stub_found::build_finds_or_builds_the_runtime_stub_by_itself
   ✓ wasm::test_runtime_stub_note::the_note_comes_only_before_the_first_build
   ✓ wasm::test_standalone_executable::test_an_executable_the_runtime_cannot_carry_is_noted_once
+  ✓ wasm::test_standalone_executable::test_build_exe_calls_c_functions
   ✓ wasm::test_standalone_executable::test_build_exe_prints_lists_as_print_does
   ✓ wasm::test_standalone_executable::test_build_exe_refuses_imports_the_runtime_lacks
   ✓ wasm::test_standalone_executable::test_build_exe_runs_the_program_and_prints_its_value
@@ -5535,15 +5431,8 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
   ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
-  ✓ wasm::test_start_function_name::the_start_function_is_named_install
   ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_follows_main
   ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_runs
-  ✓ wasm::test_wasm_emitter::test_emit_for_node_tree_shaking
-  ✓ wasm::test_wasm_emitter::test_emit_gc_types
-  ✓ wasm::test_wasm_emitter::test_function_usage_tracking
-  ✓ wasm::test_wasm_emitter::test_generate_wasm
-  ✓ wasm::test_wasm_emitter::test_node_kind_enum_abi
-  ✓ wasm::test_wasm_emitter::test_wasm_roundtrip
   ✓ wasm::test_wasm_emitter::test_wasm_roundtrip_via_is
   ✓ wasm::test_wasm_interop_rest::a_row_of_fields_among_lines
   ✓ wasm::test_wasm_interop_rest::imported_memory_and_table
@@ -5551,10 +5440,6 @@ PASSED:
   ✓ wasm::test_wasm_interop_rest::linear_memory_by_its_bytes
   ✓ wasm::test_wasm_interop_rest::optional_fields_on_one_line
   ✓ wasm::test_wasm_interop_rest::wasm_interop_sample_runs
-  ✓ wasm::test_wasm_names_order::name_subsections_and_maps_are_in_order
-  ✓ wasm::test_wasm_reader::test_create_wasm_gc_nodes_from_host_concept
-  ✓ wasm::test_wasm_reader::test_node_serialization_workflow_design
-  ✓ wasm::test_wasm_reader::test_wasm_gc_node_reading_concept
   ✓ wasm::test_wasm::test_array_indices_wasm
   ✓ wasm::test_wasm::test_assert
   ✓ wasm::test_wasm::test_auto_smarty
@@ -5620,7 +5505,6 @@ PASSED:
   ✓ wasm::test_wasm::test_wasm_while2
   ✓ wasm::test_wit_types::wit_struct_is_a_plain_word
   ✓ wasm::test_wit_types::wit_type_arguments_close_at_the_first_angle_bracket
-  ✓ wasm::test_wit::test_timeout_protection
   ✓ wasm::test_wit::test_wit_parse
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
   ✓ web::test_accessibility::compared_values_are_no_elements
@@ -6485,12 +6369,10 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_rust_macros::println_prints_the_formatted_text
   ✗ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✗ INCOMPLETE: 1 test binaries ended without a result (crashed or killed)
-    RERUN of tests/main.rs: 27 unfinished or failed tests
-    ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it: (no output)
-    CRASHED again, while running: (no test started)
-    rerun: 26 passed, 1 failed, crashed
+  ✗ parser::test_self_exact_rounding::ratio_floor_and_remainder_run_as_rust_runs_them
+  ✗ parser::test_self_time_arithmetic::operands_swap_scale_and_subtract
 
 SUMMARY:
-16 ignored, 6482 passed, 2 failed, 6484 total tested
+12 ignored, 6366 passed, 4 failed, 6370 total tested

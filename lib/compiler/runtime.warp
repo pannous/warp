@@ -93,6 +93,7 @@ number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_
 collection_text(n: any): text := {
 	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
 	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
+	if kind_code(n) == 18 { return time_text(n) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
@@ -549,7 +550,9 @@ reversed(n: any): any := {
 		}
 		return backwards
 	}
-	items = unboxed_list(n)
+	reversed_items(unboxed_list(n))
+}
+reversed_items(items: list): list := {
 	turned = new_list(#items)
 	for i in 1 to #items { turned#i = items#(#items + 1 - i) }
 	turned
@@ -815,7 +818,7 @@ exact_text(n: any): text := {
 	denominator = ratio_denominator(n)
 	twos = factor_count(denominator, 2)
 	fives = factor_count(denominator, 5)
-	if denominator != power(2, twos) * power(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
+	if denominator != int_pow(2, twos) * int_pow(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
 	digits = max_int(twos, fives)
 	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
 	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
@@ -843,6 +846,41 @@ power(base: int, exponent: int): int := {
 	for i in 0..exponent { out = out * base }
 	out
 }
+# `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
+# src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
+# 14142135623730951/10^16; ∞ and NaN have no fraction
+float_as_exact(x: float): any := {
+	# x - x is 0 for every finite x, NaN for ∞ and NaN
+	if x - x != 0 { not_a_finite_number() }
+	if x == 0 { return exact_ratio(0, 1) }
+	sign = if x < 0 then -1 else 1
+	# `then -x else` reads as a subtraction from then
+	magnitude = if x < 0 then 0 - x else x
+	found = float_digits(magnitude)
+	digits = unboxed_int(found#1)
+	shift = unboxed_int(found#2)
+	if shift <= 0 { return exact_ratio(sign * multiplied_within_64_bits(digits, 10, -shift), 1) }
+	# digits / (2^shift · 5^shift), the common factors taken out first so the denominator fits where it can
+	twos = shift
+	fives = shift
+	while twos > 0 and int_remainder(digits, 2) == 0 {
+		digits = int_quotient(digits, 2)
+		twos -= 1
+	}
+	while fives > 0 and int_remainder(digits, 5) == 0 {
+		digits = int_quotient(digits, 5)
+		fives -= 1
+	}
+	exact_ratio(sign * digits, multiplied_within_64_bits(multiplied_within_64_bits(1, 5, fives), 2, twos))
+}
+# n · factor^times of n ≥ 0; beyond 64 bits it fails as an int64 overflow (Rust's twin goes on in big ints)
+multiplied_within_64_bits(n: int, factor: int, times: int): int := {
+	for i in 0..times {
+		if n > int_quotient(9223372036854775807, factor) { overflow_of_int64() }
+		n = n * factor
+	}
+	n
+}
 max_int(a: int, b: int): int := if a > b then a else b
 # a text of count zero digits
 zeros(count: int): text := {
@@ -857,6 +895,93 @@ floor_quotient(a: int, b: int): int := {
 		if b > 0 { q -= 1 } else { q += 1 }
 	}
 	q
+}
+# `base ^ exponent` of exact numbers (src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
+# inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names
+exact_pow(base: any, exponent: any): any := {
+	if is_ratio(exponent) == 1 { fail() }
+	times = unboxed_int(exponent)
+	if times < 0 {
+		base = exact_ratio(exact_denominator(base), exact_numerator(base))
+		times = -times
+	}
+	if is_ratio(base) == 0 { return int_pow(unboxed_int(base), times) }
+	# a ratio in lowest terms stays in lowest terms raised to any power
+	ratio_of(int_pow(ratio_numerator(base), times), int_pow(ratio_denominator(base), times))
+}
+# base ^ exponent by squaring, exponent at least 0 (src/wasm_emitter/numbers/big_int/slow_paths.rs int_pow); a product
+# beyond the int range fails in int_overflow, where Rust's turns into a big int
+int_pow(base: int, exponent: int): int := {
+	if exponent < 0 { fail() }
+	result = 1
+	while exponent > 0 {
+		if int_remainder(exponent, 2) == 1 { result = checked_product(result, base) }
+		exponent = int_quotient(exponent, 2)
+		if exponent > 0 { base = checked_product(base, base) }
+	}
+	result
+}
+# a * b, failing in int_overflow when the product leaves the int range
+checked_product(a: int, b: int): int := {
+	product = a * b
+	# -1 · smallest leaves the range, and its quotient check would trap itself
+	overflowed = if a == -1 then b == least_int() else a != 0 and int_quotient(product, a) != b
+	if overflowed { int_overflow() }
+	product
+}
+least_int(): int := -9223372036854775807 - 1
+
+## exact rounding: Rust's exact_floor … exact_div_assign (src/wasm_emitter/numbers/exact.rs) as words over an Int
+## $Node's numerator and denominator; a $Ratio n/0 is ±∞ by n's sign and 0/0 is NaN, as Rust reads them
+# -1 for -∞, 1 for ∞, 0 for a finite x and for NaN
+exact_infinity_rank(x: any): int := if exact_denominator(x) == 0 then exact_numerator(x) else 0
+exact_is_nan(x: any): bool := exact_numerator(x) == 0 and exact_denominator(x) == 0
+int_order(a: int, b: int): int := if a < b then -1 else if a > b then 1 else 0
+# -1, 0 or 1 as a is below, equal to or above b; 2 (unequal) when exactly one of them is NaN
+exact_cmp(a: any, b: any): int := {
+	if exact_is_nan(a) or exact_is_nan(b) { return if exact_is_nan(a) and exact_is_nan(b) then 0 else 2 }
+	if exact_denominator(a) == 0 or exact_denominator(b) == 0 { return int_order(exact_infinity_rank(a), exact_infinity_rank(b)) }
+	exact_order(a, b)
+}
+exact_neg(x: any): any := exact_ratio(-exact_numerator(x), exact_denominator(x))
+exact_abs(x: any): any := {
+	if exact_numerator(x) < 0 { return exact_neg(x) }
+	x
+}
+# the integer part, rounded toward 0
+exact_trunc(x: any): any := {
+	if is_ratio(x) == 0 { return x }
+	int_quotient(ratio_numerator(x), ratio_denominator(x))
+}
+# a - b * trunc(a / b), the sign of a as i64.rem_s
+exact_rem(a: any, b: any): any := exact_sub(a, exact_mul(b, exact_trunc(exact_div(a, b))))
+# the Euclidean remainder, 0 <= r < |b|: the truncated one plus |b| when negative
+exact_mod(a: any, b: any): any := {
+	rest = exact_rem(a, b)
+	if exact_numerator(rest) < 0 { return exact_add(rest, exact_abs(b)) }
+	rest
+}
+# the largest integer <= x, exact beyond the float range: a negative ratio truncates up, so one less
+exact_floor(x: any): any := {
+	if is_ratio(x) == 0 { return x }
+	whole = exact_trunc(x)
+	if ratio_numerator(x) < 0 { return exact_sub(whole, 1) }
+	whole
+}
+# the quotient of a // b that goes with a % b: floor(a / b) for b > 0, -floor(-a / b) for b < 0
+exact_euclid_div(a: any, b: any): any := {
+	if exact_numerator(b) < 0 { return exact_neg(exact_floor(exact_neg(exact_div(a, b)))) }
+	exact_floor(exact_div(a, b))
+}
+# x /= y: an int x stays an int, the Euclidean quotient (x - x % y) / y; a ratio x divides exactly
+exact_div_assign(x: any, y: any): any := {
+	if is_ratio(x) == 1 { return exact_div(x, y) }
+	exact_div(exact_sub(x, exact_mod(x, y)), y)
+}
+# `floor x` of a boxed number: exact for an int or ratio, a float's floor as an int
+floored_node(n: any): any := {
+	if kind_code(n) != 1 { return truncated(float_floor(unboxed_float(n))) }
+	exact_floor(n)
 }
 
 ## runtime errors: each fails inside a function of its name, which src/wasm_emitter/control/traps.rs reads off the
@@ -876,7 +1001,22 @@ index_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
 	unboxed_int(n)
 }
+# a product beyond the int range (Rust's would be a big int)
+int_overflow() := {
+	fail()
+	0
+}
 index_must_be_an_integer(): int := {
+	fail()
+	0
+}
+# `x as rational` of ∞ or NaN: "not a finite number"
+not_a_finite_number() := {
+	fail()
+	0
+}
+# an int result beyond 64 bits where the runtime has no big ints: "int64 overflow" (src/numbers/fixed_width.rs)
+overflow_of_int64() := {
 	fail()
 	0
 }
@@ -907,3 +1047,376 @@ key_left(n: any): any := entry_key(n)
 key_right(n: any): any := key_value(n)
 key_operator(n: any): text := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
 symbol_node(name: any): any := symbol_of(node_text(name))
+
+## durations (card duration-warp; src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
+## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
+## bits (src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three
+## amounts, so they read as calendar.rs Duration does (tests/numbers/test_duration_words.rs)
+# a constant of the durations: an untyped word, as `f(): int :=` has no use yet
+second_nanos() := 1000000000
+day_nanos() := 86400 * second_nanos()
+hour_nanos() := 3600 * second_nanos()
+duration_months(n: any): int := floor_quotient(marked_kind(n), power(2, 43))
+# the 32 signed bits above the kind and the form
+duration_days(n: any): int := {
+	days = floor_quotient(marked_kind(n), power(2, 11)) % power(2, 32)
+	if days >= power(2, 31) then days - power(2, 32) else days
+}
+duration_nanos(n: any): int := unboxed_int(n)
+# `3 hours`: an amount and its unit, plural unless the amount is 1
+amount_text(amount: int, unit: text): text := {
+	if amount == 1 { return int_text(amount) + " " + unit }
+	int_text(amount) + " " + unit + "s"
+}
+# shown and the part after a space, the part alone when nothing is shown yet
+spaced(shown: text, part: text): text := if byte_count(shown) == 0 then part else shown + " " + part
+# shown and the amount of the unit, unchanged for a zero amount
+with_amount(shown: text, amount: int, unit: text): text := if amount == 0 then shown else spaced(shown, amount_text(amount, unit))
+# `1.5`, `-0.000000001`, `0`: nanoseconds as seconds with their fraction, without trailing zeros
+seconds_text(nanos: int): text := {
+	magnitude = if nanos < 0 then 0 - nanos else nanos
+	whole = int_text(int_quotient(magnitude, second_nanos()))
+	fraction = int_remainder(magnitude, second_nanos())
+	digits = 9
+	while fraction != 0 and int_remainder(fraction, 10) == 0 {
+		fraction = int_quotient(fraction, 10)
+		digits -= 1
+	}
+	shown = whole
+	if fraction != 0 { shown = whole + "." + zeros(digits - byte_count(int_text(fraction))) + int_text(fraction) }
+	if nanos < 0 { return "-" + shown }
+	shown
+}
+# a duration as calendar.rs `Display for Duration` shows it: `1 month 2 days 3 hours`, `1.5 seconds`, `0 seconds`
+duration_parts_text(months: int, days: int, nanos: int): text := {
+	shown = with_amount(with_amount("", months, "month"), days, "day")
+	# whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
+	if nanos != 0 and int_remainder(nanos, second_nanos()) == 0 {
+		seconds = int_quotient(nanos, second_nanos())
+		shown = with_amount(shown, int_quotient(seconds, 3600), "hour")
+		shown = with_amount(shown, int_quotient(int_remainder(seconds, 3600), 60), "minute")
+		return with_amount(shown, int_remainder(seconds, 60), "second")
+	}
+	if nanos == 0 and byte_count(shown) > 0 { return shown }
+	spaced(shown, seconds_text(nanos) + " seconds")
+}
+sign_of(n: int): int := if n > 0 then 1 else if n < 0 then -1 else 0
+duration_text(n: any): text := duration_parts_text(duration_months(n), duration_days(n), duration_nanos(n))
+# -1, 0 or 1 as the difference of two durations is shorter, none or longer on every date (calendar.rs
+# Duration::compares); an order that depends on the date fails
+duration_parts_order(months: int, days: int, nanos: int): int := {
+	# an exact difference: the sign of its nanoseconds
+	if months == 0 and days == 0 { return sign_of(nanos) }
+	# a month is 28 to 31 days; negative months take more days off the longer they are
+	fewest_days = days + months * (if months < 0 then 31 else 28)
+	most_days = days + months * (if months < 0 then 28 else 31)
+	# daylight saving moves an exact part against the calendar part by at most an hour; calendar parts alone keep the hour
+	shift = if nanos != 0 then hour_nanos() else 0
+	if fewest_days * day_nanos() + nanos - shift > 0 { return 1 }
+	if most_days * day_nanos() + nanos + shift < 0 { return -1 }
+	durations_compare_differently_on_different_dates()
+}
+duration_order(a: any, b: any): int := duration_parts_order(duration_months(a) - duration_months(b), duration_days(a) - duration_days(b), duration_nanos(a) - duration_nanos(b))
+# the runtime error of duration_parts_order, named for src/wasm_emitter/control/traps.rs to read off the trace
+durations_compare_differently_on_different_dates() := {
+	fail()
+	0
+}
+
+## times (card time-primitives; Rust twin: src/wasm_emitter/time): a time node of a form (src/time/mod.rs TimeForm:
+## instant 0, date 1, local time 2, duration 3, zoned time 4, time of day 5) and a position, read by the intrinsics
+## time_form, time_position, duration_months, duration_days, zone_index, zone_offset and made by time_of(info, position)
+is_time(n: any): bool := is_null(n) == 0 and kind_code(n) == 18
+is_instant(t: any): bool := time_form(t) == 0
+is_date(t: any): bool := time_form(t) == 1
+is_local_time(t: any): bool := time_form(t) == 2
+is_duration(t: any): bool := time_form(t) == 3
+is_zoned(t: any): bool := time_form(t) == 4
+is_time_of_day(t: any): bool := time_form(t) == 5
+# the duration of months, days and nanoseconds: its days kept as 32 unsigned bits above the form, its months above them
+duration_of(months: int, days: int, nanos: int): any := {
+	unsigned_days = if days < 0 then days + 4294967296 else days
+	time_of(3 + unsigned_days * 8 + months * 34359738368, nanos)
+}
+# the wall clock of an instant in the environment's time zone, in seconds east of UTC (the host word local_offset)
+local_offset_at(t: any): int := local_offset(floor_quotient(time_position(t), 1000000))
+
+## times (card time-text-warp; src/wasm_emitter/time/times.rs emit_time_text and emit_fraction, calendar.rs): a $Node
+## of kind 18, its form in the info bits (src/time/mod.rs TimeForm), its position in an $i64box: days since 1970 for a
+## date, nanoseconds since 1970 for an instant and a local time, since midnight for a time of day
+instant_form() := 0
+date_form() := 1
+duration_form() := 3
+zoned_form() := 4
+clock_form() := 5
+time_form(n: any): int := int_remainder(int_quotient(marked_kind(n), 256), 8)
+# RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
+# local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
+time_text(n: any): text := {
+	form = time_form(n)
+	if form == duration_form() or form == zoned_form() { time_form_not_in_warp() }
+	position = unboxed_int(n)
+	if form == date_form() { return date_text(position) }
+	days = floor_quotient(position, day_nanos())
+	clock = clock_text(position - days * day_nanos(), form)
+	if form == clock_form() { return clock }
+	zone = if form == instant_form() then "Z" else ""
+	date_text(days) + "T" + clock + zone
+}
+# Howard Hinnant's civil_from_days as `2026-10-10`, the proleptic Gregorian date of a day number
+date_text(days: int): text := {
+	z = days + 719468
+	era = floor_quotient(z, 146097)
+	day_of_era = z - era * 146097
+	year_of_era = int_quotient(day_of_era - int_quotient(day_of_era, 1460) + int_quotient(day_of_era, 36524) - int_quotient(day_of_era, 146096), 365)
+	day_of_year = day_of_era - (365 * year_of_era + int_quotient(year_of_era, 4) - int_quotient(year_of_era, 100))
+	shifted_month = int_quotient(5 * day_of_year + 2, 153)
+	day = day_of_year - int_quotient(153 * shifted_month + 2, 5) + 1
+	month = if shifted_month < 10 then shifted_month + 3 else shifted_month - 9
+	year = year_of_era + era * 400
+	if month <= 2 { year += 1 }
+	padded(year, 4) + "-" + padded(month, 2) + "-" + padded(day, 2)
+}
+# `14:43:33.682` of the nanoseconds of a day: the seconds only when there are any or it is a time of day (22:27:46)
+clock_text(nanos: int, form: int): text := {
+	hours = int_quotient(nanos, 3600 * second_nanos())
+	minutes = int_remainder(int_quotient(nanos, 60 * second_nanos()), 60)
+	seconds = int_remainder(int_quotient(nanos, second_nanos()), 60)
+	fraction = int_remainder(nanos, second_nanos())
+	out = padded(hours, 2) + ":" + padded(minutes, 2)
+	if seconds != 0 or fraction != 0 or form == clock_form() { out = out + ":" + padded(seconds, 2) }
+	out + fraction_text(fraction)
+}
+# `.5` of the nanoseconds below a second, without trailing zeros; "" for none
+fraction_text(fraction: int): text := {
+	if fraction == 0 { return "" }
+	digits = padded(fraction, 9)
+	stop = 9
+	while byte_at(digits, stop - 1) == 48 { stop -= 1 }
+	"." + bytes_between(digits, 0, stop)
+}
+# n with leading zeros to count digits
+padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
+# a duration or a zoned time in time_text: "time form not in warp"
+time_form_not_in_warp() := {
+	fail()
+	0
+}
+## ordering: node_order and the sort words (Rust's src/wasm_emitter/reflection/library_ops/ordering.rs)
+# -1, 0 or 1 as a sorts before, with or after b: texts and characters by their bytes, ints and exact rationals exactly,
+# a float on either side as floats; anything else traps, as Rust's not_comparable (instances and times stay Rust's)
+node_order(a: any, b: any): int := {
+	if textual_node(a) == 1 and textual_node(b) == 1 { return text_order(node_text(a), node_text(b)) }
+	if numeric_node(a) == 0 or numeric_node(b) == 0 { fail() }
+	if kind_code(a) == 1 and kind_code(b) == 1 { return exact_order(a, b) }
+	float_order(float_of_node(a), float_of_node(b))
+}
+# 1 for a boxed int, exact rational or float, else 0
+numeric_node(n: any): int := if kind_code(n) == 1 or kind_code(n) == 2 then 1 else 0
+# -1, 0 or 1 as x is below, equal to or above y; NaN equals everything, as f64.gt - f64.lt gives
+float_order(x: float, y: float): int := if x < y then -1 else if x > y then 1 else 0
+# `sort xs`, `sorted "hello"`: a new list of xs's items (a new text of its characters) in ascending order
+sorted_node(xs: any): any := {
+	if is_null(xs) == 1 { return xs }
+	sorted_like(xs, sortable_items(xs))
+}
+# `xs.sort_by(p => p.k)` as `list_sorted_by(xs, keys)` (src/lowering/lambdas.rs): xs's items ordered by their keys,
+# the items themselves where keys is ø or ends early
+sorted_node_by(xs: any, keys: any): any := {
+	if is_null(keys) == 1 { return sorted_node(xs) }
+	if is_null(xs) == 1 { return xs }
+	sorted_like(xs, unboxed_list(keys))
+}
+# xs's items ordered by keys, as a text again when xs is one
+sorted_like(xs: any, keys: list): any := {
+	items = sortable_items(xs)
+	sorted = sorted_items(items, sort_ranks(items, keys))
+	if kind_code(xs) == 3 { return characters_text(sorted) }
+	sorted
+}
+# a list's items, a text's characters
+sortable_items(xs: any): list := if kind_code(xs) == 3 then text_graphemes(unboxed_text(xs)) else unboxed_list(xs)
+# the characters of chars joined into one text
+characters_text(chars: list): text := {
+	out = ""
+	for i in 1 to #chars { out += node_text(chars#i) }
+	out
+}
+# what each item sorts by: its key as far as keys go, the item itself after
+sort_ranks(items: list, keys: list): list := {
+	ranks = new_list(#items)
+	copy_items(ranks, 0, items, 0, #items)
+	copy_items(ranks, 0, keys, 0, min_int(#keys, #items))
+	ranks
+}
+# a new list of items in the order of their ranks, equal ranks in their old order: a bottom-up merge sort, without
+# recursion, whose runs of width merge pairwise into the spare lists, which then take their place. Items in order
+# already (ascending as they are, strictly descending reversed, so equal ranks keep their order) take n - 1
+# comparisons and no merging
+sorted_items(items: list, ranks: list): list := {
+	count = #items
+	cells = new_list(count)
+	copy_items(cells, 0, items, 0, count)
+	order = run_order(ranks)
+	if order == 1 { return cells }
+	if order == -1 { return reversed_items(cells) }
+	cells_to = new_list(count)
+	ranks_to = new_list(count)
+	width = 1
+	while width < count {
+		low = 1
+		while low <= count {
+			middle = min_int(low + width, count + 1)
+			high = min_int(middle + width, count + 1)
+			merge_runs(cells, ranks, cells_to, ranks_to, low, middle, high)
+			low = high
+		}
+		spare = cells
+		cells = cells_to
+		cells_to = spare
+		spare = ranks
+		ranks = ranks_to
+		ranks_to = spare
+		width = 2 * width
+	}
+	cells
+}
+# 1 when no rank is below the one before (sorted already), -1 when each one is (strictly descending), else 0
+run_order(ranks: list): int := {
+	if #ranks < 2 { return 1 }
+	ascending = 1
+	descending = 1
+	for i in 2 to #ranks {
+		if node_order(ranks#i, ranks#(i - 1)) < 0 { ascending = 0 } else { descending = 0 }
+		if ascending == 0 and descending == 0 { return 0 }
+	}
+	if ascending == 1 then 1 else -1
+}
+# the runs low..<middle and middle..<high of cells and ranks, counted from 1, merged into the same places of cells_to
+# and ranks_to
+merge_runs(cells: list, ranks: list, cells_to: list, ranks_to: list, low: int, middle: int, high: int): list := {
+	left = low
+	right = middle
+	for index in low..high {
+		from = right
+		if takes_left(ranks, left, middle, right, high) == 1 {
+			from = left
+			left += 1
+		} else {
+			right += 1
+		}
+		cells_to#index = cells#from
+		ranks_to#index = ranks#from
+	}
+	cells_to
+}
+# 1 when the merge takes the left run's next item: the right run is done, or its next rank is not below the left's
+# (of equal ranks the left one first, which keeps the sort stable); 0 when the left run is done
+takes_left(ranks: list, left: int, middle: int, right: int, high: int): int := {
+	if left >= middle { return 0 }
+	if right >= high { return 1 }
+	if node_order(ranks#right, ranks#left) < 0 then 0 else 1
+}
+min_int(a: int, b: int): int := if a < b then a else b
+
+## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
+## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
+## that spells no number traps, where Rust's fails with invalid_number
+# 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
+sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or byte_at(t, 0) == 43) then 1 else 0
+# t starts with -
+is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == 45
+# the digit a byte spells, -1 for any other byte
+digit_of(b: int): int := if b >= 48 and b <= 57 then b - 48 else -1
+# how many digits stand in t from byte offset start on
+digit_run(t: text, start: int): int := {
+	at = start
+	while at < byte_count(t) and digit_of(byte_at(t, at)) >= 0 { at += 1 }
+	at - start
+}
+# `t as int`: an optional sign and decimal digits, nothing else; 64 bits, where Rust's grows a big int
+text_as_int(t: text): int := {
+	start = sign_length(t)
+	count = digit_run(t, start)
+	if count == 0 or start + count != byte_count(t) { fail() }
+	value = 0
+	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
+	if is_negative_text(t) then -value else value
+}
+# `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
+# nearest float, correctly rounded also beyond 10^±22, where Rust's multiplies ten by ten
+text_as_float(t: text): float := {
+	start = sign_length(t)
+	whole = digit_run(t, start)
+	at = start + whole
+	fraction = 0
+	if at < byte_count(t) and byte_at(t, at) == 46 {
+		fraction = digit_run(t, at + 1)
+		at += 1 + fraction
+	}
+	if whole + fraction == 0 { fail() }
+	stop = at
+	exponent = 0
+	if at < byte_count(t) and (byte_at(t, at) == 101 or byte_at(t, at) == 69) {
+		exponent = text_as_int(bytes_between(t, at + 1, byte_count(t)))
+		at = byte_count(t)
+	}
+	if at != byte_count(t) { fail() }
+	found = decimal_digits(t, start, stop)
+	magnitude = decimal_float(unboxed_int(found#1), unboxed_int(found#2) + exponent - fraction)
+	if is_negative_text(t) then -magnitude else magnitude
+}
+# [digits, dropped] of the digits between the byte offsets start and stop (a point among them skipped): the first 18
+# significant ones as an int (below 10^18, so below 2^63), the count of those dropped after them
+decimal_digits(t: text, start: int, stop: int): list := {
+	digits = 0
+	count = 0
+	dropped = 0
+	for i in start..stop {
+		d = digit_of(byte_at(t, i))
+		if d >= 0 and count < 18 {
+			digits = digits * 10 + d
+			if digits > 0 { count += 1 }
+		} else if d >= 0 {
+			dropped += 1
+		}
+	}
+	[digits, dropped]
+}
+# digits · 10^shift as the nearest float: digits as the double-double hi + lo (exact), scaled by float_scaled (one
+# exact power of ten up to 10^22: one rounding, as Clinger's fast path; beyond, within 2^-104 before the last
+# rounding). float_scaled's steps overflow near 2^1024, so a result beyond 10^290 is scaled to 10^20 below and
+# multiplied back (a second rounding there), one below 10^-290 to 10^20 above and divided back
+decimal_float(digits: int, shift: int): float := {
+	if digits == 0 { return float(0) }
+	magnitude = byte_count(int_text(digits)) - 1 + shift
+	if magnitude > 308 { return float_of_bits(9218868437227405312) }
+	if magnitude < -325 { return float(0) }
+	hi = float(digits)
+	gap = float(digits - truncated(hi)) * 2
+	back = if magnitude > 290 then 20 else if magnitude < -290 then -20 else 0
+	scaled = unboxed_float(float_scaled(hi, gap, shift - back)#1)
+	if back > 0 { return scaled * power_of_ten(back) }
+	if back < 0 { return scaled / power_of_ten(-back) }
+	scaled
+}
+# 10^n of an n from 0 to 22, exact
+power_of_ten(n: int): float := {
+	power = float(1)
+	left = n
+	while left > 0 {
+		power = power * 10
+		left -= 1
+	}
+	power
+}
+# `t as number`: "1/3" the exact ratio of the ints around the slash, a whole number below 2^63 an int, else a float
+text_as_number(t: text): any := {
+	slash = text_index(t, char_text("/"))
+	if slash >= 0 { return exact_ratio(text_as_int(bytes_between(t, 0, slash)), text_as_int(bytes_between(t, slash + 1, byte_count(t)))) }
+	x = text_as_float(t)
+	# 2^63 (its bits 0x43E0000000000000)
+	limit = float_of_bits(4890909195324358656)
+	if float_floor(x) == x and x < limit and -x < limit { return truncated(x) }
+	x
+}

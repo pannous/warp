@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+# emitter core: a text with a slash as number is the exact ratio (runtime.warp text_as_number; card card-4)
+# 1/3
+to_number(t: text) := t as number
+to_number("2/6")
