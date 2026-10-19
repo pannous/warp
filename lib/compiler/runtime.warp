@@ -2,14 +2,14 @@
 # byte_at, set_byte … each one or two instructions, callable only here). This file is lowered by the same pipeline as
 # any program; the emitter compiles a word on its first call, so a module carries only the words it uses.
 
-text_join(a: text, b: text) := {
+text_join(a: text, b: text): text := {
 	out = new_text(byte_count(a) + byte_count(b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
 	out
 }
 # the characters (code points) of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
-text_count(t: text) := {
+text_count(t: text): int := {
 	count = 0
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
@@ -19,7 +19,7 @@ text_count(t: text) := {
 }
 # t and a newline to stdout, through the output bytes of linear memory a chunk at a time: the one place a text
 # goes into memory
-print_line(t: text) := {
+print_line(t: text): int := {
 	room = 65520
 	start = 0
 	while start < byte_count(t) {
@@ -33,7 +33,7 @@ print_line(t: text) := {
 	write_output(1)
 }
 # -1, 0 or 1 as a's bytes come before b's, equal them or come after
-text_order(a: text, b: text) := {
+text_order(a: text, b: text): int := {
 	i = 0
 	while i < byte_count(a) and i < byte_count(b) {
 		if byte_at(a, i) < byte_at(b, i) { return -1 }
@@ -43,7 +43,7 @@ text_order(a: text, b: text) := {
 	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then -1 else 1
 }
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
-node_text(n: any) := {
+node_text(n: any): text := {
 	# ø, a one-character text, is a character literal
 	if is_null(n) == 1 { return char_text("ø") }
 	if marked_kind(n) == 257 {
@@ -60,14 +60,14 @@ node_text(n: any) := {
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
-node_code(n: any) := {
+node_code(n: any): text := {
 	# a one-character text reads as the character it is (src/node/serialization.rs)
 	if is_null(n) == 0 and kind_code(n) == 3 and text_count(unboxed_text(n)) != 1 { return quoted_text(unboxed_text(n)) }
 	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) { return "'" + node_text(n) + "'" }
 	node_text(n)
 }
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
-quoted_text(t: text) := {
+quoted_text(t: text): text := {
 	escapes = 0
 	for i in 0..byte_count(t) { escapes += escaped_byte(byte_at(t, i)) }
 	out = new_text(byte_count(t) + escapes + 2)
@@ -86,9 +86,9 @@ quoted_text(t: text) := {
 	out
 }
 # 1 for the bytes of `"` and `\`, which a quoted text escapes
-escaped_byte(b: int) := if b == 34 or b == 92 then 1 else 0
-list_text(xs: list) := "[" + items_text(xs) + "]"
-items_text(xs: list) := {
+escaped_byte(b: int): int := if b == 34 or b == 92 then 1 else 0
+list_text(xs: list): text := "[" + items_text(xs) + "]"
+items_text(xs: list): text := {
 	inner = ""
 	for x in xs {
 		if #inner > 0 { inner += " " }
@@ -97,13 +97,13 @@ items_text(xs: list) := {
 	inner
 }
 # `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
-key_text(entry: any) := {
+key_text(entry: any): text := {
 	value = key_value(entry)
 	if is_null(value) == 0 and marked_kind(value) == 8 { return key_name(entry) + node_text(value) }
 	key_name(entry) + ":" + node_code(value)
 }
 # `a + b` of values known only at run time: ø adds nothing, lists and texts join, numbers add
-node_add(a: any, b: any) := {
+node_add(a: any, b: any): any := {
 	if is_null(a) == 1 { return b }
 	if is_null(b) == 1 { return a }
 	if kind_code(a) == 8 and kind_code(b) == 8 { return list_join(unboxed_list(a), unboxed_list(b)) }
@@ -121,62 +121,63 @@ node_append(a: any, b: any) := {
 }
 # `a == b` of values known only at run time: ø equals only ø, lists equal item by item, texts and characters as
 # texts, numbers as numbers (an int and a float alike)
-node_equal(a: any, b: any) := {
+node_equal(a: any, b: any): bool := {
 	if is_null(a) == 1 or is_null(b) == 1 { return is_null(a) == is_null(b) }
 	if kind_code(a) == 6 or kind_code(b) == 6 {
 		return kind_code(a) == kind_code(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
 	}
 	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
+	if kind_code(a) == 5 or kind_code(b) == 5 { return kind_code(a) == kind_code(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
 	float_of_node(a) == float_of_node(b)
 }
-list_equal(a: list, b: list) := {
+list_equal(a: list, b: list): bool := {
 	if #a != #b { return no }
 	for i in 1 to #a { if not node_equal(a#i, b#i) { return no } }
 	yes
 }
 # a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
 # its class name and the map of its fields
-fields_of(m: any) := if kind_code(m) == 6 then key_value(m) else m
+fields_of(m: any): any := if kind_code(m) == 6 then key_value(m) else m
 # the place of m's entry named `name`, counted from 1; 0 when it has none
-map_index(m: any, name: text) := {
+map_index(m: any, name: text): int := {
 	entries = unboxed_list(fields_of(m))
 	for i in 1 to #entries { if text_order(key_name(entries#i), name) == 0 { return i } }
 	0
 }
 # `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
-map_get(m: any, name: text) := {
+map_get(m: any, name: text): any := {
 	at = map_index(m, name)
 	if at == 0 { fail() }
 	key_value(unboxed_list(fields_of(m))#at)
 }
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
-map_entries(n: any) := {
+map_entries(n: any): any := {
 	if marked_kind(n) != 8 { return n }
 	out = []
 	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
 	out
 }
-map_keys(m: any) := {
-	out = []
+def map_keys(m: any): list {
+	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
-map_values(m: any) := {
-	out = []
+def map_values(m: any): list {
+	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
 }
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
-collection_contains(c: any, x: any) := {
+collection_contains(c: any, x: any): bool := {
 	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, node_text(x)) > 0 }
 	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) >= 0 }
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
 	no
 }
 # where the bytes of part first start in t, -1 when nowhere
-text_index(t: text, part: text) := {
+text_index(t: text, part: text): int := {
 	for start in 0..(byte_count(t) - byte_count(part) + 1) {
 		i = 0
 		while i < byte_count(part) and byte_at(t, start + i) == byte_at(part, i) { i += 1 }
@@ -185,13 +186,13 @@ text_index(t: text, part: text) := {
 	-1
 }
 # `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
-node_get(n: any, key: any) := {
+node_get(n: any, key: any): any := {
 	if kind_code(key) == 1 { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, node_text(key))
 }
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry
-field_with(m: any, name: text, value: any) := {
+field_with(m: any, name: text, value: any): any := {
 	if is_null(m) == 1 { return map_of([new_key(name, value)]) }
 	entries = unboxed_list(fields_of(m))
 	at = map_index(m, name)
@@ -199,9 +200,9 @@ field_with(m: any, name: text, value: any) := {
 	m
 }
 # 1 for a boxed text or character, else 0
-textual_node(n: any) := if kind_code(n) == 3 or kind_code(n) == 4 then 1 else 0
+textual_node(n: any): int := if kind_code(n) == 3 or kind_code(n) == 4 then 1 else 0
 # the index-th character of t, counted from 1: past index - 1 lead bytes, then the code point its bytes spell
-text_char(t: text, index: int) := {
+text_char(t: text, index: int): char := {
 	at = 0
 	count = 1
 	while count < index {
@@ -215,7 +216,7 @@ text_char(t: text, index: int) := {
 	for k in 1 to extra { n = n * 64 + byte_at(t, at + k) - 128 }
 	char_of(n)
 }
-list_join(a: list, b: list) := {
+def list_join(a: list, b: list): list {
 	out = new_list(#a + #b)
 	copy_items(out, 0, a, 0, #a)
 	copy_items(out, #a, b, 0, #b)
@@ -223,7 +224,7 @@ list_join(a: list, b: list) := {
 }
 # `a += b`: b's items after a's in a itself, so every alias of a sees them; a full array is replaced by one twice
 # as large, so appending one item at a time copies each item a bounded number of times
-list_append(a: list, b: list) := {
+def list_append(a: list, b: list): list {
 	start = #a
 	added = #b
 	if start + added > item_room(a) {
@@ -236,13 +237,13 @@ list_append(a: list, b: list) := {
 	a
 }
 # `n#i` of a value known only at run time, counted from 1: a list's item, a text's character
-node_at(n: any, index: int) := {
+node_at(n: any, index: int): any := {
 	if kind_code(n) == 8 { return unboxed_list(n)#index }
 	if kind_code(n) == 3 { return text_char(unboxed_text(n), index) }
 	fail()
 }
 # `#n` of a value known only at run time: a list's items, a text's characters
-node_length(n: any) := {
+node_length(n: any): int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) == 1 { return 0 }
 	if kind_code(n) == 8 { return #unboxed_list(n) }
@@ -250,19 +251,19 @@ node_length(n: any) := {
 	fail()
 }
 # `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
-node_set_at(n: any, index: int, value: any) := {
+node_set_at(n: any, index: int, value: any): any := {
 	if kind_code(n) != 8 { fail() }
 	items = unboxed_list(n)
 	items#index = value
 	value
 }
 # the characters from..to of t, counted from 1, both included: the bytes between their lead bytes
-text_slice(t: text, from: int, to: int) := {
+text_slice(t: text, from: int, to: int): text := {
 	start = character_offset(t, from)
 	bytes_between(t, start, character_offset(t, to + 1))
 }
 # the byte offset of t's index-th character, counted from 1; past the last, the byte count
-character_offset(t: text, index: int) := {
+character_offset(t: text, index: int): int := {
 	at = 0
 	for counted in 1..<index {
 		if at < byte_count(t) { at += 1 }
@@ -271,18 +272,18 @@ character_offset(t: text, index: int) := {
 	at
 }
 # t starts with the bytes of start
-text_starts_with(t: text, start: text) := byte_count(start) <= byte_count(t) and bytes_match_at(t, start, 0)
+text_starts_with(t: text, start: text): bool := byte_count(start) <= byte_count(t) and bytes_match_at(t, start, 0)
 # t ends with the bytes of end
-text_ends_with(t: text, end: text) := byte_count(end) <= byte_count(t) and bytes_match_at(t, end, byte_count(t) - byte_count(end))
+text_ends_with(t: text, end: text): bool := byte_count(end) <= byte_count(t) and bytes_match_at(t, end, byte_count(t) - byte_count(end))
 # part's bytes stand in t from byte offset at on
-bytes_match_at(t: text, part: text, at: int) := {
+bytes_match_at(t: text, part: text, at: int): bool := {
 	for i in 0..byte_count(part) {
 		if byte_at(t, at + i) != byte_at(part, i) { return no }
 	}
 	yes
 }
 # the character position of part's first place in t, counted from 1; 0 when t holds no part
-text_find(t: text, part: text) := {
+text_find(t: text, part: text): int := {
 	position = 1
 	for at in 0 to byte_count(t) - byte_count(part) {
 		if bytes_match_at(t, part, at) { return position }
@@ -291,7 +292,7 @@ text_find(t: text, part: text) := {
 	0
 }
 # t without the spaces, tabs and line breaks at its two ends
-text_trim(t: text) := {
+text_trim(t: text): text := {
 	start = 0
 	while start < byte_count(t) and is_space_byte(byte_at(t, start)) { start += 1 }
 	stop = byte_count(t)
@@ -299,15 +300,15 @@ text_trim(t: text) := {
 	bytes_between(t, start, stop)
 }
 # a space, a tab, a line feed or a carriage return
-is_space_byte(b: int) := b == 32 or b == 9 or b == 10 or b == 13
+is_space_byte(b: int): bool := b == 32 or b == 9 or b == 10 or b == 13
 # the bytes start..<stop of t
-bytes_between(t: text, start: int, stop: int) := {
+bytes_between(t: text, start: int, stop: int): text := {
 	out = new_text(stop - start)
 	copy_text(out, 0, t, start, stop - start)
 	out
 }
 # `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only, as Rust joins
-joined(xs: list, separator: any) := {
+joined(xs: list, separator: any): text := {
 	between = node_text(separator)
 	out = ""
 	count = 0
@@ -320,20 +321,20 @@ joined(xs: list, separator: any) := {
 	out
 }
 # `n times "ab"`: t n times over
-repeated_text(n: int, t: any) := {
+repeated_text(n: int, t: any): text := {
 	piece = node_text(t)
 	out = new_text(n * byte_count(piece))
 	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
 	out
 }
 # `int[n]`: a list of count zeros
-zero_fill(count: int, zero: any) := {
+def zero_fill(count: int, filler: any): list {
 	out = new_list(count)
-	for i in 1 to count { out#i = zero }
+	for i in 1 to count { out#i = filler }
 	out
 }
 # `t.split(separator)`: the texts between separator's places in t
-split_text(t: text, separator: any) := {
+def split_text(t: text, separator: any): list {
 	between = node_text(separator)
 	out = new_list(0)
 	start = 0
@@ -351,13 +352,13 @@ split_text(t: text, separator: any) := {
 	out
 }
 # `t.chars`: t's characters
-text_chars(t: text) := {
+def text_chars(t: text): list {
 	out = new_list(text_count(t))
 	for i in 1 to text_count(t) { out#i = text_char(t, i) }
 	out
 }
 # `xs.reverse`: a list's items or a text's characters the other way round
-reversed(n: any) := {
+reversed(n: any): any := {
 	if kind_code(n) == 3 {
 		t = unboxed_text(n)
 		backwards = ""
@@ -370,10 +371,10 @@ reversed(n: any) := {
 	turned
 }
 # `sum(xs)` as `list_sum(xs, loop)`: the loop the lowering wrote gives it
-list_sum(xs: list, computed: any) := computed
+list_sum(xs: list, computed: any): any := computed
 # `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
 # masks (src/lowering/types/type_tests.rs BUILTIN_TYPES): a bool has a mark of its own, ø is the empty list
-node_is_type(n: any, type: text) := {
+node_is_type(n: any, type: text): bool := {
 	if is_null(n) == 1 { return type == "list" }
 	if marked_kind(n) == 257 { return type == "bool" }
 	kind = kind_code(n)
@@ -383,13 +384,20 @@ node_is_type(n: any, type: text) := {
 	if type == "text" { return kind == 3 or kind == 4 }
 	if type == "char" { return kind == 4 }
 	if type == "list" { return kind == 8 or kind == 7 }
+	if type == "key" { return kind == 6 }
+	if type == "symbol" { return kind == 5 }
 	no
 }
+# `x is Name` of a class: an instance is an entry keyed by its class's name
+instance_of(n: any, name: text) := {
+	if is_null(n) == 1 or kind_code(n) != 6 { return no }
+	text_order(key_name(n), name) == 0
+}
 # `round(x)`: the nearest int, half to even as wasm rounds (f64.nearest)
-rounded(x: float) := truncated(float_nearest(x))
+rounded(x: float): int := truncated(float_nearest(x))
 # the text of a run-time float (src/wasm_emitter/numbers/float_text.rs): its shortest digits that read back,
 # positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7; ∞, -∞ and NaN as the exact numbers print them
-float_text(x: float) := {
+float_text(x: float): text := {
 	if x != x { return "NaN" }
 	if x == float_of_bits(9218868437227405312) { return char_text("∞") }
 	if x == -float_of_bits(9218868437227405312) { return "-∞" }
@@ -397,7 +405,7 @@ float_text(x: float) := {
 	if x < 0 { return "-" + positive_float_text(-x) }
 	positive_float_text(x)
 }
-positive_float_text(x: float) := {
+positive_float_text(x: float): text := {
 	found = float_digits(x)
 	digits = int_text(unboxed_int(found#1))
 	count = byte_count(digits)
@@ -413,7 +421,7 @@ positive_float_text(x: float) := {
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
 # digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
 # bit is even, as a reader rounds half to even); the multiple of the largest power of ten among them, nearest x
-float_digits(x: float) := {
+def float_digits(x: float): list {
 	exponent = 0
 	mantissa = x
 	while mantissa >= 10 {
@@ -465,14 +473,14 @@ float_digits(x: float) := {
 	[multiple, shift]
 }
 # the double-double scaled reaches bound: hi beyond it, or at it with lo not below
-has_17_digits(scaled: list, bound: float) := {
+has_17_digits(scaled: list, bound: float): bool := {
 	hi = unboxed_float(scaled#1)
 	hi > bound or (hi == bound and unboxed_float(scaled#2) >= 0)
 }
 # [hi, lo]: (x + gap/2) · 10^shift as the double-double hi + lo, by at most 10^22 a step (each power exact): a product's
 # error is Dekker's exact product, a quotient's the remainder of its exact product. Exact in one step, within 2^-104 in
 # more. A float beyond ±2^900 is moved by 2^∓128 first and back after, so no product overflows, no half underflows
-float_scaled(x: float, gap: float, shift: int) := {
+def float_scaled(x: float, gap: float, shift: int): list {
 	value = x
 	scaled_gap = gap
 	scale = float(1)
@@ -514,7 +522,7 @@ float_scaled(x: float, gap: float, shift: int) := {
 	[hi * scale, lo * scale]
 }
 # a · b - product exactly, a and b split in halves of 26 bits whose products are exact (Veltkamp, Dekker)
-product_error(a: float, b: float, product: float) := {
+product_error(a: float, b: float, product: float): float := {
 	a_hi = upper_half(a)
 	a_lo = a - a_hi
 	b_hi = upper_half(b)
@@ -522,27 +530,27 @@ product_error(a: float, b: float, product: float) := {
 	a_hi * b_hi - product + a_hi * b_lo + a_lo * b_hi + a_lo * b_lo
 }
 # v's upper 26 bits: 2^27 + 1 times v, less its distance to v
-upper_half(v: float) := {
+upper_half(v: float): float := {
 	t = v * 134217729
 	t - (t - v)
 }
 # a boxed int (kind code 1), exact rational or float as a float
-float_of_node(n: any) := {
+float_of_node(n: any): float := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
 # a boxed int where an int is needed; any other value traps, as Rust fails on it
-int_of_node(n: any) := {
+int_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
 	unboxed_int(n)
 }
 # `n as int` of a boxed int or exact rational, truncated toward 0
-truncated_int(n: any) := {
+truncated_int(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
 	int_quotient(exact_numerator(n), exact_denominator(n))
 }
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
-int_text(n: int) := {
+int_text(n: int): text := {
 	sign = if n < 0 then 1 else 0
 	digits = 1
 	left = n
@@ -562,7 +570,7 @@ int_text(n: int) := {
 	out
 }
 # a character's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
-char_text(c: char) := {
+char_text(c: char): text := {
 	n = code_of(c)
 	count = if n < 128 then 1 else if n < 2048 then 2 else if n < 65536 then 3 else 4
 	out = new_text(count)
@@ -577,7 +585,7 @@ char_text(c: char) := {
 
 ## exact rationals: int `/` gives one, an int over a positive int in lowest terms (the Rust twin's Number::Quotient),
 ## held in an Int $Node as a $Ratio (intrinsics is_ratio, ratio_of, ratio_numerator, ratio_denominator)
-int_gcd(a: int, b: int) := {
+int_gcd(a: int, b: int): int := {
 	if a < 0 { a = -a }
 	if b < 0 { b = -b }
 	while b != 0 {
@@ -588,7 +596,7 @@ int_gcd(a: int, b: int) := {
 	a
 }
 # n/d in lowest terms, an int when d divides n; d 0 traps, as Rust's divide by zero fails
-exact_ratio(n: int, d: int) := {
+exact_ratio(n: int, d: int): any := {
 	if d == 0 { divide_by_zero() }
 	divisor = int_gcd(n, d)
 	if d < 0 { divisor = -divisor }
@@ -598,21 +606,21 @@ exact_ratio(n: int, d: int) := {
 	ratio_of(n, d)
 }
 # the numerator and denominator of an Int $Node, an int its own numerator over 1
-exact_numerator(n: any) := if is_ratio(n) == 1 then ratio_numerator(n) else unboxed_int(n)
-exact_denominator(n: any) := if is_ratio(n) == 1 then ratio_denominator(n) else 1
-exact_add(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
-exact_sub(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
-exact_mul(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
-exact_div(a: any, b: any) := exact_ratio(exact_numerator(a) * exact_denominator(b), exact_denominator(a) * exact_numerator(b))
+exact_numerator(n: any): int := if is_ratio(n) == 1 then ratio_numerator(n) else unboxed_int(n)
+exact_denominator(n: any): int := if is_ratio(n) == 1 then ratio_denominator(n) else 1
+exact_add(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_sub(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_mul(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
+exact_div(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b), exact_denominator(a) * exact_numerator(b))
 # -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
-exact_order(a: any, b: any) := {
+exact_order(a: any, b: any): int := {
 	left = exact_numerator(a) * exact_denominator(b)
 	right = exact_numerator(b) * exact_denominator(a)
 	if left < right then -1 else if left > right then 1 else 0
 }
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
-exact_text(n: any) := {
+exact_text(n: any): text := {
 	if is_ratio(n) == 0 { return int_text(unboxed_int(n)) }
 	numerator = ratio_numerator(n)
 	denominator = ratio_denominator(n)
@@ -632,7 +640,7 @@ exact_text(n: any) := {
 	out
 }
 # how often factor divides n
-factor_count(n: int, factor: int) := {
+factor_count(n: int, factor: int): int := {
 	count = 0
 	while n != 0 and int_remainder(n, factor) == 0 {
 		n = int_quotient(n, factor)
@@ -640,20 +648,20 @@ factor_count(n: int, factor: int) := {
 	}
 	count
 }
-power(base: int, exponent: int) := {
+power(base: int, exponent: int): int := {
 	out = 1
 	for i in 0..exponent { out = out * base }
 	out
 }
-max_int(a: int, b: int) := if a > b then a else b
+max_int(a: int, b: int): int := if a > b then a else b
 # a text of count zero digits
-zeros(count: int) := {
+zeros(count: int): text := {
 	out = new_text(if count > 0 then count else 0)
 	for i in 0..count { set_byte(out, i, 48) }
 	out
 }
 # `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
-floor_quotient(a: int, b: int) := {
+floor_quotient(a: int, b: int): int := {
 	q = int_quotient(a, b)
 	if a - q * b < 0 {
 		if b > 0 { q -= 1 } else { q += 1 }
@@ -684,3 +692,19 @@ index_must_be_an_integer() := {
 }
 # a value as a boxed $Node
 held(value: any) := value
+# the built-in node's parts (lib/compiler/node.warp): a key's operator is its code above the kind bits, the
+# position of its spelling here (src/operators/codes.rs OP_CODES)
+operator_spellings() := ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
+	"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
+	"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
+	"|", "↑", "↓", "/!", "/!="]
+operator_code(spelled: text) := {
+	spellings = operator_spellings()
+	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
+	0
+}
+key_node(left: any, operator: any, right: any) := keyed(operator_code(node_text(operator)) * 256 + 6, left, right)
+key_left(n: any) := entry_key(n)
+key_right(n: any) := key_value(n)
+key_operator(n: any) := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
+symbol_node(name: any) := symbol_of(node_text(name))

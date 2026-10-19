@@ -572,7 +572,7 @@ impl WasmGcEmitter {
 				return;
 			};
 			given.insert(param.name.clone(), argument.clone());
-			let argument = &argument;
+			let argument = &self.character_as_codepoint(param, argument);
 			// `f(xs: texts)` refuses a list of ints (W0: list int ≰ list text)
 			let element = param.annotation.as_ref().and_then(crate::analyzer::declared_element_type);
 			let list_type = crate::analyzer::list_type_name(argument, &self.scope);
@@ -613,7 +613,9 @@ impl WasmGcEmitter {
 				.annotation
 				.as_ref()
 				.is_some_and(|annotation| crate::analyzer::is_map_type(&annotation.drop_meta().name()));
-			let declared_misfit = declared_misfit || (declared_map && PLAIN_KINDS.contains(&given));
+			// `{}` is the empty map, though its kind reads Int (card needs-map)
+			let is_empty_map = matches!(argument.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty());
+			let declared_misfit = declared_misfit || (declared_map && PLAIN_KINDS.contains(&given) && !is_empty_map);
 			// `f(b: bool)` refuses 2 but takes yes, no, 1 and 0 (card bool-assign, P199)
 			let annotated_bool =
 				param.annotation.as_ref().map(Node::name).filter(|type_name| crate::analyzer::is_bool_type(type_name));
@@ -660,6 +662,20 @@ impl WasmGcEmitter {
 
 		func.instruction(&I::Call(func_index));
 		self.emit_trap_position(func);
+	}
+
+	/// `g(c: codepoint)` given `s#2`: a character of a text, held as a one-character text, given as its code point
+	/// (card text-char); any other argument as it is
+	fn character_as_codepoint(&self, param: &crate::compiler::context::Param, argument: Node) -> Node {
+		let declared_codepoint = param.annotation.as_ref().is_some_and(|annotation| {
+			crate::type_tests::canonical_spec_word(&annotation.name().to_lowercase()) == crate::words::CODEPOINT
+		});
+		let character_of_text = matches!(argument.drop_meta(), Node::Key(text, Op::Hash, _) if !text.is_empty_node())
+			&& self.get_type(&argument) == Kind::Text;
+		match declared_codepoint && character_of_text {
+			true => Node::Key(Box::new(argument), Op::As, Box::new(Node::Symbol(crate::words::CODEPOINT.into()))),
+			false => argument,
+		}
 	}
 }
 

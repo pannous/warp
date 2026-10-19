@@ -14,26 +14,31 @@ digits_reason = "a number is written in digits"
 hint_at = ø
 
 # the first positioned node, its own position or a part's: a word a pass made has none
-start_of(n: any) := {
+start_of(n: Node): any := {
 	if is_positioned(n) { return n }
-	if type(n) is key {
-		left = start_of(key_of(n))
-		if left != ø { return left }
-		return start_of(value_of(n))
+	match n {
+		Key(left, op, right): start_of(left) ?? start_of(right)
+		List(items, bracket, separator): first_start(items)
+		_: ø
 	}
-	if is_group(n) {
-		for item in n {
-			found = start_of(item)
-			if found != ø { return found }
-		}
+}
+
+# the first positioned node of the items
+first_start(items: Node): any := {
+	for item in items {
+		found = start_of(item)
+		if found != ø { return found }
 	}
 	ø
 }
 
 # `data e`: e as written
-is_quoted(n: any) := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol("data")
+is_quoted(n: Node): bool := match n {
+	List(parts, Bracket.None, Separator.Space): #parts == 2 and parts#1 == symbol("data")
+	_: no
+}
 
-as_numbers(n: any) := {
+as_numbers(n: any): any := {
 	global hint_at
 	if is_quoted(n) { return n }
 	if is_positioned(n) { hint_at = n }
@@ -42,12 +47,14 @@ as_numbers(n: any) := {
 		report(hint_at, digits_reason, text(number))
 		return number
 	}
-	if type(n) is key and op_of(n) == ":" { return key(key_of(n), ":", as_numbers(value_of(n))) }
-	if type(n) is key and op_of(n) == "." { return key(as_numbers(key_of(n)), ".", value_of(n)) }
-	children(n, as_numbers)
+	match n {
+		Key(name, Op.Colon, value): Key(name, Op.Colon, as_numbers(value))
+		Key(receiver, Op.Dot, member): Key(as_numbers(receiver), Op.Dot, member)
+		_: children(n, as_numbers)
+	}
 }
 
-number_words_pass(program: any) := {
+number_words_pass(program: any): any := {
 	global unnamed_numbers
 	global hint_at
 	hint_at = start_of(program)

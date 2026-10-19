@@ -40,7 +40,7 @@ gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5, ratio: 6}
 gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0]]
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
-node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262}
+node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6}
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 references = {text: [99, gc.text], list: [99, gc.list], node: [110]}
@@ -124,7 +124,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {} }
+# classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {} }
 
 module = Module({}, [])
 
@@ -283,7 +284,8 @@ vector_code(item_codes: any) := {
 ## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
 entry_code(name_code: any, value_code: any) := keyed_code(node(node_kind_codes.symbol, name_code), value_code)
-keyed_code(name_node: any, value_code: any) := [op.i64_const] + sleb(node_kind_codes.entry) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node])
+keyed_code(name_node: any, value_code: any) := key_code(node_kind_codes.entry, name_node, value_code)
+key_code(kind: int, name_node: any, value_code: any) := [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node])
 # an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 name_node(name: any) := {
 	if name is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(name))) }
@@ -297,7 +299,11 @@ map_value(body: Body, entries: any) := {
 	["node", node(node_kind_codes.map, vector_code(codes))]
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
-instance_value(body: Body, class_name: text, fields: any) := ["node", entry_code(text_bytes(class_name), map_value(body, fields)#2)]
+# an instance's key has no operator (Op::None), as Rust's has
+instance_value(body: Body, class_name: text, fields: any) := {
+	name = node(node_kind_codes.symbol, text_bytes(class_name))
+	["node", key_code(node_kind_codes.instance, name, map_value(body, fields)#2)]
+}
 # `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
 subscript_name(index: any) := {
 	# (type() of an arithmetic key is "operation", not key)
@@ -382,6 +388,10 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
 	if name == "item_room" { return ["int", values#1#2 + gc_code("struct_get", [gc.list, 1]) + gc_code("array_len", []) + [op.i64_extend_i32_u]] }
 	if name == "set_count" { return [no_kind, values#1#2 + index_code(values#2) + gc_code("struct_set", [gc.list, 0])] }
+	# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
+	if name == "keyed" { return ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code("struct_new", [gc.node])] }
+	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [gc.node])] }
+	if name == "symbol_of" { return ["node", node(node_kind_codes.symbol, values#1#2)] }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, [op.unreachable]] }
 	if name == "is_ratio" { return ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]] }
@@ -413,21 +423,23 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1,
-	key_name: 1, key_value: 1, new_key: 2, map_of: 1}
+	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
-	collection_contains: "collection_contains"}
+	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
+	name_of: "node_text", Symbol: "symbol_node"}
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
 type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
-	char: ["char"], bool: ["bool"], list: ["list"]}
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: []}
 type_test(body: Body, subject: any, spec: text) := {
+	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression(body, subject))], text_value(spec)]) }
 	if not (spec in type_words) { return refuse("a test of the type " + spec) }
 	type = type_words[spec]
 	value = expression(body, subject)
@@ -480,6 +492,18 @@ mentions(n: any, name: text) := {
 	no
 }
 runtime_call(name: text, values: any) := call_values(module.runtime[name], values)
+# the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
+# ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
+collect_types(n: any) := {
+	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2) }
+	if is_group(n) { for x in n { collect_types(x) } }
+}
+record_type(name: any) := {
+	if kind_of(name) == "symbol" { return module.classes[name#2] = yes }
+	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
+	if name#2 == "variants" { for variant in name#3[3..] { module.variants[variant#2] = yes } }
+	record_type(name#4)
+}
 
 local_value(body: Body, n: any) := {
 	name = name_of(n)
@@ -487,6 +511,8 @@ local_value(body: Body, n: any) := {
 		entry = module.globals[name]
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
+	# a bare enum case is its name, a symbol, at run time
+	if not (name in body.names) and name in module.variants { return ["node", node(node_kind_codes.symbol, text_bytes(name))] }
 	if not (name in body.names) { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -764,6 +790,8 @@ group_expression(body: Body, n: any) := {
 		return call(body, module.runtime[name_of(n#1)], n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test(body, n#2, n#3) }
+	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
 	}
@@ -823,6 +851,7 @@ key_expression(body: Body, n: any) := {
 		value = expression(body, left)
 		# `7/2 as int`: an exact rational truncated toward 0
 		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
+		if name_of(right) == "text" { return shown_text(value) }
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
@@ -861,7 +890,7 @@ compile_function(f: Function, argument_kinds: any) := {
 	parameter_kinds = []
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
-		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" then "node" else annotation]
+		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) or kind == "bool" { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
@@ -998,6 +1027,9 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 	module.host = {}
 	defined = defined_names(program)
 	for name in host.keys { if not (name in defined) { module.host[name] = host[name] } }
+	module.classes = {}
+	module.variants = {}
+	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
 	for name in module.host.keys { if mentions(program, name) { module.imports += [host_import(name)] } }
