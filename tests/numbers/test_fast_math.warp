@@ -2,6 +2,8 @@
 
 # fast_words_are_close_to_the_c_library
 is! 'use fast_math; x = -700.0; abs(exp(x) / 9.85967654375977e-305 - 1) < 1e-13' true
+is! 'use fast_math; x = -1.0; abs(atan2(x, -2.0) - -2.677945044588987) < 1e-12' true
+is! 'use fast_math; x = 3.0; abs(atan2(x, 1.0) - 1.2490457723982544) < 1e-12' true
 
 # fast_words_reach_the_math_module_and_stay_out_of_other_programs
 is! 'use fast_math; use math; x = 1.0; abs(sine(x) - 0.8414709848078965) < 1e-12' true

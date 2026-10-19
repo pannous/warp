@@ -3,5 +3,8 @@
 # test_type_word_is_the_parameter_name
 is! 'fibonacci number = if number<2 : number else fibonacci(number - 1) + fibonacci(number - 2); fibonacci 10' 55
 
+# test_a_declared_class_types_its_noun
+is! 'class photo{width:int}; to keep a photo: photo.width; keep photo{width:4}' 4
+
 # test_phrases_differing_only_by_unknown_nouns_are_a_redefinition
 is! 'class person{name}; class dog{name}; to kill a person: 1; to kill a dog: 2; 3' 3

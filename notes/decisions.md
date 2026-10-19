@@ -337,6 +337,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √` are accepted and normalized (÷ now floor division: julia-floor-divide).
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 - fail-effect: the `Fail` effect tracks explicit raises, division by a value that may be 0, and library calls answering with an Error; index out of range, missing fields and failed casts are untracked bugs.
+- error-classes (user 2026-10-19): errors are classes: the prelude declares `class Error` and the run-time errors as subclasses with Python names (IndexError, ZeroDivisionError, …); users declare their own (`class ParseError: Error`), an undeclared error name is a compile error with that hint. `except T as e` catches T and its subclasses; `except Error`, bare `except:` and `catch e` catch everything.
 - pattern-roadmap (user 2026-10-17, notes/matching.md ★): pattern-clauses: functions whose parameters are patterns are
   clauses tried in order (`simplify(data($a * 1)) := a; simplify(n) := n`); binding-alternatives: `|` branches bind when
   every branch binds the same names; whole-binding: `as` inside a pattern names the (sub)pattern
