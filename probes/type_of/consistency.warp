@@ -1,6 +1,0 @@
-def a(x):=x
-print type of a
-print type of int
-print type of {a:1}
-f:=it*2
-print type of f

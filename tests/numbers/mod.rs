@@ -89,6 +89,7 @@ mod test_ratio_float_division;
 mod test_ratio_gcd_warp; // card ratio-gcd-warp
 mod test_rational_quantities;
 mod test_rational_type;
+mod test_real_prefix_words; // card why-sqrt
 mod test_recursive_law; // card recursive-laws
 mod test_recursive_units; // card static-units
 mod test_repeating_decimal; // card repeating-decimals

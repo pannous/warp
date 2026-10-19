@@ -179,7 +179,9 @@ After a context swap, this file and your role file win over anything a handover 
 - Before `todo ready`: `cargo fmt`, `cargo clippy --offline --all-targets -- -D warnings` (the gate's command), and
   the wasm32 check `cargo check --offline --lib --tests --target wasm32-unknown-unknown --no-default-features`, on
   your branch. Rust formatting opt-outs go in rustfmt.toml `ignore`, never as an attribute on a mod line. .warp files
-  you wrote or changed: `scratch/warp format <files>` (notes/warp_format.md).
+  you wrote or changed: `scratch/warp format <files>` (notes/warp_format.md). Then `scripts/style_lint.py --fix` (the
+  style rules rustfmt and clippy lack, notes/style_lint.md) and commit what it moved. Style nits are the linter's, not
+  hand polish (user, 2026-10-15).
 - Done = the card is the handoff (the board's Ready column is the merge queue):
   1. Targeted tests (queue or cloud lane), commit, fmt, clippy, wasm32 check.
   2. Make sure the branch merges cleanly: `git fetch origin && git merge --autostash origin/main`. You resolve

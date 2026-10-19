@@ -1,0 +1,17 @@
+// out: 5
+// out: 10
+// out: 0
+// out: 0
+def rank(n: any) := match n {
+	Number(v): v + 1
+	Text(t): 10
+	_: 0
+}
+def first_positive(xs) {
+	for x in xs { if x > 0 { return x } }
+	0
+}
+print rank(4)
+print rank("xy")
+print rank([1])
+print first_positive([-1, -2])

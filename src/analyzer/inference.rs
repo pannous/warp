@@ -535,7 +535,7 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 	if list_type == MAP_WORD
 		|| super::is_code(indexed, scope)
 		|| list_type == NODE_LIST_TYPE
-		|| infer_type(indexed, scope) == Kind::Empty
+		|| matches!(infer_type(indexed, scope), Kind::Empty | Kind::Data)
 	{
 		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
 	}

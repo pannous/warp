@@ -35,6 +35,8 @@ runs every sample not listed in web/playground/excluded_samples.txt, which gives
   samples:` line names it; samples no chapter can name (raylib, SDL, errors…) sit by topic.
 - tests/web/test_guide.rs every_chapter_has_its_own_sample_folder keeps the two in step: a chapter's samples in one
   folder, no folder shared by two chapters. A new sample: its chapter's folder + its name in that chapter's line.
+- Put a focused example in the earliest chapter whose concept it demonstrates: `simple.warp` is basic arithmetic in
+  Numbers, while Advanced is reserved for programs that combine several chapters.
 - The menu and the address (#fizzbuzz) name a sample by its file name, so names stay unique across folders
   (build.sh refuses twins); samples.js has SAMPLE_FILES name → path for the runs' neighbour files (play "mozart.mp3").
 - Tests find a sample by name with tests/common sample_path / sample_files (never format!("samples/{name}.warp")).

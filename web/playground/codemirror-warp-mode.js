@@ -7,7 +7,7 @@ const words = list => list.length ? new RegExp(`(?:${list.join("|")})\\b`) : NOT
 CodeMirror.defineSimpleMode("warp", {
 	start: [
 		{ regex: /\/\*/, token: "comment", next: "comment" },
-		{ regex: /\/\/(?:\s.*|$)/, token: "comment" },
+		{ regex: /\/\/.*/, token: "comment" },
 		{ regex: /#(?:[ \t#!].*|$)/, token: "comment" },
 		{ regex: /"(?:[^"\\]|\\.)*"?/, token: "string" },
 		{ regex: /'(?:[^'\\]|\\.)*'?/, token: "string" },

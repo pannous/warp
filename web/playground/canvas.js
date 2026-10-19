@@ -10,7 +10,7 @@ const KEYS_HELD_KEPT = 8;
 const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "mouse_wheel", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`)];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
-const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9 };
+const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9, Shift: 0xF750, Control: 0xF751, Alt: 0xF752, Meta: 0xF753 };
 // a wheel step in the units of WheelEvent.deltaMode: pixels (host_words.rs PIXELS_PER_WHEEL_STEP), lines (a notch
 // scrolls three), pages
 const WHEEL_DELTAS_PER_STEP = [100, 3, 1];
