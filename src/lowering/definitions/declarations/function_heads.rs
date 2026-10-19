@@ -12,7 +12,7 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 		Node::List(parts, _, Separator::Space)
 			if parts.len() == 2
 				&& is_result_type(&parts[0])
-				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+				&& parts[1].is_block() =>
 		{
 			(parts[0].clone(), parts[1].clone())
 		}
@@ -75,7 +75,7 @@ pub(super) fn union_result(typed_body: &Node) -> Option<(Node, Node)> {
 		Node::List(parts, _, Separator::Space)
 			if parts.len() == 2
 				&& matches!(parts[0].drop_meta(), Node::Symbol(_))
-				&& matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+				&& parts[1].is_block() =>
 		{
 			Some((parts[0].clone(), parts[1].clone()))
 		}
@@ -142,7 +142,7 @@ pub(super) fn function_typed_result(definition: Node) -> Node {
 		[result_type, body]
 			if types.iter().all(is_kinded_type_word)
 				&& is_kinded_type_word(result_type)
-				&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+				&& body.is_block() =>
 		{
 			parens(vec![head.as_ref().clone(), body.clone()])
 		}

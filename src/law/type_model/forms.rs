@@ -80,7 +80,7 @@ pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 	if first.is_symbol(ON_WORD) {
 		let (last, words) = rest.split_last()?;
 		let event = crate::event_signals::event_name(words.iter())?;
-		return matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))
+		return last.is_block()
 			.then_some(Effect::On { event, handler: last });
 	}
 	if !first.is_symbol(EMIT_KEYWORD) {

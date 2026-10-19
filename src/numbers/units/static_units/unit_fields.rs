@@ -177,7 +177,7 @@ fn with_field_values(
 			Node::List(items.collect(), Bracket::Round, separator)
 		}
 		Node::Key(class, op @ (Op::Colon | Op::None), body)
-			if class_fields(&class).is_some() && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if class_fields(&class).is_some() && body.is_block() =>
 		{
 			let (name, fields) = class_fields(&class).unwrap();
 			let body = body.map_children(|entry| named(&name, &fields, entry.clone()).unwrap_or_else(|| walk(entry)));
@@ -469,7 +469,7 @@ impl Inference {
 			},
 		};
 		let class = name.drop_meta().name();
-		let is_named_fields = matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _));
+		let is_named_fields = body.is_block();
 		(is_named_fields && matches!(name.drop_meta(), Node::Symbol(_)) && self.classes.contains_key(&class))
 			.then_some((class, body))
 	}

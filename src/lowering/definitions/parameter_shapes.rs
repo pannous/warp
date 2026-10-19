@@ -152,7 +152,7 @@ fn wrong_type(field: &Field, value: &Node) -> Option<String> {
 fn constructions(arguments: &[Node]) -> Vec<Node> {
 	let mut merged: Vec<Node> = Vec::new();
 	for argument in arguments {
-		let constructs = matches!(argument.drop_meta(), Node::List(_, Bracket::Curly, _))
+		let constructs = argument.is_block()
 			&& merged.last().is_some_and(|kind| matches!(kind.drop_meta(), Node::Symbol(_)));
 		match constructs {
 			true => {

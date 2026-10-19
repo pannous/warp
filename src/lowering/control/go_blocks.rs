@@ -229,7 +229,7 @@ fn starts_block_at(items: &[Node]) -> Option<usize> {
 	items
 		.windows(2)
 		.position(|pair| {
-			pair[0].drop_meta().name() == GO_WORD && matches!(pair[1].drop_meta(), Node::List(_, Bracket::Curly, _))
+			pair[0].drop_meta().name() == GO_WORD && pair[1].is_block()
 		})
 		.map(|go| go + 1)
 }
