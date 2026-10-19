@@ -180,3 +180,10 @@
 - Keep runtime-fetched packages outside Warp's Cargo workspace without changing or copying a fetched package's sources.
 - Cover the workspace boundary with one focused regression test under `tests/modules/`.
 - Run the focused package filters, formatting, clippy, and the wasm32 check; keep the worktree-only version suffix uncommitted.
+
+# Julia floor-division alias cleanup
+
+- Upgrade the existing Unicode-operator regression from the obsolete `÷` plain-division decision before changing production code.
+- Route `÷` and `÷=` through the existing `FloorDiv` and `FloorDivAssign` operators; do not add a parallel arithmetic path.
+- Emit one shared newcomer note that explains Julia-compatible floor division and names `/` for plain division.
+- Keep the Rust and self-hosted parser operator tables aligned, update the two specified wiki sections, and run the focused parser tests, clippy, and wasm32 check.

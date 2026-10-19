@@ -475,6 +475,15 @@ impl WarpParser {
 		if written == DIV_WORD && !is_prefix {
 			self.warn_floor_division_spelling(DIV_WORD, "divides", FLOOR_DIVISION, Level::Normal);
 		}
+		if matches!(written.as_str(), "÷" | "÷=") && !is_prefix {
+			crate::errors::diagnostic::advise_once(
+				JULIA_FLOOR_DIVISION_TOPIC,
+				&written,
+				&written,
+				"÷ is floor division, as in Julia: 7 ÷ 2 → 3; plain division is /",
+				None,
+			);
+		}
 		norm::operator(&written, is_prefix);
 		written
 	}
