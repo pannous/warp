@@ -23,6 +23,9 @@ Traps writing passes in warp (cards match-silently and others):
 - `match xs#i { Key(…): … }` takes no case: pass the element through a Node parameter. `Empty:` does not take ø: `n is ø`.
 - a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
   function: pick names no lib/compiler file defines.
+- a pass's top-level word named like another file's (for_loops.warp's `named`, `statements_of`, `repeated` were
+  parser.warp's) replaces it in every program that uses both, silently: passes.warp's `use` lines broke the front lane
+  (card suite-front-c993b941). Before adding a pass, check its words against the other lib/compiler files.
 - `[]` is ø, so `acc = []; acc + more` is refused statically: build lists with map/filter over `1 to n`.
 - the stage programs are cached per binary and lib/ contents; a cold compile takes 2-5 min, so the first run after a
   lib/compiler edit is slow (the loop warms it with `3 + 4`). Run the binary by an absolute path or a build that
