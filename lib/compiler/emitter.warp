@@ -794,6 +794,8 @@ group_expression(body: Body, n: any) := {
 	# a match no case takes (one the analyzer found exhaustive): a trap, as Rust's no_case_ error word ends the program
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") { return [pending, [op.unreachable]] }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
+		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
+		if name_of(n#1) == "floor_quotient" { for x in n[1..] { if expression(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
 		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
 	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
