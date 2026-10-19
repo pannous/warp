@@ -85,6 +85,22 @@ colon_arms(n: Node): Node := match n {
 
 match_arms(program: any): any := bottom_up(named_switch_subjects(program), colon_arms)
 
+# bare_returns (lower_bare_returns): returning ø, bare (`if t == ø { return }`) or written (`return ø`), parses as the
+# word alone; here it becomes the phrase `return ø` the emitter compiles. `return = 1` and `x.return` keep the word
+bare_returns(n: Node): Node := match n {
+	Symbol(word): { if word == "return" then List([n, ø], Bracket.None, Separator.Space) else n }
+	List(items, bracket, separator): {
+		if #items == 2 and items#1 == symbol("return") { return List([items#1, bare_returns(items#2)], bracket, separator) }
+		children(n, bare_returns)
+	}
+	Key(left, op, right): {
+		if left == symbol("return") { return Key(left, op, bare_returns(right)) }
+		if op == Op.Dot and right == symbol("return") { return Key(bare_returns(left), op, right) }
+		children(n, bare_returns)
+	}
+	_: children(n, bare_returns)
+}
+
 # arrow_result_types (lower_arrow_result_types): Swift's and Rust's result arrow before `:=`, `x(p:P) -> int := p.n`,
 # is the typed head `x(p:P): int := p.n` every pass reads
 calls_by_name(n: Node): bool := match n {

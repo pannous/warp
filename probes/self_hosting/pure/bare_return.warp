@@ -1,0 +1,12 @@
+// card pure-front: return ø, return [] and a bare return give ø in the pure lane (welcome_forms.warp bare_returns)
+// out: ø
+// out: ø
+// out: 3
+def f(x) {
+	if x == 1 { return ø }
+	if x == 2 { return [] }
+	3
+}
+print f(1)
+print f(2)
+print f(3)

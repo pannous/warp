@@ -21,7 +21,7 @@ passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_rec
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [definitions, clauses, multiple_assignments] + passes + [node_matches, phrase_blocks, for_loops, ranges, list_methods]
+pure_passes = [definitions, clauses, multiple_assignments] + passes + [bare_returns, node_matches, phrase_blocks, for_loops, ranges, list_methods]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
