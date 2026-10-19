@@ -16,20 +16,66 @@ join(xs: list, separator: text): text from warp
 chars(t: text): list of text from warp
 code_point_list(t: text): list of int from warp
 ord(c: codepoint): int from warp
-map_keys(m): list from warp
-map_values(m): list from warp
-map_entries(m): list from warp
-map_without(m, key): list from warp
-map_of_entry(entry) from warp
-map_get_or(m, key, default = ø) from warp
-collection_contains(xs, x) from warp
-collection_position(xs, x) from warp
+map_keys(m: map): list from warp
+map_values(m: map): list from warp
+map_entries(m: map): list from warp
+map_without(m: map, key): list from warp
+map_of_entry(entry): same as entry from warp
+map_get_or(m: map, key, default = ø): value of m from warp
+collection_contains(xs: list, x): bool from warp
+collection_contains(t: text, part): bool from warp
+collection_contains(m: map, key): bool from warp
+collection_position(xs: list, x): int from warp
+collection_position(t: text, part): int from warp
 slice(xs: list, start, end = ø): list from warp
 slice(t: text, start, end = ø): text from warp
-field_with(object, name, value) from warp
-instance_copy(x, shallow) from warp
+field_with(object, name, value): same as object from warp
+instance_copy(x, shallow): same as x from warp
 wasi_environment(): text from warp
 kind_mark(x: any): int from warp
+
+// The builtins the emitter expands in place, without a runtime function (card typed-builtins): their signatures and
+// results, as the analyzer reads them
+count(xs: list): int from emitter
+count(t: text): int from emitter
+count(m: map): int from emitter
+sum(xs: list): element of xs from emitter
+byte_size(x): int from emitter
+type(x): symbol from emitter
+print(values...): nothing from emitter
+puts(t: text): int from emitter
+puti(n: int): int from emitter
+putl(n: int): int from emitter
+putf(x: float): int from emitter
+fetch(url: text, options...): text from emitter
+// the builtin methods of lists, texts and maps (members.rs), each a function value like the others (card dir-lists)
+// over a text they take its characters; a map has no overload (`map(m, f)` would see its entries)
+map(xs: list, f: function): list from emitter
+map(t: text, f: function): list from emitter
+filter(xs: list, f: function): list from emitter
+filter(t: text, f: function): list from emitter
+reduce(xs: list, f: function): element of xs from emitter
+fold(xs: list, start, f: function): same as start from emitter
+any(xs: list, f: function): bool from emitter
+any(t: text, f: function): bool from emitter
+// all of any value: `f(all xs)` broadcasts (wiki/all.md), a typed `all` would nest as a call of two values
+all(xs, f: function): bool from emitter
+find(xs: list, f: function): element of xs from emitter
+find(t: text, f: function): element of t from emitter
+each(xs: list, f: function) from emitter
+each(t: text, f: function) from emitter
+add(xs: list, x): same as xs from emitter
+insert(xs: list, x, at: int): same as xs from emitter
+remove(xs: list, x) from emitter
+remove(m: map, key) from emitter
+pop(xs: list): element of xs from emitter
+clear(xs: list): same as xs from emitter
+number(x): number from emitter
+// the calls lowering passes write: a list changed in place, a removed map value or list, a list ordered by keys
+list_become(place, fresh): same as place from emitter
+removed_value(x, k): any from emitter
+list_sorted_by(xs, keys): any from emitter
+string(x): text from emitter
 
 // Other spellings of the built-in and prelude words (wiki/alias.md): `sorted(xs)`, `xs.contains(x)`, `t.strip()`
 alias warn = warning
@@ -53,6 +99,9 @@ alias lowercase = lower
 // the text builtin trim, Python's strip
 alias strip = trim
 alias reversed = reverse
+alias size = count
+alias len = count
+alias length = count
 alias sorted = sort
 alias clone = copy
 alias ordinal = ord
@@ -92,6 +141,45 @@ is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+is_hex_digit(c) := is_digit(c) or (lower(c) >= 'a' and lower(c) <= 'f')
+is_word_char(c) := is_alphanumeric(c) or c == '_'
+// at least one character, each passing is_class: consists_of("42", is_digit)
+consists_of(t: text, is_class) := { if t == "" { return false }; for c in t { if not is_class(c) { return false } }; true }
+// a whole number, optionally signed: "-3"
+is_integer(t: text) := consists_of(remove_prefix(t, "-"), is_digit)
+// a hole's text fits its type in a text pattern: `"/users/" + id: int`, `"v" + n: digits`, `c: letter + "!"`
+fits_text_type(t: text, type: text) := match type {
+	"int" | "integer" => is_integer(t)
+	"number" | "float" => { parts = split(t, "."); count(parts) <= 2 and is_integer(parts#1) and (count(parts) == 1 or consists_of(parts#2, is_digit)) }
+	"digit" => count(t) == 1 and is_digit(t)
+	"digits" => consists_of(t, is_digit)
+	"letter" => count(t) == 1 and is_alpha(t)
+	"letters" => consists_of(t, is_alpha)
+	"hex" => consists_of(t, is_hex_digit)
+	"space" => consists_of(t, is_space)
+	"word" => consists_of(t, is_word_char)
+	_ => true
+}
+// text patterns (notes/matching.md): the texts of the holes between the pieces of `"0x" + rest`, [] when t doesn't
+// match (also when t is no text); the first piece is the prefix, the last the suffix, "" where the pattern starts or
+// ends with a hole; each hole's text fits its type, "" for any text
+text_holes(t, pieces: [text], types: [text]) := {
+	if not (t is text) { return [] }
+	prefix = first(pieces)
+	suffix = last(pieces)
+	if count(t) < count(prefix) + count(suffix) or not starts_with(t, prefix) or not ends_with(t, suffix) { return [] }
+	rest = t[count(prefix): count(t) - count(suffix)]
+	holes = []
+	for piece in pieces[1: count(pieces) - 1] {
+		at = index_of(rest, piece)
+		if at == 0 { return [] }
+		holes = holes + [rest[0: at - 1]]
+		rest = rest[at - 1 + count(piece):]
+	}
+	holes = holes + [rest]
+	for i in 1 to count(holes) { if not fits_text_type(holes#i, types#i) { return [] } }
+	holes
+}
 // the digits of n in a base up to 36, letters past 9 (upper: true capitals): to_base(255, 16) is "ff",
 // from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
 // symbols, which needs the grapheme runtime
@@ -196,7 +284,7 @@ popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x
 cleared(x) := if x is map then {} else []
 // xs.insert(v, at: i) (list_mutations inserted_in_place): the list with v at the 0-based position i, past the end or
 // before 0 at the end
-inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs[0:i] + [v] + xs[i:]
+inserted(xs, i: int, v: any) := if i < 0 or i >= count(xs) then xs + [v] else xs[0: i] + [v] + xs[i:]
 // `a ≈ b`, and `a ~ b` when rough (notes/approximately.md): `{…}` maps key by key in any order, other lists item by item,
 // pairs and instances (a class name paired with its fields) part by part, each with the same comparison again; two
 // other values by the runtime's values_similar or values_rough. Two plain numbers never get here: they compare inline
@@ -260,3 +348,65 @@ display.size := [display_width, display_height] px
 // the diagonal as a length: its nearest whole px at the density (quantities run as exact amounts, a run-time √ is a
 // float)
 display.diagonal := round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)
+// The fields of a time at run time (card time-fields-warp, notes/dates_at_run_time.md), called late by the emitter's
+// time_field with the time's form (TimeForm: 1 a date, its position in days; else nanoseconds since 1970), its wall
+// clock position, its zone offset in seconds east of UTC and the index of the field in times.rs TIME_FIELDS
+time_field_of(form: int, wall: int, offset: int, field: int): int := {
+	days = time_days(form, wall)
+	nanos = time_nanos(form, wall)
+	match field {
+		0 => civil_year(days)
+		1 => civil_month(days)
+		2 => civil_day(days)
+		// ISO weekday: 1970-01-01 was a Thursday, Monday is 1
+		3 => floor_mod(days + 3, 7) + 1
+		4 => days - days_from_civil(civil_year(days), 1, 1) + 1
+		5 => nanos /! 3600000000000
+		6 => nanos /! 60000000000 % 60
+		7 => nanos /! 1000000000 % 60
+		8 => days * 86400 + nanos /! 1000000000
+		9 => offset
+		// the time of day in whole seconds, as calendar::Time::part: 22:27:46
+		10 => nanos /! 1000000000 * 1000000000
+		_ => days
+	}
+}
+// time_parts(form, position): the calendar day of a position and the nanoseconds into it; a date has no clock
+time_days(form: int, position: int): int := if form == 1 then position else position /! 86400000000000
+time_nanos(form: int, position: int): int := if form == 1 then 0 else floor_mod(position, 86400000000000)
+floor_mod(n: int, divisor: int): int := n - n /! divisor * divisor
+// Howard Hinnant's calendar over day numbers (days since 1970-01-01, proleptic Gregorian), the one warp copy of
+// src/time/calendar.rs days_from_civil / civil_from_days (card civil-days-dup); lib/time.warp builds on it.
+// civil_from_days: eras of 400 years from 0000-03-01, a year from March
+civil_era(days: int): int := (days + 719468) /! 146097
+civil_day_of_era(days: int): int := days + 719468 - civil_era(days) * 146097
+civil_year_of_era(day_of_era: int): int := (day_of_era - day_of_era /! 1460 + day_of_era /! 36524 - day_of_era /! 146096) /! 365
+civil_day_of_year(day_of_era: int): int := {
+	year_of_era = civil_year_of_era(day_of_era)
+	day_of_era - (365 * year_of_era + year_of_era /! 4 - year_of_era /! 100)
+}
+// the month counted from March: months 10 and 11 of the year are January and February
+civil_march_month(day_of_year: int): int := (5 * day_of_year + 2) /! 153
+civil_month(days: int): int := {
+	march_month = civil_march_month(civil_day_of_year(civil_day_of_era(days)))
+	if march_month < 10 then march_month + 3 else march_month - 9
+}
+civil_day(days: int): int := {
+	day_of_year = civil_day_of_year(civil_day_of_era(days))
+	day_of_year - (153 * civil_march_month(day_of_year) + 2) /! 5 + 1
+}
+civil_year(days: int): int := {
+	year = civil_year_of_era(civil_day_of_era(days)) + civil_era(days) * 400
+	if civil_month(days) <= 2 then year + 1 else year
+}
+// the date of a day number as {year, month, day}
+civil_from_days(day_count: int) := {year: civil_year(day_count), month: civil_month(day_count), day: civil_day(day_count)}
+// the day number of a proleptic Gregorian date
+days_from_civil(year: int, month: int, day: int): int := {
+	march_year = if month <= 2 then year - 1 else year
+	era = march_year /! 400
+	year_of_era = march_year - era * 400
+	march_month = if month > 2 then month - 3 else month + 9
+	day_of_year = (153 * march_month + 2) /! 5 + day - 1
+	era * 146097 + year_of_era * 365 + year_of_era /! 4 - year_of_era /! 100 + day_of_year - 719468
+}

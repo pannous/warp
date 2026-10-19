@@ -255,6 +255,7 @@ impl Inference {
 			in_progress: vec![],
 			numbered: 0,
 			new_definitions: vec![],
+			value_names: value_names(program),
 			display: finest_units(&written),
 			written: HashMap::new(),
 			temperatures,
@@ -264,6 +265,17 @@ impl Inference {
 			started: HashMap::new(),
 		}
 	}
+}
+
+/// The symbols written other than as the first word of a list, which calls it: the functions passed as values
+fn value_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			names.extend(items.iter().skip(1).filter_map(|item| item.symbol_name().map(str::to_string)));
+		}
+	});
+	names
 }
 
 /// Every unit word written in `node`, once per mention
@@ -678,6 +690,10 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 				Some((name.name(), (parameter.drop_meta().clone(), None)))
 			}
 			Node::Key(name, Op::Colon, _) => Some((name.name(), (Node::Symbol(name.name()), None))),
+			// `f: (float) -> float`, parsed `(f: (float)) -> float`: a function, no quantity
+			Node::Key(typed, Op::Arrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
+				Some((typed.name(), (parameter.drop_meta().clone(), None)))
+			}
 			// `t = 1s`: a call leaving t out gives the default
 			Node::Key(name, Op::Assign, default) => {
 				Some((name.name(), (Node::Symbol(name.name()), Some(default.as_ref().clone()))))
@@ -742,6 +758,8 @@ struct Inference {
 	in_progress: Vec<InProgress>,
 	numbered: usize,
 	new_definitions: Vec<Node>,
+	/// The names written as values, not called: `live_loop(drums, 2)` passes the function drums
+	value_names: HashSet<String>,
 	/// The finest written unit of each dimension: the unit a quantity shows in unless converted
 	display: Vec<&'static Unit>,
 	/// The units written in each variable's values: the units it shows in (card print-print)
@@ -881,9 +899,14 @@ fn object_entries(value: &Node) -> Option<Vec<(Node, Op, Node)>> {
 
 impl Inference {
 	fn infer(&mut self, node: Node) -> Result<(Node, Signature), Stop> {
-		if let Some((_, definition)) = function_definition(&node) {
-			// a body or default with unit literals compiles only in its specialisations
-			let kept = if self.has_units(&definition) { Node::Empty } else { node };
+		if let Some((name, definition)) = function_definition(&node) {
+			// a body or default with unit literals compiles only in its specialisations, and as the plain one a
+			// function passed as a value is
+			let kept = match self.has_units(&definition) {
+				false => node,
+				true if self.value_names.contains(&name) => self.plain_forward(&name, &definition),
+				true => Node::Empty,
+			};
 			return Ok((kept, Signature::plain()));
 		}
 		if let Some(construction) = self.named_construction(&node) {
@@ -1074,9 +1097,11 @@ impl Inference {
 			Node::Key(list, Op::Hash, index) => {
 				let (list, signature) = self.infer(*list)?;
 				let (index, index_signature) = self.infer(*index)?;
-				if !index_signature.is_empty() || (!signature.is_empty() && !signature.is_list()) {
+				if !index_signature.is_empty() {
 					return Err(Stop::Unsupported);
 				}
+				// an item of a single quantity, which has none, its units: a branch not taken (lib's is_signal of
+				// play(440Hz, 1s) reads tone#1 of a list only), else an error at run time
 				Ok((Node::Key(Box::new(list), Op::Hash, Box::new(index)), signature.element()))
 			}
 			// `√a`: the powers halve, an odd power has no root

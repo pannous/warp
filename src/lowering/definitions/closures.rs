@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 pub const CLOSURE_NEW: &str = "closure_new";
 /// The mark of `&add` / `function add`: the function itself, not its call (user decision P82)
-const FUNCTION_REFERENCE_MARK: &str = "function_reference";
+pub(crate) const FUNCTION_REFERENCE_MARK: &str = "function_reference";
 /// The class whose method a closure_new target is (class_method_target)
 const METHOD_CLASS_MARK: &str = "method_of";
 const BUILTIN_PREFIX: &str = "builtin·";
@@ -344,7 +344,7 @@ fn lift_closures(program: Node) -> Node {
 	let context = crate::analyzer::function_context(&program);
 	let variables = captured_variables_of(&program);
 	let values = settled_function_values(&program, &context);
-	let callable_fields = values.callable_fields(&program);
+	let callable_fields = values.callable_fields(&program, &context);
 	let FunctionValues {
 		functions,
 		returning: returns_function,
@@ -656,7 +656,11 @@ impl FunctionValues {
 	/// (`Holder(x => x + 1)`) or an object entry given one (`hs = [{d: x => x * 3}]`), unless a function or method is
 	/// named so. A field named like a library method (`join`, `size`) is called only on a path assigned the function:
 	/// other receivers keep the method, as a class's method of such a name does (card lambda-held, reviewer)
-	fn callable_fields(&self, program: &Node) -> HashSet<String> {
+	fn callable_fields(&self, program: &Node, context: &Context) -> HashSet<String> {
+		let parameters = self.function_parameters(program, context);
+		let is_given = |value: &Node| {
+			self.is_function_value(value) || value.symbol_name().is_some_and(|name| parameters.contains(name))
+		};
 		let mut fields = HashSet::new();
 		program.visit(&mut |node| {
 			let entries = match node {
@@ -665,8 +669,7 @@ impl FunctionValues {
 				}
 				_ => self.constructed_fields(node),
 			};
-			let given_functions =
-				entries.unwrap_or_default().into_iter().filter(|(_, value)| self.is_function_value(value));
+			let given_functions = entries.unwrap_or_default().into_iter().filter(|(_, value)| is_given(value));
 			fields.extend(given_functions.map(|(field, _)| field));
 		});
 		let is_function_name = |field: &String| {
@@ -674,6 +677,23 @@ impl FunctionValues {
 		};
 		fields.retain(|field| !is_function_name(field) && !crate::class_methods::is_library_method(field));
 		fields
+	}
+
+	/// The parameters a call gives a function value: answer of `route(path, answer)` called `route("/x", q => q + 1)`,
+	/// whose `{answer: answer}` then holds it (card field-closure-call), and those declared `answer: function`
+	fn function_parameters(&self, program: &Node, context: &Context) -> HashSet<String> {
+		let declared = context.user_functions.values().flat_map(|function| &function.params).filter(|param| {
+			param.annotation.as_ref().is_some_and(crate::lowering::typed_block_arguments::is_function_type)
+		});
+		let mut parameters: HashSet<String> = declared.map(|param| param.name.clone()).collect();
+		program.visit(&mut |node| {
+			let Node::List(items, Bracket::Round, Separator::None) = node else { return };
+			let Some((head, arguments)) = items.split_first() else { return };
+			let Some(function) = head.symbol_name().and_then(|name| context.user_functions.get(name)) else { return };
+			let given = function.params.iter().zip(arguments).filter(|(_, argument)| self.is_function_value(argument));
+			parameters.extend(given.map(|(param, _)| param.name.clone()));
+		});
+		parameters
 	}
 
 	/// `Holder(x => x + 1)` of `class Holder {d}`: the field d given the lambda, as `{d: x => x + 1}` gives it
@@ -1047,9 +1067,15 @@ impl Lifting {
 	/// The variables of the enclosing scopes the body reads, in order of first use
 	fn captured(&self, body: &Node, params: &[String], bound: &HashSet<String>) -> Vec<String> {
 		let globals: HashSet<String> = body.declared_globals();
+		let mut keys = field_names(body);
 		let mut captured: Vec<String> = vec![];
 		body.visit(&mut |node| {
 			if let Node::Symbol(name) = node {
+				// `{name: "x"}`, `user.name`: a field's name, no read of a variable name
+				if let Some(left) = keys.get_mut(name).filter(|left| **left > 0) {
+					*left -= 1;
+					return;
+				}
 				// `t = k * 2` before any read of t binds the lambda's own local, no capture; `global n` shares n
 				if !params.contains(name)
 					&& !globals.contains(name)
@@ -1063,6 +1089,29 @@ impl Lifting {
 		});
 		captured
 	}
+}
+
+/// How often each name names a field: the key of an entry of a braced literal (`{name: "x", inner: {k: no}}`) or the
+/// field read after a dot (`users#id.name`)
+fn field_names(body: &Node) -> HashMap<String, usize> {
+	let mut names: HashMap<String, usize> = HashMap::new();
+	let mut count = |field: &Node| {
+		if let Some(name) = field.symbol_name() {
+			*names.entry(name.to_string()).or_default() += 1;
+		}
+	};
+	body.visit(&mut |node| match node {
+		Node::List(items, Bracket::Curly, _) => {
+			for item in items {
+				if let Node::Key(key, Op::Colon, _) = item.drop_meta() {
+					count(key);
+				}
+			}
+		}
+		Node::Key(_, Op::Dot, field) => count(field),
+		_ => {}
+	});
+	names
 }
 
 /// The names a body assigns, `angle = 0.5`: its local variables, never a function of the same name

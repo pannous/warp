@@ -1,8 +1,18 @@
 //! Conditions: if/while heads, statement modifiers `x++ while c`, condition words `x empty`
 
 use super::*;
+use crate::warp_parser::context::Context;
 use crate::words::COUNT_WORD;
 use crate::words::IS_ERROR_WORD;
+
+/// The control words that negate their condition: `unless c` is `if not c`, `until c` is `while not c`
+const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op::While)];
+/// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
+const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
+const EMPTY_WORD: &str = "empty";
+/// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
+/// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
+const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
 
 /// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`
 pub(crate) fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
@@ -43,17 +53,12 @@ impl WarpParser {
 	/// (`if area certainly > 10 then`, `while square i < 10`)
 	pub(crate) fn parse_condition(&mut self) -> Node {
 		let condition_bp = Op::If.binding_power().1;
-		let outer = self.branch_bp.replace(condition_bp);
-		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(condition_bp));
-		self.branch_bp = outer;
-		condition
+		let condition = Context { branch_bp: Some(condition_bp), equals_compares: true, ..self.context };
+		self.within(condition, |parser| parser.parse_expr(condition_bp))
 	}
 
 	pub(crate) fn with_equals_comparing<T>(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> T) -> T {
-		let outer = std::mem::replace(&mut self.equals_compares, compares);
-		let node = parse(self);
-		self.equals_compares = outer;
-		node
+		self.within(Context { equals_compares: compares, ..self.context }, parse)
 	}
 
 	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md); `x failed` is `is_error(x)`.

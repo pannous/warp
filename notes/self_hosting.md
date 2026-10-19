@@ -1,6 +1,33 @@
 # Self-hosting: warp's compiler written in warp
 Roadmap card: self-hosted (board topic; its sub-cards are the steps below, notes/roadmaps.md).
 
+Milestones:
+- 2026-10-19 ~12:50: FIRST PURE RUN. With WARP_SELF_HOSTED=pure, programs run parser.warp → warp's own passes →
+  analyzer.warp → emitter.warp with no Rust pass in between (Rust only carries data between the stage workers):
+  `1 + 2`, `print "hi"`, `f(x) := x * 2; f(3)`, `while`, `xs#2`, `if … then … else` (card pure-runs,
+  warp-self-analyzer). Forms outside the lane are refused loudly and run the usual way. The lane grows to the
+  language, never the other way round: no program, test or lib code is rewritten into primitive syntax to fit it
+  (decisions compiler-high-level, no-primitive-rewrites).
+
+## Growing the pure lane (card pure-runs)
+Loop (user via supervisor, 2026-10-19): `probes/self_hosting/refusals.sh --pure <own warp binary>` runs the ladder
+probes/self_hosting/pure/*.warp (simplest first, expected output in `// out:` lines) and the samples with
+WARP_SELF_HOSTED=pure; it counts the programs that ran pure ("pure: ran" lines in WARP_EMIT_REFUSALS) and how many of
+them were right, names the first rung not right and ranks the lane's own refusals → data/self_hosting/pure.txt.
+Fix the top refusal (or any wrong output first), repeat; suite counts only at milestones (warp-steward).
+Counts: 21 ran / 17 right (morning) → 31 / 30 (afternoon). The pure lane's passes come first in lib/compiler/passes.warp
+`pure_passes`, around the twinned `passes` Rust drives by index: definitions (def/fun), clauses (pattern clauses),
+multiple_assignments, then phrase_blocks ({print x}), for_loops (for → while), ranges (range values), list_methods
+(xs.push). Not core, skipped: `on` handlers, `stored` tables, shaders, canvas.
+Traps writing passes in warp (cards match-silently and others):
+- `match xs#i { Key(…): … }` takes no case: pass the element through a Node parameter. `Empty:` does not take ø: `n is ø`.
+- a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
+  function: pick names no lib/compiler file defines.
+- `[]` is ø, so `acc = []; acc + more` is refused statically: build lists with map/filter over `1 to n`.
+- the stage programs are cached per binary and lib/ contents; a cold compile takes 2-5 min, so the first run after a
+  lib/compiler edit is slow (the loop warms it with `3 + 4`). Run the binary by an absolute path or a build that
+  canonicalizes it (self_hosted.rs stage_key), else each folder compiles them anew.
+
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
@@ -56,10 +83,18 @@ parser-keyword-table. Target shapes:
   `twice {…}`, `is in`, `1e3`, `2x`, `x⁻¹`, `global int n`. One sugar pass in passes.warp rewrites them, one table row
   each; the twin compares after that pass.
   Done (lib/compiler/sugar.warp, `tree` = `sugared(written_tree(…))`): `xs[i]`, slices, `/!`, `div`, `/!=`, `is in`,
-  `loop {…}`. Count words wait for parser-scope-pass (a program's own `twice`); `1e3`, `2x`, `x⁻¹`, `global int n`
+  `loop {…}`, count words (`twice {…}`, with the scope: `counted`); `1e3`, `2x`, `x⁻¹`, `global int n`
   already leave the parser as one number or one key, with no written form worth keeping.
 - parser-scope-pass + parser-application: the parser writes word phrases `[f x]` without knowing names; a pass that
-  knows the scope makes calls of them. program_functions, p.bound, applies/word_begins_item and trailing_block go.
+  knows the scope makes calls of them. applies/word_begins_item and trailing_block go.
+  Done (parser-application, part 1): the head of `for`, `if` and `while` is one context in both parsers (Rust
+  Context::in_header = in_for_header or equals_compares; parser.warp p.header): a `{` there is the body, never an
+  argument, so the repair that split the body off a condition's right spine (Rust split_trailing_block, warp
+  trailing_block) is gone. Left: applies' power windows (OPERAND_POWERS minus ARGUMENT_POWER, ≤ 60, the branch
+  power) and word_begins_item still decide application in both twins alike.
+  Done (parser-scope-pass): parser.warp keeps no names (program_functions, its line scan and p.bound are gone); it
+  writes `twice {…}` as written and sugar.warp `counted(tree, scope_of_view(written))` makes it `2 times {…}` unless
+  the program binds the word (scope.warp, one scope for the whole program: a parameter `once` keeps the word anywhere).
 - parser-typed-fields: `x: int` in a class body stays a key; the type pass reads it as a field type.
   Done: parser.warp keeps the class body as written, the sugar pass (lib/compiler/sugar.warp typed_fields) types it.
 - parser-context: one context value (header, iterable, branch, spaces, indent, grouped) passed down, no saving and
@@ -127,6 +162,8 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
 
 ## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+Since 2026-10-19 (decision passes-first-principles / ignore-rust): passes come from first principles, judged by the
+programs' results; the Rust passes are ignored, not ported or twinned. The shape below is a starting point only.
 parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
 per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
 table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
@@ -137,6 +174,24 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
   until the target passes replace them.
 - New ports go toward the target: the word-phrase pass and the scope pass (with warp-parsing: parser-scope-pass,
   parser-keyword-table); broadcasting minimal; the structural keepers of the SUGAR_PASSES triage.
+
+## Back-end focus (user 2026-10-18 night, decisions self-hosting-back-end, compiler-typed, compiler-high-level)
+Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
+shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
+Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
+emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it). Before sending a tip that touches
+emitter.warp or runtime.warp, run the touched area's suite tests with WARP_SELF_HOSTED=1 (scripts/self-hosted-suite.sh
+--local <filters>, + emitter switch) and compare with the same filters on main: no new failures.
+| owner | part |
+|---|---|
+| warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
+| warp-list-result-type | the builtins' typed lines as the analyzer's signature table (analyzer.warp reads them); types on every lib/compiler function |
+| warp-self-emitter | emitter.warp beyond the core (int `/`, exact rationals, big ints, `#`, `==`, slices, errors, memo calls); the switch hands emission to it |
+| warp-runtime (was self-passes) | runtime.warp: the text, list and number runtime functions of src/wasm_emitter in warp |
+| warp-clicking-guide (markup) | maps, classes/objects and equality: their layout in emitter.warp and their runtime words (coordinate emitter.warp hunks with warp-self-emitter) |
+| warp-parsing | twins for the source and meaning passes still without one, in target-shape order |
+| warp-cache | the end-to-end switch (each stage compiled once, speed), then caching emitted specialisations |
+| warp-steward | suite count per stage: front end only, + analyzer, + emitter |
 
 ## Next phase: passes, analyzer, emitter
 Order: lowering passes first, then the analyzer, then the emitter; only the bootstrap waits for all three.
@@ -178,6 +233,25 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
+### Bootstrap gap (card bootstrap-gap)
+`SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
+every refused function of lib/compiler once, by the first form refused (a fixed family uncovers the next one behind
+it; totals vary between runs under load, compare runs on one state). 2026-10-19: 262 refused functions, 8 of 22 files
+inside the core; after `x == ø` / `x != ø` and main-level variables read by functions as module globals: 185, 9 inside.
+runtime.warp's calls of the intrinsics (`is_null`, `byte_count`, `kind_code`, `new_list`, `fail`, `unboxed_*`, ~60) are
+the survey compiling it as a program, no gap.
+| family | functions | owner |
+| --- | --- | --- |
+| a value known only at run time as a condition, text, list or bool (`if node`, `"a" + node`) | 37 | self-emitter |
+| calls of node API words emitter.warp lacks: `bracket_of`, `symbol`, `separated`, `node_of` | ~27 | emitter-structures |
+| calls of text and library words: `slice`, `starts_with`, `ends_with`, `trim`, `is_name_char`, `is_name_start`, `is_hex_digit`, `code_point_list`, `map_get_or`, `ran_without_error`; another file's `peek`, `is_at` | ~30 | runtime |
+| the unknown name left: a constant assigned from a refused call (`switch_words = [symbol("switch"), …]`, `none_word`, `alias_pairs`) | 3 | clears with the node API and library-word families |
+| parser.warp: `w is not symbol` lowered to `w == not symbol`, `def f(…): T :=` keeps `def` | 3 | card self-hosted-parser |
+
+Done in the cache family (branch closure-values): `x == ø` / `x != ø`; main-level variables a function reads as
+module globals; bool parameters; parameters declared `function` (a closure is a node); `else ø` as a branch giving ø
+(a match's `_: ø`, which made functions "giving a none").
+
 ## Emitter core (card emits-wasm, step 15)
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
 node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
@@ -192,13 +266,22 @@ function and local names.
   its value (3.5 * 2 is 7.0 here, 7 in Rust). probes/self_hosting/emitter/core/ holds one program per form, all inside
   the core; the checked share of every sample and probe must have at least a floor of programs inside.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
-- Not in the core yet (outside, not dropped): int `/` (an exact rational), decimals as exact rationals (the core reads
-  a decimal as f64), ints beyond 64 bits (Rust promotes), a yes/no variable, a loop's value, operators on texts and
-  lists beyond `+` on texts, `#` and `xs#i` (`==`, slices, a list's `+`), error values (a run-time error traps, without
+- Int `/` gives an exact rational (runtime word exact_ratio): an Int `$Node` holding a `$Ratio` of two `$i64box`, as
+  the Rust reader reads it; exact again with ints and ratios (exact_add/sub/mul/div/order), shown as Rust shows it
+  (exact_text: 3.5, 1/3); `%` on one is exact_mod and `floor` exact_floor (runtime.warp's exact rounding words, card
+  exact-rounding-warp, probes/self_hosting/emitter/exact/rounding.warp); a ratio with a float goes through floats. `#`, `x#i` and `x#i = v` on a value
+  known only at run time call node_length / node_at / node_set_at.
+- Not in the core yet (outside, not dropped): decimals as exact rationals (the core reads a decimal as f64, so
+  `1/3 + 0.5` is a float where Rust gives 5/6), ints beyond 64 bits (Rust promotes; a ratio's parts overflow
+  silently), a yes/no variable, a loop's value, slices, error values (a run-time error traps, without
   Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
-- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
-  (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp feeds it (card emitter-takes,
+  decision ignore-rust: no comparison with src/analyzer). analyzer.warp `emitter_kinds(program)` gives {functions: {f:
+  {params: [k…], result: k, locals: {x: k}, elements: {xs: k}}}, variables: {x: k}, elements: {xs: k}, value: k} with
+  k one of int float char text list node (node: any value held boxed, ø included); elements: the element kind of a
+  list whose type is known. An empty map comes as null (to_json, card lib-json). tests/parser/test_self_analyzer.rs
+  checks it runs on every source of tests/parser/analyzer_twin_sources.txt.
 
 ## Value layout (card emitter-gc; the Rust emitter follows: card rust-emitter)
 Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
@@ -281,6 +364,10 @@ Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words a
 | 12 | split, live-loop, try-assert, swizzle, text-set-char, contains, tree-walk-lib, parallel-map, signals | 60-80 each | |
 | 13 | text-quoted, insert-at, element-children, node-codes, reverse, log-root, zero-fill, pop-clear, codepoint-count, builtin-signatures, small-dispatch | 15-55 each | |
 
+float-as-exact-warp (2026-10-19): runtime.warp `float_as_exact` (float_digits, factors 2 and 5 taken out before the
+denominator is built) and emitter.warp `as_rational`; only `as rational` (a float `as real`/`as exact` stays a float).
+The warp runtime has no big ints: a fraction beyond 64 bits (`1e-20 as rational`) fails as int64 overflow, Rust's
+twin goes on in big ints. Rust's float_as_exact stays until the switch hands emission to warp.
 Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
 lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
 arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
@@ -326,8 +413,8 @@ keep its reads far from O(i) here; the gain is the plain array.get.
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
 (wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
 `warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
-(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
-(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+(Python/JS over JSON lines) and, since card exe-c-ffi, C functions: the bridge is crates/warp-runtime/src/c_calls.rs,
+shared with warp's host, and `warp build` carries the header signatures with the machine code (notes/aot.md).
 Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
 modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
 shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
@@ -342,7 +429,9 @@ no total saving, loses self-contained files, and a .cwasm only runs on the exact
 `scripts/self-hosted-suite.sh [<pushed tip>]` runs the whole suite on the cloud lane with WARP_SELF_HOSTED=1 and
 prints "self-hosted: N passed / M" plus the failures grouped by cause (an assertion's left side, digits as #), the most
 frequent first; `--local <filters>` runs it here through tests/queue.sh, `--rank <log>` ranks any test log,
-`--tests <cause regex> <log…>` lists the failed tests of a cause. A cloud run appends its count to
+`--tests <cause regex> <log…>` lists the failed tests of a cause. Plain runs set WARP_SELF_HOSTED=front (front end only, emit-families);
+`--stage <name>=<VAR>[=<value>]` sets a later stage's switch too (run `<tip>+<name>`, compared with the last run of
+the same stages): `--stage emitter=WARP_SELF_HOSTED=1` is + emitter, the per-stage counts of "Back-end focus". A cloud run appends its count to
 data/self_hosting/suite_counts.txt (warp-steward reruns after each batch touching lib/compiler or the pipeline, and
 nightly). The failure groups are cards suite-* in topic self-hosted-2, each naming its stage owner.
 - src/compiler/self_hosted.rs: with the switch on, `lawful_program` parses with parser.warp (passes.warp `stage`
@@ -353,6 +442,47 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   positions and literal layers (a plain view has none), so position-checking tests fail by design.
 - The stage program compiles once per worker thread (its compile has thread-local state the outer compile keeps);
   the twin tests parser::test_self_* are skipped (they compare warp with Rust themselves).
+- Since card End-end (branch self-switch): three stage programs, each its own warp program (a `Stage` static with
+  its worker pool): passes.warp `stage`, analyzer.warp `kinds` (self_hosted::analysis, JSON; separate because
+  analyzer.warp's names clash with parser.warp's, card local-variable-named) and emitter.warp `wasm_module`
+  (wasm_emitter::emit_module asks it first; "outside the core: …" falls back to the Rust emitter, other failures are
+  errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
+  binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
+  with the Rust pipeline (that compile shows a Rust `emit` phase).
+- WARP_SELF_ANALYSIS=1 beside the switch (card pipeline-runs): emit_module first hands each lowered program to
+  analyzer.warp `kinds` (self_hosted::program_kinds; a stage error fails the program) and its kinds go to emitter.warp
+  with the program (request [view, kinds], `typed_wasm_module`, module.kinds; cards emitter-reads, emitter-takes),
+  never compared with src/analyzer's (decision ignore-rust): an unannotated parameter takes the analyzed kind instead
+  of its first call's, and a node where an analyzed program needs a list or text is unboxed (runtime.warp
+  list_of_node, text_of_node: ø is [], anything else traps). That took sorting_idiomatic, quicksort, divisors and
+  pascals-triangle into the core (2026-10-19). Suite count: self-hosted-suite.sh --stage
+  analyzer=WARP_SELF_ANALYSIS.
+- Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
+  refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
+  585 on 2026-10-18).
+  | programs | family (refusal texts) | owner |
+  |---|---|---|
+  | 59 | `view·opaque`: a class/type or error node kept whole | warp-emitter-structures (classes), warp-self-emitter (errors) |
+  | 35+15+11 | untyped values: a text where an int is needed, a node where a list is needed, a node as a condition | warp-self-emitter with warp-self-analyzer's kinds |
+  | 25+16 | the unknown name div; floor_quotient | warp-self-emitter |
+  | 22 | closure_new (lambdas, closures): compiled since emit-families, but for a closure's text | warp-cache |
+  | 16 | the operator ‖ | open |
+  | 15+14+12 | host words on nodes: std_io, foreign_call, task_spawn_values | warp-cache (low value: needs the module's node exports) |
+  | 14+12 | is_type; map_entries (+ map_of_entry 6, field_with 5, collection_contains 8, key 4) | warp-emitter-structures |
+  | 12+11 | the unknown names size, data | open |
+  | 10+10 | `try`; main giving a none | warp-self-emitter |
+  | 10+9+5+7 | operator `:` on char and text / int / list; `^` on int | warp-self-emitter |
+  | 8 | `global` (the unknown name global) | warp-cache |
+  | 11+9+8+6 | midi_hertz, as_code, linear_new, signal_new | later |
+- Inside the core but printing otherwise than Rust (205 of the 810, refusals.sh's DIFFERENT lines, 2026-10-19):
+  63 parse (parser.warp refuses the source: `...` spreads, `.` forms), 55 diagnostics only (warnings and errors
+  without positions), 87 output. Of the 87 most are front-end: storage `·met may be ø` hints (~30), keywords as
+  names (`for`, `return`, `data`), lost units (DimensionError ~8), field counts. Emitter.warp miscompiles (programs
+  in data/self_hosting/emitter_suspects.txt): null reference traps on empty lists (dijkstra 50/81, sorting
+  35_empty_count, samples/objects/dijkstra_idiomatic), `x /= 2` traps (sieve/43_div_assign), exact_text fails
+  validation (queens/p13_push_build), i64 min prints as a float (emitter/core/print.warp), large text literal prints
+  nothing, float_loop traps; missing runtime checks: index bounds (8 programs trap instead of "index out of range"),
+  a fractional index, divide by zero, int + text, P215 list items, a lossy int return.
 - The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
   warp-lang at opt-level 2, as test.sh), in three jobs at once (TEST_GROUPS: self-hosted, the whole suite outlasts the
   lane's 2400 s limit), branches self-hosted/<tip>-<n>, deleted after the run.
@@ -361,3 +491,25 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   variable` 184 (try 52, T# 22: forms parser.warp reads otherwise), a bare `#` left side 76 (a wrong number), `cannot
   extract a numeric value from ø` 46, database `may be ø` hints 50, `not a number` 33, hints pointing into
   lib/compiler/parser.warp (its own warnings leak into the program's output) 41.
+
+## Case table in warp (card case-table-warp, 2026-10-19, written blind in the sprint: untested)
+`use case_table` gives case_upper / case_lower / case_fold, warp over the ranges of text_unicode.rs (lib/case_table.warp:
+class CaseTable, binary search per code point). The tables are lib/case_tables.warp, generated by scripts/case_tables.py
+from Python's unicodedata (17.0 at writing; Rust's char tables may be a version behind: new letters can differ).
+Open before the Rust table goes: list indexing on cons-cell lists is linear (constant-data card: an int array), the
+module builds 9 600 ints at load, `%` and `/!` on int may pull the exact runtime; measure against the builtin first.
+
+## Time primitives (card time-primitives, 2026-10-19, untested sprint work)
+emitter.warp makes the time node of a lowered `time_of(info, position)` / `instant_at(ms)` call (Kind 18, info above
+the kind bits, an $i64box position) of the emitter kind "time" (anyref like a node; boxed as itself, every
+other use refused, so a program printing a time stays outside the core until time-text lands) and gives runtime words the intrinsics time_form, time_position, duration_months,
+duration_days (sign-extended 32 bits), zone_index, zone_offset (seconds); runtime.warp adds is_time/is_date/…,
+duration_nanos, duration_of(months, days, nanos) and local_offset_at(t) over the host word local_offset, which a
+program making a time imports (Rust: imports.rs makes_instant). Names carry a time_/duration_/zone_ prefix instead of
+the card's bare form/position/days, which runtime words use as locals. The time cards (time-field, time-text,
+time-arithmetic, time-zones) move src/wasm_emitter/time onto these. Probes: probes/self_hosting/emitter/times.
+- Times in runtime.warp (card time-text-warp): `time_text(n)` (node_text's kind 18) writes a date, an instant, a local
+  time and a time of day as times.rs emit_time_text/emit_fraction do; a duration (card duration-warp) and a zoned time
+  (needs the zone names table) trap. Unreached yet: a time constant arrives in emitter.warp as an opaque
+  ["data", "Data(…)"] view (src/compiler/node_views.rs), so the emitter refuses it and Rust takes the program; the next
+  step is a view carrying the form and position (card emitter-emits).

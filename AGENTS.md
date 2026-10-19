@@ -96,15 +96,13 @@ cargo test --test tests <file_stem>::  # Run one test file: tests/<topic>/*.rs a
 
 #### Important Test Files
 
-- `tests/node/test_node.rs` - Tests Node AST operations
-- `tests/parser/test_parser.rs` - Tests parser functionality
-- `tests/wasm/test_wasm_emitter.rs` - Tests WASM GC code generation
-- `tests/wasm/test_wasm_reader.rs` - Tests reading WASM GC objects (see below)
+- `tests/parser/test_parser.rs` - warp data notation read into values
+- `tests/wasm/test_wasm.rs` - programs compiled to WASM GC and run (is!)
 
 ## WASM GC Reading Patterns
 
 The project follows patterns from `~/dev/script/rust/rasm` for ergonomic WASM GC object introspection
-(`src/gc_traits/`, examples in `tests/wasm/test_wasm_reader.rs` and `tests/wasm/test_gc_struct.rs`):
+(`src/gc_traits/`):
 
 - Loading WAT modules with GC types enabled
 - Reading GC struct fields by index
@@ -192,12 +190,19 @@ Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/c
 
 4. Verification pointers:
 
-   - `tests/wasm/test_wasm_emitter.rs` covers `test_wasm_roundtrip` and `test_wasm_roundtrip_via_is`
-   - `tests/wasm/test_wasm_reader.rs` documents the GC reading pattern
+   - `tests/wasm/test_wasm_emitter.rs` covers `test_wasm_roundtrip_via_is`
 
 5. Round-trip remains:
 
    parse -> Node -> wasm emitter -> WASM GC object -> Node
+
+## Outcome tests only (user 2026-10-19, decision outcome-tests-only)
+
+A test gives warp code and checks what it produces: the value (is!), printed output, error, effect or CLI output.
+No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC
+layouts, internal Rust APIs. Parsing warp data notation to a value is an outcome. The remaining twins that compare
+warp-written compiler parts with Rust (emitter and analyzer, judged by the program's value) go once the first pipeline
+runs completely in warp; from then on only outcome tests.
 
 ## complete roundtrip test
 
@@ -221,8 +226,8 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
-Small or non-conflicting changes may go straight onto main without a worktree (notes/roles.md
-"Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
+Small or non-conflicting changes may go straight onto main without a worktree (notes/agents/common.md
+"Where to work"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
 (/Volumes/Worktrees/warp is cowtree's donor, never removed;
 /Volumes/Worktrees/integrator holds the Integrator's tools and logs; notes/roles.md), or work on the same branch for small changes.
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).

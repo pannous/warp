@@ -297,20 +297,6 @@ impl TypeRegistry {
 		self.name_to_idx.get(name).map(|&idx| &self.types[idx])
 	}
 
-	/// Look up type by tag
-	pub fn get_by_tag(&self, tag: u32) -> Option<&TypeDef> {
-		if tag < USER_TYPE_TAG_START {
-			return None;
-		}
-		let idx = (tag - USER_TYPE_TAG_START) as usize;
-		self.types.get(idx)
-	}
-
-	/// Check if tag is a user-defined type
-	pub fn is_user_type(tag: u32) -> bool {
-		tag >= USER_TYPE_TAG_START
-	}
-
 	/// Get all registered types
 	pub fn types(&self) -> &[TypeDef] {
 		&self.types

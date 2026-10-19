@@ -8,21 +8,36 @@ use "number_words.warp"
 use "of_lookups.warp"
 use "grouped_receivers.warp"
 use "broadcasting.warp"
+use "definitions.warp"
+use "multiple_assignments.warp"
+use "clauses.warp"
+use "phrase_blocks.warp"
+use "for_loops.warp"
+use "ranges.warp"
+use "list_methods.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
-# a node after every pass, in order
-lowered_node(n: any) := {
-	for pass in passes { n = pass(n) }
+# the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
+# outside src/compiler/self_hosted.rs, first principles in warp
+pure_passes = [definitions, clauses, multiple_assignments] + passes + [phrase_blocks, for_loops, ranges, list_methods]
+
+# a node after every pure pass, in order
+lowered_node(n: any): any := {
+	for pass in pure_passes { n = pass(n) }
 	n
 }
 
+# the program as the passes leave it, from parser.warp's nodes (card rest-node): what pure runs hand to analyzer.warp
+lowered_program(source: text): Node := lowered_node(plain_node(parsed(source)))
+
 # the source text as the passes leave it, as its view
-lowered(source: text) := view_of(lowered_node(node_of(plain(tree(source)))))
+lowered(source: text): any := view_of(lowered_program(source))
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
-# parse tree's view, [i, view] the view after passes#i
-stage(request: any) := {
+# parse tree's view, [i, view] the view after passes#i, ["pure", source] the view after all of them (card pure-runs)
+stage(request: any): any := {
+	if request#1 == "pure" { return lowered(request#2) }
 	if request#1 == 0 { return bridged(tree(request#2)) }
 	pass = passes#(request#1)
 	view_of(pass(node_of(request#2)))

@@ -1,5 +1,6 @@
 //! Texts: quoted strings, escapes, f-strings and their holes, dedented multiline texts
 use super::*;
+use crate::warp_parser::context::Context;
 
 /// The most code points an emoji in code may have (a family ZWJ sequence has 7 to 11, a subdivision flag 7)
 pub(crate) const LONGEST_EMOJI: usize = 32;
@@ -54,7 +55,7 @@ pub(crate) fn dedented_lines(source: &str) -> Vec<DedentedLine> {
 
 impl WarpParser {
 	pub(crate) fn parse_string(&mut self) -> Node {
-		self.reading_atom(AtomKind::Text, Self::read_text)
+		self.read_text()
 	}
 
 	fn read_text(&mut self) -> Node {
@@ -97,12 +98,12 @@ impl WarpParser {
 				}
 				return self.quoted_text(s.nfc().collect(), quote, (quote_line, quote_column), interpolates);
 			}
-			let escaped_brace = self.brace_holes && matches!((ch, self.peek_char(1)), ('{', '{') | ('}', '}'));
+			let escaped_brace = self.context.brace_holes && matches!((ch, self.peek_char(1)), ('{', '{') | ('}', '}'));
 			if escaped_brace {
 				self.advance(); // `{{` is the brace itself
 			}
 			let hole = match ch {
-				'{' if self.brace_holes && !escaped_brace => {
+				'{' if self.context.brace_holes && !escaped_brace => {
 					self.advance();
 					self.text_until_closing('{', '}').map(Some)
 				}
@@ -217,10 +218,7 @@ impl WarpParser {
 			"warp text interpolates without a prefix",
 		);
 		self.advance();
-		let outer = std::mem::replace(&mut self.brace_holes, true);
-		let text = self.parse_string();
-		self.brace_holes = outer;
-		Some(text)
+		Some(self.within(Context { brace_holes: true, ..self.context }, Self::parse_string))
 	}
 
 	/// `\x1b` after the backslash: the character of the two hex digits, left at the second

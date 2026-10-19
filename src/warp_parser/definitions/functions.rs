@@ -1,6 +1,14 @@
 //! Function definitions: heads, typed parameters, result types, definition blocks, function references
 use super::*;
 
+/// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
+const REST_MARKERS: [&str; 2] = ["vararg", "params"];
+/// `function add`, `func add`: a reference to a function (P82), like `&add`
+const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
+const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
+/// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
+const RESULT_TYPE_WORD: &str = "as";
+
 /// A lowercase word that names no type, or a parameter group `(x, y)`
 pub(crate) fn is_parameter_word(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -105,9 +113,7 @@ pub(crate) fn defined_function_name(target: &Node) -> Option<String> {
 
 /// `f={it*2}` defines a function like `f:={it*2}`: a name assigned a block that uses `it`; other blocks are data
 pub(crate) fn is_function_block(name: &Node, block: &Node) -> bool {
-	matches!(name.drop_meta(), Node::Symbol(_))
-		&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
-		&& mentions(block, crate::words::IMPLICIT_PARAMETER)
+	matches!(name.drop_meta(), Node::Symbol(_)) && block.is_block() && mentions(block, crate::words::IMPLICIT_PARAMETER)
 }
 
 impl WarpParser {
@@ -215,7 +221,7 @@ impl WarpParser {
 		let ruby_definition = self.closing_end_follows(&RUBY_END_OPENERS);
 		// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
 		// would make each line the block of the one before)
-		let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
+		let tab_indented_ruby = ruby_definition && self.context.base_indent == 0 && self.next_line_starts_with_tab();
 		if (ruby_definition && !tab_indented_ruby) || !self.only_blanks_before_newline() {
 			return definition;
 		}
@@ -269,7 +275,7 @@ impl WarpParser {
 				let reference_to_value = next == '&'
 					|| next == '(' && !self.starts_capture()
 					|| next == '[' || next == '"'
-					|| next.is_ascii_digit() && !self.in_capture;
+					|| next.is_ascii_digit() && !self.context.in_capture;
 				reference_to_value || self.mutable_reference_follows()
 			}
 			'*' => {

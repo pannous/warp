@@ -1,0 +1,9 @@
+// a local assigned values of two kinds holds their joint kind: an int that becomes an exact rational, an int that
+// becomes a float
+x = 7
+x /= 2
+print x
+total = 0
+total = total + 0.5
+print total * 3
+x + 1

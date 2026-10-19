@@ -75,9 +75,10 @@ fn a_signal_louder_than_full_scale_is_clipped() {
 	assert!(samples.iter().all(|&sample| sample == i16::MAX), "{:?}", &samples[..4]);
 }
 
-// block-wise (sound layer 8): `play_blocks(fill, seconds)` hands fill a linear float array of a block's samples and the
-// block's time; fill writes every cell, one call per block instead of one per sample
-const BLOCK_SINE: &str = "global calls = 0\nhum(block, t) := {\n  calls = calls + 1\n  for i in 1 to #block { block#i = 0.5 * sin(2 * pi * 441 * (t + (i - 1) / sample_rate)) }\n}\nplay_blocks(hum, 0.1)";
+// block-wise (sound layer 8): `play_blocks(fill, linear_address(block), seconds)` calls fill with the block's time; fill
+// writes every cell of the program's linear float array, one call per block instead of one per sample (decision
+// music-plain-library: the program owns its block)
+const BLOCK_SINE: &str = "linear hum_block = float[512]\nglobal calls = 0\nhum(t) := {\n  calls = calls + 1\n  for i in 1 to #hum_block { hum_block#i = 0.5 * sin(2 * pi * 441 * (t + (i - 1) / sample_rate)) }\n  0\n}\nplay_blocks(hum, linear_address(hum_block), 0.1)";
 
 #[test]
 fn a_block_function_fills_the_samples_of_each_block() {
@@ -90,7 +91,7 @@ fn a_block_function_is_called_once_a_block() {
 	assert_eq!(samples.len(), (RATE * 0.1) as usize, "4 blocks of 512 samples and 157 of the fifth");
 }
 
-// stereo (sound layer 8): two functions of the time, left and right, or a block function of two blocks
+// stereo (sound layer 8): two functions of the time, left and right, or a block function filling two blocks
 fn channel(samples: &[i16], index: usize) -> Vec<i16> {
 	samples.iter().skip(index).step_by(2).copied().collect()
 }
@@ -108,12 +109,12 @@ fn a_pair_of_signal_functions_plays_in_stereo() {
 
 #[test]
 fn a_block_function_of_two_blocks_plays_in_stereo() {
-	let program = "hum(left, right, t) := for i in 1 to #left {\n  time = t + (i - 1) / sample_rate\n  left#i = 0.5 * sin(2 * pi * 441 * time)\n  right#i = 0.25 * sin(2 * pi * 220.5 * time)\n}\nplay_blocks(hum, 0.1)";
+	let program = "linear left = float[512]\nlinear right = float[512]\nhum(t) := for i in 1 to #left {\n  time = t + (i - 1) / sample_rate\n  left#i = 0.5 * sin(2 * pi * 441 * time)\n  right#i = 0.25 * sin(2 * pi * 220.5 * time)\n}\nplay_blocks(hum, [linear_address(left), linear_address(right)], 0.1)";
 	assert_stereo(&rendered(program, "signal_blocks_stereo", "rendered", "10"));
 }
 
 // `play(hum, 2s)` (user, 2026-10-12: no snake case for signals): play of a function of the time is play_signal, of a
-// block function play_blocks, of a pair of functions stereo
+// pair of functions stereo; play_blocks takes seconds too
 #[test]
 fn play_of_a_function_plays_it_as_a_signal() {
 	assert_sine(
@@ -121,11 +122,7 @@ fn play_of_a_function_plays_it_as_a_signal() {
 		0.5,
 		441.0,
 	);
-	assert_sine(
-		&rendered(&BLOCK_SINE.replace("play_blocks(hum, 0.1)", "play(hum, 0.1s)"), "play_block_function", "calls", "5"),
-		0.5,
-		441.0,
-	);
+	assert_sine(&rendered(&BLOCK_SINE.replace("0.1)", "0.1s)"), "play_block_function", "calls", "5"), 0.5, 441.0);
 	let pair =
 		"left(t) := 0.5 * sin(2 * pi * 441 * t)\nright(t) := 0.25 * sin(2 * pi * 220.5 * t)\nplay([left, right], 0.1s)";
 	assert_stereo(&rendered(pair, "play_function_pair", "rendered", "10"));

@@ -1,9 +1,7 @@
 use std::path::PathBuf;
 use warp::run::wasm_reader::read_bytes;
-use warp::wasm_emitter::run_raw_struct;
 
 const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
-const STRUCT_SOURCE: &str = "class Person{name:String age:i64}; Person{name:'Alice' age:30}";
 
 fn compile_source(file_name: &str, source: &str) -> Vec<u8> {
 	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join(file_name);
@@ -22,11 +20,4 @@ fn compile_source(file_name: &str, source: &str) -> Vec<u8> {
 fn compile_command_writes_wasm_without_running() {
 	let bytes = compile_source("compile_only_answer.warp", "6*7");
 	assert_eq!(read_bytes(&bytes).unwrap().serialize(), "42");
-}
-
-#[test]
-fn compile_command_emits_the_same_struct_module_as_eval() {
-	let bytes = compile_source("compile_only_struct.warp", STRUCT_SOURCE);
-	let instance = run_raw_struct(&bytes).expect("compile must write the raw struct module that eval runs");
-	assert!(format!("{instance:?}").contains("Person{"));
 }

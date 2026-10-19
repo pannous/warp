@@ -1,8 +1,38 @@
-// The tree shapes parser.warp writes and the sugar pass reads, as node_view writes them (tests/common/twins.rs)
+// The tree parser.warp builds and the sugar pass reads: nodes of lib/compiler/node.warp. A type declaration, an error,
+// a template and an empty group have no node warp builds yet (card node-more-cases): each travels as walk.warp's opaque
+// view, an attribute layer as its attribute key; view_of gives the view node_view writes (tests/common/twins.rs)
+use "words.warp"
+use "walk.warp"
 
-def listed(bracket, separator, nodes) := ["list", bracket, separator] + nodes
-def is_symbol(node) := node is list and node.length == 2 and node#1 == "symbol"
-def is_call_head(node) := node is list and node.length > 3 and node#1 == "list" and node#2 == "("
+def listed(bracket: text, separator: text, nodes: list): Node := {
+	if #nodes == 0 { return opaque(["list", bracket, separator]) }
+	List(nodes, bracket as Bracket, separator as Separator)
+}
 
-// The words that define a function: `def f(x) {…}`
-FUNCTION_KEYWORDS = ["fun", "fn", "def", "define", "function", "func"]
+// The key of an operator given by its spelling: `keyed("+", a, b)` is a+b
+def keyed(op: text, left: any, right: any): Node := Key(left, op as Op, right)
+
+def opaque(view: any): Node := Key(symbol(opaque_word), Op.Colon, view)
+def type_node(name: any, body: any): Node := opaque(["type", view_of(name), view_of(body)])
+def error_node(message: text): Node := opaque(["error", ["text", message]])
+def template_node(holed: text): Node := opaque(["template", holed])
+def attributed(name: text, value: any, node: any): Node := Key(symbol(attribute_word), Op.Colon, [name, value, node])
+
+// [bracket, separator, items] of a group, an empty one too; ø for any other node
+def group_parts(node: any): any := match node {
+	List(items, bracket, separator): [bracket as text, separator as text, items_of(node)]
+	Key(word, Op.Colon, view): { if word == symbol(opaque_word) and kind_of(view) == "list" then [view#2, view#3, []] else ø }
+	_: ø
+}
+
+def is_list_of(node: any, bracket: text): bool {
+	parts = group_parts(node)
+	parts != ø and parts#1 == bracket
+}
+
+def is_block(node: any): bool := is_list_of(node, "{")
+def is_symbol(node: any): bool := node is symbol
+def is_call_head(node: any): bool {
+	parts = group_parts(node)
+	parts != ø and parts#1 == "(" and #parts#3 > 0
+}

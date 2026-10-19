@@ -11,6 +11,7 @@ use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{
 	assign, block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
 };
+use super::text_patterns::TextPattern;
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{error, text, Bracket, Node, Separator};
@@ -19,7 +20,10 @@ use crate::type_kinds::optional_field;
 use crate::warp_parser::subscript;
 use crate::words::{COUNT_WORD, LET_WORD, LIST_WORD, MAP_WORD, PAIR_WORD, SLICE, STARRED, STR_WORD, SWITCH_WORDS};
 
-const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
+pub(crate) const DEFAULT_KEYS: [&str; 4] = ["default", "other", "else", WILDCARD];
+/// Words that catch the rest as `other` does unless the program has a variable of that name or the arm reads it (then
+/// the arm binds it, `rest => rest + 1`), with a got-it note (card match: `rest => 0`)
+const SOFT_DEFAULT_KEYS: [&str; 1] = ["rest"];
 /// In a pattern: any item, bound to no name
 pub(crate) const WILDCARD: &str = "_";
 const ALTERNATIVES_BIND_NO_NAMES: &str = "alternatives bind no names: write one case per pattern, or `_` for an item";
@@ -132,7 +136,8 @@ impl Lowering<'_> {
 				.collect(),
 			false => cases,
 		};
-		let (default, cases): (Vec<Case>, Vec<Case>) = cases.into_iter().partition(|case| is_default(&case.key));
+		let (default, cases): (Vec<Case>, Vec<Case>) =
+			cases.into_iter().partition(|case| is_default(case, &self.names));
 		let miss = match default.into_iter().next() {
 			Some(default) => default.body,
 			None => no_case(subject, &subject_value),
@@ -197,8 +202,16 @@ fn with_leftmost_operand(node: Node, replacement: Node) -> Node {
 	}
 }
 
-fn is_default(key: &Node) -> bool {
-	matches!(key.drop_meta(), Node::Symbol(name) if DEFAULT_KEYS.contains(&name.as_str()))
+fn is_default(case: &Case, names: &Names) -> bool {
+	let Node::Symbol(name) = case.key.drop_meta() else { return false };
+	let is_soft = SOFT_DEFAULT_KEYS.contains(&name.as_str())
+		&& !names.is_variable(name)
+		&& !case.body.mentions_any(&[name.as_str()]);
+	if is_soft {
+		crate::normalize::set_position_of(&case.key);
+		crate::errors::diagnostic::note_alias(name, "other");
+	}
+	is_soft || DEFAULT_KEYS.contains(&name.as_str())
 }
 
 /// The item at 1-based `position` of the value at `path`: `subject#2`, `subject#2#1`
@@ -345,6 +358,9 @@ impl<'a> Matched<'a> {
 	fn pattern(&mut self, pattern: &Node, path: Node) {
 		if let Some(code) = code_pattern(pattern) {
 			return code_tests(&code, path, &mut self.tests, &mut self.bindings);
+		}
+		if let Some(text_pattern) = TextPattern::of(pattern, &|name| self.names.contains(name)) {
+			return text_pattern.matched(&path, &mut self.tests, &mut self.bindings);
 		}
 		if let Some(test) = condition(&path, pattern, self.names) {
 			self.tests.push(test);
@@ -618,7 +634,10 @@ pub(crate) fn pattern_test(
 /// nowhere is a pattern, its names bound as the test holds; a list of known values stays a comparison
 pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Option<Node> {
 	let is_structural = (is_list_pattern(pattern) || is_map_pattern(pattern)) && has_open_part(pattern, names);
-	if !is_structural && code_pattern(pattern).is_none() {
+	if !is_structural
+		&& code_pattern(pattern).is_none()
+		&& TextPattern::of(pattern, &|name| names.contains(name)).is_none()
+	{
 		return None;
 	}
 	let Matched { mut tests, bindings, .. } = Matched::of(pattern, subject.clone(), names);
@@ -663,7 +682,8 @@ fn alternative_tests(subject: &Node, pattern: &Node, guarded: bool, names: &Name
 	if let Some(test) = condition(subject, pattern, names) {
 		return (vec![test], vec![]);
 	}
-	if !guarded && !is_list_pattern(pattern) && !is_map_pattern(pattern) && code_pattern(pattern).is_none() {
+	let is_structural = is_list_pattern(pattern) || is_map_pattern(pattern) || code_pattern(pattern).is_some();
+	if !guarded && !is_structural && TextPattern::of(pattern, &|name| names.contains(name)).is_none() {
 		return (vec![key(subject.clone(), Op::Eq, pattern.clone())], vec![]);
 	}
 	let matched = Matched::of(pattern, subject.clone(), names);

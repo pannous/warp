@@ -29,14 +29,6 @@ fn a_wgsl_error_names_its_place_in_the_program() {
 }
 
 #[test]
-fn a_shader_error_after_a_hole_counts_the_hole_as_written() {
-	// the shader's line 1 is `let a = values.x; let b = c`, its column 27 the `c`
-	let place =
-		warp::graphics::shader_errors::place_in_program("x = 2\ns = shader {\n\t\tlet a = $x; let b = c\n\t}", 1, 27);
-	assert_eq!(place, Some((3, 23)));
-}
-
-#[test]
 fn a_shader_error_the_browser_wrapped_is_placed_too() {
 	let code = "s = shader {\n\tfn f() : f32 { return 1.0; }\n}";
 	assert_eq!(

@@ -46,6 +46,8 @@ struct Commented {
 	comment: String,
 	/// the fields of an object x, which `x.meta` and `x.doc` read instead
 	fields: Vec<String>,
+	/// a function `f(x) := …`, whose `f.doc` its function value answers (closures.rs FUNCTION_WORDS)
+	is_function: bool,
 }
 
 /// The name a binding binds: `x = …`, or a function `f(x) := …`
@@ -61,10 +63,11 @@ fn bound_name(target: &Node) -> Option<String> {
 }
 
 fn binding_comments(node: &Node, bindings: &mut Vec<Commented>) {
-	let mut add = |name: String, comment: &str, value: &Node| {
+	let mut add = |target: &Node, name: String, comment: &str, value: &Node| {
 		bindings.push(Commented {
 			name,
 			comment: comment.to_string(),
+			is_function: matches!(target.drop_meta(), Node::List(_, Bracket::Round, _)),
 			fields: match value.drop_meta() {
 				Node::List(items, Bracket::Curly, _) => items
 					.iter()
@@ -82,13 +85,13 @@ fn binding_comments(node: &Node, bindings: &mut Vec<Commented>) {
 			(Some(comment), Node::Key(target, Op::Colon | Op::Assign | Op::Define, value))
 				if let Some(name) = bound_name(target) =>
 			{
-				add(name, comment, value)
+				add(target, name, comment, value)
 			}
 			_ => binding_comments(inner, bindings),
 		},
 		Node::Key(target, Op::Colon | Op::Assign | Op::Define, value) => match (comment_of(target), bound_name(target))
 		{
-			(Some(comment), Some(name)) => add(name, comment, value),
+			(Some(comment), Some(name)) => add(target, name, comment, value),
 			_ => binding_comments(value, bindings),
 		},
 		Node::List(items, _, _) => items.iter().for_each(|item| binding_comments(item, bindings)),
@@ -107,6 +110,7 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 					let read = match field.as_str() {
 						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => comment,
 						_ if binding.fields.iter().any(|own| own == field) => return None,
+						DOC_WORD if binding.is_function => return None,
 						DOC_WORD => comment,
 						META_WORD => Node::List(
 							vec![key(symbol(COMMENT_KEY), Op::Colon, comment)],
@@ -167,9 +171,7 @@ fn with_entry(object: Node, entry: Node) -> Result<Node, Node> {
 			items.push(entry);
 			Ok(Node::List(items, Bracket::Curly, separator))
 		}
-		Node::Key(name, op @ (Op::Colon | Op::None), fields)
-			if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
-		{
+		Node::Key(name, op @ (Op::Colon | Op::None), fields) if fields.is_block() => {
 			with_entry(*fields, entry).map(|fields| Node::Key(name, op, Box::new(fields)))
 		}
 		other => Err(other),

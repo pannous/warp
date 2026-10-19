@@ -171,12 +171,17 @@ fn from_objects(node: Node) -> Node {
 /// Each class's fields in order, with their type names
 pub(crate) fn class_fields(node: &Node) -> ClassFields {
 	let mut fields = std::collections::HashMap::new();
-	node.visit(&mut |part| {
+	let mut add_fields = |part: &Node| {
 		if let Node::Type { name, body } = part {
 			let typed = field_items(body).into_iter().map(|(_, name, type_name)| (name, type_name)).collect();
 			fields.insert(name.drop_meta().name(), typed);
 		}
+	};
+	// a used file's classes, left out of its own lowering (early_file_classes); the node's own declarations win
+	crate::compiler::compile_context::read(|context| {
+		context.early_file_classes.iter().for_each(|class| class.visit(&mut add_fields))
 	});
+	node.visit(&mut add_fields);
 	fields
 }
 

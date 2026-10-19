@@ -34,9 +34,11 @@ pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &N
 	}
 }
 
-/// `f(a, b)`, `f a b`: the name a signature list starts with, its items (the name first) and its bracket
+/// `f(a, b)`, `f a b`: the name a signature list starts with, its items (the name first) and its bracket; also with a
+/// result type still in the head, `mk(t): P` of a class P (card function-declared)
 fn signature(node: &Node) -> Option<(&str, &[Node], &Bracket)> {
-	let Node::List(items, bracket, _) = node.drop_meta() else {
+	let head = crate::lowering::nodes::result_typed(node).map_or(node, |(head, _)| head);
+	let Node::List(items, bracket, _) = head.drop_meta() else {
 		return None;
 	};
 	Some((items.first()?.symbol_name()?, items, bracket))
@@ -100,7 +102,10 @@ pub(in crate::analyzer) fn register_user_function(
 	if let Some(parent) = enclosing {
 		ctx.enclosing_functions.insert(name.clone(), parent.to_string());
 	}
-	ctx.user_functions.insert(name.clone(), user_function(&name, params, body));
+	let function = crate::compiler::analysis_memo::analysed_function(&name, &params, &body, || {
+		user_function(&name, params.clone(), body.clone())
+	});
+	ctx.user_functions.insert(name.clone(), function);
 }
 
 /// Nested function definitions in `body` become UserFunctionDefs named `parent·short`; their statements stay (emit skips

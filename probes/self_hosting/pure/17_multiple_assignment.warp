@@ -1,0 +1,8 @@
+// out: 55
+// out: 35
+a = 0
+b = 1
+for 0…9 { a, b = b, a + b }
+print a
+x, y = [5, 7]
+x * y

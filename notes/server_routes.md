@@ -92,8 +92,8 @@ A stored `Todo{title: text; done: bool}` table, a list page, a form POSTing a to
 (tests/web/test_served_forms.rs, probes/todo_app/check_served.sh).
 - An urlencoded body is the map of its fields (`request.body.title`). A browser's form (Accept text/html) gets 303
   back to its Referer (post/redirect/get), any other client the route's value.
-- `$title` in a route is the request's field: `request.query.title` of a get, `request.body.title` of the other
-  methods (serve.rs with_request_fields); `$1` stays positional.
+- A request's fields: `request.query.title` of a get, `request.body.title` of the other methods (the `$title`
+  shorthand was dropped, decision serve-plain).
 - `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags::lower_form_routes, first
   source pass); any method word of serve::METHODS, any path expression.
 - A bool column reads back as a bool; a one-character text is stored as its text (database.rs c_text).
@@ -101,8 +101,8 @@ A stored `Todo{title: text; done: bool}` table, a list page, a form POSTing a to
 - The page build leaves the table out but keeps `id` on its class (database_tables.rs with_row_ids). A served
   instance arrives as JSON `{"Todo": {…}}` and decodes to a one-entry object read as its class (STRUCT_BODY).
 - Without a server (`warp run`, the playground), top-level get/post routes are local routes (serve.rs
-  with_local_routes): `route·N(request)`, with `global` for the page variables it mentions; `page·submitted(request)`
-  calls the matching one, or throws "no route answers …". The playground listens for submit on the shadow root
+  with_local_routes): `route_add(METHOD, path, request => {…})`, with `global` for the page variables it mentions;
+  `page·submitted(request)` (lib/router.warp route_answer) calls the matching one, or throws "no route answers …". The playground listens for submit on the shadow root
   (playground.js submitForm), the Worker runs the route and shows the page anew (worker.js handleSubmit).
 - Left: card where-assigned (`waiting = xs where not it` fails to parse).
 
@@ -119,3 +119,35 @@ without_classes). An object's own entries (`address:{…}`) keep their names.
 - The single page answers every path a route matches, `route "*"` included, with 200; 404 only when no route matches
   (site.rs matches_no_route_at) or a matched route's lookup misses (`users#9`).
 - Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/servers/server.warp <port>`.
+
+## Toward a plain library (card compiler-modules, slice serve; decision domains-plain-libraries)
+Routes become ordinary warp definitions in lib/router.warp, no rewrite rules, no module pass. Moved so far:
+- `status 418` / `header "name" "value"`: router functions over the host's response_header; lib/wagi.warp defines
+  its own response_header, which wins over the host import in a WAGI build (serve.rs with_answer_headers is gone).
+- route dispatch (serve.rs route_entry, served and serverless alike): each route is
+  `route_add(METHOD, path, request => {globals…; body})` and `page·submitted(request) := route_answer(request)`, the table
+  and dispatcher in lib/router.warp; no route·N functions any more. A server's host still matches the request against
+  `serve_routes(port, [[method, path, list?] …])` (web_server.rs route_at: site fallback, failure status by path, a list
+  route's ø as []) and then asks page·submitted; route_answer picks the same route (exact path first, then pattern).
+  Next: the built-in `get "/x" {…}` sugar intercepts a user function named get: the swap to lib functions get/post/… is
+  one step.
+
+Target shape:
+```warp
+class Route { method: text, path: text, answer: function }
+routes = []
+get(path: text, answer: function) := { global routes; routes.add(Route{method: "GET", path, answer}) }
+answer(request) := for route in routes { if route.method == request.method and route_matches(route.path, request.path) { return route.answer(request) } }
+```
+Gaps (probed 2026-10-18 with the installed warp):
+- a `{…}` block to a `function` parameter is a List ("get needs a Function … got {1+2}"); question Q1 block-as-function
+- a closure in a map field: `r.answer(2)` works since card field-closure-call (a field given a parameter that a call
+  feeds a lambda); probes/web/plain_router.warp runs a route list and dispatcher in plain warp. Open: `a = r.answer; a(2)`
+- path parameters bound into the block (`:id:int`): question Q2, card route-path-patterns (topic matching)
+- decision serve-plain: `$title` dropped (done); path parameters wait for card route-path-patterns; a block to a
+  function parameter is its lazy body (card block-function-argument); default routes via `functions()` (card
+  functions-reflection)
+Stays Rust, for card module-passes (analysis/codegen, not sugar): server functions and their /rpc routes, the page's
+calls of them (asking_the_server, without_serving, prerender values), P221 route data (with_route_data), stored tables
+read anew per request (reading_tables), list answers (answers_a_list), hosted page answers (answered_page) and
+default routes (with_default_routes, reflection over the program's functions).

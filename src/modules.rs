@@ -14,7 +14,11 @@ use loader::*;
 mod std_modules;
 pub use std_modules::*;
 mod std_words_cache;
+#[cfg(feature = "native")]
+pub(crate) use std_words_cache::binary_stamp;
 use std_words_cache::*;
+mod lowered_modules;
+use lowered_modules::*;
 mod prelude_slices;
 use prelude_slices::*;
 pub mod binaryen;
@@ -43,6 +47,7 @@ use crate::lowering::nodes::with_statements_first;
 use needed_definitions::*;
 mod program_file;
 pub use program_file::*;
+pub mod rewrites;
 mod use_statements;
 pub(crate) use use_statements::*;
 
@@ -67,7 +72,7 @@ pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
 /// `use math` and other native libraries stay in place for the FFI; an unknown name is an error value.
 pub fn resolve(program: Node) -> Node {
-	resolve_in(program, &SEARCH_DIRECTORIES)
+	crate::compiler::phase_times::timed("resolve uses", || resolve_in(program, &SEARCH_DIRECTORIES))
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
@@ -89,15 +94,19 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
-	loader.program_words = program_words(&program);
+	loader.program_words = crate::compiler::phase_times::timed("resolve: program words", || program_words(&program));
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader
 		.resolve(program)
-		.and_then(|program| loader.finish_imports(program))
+		.and_then(|program| {
+			crate::compiler::phase_times::timed("resolve: finish imports", || loader.finish_imports(program))
+		})
 		.and_then(|program| {
 			loader.loading_implicitly = true;
-			let loaded = loader.implicit_std_modules(&program);
+			let loaded = crate::compiler::phase_times::timed("resolve: implicit modules", || {
+				loader.implicit_std_modules(&program)
+			});
 			loader.loading_implicitly = false;
 			loaded.map(|_| program)
 		})
@@ -106,11 +115,16 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 			None => Ok(program),
 		})
 		.map(|program| crate::modules::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
-		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
+		.map(|program| {
+			crate::compiler::phase_times::timed("resolve: needed definitions", || {
+				with_needed_definitions(program, loader.hidden_apart())
+			})
+		});
 	let files = loader.loaded.iter().chain(&loader.included).filter(|path| path.is_file()).cloned().collect();
 	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
 		context.early_class_modules.clear(); // for this program only
+		context.early_file_classes.clear();
 		own_names.iter().for_each(|own| {
 			context.module_definitions.remove(own); // the program's own word wins
 		});
@@ -137,6 +151,11 @@ fn modules_used_by(statements: &[Node]) -> Vec<String> {
 }
 
 /// The WebAssembly module a used name finds, when no warp source of that name exists
+/// The file a `use name` finds: a warp module, else a WebAssembly module
+fn module_file(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
+	loader.find(name).or_else(|| loader.find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
+}
+
 fn wasm_module_path(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
 	loader
 		.find(name)
@@ -168,8 +187,7 @@ fn as_constructions(node: Node, classes: &HashSet<String>) -> Node {
 	}
 	match node.map_children(|child| as_constructions(child, classes)) {
 		Node::Key(name, Op::Colon, block)
-			if name.symbol_name().is_some_and(|name| classes.contains(name))
-				&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if name.symbol_name().is_some_and(|name| classes.contains(name)) && block.is_block() =>
 		{
 			Node::Key(name, Op::None, block)
 		}
@@ -191,6 +209,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let mut index = 0;
 	while let Some(name) = modules.get(index).cloned() {
 		index += 1;
+		note_lookup(&name, || module_file(&loader, &name));
 		if let Some(module) = wasm_module_path(&loader, &name) {
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);
@@ -218,7 +237,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		if module.first_error().is_some() {
 			continue; // the loader reports it
 		}
-		let definitions = statements(module);
+		let definitions = module_statements(module);
 		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
 		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
 		for used in reexported {
@@ -256,10 +275,21 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let class_names: Vec<String> = std_classes.iter().filter_map(name_declared_by).collect();
 	let module_code = Node::List(std_definitions, Bracket::None, Separator::Newline);
 	let returned = crate::lowering::class_methods::returned_classes(&module_code, &class_names);
-	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
+	let instances = crate::lowering::class_methods::top_level_instances(&module_code, &class_names);
+	crate::compiler::compile_context::change(|context| {
+		context.module_returned_classes = returned;
+		context.module_instance_classes = instances;
+	});
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
+	crate::compiler::compile_context::change(|context| context.early_file_classes.extend(file_classes.clone()));
 	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
 	let program = as_constructions(program, &inserted);
+	// `Node.True`, `x is Node` of a used file's or standard module's enum (`Extremum.Least` of extrema), which
+	// sum_variants met before its declaration was in front
+	let enums: Vec<Node> = std_classes.iter().chain(&file_classes).cloned().collect();
+	let program = crate::lowering::sum_variants::with_types_of(program, &enums);
+	// `Disambiguation::Earlier` of a used module's enum, which plain_enums met before its declaration was in front
+	let program = crate::lowering::plain_enums::with_cases_of(program, &enums);
 	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
 	with_statements_first(program, file_classes)
 }

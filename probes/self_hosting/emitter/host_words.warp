@@ -1,0 +1,4 @@
+# emitter core: host words on numbers, imported from the host module (clock, random_below)
+# 5
+start = clock
+random_below(1) + (if clock >= start then 5 else 0)

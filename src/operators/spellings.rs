@@ -155,7 +155,7 @@ pub(crate) const PLAIN_GLYPHS: &str = "×÷≤≥≠≈⋍±¬⌞⌟…∈∉∋
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
 pub const ELEMENT_WISE_OPERATORS: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Pow, Op::Mod];
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
-pub const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
+pub const OPERATOR_METHODS: [(Op, &[&str]); 10] = [
 	(Op::Add, &["plus", "add", "__add__"]),
 	(Op::Sub, &["minus", "subtract", "__sub__"]),
 	(Op::Mul, &["times", "multiply", "__mul__"]),
@@ -165,6 +165,7 @@ pub const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
 	(Op::Gt, &["more", "bigger", "__gt__"]),
 	(Op::Similar, &["approximately"]),
 	(Op::Rough, &["similar"]),
+	(Op::Hash, &["index"]), // `F#4` of a note object F (decision music-plain-details)
 ];
 
 /// The spelling a negated spelling negates: `and` for `nand`

@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
 #[cfg(feature = "native")]
-use wasmtime::{Engine, FuncType, Linker, Val, ValType};
+use wasmtime::{Engine, Linker};
 
 /// libc signatures as warp calls them, over what the headers declare (or miss: abs and labs are in _stdlib.h): strcmp
 /// and strncmp take (ptr, len) pairs instead of NUL-terminated pointers; (name, params, result)
@@ -44,6 +44,8 @@ const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
 const PRELUDE_SOURCE: &str = include_str!("../../lib/prelude.warp");
 /// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
 pub const BUILTIN_LIBRARY: &str = "warp";
+/// `count(xs): int from emitter`: a builtin the emitter expands in place, without a runtime function
+pub const EMITTER_LIBRARY: &str = "emitter";
 
 /// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
 #[derive(Clone, Copy)]
@@ -56,6 +58,21 @@ pub struct ForeignLine<'a> {
 impl<'a> ForeignLine<'a> {
 	pub fn arity(&self) -> usize {
 		self.defaults().count()
+	}
+
+	/// Whether a call of `arguments` values fits: the parameters without a default at least, a rest parameter
+	/// (`values...`) any number more
+	pub fn takes(&self, arguments: usize) -> bool {
+		let required = self.defaults().filter(Option::is_none).count();
+		let rest = self.parameters.contains("...");
+		arguments >= required - usize::from(rest) && (rest || arguments <= self.arity())
+	}
+
+	/// Each parameter's name, `separator` of `separator: text = " "`, `values` of `values...`
+	pub fn names(&self) -> impl Iterator<Item = &'a str> {
+		self.parameters
+			.split(',')
+			.map(|parameter| parameter.split([':', '=']).next().unwrap_or_default().trim().trim_end_matches("..."))
 	}
 
 	/// Each parameter's default as written, `" "` of `separator: text = " "`; None for one without
@@ -85,6 +102,17 @@ impl<'a> ForeignLine<'a> {
 pub fn runtime_word_lines() -> &'static [ForeignLine<'static>] {
 	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
 	LINES.get_or_init(|| PRELUDE_SOURCE.lines().filter_map(|line| foreign_line(line, BUILTIN_LIBRARY)).collect())
+}
+
+/// lib/prelude.warp's `from emitter` lines: the builtins the emitter expands in place (count, print, fetch …)
+pub fn emitter_word_lines() -> &'static [ForeignLine<'static>] {
+	static LINES: OnceLock<Vec<ForeignLine<'static>>> = OnceLock::new();
+	LINES.get_or_init(|| PRELUDE_SOURCE.lines().filter_map(|line| foreign_line(line, EMITTER_LIBRARY)).collect())
+}
+
+/// Every typed builtin line of the prelude, runtime functions and words the emitter expands
+pub fn typed_word_lines() -> impl Iterator<Item = &'static ForeignLine<'static>> {
+	runtime_word_lines().iter().chain(emitter_word_lines())
 }
 
 /// lib/math.warp's foreign lines of one library: `'m'` (libm) or warp itself (BUILTIN_LIBRARY)
@@ -129,18 +157,21 @@ impl FfiSignature {
 pub use crate::host::HostState as FfiState;
 
 mod header;
+mod header_cache;
 #[cfg(feature = "native")]
 mod link;
+mod macros;
+mod struct_layouts;
 pub use header::*;
 #[cfg(feature = "native")]
 pub use link::*;
+pub use struct_layouts::struct_layout;
 
 /// The import module of libm
 pub const LIBM: &str = "m";
 
 const SDL_PREFIX: &str = "SDL_";
-/// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
-const HAND_LINKED_LIBC: [&str; 8] = ["abs", "strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"];
+use warp_runtime::c_signatures::HAND_LINKED_LIBC;
 
 /// Get FFI signatures by parsing header files for a library, once per process: every name the analyzer meets is looked up here
 pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, FfiSignature> {
@@ -229,18 +260,8 @@ fn unlinkable_header_function(name: &str) -> Option<&'static str> {
 		.and_then(|declared| unlinkable_type(&declared))
 }
 
-/// What a C pointer type crosses as (notes/ffi_handles.md)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CPointer {
-	/// `char *`, `const unsigned char *`: a warp text (a parameter its NUL-terminated letters in linear memory)
-	Text,
-	/// `void *`, `int *`: a parameter points into linear memory; a result is a handle
-	Memory,
-	/// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
-	Handle,
-	/// `sqlite3 **ppDb`: left out of the warp call; the first one becomes the result, the others receive NULL
-	Out,
-}
+/// What a C pointer type crosses as (notes/ffi_handles.md); the C function descriptions executables carry
+pub use warp_runtime::c_signatures::{is_error_type, CFunction, CPointer, Failure, ParamType, RetType};
 
 /// C words that qualify a type without naming it
 const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union", "unsigned", "signed"];
@@ -268,18 +289,124 @@ pub fn pointer_kind(c_type: &str) -> Option<CPointer> {
 /// An out-pointer whose filled-in pointer is the call's result, a handle: `sqlite3 **ppDb`; a `char **` (strtod's endptr)
 /// is not one, the C function's own result stays
 pub(crate) fn is_handle_out_pointer(c_type: &str) -> bool {
-	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char"
+	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char" && !is_error_type(&pointee(c_type))
 }
 
-/// The C parameters a warp call passes: all but the out-pointers
-fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
-	param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
+/// What a `const T *` points to when a `size_t` after it says how many bytes: `const uint8_t *module, size_t length`
+const BYTE_TYPES: [&str; 5] = ["uint8_t", "int8_t", "char", "void", "Bytef"];
+const LENGTH_TYPE: &str = "size_t";
+
+/// Whether the C parameter at `index` takes bytes with their length in the next one: a const single pointer to bytes,
+/// then a size_t
+fn takes_bytes(c_types: &[String], index: usize) -> bool {
+	let c_type = &c_types[index];
+	c_type.matches('*').count() == 1
+		&& c_type.split_whitespace().any(|word| word == "const")
+		&& BYTE_TYPES.contains(&pointee(c_type).as_str())
+		&& c_types.get(index + 1).is_some_and(|next| bare_c_type(next) == LENGTH_TYPE)
+}
+
+/// How each C parameter crosses: a pointer by what it points to, bytes with their length, a struct with a layout as a
+/// map (a trailing one as the output of a function that reports its success apart), else by its wasm value type (int,
+/// bool, char, short, Color: i32)
+pub fn c_param_types(hsig: &FfiHeaderSignature) -> Vec<ParamType> {
+	let c_types = &hsig.param_types;
+	let gives_outputs = reports_failure(hsig) || c_types.iter().any(|c_type| is_error_out_pointer(c_type));
+	let mut types: Vec<ParamType> = vec![];
+	for (index, c_type) in c_types.iter().enumerate() {
+		let count_follows = c_types.get(index + 1).is_some_and(|next| bare_c_type(next) == LENGTH_TYPE);
+		types.push(match types.last() {
+			Some(ParamType::Bytes | ParamType::StructsIn) => ParamType::Length,
+			_ if takes_bytes(c_types, index) => ParamType::Bytes,
+			_ if is_error_out_pointer(c_type) => ParamType::ErrorOut,
+			_ if struct_pointee(c_type).is_some() && is_const(c_type) => {
+				if count_follows {
+					ParamType::StructsIn
+				} else {
+					ParamType::StructIn
+				}
+			}
+			_ if struct_pointee(c_type).is_some() && gives_outputs && is_trailing_output(c_types, index) => {
+				if count_follows {
+					ParamType::StructsOut
+				} else {
+					ParamType::StructOut
+				}
+			}
+			_ => c_type_to_param_type(c_type),
+		});
+	}
+	types
+}
+
+/// The layout of the struct a single pointer points to, if a header defines it
+fn struct_pointee(c_type: &str) -> Option<String> {
+	(c_type.matches('*').count() == 1).then(|| struct_layout(&pointee(c_type))).flatten()
+}
+
+fn is_const(c_type: &str) -> bool {
+	c_type.split_whitespace().any(|word| word == "const")
+}
+
+/// `wasm_trap_t **trap`: an out-pointer whose filled-in value is a failure
+fn is_error_out_pointer(c_type: &str) -> bool {
+	pointer_kind(c_type) == Some(CPointer::Out) && is_error_type(&pointee(c_type))
+}
+
+/// Whether only outputs follow the parameter at `index`: its count, out-pointers, other struct pointers that are not const
+fn is_trailing_output(c_types: &[String], index: usize) -> bool {
+	c_types.iter().enumerate().skip(index + 1).all(|(later, c_type)| {
+		(later == index + 1 && bare_c_type(c_type) == LENGTH_TYPE)
+			|| pointer_kind(c_type) == Some(CPointer::Out)
+			|| (struct_pointee(c_type).is_some() && !is_const(c_type))
+	})
+}
+
+/// How the C result reports a failure: an error-shaped pointer when not NULL, a bool when false (only for a function
+/// with an output: else the bool is the result)
+pub(crate) fn failure_of(hsig: &FfiHeaderSignature, param_types: &[ParamType]) -> Failure {
+	let has_output = param_types.iter().any(|param| param.is_struct_output()) || param_types.contains(&ParamType::Out);
+	if pointer_kind(&hsig.return_type).is_some() && is_error_type(&pointee(&hsig.return_type)) {
+		Failure::NotNull
+	} else if bare_c_type(&hsig.return_type) == "bool" && has_output {
+		Failure::False
+	} else {
+		Failure::None
+	}
+}
+
+/// Whether the C result says whether the call worked: an error-shaped pointer or a bool
+fn reports_failure(hsig: &FfiHeaderSignature) -> bool {
+	let error_result = pointer_kind(&hsig.return_type).is_some() && is_error_type(&pointee(&hsig.return_type));
+	error_result || bare_c_type(&hsig.return_type) == "bool"
+}
+
+/// The C parameters a warp call passes, with how they cross: all but the out-pointers, lengths and outputs
+fn warp_parameters(hsig: &FfiHeaderSignature) -> impl Iterator<Item = (&String, ParamType)> {
+	hsig.param_types.iter().zip(c_param_types(hsig)).filter(|(_, param)| param.is_passed())
+}
+
+/// The wasm type a passed parameter has in the warp call: bytes are a value (a text, a list), pointers and handles i32
+fn param_valtype(param: ParamType) -> Option<wasm_encoder::ValType> {
+	match param {
+		ParamType::Bytes | ParamType::StructIn | ParamType::StructsIn => {
+			Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF))
+		}
+		ParamType::I64 => Some(wasm_encoder::ValType::I64),
+		ParamType::F32 => Some(wasm_encoder::ValType::F32),
+		ParamType::F64 => Some(wasm_encoder::ValType::F64),
+		ParamType::Out | ParamType::ErrorOut | ParamType::Length | ParamType::StructOut | ParamType::StructsOut => None,
+		ParamType::I32 | ParamType::Ptr | ParamType::Handle => Some(wasm_encoder::ValType::I32),
+	}
 }
 
 /// What a C function's result crosses as: a text, a handle (a pointer result or the first out-pointer), else None for
 /// its number
 pub(crate) fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
 	let has_out_pointer = hsig.param_types.iter().any(|t| is_handle_out_pointer(t));
+	if c_param_types(hsig).iter().any(|param| param.is_struct_output()) {
+		return Some(CPointer::Struct);
+	}
 	match pointer_kind(&hsig.return_type) {
 		Some(CPointer::Text) => Some(CPointer::Text),
 		Some(_) => Some(CPointer::Handle),
@@ -287,10 +414,88 @@ pub(crate) fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
 	}
 }
 
+/// The C type's parameter: a pointer by what it points to, else by its wasm value type (int, bool, char, short, Color: i32)
+fn c_type_to_param_type(c_type: &str) -> ParamType {
+	let t = bare_c_type(c_type);
+	match (pointer_kind(t), map_c_type_to_valtype(t)) {
+		(Some(CPointer::Handle), _) => ParamType::Handle,
+		(Some(CPointer::Out), _) => ParamType::Out,
+		(Some(_), _) => ParamType::Ptr,
+		(None, Some(wasm_encoder::ValType::F32)) => ParamType::F32,
+		(None, Some(wasm_encoder::ValType::F64)) => ParamType::F64,
+		(None, Some(wasm_encoder::ValType::I64)) => ParamType::I64,
+		(None, _) => ParamType::I32,
+	}
+}
+
+/// The C type's result: a bool by its low byte, else by its wasm value type
+fn c_type_to_ret_type(c_type: &str) -> RetType {
+	match map_c_type_to_valtype(c_type) {
+		_ if bare_c_type(c_type) == "bool" => RetType::Bool,
+		None => RetType::Void,
+		Some(wasm_encoder::ValType::F32) => RetType::F32,
+		Some(wasm_encoder::ValType::F64) => RetType::F64,
+		Some(wasm_encoder::ValType::I64) => RetType::I64,
+		Some(_) => RetType::I32,
+	}
+}
+
+/// The header declaration `hsig` as a C function imported from `module` (`zlib`, whose library is `z`)
+pub fn c_function_of(module: &str, hsig: &FfiHeaderSignature) -> CFunction {
+	CFunction {
+		module: module.to_string(),
+		library: resolve_library_alias(module).to_string(),
+		name: hsig.name.clone(),
+		param_types: c_param_types(hsig),
+		result: pointer_result(hsig),
+		ret_type: c_type_to_ret_type(&hsig.return_type),
+		out_pointee: hsig.param_types.iter().find(|t| is_handle_out_pointer(t)).map(|t| pointee(t)),
+		layouts: struct_layouts_of(hsig),
+		failure: failure_of(hsig, &c_param_types(hsig)),
+	}
+}
+
+/// The functions of `imported` that the headers of `module`'s library declare, as C functions imported from `module`
+pub fn header_c_functions(module: &str, imported: &std::collections::HashSet<String>) -> Vec<CFunction> {
+	let library = resolve_library_alias(module);
+	// all headers first: their struct types decide how pointers cross (is_struct_type)
+	let signatures: Vec<FfiHeaderSignature> = crate::formats::ffi_parser::find_library_headers(library)
+		.iter()
+		.flat_map(|path| parse_header_file(path, library))
+		.collect();
+	// only what the module imports, once (ctype.h declares toupper twice): libc's headers declare hundreds of functions
+	let mut seen = std::collections::HashSet::new();
+	signatures
+		.iter()
+		.filter(|hsig| imported.contains(&hsig.name) && seen.insert(hsig.name.as_str()))
+		.map(|hsig| c_function_of(module, hsig))
+		.collect()
+}
+
+/// The layout text of each struct parameter, "" for the others; none without struct parameters
+fn struct_layouts_of(hsig: &FfiHeaderSignature) -> Vec<String> {
+	let layouts: Vec<String> = hsig
+		.param_types
+		.iter()
+		.zip(c_param_types(hsig))
+		.map(|(c_type, param)| match param {
+			ParamType::StructIn | ParamType::StructsIn | ParamType::StructOut | ParamType::StructsOut => {
+				struct_pointee(c_type).unwrap_or_default()
+			}
+			_ => String::new(),
+		})
+		.collect();
+	if layouts.iter().all(String::is_empty) {
+		vec![]
+	} else {
+		layouts
+	}
+}
+
 /// The wasm result of a C function: a text Node, a handle id, else its number
 fn header_result(hsig: &FfiHeaderSignature) -> Option<wasm_encoder::ValType> {
 	match pointer_result(hsig) {
-		Some(CPointer::Text) => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
+		Some(CPointer::Text | CPointer::Struct) => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
 		Some(_) => Some(wasm_encoder::ValType::I32),
 		None => map_c_type_to_valtype(&hsig.return_type),
 	}
@@ -319,8 +524,8 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 		.map(|declared| {
 			(
 				declared.name.clone(),
-				warp_parameters(&declared.param_types)
-					.map(|c_type| pointer_kind(c_type) == Some(CPointer::Text))
+				warp_parameters(&declared)
+					.map(|(c_type, param)| param == ParamType::Ptr && pointer_kind(c_type) == Some(CPointer::Text))
 					.collect(),
 			)
 		})
@@ -331,10 +536,13 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 }
 
 fn parse_signatures_from_headers(library: &str) -> HashMap<String, FfiSignature> {
-	// all headers first: their struct types decide how pointers cross (is_struct_type)
-	let header_sigs: Vec<FfiHeaderSignature> =
-		get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library)).collect();
-	header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
+	let headers = get_library_header_paths(library);
+	header_cache::header_signatures(library, &headers, || {
+		// all headers first: their struct types decide how pointers cross (is_struct_type)
+		let header_sigs: Vec<FfiHeaderSignature> =
+			headers.iter().flat_map(|path| parse_header_file(path, library)).collect();
+		header_sigs.iter().filter_map(|hsig| Some((hsig.name.clone(), header_sig_to_ffi_sig(hsig)?))).collect()
+	})
 }
 
 /// The signatures warp links by hand, once per process: the libc functions it adapts (strcmp of two texts), libm's f64
@@ -446,4 +654,16 @@ pub fn is_ffi_library(lib: &str) -> bool {
 	}
 	// Dynamic discovery - check if headers exist
 	!get_library_header_paths(canonical).is_empty()
+}
+
+/// Whether `lib` is a C library installed with its headers, loadable now: `use wasmtime` then brings the C library
+/// libwasmtime besides the standard module wasmtime, as `use math` brings libm
+pub fn is_installed_c_library(lib: &str) -> bool {
+	#[cfg(feature = "native")]
+	return is_ffi_library(lib) && warp_runtime::c_calls::get_or_load_library(resolve_library_alias(lib)).is_some();
+	#[cfg(not(feature = "native"))]
+	return {
+		let _ = lib;
+		false
+	};
 }

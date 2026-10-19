@@ -1,5 +1,6 @@
 //! Text words: text_split, list_join and the joining of items into one text, text_quoted, the decimal digits of an Int
 use super::*;
+use crate::node::Bracket;
 use crate::wasm_emitter::{NEW_TEXT_OF, TEXT_LITERAL};
 
 /// How a type declaration of parsed code is written (Node::serialize): `type P {…}`

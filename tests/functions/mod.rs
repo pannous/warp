@@ -1,7 +1,6 @@
 mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
-mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
@@ -16,6 +15,7 @@ mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
 mod test_block_function;
+mod test_block_function_argument; // card block-function-argument
 mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
@@ -40,6 +40,7 @@ mod test_charged_getters;
 mod test_closure_float_arguments; // card if-list
 mod test_closure_value_arguments;
 mod test_closures;
+mod test_collection_result_types;
 mod test_comma_calls;
 mod test_concatenated_text_argument;
 mod test_concatenating_parameter;
@@ -47,6 +48,7 @@ mod test_constant_free_variables;
 mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
+mod test_data_parameter; // card data-parameter
 mod test_deep_recursion;
 mod test_def_block_without_parentheses; // card def-hello
 mod test_def_bool_result;
@@ -71,6 +73,7 @@ mod test_empty_function_bodies;
 mod test_event_effects;
 mod test_fail_effect;
 mod test_failed_word;
+mod test_field_closure_call; // card field-closure-call
 mod test_field_function_values;
 mod test_float_list_parameters; // card untyped-parameters
 mod test_float_to_int_parameter;
@@ -80,12 +83,13 @@ mod test_foreign_modifiers;
 mod test_foreign_spellings;
 mod test_free_var_if_arms;
 mod test_function_aliases;
-mod test_function_head; // card cleanup-definition-view
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
 mod test_function_type_at_run_time; // card type-function
+mod test_function_typed_parameters;
 mod test_function_values;
+mod test_function_words_consume; // card function-words-consume
 mod test_functions;
 mod test_functions_passed_by_name; // card specialise-named-functions
 mod test_gap_feeding; // card gap-feeding
@@ -147,6 +151,7 @@ mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
 mod test_optional_words;
+mod test_overloaded_function_values;
 mod test_parameter_any;
 mod test_parameter_assignment;
 mod test_parameter_call_kinds;
@@ -160,6 +165,7 @@ mod test_parameter_shapes;
 mod test_parens_getter_warning;
 mod test_partial_application;
 mod test_passed_through_functions;
+mod test_pattern_clauses; // card pattern-clauses
 mod test_phrase_calls;
 mod test_phrase_colon_body;
 mod test_phrase_each; // card phrase-each
@@ -202,6 +208,7 @@ mod test_statement_blocks; // card statement-block
 mod test_suffix_word_spellings;
 mod test_suffix_words;
 mod test_swift_closures;
+mod test_symbol_flow; // card regression-module
 mod test_text_joined_parameter;
 mod test_to_definition;
 mod test_tuple_function_values;
@@ -216,5 +223,6 @@ mod test_untyped_predicate_passed; // card untyped-passed
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
+mod test_wasm_instruction_bodies; // card wasm-body
 mod test_whole_float_to_int_parameter;
 mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow // card is-early-return

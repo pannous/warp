@@ -20,6 +20,8 @@ mod test_end_and_def_blocks; // cards std-module-swallowed, end-indented, def-in
 mod test_english_operator_words;
 mod test_error_excerpt;
 mod test_error_positions;
+#[cfg(feature = "native")] // runs the warp binary
+mod test_fi_block_end; // card allow-stupid
 mod test_fixits;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_footguns;
@@ -45,6 +47,7 @@ mod test_list_phrases;
 mod test_lone_words;
 mod test_lowered_error_text;
 mod test_map_broadcast_hint; // card hint-map
+mod test_near_miss_words; // card hard-coded
 mod test_open_range_slices; // card golf-open
 mod test_own_definition_hint; // card hint-own-definition
 mod test_parser_runtime_positions; // card runtime-parser

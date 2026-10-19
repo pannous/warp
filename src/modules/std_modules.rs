@@ -2,7 +2,9 @@
 use super::*;
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-pub(crate) const STD_MODULES: [(&str, &str); 29] = [
+/// `sheet: data` in a definition's head
+const DATA_PARAMETER: &str = ": data";
+pub(crate) const STD_MODULES: [(&str, &str); 36] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
@@ -32,6 +34,13 @@ pub(crate) const STD_MODULES: [(&str, &str); 29] = [
 	(SOUND_MODULE, include_str!("../../lib/sound.warp")),
 	("R", include_str!("../../lib/R.warp")),
 	("PHP", include_str!("../../lib/PHP.warp")),
+	("channels", include_str!("../../lib/channels.warp")),
+	("extrema", include_str!("../../lib/extrema.warp")),
+	("english", include_str!("../../lib/english.warp")),
+	("case_table", include_str!("../../lib/case_table.warp")),
+	("case_tables", include_str!("../../lib/case_tables.warp")),
+	("uncertain", include_str!("../../lib/uncertain.warp")),
+	("wasmtime", include_str!("../../lib/wasmtime.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
@@ -90,7 +99,9 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 	STD_MODULES.iter().map(|(module, _)| *module)
 }
 
-pub(super) fn std_module(name: &str) -> Option<&'static str> {
+/// A standard module's source as the binary embeds it: `module_source("prelude")`, which the warp compiler reads its
+/// typed builtin lines from
+pub fn std_module(name: &str) -> Option<&'static str> {
 	let name = std_module_name(name);
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
@@ -140,6 +151,28 @@ pub(crate) fn prelude_aliases() -> &'static [(String, String)] {
 		};
 		std_module(PRELUDE_MODULE).unwrap_or_default().lines().filter_map(alias).collect()
 	})
+}
+
+/// The standard modules' functions with a parameter typed data, each as its module and its definition's line
+/// (`style(sheet: data) := …` of lib/markup.warp): a tag or call of one takes its argument as written and needs no `use`
+/// (lowering/definitions/typed_block_arguments.rs, loader.rs implicit_std_modules)
+pub fn std_data_functions() -> &'static [(&'static str, &'static str)] {
+	static FUNCTIONS: std::sync::OnceLock<Vec<(&str, &str)>> = std::sync::OnceLock::new();
+	FUNCTIONS.get_or_init(|| {
+		let defines_data_function = |line: &&str| {
+			let head = line.split(":=").next().unwrap_or_default();
+			line.contains(":=") && head.contains('(') && head.contains(DATA_PARAMETER)
+		};
+		STD_MODULES
+			.iter()
+			.flat_map(|(module, source)| source.lines().filter(defines_data_function).map(|line| (*module, line)))
+			.collect()
+	})
+}
+
+/// The name a standard function's definition line defines: `style` of `style(sheet: data) := …`
+pub fn defined_function_name(line: &str) -> &str {
+	line.split('(').next().unwrap_or_default().trim()
 }
 
 /// The names the standard modules define with parameters (`ls(folder:any = ".") := …`), read from their text: the
@@ -283,7 +316,8 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		let parameters = parsed_statements(source)
 			.iter()
 			.filter_map(|statement| match statement.drop_meta() {
-				Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
+				Node::Key(head, Op::Define, _) if matches!(called_head(head).drop_meta(), Node::List(..)) => {
+					let head = called_head(head);
 					let (fewest, most) = head_arities(head);
 					Some((leftmost_symbol(head)?, most, most - fewest))
 				}
@@ -294,6 +328,14 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		parameters
 	});
 	Some(parameters)
+}
+
+/// A definition's head without its declared result type: `f(x): int` → `f(x)`
+fn called_head(head: &Node) -> &Node {
+	match head.drop_meta() {
+		Node::Key(called, Op::Colon, _) => called,
+		_ => head,
+	}
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or

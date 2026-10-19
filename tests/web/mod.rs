@@ -50,6 +50,8 @@ mod test_gpu_auto; // card gpu-auto
 mod test_gpu_functions; // card gpu-functions
 mod test_guide; // the language guide on the playground page
 #[cfg(feature = "native")] // runs node
+mod test_guide_click_scroll; // card clicking-guide
+#[cfg(feature = "native")] // runs node
 mod test_guide_heading_links; // card heading-links
 mod test_guide_sections; // card guide-lists
 mod test_headless_pages;
@@ -68,7 +70,6 @@ mod test_keyword_registry; // card where-infix
 mod test_labelled_argument_markup; // card labelled-a-argument
 #[cfg(feature = "native")] // runs node
 mod test_live_handover; // card playground-live
-mod test_markup_holes;
 mod test_markup_lines; // card todo-app
 mod test_markup_mistakes; // card our-html
 mod test_markup_nesting; // card markup-content
@@ -105,7 +106,6 @@ mod test_route_error_positions; // card runtime-errors
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_route_header; // card web-route-header
 #[cfg(feature = "native")] // runs wasm-split
-mod test_route_helpers; // card web-split-helpers
 #[cfg(feature = "native")] // builds a site (src/web/site.rs)
 mod test_route_modules;
 #[cfg(feature = "native")] // a server on a port and its SQLite table
@@ -160,7 +160,6 @@ mod test_task_files; // card task-sound-play
 #[cfg(feature = "native")] // runs node
 mod test_task_midi; // card inside-go
 mod test_task_voices; // card playground-go
-mod test_text_holes; // card web-fine-text-nodes
 mod test_transitions;
 mod test_typed_variable_not_markup; // card annotation-html
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build

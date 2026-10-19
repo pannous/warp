@@ -23,3 +23,52 @@ fn each_overload_type_is_the_librarys() {
 	crate::common::fails_with("reverse(t: text) := 1; reverse(\"ab\")", "reverse of a text is the library's word");
 	crate::common::fails_with("sort(xs: list) := 1; sort([2 1])", "sort of a list is the library's word");
 }
+
+#[test]
+fn the_member_words_declare_their_signatures_in_the_prelude() {
+	is!("filter.signature", warp::Node::Text("(xs:list, f:function) -> list".into()));
+	is!("insert.params", warp::texts(vec!["xs", "x", "at"]));
+	is!("any.signature", warp::Node::Text("(xs:list, f:function) -> bool".into()));
+}
+
+#[test]
+fn a_member_words_number_or_bool_result_is_decided_where_it_is_made() {
+	is!("x = number(\"2.5\"); x + 1", 3.5);
+	is!("any([1 2], x => x > 1)", true);
+}
+
+#[test]
+fn a_result_read_off_an_argument_is_spelled_same_as_or_value_of() {
+	is!("field_with.signature", warp::Node::Text("(object, name, value) -> same as object".into()));
+	is!("map_get_or.signature", warp::Node::Text("(m:map, key, default = ø) -> value of m".into()));
+	is!("list_become.signature", warp::Node::Text("(place, fresh) -> same as place".into()));
+	is!("removed_value.signature", warp::Node::Text("(x, k) -> any".into()));
+	is!("list_sorted_by.signature", warp::Node::Text("(xs, keys) -> any".into()));
+}
+
+#[test]
+fn count_declares_a_list_a_text_and_a_map_overload() {
+	is!("count.signature", warp::Node::Text("(xs:list) -> int".into()));
+	is!("count(\"ab\") + count({a: 1})", 3);
+}
+
+#[test]
+fn a_typed_builtin_called_without_parentheses_is_the_call() {
+	is!("sum.signature", warp::Node::Text("(xs:list) -> element of xs".into()));
+	is!("xs = [1 2 3]; sum xs", 6);
+	is!("xs = [1.5 2]; sum xs", 3.5);
+}
+
+#[test]
+fn the_map_and_membership_words_declare_their_kinds() {
+	is!("keys.signature", warp::Node::Text("(m:map) -> list".into()));
+	is!("\"abc\".contains(\"b\") and [1 2].contains(2) and {a: 1}.has(\"a\")", true);
+	is!("\"abc\".index_of(\"c\") == [5 6 7].index_of(7)", true);
+}
+
+#[test]
+fn the_member_words_declare_a_list_and_a_text_overload() {
+	is!("reduce.signature", warp::Node::Text("(xs:list, f:function) -> element of xs".into()));
+	is!("ys = filter(\"abc\", c => c != \"b\"); count(ys)", 2);
+	is!("find([1 2], x => x > 1) + fold([1 2], 0, (a, b) => a + b)", 5);
+}

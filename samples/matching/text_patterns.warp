@@ -1,0 +1,27 @@
+#!/usr/bin/env warp
+# Text patterns: pieces and holes cut a text, a hole's type reads or classifies its part (notes/matching.md)
+
+# a prefix or a suffix binds the rest
+number_of(literal) := match literal {
+	"0x" + h: hex => from_base(h, 16)
+	"0b" + b: digits => from_base(b, 2)
+	n: digits => int(n)
+	_ => 0
+}
+print number_of("0xff")                                  # 255
+print number_of("0b101")                                 # 5
+
+# pieces and holes alternate; a typed hole converts, and doesn't match when its text isn't one
+route(path) := match path {
+	"/users/" + id: int + "/posts/" + post: int => "post \(post) of user \(id)"
+	"/users/" + id: int => "user \(id + 1000)"
+	name + ".html" => "page \(name)"
+	_ => "not found"
+}
+print route("/users/7/posts/9")                          # post 9 of user 7
+print route("/users/7")                                  # user 1007
+print route("/users/me")                                 # not found
+print route("about.html")                                # page about
+
+# also after is
+if "v12" is "v" + n then print "version \(n)"             # version 12

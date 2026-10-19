@@ -16,10 +16,10 @@ mod test_display_names;
 mod test_draw;
 mod test_draw_label; // card paint-text
 mod test_file_spectrum; // card gpu-visualizer-mp3
+mod test_function_cache; // card prelude-word
 mod test_gpu_draw; // card gpu-draw
 mod test_hints_toggle; // card hints-toggle
 mod test_json_parser_fixes;
-mod test_kitchensink;
 mod test_live_redefine; // card live-redefine
 mod test_midi;
 mod test_mouse_wheel; // card shader-wheel
@@ -60,6 +60,7 @@ mod test_sound_fades; // card sound-gain-ramps
 mod test_sound_files; // card sound-library
 mod test_sound_filters; // card synth-filters
 mod test_sound_handles; // card sound-pro
+mod test_sound_note_names; // card music-plain
 mod test_sound_notes; // card sound-pro
 mod test_sound_pan; // card stereo-pan
 mod test_sound_patterns; // card patterns-live

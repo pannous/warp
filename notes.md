@@ -62,3 +62,15 @@
 - 2026-10-17 (warp-parser): object_entries must not take a square list of key: value items as one object: a one-entry map in a list is held as a bare key ([{first: 2}] is [first: 2]), so [a: 1, b: 2] is also a list of one-entry maps; generalising it broke 10 tests (list fields, possessives). Local readings (a held lambda's holder) are fine.
 
 2026-10-17 interviewer: src/extensions.rs texts! Separator::Colon edit (unknown origin, user "fix it") reverted to Comma; backup data/patches/texts-macro-colon-2026-10-17.patch
+
+- 2026-10-17 parenthesized-first: parsing and lowering preserved `((try e else 0), 2)` as a round comma tuple, but inference treated it as the last element's type and list emission treated its control-flow element as a statement sequence. Round comma tuples must be classified and emitted as value collections at both boundaries.
+
+- 2026-10-19 warp-cache: with WARP_SELF_HOSTED=1, right after lib/ or the binary changed, two runs printed nothing at all (exit 0) while a third warmed the stage cache; warm and fresh-cache reruns were right. Not reproduced: maybe a run reading a kept program another run was still writing (scratch/refusals/cache shared by parallel runs).
+- 2026-10-19 warp-cache: tests/queue.sh killed a run of 7 WARP_SELF_HOSTED=1 test files at the 4 GB memory cap (each test process compiles the stage programs on a cold cache); `--test-threads=2` stayed under it.
+- 2026-10-19 warp-cache: Rust's list semantics: `+=` and push change the list every alias holds; `xs = xs + [x]` makes a new list (emitter.warp appends in place only while xs is unshared).
+
+- card time-zones-warp (sprint, blind): lib/time.warp has the zone rules in warp (Zone class, Dst enum, time_zones table, zone_offset, zone_instant over whole seconds); src/wasm_emitter/time/time_zones.rs stays until the emitter calls these words; time_in_zone waits for card time-primitives (form/position of a time value)
+
+- exact-pow-warp (2026-10-19): runtime.warp exact_pow/int_pow; emitter.warp int ^ → exact_pow (node result). i64 only: a power beyond the int range fails in int_overflow where Rust gives a big int (probes/ratio_text.warp 2^70, samples with 2^100 may now enter the core and differ instead of being refused). A ratio or float base (node kind) is still refused (floats have no ^).
+- 2026-10-19 warp-parsing: a new probe or sample shifts the twins' 1-in-4 day share (by position in the sorted source list), so a twin failure that's already on main can show up only on your branch. `TWIN_ONLY=<path> tests/queue.sh -- <test>` on main settles it (probes/unknown_tag.warp, card emitter-prints).
+- 2026-10-19 warp-parsing: the scans before parsing (declaration_scan.rs code_only) skipped no `#` comments, so an apostrophe in one hid code up to the next apostrophe. That also masked a type-scan bug: `= type` at a line end declared the next line's first word a type. Compare `warp parse` with two binaries and bisect by dropping lines (card comment-apostrophe).

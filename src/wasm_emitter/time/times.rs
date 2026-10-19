@@ -21,6 +21,9 @@ use Instruction as I;
 
 /// time_field(node, field) -> i64: the field of TIME_FIELDS at that index; the caller has refused the ones the form lacks
 pub const TIME_FIELD: &str = "time_field";
+/// lib/prelude.warp's time_field_of, by its prelude name: the calendar of time_field in warp (card time-fields-warp)
+const TIME_FIELD_WORD: &str = "prelude·time_field_of";
+const TIME_FIELD_NAME: &str = "time_field_of";
 /// time_text(node) -> text: a time in RFC 3339, for list_join (print, str)
 pub const TIME_TEXT: &str = "time_text";
 /// duration_text(node) -> text: a duration as calendar.rs shows it, `1 month 2 days 3 hours`
@@ -63,6 +66,15 @@ const MISMATCHED_TIMES: &str = "cannot compare a date, a local time, an instant 
 /// The offset and length of a constant in the literal segment
 type Literal = (u32, u32);
 
+/// The prelude word a time's fields need, for modules IMPLIED_WORDS: `now`, a time call or a date or time literal makes
+/// a time, whose fields (and text) time_field reads through time_field_of
+pub(crate) fn implied_word(node: &Node) -> Option<&'static str> {
+	let makes_time = node.is_symbol(crate::time::NOW_WORD)
+		|| crate::time::is_time_call(node)
+		|| crate::time::time_data(node.drop_meta());
+	makes_time.then_some(TIME_FIELD_NAME)
+}
+
 impl WasmGcEmitter {
 	/// After new_int; before list_join, whose time_text calls them
 	pub(in crate::wasm_emitter) fn emit_times_runtime(&mut self) {
@@ -103,17 +115,18 @@ impl WasmGcEmitter {
 		self.emit_time_field();
 	}
 
+	/// The wall clock position of the time, then its field by lib/prelude.warp time_field_of, called late
 	fn emit_time_field(&mut self) {
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let local_offset = self.ffi_func_index(crate::host::LOCAL_OFFSET);
+		let late = self.late_call(TIME_FIELD_WORD, vec![ValType::I64; 4], vec![ValType::I64]);
 		self.runtime_function(
 			TIME_FIELD,
 			vec![node_ref, ValType::I32],
 			vec![ValType::I64],
-			vec![ValType::I64; 9],
+			vec![ValType::I64; 5],
 			|s, f| {
-				let (field, days, nanos, year, month, day, form, position, milliseconds, offset) =
-					(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+				let (field, form, position, milliseconds, nanos, offset) = (1, 2, 3, 4, 5, 6);
 				s.emit_time_form(f, 0);
 				f.instruction(&I::LocalSet(form));
 				s.emit_time_position(f, 0);
@@ -147,74 +160,12 @@ impl WasmGcEmitter {
 						I::End,
 					]);
 				}
-				Self::emit_list(f, &[I::End, I::LocalGet(form), I::LocalGet(position)]);
-				s.call(f, TIME_PARTS);
-				Self::emit_list(f, &[I::LocalSet(nanos), I::LocalSet(days), I::LocalGet(days)]);
-				s.call(f, CIVIL_FROM_DAYS);
-				Self::emit_list(f, &[I::LocalSet(day), I::LocalSet(month), I::LocalSet(year)]);
 				#[rustfmt::skip]
-				let mut day_of_year = vec![
-					I::LocalGet(days), I::LocalGet(year), I::I64Const(1), I::I64Const(1),
-					I::Call(s.func_index(DAYS_FROM_CIVIL)),
-				];
-				day_of_year.extend([I::I64Sub, I::I64Const(1), I::I64Add]);
-				let values: [Vec<I<'static>>; 12] = [
-					vec![I::LocalGet(year)],
-					vec![I::LocalGet(month)],
-					vec![I::LocalGet(day)],
-					// ISO weekday: 1970-01-01 was a Thursday, Monday is 1
-					vec![
-						I::LocalGet(days),
-						I::I64Const(3),
-						I::I64Add,
-						I::I64Const(7),
-						I::I64RemS,
-						I::I64Const(7),
-						I::I64Add,
-						I::I64Const(7),
-						I::I64RemS,
-						I::I64Const(1),
-						I::I64Add,
-					],
-					day_of_year,
-					vec![I::LocalGet(nanos), I::I64Const(HOUR * SECOND as i64), I::I64DivS],
-					vec![
-						I::LocalGet(nanos),
-						I::I64Const(MINUTE * SECOND as i64),
-						I::I64DivS,
-						I::I64Const(MINUTE),
-						I::I64RemS,
-					],
-					vec![I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64DivS, I::I64Const(MINUTE), I::I64RemS],
-					vec![
-						I::LocalGet(days),
-						I::I64Const(DAY_SECONDS),
-						I::I64Mul,
-						I::LocalGet(nanos),
-						I::I64Const(SECOND as i64),
-						I::I64DivS,
-						I::I64Add,
-					],
-					vec![I::LocalGet(offset)],
-					// whole seconds, as calendar::Time::part: 22:27:46
-					vec![
-						I::LocalGet(nanos),
-						I::I64Const(SECOND as i64),
-						I::I64DivS,
-						I::I64Const(SECOND as i64),
-						I::I64Mul,
-					],
-					vec![I::LocalGet(days)],
-				];
-				for (index, value) in values.iter().enumerate() {
-					Self::emit_list(
-						f,
-						&[I::LocalGet(field), I::I32Const(index as i32), I::I32Eq, I::If(BlockType::Empty)],
-					);
-					Self::emit_list(f, value);
-					Self::emit_list(f, &[I::Return, I::End]);
-				}
-				f.instruction(&I::Unreachable);
+				Self::emit_list(f, &[
+					I::End,
+					I::LocalGet(form), I::LocalGet(position), I::LocalGet(offset), I::LocalGet(field), I::I64ExtendI32U,
+				]);
+				Self::emit_late_call(f, &late);
 			},
 		);
 	}

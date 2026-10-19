@@ -1,0 +1,36 @@
+# A range as a value, `(1…100).filter(is_prime)` (card pure-runs): after for_loops took the ranges loops count over,
+# `a to b` (also `a…b`) and `a..b` (without b) left in a program are the list of their ints, built by a loop:
+# `(range·1 = ø; range·at·1 = a; range·end·1 = b; while range·at·1 <= range·end·1 { range·1 += [range·at·1]; range·at·1++ }; range·1)`
+use "walk.warp"
+
+ranges_made = 0
+
+listed_range(start: Node, end: Node, condition: any): Node := {
+	global ranges_made
+	ranges_made += 1
+	made = symbol("range·" + ranges_made)
+	at = symbol("range·at·" + ranges_made)
+	last = symbol("range·end·" + ranges_made)
+	grow = [Key(made, Op.AddAssign, List([at], Bracket.Square, Separator.Comma)), Key(at, Op.Inc, ø)]
+	loop = Key(Key(ø, Op.While, Key(at, condition, last)), Op.Do, List(grow, Bracket.Curly, Separator.Semicolon))
+	List([Key(made, Op.Assign, ø), Key(at, Op.Assign, start), Key(last, Op.Assign, end), loop, made], Bracket.Round, Separator.Semicolon)
+}
+
+# (`match n { Empty: … }` does not take ø, card match-silently)
+is_given(n: Node): bool := not (n is ø)
+
+# a range with both ends; `rest...`, a list pattern's rest, has none after it
+bounded(start: Node, end: Node, condition: any, n: Node): Node :=
+	if is_given(start) and is_given(end) then listed_range(start, end, condition) else n
+
+range_value(n: Node): Node := match n {
+	Key(start, Op.To, end): bounded(start, end, Op.Le, n)
+	Key(start, Op.Range, end): bounded(start, end, Op.Lt, n)
+	_: n
+}
+
+ranges(program: any): any := {
+	global ranges_made
+	ranges_made = 0
+	bottom_up(program, range_value)
+}

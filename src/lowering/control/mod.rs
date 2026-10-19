@@ -11,6 +11,6 @@ pub mod parallel;
 pub mod quasi_quote;
 pub mod result_word;
 pub mod run_time_blocks;
-pub mod scoped_handlers;
 pub mod switch;
 pub mod test_blocks;
+pub mod text_patterns;

@@ -19,9 +19,30 @@ struct Word {
 	doc: Option<String>,
 }
 
-/// The module's leading comment, joined, and its words (those it defines, std_module_definitions) in source order
-fn module_index(module: &str) -> (String, Vec<Word>) {
+/// A module's leading comment, joined, and its words in source order
+type ModuleIndex = (String, Vec<Word>);
+
+thread_local! {
+	/// Each module's index by its name and source (a checkout's lib/ gives another): the library signatures read a
+	/// prelude word's head from it for each word a program names (library_signatures.rs)
+	static INDEXES: std::cell::RefCell<std::collections::HashMap<(String, usize, usize), std::rc::Rc<ModuleIndex>>> =
+		Default::default();
+}
+
+/// The module's leading comment and its words, indexed once per source
+fn module_index(module: &str) -> std::rc::Rc<ModuleIndex> {
 	let source = crate::modules::std_module_source(module).unwrap_or_default();
+	let key = (module.to_string(), source.as_ptr() as usize, source.len());
+	if let Some(index) = INDEXES.with_borrow(|indexes| indexes.get(&key).cloned()) {
+		return index;
+	}
+	let index = std::rc::Rc::new(indexed_module(module, source));
+	INDEXES.with_borrow_mut(|indexes| indexes.insert(key, index.clone()));
+	index
+}
+
+/// The module's leading comment, joined, and its words (those it defines, std_module_definitions) in source order
+fn indexed_module(module: &str, source: &str) -> ModuleIndex {
 	let defined = crate::modules::std_module_definitions(module).unwrap_or_default();
 	let mut lines = source.lines().peekable();
 	let mut summary = vec![];
@@ -83,18 +104,18 @@ fn word_of(signature: &str) -> &str {
 
 /// A standard module word's head as its module writes it: `replace` of the prelude → `replace(t, old, new)`
 pub fn word_head(module: &str, word: &str) -> Option<String> {
-	module_index(module).1.into_iter().map(|entry| entry.signature).find(|signature| word_of(signature) == word)
+	module_index(module).1.iter().map(|entry| &entry.signature).find(|signature| word_of(signature) == word).cloned()
 }
 
 /// `help(midi)`: each head of a standard module word with the comment above it, one definition after the other
 pub fn word_help(module: &str, word: &str) -> Option<String> {
 	let entries: Vec<String> = module_index(module)
 		.1
-		.into_iter()
+		.iter()
 		.filter(|entry| word_of(&entry.signature) == word)
-		.map(|entry| match entry.doc {
+		.map(|entry| match &entry.doc {
 			Some(doc) => format!("{}\n{doc}", entry.signature),
-			None => entry.signature,
+			None => entry.signature.clone(),
 		})
 		.collect();
 	(!entries.is_empty()).then(|| entries.join("\n"))
@@ -123,13 +144,20 @@ pub fn word_definition(module: &str, word: &str) -> Option<String> {
 /// `warp help <module>`: the module, how to use it, and its words with their comment lines
 pub fn module_help(module: &str) -> Option<String> {
 	crate::modules::std_module_source(module)?;
-	let (summary, words) = module_index(module);
+	let index = module_index(module);
+	let (summary, words) = (&index.0, &index.1);
 	let width = words.iter().map(|word| word.signature.chars().count()).max().unwrap_or(0);
 	let lines = words.iter().map(|word| match &word.doc {
 		Some(doc) => format!("  {:width$}  {doc}", word.signature),
 		None => format!("  {}", word.signature),
 	});
 	Some(std::iter::once(format!("{module}: {summary}")).chain(lines).collect::<Vec<_>>().join("\n"))
+}
+
+/// The comment lines a standard module starts with, its `meta(m).doc` (meta_values.rs)
+pub fn module_summary(module: &str) -> Option<String> {
+	crate::modules::std_module_source(module)?;
+	Some(module_index(module).0.clone())
 }
 
 /// `warp help`: the modules there are
@@ -142,8 +170,9 @@ pub fn modules_overview() -> String {
 pub fn standard_library_markdown() -> String {
 	let mut page = vec![MARKDOWN_TITLE.to_string(), String::new(), MARKDOWN_INTRO.to_string()];
 	for module in crate::modules::std_module_names() {
-		let (summary, words) = module_index(module);
-		page.extend([String::new(), format!("## {module}"), String::new(), summary, String::new()]);
+		let index = module_index(module);
+		let (summary, words) = (&index.0, &index.1);
+		page.extend([String::new(), format!("## {module}"), String::new(), summary.clone(), String::new()]);
 		page.extend(words.iter().map(|word| match &word.doc {
 			Some(doc) => format!("- `{}`: {doc}", word.signature),
 			None => format!("- `{}`", word.signature),

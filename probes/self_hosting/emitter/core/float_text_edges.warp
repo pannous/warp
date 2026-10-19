@@ -1,0 +1,9 @@
+# emitter core: float texts at the edges: ∞, NaN, 0, beyond 2^900 and below 2^-900 (float_scaled rescales), subnormal,
+# and where the positional form ends (1e15, 1e-5)
+# [∞ -∞ NaN 0 3.000000000000006e300 3.3333333333333264e-301 5e-320 1e15 0.00001 123456789012345 -7e-6]
+z = float(0)
+big = float(3)
+for i in 1 to 300 { big = big * 10 }
+tiny = float(5)
+for i in 1 to 320 { tiny = tiny / 10 }
+print [float(1) / z, float(-1) / z, z / z, z, big, float(1) / big, tiny, float(1000000000000000), float(1) / 100000, float(123456789012345), float(-7) / 1000000]

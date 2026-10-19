@@ -1,22 +1,26 @@
 //! Subscripts: `xs[i]` as the 1-based `xs#(i+1)`, negative indexes counting from the end, slices `s[2…]` and `xs#(a..b)`
 use super::*;
+use crate::warp_parser::context::Context;
+
+/// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
+const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
 /// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
 const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
 
 /// The name before a minus written apart, `f - 2`: the subtraction, where `f -2` applies a callable f to -2, as the
 /// math words do (`abs - 2`, `abs -2`; negated_calls::lower_negated_calls)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SpacedMinus;
 
 /// The number a subscript was written with, `1` of `d[1]`, kept on its shifted index `d#2`: a map keyed by numbers
 /// reads it (number_keys.rs, P34)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct WrittenIndex(pub Number);
 
 /// The `1` a subscript adds to its index, `xs[i]` read `xs#(i+1)`: unlike a `+ 1` written by hand, a position meeting
 /// the brackets drops it (index_positions.rs, card index-position)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SubscriptOffset;
 
 /// `target[index]` is the 1-based `target#(index+1)`; a numeric index is shifted at parse time.
@@ -166,17 +170,18 @@ impl WarpParser {
 		self.advance(); // skip '['
 		self.skip_whitespace();
 
-		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, false); // `xs[i -1]` subtracts
-		let mut indices = vec![self.parse_slice_from_start().unwrap_or_else(|| self.parse_expr(0))];
-		self.skip_whitespace();
-
-		while self.current_char() == ',' {
-			self.advance(); // skip ','
-			self.skip_whitespace();
-			indices.push(self.parse_expr(0));
-			self.skip_whitespace();
-		}
-		self.in_spaced_list = outer_spaced_list;
+		// `xs[i -1]` subtracts
+		let indices = self.within(Context { in_spaced_list: false, ..self.context }, |parser| {
+			let mut indices = vec![parser.parse_slice_from_start().unwrap_or_else(|| parser.parse_expr(0))];
+			parser.skip_whitespace();
+			while parser.current_char() == ',' {
+				parser.advance(); // skip ','
+				parser.skip_whitespace();
+				indices.push(parser.parse_expr(0));
+				parser.skip_whitespace();
+			}
+			indices
+		});
 
 		if self.current_char() != ']' {
 			self.rewind(before_bracket); // `foo [1 2 3]`: a list argument, not an index

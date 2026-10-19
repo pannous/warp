@@ -144,3 +144,18 @@
 - Apply the standard-library-wide rule there, without hiding hints from the user's program.
 - Run the focused test before and after, then formatting, clippy, and the wasm32 check.
 - Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.
+
+# Parenthesized tuple-item cleanup
+
+- Reproduce a comma tuple whose first item is a parenthesized `try … else …` expression with a focused control test.
+- Keep the outer comma as the tuple separator; the inner parentheses group only the first value.
+- Reuse the general bracket/list parser and avoid a `try`-specific rewrite.
+- Run the focused parser/control tests, formatting, clippy, and the wasm32 check.
+
+# `fi` block closer cleanup
+
+- Reproduce the reported multi-line `if … fi` program with a new outcome test before changing the parser.
+- Treat `fi` as the same closing token as `end` only while parsing a block that expects a closer; keep ordinary `fi`
+  symbols and assignments valid outside that context.
+- Reuse the existing balanced block-closing scan and parser path instead of adding an `if`-only rewrite.
+- Run the focused `fi` and existing `end` block tests, formatting, clippy, and the wasm32 check.

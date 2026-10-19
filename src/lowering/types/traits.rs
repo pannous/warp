@@ -242,7 +242,7 @@ fn declared_trait_name(node: &Node) -> Option<String> {
 				_ => return None,
 			},
 		),
-		[keyword, name, block] if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) => (keyword, name),
+		[keyword, name, block] if block.is_block() => (keyword, name),
 		_ => return None,
 	};
 	let is_keyword = TRAIT_KEYWORDS.contains(&keyword.drop_meta().name().as_str());
@@ -384,9 +384,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 			_ => return None,
 		},
 		// `trait Shape { area }` spaced
-		[keyword, name, requirements] if matches!(requirements.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			(keyword, name, requirements)
-		}
+		[keyword, name, requirements] if requirements.is_block() => (keyword, name, requirements),
 		_ => return None,
 	};
 	let keyword_name = keyword.drop_meta().name();
@@ -673,6 +671,16 @@ pub fn untyped_parameters(head: &Node) -> Vec<String> {
 		_ => None,
 	};
 	parameters.iter().filter_map(untyped).collect()
+}
+
+/// The parameters a definition head declares of this type: `c` of `live_loop(c: function, n)`
+pub fn parameters_of_type(head: &Node, type_name: &str) -> Vec<String> {
+	let parameters = definition_head(head).map(|items| &items[1..]).unwrap_or_default();
+	let typed = |parameter: &Node| match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, declared) if declared.drop_meta().name() == type_name => Some(name.name()),
+		_ => None,
+	};
+	parameters.iter().filter_map(typed).collect()
 }
 
 /// The declared type a parameter `name:T` names

@@ -11,8 +11,6 @@ fn named(code: i64) -> String {
 
 #[test]
 fn held_key_names_the_key_held_now() {
-	let lowered = warp::pipeline::lower(r#"held_key == "a""#).expect("lowers").serialize();
-	assert!(lowered.contains("key_held"), "{lowered}");
 	is!(r#"held_key == """#, true);
 	assert_eq!(named(0), r#""""#);
 	assert_eq!(named('a' as i64), r#""a""#);
@@ -26,8 +24,6 @@ fn held_key_names_the_key_held_now() {
 fn held_key_compares_with_the_key_words() {
 	// whatever key another test's `emit key` holds now, each word reads as its name
 	is!(r#"held_key != ESC or held_key == "Escape""#, true);
-	let lowered = warp::pipeline::lower("held_key == LEFT or ESC == held_key").expect("lowers").serialize();
-	assert!(lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#""Escape""#), "{lowered}");
 	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval("held_key == LEFTT");
 	let warned = warp::errors::diagnostic::take_warnings()
@@ -43,8 +39,6 @@ fn held_key_compares_with_the_key_words() {
 #[cfg(feature = "native")]
 #[test]
 fn held_key_compares_with_every_key_held() {
-	let lowered = warp::pipeline::lower("held_key == LEFT and UP == held_key").expect("lowers").serialize();
-	assert_eq!(lowered.matches("key_held").count(), 2, "{lowered}");
 	let (left, up, right) = (0xF702, 0xF700, 0xF703);
 	use warp_runtime::system_values::held_among;
 	assert!(

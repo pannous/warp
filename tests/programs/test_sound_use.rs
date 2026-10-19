@@ -24,3 +24,8 @@ fn a_rare_sound_word_needs_use_sound() {
 fn an_own_word_named_like_a_rare_sound_word_is_the_program_s() {
 	is!("melody(x) := x * 2\nmelody 4", 8);
 }
+
+#[test]
+fn a_local_named_like_a_rare_sound_word_is_the_function_s_with_a_declared_result_too() {
+	is!("f(c: int): int := { tone = c; tone * 2 }\nf 4", 8);
+}

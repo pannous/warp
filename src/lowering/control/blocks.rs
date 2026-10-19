@@ -12,7 +12,7 @@
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
-use super::nodes::{any_part, assign, call, children_rewritten, is_block, key, word_headed};
+use super::nodes::{any_part, assign, call, children_rewritten, key, word_headed};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -112,7 +112,7 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 
 /// The argument of a callable parameter that is code to run: `{ print 1 }`, `code e`, the rest of a call
 fn is_code_argument(argument: &Node) -> bool {
-	is_block(argument)
+	argument.is_block()
 		|| prefixed(argument, &BLOCK_WORDS).is_some()
 		|| matches!(argument.drop_meta(), Node::List(_, Bracket::None, Separator::Space))
 }
@@ -196,7 +196,7 @@ pub fn seal_quoted(node: Node) -> Node {
 
 /// The code of `data e`, `data(e)` and `data(a of b)`, whose words the parser keeps as the items after data; a
 /// variable named data is no prefix: `data where it == 2`
-fn written_quote(node: &Node) -> Option<Node> {
+pub(crate) fn written_quote(node: &Node) -> Option<Node> {
 	let grouped = prefixed_group(node);
 	let Node::List(items, Bracket::None, Separator::Space) = grouped.as_ref().unwrap_or(node).drop_meta() else {
 		return None;
@@ -292,6 +292,18 @@ fn fitted_arguments(parameters: &[(String, Takes)], arguments: &[Node]) -> Optio
 		return Some(arguments.to_vec());
 	}
 	let last_is_block = parameters.last().is_some_and(|(_, takes)| *takes != Takes::Value);
+	// `at beats(2) { … }`, read as `at ((beats 2) {…})`: the block after the last value is the block argument
+	if last_is_block && arguments.len() + 1 == parameters.len() {
+		if let Some((Node::List(phrase, Bracket::None | Bracket::Round, separator), before)) =
+			arguments.split_last().map(|(last, before)| (last.drop_meta(), before))
+		{
+			if let [value, block] = phrase.as_slice() {
+				if !separator.separates_statements() && block.is_block() {
+					return Some([before, &[value.clone(), block.clone()]].concat());
+				}
+			}
+		}
+	}
 	if !last_is_block || arguments.len() < parameters.len() {
 		return None;
 	}
@@ -933,6 +945,12 @@ impl Blocks {
 				return expanded;
 			}
 		}
+		// a body of the one call `{ f a {…} }`: `if c { repeats 3 { … } }`
+		if let Node::List(items, Bracket::Curly, Separator::Space) = node.drop_meta() {
+			if let Some(expanded) = self.expand(items) {
+				return Node::List(vec![expanded], Bracket::Curly, Separator::Newline);
+			}
+		}
 		if let Some(call) = self.method_call(&node) {
 			return call;
 		}
@@ -1057,12 +1075,12 @@ fn with_trailing_blocks(node: Node, parameter_counts: &HashMap<String, usize>) -
 /// `f {…}`, `f(a) {…}`, `f(a) do … end`, `f a do … end`: the call with the block as its last argument
 fn trailing_block_call(node: &Node, parameter_counts: &HashMap<String, usize>) -> Option<Node> {
 	let (callee, more_arguments, block) = match node.drop_meta() {
-		Node::List(items, _, Separator::Space | Separator::None) if items.len() == 2 && is_block(&items[1]) => {
+		Node::List(items, _, Separator::Space | Separator::None) if items.len() == 2 && items[1].is_block() => {
 			(&items[0], vec![], &items[1])
 		}
-		Node::Key(callee, Op::Do, block) if is_block(block) => (callee.as_ref(), vec![], block.as_ref()),
+		Node::Key(callee, Op::Do, block) if block.is_block() => (callee.as_ref(), vec![], block.as_ref()),
 		Node::List(items, _, Separator::Space) if items.len() == 2 => match items[1].drop_meta() {
-			Node::Key(argument, Op::Do, block) if is_block(block) => {
+			Node::Key(argument, Op::Do, block) if block.is_block() => {
 				(&items[0], grouped_arguments(argument), block.as_ref())
 			}
 			_ => return None,

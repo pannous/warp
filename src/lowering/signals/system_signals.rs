@@ -283,9 +283,7 @@ fn event_channel(channel: &str, event: &str) -> String {
 fn named_event(value: &[Node]) -> Option<(String, Node)> {
 	let (last, words) = value.split_last()?;
 	let (last_word, data) = match last.drop_meta() {
-		Node::Key(name, Op::Colon, data) if matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			(name.as_ref().clone(), Some(data.as_ref().clone()))
-		}
+		Node::Key(name, Op::Colon, data) if data.is_block() => (name.as_ref().clone(), Some(data.as_ref().clone())),
 		_ => (last.clone(), None),
 	};
 	if words.is_empty() && data.is_none() {

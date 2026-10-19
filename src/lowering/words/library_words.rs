@@ -64,6 +64,14 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
 /// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
+/// The result type of a builtin that gives no value (`print(values...): nothing from emitter`)
+const NOTHING_RESULT: &str = "nothing";
+/// The spellings of a result read off an argument (decision same-as-result)
+const ARGUMENT_RESULTS: [(&str, ArgumentResult); 3] = [
+	("same as ", ArgumentResult::Same),
+	("element of ", ArgumentResult::Element),
+	("value of ", ArgumentResult::Element),
+];
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
@@ -163,6 +171,8 @@ pub(crate) fn expanded_word_definition(word: &str) -> Option<String> {
 	Some(format!("{name}({parameters}) := {template}"))
 }
 const DICT_WORD: &str = "dict";
+/// The type of a parameter taking a function value: `c: function`
+const FUNCTION_TYPE_WORD: &str = "function";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
@@ -186,6 +196,7 @@ const AS_LIST: &str = "as_list";
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
 const LOWERED_TO_PRELUDE: [(&str, &[&str]); 4] =
 	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"]), ("insert", &["inserted"])];
+const MODULE_SOURCE_WORD: &str = "module_source";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
 const OPERAND_TEMPORARY: &str = "operand";
@@ -206,8 +217,9 @@ pub fn result_kind(word: &str) -> Option<Kind> {
 }
 
 /// A library word's result for a first argument of the kind `argument` gives: the result of its overload for that
-/// kind (`reverse(t: text): text`, card typed-builtins), else the one all its overloads share; a value no overload is
-/// typed for (a Node of run-time kind) is a Node when the overloads differ. The argument is inferred only then
+/// kind (`reverse(t: text): text`, card typed-builtins), else the one all its overloads share. When the overloads
+/// differ, a Node of run-time kind gives a Node and any other value no overload is typed for (a name, a range) the
+/// first line's result, a list's. The argument is inferred only then
 pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> Option<Kind> {
 	let word = canonical_spelling(word);
 	let overloads: Vec<_> = crate::ffi::runtime_word_lines().iter().filter(|line| line.name == word).collect();
@@ -222,13 +234,48 @@ pub fn call_result_kind(word: &str, argument: impl FnOnce() -> Option<Kind>) -> 
 	if overloads.iter().all(|line| line_result_kind(line) == line_result_kind(first)) {
 		return line_result_kind(first);
 	}
-	let argument = argument().map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind });
-	let fitting = argument.and_then(|kind| {
-		overloads.iter().find(|line| line.first_type().and_then(crate::analyzer::type_word_kind) == Some(kind))
-	});
-	match fitting {
-		Some(line) => line_result_kind(line),
-		None => argument.map(|_| Kind::Empty),
+	let fitting = match argument()? {
+		Kind::Empty => return Some(Kind::Empty),
+		Kind::Codepoint => Kind::Text,
+		kind => kind,
+	};
+	let typed_for = |line: &&&crate::ffi::ForeignLine| line.first_type().and_then(crate::analyzer::type_word_kind);
+	line_result_kind(overloads.iter().find(|line| typed_for(line) == Some(fitting)).unwrap_or(first))
+}
+
+/// How a builtin's result follows one of its arguments (decision same-as-result): its very type, `same as object`, or
+/// the type of its elements, `element of xs`, `value of m`
+#[derive(Clone, Copy)]
+pub enum ArgumentResult {
+	Same,
+	Element,
+}
+
+/// The argument a builtin line's result follows, and how: `field_with(object, name, value): same as object` → (Same,
+/// 0), `map_get_or(m, key, default): value of m` → (Element, 0)
+pub fn argument_result(word: &str) -> Option<(ArgumentResult, usize)> {
+	let word = unaliased(word);
+	let line = crate::ffi::typed_word_lines().find(|line| line.name == word)?;
+	let (how, parameter) = ARGUMENT_RESULTS
+		.iter()
+		.find_map(|(spelling, how)| line.result.strip_prefix(spelling).map(|parameter| (*how, parameter)))?;
+	Some((how, line.names().position(|name| name == parameter)?))
+}
+
+/// The result of a call of `arguments` values to a builtin the emitter expands, as its line declares it
+/// (`count(xs): int from emitter`; print's `nothing` a Node of no value)
+pub fn emitted_call_kind(word: &str, arguments: usize) -> Option<Kind> {
+	let word = unaliased(word);
+	let line = crate::ffi::emitter_word_lines().iter().find(|line| line.name == word && line.takes(arguments))?;
+	match line.result {
+		NOTHING_RESULT => Some(Kind::Empty),
+		// a type's name (`type(3)` is int), held as no other value is
+		crate::words::SYMBOL_WORD => Some(Kind::Symbol),
+		// `number("2.5")` an int or a float, `any(xs, f)` a bool the emitter marks: decided where it is made
+		crate::words::NUMBER_WORD | crate::analyzer::BOOL_TYPE => None,
+		// a Node of any kind, decided at run time (`removed_value(x, k)`)
+		crate::words::ANY_TYPE => Some(Kind::Empty),
+		_ => line_result_kind(line).or_else(|| crate::analyzer::type_word_kind(line.result)),
 	}
 }
 
@@ -273,7 +320,7 @@ pub fn is_standard_function(name: &str) -> bool {
 /// (`count sorted xs`, `max sorted xs`, `print sorted xs`)
 pub fn is_calling_word(name: &str) -> bool {
 	is_standard_function(name)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 		|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name)
 }
 
@@ -296,7 +343,7 @@ pub fn needs_one_value(name: &str) -> bool {
 pub fn is_one_value_function(name: &str) -> bool {
 	needs_one_value(name)
 		|| crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
-		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::analyzer::is_counting_word(name)
 }
 
 fn fewest_arguments(word: &str) -> usize {
@@ -310,12 +357,17 @@ pub fn canonical_spelling(name: &str) -> &str {
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
-	let aliases = crate::modules::prelude_aliases();
-	let name = aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str());
+	let name = unaliased(name);
 	let runtime = crate::ffi::runtime_word_lines().iter().map(|line| line.name);
 	let expanded = EXPANDED_WORDS.into_iter().map(|(word, _, _)| word);
 	let built_in = runtime.chain(expanded).chain(OTHER_LIBRARY_WORDS).find(|word| *word == name);
 	built_in.or_else(|| crate::modules::prelude_word(name))
+}
+
+/// The word a prelude alias names (`size` → count), else the name itself
+pub(crate) fn unaliased(name: &str) -> &str {
+	let aliases = crate::modules::prelude_aliases();
+	aliases.iter().find(|(alias, _)| alias == name).map_or(name, |(_, word)| word.as_str())
 }
 
 pub(crate) fn arity(word: &str) -> usize {
@@ -370,6 +422,7 @@ pub fn lower(node: Node) -> Node {
 		plain,
 		instances,
 		parameters: RefCell::new(vec![]),
+		function_parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
 		times,
@@ -531,6 +584,9 @@ struct Lowering {
 	instances: crate::traits::InstanceTypes,
 	/// The untyped parameters of the definitions being lowered: any of them may hold an object, so `p.width` reads a field
 	parameters: RefCell<Vec<String>>,
+	/// The parameters declared `function` of the definitions being lowered: `c.name` reads the function's name, never a
+	/// class's method name()
+	function_parameters: RefCell<Vec<String>>,
 	/// The functions being defined, innermost last, each with its parameters: `start(l) := l.start` reads the field
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
@@ -674,6 +730,8 @@ impl Lowering {
 		let mut locals = self.shadowed.borrow().clone();
 		collect_assigned_names(&right, &mut locals);
 		let outer = self.shadowed.replace(locals);
+		let function_scope = self.function_parameters.borrow().len();
+		self.function_parameters.borrow_mut().extend(crate::traits::parameters_of_type(head, FUNCTION_TYPE_WORD));
 		let lowered = self.within_function(name, parameters, || {
 			let body = self.body_statement(head, right);
 			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
@@ -682,6 +740,7 @@ impl Lowering {
 			}
 			self.expand(body)
 		});
+		self.function_parameters.borrow_mut().truncate(function_scope);
 		self.shadowed.replace(outer);
 		lowered
 	}
@@ -842,7 +901,16 @@ impl Lowering {
 				// a synonym calls its library word: `sorted xs` is sort(xs)
 				let word = canonical_spelling(head);
 				let function = if word == head { function.clone() } else { symbol(word) };
-				return Some(word_call(&function, argument, vec![]));
+				// the call lowered as if written so: an expanded word (`sum xs`) expands
+				let call = word_call(&function, argument, vec![]);
+				let Node::List(call_items, call_bracket, call_separator) = &call else { unreachable!("a call") };
+				return Some(self.word_call(call_items, call_bracket, call_separator).unwrap_or(call));
+			}
+		}
+		// `module_source("prelude")`: a standard module's text, written out at compile time, so it is read from anywhere
+		if let (MODULE_SOURCE_WORD, [_, name]) = (head, items) {
+			if let Some(source) = name.text_value().as_deref().and_then(crate::modules::std_module) {
+				return Some(Node::Text(source.to_string()));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
@@ -956,6 +1024,14 @@ impl Lowering {
 			return Some(crate::warp_parser::subscript(receiver.clone(), method.clone()));
 		}
 		let (word_node, name, arguments) = method_parts(method)?;
+		// `c.name` of a parameter `c: function`: what the function value answers at run time
+		let is_function_parameter = receiver
+			.symbol_name()
+			.is_some_and(|parameter| self.function_parameters.borrow().iter().any(|p| p == parameter));
+		let is_function_word = || crate::wasm_emitter::functions::function_words().any(|(word, _)| word == name);
+		if is_function_parameter && arguments.is_empty() && is_function_word() {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
 			return Some(self.call(FROMKEYS, word_node, arguments, false));
 		}
@@ -1032,7 +1108,9 @@ impl Lowering {
 		{
 			return OwnMember::Has;
 		}
-		if literal.is_some() || self.instances.shape(receiver).is_some() {
+		// a sum type's value holds a variant known only at run time: `t.count` of `t: T` may be C(count)'s field
+		let is_known = literal.is_some() || self.instances.shape(receiver).is_some();
+		if is_known && !self.instances.is_sum_typed(receiver) {
 			return OwnMember::Lacks;
 		}
 		let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));

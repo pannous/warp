@@ -12,10 +12,9 @@ Where to find things:
 
 Two kinds of entry:
 - Dropped form: a form the warp part leaves out (the cleanest, most minimal compiler, not a copy of the Rust one),
-  with the sources that show it, why, and how to bring it back. The harnesses skip the named sources:
-  tests/parser/self_parser_dropped.txt (path, tab, form) for the parser survey `parser_differences`
-  (tests/parser/test_self_parser_survey.rs), and the `dropped` list of tests/common/twins.rs pass_differential, which
-  refuses a dropped source this file does not name. A pass that looks like bloat as a whole goes to the Supervisor
+  with the sources that show it, why, and how to bring it back. The emitter twin (tests/common/twins.rs twin_sources)
+  skips the named sources and refuses a dropped source this file does not name; the parser and pass twins are gone
+  (outcome tests only, 2026-10-19). A pass that looks like bloat as a whole goes to the Supervisor
   instead of being ported. `probes/self_hosting/parser/sort_differences.py` sorts remaining parser differences.
 - Deviation: where the warp part keeps a cleaner result than its Rust twin, with an example and the card or question
   for the Rust side. The differentials read them as expected.
@@ -26,7 +25,7 @@ Code and data are one: once the parser reads plain warp data correctly, these ne
 | Form | Example | What it takes |
 |------|---------|---------------|
 | Music `go {…}` blocks | `go { c4 e4 g4 }` | a sound library function taking data, `tune d:data := play d`, so `tune { c4 e4 g4 }` plays plain data; note names are constants of the music/sound library (card music-data-dsl) |
-| CSS in style blocks | `style { td#x { color: red } }` | `style` reads the block as data: selectors as keys, declarations as pairs (card style-data-dsl) |
+| CSS in style blocks | `style { td#x { color: red } }` | done: lib/markup.warp `style(sheet: data)` reads the block as data (card style-sheets) |
 
 ## Parser: forms to restore later
 | Form | Example | Why dropped | What it would take |
@@ -55,14 +54,15 @@ Per form: the form, the sources showing it, why it is left out, how to bring it 
   feature, not text building. Back: port lower_templates in front of lib/compiler/interpolation.warp.
 - Rust Option forms: `if let Some(v) = o { A } else { B }`, `match o { Some(v) => A, None => B }`, `o.unwrap_or(d)`,
   `o.expect(m)`, `o.is_some()`. Sources: probes/rust_reading/option.warp. Left out: warp's own forms say it
-  (`if o != ø`, `o ?? d`, `o ?? raise(m)`). Back: port src/lowering/welcoming/rust_options.rs as a pass before the
-  match arms.
-- `set x to 5`, `set width of p to 12` (decision setter-calls: `p.width = 12` with a style hint). Sources:
-  probes/english_setter.warp. Comes back as a library code template, not a pass (card set-set). Back meanwhile: port
-  welcome_forms.rs lower_set_phrases after `a of b`.
+  (`if o != ø`, `o ?? d`, `o ?? raise(m)`). The Rust compiler dropped it too (decision rust-cleanup-drops). Back:
+  src/lowering/welcoming/rust_options.rs from git history, as a pass before the match arms.
+- `set x to 5` dropped for good (user 2026-10-19: extra syntax, `x = 5` says it). `set width of p to 12` (decision
+  setter-calls: `p.width = 12`). Sources: probes/english_setter.warp. Back as library code (card set-set): lib/english.warp's rewrite rule, in the Rust
+  compiler; the warp compiler gets them once it reads rewrite rules (src/modules/rewrites.rs). The style hint
+  "warp doesn't do prose" is gone: a rule has no hints (test_set_to_hints_the_assignment stays ignored).
 - `print words in t` (the walk `for part in t.words {print part}`) and `byte count of t` (the count in a unit,
-  `t.bytes`) in of_lookups (decision sugar-triage). Sources: none in today's corpus differs. Back: port of_lookups.rs
-  print_walk and the text_unit branch of looked_up.
+  `t.bytes`) in of_lookups (decision sugar-triage). Sources: none in today's corpus differs. The Rust compiler dropped
+  them too (rust-cleanup-drops). Back: of_lookups.rs print_walk and the text_unit branch of looked_up from git history.
 - `(function f).dump` in grouped_receivers: a function reference in parentheses keeps its group. The bridge's plain
   view drops the function-reference mark (an attribute layer), so the twin sees `(f)` and ungroups it when f is a
   loop variable. Sources: probes/joinable_error.warp. Back: keep the function-reference mark in plain views (twins.rs
@@ -78,22 +78,22 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | # | Pass | Lines | Sources changed | Plan |
 |---|------|-------|-----------------|------|
 | 0 | interpolation | 104 | 49 | keep (ported) |
-| 1 | rust_options | 160 | 1 | drop (decided) |
+| 1 | rust_options | 160 | 1 | dropped in both compilers (rust-cleanup-drops) |
 | 2 | match arms | welcome_forms | 15 | keep (ported) |
 | 3 | arrow result types | welcome_forms | 0 | keep (ported, merged into welcome_forms.warp) |
 | 4 | of_lookups | 241 | 22 | keep `a of b` and `in`/`from` after a selector word; drop print walks, unit counts (decided, sugar-triage) |
-| 5 | set phrases | welcome_forms | 1 | drop (decided, card set-set) |
+| 5 | set phrases | welcome_forms | 1 | library: lib/english.warp rewrite rules (card set-set) |
 | 6 | grouped_receivers | 69 | 1 | keep |
-| 7 | module_properties | 467 | 3 | library (graphics: window.width; decided) |
+| 7 | module_properties | 467 | 3 | core: the property accessors (definitions/property_accessors.rs, supervisor 2026-10-18); its graphics tables (display aliases, bare width) asked at warp-interviewer |
 | 8 | times_phrases | 57 | 26 | keep (ported) |
 | 9 | broadcasting | 1410 | 11 | keep, minimal port |
 | 10 | shader_holes | 250 | 11 | library (gpu; decided) |
 | 11 | conversions | 93 | 0 | keep |
 | 12 | foreign_lines | 78 | 0 | keep |
 | 13 | inline_unions | 30 | 0 | keep |
-| 14 | scoped_handlers | 38 | 1 | drop (only the error for a form dropped earlier; decided) |
+| 14 | scoped_handlers | 38 | 1 | dropped in both compilers (the error for a form dropped earlier; rust-cleanup-drops) |
 | 15 | component_worlds | 285 | 2 | library (wasm build; decided) |
-| 16 | channel_words | 189 | 3 | library (tasks; decided) |
+| 16 | channel_words | 189 | 3 | library (tasks; decided): done, lib/channels.warp rewrite rules (card compiler-modules) |
 | 17, 18, 45 | markup_tags (form routes, html attributes, tags) | 357 | 1, 1, 14 | library (markup), one pass (decided) |
 | 19 | soft_keywords | 239 | 3 | keep |
 | 20 | parameter_patterns | 68 | 2 | keep |
@@ -112,7 +112,7 @@ ported; drop = left out; merge = one warp pass with its neighbour.
 | 36 | music_words live loops | 636 | 1 | library (sound; decided) |
 | 37 | go_blocks | 259 | 24 | keep (decided) |
 | 38 | references | 193 | 0 | keep |
-| 40 | style_rules | 220 | 6 | library (markup; decided) |
+| 40 | style_rules | 220 | 6 | library: lib/markup.warp style(sheet: data), done |
 | 41, 42 | lambdas infix iterations, member lambdas | lambdas.rs | 5, 0 | keep, merge |
 | 43, 44, 46 | glued_attributes, select_options, transitions | 43, 81, 242 | 1, 1, 3 | library (markup; decided) |
 | 47 | member_phrases | 31 | 1 | keep |
@@ -163,6 +163,26 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Element types flow through function results (`r = f(); r#1` is int when f gives a list of ints), where Rust says
   any value: probes/algo/dijkstra/12c_implicit_return_list.warp, probes/algo/sorting/69_return_list_noreturn.warp,
   probes/module_scope/mytext.warp and four more left the pinned list for it.
+- A parameter used as a list and passed on as a function (`play_signal(signal, seconds) := if signal is list then
+  stereo_signal(signal[0], …) else mono_signal(signal, seconds)`, lib/sound.warp) is a function where its calls give one,
+  where Rust says empty: probes/sound/signal_state.warp left the pinned list for it (card music-plain).
+- Closure parameters given a run-time number: Rust's flow (card src-analyzer, 2026-10-18) says a number decided at
+  run time (`apply(function, data) -> data`, `closure_lambda_1(data)`), warp keeps int / any value
+  (`apply(function, int) -> empty`). Same program output. Left the pinned list: probes/cleanup/lambdas/
+  {bench_higher_order,bench_hoisted}.warp, probes/functions/forward_param.warp, probes/generators/yield_from.warp,
+  probes/ruby_yield/{do_block,twice}.warp, probes/self_hosting/readiness/ports/times_phrases.warp. Back: the warp flow
+  joins a run-time number beside ints to data, as Rust's `joined` does.
+- Route lambdas (serve.rs route_entry, 2026-10-18): a route is `route_add(METHOD, path, request => {…})`, called by
+  lib/router.warp route_answer through closure_call_1; Rust types the never-annotated `request` from the closure call
+  (`closure_lambda_1(empty)`), warp keeps int. Same program output. Left the pinned list: probes/docs_sync/teapot.warp,
+  probes/hosting/oauth_demo.warp, probes/route_position.warp, probes/server_routes/{one_source,rpc_everywhere,
+  rpc_stub}.warp, probes/site/served.warp, probes/warp_serve/app.warp, samples/servers/route_headers.warp. Back: the
+  warp flow types a lambda parameter from the closure calls of its arity, as Rust's does.
+
+- Style sheets through lib/markup.warp's style (card style-sheets): a program with a `style{…}` block now carries the
+  library's style_* functions, whose list helpers warp reads more generally: `length: empty |
+  prelude·popped_item(list, …)` where Rust says `prelude·popped_item(empty, int) -> empty` (9 sources, first
+  probes/markup/css_hash.warp). Same output; accepted by the Integrator at 549700f08.
 
 ## Emitter: deviations
 - Value layout: typed values inside and a boxed $Node only at the edges; texts as GC byte arrays, lists as vectors
@@ -173,3 +193,33 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   ("list cannot hold this item"); warp's gives ["hi" 420], because the lowered view the emitter reads carries no
   declaration. Sources: probes/variance/runtime_lax_alias.warp, probes/variance/runtime_unannotated_param.warp. Back: the lowered view keeps the declared element type
   of a list, the emitter checks adds against it.
+- A declared result type: `def half(x) -> int { x / 2 }; half(3)` fails in Rust ("an int must be a whole number",
+  card static-int); warp's module gives 3/2 shown as 1.5, because the lowered view drops `-> int` (the body becomes
+  `the result = x / 2; the result`). Source: probes/static_result.warp (accepted by the Integrator with
+  emitter-beyond-core). Back: the lowering keeps the result type as `(body) as int` or an annotation, and the emitter
+  checks a ratio against it.
+- Closures (emitter.warp closure_value, dispatcher_code): a closure is a Function $Node holding the list [its
+  target's number, the captured values…]; every `closure_call_<n>` calls one dispatcher function per arity, which
+  compares the number. Rust calls a closure of one known target directly (no closure_call_1), so
+  functions::test_call_efficiency::a_closure_of_one_known_target_is_called_directly fails with the switch: same values,
+  another module shape. Equality compares target numbers and captured values: two lambdas written alike at two places
+  are equal in Rust (its kind carries the written form's class), different here. A program giving a closure's text
+  (print, `as text`, join) is refused: the lowered view holds no written form. Back: a direct call where the analyzer
+  knows the one target; the written form in the closure.
+- A tag over a one-item block: `div{ divv{ "hi" } }` gives warp's module the value `div{divv:"hi"}` (the block a map of
+  its one entry), Rust's `div:divv:"hi"` (the block dropped around its item). The rendered HTML is the same
+  (`<div>{divv:&quot;hi&quot;}</div>`). Source: probes/unknown_tag.warp (accepted by the Integrator with --flaky,
+  2026-10-19). Back: the lowered view marks a block that holds one item as that item, as Rust's eval reads it.
+- A symbol named like a type word: `type(symbol("key")) is key` gives no in warp's module (symbol(…) is the runtime
+  word symbol_node, a Symbol), yes in Rust's, whose type test reads the symbol's name (the source says so: "should be
+  no"). Source: probes/self_hosting/analyzer/symbol_named_key.warp. Back: Rust's `is` tests the value's kind, not a
+  symbol's name.
+- Big ints (card emitter-big-ints): an int is an i64 in emitter.warp's modules, and an int beyond 64 bits fails in
+  runtime.warp int_overflow ("trap detail: 0"), where Rust's promotes it to a BigInt (`x = 2^62; x * 4`, factorial 25,
+  Catalan numbers past the 35th). Source: samples/golf/catalan-numbers.short.warp (inside the core since a body ending
+  in a statement gives ø, 2026-10-19). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
+  handles into a big-number heap).
+- Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
+  Comparable witness), times and uncertain values trap there, where Rust's node_order orders them. A sorted list is a
+  plain list, where Rust's keeps the bracket kind of the sorted one. Back: node_order asks the witness table and the
+  time words once emitter.warp lays those out; the result takes the kind of xs.

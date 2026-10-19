@@ -31,6 +31,10 @@ impl WasmGcEmitter {
 		locals: Vec<ValType>,
 		body: impl FnOnce(&mut Self, &mut Function),
 	) -> u32 {
+		// emitted already: emit_unforeseen_functions runs the runtime emitters again for the functions main called
+		if let Some(emitted) = self.ctx.func_registry.get(name) {
+			return emitted.call_index as u32;
+		}
 		let func_type = self.type_manager.function_type(params, results);
 		self.functions.function(func_type);
 		self.function_body(locals, body);
@@ -47,7 +51,9 @@ impl WasmGcEmitter {
 	/// The code of the next declared function: `body` writes the instructions, the closing `end` is added here
 	pub(super) fn function_body(&mut self, locals: Vec<ValType>, body: impl FnOnce(&mut Self, &mut Function)) {
 		let mut func = Function::new(locals.into_iter().map(|local| (1, local)).collect::<Vec<_>>());
+		self.body_depth += 1;
 		body(self, &mut func);
+		self.body_depth -= 1;
 		func.instruction(&I::End);
 		self.code.function(&func);
 	}

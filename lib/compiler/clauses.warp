@@ -1,0 +1,91 @@
+# A function written as several clauses (card pure-runs; Rust: src/lowering/definitions pattern clauses):
+#   fib(0) := 0
+#   fib(1) := 1
+#   fib(n) := fib(n - 1) + fib(n - 2)
+# is one function trying them in order, `fib(clause·1) := if clause·1 == 0 then 0 else if clause·1 == 1 then 1 else
+# (n = clause·1; fib(n - 1) + fib(n - 2))`. A parameter is a literal the argument must equal, or a name it binds.
+# Other patterns (`total([first, rest...])`, `simplify(data($a * 1))`) become a call of `pattern·clause·<name>`, which
+# emitter.warp refuses: the function is not taken apart yet, and never run as its last clause alone.
+use "walk.warp"
+use "phrase_blocks.warp"
+
+name_text(n: Node): text := match n {
+	Symbol(name): name
+	_: ""
+}
+
+# [name, parameters, body] of `name(parameters…) := body`, else ø
+clause_head(head: Node, body: Node): any := match head {
+	List(call, Bracket.Round, Separator.None): { if #call > 0 and is_name(call#1) then [name_text(call#1), call[1..], body] else ø }
+	_: ø
+}
+
+clause_of(n: Node): any := match n {
+	Key(head, Op.Define, body): clause_head(head, body)
+	_: ø
+}
+
+definition_name(n: Node): text := {
+	clause = clause_of(n)
+	if clause is ø then "" else clause#1
+}
+
+is_literal(n: Node): bool := n is number or n is text or n is bool
+
+parameter(name: text, i: int): Node := symbol("clause·" + i)
+
+joined(conditions: list): Node := {
+	condition = conditions#1
+	for more in conditions[1..] { condition = Key(condition, Op.And, more) }
+	condition
+}
+
+# the clause's body with its names bound, as a branch; ø when a pattern is neither a literal nor a name
+branch_of(name: text, clause: list): any := {
+	patterns = clause#2
+	places = 1 to #patterns
+	if not places.all(i => is_name(patterns#i) or is_literal(patterns#i)) { return ø }
+	bound = places.filter(i => is_name(patterns#i)).map(i => Key(patterns#i, Op.Assign, parameter(name, i)))
+	if #bound == 0 then clause#3 else List(bound + [clause#3], Bracket.Round, Separator.Semicolon)
+}
+
+# the clause's test, ø when it takes every argument
+test_of(name: text, clause: list): any := {
+	patterns = clause#2
+	places = (1 to #patterns).filter(i => is_literal(patterns#i))
+	if #places == 0 then ø else joined(places.map(i => Key(parameter(name, i), Op.Eq, patterns#i)))
+}
+
+untaken(name: text): Node := List([symbol("pattern·clause·" + name)], Bracket.Round, Separator.None)
+
+# the clauses from the last one up: each tried when the ones before did not take the arguments
+tried(name: text, clauses: list, at: int): Node := {
+	branch = branch_of(name, clauses#at)
+	if branch is ø { return untaken(name) }
+	test = test_of(name, clauses#at)
+	if test is ø { return branch }
+	rest = if at == #clauses then untaken(name) else tried(name, clauses, at + 1)
+	Key(Key(Key(ø, Op.If, test), Op.Then, branch), Op.Else, rest)
+}
+
+merged_function(name: text, clauses: list): Node := {
+	arity = #clauses#1#2
+	if not clauses.all(clause => #clause#2 == arity) { return untaken(name) }
+	head = List([symbol(name)] + (1 to arity).map(i => parameter(name, i)), Bracket.Round, Separator.None)
+	Key(head, Op.Define, tried(name, clauses, 1))
+}
+
+# the places of the definitions named `name`
+places_named(owners: list, name: text): list := (1 to #owners).filter(j => owners#j == name)
+
+merged(parts: list): list := {
+	owners = parts.map(definition_name)
+	single = i => owners#i == "" or #places_named(owners, owners#i) == 1
+	kept = (1 to #parts).filter(i => single(i) or places_named(owners, owners#i)#1 == i)
+	kept.map(i => if single(i) then parts#i else merged_function(owners#i, places_named(owners, owners#i).map(j => clause_of(parts#j))))
+}
+
+clauses(program: any): any := match program {
+	List(parts, Bracket.None, separator): List(merged(parts), Bracket.None, separator)
+	_: program
+}

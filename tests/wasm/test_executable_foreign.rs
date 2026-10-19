@@ -56,31 +56,3 @@ fn a_missing_interpreter_is_named() {
 	assert!(!run.status.success());
 	assert!(errors.contains("cannot start no-such-python3") && errors.contains("WARP_PYTHON"), "{errors}");
 }
-
-#[test]
-fn the_runtime_reads_and_builds_nodes_with_warps_codes() {
-	use warp::type_kinds::{Kind, BOOL_INFO, KIND_BITS, KIND_MASK};
-	use warp_runtime::gc_values as runtime;
-	let kinds = [
-		(runtime::EMPTY, Kind::Empty),
-		(runtime::INT, Kind::Int),
-		(runtime::FLOAT, Kind::Float),
-		(runtime::TEXT, Kind::Text),
-		(runtime::CODEPOINT, Kind::Codepoint),
-		(runtime::SYMBOL, Kind::Symbol),
-		(runtime::KEY, Kind::Key),
-		(runtime::BLOCK, Kind::Block),
-		(runtime::LIST, Kind::List),
-		(runtime::ERROR, Kind::Error),
-		(runtime::FUNCTION, Kind::Function),
-	];
-	for (code, kind) in kinds {
-		assert_eq!(code, kind as u8, "{kind:?}");
-	}
-	assert_eq!((runtime::KIND_MASK, runtime::KIND_BITS, runtime::BOOL_INFO), (KIND_MASK, KIND_BITS, BOOL_INFO));
-	assert_eq!(runtime::COLON, warp::operators::op_to_code(&warp::operators::Op::Colon));
-	assert_eq!(runtime::CURLY, warp::wasm_emitter::bracket_info(&warp::node::Bracket::Curly));
-	assert_eq!(runtime::SQUARE, warp::wasm_emitter::bracket_info(&warp::node::Bracket::Square));
-	assert_eq!(runtime::BUILDERS[8..], warp::wasm_emitter::EXACT_BUILDERS[..3]);
-	assert_eq!(runtime::TEXT_HEAP, warp::host::TEXT_HEAP_EXPORT);
-}

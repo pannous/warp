@@ -1,8 +1,9 @@
-// card g_mQ9U: in a served route `$title` is the request's field title: `request.body.title` of a post (its form or
-// JSON body), `request.query.title` of a get (`/search?q=tea`)
+// card g_mQ9U: in a served route the request's field title is `request.body.title` of a post (its form or JSON body),
+// `request.query.title` of a get (`/search?q=tea`); the `$title` shorthand is gone (decision serve-plain)
 use std::time::Duration;
 
-const PROGRAM: &str = "post \"/todos\" { \"added \" + $title }\nget \"/search\" { \"looking for \" + $q }";
+const PROGRAM: &str =
+	"post \"/todos\" { \"added \" + request.body.title }\nget \"/search\" { \"looking for \" + request.query.q }";
 const PORT: u16 = 18658;
 const FORM_TYPE: &str = "application/x-www-form-urlencoded";
 

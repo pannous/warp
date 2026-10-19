@@ -4,12 +4,16 @@
 use sound
 
 tempo = 110
-live_loop bass 4 { pattern "c3 ~ [c3 c3] <~ c3?>" }   # the bass: a bar, four times; the last step alternates
-at 2 bars live_loop bass { pattern "c3 c3 [c3 c3] g2" }  # bass again: from its third bar it plays this block
-live_loop 4 { pattern "c2 _ _ e2" }                  # c2 holds three steps
-live_loop 4 { pattern("~ g4 ~ g4*2", 1 bar) }       # the offbeat chords' root
-live_loop 2 { pattern("c5(3,8) e5(2,8)", 2 bars) }   # Euclidean rhythms, 3 and 2 of 8
+bass() := pattern "c3 ~ [c3 c3] <~ c3?>"           # the bass: a bar; the last step alternates
+low() := pattern "c2 _ _ e2"                         # c2 holds three steps
+offbeat() := pattern("~ g4 ~ g4*2", bar 1)           # the offbeat chords' root
+euclid() := pattern("c5(3,8) e5(2,8)", bars 2)       # Euclidean rhythms, 3 and 2 of 8
+tune() := pattern "c4 e4 <g4 a4> [b4 c5?]"           # the swung tune, c5 in about half the cycles (pattern_seed)
+bass_voice = live_loop(bass, 4)                      # each loop a voice of its own, four bars of the bass
+live_loop(low, 4)
+live_loop(offbeat, 4)
+live_loop(euclid, 2)
 swing = 0.6
-live_loop 2 { pattern "c4 e4 <g4 a4> [b4 c5?]" }      # the swung tune, c5 in about half the cycles (pattern_seed)
-await bass
+live_loop(tune, 2)
+await bass_voice
 wait_sound()

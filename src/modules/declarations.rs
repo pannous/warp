@@ -34,6 +34,21 @@ pub(crate) fn statements(module: Node) -> Vec<Node> {
 	statements_of(&module).to_vec()
 }
 
+/// A used file's statements with its enums lowered (plain_enums.rs, sum_variants.rs): the sum type and the classes of
+/// its variants each a statement, a class insert_module_classes puts in front of the program (card node-enum)
+pub(crate) fn module_statements(module: Node) -> Vec<Node> {
+	let module = crate::lowering::sum_variants::lower(crate::lowering::plain_enums::lower(module));
+	let enum_parts = |statement: &Node| match statement.drop_meta() {
+		Node::List(parts, Bracket::None, Separator::Semicolon)
+			if parts.first().is_some_and(crate::lowering::sum_variants::is_sum_type) =>
+		{
+			parts.clone()
+		}
+		_ => vec![statement.clone()],
+	};
+	statements_of(&module).iter().flat_map(enum_parts).collect()
+}
+
 pub(crate) fn is_declaration(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Type { .. } => true,
@@ -188,14 +203,17 @@ pub(crate) fn mentioned_names(statements: &[Node]) -> Vec<String> {
 	// a function's parameters and variables are its own: `f(x, melody) := x + melody` mentions no module word melody,
 	// prelude's `dict(pairs) := { out = {}; … }` no sound word out
 	fn collect(node: &Node, names: &mut Vec<String>) {
-		let mut locals: HashSet<String> = crate::lowering::nodes::function_head(node)
+		// `f(x): int := …` too: function_head reads a typed head
+		let function = crate::lowering::nodes::function_head(node);
+		let mut locals: HashSet<String> = function
+			.as_ref()
 			.map(|function| function.parameters())
 			.unwrap_or_default()
 			.into_iter()
 			.filter_map(crate::lowering::nodes::parameter_name)
 			.collect();
-		if let Some((_, body, _)) = crate::type_tests::function_definition(node) {
-			crate::library_words::collect_assigned_names(&body, &mut locals);
+		if let Some(function) = &function {
+			crate::library_words::collect_assigned_names(function.body, &mut locals);
 		}
 		if locals.is_empty() {
 			return collect_parts(node, names);

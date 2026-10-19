@@ -7,9 +7,9 @@
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
 opaque_word = "view·opaque"
 
-kind_of(view: any) := if view is list and #view > 0 then view#1 else ""
+kind_of(view: any): text := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
-is_group(n: any) := bracket_of(n) != ø
+is_group(n: any): bool := bracket_of(n) != ø
 
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
@@ -17,14 +17,14 @@ attribute_word = "view·attribute"
 
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
 # (decision empty-group-node), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
-plain(view: any) := without_layers(view, no)
+plain(view: any): any := without_layers(view, no)
 
 # the view as the self-hosted compile hands it on: plain, but the attribute layers kept for the Rust passes after
 # (mutation.rs reads the mark of `x!`); Rust twin: src/compiler/node_views.rs handled_plain_view
-bridged(view: any) := without_layers(view, yes)
+bridged(view: any): any := without_layers(view, yes)
 
 # the view without literal layers, without attribute layers unless `attributes`, an empty group as ø
-without_layers(view: any, attributes: any) := {
+without_layers(view: any, attributes: bool): any := {
 	kind = kind_of(view)
 	if kind == "literal" or (kind == "attribute" and not attributes) { return without_layers(view#(#view), attributes) }
 	if kind == "type" or kind == "error" { return view }
@@ -33,56 +33,76 @@ without_layers(view: any, attributes: any) := {
 	view
 }
 
+# the node parser.warp builds as plain gives its view: no attribute layers, an empty group as ø, a character as a
+# text, an opaque type or error whole
+plain_node(n: any): any := match n {
+	Key(left, op, right): {
+		if left == symbol(attribute_word) { return plain_node(right#3) }
+		if left == symbol(opaque_word) { return if kind_of(right) == "list" and #right == 3 then ø else n }
+		Key(plain_node(left), op, plain_node(right))
+	}
+	List(items, bracket, separator): List(items.map(plain_node), bracket, separator)
+	// lowering reads a one-character literal as a text, as node_of does
+	Char(c): "" + c
+	_: n
+}
+
 # the node a view stands for
-node_of(view: any) := {
+node_of(view: any): any := {
 	kind = kind_of(view)
 	if kind == "symbol" { return symbol(view#2) }
-	if kind == "text" or kind == "char" { return view#2 }
-	if kind == "key" { return key(node_of(view#3), view#2, node_of(view#4)) }
-	if kind == "list" { return separated(bracketed(view[3..].map(node_of), view#2), view#3) }
+	if kind == "text" { return view#2 }
+	// lowering reads a one-character literal as a text, as the Rust lowering does
+	if kind == "char" { return "" + view#2 }
+	if kind == "key" { return Key(node_of(view#3), view#2 as Op, node_of(view#4)) }
+	if kind == "list" { return List(view[3..].map(node_of), view#2 as Bracket, view#3 as Separator) }
 	if kind == "at" { return positioned(node_of(view#4), view#2, view#3) }
-	if kind == "attribute" { return key(symbol(attribute_word), ":", [view#2, node_of(view#3), node_of(view#4)]) }
+	if kind == "attribute" { return Key(symbol(attribute_word), Op.Colon, [view#2, node_of(view#3), node_of(view#4)]) }
 	if kind == "" { return view }
-	key(symbol(opaque_word), ":", view)
+	Key(symbol(opaque_word), Op.Colon, view)
 }
 
 # the view of a node
-view_of(n: any) := {
-	if type(n) is key {
-		if key_of(n) == symbol(opaque_word) { return value_of(n) }
-		if key_of(n) == symbol(attribute_word) {
-			layer = value_of(n)
-			return ["attribute", layer#1, view_of(layer#2), view_of(layer#3)]
-		}
-		return ["key", op_of(n), view_of(key_of(n)), view_of(value_of(n))]
-	}
-	if n is symbol { return ["symbol", name_of(n)] }
-	if n is text { return ["text", n] }
-	if is_group(n) { return ["list", bracket_of(n), separator_of(n)] + n.map(view_of) }
-	n
+view_of(n: Node): any := match n {
+	Key(left, op, right): key_view(left, op as text, right)
+	Symbol(name): ["symbol", name]
+	Char(c): ["char", c]
+	Text(t): ["text", t]
+	List(items, bracket, separator): ["list", bracket as text, separator as text] + items.map(view_of)
+	_: n
+}
+
+# the view of a key: an opaque view and an attribute layer as they were written
+key_view(left: Node, op: text, right: Node): any := {
+	if left == symbol(opaque_word) { return right }
+	if left == symbol(attribute_word) { return ["attribute", right#1, view_of(right#2), view_of(right#3)] }
+	["key", op, view_of(left), view_of(right)]
 }
 
 # a group of the items, bracketed and separated as n
-group_like(n: any, items: any) := separated(bracketed(items, bracket_of(n)), separator_of(n))
+group_like(n: Node, items: list): Node := match n {
+	List(_, bracket, separator): List(items, bracket, separator)
+	_: separated(bracketed(items, bracket_of(n)), separator_of(n))
+}
 
 # the call `name(arguments…)`
-call_of(name: text, arguments: any) := bracketed([symbol(name)] + arguments, "(")
+call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
 
 # a node with f applied to each of its children
-children(n: any, f: any) := {
-	if type(n) is key and key_of(n) != symbol(opaque_word) { return key(f(key_of(n)), op_of(n), f(value_of(n))) }
-	if is_group(n) { return separated(bracketed(n.map(f), bracket_of(n)), separator_of(n)) }
-	n
+children(n: Node, f: function): Node := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then n else Key(f(left), op, f(right)) }
+	List(items, bracket, separator): List(items.map(f), bracket, separator)
+	_: n
 }
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
-bottom_up(n: any, f: any) := f(children(n, x => bottom_up(x, f)))
+bottom_up(n: any, f: function): any := f(children(n, x => bottom_up(x, f)))
 
 # the node itself: the bridge's own twin, which every pass twin relies on
-unchanged(n: any) := n
+unchanged(n: T): T := n
 
 # a group's items as a list
-items_of(n: any) := {
+items_of(n: any): list := {
 	gathered = []
 	for item in n { gathered += [item] }
 	gathered
@@ -93,24 +113,24 @@ items_of(n: any) := {
 # with the reports said meanwhile, [line, column, message, preferred] each
 global said = []
 # where n was written, ø for a node without a position (one a pass made)
-line_of(n: any) := try n.line else ø
-column_of(n: any) := try n.column else ø
-is_positioned(n: any) := line_of(n) != ø
-report(n: any, message: any, preferred: any) := {
+line_of(n: any): int? := try n.line else ø
+column_of(n: any): int? := try n.column else ø
+is_positioned(n: any): bool := line_of(n) != ø
+report(n: T, message: text, preferred: any): T := {
 	said += [[line_of(n), column_of(n), message, preferred]]
 	n
 }
-reported(view: any) := {
+reported(view: any): list := {
 	found = said
 	said = []
 	[view, found]
 }
 
 # whether the symbol `word` occurs anywhere in n, inside an opaque view too
-mentions(n: any, word: text) := view_has(view_of(n), part => part == ["symbol", word])
+mentions(n: any, word: text): bool := view_has(view_of(n), part => part == ["symbol", word])
 
 # whether `found` holds for the view or a part of it
-view_has(view: any, found: any) := {
+view_has(view: any, found: function): bool := {
 	if found(view) { return yes }
 	if view is list {
 		for part in view {
@@ -121,7 +141,7 @@ view_has(view: any, found: any) := {
 }
 
 # the leading name of a view, `f` of `f(x)`, `x` of `x: int`, else ""
-head_name(view: any) := {
+head_name(view: any): text := {
 	kind = kind_of(view)
 	if kind == "symbol" { return view#2 }
 	if kind == "key" { return head_name(view#3) }
@@ -129,10 +149,13 @@ head_name(view: any) := {
 	""
 }
 
-# every list in a view, the view itself first: the parts a whole-program question walks
-views_in(n: any) := {
+# every list in a node's view, the view itself first: the parts a whole-program question walks
+views_in(n: any): list := lists_in(view_of(n))
+
+# every list in a view, the view itself first
+lists_in(top: any): list := {
 	views = []
-	unvisited = [view_of(n)]
+	unvisited = [top]
 	while #unvisited > 0 {
 		view = unvisited#(#unvisited)
 		unvisited = unvisited[0 ..< #unvisited - 1]

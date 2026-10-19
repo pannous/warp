@@ -1,6 +1,12 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators
 
 use super::*;
+use crate::warp_parser::context::Context;
+
+const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the `do`; as in Ruby and Lua every `then … end` and `do … end` needs its own: write `while c do … if x then … end end` or `while c { … if x { … } }`";
+/// Words between two operands besides the operator words (operators::is_operator_word): `of`, `matches`
+const JOINING_WORDS: [&str; 2] = [OF_WORD, "matches"];
+const COMPARISON_FIRST: &str = "the comparison first, as C";
 
 /// Characters that end a statement: a body cannot start with them
 pub(crate) const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
@@ -133,7 +139,7 @@ impl WarpParser {
 			}
 
 			// the argument of `square xs |> sum` ends at the pipeline, which takes the whole call (lists.rs)
-			if self.pipe_takes_call && self.at_pipeline() {
+			if self.context.pipe_takes_call && self.at_pipeline() {
 				break;
 			}
 			// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
@@ -153,7 +159,7 @@ impl WarpParser {
 			let prefix_not = self.matches_keyword("not") && !self.matches_keyword(NOT_IN_SPELLING);
 			let (op, chars) = match self.peek_operator().filter(|_| !prefix_not) {
 				Some(pair) => pair,
-				None if self.stops_at_else && self.at_else_if_word().is_some() => break, // `if c: x elif d: y`
+				None if self.context.stops_at_else && self.at_else_if_word().is_some() => break, // `if c: x elif d: y`
 				None if self.at_block_close() => break, // `do x end`: the `end` is no argument of x
 				None => {
 					// Step 3b: Check for implicit function application (space between atoms)
@@ -189,11 +195,11 @@ impl WarpParser {
 			// between two comparisons it joins conditions: `sq 2 == 4 and sq 3 == 8`
 			let joins_conditions = crate::library_words::is_comparison(&lhs) && self.comparison_follows_and();
 			let ends_command = op == Op::And
-				&& (self.in_command || (min_bp == 0 && is_command(&lhs)))
+				&& (self.context.in_command || (min_bp == 0 && is_command(&lhs)))
 				&& !joins_conditions
 				&& self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.context.stops_at_else) {
 				break;
 			}
 			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
@@ -279,7 +285,7 @@ impl WarpParser {
 
 			// Parse right-hand side with appropriate binding power
 			if op == Op::Colon {
-				self.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
+				self.context.equals_compares = false; // in `if c: x=1` the colon ends the condition, the rest is the body
 			}
 			let rhs_start = self.pos;
 			let rhs = match block_body {
@@ -401,16 +407,12 @@ impl WarpParser {
 		if matches!(op, Op::If | Op::While) {
 			self.parse_condition()
 		} else if matches!(op, Op::Then | Op::Else) {
-			let outer = self.branch_bp.replace(r_bp);
-			let branch = self.parse_branch(r_bp);
-			let branch = self.branch_assignment(branch, r_bp);
-			self.branch_bp = outer;
-			branch
+			self.within(Context { branch_bp: Some(r_bp), ..self.context }, |parser| {
+				let branch = parser.parse_branch(r_bp);
+				parser.branch_assignment(branch, r_bp)
+			})
 		} else if glued_pair {
-			let outer = self.glued_pair_bp.replace(r_bp);
-			let value = self.parse_expr(r_bp);
-			self.glued_pair_bp = outer;
-			value
+			self.within(Context { glued_pair_bp: Some(r_bp), ..self.context }, |parser| parser.parse_expr(r_bp))
 		} else if matches!(op, Op::Range | Op::To) && self.peek_operator().is_some_and(|(next, _)| next == Op::FatArrow)
 		{
 			Empty // the match arm `65.. => "senior"`: a range without end
@@ -437,7 +439,7 @@ impl WarpParser {
 				let operand = self.parse_expr(right_bp);
 				let summand_bp = Op::Add.binding_power().1;
 				match operand.drop_meta() {
-					Node::Symbol(name) if !self.in_spaced_list && !self.variables.contains(name) => self
+					Node::Symbol(name) if !self.context.in_spaced_list && !self.variables.contains(name) => self
 						.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
 						.unwrap_or(operand),
 					_ => operand,

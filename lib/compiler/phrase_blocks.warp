@@ -1,0 +1,18 @@
+# A block written on one line, `{print "big"}` (card pure-runs): the parser keeps its words side by side as the group's
+# items; they are one phrase, so the block becomes a block of that one statement. A map's entries, `{a: 1 b: 2}`,
+# start with a key, never with a name, and stay as they are.
+use "walk.warp"
+
+is_name(n: Node): bool := match n {
+	Symbol(name): yes
+	_: no
+}
+
+phrase_block(n: Node): Node := match n {
+	List(items, Bracket.Curly, Separator.Space): {
+		if #items > 1 and is_name(items#1) then List([List(items, Bracket.None, Separator.Space)], Bracket.Curly, Separator.Semicolon) else n
+	}
+	_: n
+}
+
+phrase_blocks(program: any): any := bottom_up(program, phrase_block)

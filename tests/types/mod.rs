@@ -31,6 +31,7 @@ mod test_class_field_names;
 mod test_class_field_type_phrases;
 mod test_class_fields_checked;
 mod test_class_forms_ported;
+mod test_class_index_operator;
 mod test_class_interfaces;
 mod test_class_json;
 mod test_class_method_changes;
@@ -110,6 +111,7 @@ mod test_maybe_declaration; // card maybe-int
 mod test_method_bodies; // card method-bodies
 mod test_method_result_text; // card instance-result
 mod test_mixed_list_parameter_kinds; // card infers-int
+mod test_mixed_results; // card function-returning
 mod test_multi_word_class; // card multi-word-class
 mod test_mutating_methods;
 mod test_nested_type_calls; // text hex 255 is text(hex(255))
@@ -142,6 +144,7 @@ mod test_returned_instances; // card units-dynamic
 mod test_returned_list_alias; // card identity-copies-list
 mod test_runtime_text_ratio;
 mod test_same_identity;
+mod test_scoped_enum_cases; // card node-enum
 mod test_self_typed_field; // card empty-field
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists
@@ -153,13 +156,17 @@ mod test_struct_instances;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_struct_types;
 mod test_sum_types;
+mod test_symbol_parameters; // card symbol-parameters
 mod test_symbolism_object; // card symbolism-object
+mod test_tag_children; // tag_children.rs: the items of any tag's block
+mod test_tag_entries; // decision markup-plain-library
 mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions
 mod test_text_as_bool; // card yes-print
 mod test_text_as_number; // card units-dynamic
 mod test_text_defaults; // card empty-text-default
 mod test_text_of_text; // text(text(5)) is "5"
+mod test_time_fields_warp; // card time-fields-warp
 mod test_time_kinds_are_types; // card anchor-time
 mod test_time_now; // cards print-time, time-now
 mod test_time_programs_run; // card run-time-dates, stage B4

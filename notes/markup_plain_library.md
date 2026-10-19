@@ -1,0 +1,39 @@
+# Markup as a plain library (card compiler-modules, markup slice; decisions.md markup-plain-library)
+
+Goal: the markup forms are ordinary definitions in lib/markup.warp, no Rust lowering pass. A markup value is data
+(`label{ for: x; "L" }` evaluates to a Node) and lib/markup.warp's to_html is the one renderer (src/web/markup.rs
+runs it too), so most forms are a meaning the renderer gives that data, not a rewrite.
+
+| pass (Rust lines) | form | route | state |
+|---|---|---|---|
+| select_options (81) | `select{ ["apple" "pear"] }`, `select{ fruits }`, `"s": "small"` | renderer: what a select holds besides elements is its options (html_options) | done |
+| glued_attributes (43) | `label{ for: name "Name" }` | dropped (user): `label{ for: name; "Name" }` | done |
+| markup_tags form routes | `form post "/t" {…}` | `form(method: symbol, action: text, body)` in lib/markup.warp (user), loaded without `use` (implicit_modules.rs); among an element's children a function word takes as many children as it has parameters (markup_tags.rs calls_among, decision function-words-consume) | done (branch form-routes) |
+| markup_tags html attributes | `input{type="text"}` | core rule (user): `name = value` inside any data block is a key: lowering/data/tag_entries.rs | done |
+| markup_tags tags | `div(class:"x")`, spaced `ul { … }`, `li all xs`, a loop among children | core (supervisor): rules of any tag's items in lowering/data/tag_children.rs (`name(k: v)` a tag, a function word takes its parameters' count); the HTML-only ones (spaced `ul { … }`, `li all xs`, loops and computed lists spliced as children) stay in markup_tags.rs, asked at warp-interviewer | done-as-core (branch tag-children) |
+| style_rules (220) | unquoted selectors `.card {…}`, `ul > li`, lengths `8px` | `style(sheet: data)` in lib/markup.warp (decision data-parameter): the sheet as the parser read it, selectors and lengths as texts, then the renderer as before | done (branch style-data) |
+| transitions (241) | `transition: fade 200ms`, `leave: pop 400ms reverse` | `transition(spec: data)`, `animation`, `leave` in lib/markup.warp (decision transitions-data); fade/scale/slide a table there; the renderer joins every style of an element into one attribute | done (branch transitions-data); the compile-time hint for fade/scale/slide is gone (asked warp-interviewer) |
+
+Found on the way: inside a block a literal list's items are the block's (`select{ ["a" "b"] }` holds "a" and "b"),
+so the renderer cannot tell a listed option from a text child; in a select both are options. A one-letter text is a
+Char, which contains() refuses (card contains-fails; html_is_custom_element works around it with str()).
+
+Data block (tag_entries.rs): the block of a tag, `word{…}` or `word: {…}`, the word no keyword (HARD_KEYWORDS,
+HIGHLIGHTED_WORDS) and no function the program defines, holding no statement besides its `name = value` entries; an
+element's block always (its loops and handlers give children). `kill{ hp = 0; print hp }` stays code. Wiki: data.md
+gets the paragraph once the branch lands.
+
+Library data functions (branch style-data): a standard function with a `x: data` parameter (std_modules.rs
+std_data_functions, a line scan) quotes its tag's block or its argument in any program and loads its module without
+`use` (loader.rs implicit_std_modules); a function of the program's own of that name wins. Bound names in the block are
+their values (decision data-names), so `style: { color: theme }` keeps working. `style{…}` and the inline `style: {…}`
+are the same call: the result is the pair `style: {…}`, and the renderer tells a sheet (rules) from declarations as
+before. The parser's style-sheet context (in_style_sheet: hex colors, a blank before `.x`) still keys on the word style.
+
+Data entries (branch transitions-data): in a tag's block `transition: opacity 200ms ease-out` is the call
+`transition(data(…))` of a function with one data parameter, its body the value after the colon and the bare words and
+quantities after it (unbound symbols, numbers, `400ms`), up to the children (typed_block_arguments.rs entries_taken).
+The value may hold the children too (`opacity 1s "a"` parses as one value): the library splits them off (css_parts)
+and returns a list, which the element's block splices. Data arguments are taken top-down, so a `transition:` inside a
+`style{…}` sheet stays a declaration. Bound names: variables, functions, parameters and loop variables
+(`[li{ transition: fade todo.text } for todo in todos]`).

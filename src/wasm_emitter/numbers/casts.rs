@@ -20,7 +20,8 @@ const LAST_CODE_POINT: i64 = 0x10FFFF;
 const FIRST_SURROGATE: i64 = 0xD800;
 const SURROGATE_COUNT: i64 = 0x800;
 /// The words emit_cast converts to besides the number types (int, float, rational …)
-const CONVERSION_WORDS: [&str; 5] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number"];
+const CONVERSION_WORDS: [&str; 6] =
+	["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number", crate::words::SYMBOL_WORD];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -326,6 +327,10 @@ impl WasmGcEmitter {
 			"float" => self.emit_cast_to_float(func, value, target_type),
 			"text" => self.emit_cast_to_text(func, written),
 			"codepoint" => self.emit_cast_to_char(func, value),
+			// `:post`, `"post" as symbol`: the symbol of a text, also of a symbol
+			crate::words::SYMBOL_WORD => {
+				self.emit_node_builtin(func, crate::words::SYMBOL_WORD, std::slice::from_ref(written))
+			}
 			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
 			"number" => self.emit_cast_to_number(func, value),
 			// `255 as byte`: the whole number, trapping as a declared byte does when it leaves the range
@@ -486,6 +491,13 @@ impl WasmGcEmitter {
 		match known {
 			Some(character) => {
 				func.instruction(&I32Const(character as i32));
+			}
+			// a character of a text (`s#2`) is held as a one-character text: its code point, a longer text an error
+			None if self.get_type(value) == Kind::Text && !value.is_text_literal() => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, crate::wasm_emitter::reflection::library_ops::CODEPOINT_OF);
+				self.emit_call(func, "get_int_value");
+				func.instruction(&I::I32WrapI64);
 			}
 			None => {
 				self.emit_numeric_value(func, value);

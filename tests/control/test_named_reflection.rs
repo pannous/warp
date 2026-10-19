@@ -31,7 +31,7 @@ fn help_of_a_module_word_has_its_comment() {
 
 #[test]
 fn help_of_a_name_known_at_run_time() {
-	assert_contains("use sound\nword = dir(sound)#18\nhelp(word)", &["midi(pitch)", "the MIDI note nearest"]);
+	assert_contains("use sound\nword = dir(sound)#266\nhelp(word)", &["midi(pitch)", "the MIDI note nearest"]);
 }
 
 #[test]
@@ -60,14 +60,14 @@ fn an_unjoinable_item_names_its_kind() {
 #[cfg(feature = "native")] // the help tests below run the warp binary
 const MIDI_DOC: &str = "the MIDI note nearest a frequency";
 
-/// User decision (help-statement): a help(x) on its own line prints, as Python's help does; in an expression it is
-/// only its text
+/// User decision (reflection-plain, replaces help-statement): help(x) gives its text, a statement prints nothing;
+/// mid-program `print help(x)` prints
 #[cfg(feature = "native")]
 #[test]
-fn a_help_statement_prints() {
-	let printed = crate::common::printed("use sound\nhelp(midi)\n1");
-	assert!(printed.contains(MIDI_DOC), "{printed}");
-	let in_loop = crate::common::printed("use sound\nfor word in [\"midi\"]: help(word)\n1");
+fn a_help_statement_prints_nothing() {
+	let statement = crate::common::printed("use sound\nhelp(midi)\n1");
+	assert!(!statement.contains(MIDI_DOC), "{statement}");
+	let in_loop = crate::common::printed("use sound\nfor word in [\"midi\"]: print help(word)\n1");
 	assert!(in_loop.contains(MIDI_DOC), "{in_loop}");
 }
 

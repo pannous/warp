@@ -595,18 +595,52 @@ fn receiver_classes(node: &Node) -> HashMap<(String, usize), String> {
 }
 
 /// (function, parameter index) → how many arguments the function's body calls that parameter with: 0 of
-/// `twice(h) := h() + h()`
+/// `twice(h) := h() + h()`, 1 of a parameter typed `f: (float) -> float`; a parameter passed on to such a one takes its
+/// count, `play(tone) := play_signal(tone)` (card program-function), until no more do
 fn called_parameters(node: &Node) -> HashMap<(String, usize), usize> {
 	let mut called = HashMap::new();
 	each_definition(node, &mut |definition| {
 		for (index, parameter) in definition.head[1..].iter().enumerate() {
+			let declared = crate::lowering::function_types::declared_arity(parameter);
 			let Some(name) = super::nodes::parameter_name(parameter) else { continue };
-			if let Some(arguments) = called_arity(definition.body, &name) {
+			if let Some(arguments) = declared.or_else(|| called_arity(definition.body, &name)) {
 				called.insert((definition.head[0].name(), index), arguments);
 			}
 		}
 	});
-	called
+	loop {
+		let known = called.len();
+		each_definition(node, &mut |definition| {
+			for (index, parameter) in definition.head[1..].iter().enumerate() {
+				let function = definition.head[0].name();
+				let Some(name) = super::nodes::parameter_name(parameter) else { continue };
+				if called.contains_key(&(function.clone(), index)) {
+					continue;
+				}
+				if let Some(arguments) = passed_on_arity(definition.body, &name, &called) {
+					called.insert((function, index), arguments);
+				}
+			}
+		});
+		if called.len() == known {
+			return called;
+		}
+	}
+}
+
+/// How many arguments the function `parameter` is passed to calls it with: 1 of `apply(f, x)` when apply calls f(x)
+fn passed_on_arity(body: &Node, parameter: &str, called: &HashMap<(String, usize), usize>) -> Option<usize> {
+	let mut found = None;
+	body.visit(&mut |node| {
+		let Node::List(items, Bracket::Round, _) = node else { return };
+		let Some((callee, arguments)) = items.split_first() else { return };
+		for (index, argument) in arguments.iter().enumerate() {
+			if found.is_none() && argument.drop_meta().is_symbol(parameter) {
+				found = called.get(&(callee.drop_meta().name(), index)).copied();
+			}
+		}
+	});
+	found
 }
 
 /// How many arguments `body` calls `parameter` with: 1 of `h(x)`; none when its calls differ (`h(x)` and `h(x, y)`), so

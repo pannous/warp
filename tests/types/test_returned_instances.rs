@@ -22,3 +22,11 @@ fn an_operation_of_instances_is_an_instance_too() {
 fn a_parameter_shadows_an_instance_variable() {
 	is!(&format!("{VECTOR}a = make(1)\nf(a) := a + 1\nf(2) + a.x"), 4);
 }
+
+// `make(n): V := …` declares its class: a call of it takes the class operators, `<` its less method (card uncertain-warp)
+#[test]
+fn a_declared_result_class_takes_its_class_operators() {
+	let ordered = "class V{x:int; less(o:V):bool := x < o.x}\nmake(n:int): V := V(n)\n";
+	is!(&format!("{ordered}make(1) < make(2)"), true);
+	is!(&format!("{ordered}make(3) < make(2)"), false);
+}

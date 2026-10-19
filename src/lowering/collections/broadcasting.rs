@@ -21,7 +21,8 @@ use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 /// Parameter types a comparison's result fits
-const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
+const TRUTH_TYPES: [&str; 2] = ["bool", "boolean"];
+const ANY_TYPE: &str = "any";
 const BROADCAST_ITEM: &str = "broadcast_item";
 /// Library words of one text or number that broadcast over a list like a user function of a scalar, as do libm's words
 /// of one number (`sin xs`, card cos-instead)
@@ -83,36 +84,38 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	let mut arities: HashMap<String, Arity> = HashMap::new();
 	for definition in &found {
 		let count = definition.params.len();
-		// P149 (user): an untyped parameter the body uses in arithmetic (`x + 1`, `it*it`) is no truth value either
-		let typed = definition.params.first().is_some_and(|first| {
-			rules_out_a_truth_value(first) || is_arithmetic_operand(&definition.body, &first.name())
-		});
+		let first =
+			definition.params.first().map_or(FirstParameter::Any, |first| FirstParameter::of(first, &definition.body));
 		arities
 			.entry(definition.name.clone())
 			.and_modify(|known| {
 				known.fewest = known.fewest.min(count);
 				known.most = known.most.max(count);
-				known.typed_first &= typed;
+				known.first = known.first.joined(first);
 			})
-			.or_insert(Arity { library: false, ..Arity::library(count, count, typed) });
+			.or_insert(Arity { library: false, ..Arity::library(count, count, first) });
 	}
 	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter.
 	// Next to a comparison it follows the user functions' rule: its value is typed as the type itself, `int 3 == 3` is
 	// `(int 3) == 3` like `f(x: int)`; a truth type (`bool 3 == 3`) takes anything and is ambiguous like `same(x) := x`
 	for name in used_words(&program, |name| crate::analyzer::is_type_call_word(name).then_some(())).into_keys() {
-		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
-		arities.entry(name).or_insert(Arity { converts: true, ..Arity::library(1, 1, typed) });
+		let first = FirstParameter::of_type(&name).joined(FirstParameter::Value);
+		arities.entry(name).or_insert(Arity { converts: true, ..Arity::library(1, 1, first) });
 	}
 	// `round(floor x)`, `upper(lower t)`: a library word of a typed value nests like a function of its parameters
 	for (name, (fewest, most)) in used_words(&program, crate::lowering::library_signatures::typed_first_parameters) {
-		arities.entry(name).or_insert(Arity::library(fewest, most, true));
+		arities.entry(name).or_insert(Arity::library(fewest, most, FirstParameter::Value));
+	}
+	// `count xs > 3`, `size t == 4`: a library word of a list, text or map (members.rs) takes no comparison either
+	for name in used_words(&program, |name| is_member_word(name).then_some(())).into_keys() {
+		arities.entry(name).or_insert(Arity::library(1, usize::MAX, FirstParameter::Value));
 	}
 	if arities.is_empty() {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
-		arities.entry(word.to_string()).or_insert(Arity::library(1, 1, false));
+		arities.entry(word.to_string()).or_insert(Arity::library(1, 1, FirstParameter::Any));
 	}
 	nest_prefix_calls(program, &arities)
 }
@@ -176,8 +179,8 @@ pub(crate) fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
 struct Arity {
 	fewest: usize,
 	most: usize,
-	/// Every definition's first parameter declares a type that is no truth value (`x: int`, `square number`)
-	typed_first: bool,
+	/// What every definition's first parameter takes
+	first: FirstParameter,
 	/// A built-in type converting its value (`int 3.7`, `hex 255`): nests like a function, compares like one
 	converts: bool,
 	/// A word of the language, not the program's own function
@@ -185,9 +188,59 @@ struct Arity {
 }
 
 impl Arity {
-	fn library(fewest: usize, most: usize, typed_first: bool) -> Arity {
-		Arity { fewest, most, typed_first, converts: false, library: true }
+	fn library(fewest: usize, most: usize, first: FirstParameter) -> Arity {
+		Arity { fewest, most, first, converts: false, library: true }
 	}
+}
+
+/// What a function's first parameter takes, which decides `f 3 == 9`: an argument reaches right while it fits the
+/// parameter's type (P143, decision function-words-consume)
+#[derive(Clone, Copy, PartialEq)]
+enum FirstParameter {
+	/// A type that is no truth value (`x: int`, `xs: list`): the call is compared, `(square 3) == 9`
+	Value,
+	/// `b: bool`: the comparison fits, so it is the argument, `neg(1 > 3)`
+	Truth,
+	/// Untyped or `any`: both readings work, a loud error
+	Any,
+}
+
+impl FirstParameter {
+	/// P149 (user): an untyped parameter the body uses in arithmetic (`x + 1`, `it*it`) is no truth value either
+	fn of(parameter: &Node, body: &Node) -> FirstParameter {
+		match parameter.drop_meta() {
+			Node::Key(_, Op::Colon, type_node) if annotated_kind(type_node).is_some() => {
+				FirstParameter::of_type(&type_node.drop_meta().name())
+			}
+			_ if is_arithmetic_operand(body, &parameter.name()) => FirstParameter::Value,
+			_ => FirstParameter::Any,
+		}
+	}
+
+	fn of_type(type_name: &str) -> FirstParameter {
+		let type_name = type_name.to_lowercase();
+		match type_name.as_str() {
+			ANY_TYPE => FirstParameter::Any,
+			name if TRUTH_TYPES.contains(&name) => FirstParameter::Truth,
+			_ => FirstParameter::Value,
+		}
+	}
+
+	/// Overloads, and a converting type word, which takes any value: one reading only when they agree
+	fn joined(self, other: FirstParameter) -> FirstParameter {
+		if self == other {
+			self
+		} else {
+			FirstParameter::Any
+		}
+	}
+}
+
+/// `count`, `size`, `upper` …: a library word whose every type (members.rs) is no truth value; used_words leaves out a
+/// program's own `size`, so the alias is the library's
+fn is_member_word(name: &str) -> bool {
+	let types = crate::lowering::library_signatures::library_types(crate::library_words::unaliased(name));
+	!types.is_empty() && types.iter().all(|type_name| FirstParameter::of_type(type_name) == FirstParameter::Value)
 }
 
 /// The words the program calls and does not name itself that `known` recognises, with what it says about each
@@ -203,17 +256,6 @@ fn used_words<V>(program: &Node, known: impl Fn(&str) -> Option<V>) -> HashMap<S
 	let names = crate::program_names::Bindings::of(program).given();
 	used.retain(|name, _| !names.contains(name));
 	used
-}
-
-/// `x: int`, `number` (P50, the type-named parameter, as `number: number`): not `b: bool`, not untyped
-fn rules_out_a_truth_value(parameter: &Node) -> bool {
-	match parameter.drop_meta() {
-		Node::Key(_, Op::Colon, type_node) => {
-			let type_name = type_node.drop_meta().name().to_lowercase();
-			!TRUTH_TYPES.contains(&type_name.as_str()) && annotated_kind(type_node).is_some()
-		}
-		_ => false,
-	}
 }
 
 /// `sum`, `max`, `upper`, `count` …: a library word of one value, not redefined by the program
@@ -296,25 +338,33 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			Node::List(items, bracket, separator)
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
-		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error. Also in
-		// a group, `(square 3 == 9)`; a call `square(3 == 9)` has no spaces
-		Node::List(items, Bracket::None | Bracket::Round, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && crate::library_words::is_comparison(argument)) =>
+		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); a truth parameter keeps the comparison,
+		// `neg 1 > 3`; untyped, both readings work: a loud error. Also in a group, `(square 3 == 9)`; a call
+		// `square(3 == 9)` has no spaces
+		Node::List(items, Bracket::None | Bracket::Round, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some_and(|takes| takes.first != FirstParameter::Truth) && crate::library_words::is_comparison(argument)) =>
 		{
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
-			if !arity(&head).expect("guarded").typed_first {
+			if arity(&head).expect("guarded").first == FirstParameter::Any {
 				return ambiguous_call(&argument, &head.drop_meta().name(), &argument);
 			}
 			let call = |operand| Node::List(vec![head.clone(), operand], Bracket::None, Separator::Space);
 			nest_prefix_calls(crate::library_words::with_first_comparand(argument, &call), arities)
 		}
-		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
-		// ambiguous when the body accepts anything (`f := print it`)
+		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: the
+		// comparison is a truth parameter's argument, and ambiguous when the body accepts anything (`f := print it`)
 		Node::Key(left, op, right)
 			if op.is_comparison()
-				&& matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) =>
+				&& matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| takes.first != FirstParameter::Value))) =>
 		{
 			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
 			let argument = key(items[1].clone(), op, *right);
+			if arity(&items[0]).is_some_and(|takes| takes.first == FirstParameter::Truth) {
+				return Node::List(
+					vec![items[0].clone(), nest_prefix_calls(argument, arities)],
+					Bracket::None,
+					Separator::Space,
+				);
+			}
 			ambiguous_call(&left, &items[0].drop_meta().name(), &argument)
 		}
 		Node::List(items, Bracket::None, Separator::Comma) if items.len() > 1 => {

@@ -1,6 +1,11 @@
 //! if/then/else, else-if chains, the elvis operator
 
 use super::*;
+use crate::warp_parser::context::Context;
+
+/// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
+const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
+const ELVIS_WORD: &str = "elvis";
 
 /// The word between a condition and its branch: `if c then x`
 const THEN_WORD: &str = "then";
@@ -33,26 +38,17 @@ impl WarpParser {
 		if let Node::Key(cond, Op::Colon, then_expr) = &rhs {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
 			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
-			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.continue_colon_body(then_expr);
-			self.stops_at_else = outer;
+			let then_expr = self.within(Context { stops_at_else: true, ..self.context }, |parser| {
+				parser.continue_colon_body(then_expr)
+			});
 			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
-		}
-
-		if let Some((condition, then_block)) = split_trailing_block(&rhs, false) {
-			self.skip_spaces();
-			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-			return self.parse_optional_else(if_then, ElseParseMode::Atom);
 		}
 
 		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
 		let is_grouped = matches!(rhs.drop_meta(), Node::List(_, Bracket::Round, _));
 		if is_grouped && self.at_body_start() && !self.matches_keyword("then") && !self.matches_keyword("else") {
-			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.parse_expr(0);
-			self.stops_at_else = outer;
+			let then_expr = self.within(Context { stops_at_else: true, ..self.context }, |parser| parser.parse_expr(0));
 			let if_then =
 				Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);

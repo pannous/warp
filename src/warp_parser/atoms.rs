@@ -1,10 +1,21 @@
 //! Atoms: symbols with suffixes, function calls, keyword forms and glued suffixes
 
 use super::*;
+use crate::warp_parser::context::Context;
 use crate::words::STYLE_WORD;
 use crate::words::SWITCH_WORDS;
 
 use crate::words::VOID_WORD;
+use crate::words::{WASM_INSTRUCTION_CALL, WASM_WORD};
+
+/// Rust's endless `loop { … }`
+const LOOP_WORD: &str = "loop";
+/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/control/go_blocks.rs,
+/// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
+const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
+/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
+const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
+const TO_SENTENCE_WORD: &str = "To";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
 const NONE_WORD: &str = "none";
 const NONE_CALL_ERROR: &str = "none is the null ø, not a function: for \"no element matches\" write not any(xs, f)";
@@ -34,15 +45,14 @@ impl WarpParser {
 			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
 			'&' if self.starts_capture() => {
 				self.advance();
-				let outer = std::mem::replace(&mut self.in_capture, true);
-				let group = self.parse_bracketed('(');
-				self.in_capture = outer;
+				let group =
+					self.within(Context { in_capture: true, ..self.context }, |parser| parser.parse_bracketed('('));
 				match group {
 					Node::List(items, Bracket::Round, separator) => Node::List(items, Bracket::Curly, separator),
 					other => Node::List(vec![other], Bracket::Curly, Separator::None),
 				}
 			}
-			'&' if self.peek_char(1).is_ascii_digit() && self.in_capture => {
+			'&' if self.peek_char(1).is_ascii_digit() && self.context.in_capture => {
 				self.advance();
 				let position: usize = self.take_while_char(|ch| ch.is_ascii_digit()).parse().unwrap_or(1);
 				Node::Symbol(format!("${}", position.saturating_sub(1)))
@@ -81,7 +91,7 @@ impl WarpParser {
 				other => other,
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
-			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
+			// `.card { … }`: a leading-dot name, a class selector in a style block (lib/markup.warp style)
 			'.' if self.is_identifier_start(1) => self.symbol_after(1, |name| Node::Symbol(format!(".{name}"))),
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'[' => {
@@ -296,9 +306,10 @@ impl WarpParser {
 		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
 			return error(NONE_CALL_ERROR);
 		}
-		if let Some(constant) =
-			check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count()))
-		{
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| {
+			let length = symbol.chars().count();
+			!self.at_member_name(length) && !self.at_scoped_name(length) && !self.context.in_enum_cases
+		}) {
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
@@ -306,6 +317,9 @@ impl WarpParser {
 
 		if let Some(declaration) = self.try_parse_operator_declaration(&symbol) {
 			return declaration;
+		}
+		if let Some(instruction) = self.wasm_instruction_after(&symbol) {
+			return instruction;
 		}
 
 		// Possessive: `p's name` is the field `p.name`
@@ -340,7 +354,8 @@ impl WarpParser {
 		let declared = self.declared_types.contains(&symbol);
 		// inside a data literal any spaced `c { … }` is the child c{ … } (card spaced-child), but in a for header
 		// `for t in todos { … }` it is the collection and the body (card markup-ul)
-		let spaced_child = self.in_data_literal && !self.in_for_header && !declared && self.blanks_then('{');
+		let spaced_child =
+			self.context.in_data_literal && !self.context.in_for_header && !declared && self.blanks_then('{');
 		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
 			self.skip_blanks();
 		}
@@ -439,8 +454,12 @@ impl WarpParser {
 			});
 		}
 		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
-		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
-			return Some(self.parse_enum_with_values());
+		if symbol == ENUM_WORD && self.in_code() {
+			match self.enum_body_ahead() {
+				Some(true) => return Some(self.parse_enum_with_values()),
+				Some(false) => return Some(self.parse_plain_enum()),
+				None => {}
+			}
 		}
 		self.foreign_form(symbol)
 	}
@@ -468,18 +487,18 @@ impl WarpParser {
 			'{' => {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
-				let outer_data_literal = std::mem::replace(&mut self.in_data_literal, op == Op::Colon);
 				// a rule `p { … }` of a style sheet is still the sheet
-				let in_style_sheet = op == Op::Colon && (symbol == STYLE_WORD || self.in_style_sheet);
-				let outer_style_sheet = std::mem::replace(&mut self.in_style_sheet, in_style_sheet);
+				let in_style_sheet = op == Op::Colon && (symbol == STYLE_WORD || self.context.in_style_sheet);
 				self.tag_block = op == Op::Colon;
-				let mut blocks = vec![self.parse_bracketed('{')];
-				// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
-				while self.current_char() == '{' {
-					blocks.push(self.parse_bracketed('{'));
-				}
-				self.in_data_literal = outer_data_literal;
-				self.in_style_sheet = outer_style_sheet;
+				let data_literal = Context { in_data_literal: op == Op::Colon, in_style_sheet, ..self.context };
+				let blocks = self.within(data_literal, |parser| {
+					let mut blocks = vec![parser.parse_bracketed('{')];
+					// `a{x:1}{y:2}{3}`: glued blocks are the children of a, `a{x}{y z}` is no `a{x, {y z}}`
+					while parser.current_char() == '{' {
+						blocks.push(parser.parse_bracketed('{'));
+					}
+					blocks
+				});
 				let block = Node::single_or_list(blocks, Bracket::None, Separator::None);
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
@@ -543,7 +562,11 @@ impl WarpParser {
 				self.skip_spaces(); // Only spaces, preserve newlines as statement separators
 
 				// in a condition `if f(1, 2) {…}` the block is the body of the `if`, not of a definition of f
-				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header && !is_switch_subject {
+				if self.current_char() == '{'
+					&& !self.context.equals_compares
+					&& !self.context.in_for_header
+					&& !is_switch_subject
+				{
 					// Function with body: name(params) { body }, its head the call
 					let body = self.parse_bracketed('{');
 					Node::List(vec![function_call(symbol, args_node), body], Bracket::Round, Separator::None)
@@ -555,6 +578,32 @@ impl WarpParser {
 			}
 			_ => Node::symbol(&symbol),
 		}
+	}
+
+	/// `wasm f64.floor`, the word wasm and an instruction name (a type, a dot, its operation): the call
+	/// `wasm_instruction("f64.floor")`; any other `wasm` stays a word
+	fn wasm_instruction_after(&mut self, symbol: &str) -> Option<Node> {
+		if symbol != WASM_WORD || self.options.data_mode || self.current_char() != ' ' {
+			return None;
+		}
+		let rest = &self.chars[self.pos + 1..];
+		let is_name_char = |c: &&char| c.is_ascii_lowercase() || c.is_ascii_digit() || **c == '_';
+		let type_length = rest.iter().take_while(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).count();
+		if type_length == 0 || rest.get(type_length) != Some(&'.') {
+			return None;
+		}
+		let operation_length = rest[type_length + 1..].iter().take_while(is_name_char).count();
+		if operation_length == 0 {
+			return None;
+		}
+		self.advance();
+		let name = self.take_chars(type_length + 1 + operation_length);
+		if crate::wasm_emitter::functions::wasm_bodies::instruction(&name).is_none() {
+			return Some(error(&format!(
+				"wasm {name} is no instruction warp takes: the ones on i64 and f64, e.g. wasm f64.sqrt"
+			)));
+		}
+		Some(crate::node::call(WASM_INSTRUCTION_CALL, vec![Node::Text(name)]))
 	}
 
 	pub(super) fn parse_symbol(&mut self) -> Result<String, String> {

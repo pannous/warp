@@ -2,6 +2,7 @@
 //! assertions that other test files already make were dropped here.
 //! Passing tests back the "Solved" section; `#[ignore = "next"]` tests are the "NOT YET" section's clear-cut fixes.
 
+use crate::common::effects_of;
 use crate::common::{fails_with, serve};
 use crate::is;
 use warp::wasm_emitter::{eval, eval_untrusted};
@@ -361,10 +362,15 @@ fn test_text_is_indexed_by_grapheme() {
 #[test] // size is a synonym for count; bytes only via byte count / .bytes, .chars .graphemes name the unit
 fn test_text_units_are_explicit() {
 	is!("x=\"👍🏽\";x.size", 1);
-	is!("byte count of \"👍🏽\"", 8);
 	is!("x=\"👍🏽\";x.chars.count", 1); // x.chars is the list of characters (user 2026-10-14, card abc-chars; char = character 2026-10-16)
 	is!("x=\"👍🏽\";count x.codepoints", 2);
 	is!("x=\"👍🏽\";count x.graphemes", 1);
+}
+
+#[test]
+#[ignore = "dropped: rust-cleanup-drops: the unit count byte count of t; warp writes number of bytes in t, t.bytecount"]
+fn test_byte_count_of_texts_and_lists() {
+	is!("byte count of \"👍🏽\"", 8);
 	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
 
@@ -984,27 +990,21 @@ fn test_fuel_budget_can_be_raised() {
 	const { assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous") };
 }
 
-fn effects(code: &str, function: &str) -> warp::analyzer::effects::EffectSet {
-	warp::analyzer::effects::effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))
-}
-
 #[test] // Koka's div: recursion that shrinks a parameter toward a guarded base case is total
 fn test_shrinking_recursion_is_total() {
-	use warp::analyzer::effects::EffectSet;
 	for (code, name) in [
 		("fib(n) := n<2 ? n : fib(n-1)+fib(n-2)", "fib"),
 		("fac(n) := n<2 ? 1 : n*fac(n-1)", "fac"),
 		("up(n) := n>=10 ? n : up(n+1)", "up"),
 		("down(n) := n>0 ? down(n-1) : 0", "down"),
 	] {
-		assert_eq!(effects(code, name), EffectSet::PURE, "{code} parsed as {:?}", warp::parse(code));
+		assert_eq!(effects_of(code, name), "Pure", "{code}");
 	}
 	is!("fib(n) := n<2 ? n : fib(n-1)+fib(n-2) ! Pure\nfib(10)", 55);
 }
 
 #[test] // when unsure, Div: unguarded, unbounded (fac(-1)), wrong-way and mutual recursion may diverge
 fn test_unproven_recursion_may_diverge() {
-	use warp::analyzer::effects::Effect::Div;
 	for (code, name) in [
 		("f(n) := f(n)", "f"),
 		("f(n) := n==0 ? 0 : n*f(n-1)", "f"),
@@ -1014,15 +1014,14 @@ fn test_unproven_recursion_may_diverge() {
 		("even(n) := n<1 ? 1 : odd(n-1)\nodd(n) := n<1 ? 0 : even(n-1)", "even"),
 		("spin(n) := spin(n)\ncaller(n) := spin(n)+1", "caller"),
 	] {
-		assert!(effects(code, name).contains(Div), "{code}: {}", effects(code, name));
+		assert!(effects_of(code, name).contains("Div"), "{code}: {}", effects_of(code, name));
 	}
 }
 
 #[test] // a while loop has an unknown condition in general: Div
 fn test_while_loop_may_diverge() {
-	use warp::analyzer::effects::Effect::Div;
-	assert!(effects("i=0; while i<3 { i++ }; i", "main").contains(Div));
-	assert!(!effects("x=3; x*2", "main").contains(Div));
+	assert!(effects_of("g(n) := { i=0; while i<n { i++ }; i }", "g").contains("Div"));
+	assert!(!effects_of("h(x) := x*2", "h").contains("Div"));
 }
 
 #[test] // `effects of f` reports Div and `f ! Pure` rejects a function that may diverge

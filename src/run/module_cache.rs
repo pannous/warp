@@ -72,6 +72,10 @@ pub enum Origin {
 /// `bytes` (a binary module or WAT text) compiled for `engine`: from this process's modules or the cache when they
 /// hold it, else compiled and added to both
 pub fn compiled_module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+	crate::compiler::phase_times::timed("wasmtime compile", || compiled_module_untimed(engine, bytes))
+}
+
+fn compiled_module_untimed(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 	if is_precompiled(bytes) {
 		// SAFETY: compiled code runs as it is, so a .cwasm file is trusted like a native executable: the user runs it
 		return unsafe { Module::deserialize(engine, bytes) };
@@ -88,11 +92,6 @@ pub fn compiled_module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 	Ok(module)
 }
 
-/// compiled_module with the cache in `directory` and without this process's modules, and where the module came from
-pub fn compiled_module_in(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Module, Origin)> {
-	compiled_in(directory, engine, bytes)
-}
-
 /// A component (`use lib.wasm`) compiled for `engine`, from the cache when it holds it: compiling uniscript's
 /// component takes most of a second (card takes-three)
 pub fn compiled_component(engine: &Engine, bytes: &[u8]) -> Result<Component> {
@@ -103,7 +102,7 @@ pub fn compiled_component(engine: &Engine, bytes: &[u8]) -> Result<Component> {
 }
 
 /// A module or component compiled for `engine` with the cache in `directory`, and where it came from
-pub fn compiled_in<Code: CompiledCode>(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Code, Origin)> {
+fn compiled_in<Code: CompiledCode>(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Code, Origin)> {
 	load_or_compile(directory, &cache_key(engine, bytes), engine, bytes)
 }
 

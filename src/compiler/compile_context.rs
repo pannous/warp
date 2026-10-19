@@ -27,6 +27,8 @@ pub struct CompileContext {
 	pub serving_port: Option<u16>,
 	/// a sandboxed run on this thread (sandbox.rs)
 	pub sandboxed: bool,
+	/// a self-hosted stage program compiles (self_hosted.rs): no file of the working directory is one of its modules
+	pub beyond_working_directory: bool,
 	/// the source of the program, for excerpts and its `// got it` comments
 	pub source: String,
 	/// a line of the source says `use strict` (in_source_mode, the one reader of it)
@@ -57,9 +59,15 @@ pub struct CompileContext {
 	pub fast_functions: HashSet<String>,
 	/// the modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	pub early_class_modules: HashSet<PathBuf>,
+	/// the used files' classes it put in front: the loader's passes of a file read their fields (a match arm
+	/// `Holds(box) =>` binds box) though the declarations are left out of the file
+	pub early_file_classes: Vec<Node>,
 	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
 	/// class_methods reads `n + 2` of `n = note_value(C4)` as Note's plus before the module joins the program
 	pub module_returned_classes: HashMap<String, String>,
+	/// those modules' variables holding such an instance (sound's `F = PitchClass(5)`), with its class: `F#4` of the
+	/// program is PitchClass's index
+	pub module_instance_classes: HashMap<String, String>,
 	/// the unit words the program being lowered defines itself (`m = 2`): no units while it is lowered
 	pub shadowed_units: HashSet<String>,
 	/// the program's own unit lines (`unit furlong := 201.168 m`, units/definitions.rs), set before it is parsed and kept
@@ -103,6 +111,7 @@ impl Default for CompileContext {
 			server_values: vec![],
 			serving_port: None,
 			sandboxed: false,
+			beyond_working_directory: false,
 			source: String::new(),
 			says_strict: false,
 			warning_mode: WarningMode::default(),
@@ -120,7 +129,9 @@ impl Default for CompileContext {
 			fast_program: false,
 			fast_functions: HashSet::new(),
 			early_class_modules: HashSet::new(),
+			early_file_classes: vec![],
 			module_returned_classes: HashMap::new(),
+			module_instance_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
 			program_unit_lines: String::new(),
 			field_unit_words: HashMap::new(),
@@ -186,4 +197,77 @@ pub fn scoped<T: 'static, R>(field: fn(&mut CompileContext) -> &mut T, value: T,
 pub fn scoped_flags<R>(flags: &[(Flag, bool)], run: impl FnOnce() -> R) -> R {
 	let _restores: Vec<Restore<bool>> = flags.iter().map(|&(field, value)| Restore::set(field, value)).collect();
 	run()
+}
+
+/// What a used module's source passes may read of the compile so far and do not change, as text: a module lowered
+/// under the same inputs lowers the same (modules/lowered_modules.rs keys its kept lowerings with it and with
+/// LoweredEffects)
+pub fn lowering_inputs() -> String {
+	read(|context| {
+		format!(
+			"{:?}\n{:?}\n{} {} {} {} {} {} {}\n{:?}\n{:?}\n{:?}\n{}\n{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n{}",
+			context.mode,
+			context.granted,
+			context.sandboxed,
+			context.beyond_working_directory,
+			context.comments_as_meta,
+			context.reflection_mode,
+			context.counts_fuel,
+			context.fast_program,
+			context.says_strict,
+			sorted(&context.fast_functions),
+			sorted(&context.module_definitions),
+			sorted(&context.shadowed_units),
+			context.program_unit_lines,
+			sorted(&context.declared_types),
+			context.compiler_words,
+			context.serving_port,
+			context.server_values,
+			context.program_file,
+			crate::pipeline::fast_math(),
+		)
+	})
+}
+
+/// What a used module's source passes write in the compile context: kept with a lowered module, so a kept module
+/// leaves the context as its lowering did
+#[derive(Clone, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+pub struct LoweredEffects {
+	early_class_modules: Vec<PathBuf>,
+	module_returned_classes: Vec<(String, String)>,
+	module_instance_classes: Vec<(String, String)>,
+	field_unit_words: Vec<(String, String)>,
+	bool_functions: Vec<String>,
+}
+
+impl LoweredEffects {
+	pub fn now() -> Self {
+		read(|context| LoweredEffects {
+			early_class_modules: sorted(&context.early_class_modules).into_iter().cloned().collect(),
+			module_returned_classes: sorted_entries(&context.module_returned_classes),
+			module_instance_classes: sorted_entries(&context.module_instance_classes),
+			field_unit_words: sorted_entries(&context.field_unit_words),
+			bool_functions: sorted(&context.bool_functions).into_iter().cloned().collect(),
+		})
+	}
+
+	pub fn apply(self) {
+		change(|context| {
+			context.early_class_modules = self.early_class_modules.into_iter().collect();
+			context.module_returned_classes = self.module_returned_classes.into_iter().collect();
+			context.module_instance_classes = self.module_instance_classes.into_iter().collect();
+			context.field_unit_words = self.field_unit_words.into_iter().collect();
+			context.bool_functions = self.bool_functions.into_iter().collect();
+		});
+	}
+}
+
+fn sorted<T: Ord>(items: impl IntoIterator<Item = T>) -> Vec<T> {
+	let mut items: Vec<T> = items.into_iter().collect();
+	items.sort();
+	items
+}
+
+fn sorted_entries(map: &HashMap<String, String>) -> Vec<(String, String)> {
+	sorted(map.iter().map(|(key, value)| (key.clone(), value.clone())))
 }
