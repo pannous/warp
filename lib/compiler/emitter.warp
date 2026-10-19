@@ -1103,6 +1103,7 @@ def key_expression(body: Body, n: any): list {
 		# `7/2 as int`: an exact rational truncated toward 0
 		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
 		if name_of(right) == "text" { return shown_text(value) }
+		if name_of(right) == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
