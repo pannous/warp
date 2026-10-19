@@ -696,6 +696,9 @@ captured_marker = "·captured·"
 # the runtime words that give a value's text: a program using one (or shown_text of a list or node) has no closures
 # here, whose text is the lambda as written
 text_words = ["node_text", "list_text", "joined"]
+# the operators a closure takes part in (node_equal compares closures)
+closure_comparisons = ["==", "!="]
+is_closure_value(n: any) := is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 == symbol("closure_new")
 closure_value(body: Body, target: any, captured: any) := {
 	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
 	number = closure_number(name_of(target), #captured)
@@ -919,6 +922,8 @@ key_expression(body: Body, n: any) := {
 	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
 		return instance_value(body, name_of(left), right.map(x => x))
 	}
+	# a function value as an operand: Rust's type error `1 + (x => x)`, its reflection `f.name` read as `(closure_new f)#("name"+1)`
+	if not (operator in closure_comparisons) and (is_closure_value(left) or is_closure_value(right)) { return refuse("a function value in " + operator) }
 	if operator == "#" and left != ø and subscript_name(right) != ø { return map_get(expression(body, left), subscript_name(right)) }
 	if operator == "#" and left != ø and op_of(right) == "+" and value_of(right) == 1 {
 		target = expression(body, left)
