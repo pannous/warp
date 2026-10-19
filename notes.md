@@ -68,3 +68,5 @@
 - 2026-10-19 warp-cache: with WARP_SELF_HOSTED=1, right after lib/ or the binary changed, two runs printed nothing at all (exit 0) while a third warmed the stage cache; warm and fresh-cache reruns were right. Not reproduced: maybe a run reading a kept program another run was still writing (scratch/refusals/cache shared by parallel runs).
 - 2026-10-19 warp-cache: tests/queue.sh killed a run of 7 WARP_SELF_HOSTED=1 test files at the 4 GB memory cap (each test process compiles the stage programs on a cold cache); `--test-threads=2` stayed under it.
 - 2026-10-19 warp-cache: Rust's list semantics: `+=` and push change the list every alias holds; `xs = xs + [x]` makes a new list (emitter.warp appends in place only while xs is unshared).
+
+- card time-zones-warp (sprint, blind): lib/time.warp has the zone rules in warp (Zone class, Dst enum, time_zones table, zone_offset, zone_instant over whole seconds); src/wasm_emitter/time/time_zones.rs stays until the emitter calls these words; time_in_zone waits for card time-primitives (form/position of a time value)
