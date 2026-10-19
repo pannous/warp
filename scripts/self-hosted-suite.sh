@@ -170,6 +170,15 @@ switched_on() {
 	echo "$commit"
 }
 
+push_branch() {
+	local attempt
+	for attempt in 1 2 3; do
+		git push -q -f origin "$1:refs/heads/$2" && return 0
+		sleep $((attempt * 20))
+	done
+	return 1
+}
+
 cloud_run() {
 	local tip run group number branch commit logs=() branches=() commits=()
 	tip=$(git rev-parse "${1:-HEAD}") || fail "no tip ${1:-HEAD}"
@@ -180,7 +189,8 @@ cloud_run() {
 		group=${TEST_GROUPS[$number]}
 		branch=$SCRATCH_PREFIX/$run-$number
 		commit=$(switched_on "$tip" "$group")
-		git push -q -f origin "$commit:refs/heads/$branch" || fail "push of $branch failed"
+		# GitHub now and then answers "remote rejected (failed)" (9741669b, e5d5a6b7): tried again before giving up
+		push_branch "$commit" "$branch" || fail "push of $branch failed"
 		# shellcheck disable=SC2086 # the group is a list of filters
 		scripts/cloud-test.sh --no-wait "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
 		branches+=("$branch") commits+=("$commit")
