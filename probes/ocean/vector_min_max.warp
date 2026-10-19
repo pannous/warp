@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+// card min-max: min, max and clamp of vectors take each component, a number beside a vector goes with every component
+use math
+check max([1, 5], [3, 2]) == [3, 5]
+check max([1, 5], 2) == [2, 5]
+check min(2.5, 1) == 1
+check max([3, 1, 2]) == 3
+larger(a, b) := max(a, b)
+check larger([1, 5], [3, 2]) == [3, 5]
+check larger(1, 3) == 3
+check clamp([1, 5], 2, 3) == [2, 3]
+check clamp(7, 2, 3) == 3
+unit(p) := clamp(p, 0, 1)
+check unit([-1, 0.5, 2]) == [0, 0.5, 1]
+capped(p) := min(p .* 2, 3)
+check capped([1, 2]) == [2, 3]
