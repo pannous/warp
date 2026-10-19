@@ -214,6 +214,6 @@ case "${1:-}" in
 		done
 		if [ "${1:-}" = --local ]; then shift; local_run "$@"; else cloud_run "$@"; fi ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,18p' "$0"; exit 2 ;;
+	--*) sed -n '2,/^set -uo/p' "$0" | sed '$d'; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac
