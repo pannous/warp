@@ -27,3 +27,10 @@ fn a_collection_or_class_result_type_before_a_block_body() {
 	is!("class G { r: int }; def g(n: int): G { G{r: n} }; g(2).r", 2);
 	is!("class G { r: int }; def g(n: int) as G { G{r: n} }; g(2).r", 2);
 }
+
+/// A function declaring a class result maps over a list by name, as one declaring int does (card function-declared)
+#[test]
+fn a_function_with_a_class_result_maps_by_name() {
+	is!("class P { n: int }; mk(t: int): P := P(n: t); [1, 2].map(mk)#2.n", 2);
+	is!("class P { n: int }; def mk(t: int) as P := P(n: t); [3].map(mk)#1.n", 3);
+}
