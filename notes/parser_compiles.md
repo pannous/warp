@@ -43,9 +43,9 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 |---|---|
 | lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
 | prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
-| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | warp-self-analyzer |
+| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | done on pure-lane 2c0201b4e9: `f(x): T := e` as `f(x) := {the result: T = e; the result}`, as Rust lowers it (warp-self-analyzer) |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache: `Op.Colon` gives Colon on main (87062eb624); the stage's 'not an object' once a stage program has Op (a one-entry map named like a class read as an instance): enum-decls 24a46fd732, Ready (card class-named-entry); a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd; `use "lib/compiler/node.warp"` itself: card node-op-field-type, Later |
-| try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
+| try (Rust lowers it to ran_without_error/is_error: needs those builtins) | `try x else y` done on pure-lane 2c0201b4e9 (lib/compiler/tries.warp, builtins merged from pure-builtins); `try {…} catch e {…}` lowers too but waits on caught_error in emitter.warp (warp-self-emitter) (warp-self-analyzer) |
 | a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps) | gone on main 57469d5a52: warp-cache's survey has no refusal naming gaps or an instance (68 refusals, data/self_hosting/parser_gap_map_instances.txt) |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
