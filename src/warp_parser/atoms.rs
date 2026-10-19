@@ -271,6 +271,7 @@ impl WarpParser {
 			return Node::Symbol(literal);
 		}
 		let symbol = or_return_error!(self.parse_symbol());
+		let symbol = self.bang_word(symbol);
 		let symbol = self.joined_type_name(symbol);
 		let symbol = self.print_spelled(symbol);
 
@@ -578,6 +579,19 @@ impl WarpParser {
 			}
 			_ => Node::symbol(&symbol),
 		}
+	}
+
+	/// `is!`: a name glued to `!` is one word when the program or a standard module defines it so (card warp-is-tests);
+	/// otherwise the `!` stays a suffix (`x!`, `name! email?`), a macro (`println!(…)`) or `!=`
+	fn bang_word(&mut self, symbol: String) -> String {
+		if self.current_char() != BANG || self.peek_char(1) == '=' || self.options.data_mode {
+			return symbol;
+		}
+		if !self.defines_bang_word(&symbol) {
+			return symbol;
+		}
+		self.advance();
+		format!("{symbol}{BANG}")
 	}
 
 	/// `wasm f64.floor`, the word wasm and an instruction name (a type, a dot, its operation): the call
