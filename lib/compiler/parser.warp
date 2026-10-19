@@ -6,7 +6,7 @@ use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source) := view_of(parsed(source))
@@ -21,8 +21,31 @@ def parsed(source) {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source)}
 	items(p, ' ', "")
+}
+
+// The words a type's name follows where it is declared
+// Rust twin: mod.rs TYPE_DECLARATION_WORDS, RECORD_WORD
+TYPE_SCAN_WORDS = ["class", "struct", "record", "type"]
+
+// The type names a source declares: the word after class, struct, record or type within a line, outside comments
+// and texts, with nothing or a bracket, `:` or `;` glued after it (`record = find(…)` declares nothing)
+// Rust twin: declaration_scan.rs scan_declared_types
+def declared_type_names(source) {
+	type_names = []
+	for line in code_only(source).split("\n") {
+		previous = ""
+		for word_written in line.replace("\t", " ").split(" ") {
+			if word_written == "" { continue }
+			if TYPE_SCAN_WORDS.contains(previous) {
+				end = symbol_end(word_written, 0, word_written.length)
+				if end > 0 and (end == word_written.length or "({<[:;".contains(word_written[end])) { type_names += [word_written[0 .. end]] }
+			}
+			previous = word_written
+		}
+	}
+	type_names
 }
 
 // The keyword forms: each word with a form of its own and the form's shape; a prefix word's shape is the operator it
@@ -1478,9 +1501,14 @@ def named(p) {
 		if shader != ø { return shader }
 	}
 	name = symbol(word)
+	// `Point {x: 1}` with blanks constructs a declared type as the glued one does (open decision 41); a capitalized word
+	// of no declared type before a block of fields is the tagged object `Person:{…}` (card person-name)
+	declared = p.types.contains(word)
+	if (declared or is_capitalized(word)) and block_after_blanks(p, declared) { skip_spaces(p) }
 	if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
-		return Key(name, Op.Colon, braced_items(p))
+		// `Point{x: 1}` of a declared type constructs a point, any other `name{…}` stays the tagged block (D4)
+		return Key(name, if declared then Op.None else Op.Colon, braced_items(p))
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
@@ -1493,6 +1521,23 @@ def named(p) {
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))
+}
+
+// Blanks, then a block of fields: `{}`, `{ name: …`, or with `assignments` `{ x = 1 …` (its first entry may start on
+// the next line)
+// Rust twin: lookahead.rs block_after_blanks
+def block_after_blanks(p, assignments) {
+	at = blank_end(p, p.at)
+	if at == p.at or not is_at(p.code, at, '{', p.n) { return false }
+	first = at + 1
+	while first < p.n and is_blank(p.code[first]) { first = first + 1 }
+	if is_at(p.code, first, '}', p.n) { return true }
+	end = name_end(p.code, first, p.n)
+	if end == first { return false }
+	after_name = blank_end(p, end)
+	c = peek(p.code, after_name, p.n)
+	following = peek(p.code, after_name + 1, p.n)
+	(c == ':' and following != '=') or (assignments and c == '=' and following != '=')
 }
 
 // A case of an enum, no constant: `Node.True`, `Node::Empty`, `None` in `enum Bracket { Round, None }`
