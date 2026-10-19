@@ -191,19 +191,14 @@ pub fn plain_view(node: &Node) -> Node {
 	plain(node_view(node))
 }
 
-/// The plain view with the positions: ["at", line, column, view] around each positioned node
-pub fn positioned_plain_view(node: &Node) -> Node {
-	plain(positioned_view(node))
-}
-
-/// The plain view the emitter reads (lib/compiler/emitter.warp): a declaration's type, which the lowering keeps as
-/// metadata on the target and every view drops, shown as the source writes it, `x: int = 3`
-pub fn emitted_view(node: &Node) -> Node {
-	plain_view(&declared_types_shown(node.clone()))
+/// The plain view the analysis reads: each declared type shown in it
+pub fn analysis_view(program: &Node) -> Node {
+	plain_view(&declared_types_shown(program.clone()))
 }
 
 /// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
-pub fn declared_types_shown(node: Node) -> Node {
+fn declared_types_shown(node: Node) -> Node {
+	use crate::operators::Op;
 	match node {
 		Node::Key(target, Op::Assign, value)
 			if let Node::Meta { node: name, data } = *target.clone()
@@ -213,6 +208,11 @@ pub fn declared_types_shown(node: Node) -> Node {
 		}
 		other => other.map_children(declared_types_shown),
 	}
+}
+
+/// The plain view with the positions: ["at", line, column, view] around each positioned node
+pub fn positioned_plain_view(node: &Node) -> Node {
+	plain(positioned_view(node))
 }
 
 fn plain(view: Node) -> Node {
