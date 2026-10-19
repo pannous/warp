@@ -220,7 +220,8 @@ function and local names.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
 - Int `/` gives an exact rational (runtime word exact_ratio): an Int `$Node` holding a `$Ratio` of two `$i64box`, as
   the Rust reader reads it; exact again with ints and ratios (exact_add/sub/mul/div/order), shown as Rust shows it
-  (exact_text: 3.5, 1/3); `%` on one and a ratio with a float go through floats. `#`, `x#i` and `x#i = v` on a value
+  (exact_text: 3.5, 1/3); `%` on one is exact_mod and `floor` exact_floor (runtime.warp's exact rounding words, card
+  exact-rounding-warp, probes/self_hosting/emitter/exact/rounding.warp); a ratio with a float goes through floats. `#`, `x#i` and `x#i = v` on a value
   known only at run time call node_length / node_at / node_set_at.
 - Not in the core yet (outside, not dropped): decimals as exact rationals (the core reads a decimal as f64, so
   `1/3 + 0.5` is a float where Rust gives 5/6), ints beyond 64 bits (Rust promotes; a ratio's parts overflow
