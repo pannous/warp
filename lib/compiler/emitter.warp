@@ -512,7 +512,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
-type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
+core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol"}
@@ -520,8 +520,8 @@ covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["in
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: []}
 def type_test(body: Body, subject: any, spec: text): list {
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression(body, subject))], text_value(spec)]) }
-	if not (spec in type_words) { return refuse("a test of the type " + spec) }
-	type = type_words[spec]
+	if not (spec in core_type_words) { return refuse("a test of the type " + spec) }
+	type = core_type_words[spec]
 	value = expression(body, subject)
 	if value#1 == "node" { return runtime_call("node_is_type", [value, text_value(type)]) }
 	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
