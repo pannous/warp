@@ -98,8 +98,8 @@ log1p(x: float): float from 'm'
 expm1(x: float): float from 'm'
 
 gcd(a: int, b: int): int := {
-	x = if a < 0 then -a else a
-	y = if b < 0 then -b else b
+	x = if a < 0 then 0 - a else a
+	y = if b < 0 then 0 - b else b
 	while y != 0 { rest = x % y; x = y; y = rest }
 	x
 }
