@@ -633,8 +633,10 @@ assignment(body: Body, target: any, value: any) := {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	kind = value#1
-	if not (name in body.names) and name in module.shared and body.function.name == "main" { return declare_global(name, value) }
-	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
+	# a shared main-level variable is main's to assign: a function's assignment of that name makes its own local
+	is_shared = name in module.shared
+	if not (name in body.names) and is_shared and body.function.name == "main" { return declare_global(name, value) }
+	if not (name in body.names) and name in module.globals and not is_shared { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		held = body.kinds#(body.names[name] + 1)
