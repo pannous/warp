@@ -142,6 +142,8 @@ map_index(m: any, name: text) := {
 }
 # `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
 map_get(m: any, name: text) := {
+	if kind_code(m) == 5 { return node_text(m) }
+	if is_entry(m) and text_order(name, "name") == 0 { return key_name(m) }
 	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
 	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
 	at = map_index(m, name)
@@ -690,10 +692,12 @@ map_equal(a: any, b: any) := {
 	}
 	yes
 }
-# whether `m.name` reads a field: m a map or an instance with an entry so named, or an entry's key or value
+# whether `m.name` reads a field: m a map or an instance with an entry so named, an entry's key, value or name, a
+# symbol's name
 has_field(m: any, name: text) := {
 	if is_null(m) == 1 { return no }
-	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 }
+	if kind_code(m) == 5 { return text_order(name, "name") == 0 }
+	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 }
 	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
 	map_index(m, name) > 0
 }
