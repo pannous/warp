@@ -188,7 +188,7 @@ pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> 
 		return None;
 	}
 	let params: Vec<wasm_encoder::ValType> =
-		warp_parameters(&hsig.param_types).filter_map(|(_, param)| param_valtype(param)).collect();
+		warp_parameters(hsig).filter_map(|(_, param)| param_valtype(param)).collect();
 	let results: Vec<wasm_encoder::ValType> = header_result(hsig).into_iter().collect();
 
 	// Leak strings for 'static lifetime (acceptable for long-running process)
@@ -271,6 +271,7 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
 		return Vec::new();
 	};
 	let mut struct_types = StructTypes::default();
+	let mut struct_bodies = super::struct_layouts::StructBodies::default();
 	let mut signatures = Vec::new();
 	let mut current_decl = String::new();
 	let mut in_block_comment = false;
@@ -286,6 +287,7 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
 		}
 
 		struct_types.read(line);
+		struct_bodies.read(line);
 		// an empty line ends whatever was accumulating
 		if line.is_empty() {
 			current_decl.clear();
@@ -311,6 +313,7 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
 	}
 
 	remember_struct_types(struct_types.names);
+	struct_bodies.remember();
 	signatures
 }
 

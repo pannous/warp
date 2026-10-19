@@ -161,9 +161,11 @@ mod header_cache;
 #[cfg(feature = "native")]
 mod link;
 mod macros;
+mod struct_layouts;
 pub use header::*;
 #[cfg(feature = "native")]
 pub use link::*;
+pub use struct_layouts::struct_layout;
 
 /// The import module of libm
 pub const LIBM: &str = "m";
@@ -259,7 +261,7 @@ fn unlinkable_header_function(name: &str) -> Option<&'static str> {
 }
 
 /// What a C pointer type crosses as (notes/ffi_handles.md); the C function descriptions executables carry
-pub use warp_runtime::c_signatures::{CFunction, CPointer, ParamType, RetType};
+pub use warp_runtime::c_signatures::{is_error_type, CFunction, CPointer, Failure, ParamType, RetType};
 
 /// C words that qualify a type without naming it
 const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union", "unsigned", "signed"];
@@ -287,7 +289,7 @@ pub fn pointer_kind(c_type: &str) -> Option<CPointer> {
 /// An out-pointer whose filled-in pointer is the call's result, a handle: `sqlite3 **ppDb`; a `char **` (strtod's endptr)
 /// is not one, the C function's own result stays
 pub(crate) fn is_handle_out_pointer(c_type: &str) -> bool {
-	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char"
+	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char" && !is_error_type(&pointee(c_type))
 }
 
 /// What a `const T *` points to when a `size_t` after it says how many bytes: `const uint8_t *module, size_t length`
@@ -304,33 +306,96 @@ fn takes_bytes(c_types: &[String], index: usize) -> bool {
 		&& c_types.get(index + 1).is_some_and(|next| bare_c_type(next) == LENGTH_TYPE)
 }
 
-/// How each C parameter crosses: a pointer by what it points to, bytes with their length, else by its wasm value type
-/// (int, bool, char, short, Color: i32)
-pub fn c_param_types(c_types: &[String]) -> Vec<ParamType> {
+/// How each C parameter crosses: a pointer by what it points to, bytes with their length, a struct with a layout as a
+/// map (a trailing one as the output of a function that reports its success apart), else by its wasm value type (int,
+/// bool, char, short, Color: i32)
+pub fn c_param_types(hsig: &FfiHeaderSignature) -> Vec<ParamType> {
+	let c_types = &hsig.param_types;
+	let gives_outputs = reports_failure(hsig) || c_types.iter().any(|c_type| is_error_out_pointer(c_type));
 	let mut types: Vec<ParamType> = vec![];
 	for (index, c_type) in c_types.iter().enumerate() {
+		let count_follows = c_types.get(index + 1).is_some_and(|next| bare_c_type(next) == LENGTH_TYPE);
 		types.push(match types.last() {
-			Some(ParamType::Bytes) => ParamType::Length,
+			Some(ParamType::Bytes | ParamType::StructsIn) => ParamType::Length,
 			_ if takes_bytes(c_types, index) => ParamType::Bytes,
+			_ if is_error_out_pointer(c_type) => ParamType::ErrorOut,
+			_ if struct_pointee(c_type).is_some() && is_const(c_type) => {
+				if count_follows {
+					ParamType::StructsIn
+				} else {
+					ParamType::StructIn
+				}
+			}
+			_ if struct_pointee(c_type).is_some() && gives_outputs && is_trailing_output(c_types, index) => {
+				if count_follows {
+					ParamType::StructsOut
+				} else {
+					ParamType::StructOut
+				}
+			}
 			_ => c_type_to_param_type(c_type),
 		});
 	}
 	types
 }
 
-/// The C parameters a warp call passes, with how they cross: all but the out-pointers and lengths
-fn warp_parameters(c_types: &[String]) -> impl Iterator<Item = (&String, ParamType)> {
-	c_types.iter().zip(c_param_types(c_types)).filter(|(_, param)| param.is_passed())
+/// The layout of the struct a single pointer points to, if a header defines it
+fn struct_pointee(c_type: &str) -> Option<String> {
+	(c_type.matches('*').count() == 1).then(|| struct_layout(&pointee(c_type))).flatten()
+}
+
+fn is_const(c_type: &str) -> bool {
+	c_type.split_whitespace().any(|word| word == "const")
+}
+
+/// `wasm_trap_t **trap`: an out-pointer whose filled-in value is a failure
+fn is_error_out_pointer(c_type: &str) -> bool {
+	pointer_kind(c_type) == Some(CPointer::Out) && is_error_type(&pointee(c_type))
+}
+
+/// Whether only outputs follow the parameter at `index`: its count, out-pointers, other struct pointers that are not const
+fn is_trailing_output(c_types: &[String], index: usize) -> bool {
+	c_types.iter().enumerate().skip(index + 1).all(|(later, c_type)| {
+		(later == index + 1 && bare_c_type(c_type) == LENGTH_TYPE)
+			|| pointer_kind(c_type) == Some(CPointer::Out)
+			|| (struct_pointee(c_type).is_some() && !is_const(c_type))
+	})
+}
+
+/// How the C result reports a failure: an error-shaped pointer when not NULL, a bool when false (only for a function
+/// with an output: else the bool is the result)
+pub(crate) fn failure_of(hsig: &FfiHeaderSignature, param_types: &[ParamType]) -> Failure {
+	let has_output = param_types.iter().any(|param| param.is_struct_output()) || param_types.contains(&ParamType::Out);
+	if pointer_kind(&hsig.return_type).is_some() && is_error_type(&pointee(&hsig.return_type)) {
+		Failure::NotNull
+	} else if bare_c_type(&hsig.return_type) == "bool" && has_output {
+		Failure::False
+	} else {
+		Failure::None
+	}
+}
+
+/// Whether the C result says whether the call worked: an error-shaped pointer or a bool
+fn reports_failure(hsig: &FfiHeaderSignature) -> bool {
+	let error_result = pointer_kind(&hsig.return_type).is_some() && is_error_type(&pointee(&hsig.return_type));
+	error_result || bare_c_type(&hsig.return_type) == "bool"
+}
+
+/// The C parameters a warp call passes, with how they cross: all but the out-pointers, lengths and outputs
+fn warp_parameters(hsig: &FfiHeaderSignature) -> impl Iterator<Item = (&String, ParamType)> {
+	hsig.param_types.iter().zip(c_param_types(hsig)).filter(|(_, param)| param.is_passed())
 }
 
 /// The wasm type a passed parameter has in the warp call: bytes are a value (a text, a list), pointers and handles i32
 fn param_valtype(param: ParamType) -> Option<wasm_encoder::ValType> {
 	match param {
-		ParamType::Bytes => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
+		ParamType::Bytes | ParamType::StructIn | ParamType::StructsIn => {
+			Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF))
+		}
 		ParamType::I64 => Some(wasm_encoder::ValType::I64),
 		ParamType::F32 => Some(wasm_encoder::ValType::F32),
 		ParamType::F64 => Some(wasm_encoder::ValType::F64),
-		ParamType::Out | ParamType::Length => None,
+		ParamType::Out | ParamType::ErrorOut | ParamType::Length | ParamType::StructOut | ParamType::StructsOut => None,
 		ParamType::I32 | ParamType::Ptr | ParamType::Handle => Some(wasm_encoder::ValType::I32),
 	}
 }
@@ -339,6 +404,9 @@ fn param_valtype(param: ParamType) -> Option<wasm_encoder::ValType> {
 /// its number
 pub(crate) fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
 	let has_out_pointer = hsig.param_types.iter().any(|t| is_handle_out_pointer(t));
+	if c_param_types(hsig).iter().any(|param| param.is_struct_output()) {
+		return Some(CPointer::Struct);
+	}
 	match pointer_kind(&hsig.return_type) {
 		Some(CPointer::Text) => Some(CPointer::Text),
 		Some(_) => Some(CPointer::Handle),
@@ -378,10 +446,12 @@ pub fn c_function_of(module: &str, hsig: &FfiHeaderSignature) -> CFunction {
 		module: module.to_string(),
 		library: resolve_library_alias(module).to_string(),
 		name: hsig.name.clone(),
-		param_types: c_param_types(&hsig.param_types),
+		param_types: c_param_types(hsig),
 		result: pointer_result(hsig),
 		ret_type: c_type_to_ret_type(&hsig.return_type),
 		out_pointee: hsig.param_types.iter().find(|t| is_handle_out_pointer(t)).map(|t| pointee(t)),
+		layouts: struct_layouts_of(hsig),
+		failure: failure_of(hsig, &c_param_types(hsig)),
 	}
 }
 
@@ -402,10 +472,30 @@ pub fn header_c_functions(module: &str, imported: &std::collections::HashSet<Str
 		.collect()
 }
 
+/// The layout text of each struct parameter, "" for the others; none without struct parameters
+fn struct_layouts_of(hsig: &FfiHeaderSignature) -> Vec<String> {
+	let layouts: Vec<String> = hsig
+		.param_types
+		.iter()
+		.zip(c_param_types(hsig))
+		.map(|(c_type, param)| match param {
+			ParamType::StructIn | ParamType::StructsIn | ParamType::StructOut | ParamType::StructsOut => {
+				struct_pointee(c_type).unwrap_or_default()
+			}
+			_ => String::new(),
+		})
+		.collect();
+	if layouts.iter().all(String::is_empty) {
+		vec![]
+	} else {
+		layouts
+	}
+}
+
 /// The wasm result of a C function: a text Node, a handle id, else its number
 fn header_result(hsig: &FfiHeaderSignature) -> Option<wasm_encoder::ValType> {
 	match pointer_result(hsig) {
-		Some(CPointer::Text) => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
+		Some(CPointer::Text | CPointer::Struct) => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
 		Some(_) => Some(wasm_encoder::ValType::I32),
 		None => map_c_type_to_valtype(&hsig.return_type),
 	}
@@ -434,7 +524,7 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 		.map(|declared| {
 			(
 				declared.name.clone(),
-				warp_parameters(&declared.param_types)
+				warp_parameters(&declared)
 					.map(|(c_type, param)| param == ParamType::Ptr && pointer_kind(c_type) == Some(CPointer::Text))
 					.collect(),
 			)
@@ -564,4 +654,16 @@ pub fn is_ffi_library(lib: &str) -> bool {
 	}
 	// Dynamic discovery - check if headers exist
 	!get_library_header_paths(canonical).is_empty()
+}
+
+/// Whether `lib` is a C library installed with its headers, loadable now: `use wasmtime` then brings the C library
+/// libwasmtime besides the standard module wasmtime, as `use math` brings libm
+pub fn is_installed_c_library(lib: &str) -> bool {
+	#[cfg(feature = "native")]
+	return is_ffi_library(lib) && warp_runtime::c_calls::get_or_load_library(resolve_library_alias(lib)).is_some();
+	#[cfg(not(feature = "native"))]
+	return {
+		let _ = lib;
+		false
+	};
 }
