@@ -978,22 +978,25 @@ fn is_listing_word(word: &Node) -> bool {
 /// card module-methods), its fields and dir's names as texts
 pub(crate) fn word_list(word: &str, class: &str, names: &[String]) -> Node {
 	match word {
-		_ if METHODS_WORDS.contains(&word) => Node::List(
-			names.iter().map(|name| crate::closures::method_reference(name.clone(), class)).collect(),
-			Bracket::Square,
-			Separator::Space,
-		),
-		_ => text_list(names),
+		_ if METHODS_WORDS.contains(&word) => {
+			listed(references(names.iter().map(|name| crate::closures::method_reference(name.clone(), class))))
+		}
+		_ => listed(text_list(names)),
 	}
 }
 
 /// The functions of these names themselves, `[function gcd, function lcm]`
 pub(crate) fn function_list(names: &[String]) -> Node {
-	Node::List(
-		names.iter().cloned().map(crate::closures::function_reference).collect(),
-		Bracket::Square,
-		Separator::Space,
-	)
+	listed(references(names.iter().cloned().map(crate::closures::function_reference)))
+}
+
+fn references(functions: impl Iterator<Item = Node>) -> Node {
+	Node::List(functions.collect(), Bracket::Square, Separator::Space)
+}
+
+/// A reflection word's result list; none is ø, as `[]` reads (a variable can't hold an empty list node)
+fn listed(list: Node) -> Node {
+	if matches!(&list, Node::List(items, ..) if items.is_empty()) { Node::Empty } else { list }
 }
 
 /// The names a reflection word lists for a class of these fields and methods: either, or both for `dir`
