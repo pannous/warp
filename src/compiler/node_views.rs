@@ -3,6 +3,7 @@
 //! The twin tests (tests/common/twins.rs) and the self-hosted pipeline (self_hosted.rs) both cross this bridge.
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
 
 /// A list as warp writes it: the empty list is ø
 pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
@@ -272,7 +273,10 @@ fn node_of(view: &Node, handles: &[Node]) -> Result<Node, Node> {
 		"number" => crate::warp_parser::parse(&text(1)?).drop_meta().clone(),
 		"key" => {
 			let op = crate::operators::op_named(&text(1)?).ok_or_else(unreadable)?;
-			Node::Key(Box::new(node(2)?), op, Box::new(node(3)?))
+			let left = node(2)?;
+			// `-x`: Op::Neg is spelled "-" as Op::Sub is, a "-" with nothing on its left negates
+			let op = if op == Op::Sub && left.is_empty_node() { Op::Neg } else { op };
+			Node::Key(Box::new(left), op, Box::new(node(3)?))
 		}
 		"list" => {
 			let items = parts[3..].iter().map(|item| node_of(item, handles)).collect::<Result<Vec<Node>, Node>>()?;
