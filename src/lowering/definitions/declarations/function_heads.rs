@@ -35,9 +35,10 @@ pub(crate) fn result_typed_head(target: &Node) -> Option<(Node, Node)> {
 	as_union_result(target).or_else(|| result_typed(target).map(|(head, result)| (head.clone(), result.clone())))
 }
 
-/// A built-in type, or `any`: a Node of whatever kind the paths return (`def f(w) as any`, card def)
+/// A built-in type, a collection, a class (`def g(): G {…}`, card def-int), or `any`: a Node of whatever kind the
+/// paths return (`def f(w) as any`, card def)
 fn is_result_type(result_type: &Node) -> bool {
-	is_kinded_type_word(result_type) || result_type.is_symbol(ANY_TYPE)
+	result_type.symbol_name().is_some_and(crate::warp_parser::names_a_type) || result_type.is_symbol(ANY_TYPE)
 }
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`

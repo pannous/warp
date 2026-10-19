@@ -180,12 +180,22 @@ collect_functions(program: any, functions: any) := {
 	}
 	kept
 }
+# the names of the functions the program defines
+defined_names(program: any) := {
+	names = []
+	for n in statements_of(program) {
+		head = definition(n)
+		if head != ø { names += [name_of(head#1)] }
+	}
+	names
+}
 
 ## one function's locals while its body is read
 # a runtime word's body may use the intrinsics
 # function: the one compiled, returned: the kinds its `return`s give
 # depth: the blocks, loops and ifs around the code read now; exits: the depth of each enclosing loop's exit block
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; depth: int; exits: any }
+# unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; depth: int; exits: any; unshared: any }
 
 local_index(body: Body, name: text, kind: text) := {
 	if name in body.names { return body.names[name] }
@@ -377,6 +387,9 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 2])] }
 	if name == "map_of" { return ["node", node(node_kind_codes.map, values#1#2)] }
 	if name == "new_key" { return ["node", entry_code(values#1#2, values#2#2)] }
+	# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
+	if name == "item_room" { return ["int", values#1#2 + gc_code("struct_get", [gc.list, 1]) + gc_code("array_len", []) + [op.i64_extend_i32_u]] }
+	if name == "set_count" { return [no_kind, values#1#2 + index_code(values#2) + gc_code("struct_set", [gc.list, 0])] }
 	# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
 	if name == "keyed" { return ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code("struct_new", [gc.node])] }
 	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [gc.node])] }
@@ -410,7 +423,7 @@ intrinsic(body: Body, name: text, arguments: any) := {
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
 	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1}
 # the words a program calls that runtime.warp gives, by the runtime word's name
@@ -698,13 +711,58 @@ loop_exit(body: Body) := {
 # a statement's code, its value dropped
 dropped(value: any) := if value#1 == no_kind then value#2 else value#2 + [op.drop]
 
+# `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
+appended(body: Body, target_name: any, addition: any) := {
+	target = expression(body, target_name)
+	if target#1 == "list" { return runtime_call("list_append", [target, expression(body, addition)]) }
+	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, expression(body, addition)])) }
+	ø
+}
 sequence(body: Body, items: any) := {
 	if #items == 0 { return refuse("an empty block") }
 	code = []
-	for item in items[0..<(#items - 1)] { code += dropped(expression(body, item)) }
-	last = expression(body, items#(#items))
+	for item in items[0..<(#items - 1)] { code += dropped(statement(body, item)) }
+	last = statement(body, items#(#items))
 	code += last#2
 	[last#1, code]
+}
+# a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
+# simpler); a fresh list makes it unshared, a list made inside a block of the statement does not outlast it
+statement(body: Body, n: any) := {
+	kept = []
+	for name in body.unshared { if appends_only(n, name) { kept += [name] } }
+	body.unshared = kept
+	value = expression(body, n)
+	after = []
+	for name in body.unshared { if name in kept { after += [name] } }
+	made = fresh_list_name(n)
+	if made != ø and made in body.names { after += [made] }
+	body.unshared = after
+	value
+}
+# `xs = []`, `xs = ø`, `xs = [a, b]`: the local name holds a list made right here
+fresh_list_name(n: any) := {
+	if not (type(n) is key and op_of(n) == "=" and key_of(n) is symbol) { return ø }
+	if value_of(n) is ø or bracket_of(value_of(n)) == "[" { return name_of(key_of(n)) }
+	ø
+}
+# `xs = xs + e`, `xs += e` of e not mentioning xs: the name xs, else ø
+self_append_name(n: any) := {
+	if not (type(n) is key and key_of(n) is symbol) { return ø }
+	name = name_of(key_of(n))
+	sum = value_of(n)
+	if op_of(n) == "+=" and not mentions(sum, name) { return name }
+	if op_of(n) != "=" or not (type(sum) is key and op_of(sum) == "+" and key_of(sum) == key_of(n)) { return ø }
+	if mentions(value_of(sum), name) { return ø }
+	name
+}
+# whether n mentions the local name only in appends to it
+appends_only(n: any, name: text) := {
+	if self_append_name(n) == name { return yes }
+	if n is symbol { return name_of(n) != name }
+	if type(n) is key { return appends_only(key_of(n), name) and appends_only(value_of(n), name) }
+	if is_group(n) { for x in n { if not appends_only(x, name) { return no } } }
+	yes
 }
 
 expression(body: Body, n: any) := {
@@ -765,6 +823,10 @@ key_expression(body: Body, n: any) := {
 	# `c ? a : b`: the keys ?(c, :(a, b))
 	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right)) }
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
+	if operator == "=" and left is symbol and name_of(left) in body.unshared and self_append_name(n) != ø {
+		grown = appended(body, left, value_of(right))
+		if grown != ø { return grown }
+	}
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
@@ -778,8 +840,8 @@ key_expression(body: Body, n: any) := {
 		if target#1 == "node" { return runtime_call("node_get", [target, ["node", boxed(expression(body, key_of(right)))]]) }
 	}
 	if operator == "+=" {
-		target = expression(body, left)
-		if target#1 == "list" { return runtime_call("list_append", [target, expression(body, right)]) }
+		grown = appended(body, left, right)
+		if grown != ø { return grown }
 	}
 	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
@@ -819,7 +881,7 @@ logical(body: Body, symbol: text, left: any, right: any) := {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function) := {
-	scope = Body({}, [], [], 0, f.is_runtime, f, [], 0, [])
+	scope = Body({}, [], [], 0, f.is_runtime, f, [], 0, [], [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }
@@ -956,7 +1018,16 @@ host_call(body: Body, name: text, arguments: any) := {
 	if result == "i32" { return ["int", code + [op.i64_extend_i32_s]] }
 	[result, code]
 }
-host_argument(value: any, kind: text) := if kind == "i32" then converted(value, "int") + [op.i32_wrap_i64] else converted(value, kind)
+host_argument(value: any, kind: text) := {
+	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
+	if kind == "int" { return host_int(value) }
+	converted(value, kind)
+}
+# a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
+host_int(value: any) := {
+	if value#1 == "node" or value#1 == "float" { return runtime_call("rounded", [["float", converted(value, "float")]])#2 }
+	converted(value, "int")
+}
 
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
 # lib/compiler/runtime.warp lowered by the same pipeline
@@ -975,13 +1046,16 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any) := {
 	module.global_order = []
 	module.texts = {}
 	module.bytes = []
-	module.host = host
+	# the host words, but those the program defines itself: its own `notify(x) := …` is its own
+	module.host = {}
+	defined = defined_names(program)
+	for name in host.keys { if not (name in defined) { module.host[name] = host[name] } }
 	module.classes = {}
 	module.variants = {}
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
-	for name in host.keys { if mentions(program, name) { module.imports += [host_import(name)] } }
+	for name in module.host.keys { if mentions(program, name) { module.imports += [host_import(name)] } }
 	collect_functions(runtime, module.runtime)
 	for name in module.runtime.keys {
 		word = module.runtime[name]

@@ -47,3 +47,10 @@ fn a_map_parameter_refuses_a_plain_value() {
 	fails_with("g(m: map) := m; g(\"ab\")", "g needs a map for parameter m");
 	is!("g(m: map) := m.a; g({a:1})", 1);
 }
+
+/// `{}` is the empty map a map parameter takes (card needs-map)
+#[test]
+fn a_map_parameter_takes_the_empty_map() {
+	is!("g(m: map): int := { m[\"k\"] = 2; m[\"k\"] }; g({})", 2);
+	is!("g(m: map): int := #m; g({})", 0);
+}

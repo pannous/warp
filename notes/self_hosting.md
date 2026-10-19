@@ -149,6 +149,10 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
 ## Back-end focus (user 2026-10-18 night, decisions self-hosting-back-end, compiler-typed, compiler-high-level)
 Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
 shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
+Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
+emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it). Before sending a tip that touches
+emitter.warp or runtime.warp, run the touched area's suite tests with WARP_SELF_HOSTED=1 (scripts/self-hosted-suite.sh
+--local <filters>, + emitter switch) and compare with the same filters on main: no new failures.
 | owner | part |
 |---|---|
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
