@@ -44,7 +44,8 @@ REFUSAL_SHOWN = 60  # characters of a refusal that rank it
 RUN_DATA = REPO / "data" / "is_tests"
 JOBS = 4  # warp test processes at once: the Mac is shared (notes/roles.md)
 FILE_SECONDS = 300  # a file still running then counts as timed out
-SUMMARY = re.compile(r"^(?:✓ (\d+) tests? passed|(\d+) of (\d+) failed)$", re.M)
+# at a line's end: a program's print without a newline runs into it (`123✓ 2 tests passed`)
+SUMMARY = re.compile(r"(?:✓ (\d+) tests? passed|(\d+) of (\d+) failed)$", re.M)
 BOOLS = {"true": "true", "false": "false", "True": "true", "False": "false"}
 INT_LISTS = re.compile(r"(?:warp::)?(?:ints|texts|strings|floats)\(\s*(?:&\s*)?vec!\[(.*)\]\s*\)", re.S)
 LIST_LITERAL = re.compile(r"(?:vec!|&)?\[(.*)\]", re.S)
@@ -370,7 +371,7 @@ def tested(file, lane, warp):
         output = run.stdout + run.stderr
     except subprocess.TimeoutExpired:
         output = f"timed out after {FILE_SECONDS} s"
-    summary = SUMMARY.search(output)
+    summary = ([None] + list(SUMMARY.finditer(output)))[-1]
     if not summary:
         lines = sum(line.startswith("is! ") for line in file.read_text().splitlines())
         return 0, 0, lines, output

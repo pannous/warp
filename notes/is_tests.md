@@ -32,12 +32,14 @@ expectations). Comments are `#` lines (warp format's hint).
 lane; counts and logs in data/is_tests/. Lanes: normal (Rust), emitter (WARP_SELF_HOSTED=1), pure
 (WARP_SELF_HOSTED=pure). A file without its summary (crash, timeout, a lane that missed the is! lines) counts its
 lines as unrun. One lane takes ~25 min (4 processes).
-- 2026-10-19 normal: 9069 passed, 1379 failed of 10448.
+- 2026-10-19 normal: 9114 passed, ~1329 failed, 32 unrun (two files over 300 s, one crash: card py-run) of 10475.
+  Most frequent failures: π / time literals can't cross into eval's block (card eval-code), prelude words "called but
+  not loaded" inside eval (card code-run), "no implicit conversion" (Rust's is! compares a text expectation loosely).
 - emitter and pure: everything unrun: parser.warp parses the test file too and reads `is!` as `is` + `!`, so no test
   counts (card parser-reads-2, warp-parsing).
 
 ## Known gaps (cards)
-- eval of code holding π (Number::Real), nan, inf, complex: "parse_code: π cannot cross to another task yet" (the code
-  crosses into the program as data, host/tasks/values.rs TaskValue).
+- eval of code holding π (Number::Real), time literals, nan, inf, complex: "parse_code: π cannot cross to another task
+  yet" (the code crosses into the program as data, host/tasks/values.rs TaskValue): card eval-code.
 - Each is! compiles its code in a module of its own through the host (run_block): ~0.1–0.2 s a line.
 - The pure lane's parser.warp has no bang words yet: `is! '…' 6` reads as `is` + `!` there.
