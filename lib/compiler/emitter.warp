@@ -847,7 +847,8 @@ key_expression(body: Body, n: any) := {
 	if operator == "and" or operator == "or" { return logical(body, operator, left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
-	if operator == "as" and right is symbol and name_of(right) in type_words and type_words[name_of(right)] == "rational" {
+	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)
+	if operator == "as" and right is symbol and name_of(right) == "rational" {
 		return as_rational(expression(body, left))
 	}
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {

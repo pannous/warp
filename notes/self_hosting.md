@@ -311,6 +311,10 @@ Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words a
 | 12 | split, live-loop, try-assert, swizzle, text-set-char, contains, tree-walk-lib, parallel-map, signals | 60-80 each | |
 | 13 | text-quoted, insert-at, element-children, node-codes, reverse, log-root, zero-fill, pop-clear, codepoint-count, builtin-signatures, small-dispatch | 15-55 each | |
 
+float-as-exact-warp (2026-10-19): runtime.warp `float_as_exact` (float_digits, factors 2 and 5 taken out before the
+denominator is built) and emitter.warp `as_rational`; only `as rational` (a float `as real`/`as exact` stays a float).
+The warp runtime has no big ints: a fraction beyond 64 bits (`1e-20 as rational`) fails as int64 overflow, Rust's
+twin goes on in big ints. Rust's float_as_exact stays until the switch hands emission to warp.
 Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
 lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
 arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
