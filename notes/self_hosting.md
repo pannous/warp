@@ -135,6 +135,8 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
 
 ## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+Since 2026-10-19 (decision passes-first-principles / ignore-rust): passes come from first principles, judged by the
+programs' results; the Rust passes are ignored, not ported or twinned. The shape below is a starting point only.
 parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
 per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
 table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
