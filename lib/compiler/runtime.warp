@@ -576,6 +576,20 @@ int_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
 	unboxed_int(n)
 }
+# a node the analysis holds a list where a list is needed: ø is the empty list (`xs = ø; xs += [x]`); any other value
+# traps
+list_of_node(n: any): list := {
+	if is_null(n) == 1 { return new_list(0) }
+	if kind_code(n) != 8 { fail() }
+	unboxed_list(n)
+}
+# a node the analysis holds a text where a text is needed: a text, or a character as its text; any other value traps
+text_of_node(n: any): text := {
+	if is_null(n) == 1 { fail() }
+	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
+	if kind_code(n) != 3 { fail() }
+	unboxed_text(n)
+}
 # `n as int` of a boxed int or exact rational, truncated toward 0
 truncated_int(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
