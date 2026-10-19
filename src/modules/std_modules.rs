@@ -4,7 +4,7 @@ use super::*;
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
 /// `sheet: data` in a definition's head
 const DATA_PARAMETER: &str = ": data";
-pub(crate) const STD_MODULES: [(&str, &str); 30] = [
+pub(crate) const STD_MODULES: [(&str, &str); 35] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
@@ -35,6 +35,11 @@ pub(crate) const STD_MODULES: [(&str, &str); 30] = [
 	("R", include_str!("../../lib/R.warp")),
 	("PHP", include_str!("../../lib/PHP.warp")),
 	("channels", include_str!("../../lib/channels.warp")),
+	("extrema", include_str!("../../lib/extrema.warp")),
+	("english", include_str!("../../lib/english.warp")),
+	("case_table", include_str!("../../lib/case_table.warp")),
+	("case_tables", include_str!("../../lib/case_tables.warp")),
+	("uncertain", include_str!("../../lib/uncertain.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
@@ -310,7 +315,8 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		let parameters = parsed_statements(source)
 			.iter()
 			.filter_map(|statement| match statement.drop_meta() {
-				Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
+				Node::Key(head, Op::Define, _) if matches!(called_head(head).drop_meta(), Node::List(..)) => {
+					let head = called_head(head);
 					let (fewest, most) = head_arities(head);
 					Some((leftmost_symbol(head)?, most, most - fewest))
 				}
@@ -321,6 +327,14 @@ fn prelude_heads() -> Option<&'static [(String, usize, usize)]> {
 		parameters
 	});
 	Some(parameters)
+}
+
+/// A definition's head without its declared result type: `f(x): int` → `f(x)`
+fn called_head(head: &Node) -> &Node {
+	match head.drop_meta() {
+		Node::Key(called, Op::Colon, _) => called,
+		_ => head,
+	}
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or

@@ -1,0 +1,7 @@
+# emitter core: sort and sorted through runtime.warp's merge sort (sorted_node, node_order)
+print sort([5, 3, 9, 1, 7, 3, 8, 2])
+print sort([1, 2, 2, 3])
+print sort([4, 3, 2, 1])
+print sort([2.5, 1, 0.5, 2])
+print sort(["pear", "apple", "fig", "apple"])
+print sorted("hello")

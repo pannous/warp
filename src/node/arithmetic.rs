@@ -72,35 +72,3 @@ impl Div<&Node> for &Node {
 		})
 	}
 }
-
-/// `node op 3`, `node op 2.5` and `3 op node` through the node operator
-macro_rules! scalar_operands {
-	($($trait:ident $method:ident),*) => {$(
-		impl $trait<i64> for &Node {
-			type Output = Node;
-			fn $method(self, rhs: i64) -> Node { <&Node as $trait<&Node>>::$method(self, &Node::int(rhs)) }
-		}
-		impl $trait<i32> for &Node {
-			type Output = Node;
-			fn $method(self, rhs: i32) -> Node { <&Node as $trait<&Node>>::$method(self, &Node::int(rhs as i64)) }
-		}
-		impl $trait<f64> for &Node {
-			type Output = Node;
-			fn $method(self, rhs: f64) -> Node { <&Node as $trait<&Node>>::$method(self, &Node::float(rhs)) }
-		}
-		impl $trait<&Node> for i64 {
-			type Output = Node;
-			fn $method(self, rhs: &Node) -> Node { <&Node as $trait<&Node>>::$method(&Node::int(self), rhs) }
-		}
-		impl $trait<&Node> for i32 {
-			type Output = Node;
-			fn $method(self, rhs: &Node) -> Node { <&Node as $trait<&Node>>::$method(&Node::int(self as i64), rhs) }
-		}
-		impl $trait<&Node> for f64 {
-			type Output = Node;
-			fn $method(self, rhs: &Node) -> Node { <&Node as $trait<&Node>>::$method(&Node::float(self), rhs) }
-		}
-	)*};
-}
-
-scalar_operands!(Add add, Sub sub, Mul mul, Div div);
