@@ -79,8 +79,11 @@ int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
-# `xs.length`, `count xs`: `#xs`
+# `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
+counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
+# `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
+byte_count_words = {bytecount: yes, byte_size: yes}
 # the kinds `+` joins as texts
 characters = {text: yes, char: yes}
 comparisons = {"==": yes, "!=": yes, "<": yes, ">": yes, "<=": yes, ">=": yes}
@@ -152,7 +155,6 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = [] }
 
 module = Module({}, [])
-
 
 refuse(why: text): any := {
 	throw outside_the_core + why
@@ -288,13 +290,14 @@ def converted(value: any, to: text): list {
 }
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
 text_readers = {int: "text_as_int", float: "text_as_float"}
+node_casts = {int: "truncated_int", float: "float_cast"}
 def cast(value: any, to: text): list {
 	if value#1 == "text" { return runtime_call(text_readers[to], [value]) }
 	# '7' as int is 7, the text it is
 	if value#1 == "char" { return cast(["text", converted(value, "text")], to) }
 	if value#1 == "float" and to == "int" { return ["int", value#2 + [op.i64_trunc_f64_s]] }
-	# `7/2 as int`: an exact rational truncated toward 0
-	if value#1 == "node" and to == "int" { return runtime_call("truncated_int", [value]) }
+	# `7/2 as int`: an exact rational truncated toward 0; a text known only at run time spells the number
+	if value#1 == "node" { return runtime_call(node_casts[to], [value]) }
 	[to, converted(value, to)]
 }
 # a value as a yes/no condition: non-zero is yes
@@ -880,20 +883,27 @@ def map_assignment(body: Body, target: any, name: text, value: any): list {
 	if checks_fields(body, target) and not field_admits(name, value#1) { return refuse("a " + value#1 + " written to a typed field " + name) }
 	entry_assignment(body, target, text_value_of(name), value)
 }
-# the entry named by the text `name` of the map `target` set to value; the assignment gives the value
+# the entry named by the text `name` of the map `target` set to value, a variable target holding the result, a map
+# made of ø; the assignment gives the value
 def entry_assignment(body: Body, target: any, name: any, value: any): list {
 	if checks_fields(body, target) and name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
-	set = dropped(field_assignment(expression(body, target), name, [value#1, held]))
+	object = expression(body, target)
+	set = put_back(body, target, object, ["node", field_assignment(object, name, [value#1, held])#2])
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
 # `m[k] = v` of a value known only at run time, as lowered `m#(k+1) = v`: an int k sets the item k+1, any other key
 # the entry named so (runtime.warp node_put); a variable m holds the result, a map made of ø; the assignment gives v
-def keyed_assignment(body: Body, target: any, map: any, key: any, value: any): list {
+def keyed_assignment(body: Body, target: any, object: any, key: any, value: any): list {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
-	put = ["node", runtime_call("node_put", [map, ["node", boxed(key)], ["node", boxed([value#1, held])]])#2]
-	set = if target is symbol then dropped(assignment(body, target, put)) else dropped(put)
+	put = ["node", runtime_call("node_put", [object, ["node", boxed(key)], ["node", boxed([value#1, held])]])#2]
+	set = put_back(body, target, object, put)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
+# the code of a put into the map node a variable target holds, which takes its result (ø becomes a map), else the
+# put with its result dropped (a local named map reads as the word map: card local-named)
+def put_back(body: Body, target: any, object: any, put: any): list {
+	if target is symbol and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)
 }
 # Rust checks a field write against the field's type only on a local it holds as an instance of the class
 # (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
@@ -1290,7 +1300,8 @@ def key_expression(body: Body, n: any): list {
 	if operator == "-" and left == ø { return negation(body, expression(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
-	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
+	if operator == "." and right is symbol and name_of(right) in counting_properties { return length(expression(body, left)) }
+	if operator == "." and right is symbol and name_of(right) in byte_count_words { return runtime_call("node_bytes", [["node", boxed(expression(body, left))]]) }
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
 	if operator == "." and right is symbol { return field_of(body, expression(body, left), name_of(right)) }
 	# (only `rational`: a float `as real` or `as exact` stays a float in Rust, type_tests.rs is_exact_fraction_type)

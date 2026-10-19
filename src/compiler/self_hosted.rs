@@ -60,8 +60,8 @@ const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
 /// The WARP_ settings that change no stage program's compile, so not its kept module either
 #[cfg(feature = "native")]
 const SETTINGS_BESIDE_STAGES: [&str; 4] = [SWITCH, ANALYSIS_SWITCH, REFUSALS_FILE, SURVEY_SETTING];
-/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
-#[cfg(feature = "native")]
+/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses (also those
+/// runtime.warp names with `use`)
 const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
@@ -283,13 +283,29 @@ fn host_words() -> Result<String, Node> {
 /// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
 /// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
 fn runtime_words() -> Result<String, Node> {
-	std::fs::read_to_string(RUNTIME_WORDS)
+	runtime_source()
 		.map_err(|failure| crate::node::error(&failure.to_string()))
 		.and_then(|source| crate::pipeline::lower(&source))
 		.map(|lowered| view_json(&analysis_view(&lowered)))
 		.map_err(|failure| {
 			crate::node::error(&format!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()))
 		})
+}
+
+/// runtime.warp with the modules its `use <name>` lines name in its place, after it: their words become runtime words,
+/// compiled into a module only when called
+fn runtime_source() -> std::io::Result<String> {
+	let source = std::fs::read_to_string(RUNTIME_WORDS)?;
+	let mut joined = String::new();
+	let mut used = String::new();
+	for line in source.lines() {
+		match line.strip_prefix("use ") {
+			Some(name) => used += &std::fs::read_to_string(format!("{LIBRARY}/{}.warp", name.trim()))?,
+			None => joined += line,
+		}
+		joined.push('\n');
+	}
+	Ok(joined + &used)
 }
 
 /// The node of the view the stage gives, its data handles the nodes in `handles`; a warp failure is an error node, so the program fails as it should
