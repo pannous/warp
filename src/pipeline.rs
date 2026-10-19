@@ -212,6 +212,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::type_aliases::lower,
 	// `f(t: type)` takes the type value itself (type_parameters.rs), before class_methods reads typed parameters
 	crate::lowering::type_parameters::lower,
+	// `id(x: T): T`: a type variable of a generic signature, held as any (type_parameters.rs)
+	crate::lowering::type_parameters::lower_type_variables,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
 	// `stored people: [Person]`: the table's rows, inserts and field changes written through
