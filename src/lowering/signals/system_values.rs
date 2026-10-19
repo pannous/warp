@@ -224,7 +224,7 @@ fn percent_body(condition: &Node) -> Option<(Node, Node)> {
 		return None;
 	};
 	match right.drop_meta() {
-		Node::Key(percent, Op::Mod, body) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+		Node::Key(percent, Op::Mod, body) if body.is_block() => {
 			Some((Node::Key(left.clone(), *op, percent.clone()), body.as_ref().clone()))
 		}
 		_ => percent_body(right).map(|(right, body)| (Node::Key(left.clone(), *op, Box::new(right)), body)),
