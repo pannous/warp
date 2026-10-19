@@ -199,6 +199,14 @@ Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/c
 
    parse -> Node -> wasm emitter -> WASM GC object -> Node
 
+## Outcome tests only (user 2026-10-19, decision outcome-tests-only)
+
+A test gives warp code and checks what it produces: the value (is!), printed output, error, effect or CLI output.
+No tests of intermediates: parse tree shapes, node views, pass outputs, analyzer kind tables, wasm bytes, module or GC
+layouts, internal Rust APIs. Parsing warp data notation to a value is an outcome. The remaining twins that compare
+warp-written compiler parts with Rust (emitter and analyzer, judged by the program's value) go once the first pipeline
+runs completely in warp; from then on only outcome tests.
+
 ## complete roundtrip test
 
 eq! is just a shortcut for assert_eq! but

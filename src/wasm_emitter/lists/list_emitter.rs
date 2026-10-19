@@ -115,7 +115,6 @@ const INSERT_ORDER_TOPIC: &str = "insert-order";
 pub(in crate::wasm_emitter) const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
-const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
 	/// The word a list calls; a parameter named like a function or global is the parameter (`g(f, b) := [f, b]`)
@@ -1185,12 +1184,14 @@ impl WasmGcEmitter {
 		ask(&question).map(|_| ())
 	}
 
-	/// The name of the program or the language `word` is a typo of: `pirnt` → print
+	/// The name of the program or the language `word` is a typo of: `pirnt` → print, `revrse` → reverse; the language's
+	/// names are print and the builtin methods of every type (members::MEMBERS_BY_TYPE), no list of its own
 	fn near_name(&self, word: &str) -> Option<String> {
 		let mut names: Vec<String> =
 			self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
 		names.extend(self.scope.local_names());
-		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
+		let language_words = std::iter::once(PRINT_WORD).chain(crate::members::builtin_member_words());
+		names.extend(language_words.map(String::from));
 		crate::extensions::strings::near_miss(word, names)
 	}
 

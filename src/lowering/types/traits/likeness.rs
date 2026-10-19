@@ -34,9 +34,7 @@ pub(super) fn undeclared_likeness(likenesses: &[Likeness], registry: &TypeRegist
 /// data `{width:3}`, the name is only a label (user, 2026-10-03)
 pub(super) fn written_data(value: &Node, registry: &TypeRegistry) -> Option<Node> {
 	if let Node::Key(label, Op::Colon, data) = value.drop_meta() {
-		if matches!(label.drop_meta(), Node::Symbol(name) if registry.get_by_name(name).is_none())
-			&& matches!(data.drop_meta(), Node::List(_, Bracket::Curly, _))
-		{
+		if matches!(label.drop_meta(), Node::Symbol(name) if registry.get_by_name(name).is_none()) && data.is_block() {
 			return Some(data.as_ref().clone());
 		}
 	}

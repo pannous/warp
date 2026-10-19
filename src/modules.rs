@@ -186,8 +186,7 @@ fn as_constructions(node: Node, classes: &HashSet<String>) -> Node {
 	}
 	match node.map_children(|child| as_constructions(child, classes)) {
 		Node::Key(name, Op::Colon, block)
-			if name.symbol_name().is_some_and(|name| classes.contains(name))
-				&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if name.symbol_name().is_some_and(|name| classes.contains(name)) && block.is_block() =>
 		{
 			Node::Key(name, Op::None, block)
 		}
