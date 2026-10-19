@@ -1,0 +1,5 @@
+// out: 166
+SUFFIX_POWER = 165
+stronger(power: int) := power + 1
+def suffix_power() := stronger(SUFFIX_POWER)
+suffix_power()

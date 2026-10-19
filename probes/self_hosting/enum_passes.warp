@@ -1,0 +1,4 @@
+// parser.warp next to every warp pass (passes.warp) keeps `{b, c}` a braced list: for_loops.warp's named, repeated,
+// statements_of and counted replaced parser.warp's own (goal parser-compiles); want {Red, Green} braced, ',' separated
+use "../../lib/compiler/passes.warp"
+print(view_of(parsed("enum Color { Red, Green }; Color.Green")))

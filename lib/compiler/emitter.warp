@@ -9,6 +9,7 @@
 # their kinds from their annotations, else from the first call; its result kind from its body, read twice so that a
 # recursive call knows it.
 use "walk.warp"
+use "words.warp"
 use math
 use os
 use case_tables
@@ -179,6 +180,8 @@ definition(n: any): any := {
 	}
 	ø
 }
+# a statement without the keyword `def f(x): T := e` keeps before its definition
+unkeyworded(n: any): any := if bracket_of(n) == "" and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords then n#2 else n
 
 # `use math`, `import f from lib`: the Rust pipeline brought the module in already, so the statement has no code
 import_words = ["use", "require", "import", "include"]
@@ -192,7 +195,7 @@ def statements_of(n: any): list {
 # the definitions of a program into `functions`, the statements left
 def collect_functions(program: any, functions: any): list {
 	kept = []
-	for n in statements_of(program) {
+	for n in statements_of(program).map(unkeyworded) {
 		head = definition(n)
 		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
 			parameters = head[1..].map(parameter_symbol)
@@ -229,7 +232,7 @@ assigns(n: any, name: text) := {
 # the names of the functions the program defines
 def defined_names(program: any): list {
 	names = []
-	for n in statements_of(program) {
+	for n in statements_of(program).map(unkeyworded) {
 		head = definition(n)
 		if head != ø { names += [name_of(head#1)] }
 	}
@@ -719,6 +722,9 @@ def assignment(body: Body, target: any, value: any): list {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, expression(body, key_of(target)), subscript_name(value_of(target)), value)
 	}
+	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
+		return map_assignment(body, expression(body, key_of(target)), name_of(value_of(target)), value)
+	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
 	}
@@ -766,7 +772,7 @@ def admitted(value: any, kind: text): list {
 }
 def whole(value: any): list { admitted(value, "int") }
 
-# `m.x = v` as lowered, `m#("x"+1) = v`: the assignment gives v
+# `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, map: any, name: text, value: any): list {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
 	set = dropped(field_assignment(map, text_value_of(name), [value#1, held]))
@@ -1228,7 +1234,7 @@ def key_expression(body: Body, n: any): list {
 		# `7/2 as int`: an exact rational truncated toward 0; `"12" as int`: the int the text spells
 		if name_of(right) in number_casts { return number_cast(value, name_of(right)) }
 		if name_of(right) == "text" { return shown_text(value) }
-		if name_of(right) == "bool" and (value#1 == "node" or value#1 == "text" or value#1 == "char") { return runtime_call("node_as_bool", [["node", boxed(value)]]) }
+		if name_of(right) == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }

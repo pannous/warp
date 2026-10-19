@@ -94,7 +94,7 @@ Numbers can have units.
 2h + 30min
 ```
 
-Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits
+Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits
 
 ## Text
 
@@ -484,7 +484,8 @@ bump()
 score
 ```
 
-A function can call itself.
+A function can call itself. The Fibonacci sequence starts with 0 and 1; every later number is the sum of the two
+before it. Its first ten numbers are 0, 1, 1, 2, 3, 5, 8, 13, 21, and 34.
 
 ```warp => 55
 def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
@@ -806,4 +807,4 @@ Examples: "kitchen sink"; samples: laws, kitchensink
 
 Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
 
-Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test, simple
+Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test

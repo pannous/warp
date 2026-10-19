@@ -1,5 +1,0 @@
-class Circle{r:int}
-class Square{side:int}
-area(s: Circle | Square) := match s { Circle{r} => r*r*3; Square{side} => side*side }
-print area(Square(2))
-print area(Circle(1))

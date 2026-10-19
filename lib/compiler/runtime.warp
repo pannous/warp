@@ -548,8 +548,8 @@ text_trim(t: text): text := {
 	bytes_between(t, start, stop)
 }
 # the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
-# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at the start, to ø or
-# beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
+# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
+# or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
 node_slice(x: any, start: any, to: any): any := {
 	from = if is_null(start) == 1 then 0 else index_of_node(start)
 	stop = if is_null(to) == 1 then node_length(x) else index_of_node(to)
@@ -902,21 +902,20 @@ list_of_node(n: any): list := {
 	if kind_code(n) != 8 { fail() }
 	unboxed_list(n)
 }
-# `x as bool` of a value known only at run time: a text or character spelling one of the falsy words of Rust
-# (FALSY_TEXTS, in any case) is no, any other value its truth
-node_as_bool(n: any): bool := {
-	if is_null(n) == 1 or not (kind_code(n) == 3 or kind_code(n) == 4) { return node_truthy(n) }
-	t = text_of_node(n)
-	for word in ["", "0", "false", "no", "ø", "nil", "null", "none"] { if spells(t, word) { return no } }
-	yes
+# `x as bool` of a value known only at run time, as Rust's cast: a text spelling a falsy word in any case ("No",
+# "false"; FALSY_TEXTS of src/wasm_emitter/mod.rs) is no, another value as a condition (card yes-print)
+bool_cast(n: any): bool := {
+	if is_null(n) == 1 or kind_code(n) != 3 { return node_truthy(n) }
+	t = unboxed_text(n)
+	falsy = byte_count(t) == 0 or spells(t, "0") or spells(t, "false") or spells(t, "no") or spells(t, "ø")
+	not (falsy or spells(t, "nil") or spells(t, "null") or spells(t, "none"))
 }
-# whether t is the lowercase word, its ASCII letters in any case
+# t is the lower-case word, any letter of t also in upper case
 spells(t: text, word: text): bool := {
 	if byte_count(t) != byte_count(word) { return no }
-	for i in 0..byte_count(t) {
+	for i in 0..<byte_count(t) {
 		b = byte_at(t, i)
-		if b >= 65 and b <= 90 { b += 32 }
-		if b != byte_at(word, i) { return no }
+		if (if b >= 65 and b <= 90 then b + 32 else b) != byte_at(word, i) { return no }
 	}
 	yes
 }

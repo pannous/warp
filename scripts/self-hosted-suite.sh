@@ -35,8 +35,10 @@ SPEED_PROFILE=$'\n[profile.test.package.warp-lang]\nopt-level = 2'
 # 2400 s limit (6020 tests of ~6300), and a killed run prints no failure messages; the third part of ~2000 outgrew it
 # too (8f8d6dc8). Filters match anywhere in a test's path (lists:: also takes control::test_job_lists), so a test
 # may run in two parts: rank counts each test once.
+# control/functions/ffi grew to ~2150 tests and its job was killed in 6 of 8 runs (2026-10-19): split in two
 TEST_GROUPS=(
-	"control:: functions:: ffi::"
+	"control::"
+	"functions:: ffi::"
 	"types:: lists:: modules:: node:: numbers:: operators::"
 	"parser:: programs:: scope:: sweeps::"
 	"text:: wasm:: web:: welcoming::"

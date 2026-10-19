@@ -89,13 +89,18 @@ fn test_of<'a>(statement: &'a Node, words: &[&str]) -> Option<Test<'a>> {
 /// map `test_pairs = { … }`; each pair runs as `is!(code, expected)`. Any other program stays as it is
 fn pairs_checked(program: Node) -> Node {
 	let statements = program.body_statements();
-	let pairs = match statements.as_slice() {
+	let named_pairs = match statements.as_slice() {
 		[single] => match single.drop_meta() {
-			Node::Key(name, Op::Assign, map) if name.is_symbol(TEST_PAIRS) => map.body_statements(),
-			_ => statements,
+			Node::Key(name, Op::Assign, map) if name.is_symbol(TEST_PAIRS) => Some(map.body_statements()),
+			_ => None,
 		},
-		_ => statements,
+		_ => None,
 	};
+	// texts alone ("hello", the guide's first program) are a value, not a file of tests: one pair must expect something
+	if named_pairs.is_none() && !statements.iter().any(|statement| pair_parts(statement).is_some()) {
+		return program;
+	}
+	let pairs = named_pairs.unwrap_or(statements);
 	let checks: Option<Vec<Node>> = pairs.iter().map(pair_check).collect();
 	match checks {
 		Some(checks) if !checks.is_empty() => sequence(checks),
@@ -105,18 +110,23 @@ fn pairs_checked(program: Node) -> Node {
 
 /// `'1+1' 2` as `is!("1+1", 2)`; a code alone expects ø
 fn pair_check(pair: &Node) -> Option<Node> {
-	let (code, expected) = match pair.drop_meta() {
-		Node::List(items, Bracket::None | Bracket::Square, Separator::Space) if items.len() == 2 => {
-			(&items[0], items[1].clone())
-		}
-		code => (code, Node::Empty),
-	};
+	let (code, expected) = pair_parts(pair).unwrap_or((pair.drop_meta(), Node::Empty));
 	let code = match code.drop_meta() {
 		Node::Text(code) => code.clone(),
 		Node::Char(code) => code.to_string(),
 		_ => return None,
 	};
 	Some(Node::List(vec![symbol(CHECK_WORDS[0]), Node::Text(code), expected], Bracket::Round, Separator::None))
+}
+
+/// `'1+1' 2`: the code and the value it expects
+fn pair_parts(pair: &Node) -> Option<(&Node, Node)> {
+	match pair.drop_meta() {
+		Node::List(items, Bracket::None | Bracket::Square, Separator::Space) if items.len() == 2 => {
+			Some((&items[0], items[1].clone()))
+		}
+		_ => None,
+	}
 }
 
 /// `is! "3+3" 6`, `is!("3+3", 6)`: a call of a check word

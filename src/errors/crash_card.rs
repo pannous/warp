@@ -4,6 +4,7 @@
 //! urgent-card-watch also folds a card into an open one with the same fingerprint). The card names the checkout and
 //! branch the crashing build came from, so a crash in a worker's worktree build goes to that worker. Builds without
 //! the checkout (brew, releases) and CI runs file nothing; WARP_CRASH_CARDS=0 (set by tests/queue.sh) turns it off.
+//! A build older than its checkout's src/ or lib/ files nothing either: it says so and asks for a rebuild.
 
 use std::io::Write;
 use std::panic::PanicHookInfo;
@@ -22,6 +23,10 @@ const BACKTRACE_CHARS: usize = 20_000;
 const FOREIGN_SOURCES: [&str; 3] = ["/rustc/", "/.cargo/", "/.rustup/"];
 /// The backtrace frame where the panic starts unwinding: the frames after it lead to the crash
 const UNWIND_FRAME: &str = "rust_begin_unwind";
+/// The commit this warp was built from (build.rs)
+const BUILT_COMMIT: Option<&str> = option_env!("WARP_COMMIT");
+/// What a warp binary is made of: compiled in from src/, read at run time from lib/ (lib/compiler/*.warp)
+const BUILD_SOURCES: [&str; 2] = ["src", "lib"];
 
 /// One card per run: a panic while panicking ("panic in a function that cannot unwind") tells nothing new
 static FILED: AtomicBool = AtomicBool::new(false);
@@ -40,6 +45,13 @@ fn file_card(info: &PanicHookInfo) {
 	let switched_off = std::env::var(OFF_SWITCH).is_ok_and(|switch| switch == "0") || std::env::var_os("CI").is_some();
 	if switched_off || !checkout.join(".git").exists() || FILED.swap(true, Ordering::SeqCst) {
 		return;
+	}
+	if let Some(head) = newer_checkout(checkout) {
+		return eprintln!(
+			"warp: no crash card: this build is of {}, its checkout {SOURCE_CHECKOUT} is at {head} with other src/ or \
+			 lib/ files; rebuild (scripts/own-warp.sh) and run it again",
+			BUILT_COMMIT.unwrap_or_default()
+		);
 	}
 	let message = panic_message(info);
 	let headline = message.lines().next().unwrap_or_default();
@@ -78,6 +90,26 @@ fn file_card(info: &PanicHookInfo) {
 	}
 }
 
+/// The checkout's HEAD when its src/ or lib/ differ from the commit this warp was built from: a crash of such a stale
+/// build may be fixed already, or come from lib/compiler files newer than its parser (card crash-4)
+fn newer_checkout(checkout: &Path) -> Option<String> {
+	let built = BUILT_COMMIT?;
+	let head = git(checkout, &["rev-parse", "--short=9", "HEAD"])?;
+	let unchanged =
+		|| git(checkout, &[&["diff", "--quiet", built, &head, "--"][..], &BUILD_SOURCES].concat()).is_some();
+	(head != built && !unchanged()).then_some(head)
+}
+
+/// git's output in the checkout, None when it fails
+fn git(checkout: &Path, arguments: &[&str]) -> Option<String> {
+	let output =
+		Command::new("git").args(arguments).current_dir(checkout).stdin(Stdio::null()).stderr(Stdio::null()).output();
+	output
+		.ok()
+		.filter(|output| output.status.success())
+		.map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 fn filed_list(checkout: &Path) -> PathBuf {
 	std::env::var_os("HOME")
 		.map_or_else(|| checkout.join("data/crash_cards.txt"), |home| Path::new(&home).join(FILED_LIST))
@@ -85,14 +117,7 @@ fn filed_list(checkout: &Path) -> PathBuf {
 
 /// The branch checked out where this warp was built (a worker's worktree, or main in the user's checkout)
 fn current_branch(checkout: &Path) -> String {
-	Command::new("git")
-		.args(["branch", "--show-current"])
-		.current_dir(checkout)
-		.stdin(Stdio::null())
-		.stderr(Stdio::null())
-		.output()
-		.map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-		.unwrap_or_default()
+	git(checkout, &["branch", "--show-current"]).unwrap_or_default()
 }
 
 /// The innermost frame in warp's own code, `name at src/file.rs:line`: a panic inside std (a failed print) names its
