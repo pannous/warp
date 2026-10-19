@@ -10,6 +10,7 @@
 # recursive call knows it.
 use "walk.warp"
 use math
+use os
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
 type_bytes = {int: 126, float: 124, bool: 127, char: 127}
@@ -81,6 +82,9 @@ outside_the_core = "outside the core: "
 no_kind = "none"
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
+# WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
+# refusal names each refused function's first refused form, a line each (probes/self_hosting/bootstrap_gap.sh)
+survey_setting = "WARP_EMIT_SURVEY"
 
 ## bytes
 uleb(n: int) := {
@@ -125,7 +129,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = [] }
 
 module = Module({}, [])
 
@@ -959,6 +963,15 @@ new_scope(f: Function) := {
 }
 
 compile_function(f: Function, argument_kinds: any) := {
+	if not module.surveying { return function_compiled(f, argument_kinds) }
+	try { function_compiled(f, argument_kinds) } catch refusal {
+		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+		module.refusals += [outside_the_core + f.name + ": " + ("" + refusal)[(#outside_the_core)..]]
+		if f.kinds == ø { f.kinds = argument_kinds.map(k => "node") }
+		f.result = "node"
+	}
+}
+function_compiled(f: Function, argument_kinds: any) := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
 	parameter_kinds = []
@@ -1106,6 +1119,8 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 	module.closures = []
 	module.dispatchers = []
 	module.shows_values = no
+	module.surveying = env(survey_setting) != ø
+	module.refusals = []
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
@@ -1137,9 +1152,12 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
 		}
+		if #module.refusals > 0 { throw module.refusals.join("\n") }
 		module_bytes(module.order)
 	} catch refusal {
 		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
-		"" + refusal
+		text = "" + refusal
+		if #module.refusals > 0 and text != module.refusals.join("\n") { return (module.refusals + [text]).join("\n") }
+		text
 	}
 }
