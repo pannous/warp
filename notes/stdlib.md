@@ -38,6 +38,7 @@ its words with the comment line above each (src/modules/std_docs.rs).
 | hash | sha256 (hex), crc32 of a text's UTF-8 bytes | std_pure |
 | regex | matches first_match find_all replace_all (`$1` groups) | std_pure |
 | net | post(url, body); fetch is a host word | std_io |
+| extrema | min max of two or more values or one list, the builtin's replacement in waiting (card min-max-lib; moves into the prelude once as fast) | warp |
 | collections | Stack Queue Deque Set Counter; OrderedMap() is `{}` (OrderedDict, LinkedHashMap aliases) | warp classes over a list field |
 | matrix, draw, markup, router, i18n, memory, sound, shell, units, agent, wagi | their own notes | warp |
 

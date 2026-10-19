@@ -1,12 +1,14 @@
 #[cfg(feature = "native")] // the process environment's key: the browser reads the page's key setting instead
 mod test_agent; // card g_X_F0
 mod test_agent_types; // card int-let
+mod test_case_table_module; // card case-table-warp
 #[cfg(feature = "native")] // another checkout's lib/ on disk and file times: not in the browser build
 mod test_checkout_std_lib; // card local-lib
 mod test_dir;
 mod test_dir_any_value;
 mod test_dir_builtin_members; // card dir-lists
 mod test_dir_value_methods; // card list-methods: dir([1 2]) lists its methods
+mod test_english_phrases; // card set-set
 mod test_folder_scope;
 mod test_from_import; // card std-import
 mod test_header_search;
@@ -52,6 +54,7 @@ mod test_std_coverage; // card std-word
 mod test_std_docs_comment_association; // card help-markdown
 #[cfg(feature = "native")] // runs a process: not in the browser
 mod test_std_exec;
+mod test_std_extrema; // card min-max-lib
 mod test_std_file;
 mod test_std_file_bytes; // card path-list
 mod test_std_file_copy; // card std-file
@@ -75,6 +78,8 @@ mod test_std_reflection_hints; // card function-repeat
 mod test_std_regex;
 mod test_std_shadowed_names; // card libm-function
 mod test_std_time;
+mod test_std_time_zones; // card time-zones-warp
+mod test_std_uncertain; // card uncertain-warp
 mod test_std_words; // card std-word
 mod test_use_modules;
 mod test_use_several; // card std-use

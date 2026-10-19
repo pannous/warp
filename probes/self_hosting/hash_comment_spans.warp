@@ -1,0 +1,3 @@
+# card comment-apostrophe: `#` comments are spans, so an apostrophe in one opens no text
+use "../../lib/compiler/lexer.warp"
+print spans("# Rust's\nx = 1\n  #use y\nz = #xs # it's\n/# a'b #/ 'c'")

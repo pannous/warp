@@ -20,16 +20,6 @@ fn test_warp_to_json() {
 }
 
 #[test]
-fn test_function_syntax() {
-	let warp = "def myfun(a, b){ return a + b }";
-	let node = WarpParser::parse(warp);
-	let json = node.to_json().unwrap();
-
-	println!("WARP: {}", warp);
-	println!("JSON: {}", json);
-}
-
-#[test]
 fn test_nested_structures() {
 	let warp = r#"
         config {

@@ -1,0 +1,8 @@
+# every binding form scope.warp knows (card node-rewrite): fields, functions and their parameters, lambdas, loops
+class Point { x: int; y: int }
+def norm(p: Point) { p.x * p.x + p.y * p.y }
+sq(a) := a * a
+add = (a, b) => a + b
+f (g h) := g + h
+for item in [1, 2] { print item }
+m = {width: 3}
