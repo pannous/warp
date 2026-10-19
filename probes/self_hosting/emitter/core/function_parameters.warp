@@ -1,0 +1,8 @@
+# emitter: a parameter declared `function` holds a closure, a node, called through the dispatcher of its arity
+twice(f: function, x: int) := f(f(x))
+applied(xs: list, f: function) := {
+	out = []
+	for x in xs { out += [f(x)] }
+	out
+}
+[twice(n => n * 3, 2), #applied([1, 2, 3], x => x + 1)]

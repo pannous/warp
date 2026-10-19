@@ -233,6 +233,25 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
+### Bootstrap gap (card bootstrap-gap)
+`SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
+every refused function of lib/compiler once, by the first form refused (a fixed family uncovers the next one behind
+it; totals vary between runs under load, compare runs on one state). 2026-10-19: 262 refused functions, 8 of 22 files
+inside the core; after `x == ø` / `x != ø` and main-level variables read by functions as module globals: 185, 9 inside.
+runtime.warp's calls of the intrinsics (`is_null`, `byte_count`, `kind_code`, `new_list`, `fail`, `unboxed_*`, ~60) are
+the survey compiling it as a program, no gap.
+| family | functions | owner |
+| --- | --- | --- |
+| a value known only at run time as a condition, text, list or bool (`if node`, `"a" + node`) | 37 | self-emitter |
+| calls of node API words emitter.warp lacks: `bracket_of`, `symbol`, `separated`, `node_of` | ~27 | emitter-structures |
+| calls of text and library words: `slice`, `starts_with`, `ends_with`, `trim`, `is_name_char`, `is_name_start`, `is_hex_digit`, `code_point_list`, `map_get_or`, `ran_without_error`; another file's `peek`, `is_at` | ~30 | runtime |
+| the unknown name left: a constant assigned from a refused call (`switch_words = [symbol("switch"), …]`, `none_word`, `alias_pairs`) | 3 | clears with the node API and library-word families |
+| parser.warp: `w is not symbol` lowered to `w == not symbol`, `def f(…): T :=` keeps `def` | 3 | card self-hosted-parser |
+
+Done in the cache family (branch closure-values): `x == ø` / `x != ø`; main-level variables a function reads as
+module globals; bool parameters; parameters declared `function` (a closure is a node); `else ø` as a branch giving ø
+(a match's `_: ø`, which made functions "giving a none").
+
 ## Emitter core (card emits-wasm, step 15)
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
 node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives

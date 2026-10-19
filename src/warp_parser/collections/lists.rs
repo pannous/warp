@@ -232,16 +232,17 @@ impl WarpParser {
 				let body = self.within(Context { base_indent: line_indent, ..self.context }, |parser| {
 					parser.parse_list_with_separators(None, Bracket::None)
 				});
-				// Combine item with indented body as Key; a call keeps its parameters (Ruby's `def f(x)` and its lines)
-				let head = match item.drop_meta() {
+				self.skip_end_line();
+				match item.drop_meta() {
+					Node::Key(_, Op::If, _) => Node::Key(Box::new(item), Op::Then, Box::new(curly_block(body))),
+					// Combine item with indented body as Key; a call keeps its parameters (Ruby's `def f(x)` and its lines)
 					Node::List(call, Bracket::Round, _)
 						if matches!(call.first().map(Node::drop_meta), Some(Symbol(_))) =>
 					{
-						item
+						Node::Key(Box::new(item), Op::Colon, Box::new(body))
 					}
-					_ => Symbol(item.name()),
-				};
-				Node::Key(Box::new(head), Op::Colon, Box::new(body))
+					_ => Node::Key(Box::new(Symbol(item.name())), Op::Colon, Box::new(body)),
+				}
 			} else if had_newline && line_indent < self.context.base_indent && bracket == Bracket::None {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));

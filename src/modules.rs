@@ -124,6 +124,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
 		context.early_class_modules.clear(); // for this program only
+		context.early_file_classes.clear();
 		own_names.iter().for_each(|own| {
 			context.module_definitions.remove(own); // the program's own word wins
 		});
@@ -280,6 +281,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		context.module_instance_classes = instances;
 	});
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
+	crate::compiler::compile_context::change(|context| context.early_file_classes.extend(file_classes.clone()));
 	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
 	let program = as_constructions(program, &inserted);
 	// `Node.True`, `x is Node` of a used file's or standard module's enum (`Extremum.Least` of extrema), which

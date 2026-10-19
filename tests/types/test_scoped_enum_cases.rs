@@ -43,3 +43,10 @@ fn a_used_files_enum() {
 	is!(&used("x = Tree.Empty; x is Tree"), true);
 	is!(&used("Separator.None"), symbol("None"));
 }
+
+// card enum-match-in-used-file: a used file's match binds its cases' fields, as in the main file
+#[cfg(feature = "native")] // reads tests/fixtures/used_cases.warp
+#[test]
+fn a_match_in_a_used_file_binds_its_cases() {
+	is!("use \"tests/fixtures/used_cases.warp\"\nf(Thing::Holds(Box(3)), Thing::Counts(2))", 3);
+}
