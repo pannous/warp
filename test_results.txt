@@ -4252,6 +4252,7 @@ PASSED:
   ✓ programs::test_sound_tempo::notes_last_beats
   ✓ programs::test_sound_tempo::the_program_sets_the_modules_settings
   ✓ programs::test_sound_tempo::the_tempo_sets_the_beat
+  ✓ programs::test_sound_use::a_local_named_like_a_rare_sound_word_is_the_function_s_with_a_declared_result_too
   ✓ programs::test_sound_use::a_rare_sound_word_needs_use_sound
   ✓ programs::test_sound_use::an_own_word_named_like_a_rare_sound_word_is_the_program_s
   ✓ programs::test_sound_use::play_and_beep_need_no_use
@@ -6475,4 +6476,4 @@ FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
 
 SUMMARY:
-16 ignored, 6469 passed, 1 failed, 6470 total tested
+16 ignored, 6470 passed, 1 failed, 6471 total tested

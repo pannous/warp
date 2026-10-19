@@ -1,0 +1,5 @@
+class Point {x: int; y: int}
+p = Point(1, 2)
+p.y = 7
+print p
+p.x + p.y

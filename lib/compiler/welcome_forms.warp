@@ -8,16 +8,16 @@ use "walk.warp"
 switch_words = [symbol("switch"), symbol("match")]
 default_word = "default"
 
-is_switch_word(n: any) := switch_words contains n
-last_of(items: any) := items#(#items)
+is_switch_word(n: any): bool := switch_words contains n
+last_of(items: any): any := items#(#items)
 
 # `alle = (f(3) {cases})` as [alle = f(3), {cases}], else ø
-named_subject(item: Node) := match item {
+named_subject(item: Node): any := match item {
 	Key(name, Op.Assign, value): { if name is symbol then named_value(name, value) else ø }
 	_: ø
 }
 
-named_value(name: Node, value: Node) := {
+named_value(name: Node, value: Node): any := {
 	if not is_group(value) or #value < 2 or bracket_of(last_of(value)) != "{" { return ø }
 	expression = value[0 .. #value - 1]
 	subject = if #expression == 1 then expression#1 else group_like(value, expression)
@@ -31,7 +31,7 @@ named_switch_subjects(n: Node): Node := match n {
 }
 
 # the items with the subject after each switch word named
-subjects_named(items: any) := {
+subjects_named(items: any): list := {
 	found = []
 	for item in items {
 		named = if #found > 0 and is_switch_word(last_of(found)) then named_subject(item) else ø
@@ -57,7 +57,7 @@ colon_case(case: Node): Node := match case {
 }
 
 # `_` and `else` as `default`
-default_pattern(pattern: Node) := if pattern == symbol("_") or pattern == symbol("else") then symbol(default_word) else pattern
+default_pattern(pattern: Node): Node := if pattern == symbol("_") or pattern == symbol("else") then symbol(default_word) else pattern
 
 colon_cases(block: Node): Node := match block {
 	List(cases, Bracket.Curly, separator): List(cases.map(colon_case), Bracket.Curly, separator)
@@ -65,7 +65,7 @@ colon_cases(block: Node): Node := match block {
 }
 
 # the items of a match with its cases block in the colon form; other items as they are
-with_colon_cases(items: any) := {
+with_colon_cases(items: any): any := {
 	if #items == 2 and is_group(items#1) and #(items#1) == 2 and is_switch_word(items#1#1) {
 		return [items#1, colon_cases(items#2)]
 	}
@@ -83,11 +83,11 @@ colon_arms(n: Node): Node := match n {
 	_: n
 }
 
-match_arms(program: any) := bottom_up(named_switch_subjects(program), colon_arms)
+match_arms(program: any): any := bottom_up(named_switch_subjects(program), colon_arms)
 
 # arrow_result_types (lower_arrow_result_types): Swift's and Rust's result arrow before `:=`, `x(p:P) -> int := p.n`,
 # is the typed head `x(p:P): int := p.n` every pass reads
-calls_by_name(n: Node) := match n {
+calls_by_name(n: Node): bool := match n {
 	List(parts, Bracket.Round, separator): #parts > 0 and parts#1 is symbol
 	_: no
 }

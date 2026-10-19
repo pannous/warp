@@ -14,7 +14,7 @@ digits_reason = "a number is written in digits"
 hint_at = ø
 
 # the first positioned node, its own position or a part's: a word a pass made has none
-start_of(n: Node) := {
+start_of(n: Node): any := {
 	if is_positioned(n) { return n }
 	match n {
 		Key(left, op, right): start_of(left) ?? start_of(right)
@@ -24,7 +24,7 @@ start_of(n: Node) := {
 }
 
 # the first positioned node of the items
-first_start(items: Node) := {
+first_start(items: Node): any := {
 	for item in items {
 		found = start_of(item)
 		if found != ø { return found }
@@ -33,12 +33,12 @@ first_start(items: Node) := {
 }
 
 # `data e`: e as written
-is_quoted(n: Node) := match n {
+is_quoted(n: Node): bool := match n {
 	List(parts, Bracket.None, Separator.Space): #parts == 2 and parts#1 == symbol("data")
 	_: no
 }
 
-as_numbers(n: any) := {
+as_numbers(n: any): any := {
 	global hint_at
 	if is_quoted(n) { return n }
 	if is_positioned(n) { hint_at = n }
@@ -54,7 +54,7 @@ as_numbers(n: any) := {
 	}
 }
 
-number_words_pass(program: any) := {
+number_words_pass(program: any): any := {
 	global unnamed_numbers
 	global hint_at
 	hint_at = start_of(program)

@@ -13,9 +13,9 @@ any_word = "any"
 collection_words = ["list", "map"]
 foreign_list_heads = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"]
 
-is_type_word(word: text) := type_words contains word.lower()
-is_type_word_or_any(word: text) := word == any_word or is_type_word(word)
-is_collection_head(word: text) := collection_words contains word or foreign_list_heads contains word
+is_type_word(word: text): bool := type_words contains word.lower()
+is_type_word_or_any(word: text): bool := word == any_word or is_type_word(word)
+is_collection_head(word: text): bool := collection_words contains word or foreign_list_heads contains word
 
 # the words opening a definition, `def f(x) {…}` (Rust twin: operators/mod.rs FUNCTION_KEYWORDS)
 function_keywords = ["fun", "fn", "def", "define", "function", "func"]
