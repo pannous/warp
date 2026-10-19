@@ -34,6 +34,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
 | class constructor `Point(2, 3)`, try | warp-self-analyzer |
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
-| int(x), positioned, `op as Op` (keyed), an instance inside a map, a node into a typed Parser field, a write by a run-time key, pending kinds in recursive functions, `branch` called with a missing argument | warp-emitter-structures |
+| int(x), positioned, `op as Op` (keyed), a node into a typed Parser field, `branch` called with a missing argument | warp-emitter-structures |
+| an instance inside a map (gaps), a write by a run-time key (remember), pending kinds in recursive functions | warp-runtime |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
