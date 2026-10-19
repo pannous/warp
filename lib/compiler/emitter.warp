@@ -153,6 +153,7 @@ class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; b
 
 module = Module({}, [])
 
+
 refuse(why: text): any := {
 	throw outside_the_core + why
 }
@@ -1402,17 +1403,6 @@ analyzed_element_kind(f: Function, name: text): any := {
 	if kind in unboxed_element_kinds then kind else ø
 }
 
-# `e as T`, a value of kind T, as `(f x): T := e` lowers its result; ø for any other value
-cast_kind(n: any): any := {
-	if not (type(n) is key and op_of(n) == "as" and value_of(n) is symbol) { return ø }
-	kind = name_of(value_of(n))
-	if kind in type_bytes or kind in references then kind else ø
-}
-last_statement(n: any): any := {
-	parts = statements_of(n)
-	if #parts == 0 then ø else parts#(#parts)
-}
-
 compile_function(f: Function, argument_kinds: any): any := {
 	if not module.surveying { return function_compiled(f, argument_kinds) }
 	try { function_compiled(f, argument_kinds) } catch refusal {
@@ -1434,14 +1424,11 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
 	# the first readings find the result kind and the kinds of locals assigned values of two kinds (`widens`), the
-	# last gives the code with every recursive call knowing the result; a result analyzer.warp knows or the lowering's
-	# `as T` of a declared one is known from the start, so a function compiled during a first reading (k in
-	# `s(v): text := k(v)`) calls f with its true kind
-	declared = analyzed_result_kind(f) ?? cast_kind(last_statement(f.body))
+	# last gives the code with every recursive call knowing the result
 	widened = -1
 	while widened != #f.widened.keys {
 		widened = #f.widened.keys
-		f.result = declared ?? pending
+		f.result = pending
 		first = new_scope(f)
 		result = expression(first, f.body)#1
 		for kind in first.returned { result = joint_kind(result, kind) }
