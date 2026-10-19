@@ -1,0 +1,69 @@
+# `for` loops lower to the `while` loop (card pure-runs; Rust twin: src/lowering/control/for_loop.rs):
+# `for i in a..b body` → `i = a; i·end = b; while i < i·end { body; i++ }` (`to` and `...` include b: `<=`), so b is
+#   evaluated once, before the loop, and i is b (b+1) afterwards
+# `for x in xs body`   → `x·items = xs; x·index = 0; while x·index < #x·items { x = x·items#(x·index+1); body; x·index++ }`
+# `for xs body` loops with the variable `it`. Any other `for` stays as written and is refused downstream, loudly.
+use "walk.warp"
+
+implicit_variable = "it"
+
+is_name(n: Node): bool := match n {
+	Symbol(name): yes
+	_: no
+}
+
+named(variable: Node, suffix: text): Node := match variable {
+	Symbol(name): symbol(name + "·" + suffix)
+	_: variable
+}
+
+# the body's statements: a `{…}` block's lines, the phrase `{print i}` as one statement, a bare body as it is
+statements_of(body: Node): list := match body {
+	List(items, Bracket.Curly, Separator.Space): { if #items == 1 then items else [List(items, Bracket.None, Separator.Space)] }
+	List(items, Bracket.Curly, separator): items
+	_: [body]
+}
+
+sequence(statements: list): Node := List(statements, Bracket.Round, Separator.Semicolon)
+
+repeated(condition: Node, statements: list): Node :=
+	Key(Key(ø, Op.While, condition), Op.Do, List(statements, Bracket.Curly, Separator.Semicolon))
+
+counted(variable: Node, start: Node, end: Node, inclusive: bool, body: Node): Node := {
+	limit = end
+	setup = [Key(variable, Op.Assign, start)]
+	if not (end is number) {
+		limit = named(variable, "end")
+		setup = setup + [Key(limit, Op.Assign, end)]
+	}
+	condition = if inclusive then Key(variable, Op.Le, limit) else Key(variable, Op.Lt, limit)
+	sequence(setup + [repeated(condition, statements_of(body) + [Key(variable, Op.Inc, ø)])])
+}
+
+walked(variable: Node, iterable: Node, body: Node): Node := {
+	items = named(variable, "items")
+	index = named(variable, "index")
+	item = Key(variable, Op.Assign, Key(items, Op.Hash, Key(index, Op.Add, 1)))
+	rounds = [item] + statements_of(body) + [Key(index, Op.Inc, ø)]
+	setup = [Key(items, Op.Assign, iterable), Key(index, Op.Assign, 0)]
+	sequence(setup + [repeated(Key(index, Op.Lt, Key(ø, Op.Hash, items)), rounds)])
+}
+
+loop_over(variable: Node, iterable: Node, body: Node): Node := match iterable {
+	Key(start, Op.Range, end): counted(variable, start, end, no, body)
+	Key(start, Op.To, end): counted(variable, start, end, yes, body)
+	_: walked(variable, iterable, body)
+}
+
+loop_of(n: Node): Node := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 5 and parts#1 == symbol("for") and parts#3 == symbol("in") and is_name(parts#2) {
+			return loop_over(parts#2, parts#4, parts#5)
+		}
+		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_variable), parts#2, parts#3) }
+		n
+	}
+	_: n
+}
+
+for_loops(program: any): any := bottom_up(program, loop_of)
