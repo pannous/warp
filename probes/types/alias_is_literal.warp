@@ -1,3 +1,0 @@
-// card alias-is-literal: a literal is tested against the type an alias names
-type Age = int
-print [30 is Age, "thirty" is Age]

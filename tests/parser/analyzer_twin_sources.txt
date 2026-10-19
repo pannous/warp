@@ -602,7 +602,6 @@ probes/demo/obj_parse.warp
 probes/dev/counter.warp
 probes/dev/greeting_module.warp
 probes/dev_marks/typo.warp
-probes/dimension_types/dimensions.warp
 probes/docs_sync/batch17.warp
 probes/docs_sync/bits_if.warp
 probes/docs_sync/block_args.warp
@@ -1167,20 +1166,8 @@ probes/time_now/partial.warp
 probes/timers_listen.warp
 probes/todo_app/forms.warp
 probes/transitions/list.warp
-probes/type_of/consistency.warp
-probes/typed_global/const_called_before.warp
 probes/typed_global/use_uniscript.warp
-probes/typed_list/upper.warp
-probes/typed_map/declared.warp
-probes/types/alias_is.warp
-probes/types/alias_is_literal.warp
-probes/types/bool_local.warp
-probes/types/bracket_list_parameter.warp
-probes/types/enum_case_statement.warp
-probes/types/now_in_data.warp
-probes/types/text_as_bool.warp
 probes/types_first_run.warp
-probes/union_types/class_union.warp
 probes/uniscript/full.warp
 probes/uniscript/loopfn.warp
 probes/uniscript/mod_probe.warp
@@ -1437,3 +1424,4 @@ samples/web/page_custom_event.warp
 samples/web/page_elements.warp
 samples/web/select_binding.warp
 samples/web/typed_form.warp
+tests/fixtures/parser_corpus/types.warp
