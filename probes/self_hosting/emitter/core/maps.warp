@@ -1,0 +1,6 @@
+m = {a: 1, b: "xy", c: 'z'}
+n = m
+n.d = [2, 3]
+m.a += 4
+print m
+[m.a, m.b, #(m.d), m == {a: 5, b: "xy", c: 'z', d: [2, 3]}]

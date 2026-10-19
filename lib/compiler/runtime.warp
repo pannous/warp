@@ -53,8 +53,10 @@ node_text(n: any) := {
 	}
 	if kind_code(n) == 1 { return exact_text(n) }
 	if kind_code(n) == 2 { return float_text(unboxed_float(n)) }
-	if kind_code(n) == 3 { return unboxed_text(n) }
+	if kind_code(n) == 3 or kind_code(n) == 5 { return unboxed_text(n) }
 	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
+	if kind_code(n) == 6 { return key_text(n) }
+	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
 	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
 	fail()
 }
@@ -96,6 +98,12 @@ items_text(xs: list) := {
 	}
 	inner
 }
+# `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
+key_text(entry: any) := {
+	value = key_value(entry)
+	if is_null(value) == 0 and marked_kind(value) == 8 { return key_name(entry) + node_text(value) }
+	key_name(entry) + ":" + node_code(value)
+}
 # `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any) := {
 	# ø, also `[]` in the lowered program, beside a list is that list, beside a text "ø"; beside a number Rust fails
@@ -125,6 +133,85 @@ checked_multiply(a: int, b: int) := {
 	bound = float(4611686018427387904) + float(4611686018427387904)
 	if estimate >= bound or estimate < 0 - bound { fail() }
 	a * b
+}
+# `a == b` of values known only at run time: ø equals only ø, lists equal item by item, texts and characters as
+# texts, numbers as numbers (an int and a float alike)
+node_equal(a: any, b: any) := {
+	if is_null(a) == 1 or is_null(b) == 1 { return is_null(a) == is_null(b) }
+	if kind_code(a) == 6 or kind_code(b) == 6 {
+		return kind_code(a) == kind_code(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
+	}
+	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
+	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
+	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
+	float_of_node(a) == float_of_node(b)
+}
+list_equal(a: list, b: list) := {
+	if #a != #b { return no }
+	for i in 1 to #a { if not node_equal(a#i, b#i) { return no } }
+	yes
+}
+# a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
+# its class name and the map of its fields
+fields_of(m: any) := if kind_code(m) == 6 then key_value(m) else m
+# the place of m's entry named `name`, counted from 1; 0 when it has none
+map_index(m: any, name: text) := {
+	entries = unboxed_list(fields_of(m))
+	for i in 1 to #entries { if text_order(key_name(entries#i), name) == 0 { return i } }
+	0
+}
+# `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
+map_get(m: any, name: text) := {
+	at = map_index(m, name)
+	if at == 0 { fail() }
+	key_value(unboxed_list(fields_of(m))#at)
+}
+# what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
+map_entries(n: any) := {
+	if marked_kind(n) != 8 { return n }
+	out = []
+	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
+	out
+}
+map_keys(m: any) := {
+	out = []
+	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
+	out
+}
+map_values(m: any) := {
+	out = []
+	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
+	out
+}
+# `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
+collection_contains(c: any, x: any) := {
+	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, node_text(x)) > 0 }
+	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) >= 0 }
+	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
+	no
+}
+# where the bytes of part first start in t, -1 when nowhere
+text_index(t: text, part: text) := {
+	for start in 0..(byte_count(t) - byte_count(part) + 1) {
+		i = 0
+		while i < byte_count(part) and byte_at(t, start + i) == byte_at(part, i) { i += 1 }
+		if i == byte_count(part) { return start }
+	}
+	-1
+}
+# `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
+node_get(n: any, key: any) := {
+	if kind_code(key) == 1 { return node_at(n, unboxed_int(key) + 1) }
+	map_get(n, node_text(key))
+}
+# `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
+# becomes a map of the one entry
+field_with(m: any, name: text, value: any) := {
+	if is_null(m) == 1 { return map_of([new_key(name, value)]) }
+	entries = unboxed_list(fields_of(m))
+	at = map_index(m, name)
+	if at == 0 { list_append(entries, [new_key(name, value)]) } else { entries#at = new_key(name, value) }
+	m
 }
 # 1 for a boxed text or character, else 0
 textual_node(n: any) := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0

@@ -4,9 +4,9 @@ use "positions.warp"
 
 // Where the comments and texts of a source start and end, in code points: [[start, end], …]
 // Rust twin: warp_parser comment_and_text_spans
-def spans(text) := if one_point_each(text) then spans_in(text) else spans_in(code_points(text))
+def spans(text: text): list := if one_point_each(text) then spans_in(text) else spans_in(code_points(text))
 
-def spans_in(source) {
+def spans_in(source: any): list {
 	found = []
 	at = 0
 	n = source.length
@@ -19,7 +19,7 @@ def spans_in(source) {
 
 // The source with its comments and texts blanked out, a space each
 // Rust twin: declaration_scan.rs code_only
-def code_only(source) {
+def code_only(source: any): text {
 	parts = []
 	at = 0
 	for span in spans_in(source) {
@@ -30,7 +30,7 @@ def code_only(source) {
 }
 
 // The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `at`, else `at`
-def span_end(source, at, n) {
+def span_end(source: any, at: int, n: int): int {
 	c = source[at]
 	next = peek(source, at + 1, n)
 	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') { return index_of(source, "\n", at, n) }
@@ -41,7 +41,7 @@ def span_end(source, at, n) {
 
 // After the quote closing a text from `from` on: an escaped quote `\"` leaves it open
 // Rust twin: warp_parser quoted_end
-def quoted_end(source, from, quote, n) {
+def quoted_end(source: any, from: int, quote: any, n: int): int {
 	at = from
 	while at < n and source[at] != quote {
 		if source[at] == '\\' { at = at + 1 }
@@ -51,19 +51,19 @@ def quoted_end(source, from, quote, n) {
 }
 
 // Where `part` first starts in the source from `from` on, else the source's length
-def index_of(source, part, from, n) {
+def index_of(source: any, part: text, from: int, n: int): int {
 	at = from
 	while at < n and not starts_at(source, part, at) { at = at + 1 }
 	at
 }
 
 // The index after the first `part` from `from` on, else the source's length
-def after(source, part, from, n) {
+def after(source: any, part: text, from: int, n: int): int {
 	at = index_of(source, part, from, n)
 	if at < n then at + part.length else n
 }
 
-def starts_at(source, part, at) {
+def starts_at(source: any, part: text, at: int): bool {
 	i = 0
 	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
 	i == part.length
@@ -71,16 +71,16 @@ def starts_at(source, part, at) {
 
 // Where the numbers of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the number atoms the parser reads
-def numbers(text) := atoms(text, "number")
+def numbers(text: text): list := atoms(text, "number")
 
 // Where the texts of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the text atoms the parser reads
-def texts(text) := atoms(text, "text")
+def texts(text: text): list := atoms(text, "text")
 
-def atoms(text, kind) := if one_point_each(text) then positions(text, kind) else positions(code_points(text), kind)
+def atoms(text: text, kind: text): list := if one_point_each(text) then positions(text, kind) else positions(code_points(text), kind)
 
 // Where the atoms of `kind` ("number" or "text") start
-def positions(source, kind) {
+def positions(source: any, kind: text): list {
 	found = []
 	line = 1
 	column = 1
@@ -111,7 +111,7 @@ def positions(source, kind) {
 }
 
 // A raised letter continues a name as in Rust (`xⁿ`), a raised digit ends it (`x²` squares x)
-def is_name_char(c) := is_alphanumeric(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
+def is_name_char(c: any): bool := is_alphanumeric(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
 
 // The superscript digits in digit order, the raised letters in the order of the letters they raise (no raised q)
 // Rust twin: warp_parser/mod.rs SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS
@@ -119,11 +119,11 @@ SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
 SUPERSCRIPT_LETTERS = "ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ"
 RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
 
-def is_blank(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+def is_blank(c: any): bool := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 
 // The end of what the parser skips at `at`, a comment as it reads one or a text, else `at`
 // Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_line_comment, at_hash_comment
-def skipped_end(source, at, n) {
+def skipped_end(source: any, at: int, n: int): int {
 	c = source[at]
 	comment = comment_end(source, at, n)
 	if comment > at { return comment }
@@ -136,7 +136,7 @@ def skipped_end(source, at, n) {
 
 // The end of the comment starting at `at` (`// …`, `# …`, `/* … */`, `/# … #/`), else `at`
 // Rust twin: warp_parser/scanning.rs at_line_comment, at_hash_comment
-def comment_end(source, at, n) {
+def comment_end(source: any, at: int, n: int): int {
 	c = source[at]
 	next = peek(source, at + 1, n)
 	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') { return index_of(source, "\n", at, n) }
@@ -152,7 +152,7 @@ def comment_end(source, at, n) {
 // (`resumes`, the source's length at its end) and whether a line break lies between (`breaks`); a comment's own line
 // breaks do not count. The parser asks these instead of scanning ahead (card parser-tokens)
 class Gaps { resumes: list; breaks: list }
-def gaps(source, n) {
+def gaps(source: any, n: int): Gaps := {
 	resumes = (n + 1) times [n]
 	breaks = (n + 1) times [false]
 	at = n - 1
@@ -174,14 +174,14 @@ def gaps(source, n) {
 }
 
 // A quote opening a text at `at`
-def text_starts(source, at, n) {
+def text_starts(source: any, at: int, n: int): bool {
 	c = source[at]
 	c == '«' or c == '"' or c == '`' or c == '\'' and not possessive(source, at, n)
 }
 
 // `shader {` or `wgsl {` at `at`: the index of its brace, else `at`
 // Rust twin: warp_parser/literals.rs parse_shader_block (SHADER_WORDS)
-def shader_brace(source, at, n) {
+def shader_brace(source: any, at: int, n: int): int {
 	if at > 0 and is_name_char(source[at - 1]) { return at }
 	for word in ["shader", "wgsl"] {
 		if starts_at(source, word, at) {
@@ -196,7 +196,7 @@ def shader_brace(source, at, n) {
 
 // After the `}` closing the block from `from` on, WGSL comments not counting
 // Rust twin: warp_parser/literals.rs closing_brace
-def block_end(source, from, n) {
+def block_end(source: any, from: int, n: int): int {
 	at = from
 	depth = 1
 	while at < n {
@@ -216,7 +216,7 @@ def block_end(source, from, n) {
 
 // In a style sheet `#8884` is a hex color, no number: its end, else `at`
 // Rust twin: warp_parser/lookahead.rs css_color_length
-def css_color_end(source, at, n) {
+def css_color_end(source: any, at: int, n: int): int {
 	if not (source[at] == '#' and at + 1 < n and is_digit(source[at + 1])) { return at }
 	end = at + 1
 	while end < n and is_hex_digit(source[end]) { end = end + 1 }
@@ -225,11 +225,11 @@ def css_color_end(source, at, n) {
 	if [3, 4, 6, 8].contains(digits) and not glued then end else at
 }
 
-def is_hex_digit(c) := is_digit(c) or "abcdefABCDEF".contains(c)
+def is_hex_digit(c: any): bool := is_digit(c) or "abcdefABCDEF".contains(c)
 
 // After the text from `from` on that `closing` ends, a backslash escaping the character after it
 // Rust twin: warp_parser/literals.rs parse_string
-def text_end(source, from, closing, n) {
+def text_end(source: any, from: int, closing: any, n: int): int {
 	interpolates = closing == '"' or closing == '`'
 	at = from
 	while at < n and source[at] != closing {
@@ -247,7 +247,7 @@ def text_end(source, from, closing, n) {
 
 // After the `close` of an interpolation hole from `from` on, nested brackets and quoted text inside
 // Rust twin: warp_parser/literals.rs text_until_closing
-def hole_end(source, from, open, close, n) {
+def hole_end(source: any, from: int, open: any, close: any, n: int): int {
 	depth = 1
 	quote = ' '
 	at = from
@@ -269,14 +269,14 @@ def hole_end(source, from, open, close, n) {
 }
 
 // `p's name`: the field p.name, no text
-def possessive(source, at, n) {
+def possessive(source: any, at: int, n: int): bool {
 	at > 0 and is_name_char(source[at - 1]) and is_at(source, at + 1, 's', n) and is_at(source, at + 2, ' ', n) and at + 3 < n and is_name_start(source[at + 3])
 }
 
-def is_name_start(c) := is_alpha(c) or c == '_'
+def is_name_start(c: any): bool := is_alpha(c) or c == '_'
 
 // `# note`, `#!`, `##`, `#use lib`: a comment; `#s`, `#a-1`, `#f(x)` count
-def hash_comment(source, at, n) {
+def hash_comment(source: any, at: int, n: int): bool {
 	next = peek(source, at + 1, n)
 	if is_blank(next) or next == '!' or next == '#' { return true }
 	width = name_end(source, at + 1, n) - at - 1
@@ -284,13 +284,13 @@ def hash_comment(source, at, n) {
 }
 
 // Whether one of `words` is exactly the `width` items at `at` (the source a text or its code points)
-def any_word_at(source, at, width, words) {
+def any_word_at(source: any, at: int, width: int, words: list): bool {
 	for word in words { if word.length == width and starts_at(source, word, at) { return true } }
 	false
 }
 
 // After the name from `from` on; `$1` is a parameter, no number
-def name_end(source, from, n) {
+def name_end(source: any, from: int, n: int): int {
 	at = from
 	while at < n and is_name_char(source[at]) { at = at + 1 }
 	at
@@ -298,18 +298,18 @@ def name_end(source, from, n) {
 
 // `full-name`: a hyphen in a name joins the word after it; `x-1` and `i--` end the name at the hyphen
 // Rust twin: warp_parser/atoms.rs parse_symbol, hyphen_joins_word
-def symbol_end(source, from, n) {
+def symbol_end(source: any, from: int, n: int): int {
 	at = name_end(source, from, n)
 	while at + 1 < n and source[at] == '-' and is_name_start(source[at + 1]) { at = name_end(source, at + 1, n) }
 	at
 }
 
-def number_starts(source, at) := (is_digit(source[at]) or fraction_starts(source, at)) and (at == 0 or not is_name_char(source[at - 1]))
+def number_starts(source: any, at: int): bool := (is_digit(source[at]) or fraction_starts(source, at)) and (at == 0 or not is_name_char(source[at - 1]))
 
 // `.5`, `[.25]`: a fraction written without its 0, where no operand ends before the dot (`xs.1`, `f().5` stay members)
-def fraction_starts(source, at) := source[at] == '.' and at + 1 < source.length and is_digit(source[at + 1]) and (at == 0 or not ").]}".contains(source[at - 1]))
+def fraction_starts(source: any, at: int): bool := source[at] == '.' and at + 1 < source.length and is_digit(source[at + 1]) and (at == 0 or not ").]}".contains(source[at - 1]))
 
-def number_end(source, at, n) {
+def number_end(source: any, at: int, n: int): int {
 	date = date_length(source, at, n)
 	if date > 0 { return at + date }
 	while at < n and (is_name_char(source[at]) or source[at] == '.' and at + 1 < n and is_digit(source[at + 1])) {
@@ -321,7 +321,7 @@ def number_end(source, at, n) {
 
 // A version literal at `at`, digits with two dots or more (`1.2.3`), which the parser reads as no number: its end,
 // else `at`. Rust twin: versions.rs literal_len
-def version_end(source, at, n) {
+def version_end(source: any, at: int, n: int): int {
 	end = digits_end(source, at, n)
 	dots = 0
 	while end + 1 < n and source[end] == '.' and is_digit(source[end + 1]) {
@@ -332,14 +332,14 @@ def version_end(source, at, n) {
 	end
 }
 
-def digits_end(source, at, n) {
+def digits_end(source: any, at: int, n: int): int {
 	while at < n and is_digit(source[at]) { at = at + 1 }
 	at
 }
 
 // Length of a date literal at `at` (RFC 3339 / 9557: `2024-01-31`, `2024-01-31T10:00:05.5Z`, `…+01:00[Europe/Berlin]`),
 // else 0. Rust twin: time/calendar.rs literal_len
-def date_length(source, at, n) {
+def date_length(source: any, at: int, n: int): int {
 	if not (digits(source, at, 4, n) and is_at(source, at + 4, '-', n) and digits(source, at + 5, 2, n)) { return 0 }
 	if not (is_at(source, at + 7, '-', n) and digits(source, at + 8, 2, n)) { return 0 }
 	end = at + 10
@@ -364,15 +364,15 @@ def date_length(source, at, n) {
 }
 
 // `e-3` of `1e-3`, `E+5` at `at`
-def signed_exponent(source, at, n) {
+def signed_exponent(source: any, at: int, n: int): bool {
 	(source[at] == 'e' or source[at] == 'E') and (is_at(source, at + 1, '-', n) or is_at(source, at + 1, '+', n)) and at + 2 < n and is_digit(source[at + 2])
 }
 
 // `hh:mm` at `at`
-def clock_at(source, at, n) := digits(source, at, 2, n) and is_at(source, at + 2, ':', n) and digits(source, at + 3, 2, n)
+def clock_at(source: any, at: int, n: int): bool := digits(source, at, 2, n) and is_at(source, at + 2, ':', n) and digits(source, at + 3, 2, n)
 
 // After the RFC 9557 suffixes at `at`: `[Europe/Berlin]`, `[_tzdata=warp-2026a]`
-def after_zone_names(source, at, n) {
+def after_zone_names(source: any, at: int, n: int): int {
 	end = at
 	while is_at(source, end, '[', n) {
 		close = index_of(source, "]", end + 1, n)
@@ -382,25 +382,25 @@ def after_zone_names(source, at, n) {
 	end
 }
 
-def all_zone_chars(source, from, to) {
+def all_zone_chars(source: any, from: int, to: int): bool {
 	i = from
 	while i < to and (is_alphanumeric(source[i]) or "/_+-=.!".contains(source[i])) { i = i + 1 }
 	i == to
 }
 
-def digits(source, at, count, n) {
+def digits(source: any, at: int, count: int, n: int): bool {
 	i = 0
 	while i < count and at + i < n and is_digit(source[at + i]) { i = i + 1 }
 	i == count
 }
 
-def is_at(source, at, c, n) := at < n and source[at] == c
+def is_at(source: any, at: int, c: any, n: int): bool := at < n and source[at] == c
 
 // The character at `at`, a newline past the end
-def peek(source, at, n) := if at < n then source[at] else '\n'
+def peek(source: any, at: int, n: int): any := if at < n then source[at] else '\n'
 
 // The bracket or quote closing `open`, a quote closing itself
-def closing_of(open) {
+def closing_of(open: any): any {
 	if open == '(' { return ')' }
 	if open == '[' { return ']' }
 	if open == '{' { return '}' }
