@@ -552,6 +552,7 @@ PASSED:
   ✓ control::test_one_method_form::one_name_over_several_classes
   ✓ control::test_or_error_type::test_a_result_declared_int_or_error_holds_both
   ✓ control::test_or_error_type::test_a_variable_declared_int_or_error_holds_both
+  ✓ control::test_or_error_type::test_an_optional_result_of_any_type_holds_its_value_or_none
   ✓ control::test_or_error_type::test_an_optional_type_before_a_name_or_as_a_result
   ✓ control::test_or_error_type::test_every_builtin_type_joins_a_union
   ✓ control::test_page_events::a_choice_that_only_reads_is_the_output_binding
@@ -2765,6 +2766,7 @@ PASSED:
   ✓ node::test_node_api::rebuilt_lists_equal_the_written_ones
   ✓ node::test_node_cases::a_case_builds_the_node
   ✓ node::test_node_cases::a_pattern_takes_the_node_apart
+  ✓ node::test_node_cases::a_patterns_op_is_spelled_as_text
   ✓ node::test_node_cases::a_programs_own_names_win
   ✓ node::test_node_cases::an_enum_case_in_a_pattern_compares
   ✓ node::test_node_cases::an_operator_case_is_spelled_as_the_node_carries_it
@@ -3826,6 +3828,7 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
@@ -4672,7 +4675,9 @@ PASSED:
   ✓ types::test_checked_call_kinds::a_declared_parameter_refuses_an_argument_of_another_kind
   ✓ types::test_checked_call_kinds::a_declared_parameter_takes_its_subtypes
   ✓ types::test_checked_call_kinds::a_map_parameter_refuses_a_plain_value
+  ✓ types::test_checked_call_kinds::a_map_parameter_takes_the_empty_map
   ✓ types::test_checked_call_kinds::a_variable_keeps_the_kind_of_a_call_result
+  ✓ types::test_checked_results::a_collection_or_class_result_type_before_a_block_body
   ✓ types::test_checked_results::a_fraction_reaching_an_int_result_is_an_error
   ✓ types::test_checked_results::a_lossless_result_still_converts
   ✓ types::test_class_aliases::a_constructor_alias_called_as_a_method_stays_a_method
@@ -4782,6 +4787,7 @@ PASSED:
   ✓ types::test_code_type::a_function_body_prints_its_source
   ✓ types::test_code_type::a_function_body_tests_as_code
   ✓ types::test_code_type::parsed_code_is_code
+  ✓ types::test_codepoint_digit::a_character_of_a_text_casts_to_itself
   ✓ types::test_codepoint_digit::a_number_naming_no_code_point_is_an_error
   ✓ types::test_codepoint_digit::a_variable_casts_like_its_literal
   ✓ types::test_collection_declarations::a_collection_word_declares_a_variable
@@ -6476,4 +6482,4 @@ FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
 
 SUMMARY:
-16 ignored, 6470 passed, 1 failed, 6471 total tested
+16 ignored, 6476 passed, 1 failed, 6477 total tested
