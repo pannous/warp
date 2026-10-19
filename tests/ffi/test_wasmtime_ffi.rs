@@ -41,3 +41,32 @@ instance = wasmtime_linker_instantiate(wasmtime_linker_new(engine), context, was
 instance.store_id > 0";
 	is!(source, true);
 }
+
+/// The module lib/compiler/emitter.warp emits (the self-hosted compile) runs through lib/wasmtime.warp too
+#[test]
+fn a_module_emitter_warp_emitted_runs_through_libwasmtime() {
+	if !libwasmtime_installed() {
+		return;
+	}
+	let folder = crate::common::scratch_directory("wasmtime_self_emitted");
+	std::fs::create_dir_all(&folder).unwrap();
+	std::fs::write(folder.join("program.warp"), "print \"hi from emitter.warp\"\n6 * 7").unwrap();
+	let compiled = crate::common::warp_command()
+		.args(["--no-ask", "compile", "--wasm", "program.warp"])
+		.current_dir(&folder)
+		.env("WARP_SELF_HOSTED", "1")
+		.output()
+		.unwrap();
+	assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
+	let run = crate::common::warp_command()
+		.arg(concat!(env!("CARGO_MANIFEST_DIR"), "/probes/wasmtime_self_emitted.warp"))
+		.arg(folder.join("program.wasm"))
+		.output()
+		.unwrap();
+	assert_eq!(
+		String::from_utf8_lossy(&run.stdout),
+		"hi from emitter.warp\n42\n",
+		"{}",
+		String::from_utf8_lossy(&run.stderr)
+	);
+}
