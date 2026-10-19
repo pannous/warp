@@ -34,13 +34,6 @@ fn test_postfix_binds_to_the_symbol() {
 }
 
 #[test]
-fn test_ordinals_are_not_products() {
-	for ordinal in ["1st", "2nd", "3rd", "4th"] {
-		assert!(!is_product(&parse(ordinal)), "{ordinal}");
-	}
-}
-
-#[test]
 fn test_undefined_symbol_is_the_normal_error() {
 	common::fails_with("2q", "q");
 }

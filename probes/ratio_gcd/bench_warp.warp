@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// card ratio-gcd-warp: bench_builtin.warp's work through lib/math.warp's twins lowest_terms, euclidean_remainder
+// and euclidean_quotient; both print the same line
+use math
+above = 0
+rests = 0
+for i in 1 to 200000 {
+	r = lowest_terms(6 * i, 4 * i + 2)
+	if r.numerator > r.denominator { above += 1 }
+	rests += euclidean_remainder(0 - i, 97) + euclidean_quotient(0 - i, 89)
+}
+print "\(above) \(rests)"
