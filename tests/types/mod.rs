@@ -144,6 +144,7 @@ mod test_returned_instances; // card units-dynamic
 mod test_returned_list_alias; // card identity-copies-list
 mod test_runtime_text_ratio;
 mod test_same_identity;
+mod test_scoped_enum_cases; // card node-enum
 mod test_self_typed_field; // card empty-field
 mod test_shared_instances;
 mod test_shared_lists; // card shared-lists

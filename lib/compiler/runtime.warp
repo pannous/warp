@@ -51,6 +51,7 @@ node_text(n: any) := {
 		return "yes"
 	}
 	if kind_code(n) == 1 { return exact_text(n) }
+	if kind_code(n) == 2 { return float_text(unboxed_float(n)) }
 	if kind_code(n) == 3 { return unboxed_text(n) }
 	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
 	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
@@ -58,8 +59,9 @@ node_text(n: any) := {
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
 node_code(n: any) := {
-	if is_null(n) == 0 and kind_code(n) == 3 { return quoted_text(unboxed_text(n)) }
-	if is_null(n) == 0 and kind_code(n) == 4 { return "'" + node_text(n) + "'" }
+	# a one-character text reads as the character it is (src/node/serialization.rs)
+	if is_null(n) == 0 and kind_code(n) == 3 and text_count(unboxed_text(n)) != 1 { return quoted_text(unboxed_text(n)) }
+	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) { return "'" + node_text(n) + "'" }
 	node_text(n)
 }
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
@@ -151,10 +153,7 @@ node_set_at(n: any, index: int, value: any) := {
 # the characters from..to of t, counted from 1, both included: the bytes between their lead bytes
 text_slice(t: text, from: int, to: int) := {
 	start = character_offset(t, from)
-	stop = character_offset(t, to + 1)
-	out = new_text(stop - start)
-	copy_text(out, 0, t, start, stop - start)
-	out
+	bytes_between(t, start, character_offset(t, to + 1))
 }
 # the byte offset of t's index-th character, counted from 1; past the last, the byte count
 character_offset(t: text, index: int) := {
@@ -191,16 +190,250 @@ text_trim(t: text) := {
 	while start < byte_count(t) and is_space_byte(byte_at(t, start)) { start += 1 }
 	stop = byte_count(t)
 	while stop > start and is_space_byte(byte_at(t, stop - 1)) { stop -= 1 }
+	bytes_between(t, start, stop)
+}
+# a space, a tab, a line feed or a carriage return
+is_space_byte(b: int) := b == 32 or b == 9 or b == 10 or b == 13
+# the bytes start..<stop of t
+bytes_between(t: text, start: int, stop: int) := {
 	out = new_text(stop - start)
 	copy_text(out, 0, t, start, stop - start)
 	out
 }
-# a space, a tab, a line feed or a carriage return
-is_space_byte(b: int) := b == 32 or b == 9 or b == 10 or b == 13
+# `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only, as Rust joins
+joined(xs: list, separator: any) := {
+	between = node_text(separator)
+	out = ""
+	count = 0
+	for x in xs {
+		if kind_code(x) == 8 { fail() }
+		if count > 0 { out += between }
+		out += node_text(x)
+		count += 1
+	}
+	out
+}
+# `n times "ab"`: t n times over
+repeated_text(n: int, t: any) := {
+	piece = node_text(t)
+	out = new_text(n * byte_count(piece))
+	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
+	out
+}
+# `int[n]`: a list of count zeros
+zero_fill(count: int, zero: any) := {
+	out = new_list(count)
+	for i in 1 to count { out#i = zero }
+	out
+}
+# `t.split(separator)`: the texts between separator's places in t
+split_text(t: text, separator: any) := {
+	between = node_text(separator)
+	out = new_list(0)
+	start = 0
+	at = 0
+	while at + byte_count(between) <= byte_count(t) {
+		if byte_count(between) > 0 and bytes_match_at(t, between, at) {
+			out += [bytes_between(t, start, at)]
+			at += byte_count(between)
+			start = at
+		} else {
+			at += 1
+		}
+	}
+	out += [bytes_between(t, start, byte_count(t))]
+	out
+}
+# `t.chars`: t's characters
+text_chars(t: text) := {
+	out = new_list(text_count(t))
+	for i in 1 to text_count(t) { out#i = text_char(t, i) }
+	out
+}
+# `xs.reverse`: a list's items or a text's characters the other way round
+reversed(n: any) := {
+	if kind_code(n) == 3 {
+		t = unboxed_text(n)
+		backwards = ""
+		for i in text_count(t) down to 1 { backwards += text_char(t, i) }
+		return backwards
+	}
+	items = unboxed_list(n)
+	turned = new_list(#items)
+	for i in 1 to #items { turned#i = items#(#items + 1 - i) }
+	turned
+}
+# `sum(xs)` as `list_sum(xs, loop)`: the loop the lowering wrote gives it
+list_sum(xs: list, computed: any) := computed
+# `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
+# masks (src/lowering/types/type_tests.rs BUILTIN_TYPES): a bool has a mark of its own, ø is the empty list
+node_is_type(n: any, type: text) := {
+	if is_null(n) == 1 { return type == "list" }
+	if marked_kind(n) == 257 { return type == "bool" }
+	kind = kind_code(n)
+	if type == "int" { return kind == 1 and is_ratio(n) == 0 }
+	if type == "rational" or type == "number" { return kind == 1 or kind == 2 }
+	if type == "float" { return kind == 2 }
+	if type == "text" { return kind == 3 or kind == 4 }
+	if type == "char" { return kind == 4 }
+	if type == "list" { return kind == 8 or kind == 7 }
+	no
+}
+# `round(x)`: the nearest int, half to even as wasm rounds (f64.nearest)
+rounded(x: float) := truncated(float_nearest(x))
+# the text of a run-time float (src/wasm_emitter/numbers/float_text.rs): its shortest digits that read back,
+# positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7; ∞, -∞ and NaN as the exact numbers print them
+float_text(x: float) := {
+	if x != x { return "NaN" }
+	if x == float_of_bits(9218868437227405312) { return char_text("∞") }
+	if x == -float_of_bits(9218868437227405312) { return "-∞" }
+	if x == 0 { return char_text("0") }
+	if x < 0 { return "-" + positive_float_text(-x) }
+	positive_float_text(x)
+}
+positive_float_text(x: float) := {
+	found = float_digits(x)
+	digits = int_text(unboxed_int(found#1))
+	count = byte_count(digits)
+	exponent = count - 1 - unboxed_int(found#2)
+	if exponent >= 15 or exponent < -5 {
+		rest = if count > 1 then "." + bytes_between(digits, 1, count) else ""
+		return bytes_between(digits, 0, 1) + rest + "e" + int_text(exponent)
+	}
+	if exponent >= count - 1 { return digits + zeros(exponent - count + 1) }
+	if exponent >= 0 { return bytes_between(digits, 0, exponent + 1) + "." + bytes_between(digits, exponent + 1, count) }
+	"0." + zeros(-1 - exponent) + digits
+}
+# [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
+# digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
+# bit is even, as a reader rounds half to even); the multiple of the largest power of ten among them, nearest x
+float_digits(x: float) := {
+	exponent = 0
+	mantissa = x
+	while mantissa >= 10 {
+		mantissa = mantissa / 10
+		exponent += 1
+	}
+	while mantissa < 1 {
+		mantissa = mantissa * 10
+		exponent -= 1
+	}
+	shift = 16 - exponent
+	scaled = float_scaled(x, float(0), shift)
+	while has_17_digits(scaled, 1e17) or not has_17_digits(scaled, 1e16) {
+		shift += if has_17_digits(scaled, 1e17) then -1 else 1
+		scaled = float_scaled(x, float(0), shift)
+	}
+	hi = unboxed_float(scaled#1)
+	lo = unboxed_float(scaled#2)
+	whole = truncated(hi) + truncated(float_floor(lo))
+	fraction = lo - float_floor(lo)
+	# the gaps to the neighbours; the largest float's upper one is its lower
+	below = x - float_of_bits(bits_of_float(x) - 1)
+	above = float_of_bits(bits_of_float(x) + 1) - x
+	if above == float_of_bits(9218868437227405312) { above = below }
+	# an odd last bit excludes a halfway that is whole
+	odd = int_remainder(bits_of_float(x), 2)
+	lowest = float_scaled(x, -below, shift)
+	low_lo = unboxed_float(lowest#2)
+	low = truncated(unboxed_float(lowest#1)) + truncated(float_ceil(low_lo))
+	if odd == 1 and low_lo == float_ceil(low_lo) { low += 1 }
+	highest = float_scaled(x, above, shift)
+	high_lo = unboxed_float(highest#2)
+	high = truncated(unboxed_float(highest#1)) + truncated(float_floor(high_lo))
+	if odd == 1 and high_lo == float_floor(high_lo) { high -= 1 }
+	# the largest power of ten with a multiple from low to high
+	power = 10
+	while int_quotient(low + power - 1, power) * power <= high { power = power * 10 }
+	power = int_quotient(power, 10)
+	# its multiple nearest x · 10^shift: the one below or the next, by twice the distance minus the power
+	multiple = whole - int_remainder(whole, power)
+	twice = (whole - multiple) * 2 - power + fraction * 2
+	if twice > 0 or (twice == 0 and int_remainder(int_quotient(multiple, power), 2) == 1) { multiple += power }
+	if multiple < low { multiple += power }
+	if multiple > high { multiple -= power }
+	while int_remainder(multiple, 10) == 0 {
+		multiple = int_quotient(multiple, 10)
+		shift -= 1
+	}
+	[multiple, shift]
+}
+# the double-double scaled reaches bound: hi beyond it, or at it with lo not below
+has_17_digits(scaled: list, bound: float) := {
+	hi = unboxed_float(scaled#1)
+	hi > bound or (hi == bound and unboxed_float(scaled#2) >= 0)
+}
+# [hi, lo]: (x + gap/2) · 10^shift as the double-double hi + lo, by at most 10^22 a step (each power exact): a product's
+# error is Dekker's exact product, a quotient's the remainder of its exact product. Exact in one step, within 2^-104 in
+# more. A float beyond ±2^900 is moved by 2^∓128 first and back after, so no product overflows, no half underflows
+float_scaled(x: float, gap: float, shift: int) := {
+	value = x
+	scaled_gap = gap
+	scale = float(1)
+	if x >= float_of_bits(8660422083433463808) {
+		value = x * float_of_bits(4030721666496593920)
+		scaled_gap = scaled_gap * float_of_bits(4030721666496593920)
+		scale = float_of_bits(5183643171103440896)
+	}
+	if x < float_of_bits(553942754166571008) {
+		value = x * float_of_bits(5183643171103440896)
+		scaled_gap = scaled_gap * float_of_bits(5183643171103440896)
+		scale = float_of_bits(4030721666496593920)
+	}
+	hi = value
+	lo = scaled_gap / 2
+	left = shift
+	while left != 0 {
+		step = if left > 22 then 22 else if left < -22 then -22 else left
+		power = float(1)
+		count = step
+		if step < 0 { count = -step }
+		for k in 1 to count { power = power * 10 }
+		if step > 0 {
+			product = hi * power
+			lo = product_error(hi, power, product) + lo * power
+			hi = product
+		} else {
+			quotient = hi / power
+			product = quotient * power
+			lo = (hi - product - product_error(quotient, power, product) + lo) / power
+			hi = quotient
+		}
+		# renormalized, so hi is the nearest float
+		sum = hi + lo
+		lo = lo - (sum - hi)
+		hi = sum
+		left -= step
+	}
+	[hi * scale, lo * scale]
+}
+# a · b - product exactly, a and b split in halves of 26 bits whose products are exact (Veltkamp, Dekker)
+product_error(a: float, b: float, product: float) := {
+	a_hi = upper_half(a)
+	a_lo = a - a_hi
+	b_hi = upper_half(b)
+	b_lo = b - b_hi
+	a_hi * b_hi - product + a_hi * b_lo + a_lo * b_hi + a_lo * b_lo
+}
+# v's upper 26 bits: 2^27 + 1 times v, less its distance to v
+upper_half(v: float) := {
+	t = v * 134217729
+	t - (t - v)
+}
 # a boxed int (kind code 1), exact rational or float as a float
 float_of_node(n: any) := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
+}
+# a boxed int where an int is needed; any other value traps, as Rust fails on it
+int_of_node(n: any) := {
+	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
+	unboxed_int(n)
+}
+# `n as int` of a boxed int or exact rational, truncated toward 0
+truncated_int(n: any) := {
+	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
+	int_quotient(exact_numerator(n), exact_denominator(n))
 }
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int) := {

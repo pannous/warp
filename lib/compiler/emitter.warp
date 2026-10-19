@@ -47,8 +47,8 @@ no_value = 64
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i32_sub: 107, i32_and: 113, i32_or: 114,
-	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_neg: 154, i32_wrap_i64: 167, i64_extend_i32_u: 173,
-	f64_convert_i64_s: 185, ref_is_null: 209}
+	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
+	f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -148,6 +148,10 @@ definition(n: any) := {
 	ø
 }
 
+# `use math`, `import f from lib`: the Rust pipeline brought the module in already, so the statement has no code
+import_words = ["use", "require", "import", "include"]
+is_import(n: any) := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in import_words
+
 statements_of(n: any) := {
 	if is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
 	[n]
@@ -158,7 +162,7 @@ collect_functions(program: any, functions: any) := {
 	kept = []
 	for n in statements_of(program) {
 		head = definition(n)
-		if head == ø { kept += [n] } else {
+		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
 			parameters = head[1..].map(parameter_symbol)
 			annotations = head[1..].map(annotation_of)
 			functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
@@ -199,6 +203,8 @@ converted(value: any, to: text) := {
 	if to == "node" { return boxed(value) }
 	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
 	if from == "bool" and to == "int" { return value#2 + [op.i64_extend_i32_u] }
+	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
+	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
@@ -321,6 +327,12 @@ intrinsic(body: Body, name: text, arguments: any) := {
 	if name == "unboxed_float" { return ["float", unboxed(values#1#2, gc.float_box)] }
 	if name == "int_quotient" { return ["int", values#1#2 + values#2#2 + [op.i64_div_s]] }
 	if name == "int_remainder" { return ["int", values#1#2 + values#2#2 + [op.i64_rem_s]] }
+	if name == "bits_of_float" { return ["int", converted(values#1, "float") + [op.i64_reinterpret_f64]] }
+	if name == "float_of_bits" { return ["float", values#1#2 + [op.f64_reinterpret_i64]] }
+	if name == "float_floor" { return ["float", converted(values#1, "float") + [op.f64_floor]] }
+	if name == "float_ceil" { return ["float", converted(values#1, "float") + [op.f64_ceil]] }
+	if name == "float_nearest" { return ["float", converted(values#1, "float") + [op.f64_nearest]] }
+	if name == "truncated" { return ["int", converted(values#1, "float") + [op.i64_trunc_f64_s]] }
 	if name == "code_of" { return ["int", values#1#2 + [op.i64_extend_i32_u]] }
 	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code("array_set", [gc.text])] }
 	if name == "output_byte" { return [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)] }
@@ -332,7 +344,26 @@ intrinsic(body: Body, name: text, arguments: any) := {
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
-	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1}
+	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
+	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1}
+# the words a program calls that runtime.warp gives, by the runtime word's name
+library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
+	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_chars", reverse: "reversed", list_sum: "list_sum"}
+# `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
+# canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
+type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
+	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
+	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
+	bool: "bool", boolean: "bool", list: "list"}
+covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
+	char: ["char"], bool: ["bool"], list: ["list"]}
+type_test(body: Body, subject: any, spec: text) := {
+	if not (spec in type_words) { return refuse("a test of the type " + spec) }
+	type = type_words[spec]
+	value = expression(body, subject)
+	if value#1 == "node" { return runtime_call("node_is_type", [value, text_value(type)]) }
+	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
+}
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
 as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
 kind_code_of(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and]
@@ -363,6 +394,7 @@ shown_text(value: any) := {
 	if kind == pending { return ["text", value#2] }
 	if kind == "list" { return runtime_call("list_text", [value]) }
 	if kind == "int" { return runtime_call("int_text", [value]) }
+	if kind == "float" { return runtime_call("float_text", [value]) }
 	if kind == "char" { return runtime_call("char_text", [value]) }
 	if kind == "node" { return runtime_call("node_text", [value]) }
 	if kind != "bool" { return refuse("the text of a " + kind) }
@@ -465,7 +497,6 @@ assignment(body: Body, target: any, value: any) := {
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
 	kind = value#1
-	if kind == "bool" { return refuse("a yes/no variable") }
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		kind = body.kinds#(body.names[name] + 1)
@@ -556,6 +587,10 @@ group_expression(body: Body, n: any) := {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.runtime and body.intrinsics {
 		return call(body, module.runtime[name_of(n#1)], n[1..].map(x => x))
 	}
+	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test(body, n#2, n#3) }
+	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
+		return call(body, module.runtime[library_words[name_of(n#1)]], n[1..].map(x => x))
+	}
 	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(expression(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words { return length(expression(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("float") { return ["float", converted(expression(body, n#2), "float")] }
@@ -572,6 +607,8 @@ key_expression(body: Body, n: any) := {
 	right = value_of(n)
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø) }
+	# `c ? a : b`: the keys ?(c, :(a, b))
+	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right)) }
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left is symbol and name_of(left) == "global" and type(right) is key and op_of(right) == "=" and key_of(right) is symbol {
@@ -588,7 +625,10 @@ key_expression(body: Body, n: any) := {
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
-		return [name_of(right), converted(expression(body, left), name_of(right))]
+		value = expression(body, left)
+		# `7/2 as int`: an exact rational truncated toward 0
+		if value#1 == "node" and name_of(right) == "int" { return runtime_call("truncated_int", [value]) }
+		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø { return refuse("the operator " + operator) }

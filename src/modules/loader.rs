@@ -780,8 +780,10 @@ impl<'a> Loader<'a> {
 		if name.contains('/') {
 			crate::modules::reads_beyond_folders("a module of a subfolder");
 		}
-		let bases: Vec<PathBuf> =
-			self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
+		let beyond_working_directory =
+			crate::compiler::compile_context::read(|context| context.beyond_working_directory);
+		let working_directory = (!beyond_working_directory).then(PathBuf::new);
+		let bases: Vec<PathBuf> = self.including_directory.iter().cloned().chain(working_directory).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {
@@ -904,7 +906,7 @@ fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node
 	// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 	// alias lines are the loader's (modules::resolve), no code of the module
 	let kept = |statement: &Node| !(classes_early && is_class(statement)) && word_alias(statement).is_none();
-	let module = sequence(statements(module).into_iter().filter(kept).collect());
+	let module = sequence(module_statements(module).into_iter().filter(kept).collect());
 	let module = crate::compiler::phase_times::timed_as(
 		|| format!("module source passes of {}", shown.display()),
 		|| crate::pipeline::lower_module_source(module),

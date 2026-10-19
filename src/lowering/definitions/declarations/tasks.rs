@@ -884,7 +884,7 @@ pub(crate) const NODE_WRAPPER_SUFFIX: &str = "·node";
 pub(super) const WRAPPER_RESULT: &str = "r·node";
 /// The one parameter of the wrapper: the list of the arguments, as task_spawn_values carries it (the host passes one
 /// Node and needs no parameter types: a browser cannot read them)
-pub(super) const WRAPPER_ARGUMENTS: &str = "arguments·node";
+pub(crate) const WRAPPER_ARGUMENTS: &str = "arguments·node";
 
 /// The program with the wrappers of the started functions (name → parameter count) defined first
 pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMap<String, usize>) -> Node {

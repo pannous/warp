@@ -1,0 +1,12 @@
+# module fixture for tests/types/test_scoped_enum_cases.rs: enums of a used file, cases in rows and named like constants
+enum Op {
+	Add, Sub
+	Mul, Div
+}
+enum Separator { Space, Comma, None }
+enum Tree {
+	True
+	Empty
+	Number(value: int)
+	Key(left: Tree, op: Op, right: Tree)
+}

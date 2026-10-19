@@ -1,9 +1,9 @@
 // The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as node_view writes it
 // (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
-use "lib/compiler/lexer.warp"
-use "lib/compiler/shapes.warp"
-use "lib/compiler/words.warp"
-use "lib/compiler/sugar.warp"
+use "lexer.warp"
+use "shapes.warp"
+use "words.warp"
+use "sugar.warp"
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; resumes: list; breaks: list }
 
@@ -717,7 +717,20 @@ def prefixed_by_symbol(p, c) {
 		p.at = p.at + 1
 		return ["key", "√", ø, expression(p, PREFIX_POWER)]
 	}
+	if c == ':' and explicit_symbol_at(p) {
+		end = name_end(p.code, p.at + 1, p.n)
+		name = p.code[p.at + 1 .. end]
+		p.at = end
+		return listed("(", "", [["symbol", "symbol"], ["text", name]])
+	}
 	atom(p)
+}
+
+// `:post` (wiki/symbol.md): the symbol itself, written as the call symbol("post"), never evaluated
+// Rust twin: atoms.rs parse_atom (':' at_explicit_symbol), lookahead.rs at_explicit_symbol
+def explicit_symbol_at(p) {
+	before = if p.at == 0 then ' ' else p.code[p.at - 1]
+	is_name_start(peek(p.code, p.at + 1, p.n)) and (is_blank(before) or "([{,=".contains(before))
 }
 
 // `return x`, `return` alone: ø; `return = 1` assigns a name

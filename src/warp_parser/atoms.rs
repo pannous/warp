@@ -305,9 +305,10 @@ impl WarpParser {
 		if symbol == NONE_WORD && self.peek_char(0) == '(' && !self.options.data_mode {
 			return error(NONE_CALL_ERROR);
 		}
-		if let Some(constant) =
-			check_constants(&symbol, self.options.data_mode).filter(|_| !self.at_member_name(symbol.chars().count()))
-		{
+		if let Some(constant) = check_constants(&symbol, self.options.data_mode).filter(|_| {
+			let length = symbol.chars().count();
+			!self.at_member_name(length) && !self.at_scoped_name(length) && !self.context.in_enum_cases
+		}) {
 			if !self.names_field(&symbol, &constant) {
 				return self.refuse_constant_assignment(&symbol).unwrap_or(constant); // if true {} fall through :?
 			}
@@ -449,8 +450,12 @@ impl WarpParser {
 			});
 		}
 		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
-		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
-			return Some(self.parse_enum_with_values());
+		if symbol == ENUM_WORD && self.in_code() {
+			match self.enum_body_ahead() {
+				Some(true) => return Some(self.parse_enum_with_values()),
+				Some(false) => return Some(self.parse_plain_enum()),
+				None => {}
+			}
 		}
 		self.foreign_form(symbol)
 	}

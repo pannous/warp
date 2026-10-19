@@ -1,0 +1,8 @@
+// `c ? a : b` is `if c then a else b`; a boxed item where an int is needed converts at run time
+xs = [3, 4]
+a = "abc"
+b = "xbz"
+print(a#2 == b#2 ? 0 : 1)
+total = 0
+for x in xs { total += x }
+total > 6 ? total : 0
