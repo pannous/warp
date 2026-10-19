@@ -140,7 +140,7 @@ def section(id: int, content: any): list { [id] + uleb(#content) + content }
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {} }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
@@ -149,7 +149,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); variants its enums' bare cases
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = [] }
 
 module = Module({}, [])
 
@@ -282,7 +282,8 @@ def converted(value: any, to: text): list {
 	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
 	if from == "node" and to in node_readers { return runtime_call(node_readers[to], [value])#2 }
 	if from == "char" and to == "text" { return runtime_call("char_text", [value])#2 }
-	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
+	# (a local holding a call still compiling, in a first reading of a cycle, whose code is not kept)
+	if from != to and from != pending and to != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
@@ -418,6 +419,8 @@ subscript_name(index: any): any := {
 	if op_of(index) == "+" and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
 	ø
 }
+# `k+1`, the index `m[k]` lowers to
+is_shifted_index(index: any): bool := op_of(index) == "+" and value_of(index) == 1
 # `m.name`, `m["name"]`: a map's or an instance's entry, a swizzle's components of a list of 2 to 4 numbers (`p.zy`),
 # else the run ends in no_field_<name>, which Rust's run reports as "no field name"
 def field_read(body: Body, target: any, name: text): list {
@@ -811,12 +814,13 @@ def assignment(body: Body, target: any, value: any): list {
 		return map_assignment(body, key_of(target), subscript_name(value_of(target)), value)
 	}
 	# `m[k] = v`, lowered `m#(k+1) = v`: a text k names an entry; a k known only at run time may be either
-	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and op_of(value_of(target)) == "+" and value_of(value_of(target)) == 1 {
+	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and is_shifted_index(value_of(target)) {
 		subscript = expression(body, key_of(value_of(target)))
-		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
 		if subscript#1 == "text" or subscript#1 == "char" { return entry_assignment(body, key_of(target), subscript, value) }
-		# `m[1] = v` of a value known only at run time: a list's item or a map's entry keyed by the int 1
-		if expression(body, key_of(target))#1 == "node" { return refuse("an int-keyed write to a list or map known only at run time") }
+		# a value known only at run time takes an int k as its item k+1, any other k as the entry named so
+		held = expression(body, key_of(target))
+		if held#1 == "node" { return keyed_assignment(body, key_of(target), held, subscript, value) }
+		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
 	}
 	if type(target) is key and op_of(target) == "." and value_of(target) is symbol {
 		return map_assignment(body, key_of(target), name_of(value_of(target)), value)
@@ -837,6 +841,9 @@ def assignment(body: Body, target: any, value: any): list {
 	if is_global(body, name) and not is_shared { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
 	if not (name in body.names) and analyzed_local_kind(body.function, name) != ø { kind = analyzed_local_kind(body.function, name) }
+	# the last reading of a function in a cycle: a local given the value of a call still compiling holds a node until
+	# the function is read again (module.rereads)
+	if not (name in body.names) and kind == pending and body.function.result != pending { kind = "node" }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		held = body.kinds#(body.names[name] + 1)
 		if widens(body, name, held, kind) {
@@ -878,6 +885,14 @@ def entry_assignment(body: Body, target: any, name: any, value: any): list {
 	if checks_fields(body, target) and name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
 	set = dropped(field_assignment(expression(body, target), name, [value#1, held]))
+	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
+# `m[k] = v` of a value known only at run time, as lowered `m#(k+1) = v`: an int k sets the item k+1, any other key
+# the entry named so (runtime.warp node_put); a variable m holds the result, a map made of ø; the assignment gives v
+def keyed_assignment(body: Body, target: any, map: any, key: any, value: any): list {
+	held = [op.local_get] + uleb(fresh_local(body, value#1))
+	put = ["node", runtime_call("node_put", [map, ["node", boxed(key)], ["node", boxed([value#1, held])]])#2]
+	set = if target is symbol then dropped(assignment(body, target, put)) else dropped(put)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
 # Rust checks a field write against the field's type only on a local it holds as an instance of the class
@@ -938,6 +953,7 @@ def call(body: Body, f: Function, arguments: any): list {
 }
 def call_values(f: Function, values: any): list {
 	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
+	if f.result == pending { module.saw_pending = yes }
 	code = []
 	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
 	[f.result, code + [op.call] + uleb(f.index)]
@@ -1247,7 +1263,7 @@ def key_expression(body: Body, n: any): list {
 	# a function value as an operand: Rust's type error `1 + (x => x)`, its reflection `f.name` read as `(closure_new f)#("name"+1)`
 	if not (operator in closure_comparisons) and (is_closure_value(left) or is_closure_value(right)) { return refuse("a function value in " + operator) }
 	if operator == "#" and left != ø and subscript_name(right) != ø { return field_read(body, expression(body, left), subscript_name(right)) }
-	if operator == "#" and left != ø and op_of(right) == "+" and value_of(right) == 1 {
+	if operator == "#" and left != ø and is_shifted_index(right) {
 		target = expression(body, left)
 		if target#1 == "node" { return runtime_call("node_get", [target, ["node", boxed(expression(body, key_of(right)))]]) }
 	}
@@ -1395,13 +1411,16 @@ analyzed_element_kind(f: Function, name: text): any := {
 }
 
 compile_function(f: Function, argument_kinds: any): any := {
-	if not module.surveying { return function_compiled(f, argument_kinds) }
-	try { function_compiled(f, argument_kinds) } catch refusal {
-		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
-		module.refusals += [outside_the_core + f.name + ": " + ("" + refusal)[(#outside_the_core)..]]
-		if f.kinds == ø { f.kinds = argument_kinds.map(k => "node") }
-		f.result = "node"
+	outer = module.saw_pending
+	if not module.surveying { function_compiled(f, argument_kinds) } else {
+		try { function_compiled(f, argument_kinds) } catch refusal {
+			if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+			module.refusals += [outside_the_core + f.name + ": " + ("" + refusal)[(#outside_the_core)..]]
+			if f.kinds == ø { f.kinds = argument_kinds.map(k => "node") }
+			f.result = "node"
+		}
 	}
+	module.saw_pending = outer
 }
 function_compiled(f: Function, argument_kinds: any): any := {
 	f.index = #module.imports + #module.order
@@ -1410,7 +1429,9 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
 		if annotation == ø { annotation = analyzed_parameter_kind(f, i) }
-		parameter_kinds += [if annotation == ø then argument_kinds[i] else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
+		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
+		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
+		parameter_kinds += [if annotation == ø then given else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
@@ -1425,12 +1446,21 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø { result = analyzed_result_kind(f) }
-	if result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
-	# a body ending in a statement (a loop, a print) gives ø, as Rust's does
-	f.result = if result == no_kind then "node" else result
+	if result == "mixed" { return refuse(f.name + " giving a " + result) }
+	# a body ending in a statement (a loop, a print) gives ø, as Rust's does; one giving only the result of a call
+	# still compiling gives a node
+	f.result = if result == no_kind or result == pending then "node" else result
+	f.gives_nothing = result == no_kind
+	module.saw_pending = no
+	body_code(f)
+	if module.saw_pending { module.rereads += [f] }
+}
+# the last reading of f, every call's result known but those of functions still compiling; a function that called
+# one of those is read again once every function is compiled (module.rereads)
+body_code(f: Function) := {
 	scope = new_scope(f)
 	value = expression(scope, f.body)
-	f.code = if result == no_kind then value#2 + [ref_null, gc.node] else converted(value, result)
+	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.parameters)..]
 	f.local_names = scope.order
 }
@@ -1582,6 +1612,8 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.shows_values = no
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
+	module.saw_pending = no
+	module.rereads = []
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
@@ -1610,6 +1642,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 			seen = #module.closures + #module.dispatchers
 			for f in module.dispatchers { dispatcher_code(f) }
 		}
+		for f in module.rereads { body_code(f) }
 		# a closure's text is its lambda as written, which the lowered program no longer holds
 		if #module.closures > 0 and module.shows_values { refuse("the text of a closure") }
 		if main.result != "int" and main.result != "float" {
