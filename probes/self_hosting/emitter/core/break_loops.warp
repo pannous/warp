@@ -1,0 +1,13 @@
+# emitter core: break leaves the innermost loop, also from inside an if and a nested loop
+# 3 12
+i = 0
+while i < 10 { i += 1; if i == 3 { break } }
+n = 0
+while n < 100 {
+	n += 1
+	k = 0
+	while yes { k += 1; if k == 2 then break }
+	if n * k > 20 { break }
+}
+print(i)
+n + 1
