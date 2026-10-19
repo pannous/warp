@@ -1132,7 +1132,8 @@ node_unboxings = {list: "list_of_node", text: "text_of_node"}
 # is the program analyzed (WARP_SELF_ANALYSIS): then a node meeting a list or text holds one, as analyzer.warp found
 analyzed_program() := module.kinds != ø and "value" in module.kinds
 # the kinds analyzer.warp finds that the emitter holds as found; a node stays the emitter's own reading of the value
-held_kinds = {int: 1, float: 1, char: 1, text: 1, list: 1}
+# not int: analyzer.warp's int is warp's unbounded one, a node holding a big number would trap as an i64
+held_kinds = {float: 1, char: 1, text: 1, list: 1}
 held_kind(kind: any) := if kind in held_kinds then kind else ø
 # what analyzer.warp found for the program's function f, main's being the program's variables and value; ø if nothing
 analyzed_function(f: Function) := {
@@ -1160,7 +1161,7 @@ analyzed_local_kind(f: Function, name: text) := {
 	held_kind(found["locals"][name])
 }
 # the kind of the elements analyzer.warp found for f's list `name`, if the emitter unboxes it from a node
-unboxed_element_kinds = {int: 1, float: 1, text: 1, list: 1}
+unboxed_element_kinds = {float: 1, text: 1, list: 1}
 analyzed_element_kind(f: Function, name: text) := {
 	found = analyzed_function(f)
 	if found == ø or found["elements"] == ø or not (name in found["elements"]) { return ø }

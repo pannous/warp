@@ -45,11 +45,14 @@ impl WarpParser {
 	}
 
 	pub(super) fn closing_end_follows_from(&self, start: usize, openers: &[&str]) -> bool {
-		if self.names_end {
+		if self.names_end && self.names_fi {
 			return false;
 		}
 		let mut indexes = self.closing_ends.borrow_mut();
-		indexes.entry(openers.join(" ")).or_insert_with(|| ClosingEnds::of(&self.chars, openers)).close_after(start)
+		indexes
+			.entry(openers.join(" "))
+			.or_insert_with(|| ClosingEnds::of(&self.chars, openers, self.names_end, self.names_fi))
+			.close_after(start)
 	}
 
 	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
@@ -110,16 +113,20 @@ impl WarpParser {
 		self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').nth(1) == Some(&'\t')
 	}
 
-	/// The `end` on the line after a block read by indentation, the newline before the next statement kept; an `end`
+	/// The `end` or `fi` on the line after a block read by indentation, the newline before the next statement kept; a closer
 	/// indented less than the block's head closes an outer block
 	pub(in crate::warp_parser) fn skip_end_line(&mut self) {
 		let before = self.mark();
 		let (_, indent) = self.skip_whitespace();
-		if indent != self.context.base_indent || !self.matches_keyword(END_KEYWORD) {
+		let Some(closer) = self.block_closer() else {
+			self.rewind(before);
+			return;
+		};
+		if indent != self.context.base_indent {
 			self.rewind(before);
 			return;
 		}
-		self.advance_by(END_KEYWORD.len());
+		self.advance_by(closer.len());
 	}
 
 	/// Offside rule: the lines indented (by tabs or spaces) below a line ending in `:` are its `{…}` block;
@@ -139,6 +146,7 @@ impl WarpParser {
 			parser.parse_list_with_separators(None, Bracket::None)
 		});
 		self.seek_back_over_whitespace(); // the newline after the block still separates the next statement
+		self.skip_end_line();
 		Some(curly_block(block))
 	}
 
@@ -159,22 +167,28 @@ impl WarpParser {
 			parser.parse_list_with_separators(None, Bracket::None)
 		});
 		self.skip_whitespace();
-		if self.matches_keyword(END_KEYWORD) {
-			self.advance_by(END_KEYWORD.len());
+		if let Some(closer) = self.block_closer() {
+			self.advance_by(closer.len());
 		}
 		curly_block(block)
+	}
+
+	fn block_closer(&self) -> Option<&'static str> {
+		[(END_KEYWORD, self.names_end), (FI_KEYWORD, self.names_fi)]
+			.into_iter()
+			.find_map(|(word, is_name)| (!is_name && self.matches_keyword(word)).then_some(word))
 	}
 
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed
 	pub(in crate::warp_parser) fn at_block_close(&self) -> bool {
 		self.context.stops_at_end
-			&& (self.matches_keyword(END_KEYWORD) || (self.context.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
+			&& (self.block_closer().is_some() || (self.context.stops_at_else && self.matches_keyword(ELSE_KEYWORD)))
 	}
 }
 
 /// A Ruby class body without the `end` lines of its methods (their bodies are read by indentation)
 pub(super) fn without_end_lines(body: Node) -> Node {
-	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
+	let is_end = |item: &Node| item.is_symbol(END_KEYWORD) || item.is_symbol(FI_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(
 			items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(),
@@ -190,14 +204,14 @@ fn is_property(chars: &[char], word_start: usize) -> bool {
 	word_start > 0 && chars[word_start - 1] == '.'
 }
 
-/// Whether the source uses `end` as a name: a parameter or argument between separators (`f(a, end)`) or an assigned
-/// variable (`end = 3`). Then no `end` closes a block: `if a == 0 then 1 else end` hands back the variable
-pub(super) fn names_end(chars: &[char]) -> bool {
+/// Whether the source uses a block-closing word as a name: a parameter or argument between separators (`f(a, end)`) or
+/// an assigned variable (`end = 3`). Then that word closes no block: `if a == 0 then 1 else end` hands back the variable
+pub(super) fn names_block_closer(chars: &[char], closer: &str) -> bool {
 	let next_visible =
 		|from: usize| chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
 	let previous_visible = |before: usize| chars[..before].iter().rposition(|ch| !ch.is_whitespace());
 	code_words(chars, 0).any(|(word_start, word_end)| {
-		if chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
+		if chars[word_start..word_end].iter().copied().ne(closer.chars()) {
 			return false;
 		}
 		let before = previous_visible(word_start).map(|index| chars[index]);
@@ -218,7 +232,7 @@ pub(super) struct ClosingEnds {
 }
 
 impl ClosingEnds {
-	fn of(chars: &[char], openers: &[&str]) -> Self {
+	fn of(chars: &[char], openers: &[&str], names_end: bool, names_fi: bool) -> Self {
 		let (mut word_starts, mut balances, mut balance) = (vec![], vec![], 0);
 		for (word_start, word_end) in code_words(chars, 0) {
 			if is_property(chars, word_start) {
@@ -226,7 +240,8 @@ impl ClosingEnds {
 			}
 			let word: String = chars[word_start..word_end].iter().collect();
 			balance += match word.as_str() {
-				END_KEYWORD => -1,
+				END_KEYWORD if !names_end => -1,
+				FI_KEYWORD if !names_fi => -1,
 				opener if openers.contains(&opener) && !is_endless_definition(chars, word_end) => 1,
 				_ => continue,
 			};
