@@ -1,0 +1,10 @@
+// a local given the value of a call still compiling, then another value: it holds a node until its function is read
+// again (parser.warp global_declaration: `declaration = expression(p, 0)`, then typed_default of it)
+def nested(p, m) := if m > 3 then [m] else wrapped(p, m + 1)
+def wrapped(p, m) {
+	inner = nested(p, m)
+	if m > 0 { inner = listed(inner) }
+	inner
+}
+def listed(x) := [x]
+nested(0, 0)
