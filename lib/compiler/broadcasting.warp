@@ -7,7 +7,7 @@ use "words.warp"
 each_element = "each_element"
 
 # `.*` gives `*`, else ø
-element_operator(word: any) := {
+element_operator(word: any): any := {
 	if word is not symbol { return ø }
 	for op in element_wise_operators {
 		if name_of(word) == "." + op { return op }
@@ -16,12 +16,12 @@ element_operator(word: any) := {
 }
 
 # xs.map(each_element -> each_element op operand)
-element_wise(list: any, op: text, operand: any) := {
+element_wise(list: any, op: text, operand: any): any := {
 	item = symbol(each_element)
 	key(list, ".", call_of("map", [key(item, "->", key(item, op, operand))]))
 }
 
-element_wise_phrase(n: any) := {
+element_wise_phrase(n: any): any := {
 	if not is_group(n) or bracket_of(n) != "" or separator_of(n) != " " { return n }
 	parts = items_of(n)
 	if #parts != 3 { return n }
@@ -30,4 +30,4 @@ element_wise_phrase(n: any) := {
 	element_wise(parts#1, op, parts#3)
 }
 
-element_wise_operators_pass(program: any) := bottom_up(program, element_wise_phrase)
+element_wise_operators_pass(program: any): any := bottom_up(program, element_wise_phrase)

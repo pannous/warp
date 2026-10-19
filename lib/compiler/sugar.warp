@@ -11,7 +11,7 @@ COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
 // function anywhere (`twice(x) := …`, in `scope`), a variable once assigned (`once = [5]`, statements in order, in
 // `bound`), a parameter inside its definition
 // Rust twin: control/loops.rs try_parse_count_word
-counted(node: any, scope: any, bound: list) := {
+counted(node: any, scope: any, bound: list): any := {
 	if node === ø or not (node is list) { return node }
 	match node {
 		["key", "=" | ":=", target, value] => ["key", node#2, target, counted(value, scope, bound + parameter_names(target))]
@@ -21,7 +21,7 @@ counted(node: any, scope: any, bound: list) := {
 }
 
 // A list's items in order, each seeing the names the items before it assigned
-counted_items(node: any, scope: any, bound: list) := {
+counted_items(node: any, scope: any, bound: list): any := {
 	result = node[0:3]
 	for item in node[3:] {
 		result = result + [counted(item, scope, bound)]
@@ -31,25 +31,25 @@ counted_items(node: any, scope: any, bound: list) := {
 }
 
 // `3 times body` of a count word the program leaves alone, else the list as it is
-count_phrase(node: any, scope: any, bound: list) := match node {
+count_phrase(node: any, scope: any, bound: list): any := match node {
 	["list", "", " ", ["symbol", word], body] if counts(body) and is_count_word(word, scope, bound) => listed("", " ", [count_of(word), ["symbol", "times"], body])
 	_ => node
 }
 
-is_count_word(word: text, scope: any, bound: list) := {
+is_count_word(word: text, scope: any, bound: list): bool := {
 	if count_of(word) == ø or (bound contains word) { return false }
 	not binds_as(scope, word, "function")
 }
 
 // The name `x = …` or `f(a) := …` binds
-assigned_names(item: any) := match item {
+assigned_names(item: any): list := match item {
 	["key", "=" | ":=", ["symbol", name], _] => [name]
 	["key", "=" | ":=", ["list", "(", _, ["symbol", name], ...], _] => [name]
 	_ => []
 }
 
 // The parameters of `f(a, b: int) := …`: a and b
-parameter_names(target: any) := {
+parameter_names(target: any): list := {
 	names = []
 	if not is_call_head(target) { return names }
 	for parameter in target[4:] {
@@ -60,7 +60,7 @@ parameter_names(target: any) := {
 }
 
 // What a count word repeats: a block of code, a list or a text; `twice {a: 1}` passes an object, it stays the call
-counts(body: any) := match body {
+counts(body: any): any := match body {
 	["list", "{", ...] => not counts_pairs(body)
 	["list", "[", ...] => true
 	["text" | "char", _] => true
@@ -68,7 +68,7 @@ counts(body: any) := match body {
 }
 
 // A block of `key: value` entries only, an object rather than code
-counts_pairs(node: any) := {
+counts_pairs(node: any): bool := {
 	if not is_block(node) or node.length < 4 { return false }
 	for entry in node[3:] {
 		if not (entry is list and entry.length > 1 and entry#1 == "key" and entry#2 == ":") { return false }
@@ -77,7 +77,7 @@ counts_pairs(node: any) := {
 }
 
 // How often a count word repeats, else ø
-count_of(word: text) := {
+count_of(word: text): any := {
 	for pair in COUNT_WORDS {
 		if pair#1 == word { return pair#2 }
 	}
@@ -85,7 +85,7 @@ count_of(word: text) := {
 }
 
 // The tree with every written form rewritten, deepest first
-sugared(node: any) := {
+sugared(node: any): any := {
 	if node === ø or not (node is list) { return node }
 	rewritten = node.map(sugared)
 	match rewritten {
@@ -101,11 +101,11 @@ sugared(node: any) := {
 	}
 }
 
-quotient_call(left: any, right: any) := ["list", "(", "", ["symbol", "floor_quotient"], left, right]
+quotient_call(left: any, right: any): any := ["list", "(", "", ["symbol", "floor_quotient"], left, right]
 
 // `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
 // Rust twin: warp_parser subscript
-subscript(target: any, index: any) := {
+subscript(target: any, index: any): any := {
 	bounds = slice_bounds(index)
 	if bounds != ø { return ["list", "(", "", ["symbol", "slice"], target] + bounds }
 	["key", "#", target, one_based(index)]
@@ -113,7 +113,7 @@ subscript(target: any, index: any) := {
 
 // The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
 // Rust twin: subscripts.rs slice_bounds
-slice_bounds(written: any) := match written {
+slice_bounds(written: any): any := match written {
 	["key", ":" | "..", start, end] => [start, end]
 	["key", "to", start, last] => [start, if last === ø then ø else ["key", "+", last, 1]]
 	_ => ø
@@ -121,7 +121,7 @@ slice_bounds(written: any) := match written {
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
-one_based(index: any) := if index is number then index + 1 else ["key", "+", index, 1]
+one_based(index: any): any := if index is number then index + 1 else ["key", "+", index, 1]
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 // Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
@@ -129,7 +129,7 @@ CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "
 
 // A class body's fields with their types, `x: int` holding the type int; a method keeps its code
 // Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type
-typed_fields(node: any) := match node {
+typed_fields(node: any): any := match node {
 	["key", ":=", _, _] => node
 	["key", op, name, value] => ["key", op, name, if is_symbol(value) then ["type", value, ø] else value]
 	["list", bracket, sep, first, ...] if not starts_code(first) => typed_members(bracket, sep, node[3 ..].map(typed_fields))
@@ -137,14 +137,14 @@ typed_fields(node: any) := match node {
 }
 
 // A class body's members, typed; the line `left: Node` is the one field
-typed_members(bracket: text, sep: text, members: list) := match members {
+typed_members(bracket: text, sep: text, members: list): any := match members {
 	[["key", ":", _, _]] if bracket == "" => members#1
 	_ => listed(bracket, sep, members)
 }
 
 // `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
 // Rust twin: lookahead.rs starts_code
-starts_code(first: any) := match first {
+starts_code(first: any): bool := match first {
 	["symbol", word] => CODE_MEMBER_WORDS contains word
 	["list", "(", _, ["symbol", _], ...] => true
 	_ => false
