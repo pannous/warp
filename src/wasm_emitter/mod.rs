@@ -265,16 +265,6 @@ impl WasmGcEmitter {
 		self.highest_key_operator.max(crate::operators::op_to_code(&crate::operators::Op::Colon))
 	}
 
-	/// Enable/disable emitting Kind globals for documentation
-	pub fn set_emit_kind_globals(&mut self, enabled: bool) {
-		self.config.emit_kind_globals = enabled;
-	}
-
-	/// Enable/disable host function imports (fetch, run)
-	pub fn set_host_imports(&mut self, enabled: bool) {
-		self.config.emit_host_imports = enabled;
-	}
-
 	// ═══════════════════════════════════════════════════════════════════════════
 	// Type management helpers (delegate to type_manager)
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -282,11 +272,6 @@ impl WasmGcEmitter {
 	/// Get a RefType for Node with specified nullability
 	fn node_ref(&self, nullable: bool) -> RefType {
 		self.type_manager.node_ref(nullable)
-	}
-
-	/// Emit user-defined struct types from TypeRegistry
-	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
-		self.emit_struct_types(registry.types());
 	}
 
 	/// The struct types of the declared types, their indices noted in the context
@@ -297,11 +282,6 @@ impl WasmGcEmitter {
 				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
 			}
 		}
-	}
-
-	/// Get the WASM type index for a user-defined type
-	pub fn get_user_type_idx(&self, name: &str) -> Option<u32> {
-		self.type_manager.get_user_type_idx(name)
 	}
 
 	/// Emit core GC types (String, Node, i64box, f64box)

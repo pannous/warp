@@ -1,0 +1,6 @@
+// card wasmtime-ffi step D: the module lib/compiler/emitter.warp emitted (`WARP_SELF_HOSTED=1 warp compile --wasm
+// 'print "hi from emitter.warp"; 6 * 7'` writes it to out.wasm) runs through Homebrew's libwasmtime (lib/wasmtime.warp)
+use wasmtime
+use file
+use os
+print run(read_bytes(if #args > 0 then args#1 else "out.wasm"))
