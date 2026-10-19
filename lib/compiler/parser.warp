@@ -1104,6 +1104,10 @@ def named(p) {
 		if referenced != ø { return referenced }
 	}
 	if word == "enum" and enum_values_ahead(p) { return enum_with_values(p) }
+	if word == "wasm" {
+		instruction = wasm_instruction_after(p)
+		if instruction != ø { return instruction }
+	}
 	constant = if names_case(p, word.length) then "" else keyword_form(word.lower())
 	if constant == "true" { return true }
 	if constant == "false" { return false }
@@ -1124,6 +1128,20 @@ def named(p) {
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))
+}
+
+// `wasm f64.floor`: a function body that is one wasm instruction (decision wasm-instruction-body), ø when no
+// `type.operation` follows
+// Rust twin: atoms.rs wasm_instruction_after
+def wasm_instruction_after(p) {
+	if not is_at(p.code, p.at, ' ', p.n) { return ø }
+	type_end = name_end(p.code, p.at + 1, p.n)
+	if type_end == p.at + 1 or not is_at(p.code, type_end, '.', p.n) { return ø }
+	end = name_end(p.code, type_end + 1, p.n)
+	if end == type_end + 1 { return ø }
+	name = p.code[p.at + 1 .. end]
+	p.at = end
+	listed("(", "", [["symbol", "wasm_instruction"], ["text", name]])
 }
 
 // A case of an enum, no constant: `Node.True`, `Node::Empty`, `None` in `enum Bracket { Round, None }`
