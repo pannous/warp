@@ -13,16 +13,16 @@ pub fn wasm_body_instruction(body: &Node) -> Option<&str> {
 	match body.drop_meta() {
 		Node::Key(value, Op::As, _) => wasm_body_instruction(value),
 		Node::List(items, ..) if items.len() == 1 => wasm_body_instruction(&items[0]),
-		Node::List(items, ..) if items.len() == 2 => match items[0].drop_meta() {
-			Node::Key(target, Op::Assign, value) if target.drop_meta() == items[1].drop_meta() => wasm_body_instruction(value),
-			_ => None,
-		},
 		Node::List(items, ..) if items.len() == 2 && items[0].drop_meta() == &Node::Symbol(WASM_INSTRUCTION_CALL.into()) => {
 			match items[1].drop_meta() {
 				Node::Text(name) => Some(name),
 				_ => None,
 			}
 		}
+		Node::List(items, ..) if items.len() == 2 => match items[0].drop_meta() {
+			Node::Key(target, Op::Assign, value) if target.drop_meta() == items[1].drop_meta() => wasm_body_instruction(value),
+			_ => None,
+		},
 		_ => None,
 	}
 }
