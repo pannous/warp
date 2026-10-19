@@ -6,10 +6,44 @@ text_join(a: text, b: text): text := {
 	out = new_text(byte_count(a) + byte_count(b))
 	copy_text(out, 0, a, 0, byte_count(a))
 	copy_text(out, byte_count(a), b, 0, byte_count(b))
+	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
+	if same_text(a, walked_text) == 1 { walked_text = out }
+	if same_text(a, other_text) == 1 { other_text = out }
 	out
 }
-# the characters (code points) of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
+# the text counted last, its size then and its count; the two texts `t#i` walked last, each with its size then, the
+# index the walk stands at, that character's byte and the one before's (-1 when unknown): `for ch in t` counts t once
+# and walks on from the character before, also with another text indexed in between or one look back (linear time,
+# as Rust's text cursor)
+global counted_text = ""
+global counted_bytes = 0
+global counted = 0
+global walked_text = ""
+global walked_bytes = 0
+global walked_index = 0
+global walked_at = 0
+global walked_before = -1
+global other_text = ""
+global other_bytes = 0
+global other_index = 0
+global other_at = 0
+global other_before = -1
+# the characters (grapheme clusters) of a text
 text_count(t: text): int := {
+	if same_text(t, counted_text) == 1 and byte_count(t) == counted_bytes { return counted }
+	count = 0
+	at = 0
+	while at < byte_count(t) {
+		at = character_end(t, at)
+		count += 1
+	}
+	counted_text = t
+	counted_bytes = byte_count(t)
+	counted = count
+	count
+}
+# the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
+code_point_count(t: text): int := {
 	count = 0
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
@@ -63,7 +97,7 @@ node_text(n: any): text := {
 # a value as a list shows its items: a text in double quotes, a character in single quotes
 node_code(n: any): text := {
 	# a one-character text reads as the character it is (src/node/serialization.rs)
-	if is_null(n) == 0 and kind_code(n) == 3 and text_count(unboxed_text(n)) != 1 { return quoted_text(unboxed_text(n)) }
+	if is_null(n) == 0 and kind_code(n) == 3 and code_point_count(unboxed_text(n)) != 1 { return quoted_text(unboxed_text(n)) }
 	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) { return "'" + node_text(n) + "'" }
 	node_text(n)
 }
@@ -183,12 +217,12 @@ map_entries(n: any): any := {
 	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
 	out
 }
-def map_keys(m: any): list {
+map_keys(m: any): list := {
 	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
-def map_values(m: any): list {
+map_values(m: any): list := {
 	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
@@ -225,22 +259,122 @@ field_with(m: any, name: text, value: any): any := {
 }
 # 1 for a boxed text or character, else 0
 textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
-# the index-th character of t, counted from 1: past index - 1 lead bytes, then the code point its bytes spell
-text_char(t: text, index: int): char := {
-	at = 0
-	count = 1
-	while count < index {
-		at += 1
-		while byte_at(t, at) >= 128 and byte_at(t, at) < 192 { at += 1 }
-		count += 1
-	}
+# the bytes of the code point whose UTF-8 starts with the byte lead
+code_point_width(lead: int): int := if lead < 128 then 1 else if lead < 224 then 2 else if lead < 240 then 3 else 4
+# the code point whose UTF-8 bytes start at byte `at` of t
+code_point_at(t: text, at: int): int := {
 	lead = byte_at(t, at)
-	extra = if lead < 128 then 0 else if lead < 224 then 1 else if lead < 240 then 2 else 3
 	n = if lead < 128 then lead else if lead < 224 then lead - 192 else if lead < 240 then lead - 224 else lead - 240
-	for k in 1 to extra { n = n * 64 + byte_at(t, at + k) - 128 }
-	char_of(n)
+	for k in 1 to code_point_width(lead) - 1 { n = n * 64 + byte_at(t, at + k) - 128 }
+	n
 }
-def list_join(a: list, b: list): list {
+within(c: int, low: int, high: int): bool := c >= low and c <= high
+# a code point that continues the character before it: combining marks, variation selectors, skin tones, ZWJ …
+# (src/extensions/strings.rs GRAPHEME_EXTEND, the same table)
+extends_character(c: int): bool := {
+	if c < 768 { return no }
+	if within(c, 768, 879) { return yes }
+	if within(c, 1155, 1161) { return yes }
+	if within(c, 1425, 1469) { return yes }
+	if within(c, 1473, 1474) { return yes }
+	if within(c, 1476, 1477) { return yes }
+	if within(c, 1552, 1562) { return yes }
+	if within(c, 1611, 1631) { return yes }
+	if within(c, 1648, 1648) { return yes }
+	if within(c, 1750, 1756) { return yes }
+	if within(c, 2304, 2307) { return yes }
+	if within(c, 2362, 2364) { return yes }
+	if within(c, 2366, 2383) { return yes }
+	if within(c, 2385, 2391) { return yes }
+	if within(c, 2402, 2403) { return yes }
+	if within(c, 3633, 3633) { return yes }
+	if within(c, 3636, 3642) { return yes }
+	if within(c, 3655, 3662) { return yes }
+	if within(c, 6832, 6911) { return yes }
+	if within(c, 7616, 7679) { return yes }
+	if within(c, 8204, 8205) { return yes }
+	if within(c, 8400, 8447) { return yes }
+	if within(c, 12441, 12442) { return yes }
+	if within(c, 65024, 65039) { return yes }
+	if within(c, 65056, 65071) { return yes }
+	if within(c, 127995, 127999) { return yes }
+	if within(c, 917536, 917631) { return yes }
+	within(c, 917760, 917999)
+}
+# after a ZWJ these join the character (emoji ZWJ sequences, GRAPHEME_PICTOGRAPHIC)
+pictographic(c: int): bool := within(c, 9728, 10175) or within(c, 126976, 129791)
+# a flag is a pair of these
+regional_indicator(c: int): bool := within(c, 127462, 127487)
+# the byte after the character (grapheme cluster) starting at byte `at` of t (src/extensions/strings.rs
+# grapheme_clusters): controls stand alone but CR LF, a flag pairs two regional indicators
+character_end(t: text, at: int): int := {
+	previous = code_point_at(t, at)
+	end = at + code_point_width(byte_at(t, at))
+	if previous == 13 and end < byte_count(t) and byte_at(t, end) == 10 { return end + 1 }
+	if previous < 32 or within(previous, 127, 159) { return end }
+	unpaired = if regional_indicator(previous) then 1 else 0
+	while end < byte_count(t) {
+		next = code_point_at(t, end)
+		if not (extends_character(next) or (previous == 8205 and pictographic(next)) or (unpaired == 1 and regional_indicator(next))) { return end }
+		unpaired = 0
+		previous = next
+		end += code_point_width(byte_at(t, end))
+	}
+	end
+}
+# the character of t from byte `at` to end: a character value for one code point, else a text
+character_between(t: text, at: int, end: int): any := {
+	if end - at == code_point_width(byte_at(t, at)) { return char_of(code_point_at(t, at)) }
+	bytes_between(t, at, end)
+}
+# the index-th character of t, counted from 1
+text_char(t: text, index: int): any := {
+	if walk_reaches(t, index) == 0 { swap_walks() }
+	if walk_reaches(t, index) == 0 {
+		walked_text = t
+		walked_bytes = byte_count(t)
+		walked_index = 1
+		walked_at = 0
+		walked_before = -1
+	}
+	if index < walked_index {
+		walked_index -= 1
+		walked_at = walked_before
+		walked_before = -1
+	}
+	while walked_index < index {
+		walked_before = walked_at
+		walked_at = character_end(t, walked_at)
+		walked_index += 1
+	}
+	character_between(t, walked_at, character_end(t, walked_at))
+}
+# 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one
+# past it
+walk_reaches(t: text, index: int): int := {
+	if same_text(t, walked_text) == 0 or byte_count(t) < walked_bytes or index < walked_index - 1 { return 0 }
+	if index == walked_index - 1 and walked_before < 0 { return 0 }
+	1
+}
+swap_walks(): int := {
+	text = walked_text
+	walked_text = other_text
+	other_text = text
+	bytes = walked_bytes
+	walked_bytes = other_bytes
+	other_bytes = bytes
+	index = walked_index
+	walked_index = other_index
+	other_index = index
+	at = walked_at
+	walked_at = other_at
+	other_at = at
+	before = walked_before
+	walked_before = other_before
+	other_before = before
+	0
+}
+list_join(a: list, b: list): list := {
 	out = new_list(#a + #b)
 	copy_items(out, 0, a, 0, #a)
 	copy_items(out, #a, b, 0, #b)
@@ -248,7 +382,7 @@ def list_join(a: list, b: list): list {
 }
 # `a += b`: b's items after a's in a itself, so every alias of a sees them; a full array is replaced by one twice
 # as large, so appending one item at a time copies each item a bounded number of times
-def list_append(a: list, b: list): list {
+list_append(a: list, b: list): list := {
 	start = #a
 	added = #b
 	if start + added > item_room(a) {
@@ -353,13 +487,13 @@ repeated_text(n: int, t: any): text := {
 	out
 }
 # `int[n]`: a list of count zeros
-def zero_fill(count: int, filler: any): list {
+zero_fill(count: int, filler: any): list := {
 	out = new_list(count)
 	for i in 1 to count { out#i = filler }
 	out
 }
 # `t.split(separator)`: the texts between separator's places in t
-def split_text(t: text, separator: any): list {
+split_text(t: text, separator: any): list := {
 	between = node_text(separator)
 	out = new_list(0)
 	start = 0
@@ -376,18 +510,39 @@ def split_text(t: text, separator: any): list {
 	out += [bytes_between(t, start, byte_count(t))]
 	out
 }
-# `t.chars`: t's characters
-def text_chars(t: text): list {
+# `t.chars`: t's characters (grapheme clusters)
+text_graphemes(t: text): list := {
 	out = new_list(text_count(t))
-	for i in 1 to text_count(t) { out#i = text_char(t, i) }
+	at = 0
+	for i in 1 to #out {
+		end = character_end(t, at)
+		out#i = character_between(t, at, end)
+		at = end
+	}
+	out
+}
+# `for each codepoint in t`: t's code points
+text_chars(t: text): list := {
+	out = new_list(code_point_count(t))
+	at = 0
+	for i in 1 to #out {
+		out#i = char_of(code_point_at(t, at))
+		at += code_point_width(byte_at(t, at))
+	}
 	out
 }
 # `xs.reverse`: a list's items or a text's characters the other way round
 reversed(n: any): any := {
+	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
 	if kind_code(n) == 3 {
 		t = unboxed_text(n)
 		backwards = ""
-		for i in text_count(t) down to 1 { backwards += text_char(t, i) }
+		at = 0
+		while at < byte_count(t) {
+			end = character_end(t, at)
+			backwards = bytes_between(t, at, end) + backwards
+			at = end
+		}
 		return backwards
 	}
 	reversed_items(unboxed_list(n))
@@ -416,7 +571,7 @@ node_is_type(n: any, type: text): bool := {
 	no
 }
 # `x is Name` of a class: an instance is an entry keyed by its class's name
-instance_of(n: any, name: text) := {
+instance_of(n: any, name: text): bool := {
 	if is_null(n) == 1 or kind_code(n) != 6 { return no }
 	text_order(key_name(n), name) == 0
 }
@@ -448,7 +603,7 @@ positive_float_text(x: float): text := {
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
 # digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
 # bit is even, as a reader rounds half to even); the multiple of the largest power of ten among them, nearest x
-def float_digits(x: float): list {
+float_digits(x: float): list := {
 	exponent = 0
 	mantissa = x
 	while mantissa >= 10 {
@@ -507,7 +662,7 @@ has_17_digits(scaled: list, bound: float): bool := {
 # [hi, lo]: (x + gap/2) · 10^shift as the double-double hi + lo, by at most 10^22 a step (each power exact): a product's
 # error is Dekker's exact product, a quotient's the remainder of its exact product. Exact in one step, within 2^-104 in
 # more. A float beyond ±2^900 is moved by 2^∓128 first and back after, so no product overflows, no half underflows
-def float_scaled(x: float, gap: float, shift: int): list {
+float_scaled(x: float, gap: float, shift: int): list := {
 	value = x
 	scaled_gap = gap
 	scale = float(1)
@@ -848,18 +1003,18 @@ floored_node(n: any): any := {
 
 ## runtime errors: each fails inside a function of its name, which src/wasm_emitter/control/traps.rs reads off the
 ## trace as the error's message; the global trap_detail holds the value the message names
-divide_by_zero() := {
+divide_by_zero(): int := {
 	fail()
 	0
 }
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
-index_out_of_range_of(index: int, count: int) := {
+index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
 	fail()
 	0
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
-index_of_node(n: any) := {
+index_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
 	unboxed_int(n)
 }
@@ -868,7 +1023,7 @@ int_overflow() := {
 	fail()
 	0
 }
-index_must_be_an_integer() := {
+index_must_be_an_integer(): int := {
 	fail()
 	0
 }
@@ -892,23 +1047,23 @@ wrong_number_of_arguments() := {
 	0
 }
 # a value as a boxed $Node
-held(value: any) := value
+held(value: any): any := value
 # the built-in node's parts (lib/compiler/node.warp): a key's operator is its code above the kind bits, the
 # position of its spelling here (src/operators/codes.rs OP_CODES)
-operator_spellings() := ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
+operator_spellings(): list := ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 	"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
 	"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
 	"|", "↑", "↓", "/!", "/!="]
-operator_code(spelled: text) := {
+operator_code(spelled: text): int := {
 	spellings = operator_spellings()
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
 	0
 }
-key_node(left: any, operator: any, right: any) := keyed(operator_code(node_text(operator)) * 256 + 6, left, right)
-key_left(n: any) := entry_key(n)
-key_right(n: any) := key_value(n)
-key_operator(n: any) := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
-symbol_node(name: any) := symbol_of(node_text(name))
+key_node(left: any, operator: any, right: any): any := keyed(operator_code(node_text(operator)) * 256 + 6, left, right)
+key_left(n: any): any := entry_key(n)
+key_right(n: any): any := key_value(n)
+key_operator(n: any): text := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
+symbol_node(name: any): any := symbol_of(node_text(name))
 
 ## durations (card duration-warp; src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
@@ -1097,7 +1252,7 @@ sorted_like(xs: any, keys: list): any := {
 	sorted
 }
 # a list's items, a text's characters
-sortable_items(xs: any): list := if kind_code(xs) == 3 then text_chars(unboxed_text(xs)) else unboxed_list(xs)
+sortable_items(xs: any): list := if kind_code(xs) == 3 then text_graphemes(unboxed_text(xs)) else unboxed_list(xs)
 # the characters of chars joined into one text
 characters_text(chars: list): text := {
 	out = ""
@@ -1230,7 +1385,7 @@ text_as_float(t: text): float := {
 }
 # [digits, dropped] of the digits between the byte offsets start and stop (a point among them skipped): the first 18
 # significant ones as an int (below 10^18, so below 2^63), the count of those dropped after them
-def decimal_digits(t: text, start: int, stop: int): list {
+decimal_digits(t: text, start: int, stop: int): list := {
 	digits = 0
 	count = 0
 	dropped = 0
