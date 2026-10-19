@@ -155,7 +155,7 @@ fn multi_word_types_in_line(line: &str) -> Vec<Vec<String>> {
 	types
 }
 
-/// The source with its comments (`// …`, `/* … */`) and texts (`"…"`, `'…'`) blanked out
+/// The source with its comments (`// …`, `# …`, `/* … */`, `/# … #/`) and texts (`"…"`, `'…'`) blanked out
 pub(crate) fn code_only(source: &str) -> String {
 	let chars: Vec<char> = source.chars().collect();
 	let mut code = String::with_capacity(source.len());
@@ -187,21 +187,28 @@ pub fn comment_and_text_spans(source: &str) -> Vec<(usize, usize)> {
 	spans
 }
 
-/// The end of the comment (`// …`, `/* … */`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
+/// The end of the comment (`// …`, `# …`, `/* … */`, `/# … #/`) or text (`"…"`, `'…'`) starting at `chars[at]`, if one starts there
 pub(crate) fn text_or_comment_end(chars: &[char], at: usize) -> Option<usize> {
 	let (c, next) = (chars[at], chars.get(at + 1).copied());
 	let skip_until = |from: usize, end: &[char]| {
 		(from..chars.len()).find(|&i| chars[i..].starts_with(end)).map_or(chars.len(), |i| i + end.len())
 	};
+	let line_end = || (at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len());
 	let after = match (c, next) {
-		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => {
-			(at..chars.len()).find(|&i| chars[i] == '\n').unwrap_or(chars.len())
-		}
+		('/', Some('/')) if at == 0 || chars[at - 1] != ':' => line_end(),
+		('#', Some(' ' | '\t')) => line_end(),
+		('#', _) if at_line_start(chars, at) && super::comments::hash_comment_at(chars, at) => line_end(),
 		('/', Some('*')) => skip_until(at + 2, &['*', '/']),
+		('/', Some('#')) => skip_until(at + 2, &['#', '/']),
 		('"' | '\'', _) => quoted_end(chars, at + 1, c),
 		_ => return None,
 	};
 	Some(after.max(at + 1))
+}
+
+/// Only blanks stand before `chars[at]` on its line
+fn at_line_start(chars: &[char], at: usize) -> bool {
+	chars[..at].iter().rev().take_while(|&&c| c != '\n').all(|&c| c == ' ' || c == '\t')
 }
 
 /// The end of a quoted text from `from` on, past its closing quote: an escaped quote `\"` leaves it open

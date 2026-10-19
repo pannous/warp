@@ -124,3 +124,10 @@ fn test_nested_block_comments() {
 	is!("/# a /# b #/ #/ 4", 4);
 	is!("1 /* x */ + 2", 3);
 }
+
+#[test] // card comment-apostrophe: the scans before parsing skip `#` comments as the parser does
+fn test_apostrophe_in_hash_comment_hides_no_code() {
+	let declared = "class Point { x: int }\np = Point{x: 1}";
+	let commented = "# Rust's\nclass Point { x: int }\n# it's\np = Point{x: 1}\n/# don't #/";
+	eq!(parse(commented), parse(declared));
+}
