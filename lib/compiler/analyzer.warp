@@ -65,6 +65,8 @@ arithmetic_kind(left: text, op: text, right: text): text := {
 	if op == "*" and texts and (left == "int" or right == "int") { return "text" }
 	if texts or left == "list" or right == "list" or left == "error" or right == "error" or left == "function" or right == "function" { return "error" }
 	if left == "float" or right == "float" { return "float" }
+	# 7 / 2 is the ratio 7/2, not an int (6 / 2 is 3, known only when it runs)
+	if op == "/" { return "rational" }
 	"int"
 }
 

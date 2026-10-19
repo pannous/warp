@@ -113,8 +113,9 @@ pub(crate) const REVERSE_WORD: &str = "reverse";
 const FAILED_WORD: &str = "failed";
 const CLASS_KEYWORD: &str = "class";
 const IF_WORD: &str = "if";
-/// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
+/// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`; `fi` is an `end` alias
 const END_KEYWORD: &str = "end";
+const FI_KEYWORD: &str = "fi";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
 /// The words a Ruby `end` closes in a class body: `def … end`, `do … end`
@@ -266,6 +267,8 @@ pub struct WarpParser {
 	program_functions: std::collections::HashSet<String>,
 	/// Whether the source uses `end` as a name (`end = 3`), found by a pre-scan: then no `end` closes a block
 	names_end: bool,
+	/// The corresponding name check for the `fi` block-closing alias
+	names_fi: bool,
 	/// The `end`s and openers of the source per set of openers, indexed once on the first search for a closing `end`,
 	/// so each `do`/`def` costs a lookup instead of a scan of the rest of the source
 	closing_ends: std::cell::RefCell<std::collections::HashMap<String, blocks::ClosingEnds>>,
@@ -338,9 +341,11 @@ impl WarpParser {
 		} else {
 			Default::default()
 		};
-		let names_end = blocks::names_end(&chars);
+		let names_end = blocks::names_block_closer(&chars, END_KEYWORD);
+		let names_fi = blocks::names_block_closer(&chars, FI_KEYWORD);
 		WarpParser {
 			names_end,
+			names_fi,
 			closing_ends: Default::default(),
 			user_operators,
 			source_aliases,

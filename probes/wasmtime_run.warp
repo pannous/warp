@@ -1,0 +1,19 @@
+// card wasmtime-ffi: a module's bytes run through Homebrew's libwasmtime, called as any C library
+use wasmtime
+hi = [0, 97, 115, 109, 1, 0, 0, 0, 1, 13, 2, 96, 4, 127, 127, 127, 127, 1, 127, 96, 0, 1, 126, 2, 35, 1, 22, 119, 97, 115, 105, 95, 115, 110, 97, 112, 115, 104, 111, 116, 95, 112, 114, 101, 118, 105, 101, 119, 49, 8, 102, 100, 95, 119, 114, 105, 116, 101, 0, 0, 3, 2, 1, 1, 5, 3, 1, 0, 1, 7, 17, 2, 6, 109, 101, 109, 111, 114, 121, 2, 0, 4, 109, 97, 105, 110, 0, 1, 10, 31, 1, 29, 0, 65, 0, 65, 16, 54, 2, 0, 65, 4, 65, 3, 54, 2, 0, 65, 1, 65, 0, 65, 1, 65, 8, 16, 0, 26, 66, 7, 11, 11, 9, 1, 0, 65, 16, 11, 3, 104, 105, 10]
+// without signal-based traps: wasmtime's signal handlers would replace warp's own (warp's next trap a SIGILL)
+engine_config = wasm_config_new()
+wasmtime_config_signals_based_traps_set(engine_config, false)
+engine = wasm_engine_new_with_config(engine_config)
+store = wasmtime_store_new(engine, 0, 0)
+context = wasmtime_store_context(store)
+linker = wasmtime_linker_new(engine)
+wasmtime_linker_define_wasi(linker)
+config = wasi_config_new()
+wasi_config_inherit_stdout(config)
+wasmtime_context_set_wasi(context, config)
+module = wasmtime_module_new(engine, hi)
+instance = wasmtime_linker_instantiate(linker, context, module)
+main = wasmtime_instance_export_get(context, instance, "main")
+results = wasmtime_func_call(context, main.of.func, [], 1)
+print results#1.of.i64
