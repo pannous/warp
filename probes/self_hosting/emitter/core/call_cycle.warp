@@ -1,0 +1,17 @@
+// functions calling each other in a cycle, none annotated: a call still compiling gives its value only once every
+// function is compiled (emitter.warp module.rereads), as parser.warp's expression → continued → prefixed → expression
+def ahead(p, m) := scan(p, m + 1)
+def scan(p, m) {
+	while true {
+		if m > 3 { break }
+		found = small(p, m)
+		if found != ø { return found }
+		m = ahead(p, m)
+	}
+	m
+}
+def small(p, m) {
+	if m > 2 { return ø }
+	m
+}
+ahead(0, 0)

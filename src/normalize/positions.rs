@@ -14,9 +14,11 @@ pub struct HintPosition {
 /// looked up) leaves the hint position where the program's hint is about to point
 pub fn without_hints<T>(action: impl FnOnce() -> T) -> T {
 	let position = compile_context::read(|context| context.hint_position.clone());
-	compile_context::scoped(|context| &mut context.hint_position, position, || {
-		compile_context::scoped(|context| &mut context.hints_muted, true, action)
-	})
+	compile_context::scoped(
+		|context| &mut context.hint_position,
+		position,
+		|| compile_context::scoped(|context| &mut context.hints_muted, true, action),
+	)
 }
 
 /// A hint as tests and hosts read it: a view of a Diagnostic of level Hint (see `capture_hints`)
