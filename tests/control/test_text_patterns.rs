@@ -42,3 +42,15 @@ fn a_text_pattern_needs_a_piece_between_holes() {
 fn a_known_name_in_a_sum_is_a_value() {
 	is!(r#"p = "0x"; s = "0xff"; match s { p + "ff" => "same"; _ => "no" }"#, "same");
 }
+
+// the prelude word the patterns call: text_holes(text, pieces, types), each hole's text fitting its type, [] otherwise
+#[test]
+fn text_holes_fit_their_types() {
+	is!(r#"text_holes("/users/42", ["/users/", ""], ["int"])#1"#, "42");
+	is!(r#"count(text_holes("/users/bo", ["/users/", ""], ["int"]))"#, 0);
+	is!(r#"text_holes("-3.25 m", ["", " m"], ["number"])#1"#, "-3.25");
+	is!(r#"text_holes("0xff!", ["0x", "!"], ["hex"])#1"#, "ff");
+	is!(r#"count(text_holes("0xfg!", ["0x", "!"], ["hex"]))"#, 0);
+	is!(r#"text_holes("my_name", ["", ""], ["word"])#1"#, "my_name");
+	is!(r#"count(text_holes("my-name", ["", ""], ["word"]))"#, 0);
+}
