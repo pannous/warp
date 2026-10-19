@@ -392,6 +392,11 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
   binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
   with the Rust pipeline (that compile shows a Rust `emit` phase).
+- WARP_SELF_ANALYSIS=1 beside the switch (card pipeline-runs): emit_module first hands each lowered program to
+  analyzer.warp `kinds` (self_hosted::check_analysis) and fails it loud on a stage error or a slot where warp's kind
+  does not cover Rust's (`… disagrees with Rust's: html_items(): list, not empty`). Step one only checks: the emitter
+  still reads src/analyzer's kinds; later warp's kinds feed it. Suite count: self-hosted-suite.sh --stage
+  analyzer=WARP_SELF_ANALYSIS.
 - Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
   refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
   585 on 2026-10-18).
@@ -400,7 +405,7 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   | 59 | `view·opaque`: a class/type or error node kept whole | warp-emitter-structures (classes), warp-self-emitter (errors) |
   | 35+15+11 | untyped values: a text where an int is needed, a node where a list is needed, a node as a condition | warp-self-emitter with warp-self-analyzer's kinds |
   | 25+16 | the unknown name div; floor_quotient | warp-self-emitter |
-  | 22 | closure_new (lambdas, closures) | warp-cache |
+  | 22 | closure_new (lambdas, closures): compiled since emit-families, but for a closure's text | warp-cache |
   | 16 | the operator ‖ | open |
   | 15+14+12 | host words on nodes: std_io, foreign_call, task_spawn_values | warp-cache (low value: needs the module's node exports) |
   | 14+12 | is_type; map_entries (+ map_of_entry 6, field_with 5, collection_contains 8, key 4) | warp-emitter-structures |

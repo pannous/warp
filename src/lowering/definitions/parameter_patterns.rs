@@ -51,7 +51,7 @@ fn parameter_named(parameter: Node, patterns: &mut Vec<(String, Node)>) -> Node 
 		),
 		Node::List(_, Bracket::Square, _) => Node::Symbol(named(LIST_PARAMETER, parameter, patterns)),
 		_ if is_map_pattern(&parameter) => Node::Symbol(named(MAP_PARAMETER, parameter, patterns)),
-		Node::Key(class, Op::None, fields) if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+		Node::Key(class, Op::None, fields) if fields.is_block() => {
 			let class = class.drop_meta().clone();
 			let name = named(&class.name().to_lowercase(), parameter, patterns);
 			key(Node::Symbol(name), Op::Colon, class)
