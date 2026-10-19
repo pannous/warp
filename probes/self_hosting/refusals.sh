@@ -4,6 +4,7 @@
 # program. A program inside the core must print what it prints without the switch (the Rust emitter): one that does not
 # is listed DIFFERENT. Window samples (raylib, sdl) never run.
 # usage: probes/self_hosting/refusals.sh <warp binary> [program path regex]   → data/self_hosting/refusals.txt
+#   WARP_SELF_HOSTED=pure …: the pure lane's refusals (card pure-runs)
 # SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh <warp binary>   → data/self_hosting/bootstrap_gap.txt:
 #   with WARP_EMIT_SURVEY, every refused function of the programs (warp's compiler itself, card bootstrap-gap) once,
 #   ranked by the form refused
@@ -21,7 +22,7 @@ TIMEOUT_SECONDS=15
 rm -rf "$work/runs" && mkdir -p "$work/runs" "$(dirname "$report")"
 export WARP=$warp WORK=$work ROOT=$root TIMEOUT_SECONDS
 [ -n "${SURVEY:-}" ] && export WARP_EMIT_SURVEY=1
-export WARP_SELF_HOSTED=1 WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_MODULE_CACHE=$work/cache
+export WARP_SELF_HOSTED=${WARP_SELF_HOSTED:-1} WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_MODULE_CACHE=$work/cache
 "$warp" "3 + 4" >/dev/null 2>&1 # compiles the stage programs once, into the cache every run shares
 [ -n "${WARP_SELF_ANALYSIS:-}" ] && "$warp" "x = 3; x + 4" >/dev/null 2>&1 # the analysis stage too (the first program the emitter meets)
 run() { # <program> [setting…]: its output and exit status
