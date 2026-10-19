@@ -969,8 +969,6 @@ is_local_time(t: any): bool := time_form(t) == 2
 is_duration(t: any): bool := time_form(t) == 3
 is_zoned(t: any): bool := time_form(t) == 4
 is_time_of_day(t: any): bool := time_form(t) == 5
-# a duration's exact nanoseconds, beside its calendar months and days
-duration_nanos(d: any): int := time_position(d)
 # the duration of months, days and nanoseconds: its days kept as 32 unsigned bits above the form, its months above them
 duration_of(months: int, days: int, nanos: int): any := {
 	unsigned_days = if days < 0 then days + 4294967296 else days
@@ -987,8 +985,6 @@ date_form() := 1
 duration_form() := 3
 zoned_form() := 4
 clock_form() := 5
-second_nanos() := 1000000000
-day_nanos() := 86400000000000
 time_form(n: any): int := int_remainder(int_quotient(marked_kind(n), 256), 8)
 # RFC 3339 as calendar.rs shows a time, `2026-10-10T14:43:33.682Z`: a date has no clock, a time of day no date, a
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
