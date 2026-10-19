@@ -181,7 +181,8 @@ pub(crate) fn run_cached_block(program: Node) -> Node {
 		None => {
 			COMPILED_BLOCKS.with(|count| count.set(count.get() + 1));
 			// `a ≈ b` calls the prelude's alike, which only code generation names: loaded as for a program (card code-run)
-			let compiled = loading_compiler_words(|| lower_for_emission(program.clone()).and_then(|node| emit_module(&node)));
+			let compiled =
+				loading_compiler_words(|| lower_for_emission(program.clone()).and_then(|node| emit_module(&node)));
 			let module = match compiled {
 				Ok(module) => module,
 				Err(type_error_or_final_value) => return type_error_or_final_value,

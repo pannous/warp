@@ -996,7 +996,11 @@ fn references(functions: impl Iterator<Item = Node>) -> Node {
 
 /// A reflection word's result list; none is ø, as `[]` reads (a variable can't hold an empty list node)
 fn listed(list: Node) -> Node {
-	if matches!(&list, Node::List(items, ..) if items.is_empty()) { Node::Empty } else { list }
+	if matches!(&list, Node::List(items, ..) if items.is_empty()) {
+		Node::Empty
+	} else {
+		list
+	}
 }
 
 /// The names a reflection word lists for a class of these fields and methods: either, or both for `dir`

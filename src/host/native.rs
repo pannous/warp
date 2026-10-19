@@ -560,11 +560,7 @@ fn parse_code(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Re
 	match crate::lowering::parse_word::code_of(&source) {
 		// code the program can't hold yet fails as its error, which `try` catches, not as a trap
 		Ok(code) => {
-			let built = built_in_program(
-				&mut caller,
-				&crate::compiler::run_time_blocks::held_code(code),
-				PARSE_CODE,
-			);
+			let built = built_in_program(&mut caller, &crate::compiler::run_time_blocks::held_code(code), PARSE_CODE);
 			raised(&mut caller, built)
 		}
 		Err(failure) => error_in_program(&mut caller, &failure),
