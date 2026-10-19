@@ -337,6 +337,9 @@ impl WasmGcEmitter {
 	/// only ever gets floats by index. Lists are shared (P200b): a list some holder keeps as Nodes stays Nodes once it
 	/// changes (list_sharing.rs). Any other use reads them as Nodes, so it stays correct.
 	pub(in crate::wasm_emitter) fn find_typed_lists(&self, program: &Node) -> HashMap<String, TypedList> {
+		// a function defined here has variables of its own: `ocean(x, y) := sun_light .* x` lowers to a loop whose item
+		// list holds sun_light, no alias of main's (find_typed_globals already looks at main without them)
+		let program = &self.without_definitions(program);
 		let mut sources: HashMap<String, Vec<Source>> = HashMap::new();
 		let mut excluded: HashSet<String> = HashSet::new();
 		let mut updated: HashSet<String> = HashSet::new();

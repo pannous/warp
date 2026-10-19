@@ -148,6 +148,8 @@ kind_of_list(n: any, scope: any): text := {
 	statements = separator_of(n) == ";" or separator_of(n) == "\n"
 	# `(a, b)` computes its elements
 	if bracket_of(n) == "(" and separator_of(n) == "," { return "list" }
+	# `{a: 1, b: 2}`: a map, a node at run time
+	if bracket_of(n) == "{" and #n > 0 and all_of(n, part => is_key(part, ":")) { return "data" }
 	if bracket_of(n) == "[" or (not (statements and bracket_of(n) == "") and all_of(n, is_data)) { return "list" }
 	kind_of(n#(#n), scope)
 }

@@ -24,8 +24,8 @@ fn the_arguments_after_a_comma_join_a_braceless_call_wherever_it_stands() {
 	assert_eq!(printed("x = max 3, 4; x"), "4");
 	assert_eq!(printed("f(x) := x * 2; f(max 3, 4)"), "8");
 	assert_eq!(printed("min 5, 2, 9"), "2");
-	// as max(xs, 0): a list is no candidate beside a number
-	assert!(printed("xs = [1 5]; max xs, 0").contains("cannot compare a list"));
+	// as max(xs, 0): each item against 0 (card min-max); `(max xs), 0` would be 5
+	assert_eq!(printed("xs = [1 5]; max xs, 0"), "[1 5]");
 }
 
 #[cfg(feature = "native")]

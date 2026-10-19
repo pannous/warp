@@ -427,7 +427,8 @@ pub fn compiler_key() -> Option<&'static str> {
 #[cfg(feature = "native")]
 fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
-	let binary = std::env::current_exe().ok()?;
+	// canonical: macOS gives the path the binary was started by, `../../scratch/warp` keyed every folder apart
+	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
 	let mut hasher = Sha256::new();
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));

@@ -1,6 +1,7 @@
 //! User functions: their compilation, signatures, closure captures and calls
 
 use super::super::*;
+use super::wasm_bodies;
 
 /// The kinds a call's argument has for sure when inference names them: what a declared parameter type is checked against
 const SCALAR_KINDS: [Kind; 5] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List];
@@ -365,7 +366,11 @@ impl WasmGcEmitter {
 			self.emit_trap_position(&mut func);
 		}
 		// Compile the function body - use node instructions for Node-returning functions
-		if self.struct_results.contains_key(name) {
+		if let Some(instruction) = wasm_bodies::wasm_body_instruction(&user_fn.body).and_then(wasm_bodies::instruction)
+		{
+			(0..num_params).for_each(|param| _ = func.instruction(&I::LocalGet(param)));
+			func.instruction(&instruction);
+		} else if self.struct_results.contains_key(name) {
 			self.emit_struct_result_body(&mut func, &user_fn.body);
 		} else if self.returns_list {
 			self.emit_list_abi_body(&mut func, &user_fn.body);
