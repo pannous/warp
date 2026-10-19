@@ -10,7 +10,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
 - ready-queue: the board's Ready column is the merge queue (`todo ready <card>`, refuses only a branch that doesn't merge cleanly into origin/main); batches of ≤ ~8 cards, wide refactors and carrier branches alone and first; the Integrator resolves only trivial conflicts, others go back to the owner (card to Now + note with the hunk); a reviewer veto moves the card back to Now.
 - urgent-direct: warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
-- fix-forward: the Integrator may ignore up to 10 failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the owner (notes/roles.md "Fix forward").
+- fix-forward: the Integrator may ignore up to 10 failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the owner (notes/agents/integrator.md "Fix forward").
 - crash-fixes-first: crash fixes merge with the highest priority. small-changes-on-main: small or non-conflicting changes may go on main without a worktree. session-names: a session is named for its current task.
 - self-hosting: parser first, each warp part a twin of its Rust part with a differential test over the samples' kept forms (exclusion list, self-hosting-minimal); gaps are fixed in the language.
   self-hosting-resumed: self-hosting is the fleet's next big task; workers
