@@ -151,3 +151,11 @@
 - Keep the outer comma as the tuple separator; the inner parentheses group only the first value.
 - Reuse the general bracket/list parser and avoid a `try`-specific rewrite.
 - Run the focused parser/control tests, formatting, clippy, and the wasm32 check.
+
+# `fi` block closer cleanup
+
+- Reproduce the reported multi-line `if … fi` program with a new outcome test before changing the parser.
+- Treat `fi` as the same closing token as `end` only while parsing a block that expects a closer; keep ordinary `fi`
+  symbols and assignments valid outside that context.
+- Reuse the existing balanced block-closing scan and parser path instead of adding an `if`-only rewrite.
+- Run the focused `fi` and existing `end` block tests, formatting, clippy, and the wasm32 check.
