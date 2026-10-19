@@ -17,6 +17,9 @@ section_ids = {custom: 0, type: 1, import: 2, function: 3, memory: 5, globals: 6
 function_type_byte = 96
 export_function_byte = 0
 export_memory_byte = 2
+export_global_byte = 3
+# the globals the runner reads after a trap (src/run/wasm_reader.rs with_trap_detail): the value a runtime error names
+exported_globals = ["trap_detail"]
 import_function_byte = 0
 # a module that prints imports WASI's fd_write(fd, iovecs, iovec count, written at) → error code, all i32
 fd_write = ["wasi_snapshot_preview1", "fd_write", [96, 4, 127, 127, 127, 127, 1, 127]]
@@ -47,7 +50,7 @@ no_value = 64
 # opcodes (WebAssembly core spec, section 5.4)
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
-	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i32_sub: 107, i32_and: 113, i32_or: 114,
+	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_ge_u: 90, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209}
 # GC instructions, after their prefix 251
@@ -310,16 +313,25 @@ element_assignment(body: Body, list: any, index: any, value: any) := {
 	if list#1 == "node" { return runtime_call("node_set_at", [list, index, value]) }
 	if list#1 != "list" { return refuse("an assignment to an element of a " + list#1) }
 	held = uleb(fresh_local(body, value#1))
-	items = list#2 + gc_code("struct_get", [gc.list, 1]) + index_code(index) + [op.i32_const, 1, op.i32_sub]
-	code = value#2 + [op.local_set] + held + items + boxed([value#1, [op.local_get] + held]) + gc_code("array_set", [gc.items])
-	[value#1, code + [op.local_get] + held]
+	code = value#2 + [op.local_set] + held + checked_item(body, list, index) + boxed([value#1, [op.local_get] + held])
+	[value#1, code + gc_code("array_set", [gc.items]) + [op.local_get] + held]
 }
 # `xs#i`: the i-th item, counted from 1
-element(list: any, index: any) := {
+element(body: Body, list: any, index: any) := {
 	if list#1 == "node" { return runtime_call("node_at", [list, index]) }
 	if list#1 != "list" { return refuse("an element of a " + list#1) }
-	items = list#2 + gc_code("struct_get", [gc.list, 1])
-	["node", items + index_code(index) + [op.i32_const, 1, op.i32_sub] + gc_code("array_get", [gc.items])]
+	["node", checked_item(body, list, index) + gc_code("array_get", [gc.items])]
+}
+# a list's items and the 0-based place of its index-th item; an index outside 1…count fails in index_out_of_range_of
+checked_item(body: Body, list: any, index: any) := {
+	held = uleb(fresh_local(body, "list"))
+	at = [op.local_get] + uleb(fresh_local(body, "int"))
+	count = ["int", [op.local_get] + held + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]]
+	whole = if index#1 == "node" then runtime_call("index_of_node", [index])#2 else converted(index, "int")
+	code = list#2 + [op.local_set] + held + whole + [op.local_set] + at[1..]
+	outside = at + [op.i64_const, 1, int_ops["-"]] + count#2 + [op.i64_ge_u]
+	code += outside + [op.if, no_value] + dropped(runtime_call("index_out_of_range_of", [["int", at], count])) + [op.end]
+	code + [op.local_get] + held + gc_code("struct_get", [gc.list, 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
 }
 # the words the runtime is written in, each one or two instructions
 intrinsic(body: Body, name: text, arguments: any) := {
@@ -470,7 +482,7 @@ local_value(body: Body, n: any) := {
 operation(body: Body, symbol: text, a: any, b: any) := {
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
-	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(a, b) }
+	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }
 	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, b]) }
 	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
 	textual = a#1 in characters or b#1 in characters
@@ -581,7 +593,15 @@ widens(body: Body, name: text, held: text, kind: text) := {
 	joint != held and (joint in type_bytes or joint in references)
 }
 
-# `global name = value` declares the module's variable name, which every function reads and writes
+# `global name = value` declares the module's variable name, which every function reads and writes; a bare
+# `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, ø until assigned
+global_declaration(body: Body, declaration: any) := {
+	if declaration is symbol { return declare_global(name_of(declaration), ["node", [ref_null, gc.node]]) }
+	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
+		return refuse("the declaration global " + form_of(declaration))
+	}
+	declare_global(name_of(key_of(declaration)), expression(body, value_of(declaration)))
+}
 declare_global(name: text, value: any) := {
 	if not (name in module.globals) {
 		module.globals[name] = [#module.global_order, value#1]
@@ -694,6 +714,7 @@ group_expression(body: Body, n: any) := {
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("float") { return ["float", converted(expression(body, n#2), "float")] }
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
+	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("global") { return global_declaration(body, n#2) }
 	if bracket_of(n) == "[" { return list_value(body, n.map(x => x)) }
 	if bracket_of(n) == "{" and #n > 0 and n.all(is_entry) { return map_value(body, n.map(x => x)) }
 	# a map of one entry, as Rust's lowering marks it: map_value already gives the map
@@ -715,9 +736,7 @@ key_expression(body: Body, n: any) := {
 	if operator == "?" and type(right) is key and op_of(right) == ":" { return conditional(body, left, key_of(right), value_of(right)) }
 	if operator == "do" and type(left) is key and op_of(left) == "while" { return loop_of(body, value_of(left), right) }
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
-	if operator == ":" and left is symbol and name_of(left) == "global" and type(right) is key and op_of(right) == "=" and key_of(right) is symbol {
-		return declare_global(name_of(key_of(right)), expression(body, value_of(right)))
-	}
+	if operator == ":" and left == symbol("global") { return global_declaration(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
 	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
@@ -850,6 +869,9 @@ module_bytes(functions: any) := {
 		memory = section(section_ids.memory, vector([[0] + uleb(memory_pages)]))
 		exports += [name_bytes("memory") + [export_memory_byte, 0]]
 	} else { imported = [] }
+	for name in exported_globals {
+		if name in module.globals { exports += [name_bytes(name) + [export_global_byte] + uleb(module.globals[name]#1)] }
+	}
 	exported = section(section_ids.export, vector(exports))
 	# the texts' bytes: one passive segment, which array.new_data reads
 	segments = section(section_ids.data_count, uleb(1))
