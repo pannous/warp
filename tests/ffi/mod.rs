@@ -54,5 +54,7 @@ mod test_libm_header_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_libm_linking;
 mod test_page_ids; // card page-ids
+#[cfg(feature = "native")] // libwarp_runtime is built with cargo: native only
+mod test_run_wasm_library; // card run-wasm-lib
 mod test_wasi;
 mod test_web_idl; // card standalone-math-units step 3
