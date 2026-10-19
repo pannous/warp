@@ -8,6 +8,7 @@ is! 'a = 1; b = 2; def f() {
 f(); a + b' 11
 
 # a_block_declares_several_globals
+is! 'a = 1; b = 2; def f() { global a; global b; a = 5; b = 6 }; f(); a + b' 11
 is! 'a = 1; b = 2; def f() {
  global a
  global b

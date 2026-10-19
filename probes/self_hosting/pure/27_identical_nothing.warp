@@ -1,0 +1,7 @@
+// out: yes
+// out: no
+// out: yes
+def missing(x) := x === ø
+print missing(ø)
+print missing(3)
+print 3 !== ø

@@ -5,9 +5,7 @@
 //! warp compiler already compiles.
 //! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
-use crate::compiler::node_views::{
-	analysis_view, handled_plain_view, json_text, node_of_handled_view, plain_view, view_json,
-};
+use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
@@ -282,12 +280,13 @@ fn host_words() -> Result<String, Node> {
 	Ok(serde_json::Value::Object(words.collect()).to_string())
 }
 
-/// The view of lib/compiler/runtime.warp lowered, as JSON; a warp older than lib/ may fail to lower it (card crash-3)
+/// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
+/// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
 fn runtime_words() -> Result<String, Node> {
 	std::fs::read_to_string(RUNTIME_WORDS)
 		.map_err(|failure| crate::node::error(&failure.to_string()))
 		.and_then(|source| crate::pipeline::lower(&source))
-		.map(|lowered| view_json(&plain_view(&lowered)))
+		.map(|lowered| view_json(&analysis_view(&lowered)))
 		.map_err(|failure| {
 			crate::node::error(&format!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()))
 		})

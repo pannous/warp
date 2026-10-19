@@ -11,4 +11,5 @@ is! 'import tests/fixtures/wasm/zlib; crc32(0, compress(64, "hello hello hello")
 is! 'import tests/fixtures/wasm/xxhash; state = XXH32_createState(); XXH32_reset(state, 0); XXH32_update(state, "hel"); XXH32_update(state, "lo"); XXH32_digest(state)' 4211111929
 
 # a_function_wrapping_a_c_call_gives_its_text
+is! 'import tests/fixtures/wasm/shout; loud(t:text) := shout(t); loud("ab")' 'AB!'
 is! 'import tests/fixtures/wasm/shout; loud(t) := shout(t); loud("a") + loud("b")' 'A!B!'
