@@ -745,7 +745,7 @@ spaced(shown: text, part: text): text := if byte_count(shown) == 0 then part els
 with_amount(shown: text, amount: int, unit: text): text := if amount == 0 then shown else spaced(shown, amount_text(amount, unit))
 # `1.5`, `-0.000000001`, `0`: nanoseconds as seconds with their fraction, without trailing zeros
 seconds_text(nanos: int): text := {
-	magnitude = if nanos < 0 then -nanos else nanos
+	magnitude = if nanos < 0 then 0 - nanos else nanos
 	whole = int_text(int_quotient(magnitude, second_nanos()))
 	fraction = int_remainder(magnitude, second_nanos())
 	digits = 9
