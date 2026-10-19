@@ -218,9 +218,10 @@ lowest_terms(n: int, d: int): RatioParts := {
 	RatioParts(sign * n, sign * d)
 }
 // a/b of two exact numbers as exact_div divides them: an int whenever b divides a, by 0 the error divide by zero
-exact_quotient(a: RatioParts, b: RatioParts): RatioParts := {
-	if b.numerator == 0 { raise "divide by zero" }
-	lowest_terms(a.numerator * b.denominator, a.denominator * b.numerator)
+// (top and bottom, not a and b: a class-typed parameter types every same-named one, card parameter-typed-class)
+exact_quotient(top: RatioParts, bottom: RatioParts): RatioParts := {
+	if bottom.numerator == 0 { raise "divide by zero" }
+	lowest_terms(top.numerator * bottom.denominator, top.denominator * bottom.numerator)
 }
 // a % b of two ints as int_mod takes it: never below 0, the truncated remainder `rem` plus |b| when it is negative
 euclidean_remainder(a: int, b: int): int := {
