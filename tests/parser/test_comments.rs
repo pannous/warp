@@ -36,3 +36,10 @@ fn test_nested_block_comments() {
 	is!("/# a /# b #/ #/ 4", 4);
 	is!("1 /* x */ + 2", 3);
 }
+
+#[test] // card comment-apostrophe: the scans before parsing skip `#` comments as the parser does
+fn test_apostrophe_in_hash_comment_hides_no_code() {
+	is!("# Rust's\nclass Point { x: int }\n# it's\n/# don't #/\nstr(Point{x: 1})", "Point{x:1}");
+	// `type` ending a line declares no type named by the next line's first word (analyzer.warp settle)
+	is!("f(t) := type\nchanged = yes\nn = 0\nwhile changed {\n\tchanged = no\n\tn += 1\n}\nn", 1);
+}

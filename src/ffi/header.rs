@@ -180,7 +180,7 @@ pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> 
 		return None;
 	}
 	let params: Vec<wasm_encoder::ValType> =
-		warp_parameters(&hsig.param_types).filter_map(|t| map_c_type_to_valtype(t)).collect();
+		warp_parameters(&hsig.param_types).filter_map(|(_, param)| param_valtype(param)).collect();
 	let results: Vec<wasm_encoder::ValType> = header_result(hsig).into_iter().collect();
 
 	// Leak strings for 'static lifetime (acceptable for long-running process)

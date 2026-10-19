@@ -51,11 +51,25 @@ mod test_self_analyzer; // card inferred-kinds
 #[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
 #[cfg(feature = "native")]
+mod test_self_emitter_times; // card time-primitives
+#[cfg(feature = "native")]
+mod test_self_exact_pow; // card exact-pow-warp
+#[cfg(feature = "native")]
+mod test_self_exact_rounding; // card exact-rounding-warp
+#[cfg(feature = "native")]
+mod test_self_float_as_exact; // card float-as-exact-warp
+#[cfg(feature = "native")]
 mod test_self_float_text; // card float-text-warp
 #[cfg(feature = "native")]
 mod test_self_hosted_analysis; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_cache; // card End-end
+#[cfg(feature = "native")]
+mod test_self_sort; // card sort-warp
+#[cfg(feature = "native")] // a lib/compiler file on disk
+mod test_self_time_arithmetic; // card time-arithmetic-warp
+#[cfg(feature = "native")]
+mod test_self_time_text; // card time-text-warp
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;

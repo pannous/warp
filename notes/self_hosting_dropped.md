@@ -210,3 +210,7 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   its one entry), Rust's `div:divv:"hi"` (the block dropped around its item). The rendered HTML is the same
   (`<div>{divv:&quot;hi&quot;}</div>`). Source: probes/unknown_tag.warp (accepted by the Integrator with --flaky,
   2026-10-19). Back: the lowered view marks a block that holds one item as that item, as Rust's eval reads it.
+- Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
+  Comparable witness), times and uncertain values trap there, where Rust's node_order orders them. A sorted list is a
+  plain list, where Rust's keeps the bracket kind of the sorted one. Back: node_order asks the witness table and the
+  time words once emitter.warp lays those out; the result takes the kind of xs.

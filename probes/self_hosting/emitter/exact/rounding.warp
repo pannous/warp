@@ -1,0 +1,12 @@
+// exact rounding of ratios in emitter.warp: `floor` and `%` by the runtime words exact_floor and exact_mod
+half = 7/2
+print floor(half)
+minus = -7/2
+print floor(minus)
+print floor(9/3)
+print floor(2.5)
+print floor(4)
+print half % 2
+print minus % 2
+print 1/3 % 1
+floor(-1/3) + half % 1
