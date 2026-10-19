@@ -431,3 +431,12 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   variable` 184 (try 52, T# 22: forms parser.warp reads otherwise), a bare `#` left side 76 (a wrong number), `cannot
   extract a numeric value from ø` 46, database `may be ø` hints 50, `not a number` 33, hints pointing into
   lib/compiler/parser.warp (its own warnings leak into the program's output) 41.
+
+## Time primitives (card time-primitives, 2026-10-19, untested sprint work)
+emitter.warp makes the time node of a lowered `time_of(info, position)` / `instant_at(ms)` call (Kind 18, info above
+the kind bits, an $i64box position) and gives runtime words the intrinsics time_form, time_position, duration_months,
+duration_days (sign-extended 32 bits), zone_index, zone_offset (seconds); runtime.warp adds is_time/is_date/…,
+duration_nanos, duration_of(months, days, nanos) and local_offset_at(t) over the host word local_offset, which a
+program making a time imports (Rust: imports.rs makes_instant). Names carry a time_/duration_/zone_ prefix instead of
+the card's bare form/position/days, which runtime words use as locals. The time cards (time-field, time-text,
+time-arithmetic, time-zones) move src/wasm_emitter/time onto these. Probes: probes/self_hosting/emitter/times.
