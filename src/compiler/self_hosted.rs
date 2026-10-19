@@ -16,8 +16,8 @@ use std::sync::{Mutex, OnceLock};
 const SWITCH: &str = "WARP_SELF_HOSTED";
 /// WARP_SELF_HOSTED=front: parser.warp and the pass twins, the Rust emitter (a suite count of the front end alone)
 const FRONT_END_ONLY: &str = "front";
-/// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too, a disagreement
-/// with src/analyzer failing it (a suite count of + analyzer)
+/// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too and emitter.warp
+/// reads its kinds (a suite count of + analyzer)
 const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
 /// passes.warp `stage` of the request in the worker's input file
 const PASSES_PROGRAM: &str =
@@ -135,20 +135,14 @@ pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
 	enabled().then(|| kinds_of(view))
 }
 
-/// With ANALYSIS_SWITCH on, the kinds analyzer.warp finds in the lowered program, which emitter.warp then reads: an
-/// error when the stage fails or a kind it finds is narrower than src/analyzer's (analyzer::uncovered); None when off
-pub fn checked_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> {
+/// With ANALYSIS_SWITCH on, the kinds analyzer.warp finds in the lowered program, which emitter.warp then reads (warp's
+/// kinds alone, never compared with src/analyzer's: decision ignore-rust); an error when the stage fails; None when off
+pub fn program_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> {
 	static ANALYZES: OnceLock<bool> = OnceLock::new();
 	if !enabled() || !*ANALYZES.get_or_init(|| std::env::var_os(ANALYSIS_SWITCH).is_some()) {
 		return Ok(None);
 	}
-	use crate::analyzer::{inferred_kinds, json_kind_slots, kind_slots, uncovered};
-	let kinds = kinds_of(&analysis_view(program)).map_err(|failure| crate::node::error(&failure))?;
-	let differing = uncovered(&json_kind_slots(&kinds), &kind_slots(&inferred_kinds(program)));
-	if differing.is_empty() {
-		return Ok(Some(kinds));
-	}
-	Err(crate::node::error(&format!("the self-hosted analysis disagrees with Rust's: {}", differing.join("; "))))
+	kinds_of(&analysis_view(program)).map(Some).map_err(|failure| crate::node::error(&failure))
 }
 
 /// The kinds analyzer.warp finds in the program `view` shows, self-hosted or not

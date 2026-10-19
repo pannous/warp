@@ -118,7 +118,7 @@ use crate::lowering::list_mutations::*;
 pub(crate) use imports::signature_kind;
 pub use imports::*;
 pub use inference::*;
-pub use inferred_kinds::{covers, inferred_kinds, json_kind_slots, kind_slots, uncovered, KindSlots};
+pub use inferred_kinds::{covers, inferred_kinds, kind_slots, KindSlots};
 pub use main_globals::*;
 pub use user_functions::*;
 pub use variables::*;

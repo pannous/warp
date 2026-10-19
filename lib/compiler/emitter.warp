@@ -977,7 +977,7 @@ new_scope(f: Function) := {
 analyzed_kinds = {int: "int", float: "float", text: "text", list: "list", codepoint: "char"}
 # the runtime words taking a node where the analysis holds a list or a text (they trap on any other value)
 node_unboxings = {list: "list_of_node", text: "text_of_node"}
-# is the program analyzed (WARP_SELF_ANALYSIS): its kinds agree with Rust's, so a node meeting a list or text holds one
+# is the program analyzed (WARP_SELF_ANALYSIS): then a node meeting a list or text holds one, as analyzer.warp found
 analyzed_program() := module.kinds != ø and "value" in module.kinds
 # the kind the analyzer found for f's i-th parameter (counted from 0), as the emitter's; ø when it found none it holds
 analyzed_parameter_kind(f: Function, i: int) := {

@@ -29,8 +29,8 @@ fn self_analyzed_run(switch: &str, code: &str) -> (String, String) {
 	(String::from_utf8_lossy(&run.stdout).into_owned(), String::from_utf8_lossy(&run.stderr).into_owned())
 }
 
-/// WARP_SELF_ANALYSIS beside the switch: analyzer.warp analyzes each lowered program as well, and a program whose kinds
-/// agree with src/analyzer's runs as before (card pipeline-runs)
+/// WARP_SELF_ANALYSIS beside the switch: analyzer.warp analyzes each lowered program as well, and the program runs as
+/// before (card pipeline-runs)
 #[test]
 fn a_program_the_analyses_agree_on_runs_self_analyzed() {
 	let (value, errors) = self_analyzed_run("front", "square(x: int) := x * x; y = square(3); y + 1");
