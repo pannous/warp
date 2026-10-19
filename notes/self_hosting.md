@@ -431,3 +431,8 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   variable` 184 (try 52, T# 22: forms parser.warp reads otherwise), a bare `#` left side 76 (a wrong number), `cannot
   extract a numeric value from ø` 46, database `may be ø` hints 50, `not a number` 33, hints pointing into
   lib/compiler/parser.warp (its own warnings leak into the program's output) 41.
+- Times in runtime.warp (card time-text-warp): `time_text(n)` (node_text's kind 18) writes a date, an instant, a local
+  time and a time of day as times.rs emit_time_text/emit_fraction do; a duration (card duration-warp) and a zoned time
+  (needs the zone names table) trap. Unreached yet: a time constant arrives in emitter.warp as an opaque
+  ["data", "Data(…)"] view (src/compiler/node_views.rs), so the emitter refuses it and Rust takes the program; the next
+  step is a view carrying the form and position (card self-time-constants).
