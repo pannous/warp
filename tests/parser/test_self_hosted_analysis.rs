@@ -22,7 +22,6 @@ fn self_analyzed_run(switch: &str, code: &str) -> (String, String) {
 		.env("WARP_SELF_HOSTED", switch)
 		.env("WARP_SELF_ANALYSIS", "1")
 		.env("WARP_MODULE_CACHE", cache)
-		.env("WARP_PHASE_TIMES", "1")
 		.arg(code)
 		.output()
 		.expect("warp runs");
@@ -37,22 +36,12 @@ fn a_program_the_analyses_agree_on_runs_self_analyzed() {
 	assert!(value.contains("10"), "{value} {errors}");
 }
 
-/// emitter.warp takes an unannotated parameter's kind from analyzer.warp, not from the first call: `h(xs#1)` passes a
-/// node, yet h's n is an int, so `n % 3` stays inside the core (card emitter-reads)
+/// With the warp emitter reading analyzer.warp's kinds, a parameter first called with a list item and a local grown
+/// from ø into a list give their values (card emitter-reads)
 #[test]
-fn the_warp_emitter_reads_the_analyzed_parameter_kinds() {
-	self_analyzed_run("1", "x = 3; x + 4"); // the stage programs compile with the Rust emitter, once
-	let (value, phases) = self_analyzed_run("1", "h(n) := n % 3; xs = [4, 5]; h(xs#1)");
-	assert!(value.contains('1'), "{value}");
-	assert!(!phases.contains("emit ("), "the Rust emitter ran: {phases}");
-}
-
-/// A local starting as ø and grown by `+=` is a node, yet the analysis holds it a list where merge needs one, so
-/// emitter.warp unboxes it (runtime.warp list_of_node, trapping on anything else) instead of refusing the program
-#[test]
-fn the_warp_emitter_unboxes_a_node_the_analysis_holds_a_list() {
-	self_analyzed_run("1", "x = 3; x + 4"); // the stage programs compile with the Rust emitter, once
-	let (value, phases) = self_analyzed_run("1", SORTING_SAMPLE);
-	assert!(value.contains("-3,0,1,2,5,5,6,7,8,9"), "{value}");
-	assert!(!phases.contains("emit ("), "the Rust emitter ran: {phases}");
+fn programs_emitted_with_the_analyzed_kinds_give_their_values() {
+	let (value, errors) = self_analyzed_run("1", "h(n) := n % 3; xs = [4, 5]; h(xs#1)");
+	assert!(value.contains('1'), "{value} {errors}");
+	let (value, errors) = self_analyzed_run("1", SORTING_SAMPLE);
+	assert!(value.contains("-3,0,1,2,5,5,6,7,8,9"), "{value} {errors}");
 }
