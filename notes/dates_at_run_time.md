@@ -56,6 +56,13 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
   names enter linear memory only when a zoned constant requires `ZONE_NAMES` (analyzer/imports.rs).
 - node_order compares two times of one form by position; two forms trap with "no implicit conversion between kinds
   of time", durations with "cannot order durations".
+- warp twins (card duration-warp): lib/compiler/runtime.warp `## durations` has `duration_text(n)` and
+  `duration_order(a, b)`, each unpacking the node (months above bit 43 of the kind word, days the signed 32 bits
+  above bit 11, nanoseconds in the box) into `duration_parts_text` / `duration_parts_order` over the three amounts,
+  checked against calendar.rs by tests/numbers/test_duration_words.rs. emitter.warp compiles no time yet, so the
+  Rust functions stay until it does; then the call sites call the warp words, traps.rs maps
+  `durations_compare_differently_on_different_dates` to the "cannot order durations" message, and the Rust goes.
+  lib/time.warp `format_duration(ms)` is a different, compact form (`1h 30m 30s`) of plain milliseconds, kept apart.
 
 ## Arithmetic (wasm_emitter/time_arithmetic.rs)
 node_add, node_sub and node_mul hand over to `time_arithmetic(a, b, operator)` when an operand is a time, as calendar.rs
