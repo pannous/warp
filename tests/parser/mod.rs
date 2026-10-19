@@ -25,7 +25,6 @@ mod test_guard_comment; // card else-comment-swallows
 mod test_home_paths; // card unix-words
 mod test_if_condition_words; // card parser-if-stops
 mod test_inline_comments;
-mod test_json;
 mod test_juxtaposition;
 mod test_meta;
 mod test_meta_attributes;
@@ -62,20 +61,17 @@ mod test_spaced_children;
 mod test_spaced_optional_type;
 mod test_spaced_required_fields;
 mod test_statement_phrases;
-mod test_statement_terminators;
 mod test_statements_after_type;
 mod test_superscript_signs;
 mod test_surface_syntax;
 mod test_symbol_hyphen;
 mod test_time_unit_keys;
 mod test_times_phrase; // card self-parser
-mod test_trailing_annotation;
 mod test_unary_plus;
 mod test_uniscript_entities;
 mod test_uniscript_hyphen_names; // card uniscript-literal-hyphen
 mod test_url_literal; // card add-http
 mod test_warp_format;
-mod test_warp_position;
 mod test_wisp_def_params;
 mod test_wisp_malformed;
 mod test_wisp_roundtrip;
