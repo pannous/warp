@@ -151,12 +151,12 @@ map_entries(n: any): any := {
 	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
 	out
 }
-def map_keys(m: any): list {
+map_keys(m: any): list := {
 	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
-def map_values(m: any): list {
+map_values(m: any): list := {
 	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
@@ -208,14 +208,14 @@ text_char(t: text, index: int): char := {
 	for k in 1 to extra { n = n * 64 + byte_at(t, at + k) - 128 }
 	char_of(n)
 }
-def list_join(a: list, b: list): list {
+list_join(a: list, b: list): list := {
 	out = new_list(#a + #b)
 	copy_items(out, 0, a, 0, #a)
 	copy_items(out, #a, b, 0, #b)
 	out
 }
 # `a += b`: b's items after a's in a itself, so every alias of a sees them
-def list_append(a: list, b: list): list {
+list_append(a: list, b: list): list := {
 	adopt_items(a, list_join(a, b))
 	a
 }
@@ -311,13 +311,13 @@ repeated_text(n: int, t: any): text := {
 	out
 }
 # `int[n]`: a list of count zeros
-def zero_fill(count: int, filler: any): list {
+zero_fill(count: int, filler: any): list := {
 	out = new_list(count)
 	for i in 1 to count { out#i = filler }
 	out
 }
 # `t.split(separator)`: the texts between separator's places in t
-def split_text(t: text, separator: any): list {
+split_text(t: text, separator: any): list := {
 	between = node_text(separator)
 	out = new_list(0)
 	start = 0
@@ -335,7 +335,7 @@ def split_text(t: text, separator: any): list {
 	out
 }
 # `t.chars`: t's characters
-def text_chars(t: text): list {
+text_chars(t: text): list := {
 	out = new_list(text_count(t))
 	for i in 1 to text_count(t) { out#i = text_char(t, i) }
 	out
@@ -397,7 +397,7 @@ positive_float_text(x: float): text := {
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
 # digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
 # bit is even, as a reader rounds half to even); the multiple of the largest power of ten among them, nearest x
-def float_digits(x: float): list {
+float_digits(x: float): list := {
 	exponent = 0
 	mantissa = x
 	while mantissa >= 10 {
@@ -456,7 +456,7 @@ has_17_digits(scaled: list, bound: float): bool := {
 # [hi, lo]: (x + gap/2) · 10^shift as the double-double hi + lo, by at most 10^22 a step (each power exact): a product's
 # error is Dekker's exact product, a quotient's the remainder of its exact product. Exact in one step, within 2^-104 in
 # more. A float beyond ±2^900 is moved by 2^∓128 first and back after, so no product overflows, no half underflows
-def float_scaled(x: float, gap: float, shift: int): list {
+float_scaled(x: float, gap: float, shift: int): list := {
 	value = x
 	scaled_gap = gap
 	scale = float(1)
