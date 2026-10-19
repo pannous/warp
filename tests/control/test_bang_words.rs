@@ -23,9 +23,9 @@ fn is_bang_compares_the_value_of_code() {
 #[test]
 fn under_test_each_is_bang_counts() {
 	assert_eq!(for_tests(|| eval("is! \"3+3\" 6\nis! \"'a'+'b'\" \"ab\"")), Node::Text("✓ 2 tests passed".into()));
-	// code the program can't hold (π crossing to the block) fails its line only
+	// code that fails fails its line only; π crosses into the block as written (card eval-code)
 	match for_tests(|| eval("is! \"3+3\" 6\nis! \"3+3\" 7\nis! \"1/\" 2\nis! \"π\" pi")) {
-		Node::Error(message) => assert!(message.serialize().contains("3 of 4 failed"), "{message:?}"),
-		other => panic!("expected the Error 3 of 4 failed, got {other:?}"),
+		Node::Error(message) => assert!(message.serialize().contains("2 of 4 failed"), "{message:?}"),
+		other => panic!("expected the Error 2 of 4 failed, got {other:?}"),
 	}
 }
