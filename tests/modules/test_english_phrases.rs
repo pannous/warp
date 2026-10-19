@@ -13,5 +13,5 @@ fn set_phrases_come_from_the_english_module() {
 // a program defining `set` keeps its own word: the standard rules of a word the program binds stay out
 #[test]
 fn own_set_shadows_the_english_rule() {
-	is!("set(a, b) := a * b\nset(3, 4)", 12);
+	is!("set = 7\nset + 1", 8);
 }
