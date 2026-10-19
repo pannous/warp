@@ -294,6 +294,11 @@ impl Node {
 		self.symbol_name() == Some(word)
 	}
 
+	/// Whether this is a block `{…}`, through its metadata
+	pub fn is_block(&self) -> bool {
+		matches!(self.drop_meta(), List(_, Bracket::Curly, _))
+	}
+
 	pub fn name(&self) -> String {
 		match self.drop_meta() {
 			Symbol(name) | Text(name) => name.clone(),

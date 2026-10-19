@@ -277,7 +277,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	if !for_word.is_symbol(FOR_WORD)
 		|| !in_word.is_symbol(IN_WORD)
 		|| !where_word.is_symbol(WHERE_KEYWORD)
-		|| !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))
+		|| !body.is_block()
 	{
 		return None;
 	}

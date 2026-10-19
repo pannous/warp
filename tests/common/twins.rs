@@ -308,7 +308,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	let cases = in_parallel(paths.to_vec(), |path| {
 		let text = std::fs::read_to_string(path).ok()?;
 		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
-		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
+		Some((path.display().to_string(), view_json(&analysis_view(&lowered)), text))
 	});
 	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}.json", std::process::id()));
 	let runtime_source = std::fs::read_to_string(Path::new(COMPILER_FOLDER).join(RUNTIME_WORDS)).unwrap();
