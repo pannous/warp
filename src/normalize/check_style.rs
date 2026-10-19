@@ -204,7 +204,7 @@ fn check_items(items: &[Node], positioned: &Node) {
 		{
 			let is_call = match argument.drop_meta() {
 				// `int g(int x) {…}` defines g, `int(…)` would convert
-				Node::List(parts, Bracket::Round, _) if matches!(parts.as_slice(), [_, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) => {
+				Node::List(parts, Bracket::Round, _) if matches!(parts.as_slice(), [_, body] if body.is_block()) => {
 					false
 				}
 				// `text(p:person)` heads the Printable operation of a declared type (P31)
