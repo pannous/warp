@@ -38,10 +38,9 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 |---|---|
 | lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
 | prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
-| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | open |
+| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | warp-self-analyzer |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache; a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd |
 | try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
-  cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
 | a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps), a write by a run-time key (remember), pending kinds in recursive functions | warp-runtime |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
