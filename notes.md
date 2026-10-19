@@ -68,3 +68,5 @@
 - 2026-10-19 warp-cache: with WARP_SELF_HOSTED=1, right after lib/ or the binary changed, two runs printed nothing at all (exit 0) while a third warmed the stage cache; warm and fresh-cache reruns were right. Not reproduced: maybe a run reading a kept program another run was still writing (scratch/refusals/cache shared by parallel runs).
 - 2026-10-19 warp-cache: tests/queue.sh killed a run of 7 WARP_SELF_HOSTED=1 test files at the 4 GB memory cap (each test process compiles the stage programs on a cold cache); `--test-threads=2` stayed under it.
 - 2026-10-19 warp-cache: Rust's list semantics: `+=` and push change the list every alias holds; `xs = xs + [x]` makes a new list (emitter.warp appends in place only while xs is unshared).
+
+- exact-pow-warp (2026-10-19): runtime.warp exact_pow/int_pow; emitter.warp int ^ → exact_pow (node result). i64 only: a power beyond the int range fails in int_overflow where Rust gives a big int (probes/ratio_text.warp 2^70, samples with 2^100 may now enter the core and differ instead of being refused). A ratio or float base (node kind) is still refused (floats have no ^).
