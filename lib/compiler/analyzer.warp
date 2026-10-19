@@ -5,6 +5,7 @@
 # variable holding a list also has a type word naming its elements (`list of int`, `map of text`, `list of node`).
 use "walk.warp"
 use "words.warp"
+use "signatures.warp"
 
 # name → the function's definition `(f a b) := body`, its result kind, and the scope of its body ("" for main)
 definitions = {}
@@ -20,11 +21,6 @@ compound_ops = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%", "^=": "^"
 primitive_kinds = {"int": 1, "float": 1, "codepoint": 1, "i32": 1, "f32": 1, "pointer": 1}
 # the kinds of the values a variable may hold that do not mix: one given two of them holds a node (empty)
 concrete_kinds = {"int": 1, "float": 1, "text": 1, "codepoint": 1, "list": 1, "symbol": 1}
-# the built-in type words and the kind a value declared so is held as
-type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "int", number: "int",
-	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
-	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
-	bool: "int", boolean: "int", function: "function", closure: "function", real: "empty", exact: "empty"}
 # type words a declaration holds as a node: any value, a map
 node_types = {any: 1, map: 1}
 
@@ -112,6 +108,8 @@ kind_of_list(n: any, scope: any) := {
 		return if element == "text" or element == "codepoint" then "text" else if element == "empty" then "empty" else "list"
 	}
 	if name != "" and name in call_kinds and (#n >= 2 or n.bracket == "(") and binding(scope, name) == ø { return call_kinds[name] }
+	typed = typed_call_kind(n, scope)
+	if typed != ø { return typed }
 	# a word nothing defines or tables (a function value, a host word): any value
 	if n.bracket == "(" and #n >= 2 and n.separator != "," and name != "" { return "empty" }
 	if n.bracket == "(" and #n == 1 {
@@ -201,6 +199,25 @@ subscript_kind(indexed: any, index: any, scope: any) := {
 	if index is text or kind_of(index, scope) == "text" or kind_of(index, scope) == "codepoint" { "empty" } else { "int" }
 }
 
+# a call of a builtin the prelude types (signatures.warp; Rust emitted_call_kind, then library_call_kind): the kind
+# its line declares, that of an argument (`same as object`, `element of xs`), of its overload for the first value; ø
+# for no typed builtin
+typed_call_kind(n: any, scope: any) := {
+	name = head_name(n)
+	if name == "" or binding(scope, name) != ø or name in scope.parameters or not (#n >= 2 or n.bracket == "(") { return ø }
+	emitted = emitted_call_kind(name, #n - 1)
+	if emitted != ø { return emitted }
+	if #lines_of(typed_lines, unaliased(name)) == 0 or n.bracket != "(" or #n < 2 or n.separator == "," { return ø }
+	result_rule = argument_result(name)
+	if result_rule != ø {
+		if #n <= result_rule#2 { return "empty" }
+		argument = n#(result_rule#2 + 1)
+		if result_rule#1 == "same" { return if is_ref(kind_of(argument, scope)) then kind_of(argument, scope) else "empty" }
+		return element_kind(argument, scope) ?? "empty"
+	}
+	overload_kind(name, kind_of(n#2, scope)) ?? "int"
+}
+
 element_kind(indexed: any, scope: any) := {
 	kind = kind_of(indexed, scope)
 	if kind == "text" or kind == "symbol" { return "text" }
@@ -266,6 +283,8 @@ common_type(words: any) := {
 list_type(n: any, scope: any) := {
 	if n is symbol {
 		declared = scope.types.get(n.name)
+		# `xs: list`, a parameter of no declared element type, as an untyped one: each caller may pass other elements
+		if declared == "list" and n.name in scope.parameters { return "list of node" }
 		if declared != ø { return declared }
 		if n.name in scope.parameters { return "list of node" }
 		if binding(scope, n.name) == ø and results.get(n.name) == "list" { return result_types.get(n.name) ?? "list of node" }
@@ -365,7 +384,6 @@ joined_kind(a: text, b: text) := {
 	if pair == ["float", "int"] { return "float" }
 	if pair == ["codepoint", "text"] { return "text" }
 	if pair == ["list", "nil"] { return "list" }
-	if pair == ["data", "float"] or pair == ["data", "int"] { return "data" }
 	"empty"
 }
 

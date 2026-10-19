@@ -1,0 +1,5 @@
+# emitter core: a yes/no value held in a variable
+# yes
+small = 3 < 4
+large = 5 > 9
+small and not large

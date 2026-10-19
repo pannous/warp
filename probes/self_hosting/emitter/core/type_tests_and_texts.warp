@@ -1,0 +1,10 @@
+# emitter core: `x is type` known statically and at run time (runtime.warp node_is_type), split, chars, reverse, str
+xs = [3, float(5) / 2, "a", "ab", yes, [1]]
+for x in xs { print [x is int, x is float, x is number, x is text, x is char, x is bool, x is list] }
+n = 4
+print [n is int, n is float, n is text]
+print "ab, c,, d".split(", ")
+print "héllo".chars
+print "abc".reverse
+print [1, 2, 3].reverse
+print str(25) + "!"

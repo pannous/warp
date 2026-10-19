@@ -154,7 +154,7 @@ shows the progress. Every compiler function typed (generic ones generically), wr
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
 | warp-list-result-type | the builtins' typed lines as the analyzer's signature table (analyzer.warp reads them); types on every lib/compiler function |
 | warp-self-emitter | emitter.warp beyond the core (int `/`, exact rationals, big ints, `#`, `==`, slices, errors, memo calls); the switch hands emission to it |
-| warp-self-passes | runtime.warp: the text, list and number runtime functions of src/wasm_emitter in warp |
+| warp-runtime (was self-passes) | runtime.warp: the text, list and number runtime functions of src/wasm_emitter in warp |
 | warp-clicking-guide (markup) | maps, classes/objects and equality: their layout in emitter.warp and their runtime words (coordinate emitter.warp hunks with warp-self-emitter) |
 | warp-parsing | twins for the source and meaning passes still without one, in target-shape order |
 | warp-cache | the end-to-end switch (each stage compiled once, speed), then caching emitted specialisations |
@@ -388,24 +388,32 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
   binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
   with the Rust pipeline (that compile shows a Rust `emit` phase).
-- Emit refusals ranked 2026-10-18 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
-  refusal once per program; raw list data/self_hosting/refusals.txt): 1471 programs, 585 inside the core (or no emit).
+- Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
+  refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
+  585 on 2026-10-18).
   | programs | family (refusal texts) | owner |
   |---|---|---|
-  | 57 | `view·opaque`: a class/type or error node kept whole | warp-clicking-guide (classes), warp-self-emitter (errors) |
-  | 47+4 | `#` on int, `^` on int | warp-self-emitter |
-  | 41+10+9+5 | operator `:` on int / char and text / char and int / char and list (ranges, slices, pairs) | warp-self-emitter (slices) |
-  | 33+8 | int division, an exact rational; floor_quotient | warp-self-emitter |
-  | 27+27+18+4 | untyped values: the length of a node, a node where an int/list is needed, an assignment to an element of a node | warp-self-emitter with warp-self-analyzer's kinds |
-  | 52 | `use` / `import` statements still in the lowered program (Rust skips declarations) | warp-cache |
-  | 20 | closure_new (lambdas, closures) | warp-cache |
-  | 16+14+14+13 | host calls: system_value, clock, std_io, foreign_call | warp-cache |
-  | 14 | `break` | warp-cache |
-  | 12+8 | a yes/no variable; `global` | warp-cache |
-  | 12+6+5+4+8 | maps: map_entries, map_of_entry, field_with, key, collection_contains | warp-clicking-guide |
-  | 26+12+6+6+5+5+4+8 | runtime words not yet in runtime.warp: join, zero_fill, times·text, text_form, len, round (in: emitter.warp library_words, card program-join); left: random_below (host), as_code (code values) | warp-self-passes |
-  | 10 | `try` | warp-self-emitter (errors) |
-  | 11+14+6+5 | sound/signals/tasks: midi_hertz, signal_new/listen, task_spawn_values, linear_new | later |
+  | 59 | `view·opaque`: a class/type or error node kept whole | warp-emitter-structures (classes), warp-self-emitter (errors) |
+  | 35+15+11 | untyped values: a text where an int is needed, a node where a list is needed, a node as a condition | warp-self-emitter with warp-self-analyzer's kinds |
+  | 25+16 | the unknown name div; floor_quotient | warp-self-emitter |
+  | 22 | closure_new (lambdas, closures) | warp-cache |
+  | 16 | the operator ‖ | open |
+  | 15+14+12 | host words on nodes: std_io, foreign_call, task_spawn_values | warp-cache (low value: needs the module's node exports) |
+  | 14+12 | is_type; map_entries (+ map_of_entry 6, field_with 5, collection_contains 8, key 4) | warp-emitter-structures |
+  | 12+11 | the unknown names size, data | open |
+  | 10+10 | `try`; main giving a none | warp-self-emitter |
+  | 10+9+5+7 | operator `:` on char and text / int / list; `^` on int | warp-self-emitter |
+  | 8 | `global` (the unknown name global) | warp-cache |
+  | 11+9+8+6 | midi_hertz, as_code, linear_new, signal_new | later |
+- Inside the core but printing otherwise than Rust (205 of the 810, refusals.sh's DIFFERENT lines, 2026-10-19):
+  63 parse (parser.warp refuses the source: `...` spreads, `.` forms), 55 diagnostics only (warnings and errors
+  without positions), 87 output. Of the 87 most are front-end: storage `·met may be ø` hints (~30), keywords as
+  names (`for`, `return`, `data`), lost units (DimensionError ~8), field counts. Emitter.warp miscompiles (programs
+  in data/self_hosting/emitter_suspects.txt): null reference traps on empty lists (dijkstra 50/81, sorting
+  35_empty_count, samples/objects/dijkstra_idiomatic), `x /= 2` traps (sieve/43_div_assign), exact_text fails
+  validation (queens/p13_push_build), i64 min prints as a float (emitter/core/print.warp), large text literal prints
+  nothing, float_loop traps; missing runtime checks: index bounds (8 programs trap instead of "index out of range"),
+  a fractional index, divide by zero, int + text, P215 list items, a lossy int return.
 - The cloud run is the pushed tip plus a throwaway commit turning the switch on in .cargo/config.toml [env] (with
   warp-lang at opt-level 2, as test.sh), in three jobs at once (TEST_GROUPS: self-hosted, the whole suite outlasts the
   lane's 2400 s limit), branches self-hosted/<tip>-<n>, deleted after the run.

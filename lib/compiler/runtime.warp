@@ -59,8 +59,9 @@ node_text(n: any) := {
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
 node_code(n: any) := {
-	if is_null(n) == 0 and kind_code(n) == 3 { return quoted_text(unboxed_text(n)) }
-	if is_null(n) == 0 and kind_code(n) == 4 { return "'" + node_text(n) + "'" }
+	# a one-character text reads as the character it is (src/node/serialization.rs)
+	if is_null(n) == 0 and kind_code(n) == 3 and text_count(unboxed_text(n)) != 1 { return quoted_text(unboxed_text(n)) }
+	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) { return "'" + node_text(n) + "'" }
 	node_text(n)
 }
 # a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
@@ -138,6 +139,8 @@ node_at(n: any, index: int) := {
 }
 # `#n` of a value known only at run time: a list's items, a text's characters
 node_length(n: any) := {
+	# ø, also an empty list `[]` in the lowered program, holds nothing
+	if is_null(n) == 1 { return 0 }
 	if kind_code(n) == 8 { return #unboxed_list(n) }
 	if kind_code(n) == 3 { return text_count(unboxed_text(n)) }
 	fail()
@@ -199,6 +202,87 @@ bytes_between(t: text, start: int, stop: int) := {
 	copy_text(out, 0, t, start, stop - start)
 	out
 }
+# `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only, as Rust joins
+joined(xs: list, separator: any) := {
+	between = node_text(separator)
+	out = ""
+	count = 0
+	for x in xs {
+		if kind_code(x) == 8 { fail() }
+		if count > 0 { out += between }
+		out += node_text(x)
+		count += 1
+	}
+	out
+}
+# `n times "ab"`: t n times over
+repeated_text(n: int, t: any) := {
+	piece = node_text(t)
+	out = new_text(n * byte_count(piece))
+	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
+	out
+}
+# `int[n]`: a list of count zeros
+zero_fill(count: int, zero: any) := {
+	out = new_list(count)
+	for i in 1 to count { out#i = zero }
+	out
+}
+# `t.split(separator)`: the texts between separator's places in t
+split_text(t: text, separator: any) := {
+	between = node_text(separator)
+	out = new_list(0)
+	start = 0
+	at = 0
+	while at + byte_count(between) <= byte_count(t) {
+		if byte_count(between) > 0 and bytes_match_at(t, between, at) {
+			out += [bytes_between(t, start, at)]
+			at += byte_count(between)
+			start = at
+		} else {
+			at += 1
+		}
+	}
+	out += [bytes_between(t, start, byte_count(t))]
+	out
+}
+# `t.chars`: t's characters
+text_chars(t: text) := {
+	out = new_list(text_count(t))
+	for i in 1 to text_count(t) { out#i = text_char(t, i) }
+	out
+}
+# `xs.reverse`: a list's items or a text's characters the other way round
+reversed(n: any) := {
+	if kind_code(n) == 3 {
+		t = unboxed_text(n)
+		backwards = ""
+		for i in text_count(t) down to 1 { backwards += text_char(t, i) }
+		return backwards
+	}
+	items = unboxed_list(n)
+	turned = new_list(#items)
+	for i in 1 to #items { turned#i = items#(#items + 1 - i) }
+	turned
+}
+# `sum(xs)` as `list_sum(xs, loop)`: the loop the lowering wrote gives it
+list_sum(xs: list, computed: any) := computed
+# `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
+# masks (src/lowering/types/type_tests.rs BUILTIN_TYPES): a bool has a mark of its own, ø is the empty list
+node_is_type(n: any, type: text) := {
+	if is_null(n) == 1 { return type == "list" }
+	if marked_kind(n) == 257 { return type == "bool" }
+	kind = kind_code(n)
+	if type == "int" { return kind == 1 and is_ratio(n) == 0 }
+	if type == "rational" or type == "number" { return kind == 1 or kind == 2 }
+	if type == "float" { return kind == 2 }
+	if type == "text" { return kind == 3 or kind == 4 }
+	if type == "char" { return kind == 4 }
+	if type == "list" { return kind == 8 or kind == 7 }
+	no
+}
+# `round(x)`: the nearest int, half to even as wasm rounds (f64.nearest)
+rounded(x: float) := truncated(float_nearest(x))
 # the text of a run-time float (src/wasm_emitter/numbers/float_text.rs): its shortest digits that read back,
 # positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7; ∞, -∞ and NaN as the exact numbers print them
 float_text(x: float) := {
@@ -343,6 +427,16 @@ float_of_node(n: any) := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
+# a boxed int where an int is needed; any other value traps, as Rust fails on it
+int_of_node(n: any) := {
+	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
+	unboxed_int(n)
+}
+# `n as int` of a boxed int or exact rational, truncated toward 0
+truncated_int(n: any) := {
+	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
+	int_quotient(exact_numerator(n), exact_denominator(n))
+}
 # the decimal digits of n, the last first; truncating division keeps the smallest int's digits in reach
 int_text(n: int) := {
 	sign = if n < 0 then 1 else 0
@@ -453,4 +547,12 @@ zeros(count: int) := {
 	out = new_text(if count > 0 then count else 0)
 	for i in 0..count { set_byte(out, i, 48) }
 	out
+}
+# `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
+floor_quotient(a: int, b: int) := {
+	q = int_quotient(a, b)
+	if a - q * b < 0 {
+		if b > 0 { q -= 1 } else { q += 1 }
+	}
+	q
 }
