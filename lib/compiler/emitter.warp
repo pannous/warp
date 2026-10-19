@@ -220,7 +220,7 @@ shared_names(statements: any) := {
 	shared
 }
 reads_free(f: Function, name: text) := {
-	if not mentions(f.body, name) or assigns(f.body, name) { return no }
+	if not mentions_name(f.body, name) or assigns(f.body, name) { return no }
 	for p in f.parameters { if name_of(p) == name { return no } }
 	yes
 }
@@ -594,7 +594,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
 # canonical name, and the kinds of the core each covers; an untyped value asks runtime.warp node_is_type
-type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
+core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
 	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map"}
@@ -602,8 +602,8 @@ covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["in
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: []}
 def type_test(body: Body, subject: any, spec: text): list {
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression(body, subject))], text_value(spec)]) }
-	if not (spec in type_words) { return refuse("a test of the type " + spec) }
-	type = type_words[spec]
+	if not (spec in core_type_words) { return refuse("a test of the type " + spec) }
+	type = core_type_words[spec]
 	value = expression(body, subject)
 	if value#1 == "node" { return runtime_call("node_is_type", [value, text_value(type)]) }
 	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
@@ -653,10 +653,10 @@ def printed_value(body: Body, n: any): list {
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]] }
 # whether the symbol `name` occurs in n
-mentions(n: any, name: text): bool := {
+mentions_name(n: any, name: text): bool := {
 	if n is symbol { return name_of(n) == name }
-	if type(n) is key { return mentions(key_of(n), name) or mentions(value_of(n), name) }
-	if is_group(n) { for x in n { if mentions(x, name) { return yes } } }
+	if type(n) is key { return mentions_name(key_of(n), name) or mentions_name(value_of(n), name) }
+	if is_group(n) { for x in n { if mentions_name(x, name) { return yes } } }
 	no
 }
 def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }
@@ -1063,7 +1063,7 @@ step_operators = ["=", "+=", "-=", "++", "--"]
 continued_safely(test: any, parts: any): bool := {
 	if #parts == 0 { return yes }
 	final_statement = parts#(#parts)
-	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions(test, name_of(key_of(final_statement))))
+	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions_name(test, name_of(key_of(final_statement))))
 }
 
 # the code of n read inside `blocks` more blocks, loops or ifs
@@ -1130,9 +1130,9 @@ self_append_name(n: any): any := {
 	if not (type(n) is key and key_of(n) is symbol) { return ø }
 	name = name_of(key_of(n))
 	sum = value_of(n)
-	if op_of(n) == "+=" and not mentions(sum, name) { return name }
+	if op_of(n) == "+=" and not mentions_name(sum, name) { return name }
 	if op_of(n) != "=" or not (type(sum) is key and op_of(sum) == "+" and key_of(sum) == key_of(n)) { return ø }
-	if mentions(value_of(sum), name) { return ø }
+	if mentions_name(value_of(sum), name) { return ø }
 	name
 }
 # whether n mentions the local name only in appends to it
@@ -1615,10 +1615,10 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.saw_pending = no
 	module.rereads = []
 	collect_types(program)
-	module.imports = if mentions(program, "print") then [fd_write] else []
+	module.imports = if mentions_name(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
 	for name in module.host.keys {
-		if mentions(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
+		if mentions_name(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
 	}
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	for name in module.runtime.keys {
@@ -1680,7 +1680,7 @@ time_words = {time_of: 2, instant_at: 1}
 time_intrinsics = {time_form: 1, time_position: 1, duration_months: 1, duration_days: 1, zone_index: 1, zone_offset: 1}
 # the host words runtime words over times call, imported when the program makes a time (Rust: imports.rs makes_instant)
 time_host_words = ["local_offset"]
-makes_time(program: any): bool := mentions(program, "instant_at") or mentions(program, "time_of")
+makes_time(program: any): bool := mentions_name(program, "instant_at") or mentions_name(program, "time_of")
 
 # time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
 def time_call(body: Body, name: text, arguments: any): list {

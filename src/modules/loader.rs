@@ -186,6 +186,9 @@ pub(super) struct Loader<'a> {
 	pub(super) used_file_module: Option<PathBuf>,
 	/// the module file of each package loaded: a second `use` of the package names it again
 	pub(super) package_modules: HashMap<String, PathBuf>,
+	/// the file module declaring each signature (declared_signature), and the declaration as written: another one
+	/// declaring it differently is the error
+	pub(super) declaring_files: HashMap<String, (PathBuf, String)>,
 }
 
 pub(super) struct ModuleImport {
@@ -703,8 +706,11 @@ impl<'a> Loader<'a> {
 		let outer_fast = std::mem::replace(&mut self.fast_module, fast);
 		let file_module = import == Import::Use && self.std_module_depth == 0;
 		if file_module {
-			let declares = |statement: &&Node| is_declaration(statement) && used_modules(statement).is_none();
-			let own = statements(module.clone()).iter().filter(declares).filter_map(name_declared_by).collect();
+			let own_declarations = own_declarations(&module);
+			if !is_std_source(&shown_path(&path).to_string_lossy()) {
+				self.claim_signatures(&own_declarations, &file)?;
+			}
+			let own = own_declarations.iter().filter_map(name_declared_by).collect();
 			self.file_module_words.insert(file.clone(), own);
 			self.loading_modules.push(file.clone());
 		}
@@ -737,6 +743,32 @@ impl<'a> Loader<'a> {
 			}
 			Import::Include => statements,
 		})
+	}
+
+	/// A file module's declarations claim their signatures: another file declaring one already, differently, is the
+	/// error naming both, since the later would silently replace the earlier (card two-used-files). The same
+	/// declaration in both is one: a used file's classes go in front of each user, the lowering's `Op·text` in each
+	/// file reading an enum
+	fn claim_signatures(&mut self, declarations: &[Node], file: &Path) -> Result<(), Node> {
+		for declaration in declarations {
+			let Some(signature) = declared_signature(declaration) else { continue };
+			let written = declaration.serialize();
+			match self.declaring_files.get(&signature) {
+				Some((earlier, earlier_written)) if earlier != file && *earlier_written != written => {
+					let (earlier, file) = (relative_path(earlier), relative_path(file));
+					return Err(error(&format!(
+						"{signature} is declared in both {} and {}: rename one, or keep one of them",
+						earlier.display(),
+						file.display()
+					)));
+				}
+				Some(_) => {}
+				None => {
+					self.declaring_files.insert(signature, (file.to_path_buf(), written));
+				}
+			}
+		}
+		Ok(())
 	}
 
 	/// The file of a module: every search directory below the directory of the including file, then below the working
@@ -925,6 +957,21 @@ fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node
 
 pub(crate) fn shown_path(path: &Path) -> PathBuf {
 	path.components().filter(|component| !matches!(component, std::path::Component::CurDir)).collect()
+}
+
+/// The path from the working directory, when the file lies below it
+fn relative_path(path: &Path) -> PathBuf {
+	let below =
+		std::env::current_dir().ok().and_then(|directory| path.strip_prefix(directory).ok().map(Path::to_path_buf));
+	below.unwrap_or_else(|| shown_path(path))
+}
+
+/// A module's own declarations, not the `use`s among them
+fn own_declarations(module: &Node) -> Vec<Node> {
+	statements(module.clone())
+		.into_iter()
+		.filter(|statement| is_declaration(statement) && used_modules(statement).is_none())
+		.collect()
 }
 
 /// The program with each group of imported statements spliced in place, `hidden` renamed apart in them

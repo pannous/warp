@@ -141,11 +141,11 @@ view_has(view: any, found: function): bool := {
 }
 
 # the leading name of a view, `f` of `f(x)`, `x` of `x: int`, else ""
-head_name(view: any): text := {
+view_head_name(view: any): text := {
 	kind = kind_of(view)
 	if kind == "symbol" { return view#2 }
-	if kind == "key" { return head_name(view#3) }
-	if kind == "list" and #view > 3 { return head_name(view#4) }
+	if kind == "key" { return view_head_name(view#3) }
+	if kind == "list" and #view > 3 { return view_head_name(view#4) }
 	""
 }
 
