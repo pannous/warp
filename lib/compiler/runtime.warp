@@ -93,11 +93,11 @@ print_line(t: text): int := {
 text_order(a: text, b: text): int := {
 	i = 0
 	while i < byte_count(a) and i < byte_count(b) {
-		if byte_at(a, i) < byte_at(b, i) { return -1 }
+		if byte_at(a, i) < byte_at(b, i) { return - 1 }
 		if byte_at(a, i) > byte_at(b, i) { return 1 }
 		i += 1
 	}
-	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then -1 else 1
+	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then - 1 else 1
 }
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 node_text(n: any): text := match n {
@@ -112,9 +112,10 @@ node_text(n: any): text := match n {
 	_: collection_text(n)
 }
 number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
-# a map in braces, a list as list_text shows it
+# a map in braces, a list as list_text shows it, one without brackets (`y 1+1`) its items alone
 collection_text(n: any): text := {
 	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
+	if kind_code(n) == 8 and bracket_info(n) == 5 { return items_text(unboxed_list(n)) }
 	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
 	if kind_code(n) == 18 { return time_text(n) }
 	fail()
@@ -704,7 +705,7 @@ float_digits(x: float): list := {
 	shift = 16 - exponent
 	scaled = float_scaled(x, float(0), shift)
 	while has_17_digits(scaled, 1e17) or not has_17_digits(scaled, 1e16) {
-		shift += if has_17_digits(scaled, 1e17) then -1 else 1
+		shift += if has_17_digits(scaled, 1e17) then - 1 else 1
 		scaled = float_scaled(x, float(0), shift)
 	}
 	hi = unboxed_float(scaled#1)
@@ -767,7 +768,7 @@ float_scaled(x: float, gap: float, shift: int): list := {
 	lo = scaled_gap / 2
 	left = shift
 	while left != 0 {
-		step = if left > 22 then 22 else if left < -22 then -22 else left
+		step = if left > 22 then 22 else if left < -22 then - 22 else left
 		power = float(1)
 		count = step
 		if step < 0 { count = -step }
@@ -813,7 +814,7 @@ float_mod(a: float, b: float): float := {
 	if b == 0 { divide_by_zero() }
 	q = a / b
 	rest = a - b * (if q < 0 then float_ceil(q) else float_floor(q))
-	if rest < 0 { return rest + (if b < 0 then -b else b) }
+	if rest < 0 { return rest + (if b < 0 then - b else b) }
 	rest
 }
 # a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
@@ -958,7 +959,7 @@ exact_div(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denomin
 exact_order(a: any, b: any): int := {
 	left = exact_numerator(a) * exact_denominator(b)
 	right = exact_numerator(b) * exact_denominator(a)
-	if left < right then -1 else if left > right then 1 else 0
+	if left < right then - 1 else if left > right then 1 else 0
 }
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
@@ -972,7 +973,7 @@ exact_text(n: any): text := {
 	digits = max_int(twos, fives)
 	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
 	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
-	magnitude = int_text(if scaled < 0 then -scaled else scaled)
+	magnitude = int_text(if scaled < 0 then - scaled else scaled)
 	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
 	whole = byte_count(padded) - digits
 	out = new_text(byte_count(padded) + 1)
@@ -1003,7 +1004,7 @@ float_as_exact(x: float): any := {
 	# x - x is 0 for every finite x, NaN for ∞ and NaN
 	if x - x != 0 { not_a_finite_number() }
 	if x == 0 { return exact_ratio(0, 1) }
-	sign = if x < 0 then -1 else 1
+	sign = if x < 0 then - 1 else 1
 	# `then -x else` reads as a subtraction from then
 	magnitude = if x < 0 then 0 - x else x
 	found = float_digits(magnitude)
@@ -1086,7 +1087,7 @@ least_int(): int := -9223372036854775807 - 1
 # -1 for -∞, 1 for ∞, 0 for a finite x and for NaN
 exact_infinity_rank(x: any): int := if exact_denominator(x) == 0 then exact_numerator(x) else 0
 exact_is_nan(x: any): bool := exact_numerator(x) == 0 and exact_denominator(x) == 0
-int_order(a: int, b: int): int := if a < b then -1 else if a > b then 1 else 0
+int_order(a: int, b: int): int := if a < b then - 1 else if a > b then 1 else 0
 # -1, 0 or 1 as a is below, equal to or above b; 2 (unequal) when exactly one of them is NaN
 exact_cmp(a: any, b: any): int := {
 	if exact_is_nan(a) or exact_is_nan(b) { return if exact_is_nan(a) and exact_is_nan(b) then 0 else 2 }
@@ -1378,7 +1379,7 @@ duration_parts_text(months: int, days: int, nanos: int): text := {
 	if nanos == 0 and byte_count(shown) > 0 { return shown }
 	spaced(shown, seconds_text(nanos) + " seconds")
 }
-sign_of(n: int): int := if n > 0 then 1 else if n < 0 then -1 else 0
+sign_of(n: int): int := if n > 0 then 1 else if n < 0 then - 1 else 0
 duration_text(n: any): text := duration_parts_text(duration_months(n), duration_days(n), duration_nanos(n))
 # -1, 0 or 1 as the difference of two durations is shorter, none or longer on every date (calendar.rs
 # Duration::compares); an order that depends on the date fails
@@ -1391,7 +1392,7 @@ duration_parts_order(months: int, days: int, nanos: int): int := {
 	# daylight saving moves an exact part against the calendar part by at most an hour; calendar parts alone keep the hour
 	shift = if nanos != 0 then hour_nanos() else 0
 	if fewest_days * day_nanos() + nanos - shift > 0 { return 1 }
-	if most_days * day_nanos() + nanos + shift < 0 { return -1 }
+	if most_days * day_nanos() + nanos + shift < 0 { return - 1 }
 	durations_compare_differently_on_different_dates()
 }
 duration_order(a: any, b: any): int := duration_parts_order(duration_months(a) - duration_months(b), duration_days(a) - duration_days(b), duration_nanos(a) - duration_nanos(b))
@@ -1492,7 +1493,7 @@ node_order(a: any, b: any): int := {
 # 1 for a boxed int, exact rational or float, else 0
 numeric_node(n: any): int := if kind_code(n) == 1 or kind_code(n) == 2 then 1 else 0
 # -1, 0 or 1 as x is below, equal to or above y; NaN equals everything, as f64.gt - f64.lt gives
-float_order(x: float, y: float): int := if x < y then -1 else if x > y then 1 else 0
+float_order(x: float, y: float): int := if x < y then - 1 else if x > y then 1 else 0
 # `sort xs`, `sorted "hello"`: a new list of xs's items (a new text of its characters) in ascending order
 sorted_node(xs: any): any := {
 	if is_null(xs) == 1 { return xs }
@@ -1568,7 +1569,7 @@ run_order(ranks: list): int := {
 		if node_order(ranks#i, ranks#(i - 1)) < 0 { ascending = 0 } else { descending = 0 }
 		if ascending == 0 and descending == 0 { return 0 }
 	}
-	if ascending == 1 then 1 else -1
+	if ascending == 1 then 1 else - 1
 }
 # the runs low..<middle and middle..<high of cells and ranks, counted from 1, merged into the same places of cells_to
 # and ranks_to
@@ -1605,7 +1606,7 @@ sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or by
 # t starts with -
 is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == 45
 # the digit a byte spells, -1 for any other byte
-digit_of(b: int): int := if b >= 48 and b <= 57 then b - 48 else -1
+digit_of(b: int): int := if b >= 48 and b <= 57 then b - 48 else - 1
 # how many digits stand in t from byte offset start on
 digit_run(t: text, start: int): int := {
 	at = start
@@ -1619,7 +1620,7 @@ text_as_int(t: text): int := {
 	if count == 0 or start + count != byte_count(t) { invalid_number() }
 	value = 0
 	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
-	if is_negative_text(t) then -value else value
+	if is_negative_text(t) then - value else value
 }
 # `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
 # nearest float, correctly rounded also beyond 10^±22, where Rust's multiplies ten by ten
@@ -1642,7 +1643,7 @@ text_as_float(t: text): float := {
 	if at != byte_count(t) { invalid_number() }
 	found = decimal_digits(t, start, stop)
 	magnitude = decimal_float(unboxed_int(found#1), unboxed_int(found#2) + exponent - fraction)
-	if is_negative_text(t) then -magnitude else magnitude
+	if is_negative_text(t) then - magnitude else magnitude
 }
 # [digits, dropped] of the digits between the byte offsets start and stop (a point among them skipped): the first 18
 # significant ones as an int (below 10^18, so below 2^63), the count of those dropped after them
@@ -1672,7 +1673,7 @@ decimal_float(digits: int, shift: int): float := {
 	if magnitude < -325 { return float(0) }
 	hi = float(digits)
 	gap = float(digits - truncated(hi)) * 2
-	back = if magnitude > 290 then 20 else if magnitude < -290 then -20 else 0
+	back = if magnitude > 290 then 20 else if magnitude < -290 then - 20 else 0
 	scaled = unboxed_float(float_scaled(hi, gap, shift - back)#1)
 	if back > 0 { return scaled * power_of_ten(back) }
 	if back < 0 { return scaled / power_of_ten(-back) }
@@ -1695,6 +1696,6 @@ text_as_number(t: text): any := {
 	x = text_as_float(t)
 	# 2^63 (its bits 0x43E0000000000000)
 	limit = float_of_bits(4890909195324358656)
-	if float_floor(x) == x and x < limit and -x < limit { return truncated(x) }
+	if float_floor(x) == x and x < limit and - x < limit { return truncated(x) }
 	x
 }
