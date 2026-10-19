@@ -37,7 +37,7 @@ gc = {text: 0, items: 1, list: 2, node: 3, int_box: 4, float_box: 5, ratio: 6}
 gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [95, 3, 126, 0, 110, 0, 99, 3, 0], [95, 1, 126, 0], [95, 1, 124, 0], [95, 2, 110, 0, 110, 0]]
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
-node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262}
+node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6}
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 references = {text: [99, gc.text], list: [99, gc.list], node: [110]}
@@ -271,7 +271,8 @@ vector_code(item_codes: any) := {
 ## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
 entry_code(name_code: any, value_code: any) := keyed_code(node(node_kind_codes.symbol, name_code), value_code)
-keyed_code(name_node: any, value_code: any) := [op.i64_const] + sleb(node_kind_codes.entry) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node])
+keyed_code(name_node: any, value_code: any) := key_code(node_kind_codes.entry, name_node, value_code)
+key_code(kind: int, name_node: any, value_code: any) := [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node])
 # an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 name_node(name: any) := {
 	if name is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(name))) }
@@ -285,7 +286,11 @@ map_value(body: Body, entries: any) := {
 	["node", node(node_kind_codes.map, vector_code(codes))]
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
-instance_value(body: Body, class_name: text, fields: any) := ["node", entry_code(text_bytes(class_name), map_value(body, fields)#2)]
+# an instance's key has no operator (Op::None), as Rust's has
+instance_value(body: Body, class_name: text, fields: any) := {
+	name = node(node_kind_codes.symbol, text_bytes(class_name))
+	["node", key_code(node_kind_codes.instance, name, map_value(body, fields)#2)]
+}
 # `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
 subscript_name(index: any) := {
 	# (type() of an arithmetic key is "operation", not key)
