@@ -12,14 +12,17 @@
 #                                                      counted apart as run <tip>+<name>; notes/self_hosting.md
 #                                                      "Back-end focus": front end only, + emitter (--stage
 #                                                      emitter=WARP_SELF_HOSTED=1), + analyzer (--stage
-#                                                      analyzer=WARP_SELF_ANALYSIS: analyzer.warp checks each program)
+#                                                      analyzer=WARP_SELF_ANALYSIS: analyzer.warp checks each program),
+#                                                      + pure (--stage pure=WARP_SELF_HOSTED=pure: no Rust pass; the
+#                                                      report counts the programs that ran pure and ranks refusals)
 #   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh (after --stage …: with that stage,
 #                                                      e.g. --stage emitter=WARP_SELF_HOSTED=1 --local lists::)
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
-SWITCHES=("$SWITCH=front")       # VAR=value lines of .cargo/config.toml [env]: the front end alone, unless --stage adds
+SWITCHES=("$SWITCH=front"        # VAR=value lines of .cargo/config.toml [env]: the front end alone, unless --stage adds
+	"WARP_EMIT_REFUSALS=/dev/stderr") # each refusal of a warp stage (and pure's "pure: ran") as a log line, ranked
 STAGE=""                         # the later stages switched on too (--stage), as the run's name suffix
 SKIPPED=parser::test_self_       # the twins compare warp with Rust themselves
 SCRATCH_PREFIX=self-hosted       # the throwaway branches
@@ -94,11 +97,29 @@ rank() {
 		}'
 }
 
+# The programs the warp stages compiled ("pure: ran", the pure lane's) and refused ("outside the core: …"), the
+# refusals ranked, digits as #; a program of a test that ran in two parts counts twice
+refusals() {
+	local log
+	for log in "$@"; do
+		if [[ "$log" == *.gz ]]; then gunzip -c "$log"; else cat "$log"; fi
+	done | LC_ALL=C grep -ao -e 'pure: ran' -e 'outside the core: .*' | LC_ALL=C awk -v shown=$SHOWN_CAUSES -v width=$CAUSE_WIDTH '
+		$0 == "pure: ran" { ran++; next }
+		{ refused++; refusal = substr($0, 1, width); gsub(/[0-9]+/, "#", refusal); refusals[refusal]++ }
+		END {
+			if (!ran && !refused) exit
+			printf "warp stages: %d programs ran pure, %d refused\nrefusals (count, refusal):\n", ran, refused
+			sorter = "LC_ALL=C sort -rn | head -" shown
+			for (refusal in refusals) printf "%6d  %s\n", refusals[refusal], refusal | sorter
+		}'
+}
+
 local_run() {
 	mkdir -p "$REPORTS"
 	local log=$REPORTS/local.log
 	env "${SWITCHES[@]}" tests/queue.sh -- "$@" --skip "$SKIPPED" > "$log" 2>&1
 	rank "$log"
+	refusals "$log"
 	echo "(log: $log)"
 }
 
@@ -168,6 +189,7 @@ cloud_run() {
 	mkdir -p "$REPORTS"
 	local report=$REPORTS/$run.txt previous
 	rank "${logs[@]}" | tee "$report"
+	refusals "${logs[@]}" | tee -a "$report"
 	mkdir -p "$(dirname "$COUNTS")"
 	# against the last complete run of the same stages on an ancestor of this tip (another session's branch run would
 	# count that branch's fixes as regressions): a line noting "incomplete" lacks the tests of its killed part
