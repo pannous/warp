@@ -52,6 +52,19 @@ text_count(t: text): int := {
 	counted = count
 	count
 }
+# `t.lower()`, `t.upper()`: t with its ASCII letters first…last moved by shift; a text beyond ASCII fails loudly
+# (non_ascii_text): Rust's case table (src/wasm_emitter/text/text_unicode.rs) is not ported yet (card unicode-case)
+ascii_case(t: text, first: int, last: int, shift: int): text := {
+	out = new_text(byte_count(t))
+	for i in 0..byte_count(t) {
+		b = byte_at(t, i)
+		if b >= 128 { non_ascii_text() }
+		set_byte(out, i, if b >= first and b <= last then b + shift else b)
+	}
+	out
+}
+text_lower(t: text): text := ascii_case(t, 65, 90, 32)
+text_upper(t: text): text := ascii_case(t, 97, 122, 0 - 32)
 # the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
 code_point_count(t: text): int := {
 	count = 0
@@ -1107,6 +1120,10 @@ not_a_list(): int := {
 	0
 }
 not_a_text(): int := {
+	fail()
+	0
+}
+non_ascii_text(): int := {
 	fail()
 	0
 }

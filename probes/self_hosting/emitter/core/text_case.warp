@@ -1,0 +1,4 @@
+// `t.lower()`, `t.upper()` of ASCII texts (runtime.warp ascii_case; beyond ASCII it fails loudly: card unicode-case)
+print "Int".lower()
+print upper("ab!")
+"Warp".lower() == "warp"
