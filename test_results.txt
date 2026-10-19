@@ -2456,6 +2456,9 @@ PASSED:
   ✓ modules::test_dir_value_methods::dir_of_a_value_lists_its_types_methods
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
+  ✓ modules::test_english_phrases::a_quoted_set_phrase_stays_as_written
+  ✓ modules::test_english_phrases::own_set_shadows_the_english_rule
+  ✓ modules::test_english_phrases::set_phrases_come_from_the_english_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
   ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
@@ -2587,6 +2590,10 @@ PASSED:
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
   ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
+  ✓ modules::test_std_extrema::an_empty_list_has_no_extremum
+  ✓ modules::test_std_extrema::extrema_of_one_list_of_candidates
+  ✓ modules::test_std_extrema::extrema_of_two_or_more_values
+  ✓ modules::test_std_extrema::the_extremum_enum_names_its_word
   ✓ modules::test_std_file_bytes::a_value_that_is_no_byte_is_refused
   ✓ modules::test_std_file_bytes::bytes_and_texts_are_the_same_file
   ✓ modules::test_std_file_bytes::write_bytes_and_read_bytes_need_no_use
@@ -3173,6 +3180,10 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
+  ✓ numbers::test_ratio_gcd_warp::euclidean_words_match_percent_and_floor_division
+  ✓ numbers::test_ratio_gcd_warp::exact_quotient_divides_as_slash
+  ✓ numbers::test_ratio_gcd_warp::gcd_is_never_negative
+  ✓ numbers::test_ratio_gcd_warp::lowest_terms_are_the_ratios_of_division
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
   ✓ numbers::test_rational_quantities::test_non_whole_results_are_exact
   ✓ numbers::test_rational_type::test_floats_are_not_rational
@@ -3823,6 +3834,7 @@ PASSED:
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
@@ -4286,6 +4298,7 @@ PASSED:
   ✓ programs::test_window_closed_by_user::the_closed_line_ends_the_run
   ✓ programs::test_window_size::a_bare_width_is_the_canvas_width
   ✓ programs::test_window_size::a_width_of_the_program_keeps_its_meaning
+  ✓ programs::test_window_size::canvas_size_by_a_set_phrase
   ✓ programs::test_window_size::canvas_size_is_a_property
   ✓ programs::test_window_size::the_display_is_read_only
   ✓ programs::test_window_size::the_viewer_reads_a_resize
@@ -4473,7 +4486,6 @@ PASSED:
   ✓ text::test_print_arguments::print_joins_its_arguments_with_a_space
   ✓ text::test_print_arguments::print_of_a_braceless_call_gives_nothing
   ✓ text::test_print_arguments::print_of_a_braceless_call_prints_its_result
-  ✓ text::test_print_arguments::print_of_several_arguments_gives_nothing
   ✓ text::test_print_arguments::print_without_arguments_writes_an_empty_line
   ✓ text::test_print_gives_nothing::print_gives_nothing
   ✓ text::test_print_gives_nothing::the_console_shows_no_value_after_a_print
@@ -5496,7 +5508,6 @@ PASSED:
   ✓ wasm::test_executable_output::test_executable_trap_names_main
   ✓ wasm::test_executable_size::test_executable_exports_only_what_the_stub_calls
   ✓ wasm::test_executable_size::test_executable_keeps_its_handlers
-  ✓ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken
   ✓ wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
   ✓ wasm::test_gc_struct::test_class_instance_raw
   ✓ wasm::test_gc_struct::test_gc_object_index_access
@@ -5521,6 +5532,7 @@ PASSED:
   ✓ wasm::test_runtime_stub_found::build_finds_or_builds_the_runtime_stub_by_itself
   ✓ wasm::test_runtime_stub_note::the_note_comes_only_before_the_first_build
   ✓ wasm::test_standalone_executable::test_an_executable_the_runtime_cannot_carry_is_noted_once
+  ✓ wasm::test_standalone_executable::test_build_exe_calls_c_functions
   ✓ wasm::test_standalone_executable::test_build_exe_prints_lists_as_print_does
   ✓ wasm::test_standalone_executable::test_build_exe_refuses_imports_the_runtime_lacks
   ✓ wasm::test_standalone_executable::test_build_exe_runs_the_program_and_prints_its_value
@@ -6486,11 +6498,7 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✗ INCOMPLETE: 1 test binaries ended without a result (crashed or killed)
-    RERUN of tests/main.rs: 27 unfinished or failed tests
-    ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it: (no output)
-    CRASHED again, while running: (no test started)
-    rerun: 26 passed, 1 failed, crashed
+  ✗ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken
 
 SUMMARY:
-16 ignored, 6482 passed, 2 failed, 6484 total tested
+16 ignored, 6494 passed, 2 failed, 6496 total tested
