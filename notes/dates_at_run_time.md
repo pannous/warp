@@ -52,7 +52,7 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
   `TimeForm::refusal(name)` (`date has no hour`, `duration has no field year`). time_field itself only finds the wall
   clock position (zone offset, the host's local_offset); the calendar is lib/prelude.warp `time_field_of(form, wall,
   offset, field)`, called late (card time-fields-warp), over the warp twins of time_parts (`time_days`, `time_nanos`)
-  and of the civil calendar (`civil_year/month/day`, `civil_days`). A program making a time loads the word through
+  and of the civil calendar (`civil_year/month/day`, `days_from_civil`, one copy with civil-days-dup's `civil_from_days`). A program making a time loads the word through
   times.rs implied_word (`now`, a time call, a date or time literal). The Rust time_parts and civil functions stay for
   time_text, time arithmetic and zones.
 - `time_text(node) -> text`: RFC 3339 like calendar.rs `Display` (seconds left out when zero, fraction trimmed, `Z`
