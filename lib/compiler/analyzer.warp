@@ -266,7 +266,12 @@ element_kind(indexed: any, scope: any): any := {
 	kind = kind_of(indexed, scope)
 	if kind == "text" or kind == "symbol" { return "text" }
 	if kind == "empty" { return "empty" }
-	type_name = list_type(indexed, scope)
+	typed_element_kind(list_type(indexed, scope))
+}
+
+# the kind of an element of a list or map type (list of int: int), ø when the type names none
+typed_element_kind(type_name: any): any := {
+	if type_name == ø { return ø }
 	if type_name == "map" or type_name == "list of node" { return "empty" }
 	element = if type_name.starts_with("list of ") then type_name[8..] else if type_name.starts_with("map of ") then type_name[7..] else ""
 	if element == "" { return ø }
@@ -921,6 +926,41 @@ kinds(program: any): any := {
 	variables = {}
 	for name in main.kinds.keys() { if not (name in main.declared_globals) { variables[name] = main.kinds[name] } }
 	{functions: functions, variables: variables, value: kind_of(program, main)}
+}
+
+# the kinds emitter.warp holds values as: int, float, char, text, list, any other value a boxed node
+emitter_kind(kind: any): text := if kind == "codepoint" then "char" else if kind in emitter_kept_kinds then kind else "node"
+emitter_kept_kinds = {int: 1, float: 1, text: 1, list: 1}
+
+# the variables of a scope but its parameters, each with its emitter kind
+emitter_locals(scope: any, parameters: list): any := {
+	locals = {}
+	for name in scope.kinds.keys() { if not (name in parameters) and not (name in scope.declared_globals) { locals[name] = emitter_kind(scope.kinds[name]) } }
+	locals
+}
+
+# the element kinds of the lists a scope knows the type of: name → emitter kind
+emitter_elements(scope: any): any := {
+	elements = {}
+	for name in scope.types.keys() {
+		element = typed_element_kind(scope.types[name])
+		if element != ø and scope.kinds.get(name) == "list" { elements[name] = emitter_kind(element) }
+	}
+	elements
+}
+
+# what emitter.warp reads (card emitter-takes): {functions: {f: {params: [kind…], result, locals: {x: kind}, elements:
+# {xs: kind}}}, variables: {x: kind}, elements: {xs: kind}, value: kind}, kinds as emitter_kind names them
+emitter_kinds(program: any): any := {
+	analyze(program)
+	functions = {}
+	for name in definitions.keys() {
+		scope = scopes[name]
+		parameters = parameters_of(name).map(parameter_name)
+		functions[name] = {params: parameters.map(own => emitter_kind(scope.kinds[own])), result: emitter_kind(results[name]), locals: emitter_locals(scope, parameters), elements: emitter_elements(scope)}
+	}
+	main = scopes[""]
+	{functions: functions, variables: emitter_locals(main, []), elements: emitter_elements(main), value: emitter_kind(kind_of(program, main))}
 }
 
 inferred_kinds(program: any): list := {
