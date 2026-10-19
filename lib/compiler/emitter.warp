@@ -55,6 +55,13 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_ge_u: 90, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211}
+# the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
+wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
+	"i64.div_s": 127, "i64.div_u": 128, "i64.rem_s": 129, "i64.rem_u": 130, "i64.and": 131, "i64.or": 132, "i64.xor": 133,
+	"i64.shl": 134, "i64.shr_s": 135, "i64.shr_u": 136, "i64.rotl": 137, "i64.rotr": 138, "f64.abs": 153, "f64.neg": 154,
+	"f64.ceil": 155, "f64.floor": 156, "f64.trunc": 157, "f64.nearest": 158, "f64.sqrt": 159, "f64.add": 160, "f64.sub": 161,
+	"f64.mul": 162, "f64.div": 163, "f64.min": 164, "f64.max": 165, "f64.copysign": 166, "i64.trunc_f64_s": 176,
+	"i64.trunc_f64_u": 177, "f64.convert_i64_s": 185, "f64.convert_i64_u": 186, "i64.reinterpret_f64": 189, "f64.reinterpret_i64": 191}
 # GC instructions, after their prefix 251
 gc_prefix = 251
 gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_new_default: 7, array_new_fixed: 8, array_new_data: 9, array_get: 11, array_get_u: 13,
@@ -414,6 +421,13 @@ def checked_item(body: Body, list: any, index: any): list {
 	code += outside + [op.if, no_value] + dropped(runtime_call("index_out_of_range_of", [["int", at], count])) + [op.end]
 	code + [op.local_get] + held + gc_code("struct_get", [gc.list, 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
 }
+# `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
+def wasm_instruction(body: Body, name: text): list {
+	if not (name in wasm_instructions) { return refuse("wasm " + name) }
+	code = []
+	for i in 0..<#body.function.parameters { code += [op.local_get] + uleb(i) }
+	[if name.starts_with("i64") then "int" else "float", code + [wasm_instructions[name]]]
+}
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: any): list {
 	values = arguments.map(a => expression(body, a))
@@ -468,14 +482,6 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	if name == "ratio_numerator" { return ["int", ratio_part(values#1#2, 0)] }
 	if name == "ratio_denominator" { return ["int", ratio_part(values#1#2, 1)] }
 	if name == "unboxed_float" { return ["float", unboxed(values#1#2, gc.float_box)] }
-	if name == "int_quotient" { return ["int", values#1#2 + values#2#2 + [op.i64_div_s]] }
-	if name == "int_remainder" { return ["int", values#1#2 + values#2#2 + [op.i64_rem_s]] }
-	if name == "bits_of_float" { return ["int", converted(values#1, "float") + [op.i64_reinterpret_f64]] }
-	if name == "float_of_bits" { return ["float", values#1#2 + [op.f64_reinterpret_i64]] }
-	if name == "float_floor" { return ["float", converted(values#1, "float") + [op.f64_floor]] }
-	if name == "float_ceil" { return ["float", converted(values#1, "float") + [op.f64_ceil]] }
-	if name == "float_nearest" { return ["float", converted(values#1, "float") + [op.f64_nearest]] }
-	if name == "truncated" { return ["int", converted(values#1, "float") + [op.i64_trunc_f64_s]] }
 	if name == "code_of" { return ["int", values#1#2 + [op.i64_extend_i32_u]] }
 	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code("array_set", [gc.text])] }
 	if name == "output_byte" { return [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)] }
@@ -484,11 +490,10 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 	code = values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5)
 	[no_kind, code + gc_code("array_copy", [gc.text, gc.text])]
 }
-intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, int_quotient: 2, int_remainder: 2, code_of: 1, set_byte: 3,
+intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
-	bits_of_float: 1, float_of_bits: 1, float_floor: 1, float_ceil: 1, float_nearest: 1, truncated: 1,
 	key_name: 1, key_value: 1, new_key: 2, map_of: 1, keyed: 3, entry_key: 1, symbol_of: 1, same_text: 2}
 # the words a program calls that runtime.warp gives, by the runtime word's name
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
@@ -581,7 +586,6 @@ record_type(name: any): any := {
 	record_type(name#4)
 }
 
-# whether name is the program's global variable here: never in a runtime word, whose locals are its own
 # a runtime word sees only the globals runtime.warp declares, never those of the program
 is_global(body: Body, name: text): bool := not (name in body.names) and name in module.globals and (not body.intrinsics or name in module.runtime_globals)
 def local_value(body: Body, n: any): list {
@@ -994,6 +998,7 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
 		return host_call(body, name_of(n#1), n[1..].map(x => x))
 	}
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and body.intrinsics {
 		return intrinsic(body, name_of(n#1), n[1..].map(x => x))
 	}

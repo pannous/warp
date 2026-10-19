@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+// decision wasm-instruction-body: a function whose body is one wasm instruction
+round_down(a: float): float := wasm f64.floor
+remainder(a: int, b: int): int := wasm i64.rem_s
+popcount(a: int): int := wasm i64.popcnt
+smaller(a: float, b: float): float := wasm f64.min
+[round_down(2.5), remainder(-7, 3), popcount(255), smaller(2.5, 1.5)]
