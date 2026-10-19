@@ -130,4 +130,7 @@ fn test_apostrophe_in_hash_comment_hides_no_code() {
 	let declared = "class Point { x: int }\np = Point{x: 1}";
 	let commented = "# Rust's\nclass Point { x: int }\n# it's\np = Point{x: 1}\n/# don't #/";
 	eq!(parse(commented), parse(declared));
+	// `= type` ending a line declares no type named by the next line's first word (analyzer.warp settle)
+	let flag = "changed = yes\nwhile changed {\n\tchanged = no\n}";
+	eq!(parse(&format!("t = type\n{flag}"))[2], parse(flag)[1]);
 }

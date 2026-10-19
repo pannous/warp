@@ -50,15 +50,18 @@ pub(crate) fn is_plain_name(word: &str) -> bool {
 /// outside comments and texts (`// the type end` declares nothing)
 pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
 	let source = code_only(source);
-	let words: Vec<&str> = source.split_whitespace().collect();
-	words
-		.windows(2)
-		.filter(|pair| TYPE_DECLARATION_WORDS.contains(&pair[0]) || pair[0] == RECORD_WORD || pair[0] == "type")
+	// word pairs within a line: `x = type` ending one declares nothing with the next line's first word
+	let pairs = source.lines().flat_map(|line| {
+		let words: Vec<&str> = line.split_whitespace().collect();
+		words.windows(2).map(|pair| (pair[0], pair[1])).collect::<Vec<_>>()
+	});
+	pairs
+		.filter(|(word, _)| TYPE_DECLARATION_WORDS.contains(word) || *word == RECORD_WORD || *word == "type")
 		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
 		// `record = find(…)` declares nothing
-		.filter_map(|pair| {
-			let name: String = pair[1].chars().take_while(|ch| is_identifier_char(*ch) || *ch == '-').collect();
-			let rest = &pair[1][name.len()..];
+		.filter_map(|(_, next)| {
+			let name: String = next.chars().take_while(|ch| is_identifier_char(*ch) || *ch == '-').collect();
+			let rest = &next[name.len()..];
 			(rest.is_empty() || rest.starts_with(['(', '{', '<', '[', ':', ';'])).then_some(name)
 		})
 		.filter(|name| is_plain_name(name) || is_kebab_name(name))
