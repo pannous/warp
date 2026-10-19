@@ -83,6 +83,14 @@ instead of bending the code.
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
   run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
   later can be another session's build.
+- Quick check first, before the test queue: run the .warp code you wrote or touched through your own binary, e.g.
+  `WARP_NO_WINDOW=1 scratch/warp probes/<x>.warp`, and for compiler work through the self-hosted pipeline:
+  `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 scratch/warp probes/<x>.warp` (=front: front end only). The stages load your
+  worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
+  the stage programs (~90 s, prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
+  and wrong values in seconds (most of the 39 sprint failures of batch B, 2026-10-19). It does not show whether
+  emitter.warp or the Rust fallback emitted the program (card emit-fallback-visible); the + emitter comparison
+  stays the check for that. Then the targeted tests via tests/queue.sh.
 - Samples: every major or semi-major feature (a new syntax form, library area, server/ORM/GPU
   capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
