@@ -548,9 +548,11 @@ record_type(name: any): any := {
 	record_type(name#4)
 }
 
+# whether name is the program's global variable here: never in a runtime word, whose locals are its own
+is_global(body: Body, name: text): bool := not body.intrinsics and not (name in body.names) and name in module.globals
 def local_value(body: Body, n: any): list {
 	name = name_of(n)
-	if not (name in body.names) and name in module.globals {
+	if is_global(body, name) {
 		entry = module.globals[name]
 		return [entry#2, [op.global_get] + uleb(entry#1)]
 	}
@@ -571,6 +573,8 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol == "+" and textual { return runtime_call("text_join", [shown_text(a), shown_text(b)]) }
 	structured = a#1 == "list" or b#1 == "list" or a#1 == "node" or b#1 == "node"
 	if structured and symbol in equalities { return equality(body, symbol, a, b) }
+	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
+	if textual and (a#1 == "node" or b#1 == "node") and not (symbol in comparisons) { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if a#1 == "node" or b#1 == "node" { return node_operation(body, symbol, boxed(a), boxed(b)) }
 	if symbol in comparisons and a#1 == "char" and b#1 == "char" { return operation(body, symbol, code_point(a), code_point(b)) }
 	if symbol in comparisons and textual and a#1 in characters and b#1 in characters {
@@ -654,7 +658,7 @@ def assignment(body: Body, target: any, value: any): list {
 	name = name_of(target)
 	if name in body.declared { value = admitted(value, body.declared[name]) }
 	kind = value#1
-	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
+	if is_global(body, name) { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
 	if name in body.names and body.kinds#(body.names[name] + 1) != kind {
 		held = body.kinds#(body.names[name] + 1)
