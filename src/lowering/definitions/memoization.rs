@@ -110,7 +110,7 @@ fn keyword_definition_parts(definition: &Node) -> Option<(Node, Node, Rebuild)> 
 	match definition {
 		Node::Key(head, op @ (Op::Colon | Op::Define), body) => key_parts(head, *op, body),
 		Node::List(parts, bracket, separator) => match parts.as_slice() {
-			[head, body] if is_call_head(head) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			[head, body] if is_call_head(head) && body.is_block() => {
 				let (bracket, separator) = (bracket.clone(), separator.clone());
 				Some((
 					head.clone(),

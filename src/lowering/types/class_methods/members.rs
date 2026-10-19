@@ -101,7 +101,6 @@ pub(super) fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 		};
 		key(head, Op::Define, body.clone())
 	};
-	let is_block = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 	match (first.drop_meta(), second.drop_meta()) {
 		// `get age() {…}`, `set age(v) {…}`
 		(Node::Symbol(word), Node::List(parts, _, _))
@@ -120,7 +119,7 @@ pub(super) fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 		}
 		// `age:{2026 - birthday} set{birthday = 2026 - it}`
 		(Node::Key(name, Op::Colon | Op::None, getter), Node::Key(set, Op::Colon | Op::None, setter))
-			if set.drop_meta().name() == "set" && is_block(getter) && is_block(setter) =>
+			if set.drop_meta().name() == "set" && getter.is_block() && setter.is_block() =>
 		{
 			let name = name.drop_meta().name();
 			// `it` is the new value; named apart, so no pass reads the block as a lambda of `it`
@@ -272,7 +271,7 @@ pub(super) fn typed_method(call: &Node, typed_block: &Node) -> Option<Node> {
 	let [result_type, block] = parts.as_slice() else {
 		return None;
 	};
-	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
+	let is_block = block.is_block();
 	(is_call && is_block).then(|| key(key(call.clone(), Op::Colon, result_type.clone()), Op::Define, block.clone()))
 }
 
@@ -411,10 +410,7 @@ pub(super) fn with_init_constructors(node: Node, called: &std::collections::Hash
 /// The name a constructor-like member is written with: `constructor` of `constructor(x){…}`, `Point` of `Point(x) := …`
 pub(super) fn constructor_alias(item: &Node) -> Option<String> {
 	match item.drop_meta() {
-		Node::Key(word, Op::None | Op::Colon, block)
-			if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
-				&& constructor_parameters(word).is_some() =>
-		{
+		Node::Key(word, Op::None | Op::Colon, block) if block.is_block() && constructor_parameters(word).is_some() => {
 			Some(leading_name(word))
 		}
 		_ => method_parts(item).map(|(method, _, _)| method),
@@ -498,7 +494,7 @@ pub(super) fn declared_with_classes(node: Node, classes: &[String]) -> Node {
 pub(super) fn braced_method(words: &[Node]) -> Option<Node> {
 	let [call, block] = words else { return None };
 	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|name| !is_constructor_word(name)));
-	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
+	let is_block = block.is_block();
 	(is_call && is_block).then(|| key(call.clone(), Op::Define, block.clone()))
 }
 
@@ -555,7 +551,7 @@ pub(super) fn curly(body: Node) -> Node {
 /// `init {…}` (spaced) and `init(name) {…}`: the constructor `init{…}`, `init(name):{…}`
 pub(super) fn value_block(words: &[Node]) -> Option<Node> {
 	let [word, block] = words else { return None };
-	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
+	let is_block = block.is_block();
 	(is_block && constructor_parameters(word).is_some()).then(|| key(word.clone(), Op::None, block.clone()))
 }
 
@@ -581,9 +577,7 @@ pub(super) fn constructor_parameters(word: &Node) -> Option<Vec<Node>> {
 pub(super) fn constructor_parts(item: &Node) -> Option<(Vec<Node>, &Node)> {
 	match item.drop_meta() {
 		// glued `init{…}` arrives as the key `init:{…}`
-		Node::Key(word, Op::None | Op::Colon, block)
-			if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
-		{
+		Node::Key(word, Op::None | Op::Colon, block) if block.is_block() => {
 			Some((constructor_parameters(word)?, block))
 		}
 		_ => None,
