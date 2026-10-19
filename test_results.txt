@@ -2033,6 +2033,9 @@ PASSED:
   ✓ functions::test_variadic::calls_without_parentheses_fill_the_rest_too
   ✓ functions::test_variadic::kotlin_vararg_and_csharp_params
   ✓ functions::test_variadic::spreading_into_a_function_parameter
+  ✓ functions::test_wasm_instruction_bodies::float_instruction_bodies
+  ✓ functions::test_wasm_instruction_bodies::int_instruction_bodies
+  ✓ functions::test_wasm_instruction_bodies::unknown_instruction_is_an_error
   ✓ functions::test_whole_float_to_int_parameter::a_whole_float_for_an_int_parameter_is_refused
   ✓ functions::test_words_in_phrases::a_library_word_after_an_operator_takes_its_argument
   ✓ functions::test_words_in_phrases::a_prefix_word_is_the_element_of_a_comprehension
@@ -6291,8 +6294,6 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✗ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
-  ✗ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
 
 SUMMARY:
-11 ignored, 6287 passed, 3 failed, 6290 total tested
+11 ignored, 6290 passed, 1 failed, 6291 total tested

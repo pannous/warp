@@ -2,6 +2,16 @@
 # byte_at, set_byte … each one or two instructions, callable only here). This file is lowered by the same pipeline as
 # any program; the emitter compiles a word on its first call, so a module carries only the words it uses.
 
+# the words that are one wasm instruction each (decision wasm-instruction-body)
+int_quotient(a: int, b: int): int := wasm i64.div_s
+int_remainder(a: int, b: int): int := wasm i64.rem_s
+bits_of_float(x: float): int := wasm i64.reinterpret_f64
+float_of_bits(bits: int): float := wasm f64.reinterpret_i64
+float_floor(x: float): float := wasm f64.floor
+float_ceil(x: float): float := wasm f64.ceil
+float_nearest(x: float): float := wasm f64.nearest
+truncated(x: float): int := wasm i64.trunc_f64_s
+
 text_join(a: text, b: text): text := {
 	out = new_text(byte_count(a) + byte_count(b))
 	copy_text(out, 0, a, 0, byte_count(a))
@@ -232,6 +242,7 @@ map_values(m: any): list := {
 }
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
 collection_contains(c: any, x: any): bool := {
+	if is_null(c) == 1 { return no } # `[]` is the null node
 	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, node_text(x)) > 0 }
 	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) >= 0 }
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
@@ -789,6 +800,17 @@ int_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
 	unboxed_int(n)
 }
+# a value known only at run time given to a variable declared int: a float or a fraction is no whole number, as Rust's
+int_admitted(n: any): int := {
+	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { not_an_int() }
+	if kind_code(n) == 2 or is_ratio(n) == 1 { an_int_must_be_a_whole_number() }
+	unboxed_int(n)
+}
+# … given to a variable declared list: ø or a list (a map is kind 8 in curly braces, no list), kept as it is, as Rust's
+list_admitted(n: any): any := {
+	if is_null(n) == 0 and (kind_code(n) != 8 or marked_kind(n) == 8) { not_a_list() }
+	n
+}
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
 # empty one) where a list is needed; any other value traps, as Rust fails on it
 text_of_node(n: any): text := {
@@ -1085,6 +1107,14 @@ not_a_list(): int := {
 	0
 }
 not_a_text(): int := {
+	fail()
+	0
+}
+not_an_int(): int := {
+	fail()
+	0
+}
+an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
 }
