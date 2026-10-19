@@ -5,6 +5,7 @@ use warp::node::Node;
 use warp::pipeline::{eval, for_tests};
 
 const PAIRS: &str = "# arithmetic\n'1+1'\t2\n'0-1'\t-1\tnegative\n'x=0'\tø\n\n'[1,2]'\t[1, 2]\n'3>1'\tyes\t";
+#[cfg(feature = "native")]
 const SKIPPING: &str = "'1+1'\t2\n// 'fib 10'\t55\tcard fib-memo: regression\n'2*3'\t6\n";
 
 #[test]

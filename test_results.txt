@@ -851,6 +851,9 @@ PASSED:
   ✓ control::test_tasks::a_program_may_define_its_own_go
   ✓ control::test_tasks::await_gives_the_value_of_a_task
   ✓ control::test_tasks::stopping_a_finished_task_warns_and_changes_nothing
+  ✓ control::test_test_pairs::a_tab_separates_the_columns_of_a_line
+  ✓ control::test_test_pairs::each_pair_is_a_test
+  ✓ control::test_test_pairs::warp_test_reports_commented_pairs_as_skipped
   ✓ control::test_text_loop_value::a_loop_ending_in_a_character_gives_that_character
   ✓ control::test_text_loop_value::a_loop_ending_in_a_text_gives_that_text
   ✓ control::test_text_loop_value::a_text_loop_that_never_ran_is_empty
@@ -6311,4 +6314,4 @@ FAILED:
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6305 passed, 1 failed, 6306 total tested
+11 ignored, 6308 passed, 1 failed, 6309 total tested
