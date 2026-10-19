@@ -32,8 +32,7 @@ run_report does. An environment skip (no WebGPU adapter) stays separate from a f
 
 ## Probes into tests, by judgment
 A probe becomes test assertions only when it checks decided behaviour with a stable value; exploratory, visual,
-sound, timing and undecided ones stay. A probe listed in tests/parser/self_parser_sources.txt keeps its parse parity:
-its text moves into tests/fixtures/parser_corpus/<folder>.warp (snippets concatenated, names as comments).
+sound, timing and undecided ones stay. Tests are outcome tests only (AGENTS.md "Outcome tests only").
 Kept by class: markup with warnings, shaders and painting, sound, stored tables, timing, server/CLI, open questions,
 design examples and spec inventories, probes/algo/ (bisection snippets; samples/<algo>.warp are the tests),
 generators/, laws/ (Lean), tools and research (.py/.sh/.mjs/.md/.lean). Executable or user-touched probes (shebang,

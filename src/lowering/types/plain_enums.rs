@@ -6,7 +6,7 @@
 
 use super::node_cases;
 use super::nodes::{key, matched};
-use super::sum_variants::{case_rows, sum_type};
+use super::sum_variants::{case_rows, sum_type, sum_types};
 use crate::analyzer::match_exhaustive::typed_subjects;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{call, Bracket, Node, Separator};
@@ -64,6 +64,22 @@ pub fn lower(program: Node) -> Node {
 			cases.extend(enum_cases(items));
 		}
 	});
+	with_cases(program, cases)
+}
+
+/// The program with the cases of a used module's plain enums lowered in it (`Disambiguation::Earlier` of `use time`):
+/// those declarations join the program after lower ran, already sum types `type @variants(Reject Earlier) Disambiguation`
+pub(crate) fn with_cases_of(program: Node, declarations: &[Node]) -> Node {
+	let module_code = Node::List(declarations.to_vec(), Bracket::None, Separator::Newline);
+	let cases = sum_types(&module_code)
+		.into_iter()
+		.filter(|(_, variants)| variants.is_plain())
+		.map(|(name, variants)| (name, variants.bare_names().collect()))
+		.collect();
+	with_cases(program, cases)
+}
+
+fn with_cases(program: Node, cases: HashMap<String, Vec<String>>) -> Node {
 	if cases.is_empty() {
 		return program;
 	}

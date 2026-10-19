@@ -1,12 +1,11 @@
 // card play-mozart: `./` or `../` glued to what follows, at the start of an operand, is a file path written without
 // quotes: `play ./mozart.mp3`. With a space behind it `./` stays the element-wise division: `[2 4] ./ 2`
 use crate::is;
-use warp::{parse, Node};
+use warp::parse;
 
 #[test]
 fn a_dot_slash_starts_a_path() {
-	assert_eq!(parse("./mozart.mp3"), Node::Text("./mozart.mp3".into()));
-	assert_eq!(parse("../music/mozart.mp3"), Node::Text("../music/mozart.mp3".into()));
+	is!("x = ../music/mozart.mp3\nx", "../music/mozart.mp3");
 	is!("x = ./songs/mozart.mp3\nx", "./songs/mozart.mp3");
 	is!("[./a.wav, ../b.wav]", parse("[\"./a.wav\" \"../b.wav\"]"));
 }
