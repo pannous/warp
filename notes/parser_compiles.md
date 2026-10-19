@@ -41,4 +41,6 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | int(x), positioned, `op as Op` (keyed), a node into a typed Parser field, `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps), a write by a run-time key (remember), pending kinds in recursive functions | warp-runtime |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
+| user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
+| two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
