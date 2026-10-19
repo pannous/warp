@@ -1554,6 +1554,8 @@ nanos_per_milli = 1000000
 # index (8 bits) above the form, its offset in minutes above that
 form_bits = 3
 form_mask = 7
+# the form of a zoned time: its text names its zone, which only Rust's zone table knows
+zoned_form = 4
 months_shift = 35
 zone_mask = 255
 offset_shift = 11
@@ -1570,6 +1572,7 @@ makes_time(program: any): bool := mentions(program, "instant_at") or mentions(pr
 # time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
 def time_call(body: Body, name: text, arguments: any): list {
 	if #arguments != time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
+	if name == "time_of" and arguments#1 is number and arguments#1 % (form_mask + 1) == zoned_form { return refuse("a zoned time") }
 	values = arguments.map(a => expression(body, a))
 	if name == "instant_at" {
 		nanos = converted(values#1, "int") + [op.i64_const] + sleb(nanos_per_milli) + [shift_ops.i64_mul]
