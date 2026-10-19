@@ -11,6 +11,8 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 - `def f(x): list|map|any := e` result types in the Rust parser: emit-enum-match d717c74deb
 - bracket_of, separator_of, bracketed, separated as runtime words, n.op / n.bracket fields: emit-enum-match d717c74deb
 - node into a variable declared list/int: runtime-declared 3a700ae
+- a runtime.warp word's declared result kept (`f(): int := { … return xs#i … }` was a node): runtime.warp reaches
+  emitter.warp through the analysis view, runtime-declared 305298c5e7
 - match with node patterns: pure-lane 54dabdd10 (node_matches.warp)
 - bare `return` (`{ return ø }`) and `continue` in while loops: pure-lane ec8cd7ade (a for whose body continues stays
   with Rust: its step must not be skipped)
@@ -27,4 +29,5 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
 | class constructor `Point(2, 3)`, the file's own globals, try, `===` | warp-self-analyzer |
 | int(x), positioned, `op as Op` (keyed), an instance inside a map, a node into a typed Parser field, a write by a run-time key, pending kinds in recursive functions, `branch` called with a missing argument | warp-emitter-structures |
+| print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
