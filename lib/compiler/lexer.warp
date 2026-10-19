@@ -154,9 +154,30 @@ def comment_end(source: any, at: int, n: int): int {
 	if c == '#' and (at == 0 or is_blank(source[at - 1])) and hash_comment(source, at, n) {
 		return index_of(source, "\n", at, n)
 	}
-	if c == '/' and next == '*' { return after(source, "*/", at + 2, n) }
-	if c == '/' and next == '#' { return after(source, "#/", at + 2, n) }
+	if c == '/' and (next == '*' or next == '#') { return block_comment_end(source, at, next, n) }
 	at
+}
+
+// After the block comment `/* … */` (`/# … #/` with the mark #) opening at `at`; comments nest:
+// `/* outer /* inner */ still outer */`
+// Rust twin: comments.rs consume_block_comment
+def block_comment_end(source: any, at: int, mark: any, n: int): int {
+	depth = 1
+	i = at + 2
+	while i < n {
+		following = peek(source, i + 1, n)
+		if source[i] == '/' and following == mark {
+			depth = depth + 1
+			i = i + 2
+		} else if source[i] == mark and following == '/' {
+			depth = depth - 1
+			i = i + 2
+			if depth == 0 { return i }
+		} else {
+			i = i + 1
+		}
+	}
+	n
 }
 
 // The gaps of a source, read once: for each position, where its code goes on after blanks and comments

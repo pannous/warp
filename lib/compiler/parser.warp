@@ -1732,10 +1732,16 @@ def declares_type(p, word) {
 	c.upper() == c or body_follows or p.code[at .. end] == "of"
 }
 
+// After the spaces, tabs and inline block comments from `from` on: `1 /* inline */ + 1`
+// Rust twin: comments.rs skip_spaces_and_inline_comments
 def blank_end(p, from) {
 	at = from
-	while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
-	at
+	while true {
+		while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+		following = peek(p.code, at + 1, p.n)
+		if not is_at(p.code, at, '/', p.n) or not (following == '*' or following == '#') { return at }
+		at = block_comment_end(p.code, at, following, p.n)
+	}
 }
 
 // The name and `{fields}` of a type declaration; `class Dog extends Animal` carries its parent on the name, a bare
