@@ -1,16 +1,16 @@
 // P26 (user, 2026-10-05): libm (sin, exp, …) counts as pure: no Ffi capability, allowed in eval_untrusted and inside
 // `! Pure` functions. Other foreign functions keep the FFI effect.
+use crate::common::effects_of;
 use crate::is;
-use warp::analyzer::effects::{effects_of, Effect::FFI, EffectSet};
 use warp::wasm_emitter::eval_untrusted;
 use warp::Node;
 
 #[test]
 fn libm_calls_are_pure() {
-	assert_eq!(effects_of("sin(1.0)", "main"), Some(EffectSet::PURE));
-	assert_eq!(effects_of("use m;floor(4.5)", "main"), Some(EffectSet::PURE));
-	assert_eq!(effects_of("wave(x) := exp(x) + cos(x)", "wave"), Some(EffectSet::PURE));
-	assert_eq!(effects_of("import strlen from \"c\"; strlen(\"ab\")", "main"), Some(EffectSet::of(&[FFI])));
+	assert_eq!(effects_of("v(x) := sin(x)", "v"), "Pure");
+	assert_eq!(effects_of("use m; down(x) := floor(x)", "down"), "Pure");
+	assert_eq!(effects_of("wave(x) := exp(x) + cos(x)", "wave"), "Pure");
+	assert_eq!(effects_of("import strlen from \"c\"; size(s) := strlen(s)", "size"), "FFI");
 }
 
 #[test]

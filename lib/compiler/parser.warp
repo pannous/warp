@@ -1,5 +1,6 @@
-// The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as node_view writes it
-// (tests/common/twins.rs), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs)
+// The parser written in warp (card self-parser, notes/self_hosting.md step 6): a source's tree as nodes
+// (lib/compiler/shapes.warp), each word next to its Rust twin in src/warp_parser (tests/parser/test_self_parser.rs),
+// which compares its view (tests/common/twins.rs node_view)
 use "lexer.warp"
 use "shapes.warp"
 use "words.warp"
@@ -7,14 +8,17 @@ use "sugar.warp"
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list }
 
+// The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
+def tree(source) := view_of(parsed(source))
+
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
-def tree(source) {
+def parsed(source) {
 	written = written_tree(source)
-	counted(sugared(written), scope_of_view(written), [])
+	counted(written, scope_of(written), [])
 }
 
-// The tree as the source writes it, before the sugar pass (lib/compiler/sugar.warp)
+// The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source) {
 	found = gaps(source, source.length)
 	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks}
@@ -71,7 +75,8 @@ def items(p, closer, bracket) {
 		newline = skip_blanks(p)
 		if bracket == "" and newline and line_indent(p) > p.indent {
 			body = lines_below(p)
-			item = ["key", ":", item, if is_list_of(body, "") and body#3 == "\n" then listed("{", "\n", body[3 ..]) else body]
+			lines = group_parts(body)
+			item = Key(item, Op.Colon, if lines != ø and lines#1 == "" and lines#2 == "\n" then listed("{", "\n", lines#3) else body)
 			newline = skip_blanks(p)
 		}
 		dedent = bracket == "" and newline and line_indent(p) < p.indent
@@ -90,7 +95,7 @@ def items(p, closer, bracket) {
 def follows_clause_word(found) {
 	if found.length == 0 { return false }
 	previous = found#(found.length)#1
-	previous is list and previous.length == 2 and previous#1 == "symbol" and keyword_form(previous#2) == "clause"
+	previous is symbol and keyword_form(name_of(previous)) == "clause"
 }
 
 def stray_closer(p, c) {
@@ -99,7 +104,7 @@ def stray_closer(p, c) {
 }
 
 // An error node with its message, as the Rust parser writes one into the tree
-def failed(message) := ["error", ["text", message]]
+def failed(message) := error_node(message)
 
 // `line:column` of the character at `at`, both from 1
 def line_and_column(code, at) {
@@ -152,7 +157,8 @@ def indented_block(p) {
 	}
 	block = lines_below(p)
 	p.spaces = outer_spaces
-	if is_list_of(block, "") { return listed("{", block#3, block[3 ..]) }
+	lines = group_parts(block)
+	if lines != ø and lines#1 == "" { return listed("{", lines#2, lines#3) }
 	listed("{", "", [block])
 }
 
@@ -164,8 +170,6 @@ def line_blanks(p) {
 
 // Only blanks follow `at` on its line
 def ends_line(p, at) := line_ends_after(p, at)
-
-def is_list_of(node, bracket) := node is list and node.length > 2 and node#1 == "list" and node#2 == bracket
 
 // The body after `:` or `do`: the block indented below when the line ends, else the rest of the line
 // Rust twin: blocks.rs colon_body
@@ -210,7 +214,7 @@ def precedence(separator) {
 // [[item, separator], …] as one list: the loosest separator splits first, the groups between split by the tighter ones
 // Rust twin: lists.rs group_by_separators
 def grouped(pairs, bracket) {
-	if pairs.length == 0 { return if bracket == "{" then ["list", "{", ""] else ø }
+	if pairs.length == 0 { return if bracket == "{" then listed("{", "", []) else ø }
 	if pairs.length == 1 and bracket == "" { return pairs#1#1 }
 	loosest = -1
 	for pair in pairs {
@@ -247,18 +251,19 @@ def phrase(bracket, nodes) {
 	if not (bracket == "" or bracket == "{") or nodes.length < 3 or nodes#1 != PRINT { return listed(bracket, " ", nodes) }
 	listed(bracket, " ", [nodes#1, listed("", " ", nodes[1:])])
 }
-PRINT = ["symbol", "print"]
+PRINT = symbol("print")
 
 // `print a, b` and `{ print i, i*2 }`: the comma binds looser than the space, so [[print a], b] is the call print(a, b)
 // Rust twin: commands.rs grouped_list, print_call
 def comma_list(bracket, nodes) {
-	head = nodes#1
-	if not (bracket == "" or bracket == "{") or not is_list_of(head, "") or head#3 != " " or head#4 != PRINT {
-		return listed(bracket, ",", nodes)
-	}
-	call = listed("(", "", [PRINT] + head[4 ..] + nodes[1 ..])
+	head = group_parts(nodes#1)
+	if not (bracket == "" or bracket == "{") or not prints(head) { return listed(bracket, ",", nodes) }
+	call = listed("(", "", [PRINT] + head#3[1:] + nodes[1 ..])
 	if bracket == "{" then listed("{", "", [call]) else call
 }
+
+// The parts of an unbracketed phrase `print a`
+def prints(phrase) := phrase != ø and phrase#1 == "" and phrase#2 == " " and #phrase#3 > 0 and phrase#3#1 == PRINT
 
 // Spaces, tabs, newlines and comments skipped; whether a newline was among them
 // Rust twin: scanning.rs skip_whitespace_and_comments
@@ -306,7 +311,7 @@ def continued(p, left, min_power) {
 		if (c == '+' or c == '-') and is_at(p.code, p.at + 1, c, p.n) and SUFFIX_POWER >= min_power {
 			op = p.code[p.at .. p.at + 2]
 			p.at = p.at + 2
-			left = ["key", op, left, ø]
+			left = keyed(op, left, ø)
 		} else if c == '!' and SUFFIX_POWER >= min_power and bang_suffix_at(p) {
 			p.at = p.at + 1
 			fully = is_at(p.code, p.at, '!', p.n) and not is_at(p.code, p.at + 1, '=', p.n)
@@ -319,11 +324,11 @@ def continued(p, left, min_power) {
 			if index == ø { index = expression(p, 0) }
 			skip_blanks(p)
 			if is_at(p.code, p.at, ']', p.n) { p.at = p.at + 1 }
-			left = ["key", "[]", left, index]
+			left = subscript(left, index)
 		} else if left != ø and keyword_at(p, "times") and times_binds(p, min_power) {
 			p.at = p.at + 5
 			skip_spaces(p)
-			left = listed("", " ", [left, ["symbol", "times"], repeated(p)])
+			left = listed("", " ", [left, symbol("times"), repeated(p)])
 		} else if floor_division_at(p).length > 0 {
 			written = floor_division_at(p)
 			powers = binding_powers("/")
@@ -331,20 +336,23 @@ def continued(p, left, min_power) {
 			if powers#1 < min_power { break }
 			p.at = p.at + written.length
 			skip_blanks(p)
-			left = ["key", written, left, expression(p, powers#2)]
+			right = expression(p, powers#2)
+			// `a /!= b` is the assignment `a = floor_quotient(a, b)`
+			left = if written == "/!=" then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			word = membership_at(p)
 			if 115 < min_power { break }
 			p.at = p.at + word.length
 			skip_blanks(p)
-			left = listed("", " ", [left, ["symbol", word], expression(p, 116)])
+			// `x is in xs` is `x in xs`
+			left = listed("", " ", [left, symbol(if word == "is in" then "in" else word), expression(p, 116)])
 		} else if down_to_at(p) > 0 {
 			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
 			powers = binding_powers("to")
 			if powers#1 < min_power { break }
 			p.at = p.at + down_to_at(p)
 			skip_blanks(p)
-			left = listed("(", "", [["symbol", "reverse"], ["key", "to", expression(p, powers#2), left]])
+			left = listed("(", "", [symbol("reverse"), Key(expression(p, powers#2), Op.To, left)])
 		} else {
 			op = operator_at(p)
 			if op.length == 0 {
@@ -360,14 +368,14 @@ def continued(p, left, min_power) {
 			// `f(n):` ending its line: the block indented below is its value
 			block = if op#1 == ":" and ends_line(p, p.at) then indented_block(p) else ø
 			if block != ø {
-				left = ["key", ":", left, block]
+				left = Key(left, Op.Colon, block)
 				continue
 			}
 			skip_blanks(p)
 			if ELEMENT_WISE_OPERATORS contains op#1 {
-				left = listed("", " ", [left, ["symbol", op#1], expression(p, powers#2)])
+				left = listed("", " ", [left, symbol(op#1), expression(p, powers#2)])
 			} else {
-				left = if op#2 == "then" or op#2 == "else" then ["key", op#2, left, branch(p, powers#2)] else ["key", op#2, left, expression(p, powers#2)]
+				left = keyed(op#2, left, if op#2 == "then" or op#2 == "else" then branch(p, powers#2) else expression(p, powers#2))
 			}
 		}
 	}
@@ -414,7 +422,7 @@ def count_worded(p) {
 				p.at = start
 				return ø
 			}
-			return listed("", " ", [["symbol", word#1], body])
+			return listed("", " ", [symbol(word#1), body])
 		}
 	}
 	ø
@@ -457,7 +465,7 @@ def membership_at(p) {
 
 // A unit word stays in the flat counting phrase `number of chars in t`
 // Rust twin: counting.rs text_unit
-def counts_units(left) := left is list and left.length == 2 and left#1 == "symbol" and UNIT_WORDS.contains(left#2)
+def counts_units(left) := left is symbol and UNIT_WORDS.contains(name_of(left))
 
 UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "codepoint", "codepoints", "grapheme", "graphemes"]
 
@@ -474,7 +482,7 @@ def operand_after(p, width) {
 // Rust twin: suffixes.rs try_parse_implicit_application
 def applies(p, left, min_power) {
 	if min_power == 0 or min_power > 151 { return false }
-	callable = left is list and left.length > 1 and (left#1 == "symbol" or (left#1 == "list" and left#2 == ""))
+	callable = left is symbol or is_list_of(left, "")
 	if not callable { return false }
 	c = peek(p.code, p.at, p.n)
 	if c == '{' and p.header { return false }
@@ -528,8 +536,8 @@ def slice_from_start(p) {
 		if starts_at(p.code, mark#1, p.at) {
 			p.at = p.at + mark#1.length
 			skip_blanks(p)
-			if is_at(p.code, p.at, ']', p.n) { return ["key", mark#2, ø, ø] }
-			return ["key", mark#2, ø, expression(p, 0)]
+			if is_at(p.code, p.at, ']', p.n) { return keyed(mark#2, ø, ø) }
+			return keyed(mark#2, ø, expression(p, 0))
 		}
 	}
 	ø
@@ -552,25 +560,30 @@ def bang_suffix_at(p) {
 // result back to x, `{…}!` runs the block anyway, `ø!` unwraps
 // Rust twin: suffixes.rs try_parse_evaluate_bang
 def forced(left, fully) {
-	if left == ø { return listed("(", "", [["symbol", "unwrap"], ø]) }
+	if left == ø { return listed("(", "", [symbol("unwrap"), ø]) }
 	variable = mutated_variable(left)
-	dotted = left is list and left#1 == "key" and left#2 == "."
-	if variable != ø and not dotted { return ["key", "=", variable, left] }
-	if left is list and left#1 == "list" and left#2 == "{" { return left }
-	["attribute", "mutated", if fully then 2 else true, left]
+	if variable != ø and not is_member(left) { return Key(variable, Op.Assign, left) }
+	if is_block(left) { return left }
+	attributed("mutated", if fully then 2 else true, left)
+}
+
+def is_member(node) := match node {
+	Key(receiver, Op.Dot, member): yes
+	_: no
 }
 
 // The variable a call written before `!` changes: x in `x.upper`, `x.upper()` and `upper(x)`
 // Rust twin: mutation.rs mutated_variable
-def mutated_variable(call) {
-	if not (call is list) { return ø }
-	if call#1 == "key" and call#2 == "." and is_name(call#3) and is_method(call#4) { return call#3 }
-	if call#1 == "list" and call#2 == "(" and call.length == 5 and is_name(call#4) and is_name(call#5) { return call#5 }
-	ø
+def mutated_variable(call) := match call {
+	Key(receiver, Op.Dot, method): { if receiver is symbol and is_method(method) then receiver else ø }
+	List(parts, Bracket.Round, separator): { if #parts == 2 and parts#1 is symbol and parts#2 is symbol then parts#2 else ø }
+	_: ø
 }
 
-def is_name(view) := view is list and view.length == 2 and view#1 == "symbol"
-def is_method(view) := is_name(view) or (view is list and view#1 == "list" and view.length > 3 and is_name(view#4))
+def is_method(node) {
+	parts = group_parts(node)
+	node is symbol or (parts != ø and #parts#3 > 0 and parts#3#1 is symbol)
+}
 // The left power of `#`, which a glued `[` indexes with
 INDEX_POWER = 170
 
@@ -667,7 +680,7 @@ def prefixed(p) {
 	if form == "not" {
 		p.at = p.at + 3
 		skip_spaces(p)
-		return ["key", "not", ø, expression(p, 105)]
+		return Key(ø, Op.Not, expression(p, 105))
 	}
 	atom(p)
 }
@@ -678,10 +691,10 @@ def prefixed(p) {
 // Rust twin of the words: lookahead.rs PREFIX_OPERATOR_WORDS
 def word_prefixed(p, word, operator) {
 	p.at = p.at + word.length
-	if expression_ends(p) { return ["key", operator, ø, ø] }
+	if expression_ends(p) { return keyed(operator, ø, ø) }
 	glued = peek(p.code, p.at, p.n) == '('
 	skip_spaces(p)
-	["key", operator, ø, expression(p, glued ? PREFIX_POWER : ARGUMENT_POWER)]
+	keyed(operator, ø, expression(p, glued ? PREFIX_POWER : ARGUMENT_POWER))
 }
 
 PREFIX_POWER = 162
@@ -703,25 +716,25 @@ def prefixed_by_symbol(p, c) {
 		skip_spaces(p)
 		operand = expression(p, 155)
 		if operand is number { return 0 - operand }
-		return ["key", "-", ø, operand]
+		return keyed("-", ø, operand)
 	}
 	if c == '!' or c == '¬' {
 		p.at = p.at + 1
-		return ["key", "not", ø, expression(p, 105)]
+		return Key(ø, Op.Not, expression(p, 105))
 	}
 	if c == '#' and not is_blank(next) {
 		p.at = p.at + 1
-		return ["key", "#", ø, expression(p, INDEX_POWER - 1)]
+		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
 	if c == '√' {
 		p.at = p.at + 1
-		return ["key", "√", ø, expression(p, PREFIX_POWER)]
+		return Key(ø, Op.Sqrt, expression(p, PREFIX_POWER))
 	}
 	if c == ':' and explicit_symbol_at(p) {
 		end = name_end(p.code, p.at + 1, p.n)
 		name = p.code[p.at + 1 .. end]
 		p.at = end
-		return listed("(", "", [["symbol", "symbol"], ["text", name]])
+		return listed("(", "", [symbol("symbol"), name])
 	}
 	atom(p)
 }
@@ -748,7 +761,7 @@ def returned(p) {
 	value = ø
 	if not (c == '}' or c == ';' or c == '\n' or c == '\r') { value = continued(p, expression(p, 59), 0) }
 	// `return` alone is the word
-	if value === ø then ["symbol", "return"] else listed("", " ", [["symbol", "return"], value])
+	if value === ø then symbol("return") else listed("", " ", [symbol("return"), value])
 }
 
 // The operators after which `return` names a variable
@@ -757,13 +770,13 @@ ASSIGNING = ["=", ":=", ":", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "
 // Binds a condition until `then`, `do` or the colon of `if c: x`
 CONDITION_POWER = 81
 
-// `loop { … }` as written, ø when no block follows the word
+// Rust's `loop { … }` as `while true { … }`, ø when no block follows the word
 // Rust twin: atoms.rs keyword_form (LOOP_WORD)
 def endless_loop(p) {
 	at = blank_end(p, p.at + 4)
 	if not is_at(p.code, at, '{', p.n) { return ø }
 	p.at = at + 1
-	["key", "loop", ø, items(p, '}', "{")]
+	Key(Key(ø, Op.While, true), Op.Do, items(p, '}', "{"))
 }
 
 // `if c {…} else {…}` and `while c {…}`: the block after the condition is its branch or body
@@ -778,16 +791,16 @@ def conditioned(word, condition, p) {
 		body = colon_body(p, 1)
 		p.branch = outer
 	} else {
-		if not is_at(p.code, p.at, '{', p.n) { return ["key", word, ø, condition] }
+		if not is_at(p.code, p.at, '{', p.n) { return keyed(word, ø, condition) }
 		p.at = p.at + 1
 		body = items(p, '}', "{")
 	}
-	head = ["key", word, ø, condition]
-	if word == "while" { return ["key", "do", head, body] }
-	branches = ["key", "then", head, body]
+	head = keyed(word, ø, condition)
+	if word == "while" { return Key(head, Op.Do, body) }
+	branches = Key(head, Op.Then, body)
 	otherwise = else_branch(p)
 	if otherwise.length == 0 { return branches }
-	["key", "else", branches, otherwise#1]
+	Key(branches, Op.Else, otherwise#1)
 }
 
 // `else body`, also on the line after the branch, `else: body`, and `elif`/`elsif`/`elseif` chaining a new if; [] if
@@ -832,7 +845,7 @@ def branch_assignment(p, target, min_power) {
 	if op.length == 0 or not BRANCH_ASSIGNING.contains(op#2) { return target }
 	p.at = p.at + op#1.length
 	skip_spaces(p)
-	["key", op#2, target, expression(p, min_power)]
+	keyed(op#2, target, expression(p, min_power))
 }
 
 BRANCH_ASSIGNING = ["=", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^="]
@@ -868,7 +881,7 @@ def looped(p) {
 			iterable = header_expression(p, 81)
 			p.iterable = false
 			skip_spaces(p)
-			return listed("", " ", [["symbol", "for"], variable, ["symbol", "in"], iterable, loop_body(p)])
+			return listed("", " ", [symbol("for"), variable, symbol("in"), iterable, loop_body(p)])
 		}
 	}
 	p.at = before + 3
@@ -898,10 +911,8 @@ def ranged_loop(p) {
 	}
 	if body == ø { return ø }
 	// a colon body stays bare, as in `for i in xs: x`
-	listed("", " ", [["symbol", "for"], iterable, body])
+	listed("", " ", [symbol("for"), iterable, body])
 }
-
-def is_block(node) := node is list and node.length > 2 and node#1 == "list" and node#2 == "{"
 
 // A loop's body: `{…}`, `: words`, `do words`
 // Rust twin: statements.rs for_iterable_and_body_word, colon_body
@@ -956,7 +967,7 @@ def loop_variable(p) {
 		skip_spaces(p)
 		if not is_name_start(peek(p.code, p.at, p.n)) { return ø }
 		end = name_end(p.code, p.at, p.n)
-		names = names + [["symbol", p.code[p.at .. end]]]
+		names = names + [symbol(p.code[p.at .. end])]
 		p.at = end
 		skip_spaces(p)
 		if not is_at(p.code, p.at, ',', p.n) { break }
@@ -997,7 +1008,7 @@ def atom(p) {
 	// `$a`, a pattern's name hole: `data($a + 0)`
 	if c == '$' and is_name_start(peek(p.code, p.at + 1, p.n)) {
 		end = symbol_end(p.code, p.at + 1, p.n)
-		hole = ["symbol", p.code[p.at .. end]]
+		hole = symbol(p.code[p.at .. end])
 		p.at = end
 		return hole
 	}
@@ -1029,7 +1040,7 @@ def with_glued_factor(p, amount: any) {
 	}
 	factor = atom(p)
 	power = superscript_power(p, factor, 0)
-	["key", "*", amount, if power == ø then factor else power]
+	Key(amount, Op.Mul, if power == ø then factor else power)
 }
 
 // `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
@@ -1041,18 +1052,18 @@ def superscript_power(p, left, min_power) {
 	width = terms#(terms.length)#3 - p.at
 	lettered = false
 	for term in terms {
-		if term#2 is list { lettered = true }
+		if term#2 is symbol { lettered = true }
 	}
 	if lettered {
 		if binding_powers("^")#1 < min_power { return ø }
 		exponent = terms#1#2
-		for term in terms[1:] { exponent = ["key", if term#1 < 0 then "-" else "+", exponent, term#2] }
+		for term in terms[1:] { exponent = Key(exponent, if term#1 < 0 then Op.Sub else Op.Add, term#2) }
 		p.at = p.at + width
-		return reciprocal_if(terms#1#1 < 0, ["key", "^", left, exponent])
+		return reciprocal_if(terms#1#1 < 0, Key(left, Op.Pow, exponent))
 	}
 	total = 0
 	for term in terms { total = total + term#1 * term#2 }
-	power = ["key", "^", left, if total < 0 then 0 - total else total]
+	power = Key(left, Op.Pow, if total < 0 then 0 - total else total)
 	// a lone ² or ³ binds as a suffix: `a.b²` squares a.b
 	suffix = width == 1 and (total == 2 or total == 3)
 	if (if suffix then SUFFIX_POWER else binding_powers("^")#1) < min_power { return ø }
@@ -1060,7 +1071,7 @@ def superscript_power(p, left, min_power) {
 	reciprocal_if(total < 0, power)
 }
 
-def reciprocal_if(negative, power) := if negative then ["key", "/", 1, power] else power
+def reciprocal_if(negative, power) := if negative then Key(1, Op.Div, power) else power
 
 // The superscript terms at the parser's position, each [sign, value, end]: a raised number, or a raised name as a symbol
 def raised_terms(p) {
@@ -1082,7 +1093,7 @@ def raised_terms(p) {
 			end = end + 1
 		}
 		if end == start { return terms }
-		terms += [[sign, if letters == "" then value else ["symbol", letters], end]]
+		terms += [[sign, if letters == "" then value else symbol(letters), end]]
 		at = end
 	}
 	terms
@@ -1112,10 +1123,10 @@ def named(p) {
 	if constant == "true" { return true }
 	if constant == "false" { return false }
 	if constant == "empty" { return ø }
-	name = ["symbol", word]
+	name = symbol(word)
 	if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
-		return ["key", ":", name, braced_items(p)]
+		return Key(name, Op.Colon, braced_items(p))
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
@@ -1188,7 +1199,7 @@ def function_reference(p) {
 	next_word = p.code[rest .. name_end(p.code, rest, p.n)]
 	if not (rest >= p.n or ";,)]}\n".contains(p.code[rest]) or next_word == "on" or next_word == "is") { return ø }
 	p.at = end
-	["symbol", p.code[at .. end]]
+	symbol(p.code[at .. end])
 }
 
 // The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter
@@ -1196,53 +1207,67 @@ def function_reference(p) {
 // Rust twin: atoms.rs function_call, is_labeled_parameter
 def spread(arguments) {
 	if arguments == ø { return [] }
-	if arguments is list and arguments#1 == "list" and not labeled_parameter(arguments) { return arguments[3 .. arguments.length] }
+	parts = group_parts(arguments)
+	if parts != ø and not labeled_parameter(parts) { return parts#3 }
 	[arguments]
 }
 
 // Every argument of `f(int x, float y)` as its typed parameter
 // Rust twin: definitions/functions.rs typed_parameters
 def typed_parameters(arguments) {
-	if not (is_list_view(arguments) and arguments#3 == ",") { return typed_parameter(arguments) }
-	listed(arguments#2, ",", [typed_parameter(argument) for argument in arguments[3 ..]])
+	parts = group_parts(arguments)
+	if parts == ø or parts#2 != "," or #parts#3 == 0 { return typed_parameter(arguments) }
+	listed(parts#1, ",", [typed_parameter(argument) for argument in parts#3])
 }
 
 // `f(int x)`, Go's `f(x int)`, `f(s Shape)` and `f(x of int)` as the typed parameter x:int; `f(vararg xs)`,
 // `f(params int[] xs)` the rest parameter *xs; `f(int b = 2)` as b:int = 2; any other argument as it is
 // Rust twin: definitions/functions.rs typed_parameter
 def typed_parameter(argument) {
-	if not (is_list_view(argument) and argument#3 == " " and argument#2 != "[") { return argument }
-	words = argument[3 ..]
+	parts = group_parts(argument)
+	if parts == ø or parts#2 != " " or parts#1 == "[" or #parts#3 == 0 { return argument }
+	words = parts#3
 	first = words#1
 	last = words#(words.length)
-	if words.length == 2 and is_type_symbol(first) and is_symbol(last) { return ["key", ":", last, first] }
-	if words.length == 2 and is_symbol(first) and not is_type_symbol(first) and (is_type_symbol(last) or (is_symbol(last) and last#2[0].upper() == last#2[0] and last#2[0].lower() != last#2[0])) {
-		return ["key", ":", first, last]
+	if words.length == 2 and is_type_symbol(first) and is_symbol(last) { return Key(last, Op.Colon, first) }
+	if words.length == 2 and is_symbol(first) and not is_type_symbol(first) and (is_type_symbol(last) or (is_symbol(last) and is_capitalized(name_of(last)))) {
+		return Key(first, Op.Colon, last)
 	}
-	if words.length == 3 and words#2 == ["symbol", "of"] and is_type_symbol(last) and is_symbol(first) and not is_type_symbol(first) {
-		return ["key", ":", first, last]
+	if words.length == 3 and words#2 == symbol("of") and is_type_symbol(last) and is_symbol(first) and not is_type_symbol(first) {
+		return Key(first, Op.Colon, last)
 	}
-	if is_symbol(first) and REST_MARKERS.contains(first#2) {
-		if is_symbol(last) { return ["symbol", "*" + last#2] }
-		if last is list and last.length == 4 and last#1 == "key" and last#2 == ":" { return ["symbol", "*" + last#3#2] }
-		return argument
-	}
-	if words.length == 2 and is_type_symbol(first) and last is list and last.length == 4 and last#1 == "key" and last#2 == "=" and is_symbol(last#3) {
-		return ["key", "=", ["key", ":", last#3, first], last#4]
-	}
+	if is_symbol(first) and REST_MARKERS.contains(name_of(first)) { return rest_parameter(last, argument) }
+	if words.length == 2 and is_type_symbol(first) { return typed_default(last, first, argument) }
 	argument
+}
+
+def is_capitalized(name) := name[0].upper() == name[0] and name[0].lower() != name[0]
+
+// `vararg xs`, `params int[] xs: list` as the rest parameter *xs
+def rest_parameter(last, argument) := match last {
+	Symbol(name): symbol("*" + name)
+	Key(name, Op.Colon, kind): { if name is symbol then symbol("*" + name_of(name)) else argument }
+	_: argument
+}
+
+// `int b = 2` as b:int = 2
+def typed_default(last, kind, argument) := match last {
+	Key(name, Op.Assign, value): { if name is symbol then Key(Key(name, Op.Colon, kind), Op.Assign, value) else argument }
+	_: argument
 }
 
 // The rest-parameter markers: Kotlin's `vararg xs`, C#'s `params int[] xs`
 // Rust twin: warp_parser/definitions/functions.rs REST_MARKERS
 REST_MARKERS = ["vararg", "params"]
 
-def is_list_view(view) := view !== ø and view is list and view.length > 3 and view#1 == "list"
-def is_type_symbol(view) := is_symbol(view) and is_type_word(view#2)
+def is_type_symbol(node) := is_symbol(node) and is_type_word(name_of(node))
 
-// `person name: String`: a label, then the typed parameter
-def labeled_parameter(words) {
-	words.length == 5 and words#3 == " " and is_symbol(words#4) and words#5 is list and words#5#1 == "key" and words#5#2 == ":" and is_symbol(words#5#3)
+// `person name: String`: a label, then the typed parameter, of a group's parts
+def labeled_parameter(parts) := parts#2 == " " and #parts#3 == 2 and is_symbol(parts#3#1) and is_typed_name(parts#3#2)
+
+def is_typed_name(node) := match node {
+	Key(name, Op.Colon, kind): name is symbol
+	_: no
 }
 
 // The words before a declared name that only say how it is declared: `global mutable x`, `export const y`; a type
@@ -1268,16 +1293,14 @@ def global_declaration(p, keyword) {
 		p.at = after
 	}
 	declaration = expression(p, 0)
-	if type_word != ø and declaration is list and declaration#1 == "key" and declaration#2 == "=" and is_symbol(declaration#3) {
-		declaration = ["key", "=", ["key", ":", declaration#3, ["symbol", type_word]], declaration#4]
-	}
+	if type_word != ø { declaration = typed_default(declaration, symbol(type_word), declaration) }
 	names = [declaration]
 	while keyword == "global" and is_symbol(names#(names.length)) and is_at(p.code, p.at, ',', p.n) {
 		p.at = p.at + 1
 		skip_spaces(p)
 		names = names + [atom(p)]
 	}
-	declared = [["key", ":", ["symbol", "global"], name] for name in names]
+	declared = [Key(GLOBAL, Op.Colon, name) for name in names]
 	if declared.length == 1 { return declared#1 }
 	listed("", ";", declared)
 }
@@ -1285,12 +1308,19 @@ def global_declaration(p, keyword) {
 // The statements an item stands for in its block: `global a, b` is the declarations `global: a` and `global: b`
 // Rust twin: definitions/variables.rs declarations_of_several_globals
 def statements_of(item) {
-	if not (item is list and item.length > 3 and item#1 == "list" and item#2 == "" and item#3 == ";") { return [item] }
-	declarations = item[3 ..]
-	for declaration in declarations {
-		if not (declaration is list and declaration#1 == "key" and declaration#2 == ":" and declaration#3 == ["symbol", "global"]) { return [item] }
+	parts = group_parts(item)
+	if parts == ø or parts#1 != "" or parts#2 != ";" or #parts#3 == 0 { return [item] }
+	for declaration in parts#3 {
+		if not declares_global(declaration) { return [item] }
 	}
-	declarations
+	parts#3
+}
+
+GLOBAL = symbol("global")
+
+def declares_global(node) := match node {
+	Key(word, Op.Colon, name): word == GLOBAL
+	_: no
 }
 
 // What follows the name of a lowercase `type`: `type point {…}`, `type size = u32`, `type pair<T>`
@@ -1330,7 +1360,7 @@ def declared_type(p, word) {
 	p.at = p.at + word.length
 	skip_blanks(p)
 	end = symbol_end(p.code, p.at, p.n)
-	name = ["symbol", p.code[p.at .. end]]
+	name = symbol(p.code[p.at .. end])
 	p.at = end
 	parameters = type_parameters(p)
 	ends_statement = ";}\n".contains(peek(p.code, blank_end(p, p.at), p.n))
@@ -1339,7 +1369,7 @@ def declared_type(p, word) {
 		p.at = p.at + 7
 		skip_blanks(p)
 		end = symbol_end(p.code, p.at, p.n)
-		name = ["attribute", "extends", ["symbol", p.code[p.at .. end]], name]
+		name = attributed("extends", symbol(p.code[p.at .. end]), name)
 		p.at = end
 		skip_blanks(p)
 	}
@@ -1350,13 +1380,18 @@ def declared_type(p, word) {
 	if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
 		body = items(p, '}', "{")
-		if is_list_of(body, "{") { body = listed("{", body#3, body[3 ..].map(field => untyped(field, parameters))) }
-		return ["type", name, body]
+		fields = group_parts(body)
+		if fields != ø and fields#1 == "{" { body = listed("{", fields#2, fields#3.map(field => untyped(field, parameters))) }
+		return declared_type_node(name, body)
 	}
-	if not ends_statement { return ["type", name, ø] }
-	if word == "class" { name = ["attribute", "bare_class", true, name] }
-	["type", name, ["list", "{", ""]]
+	if not ends_statement { return type_node(name, ø) }
+	if word == "class" { name = attributed("bare_class", true, name) }
+	declared_type_node(name, listed("{", "", []))
 }
+
+// A type declaration, its fields typed
+// Rust twin: types/declarations.rs transform_fields_to_types
+def declared_type_node(name, body) := type_node(name, typed_fields(body))
 
 // `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the position
 // after the `=` or `:` when the declaration lists alternatives one of which carries a payload, else -1
@@ -1417,11 +1452,9 @@ def type_parameters(p) {
 
 // A field of a type parameter holds any value: `item: T` of `Box[T]` is `item: any`
 // Rust twin: types/declarations.rs any_for_type_parameters
-def untyped(field, parameters) {
-	if field is list and field#1 == "key" and field#2 == ":" and is_symbol(field#4) and parameters.contains(field#4#2) {
-		return ["key", ":", field#3, ["symbol", "any"]]
-	}
-	field
+def untyped(field, parameters) := match field {
+	Key(name, Op.Colon, kind): { if kind is symbol and parameters.contains(name_of(kind)) then Key(name, Op.Colon, symbol("any")) else field }
+	_: field
 }
 
 def space_end(code, from, n) {
@@ -1440,24 +1473,24 @@ def sum_type(p, name, start, parameters) {
 	while true {
 		p.at = space_end(p.code, p.at, p.n)
 		end = symbol_end(p.code, p.at, p.n)
-		if end == p.at { return failed("a variant of " + name#2 + " needs a name") }
+		if end == p.at { return failed("a variant of " + view_of(name)#2 + " needs a name") }
 		variant = p.code[p.at .. end]
 		p.at = end
 		payload = []
 		if is_at(p.code, p.at, '(', p.n) {
 			p.at = p.at + 1
 			group = items(p, ')', "(")
-			payload = if is_list_of(group, "(") then group[3 ..] else [group]
+			payload = if is_list_of(group, "(") then group_parts(group)#3 else [group]
 		}
 		// Elm's `Failure HttpError`: the payload's types after the name
 		skip_spaces(p)
 		while is_name_start(peek(p.code, p.at, p.n)) {
 			end = symbol_end(p.code, p.at, p.n)
-			payload += [["symbol", p.code[p.at .. end]]]
+			payload += [symbol(p.code[p.at .. end])]
 			p.at = end
 			skip_spaces(p)
 		}
-		if payload.length == 0 { bare += [["symbol", variant]] } else { classes += [variant_class(name, variant, payload, parameters)] }
+		if payload.length == 0 { bare += [symbol(variant)] } else { classes += [variant_class(name, variant, payload, parameters)] }
 		after = space_end(p.code, p.at, p.n)
 		if peek(p.code, after, p.n) != '|' { break }
 		p.at = after + 1
@@ -1467,7 +1500,7 @@ def sum_type(p, name, start, parameters) {
 
 // The sum type of its bare variants by name, then the classes of the variants with a payload
 // Rust twin: sum_variants.rs sum_type
-def sum_type_of(name, bare, classes) := listed("", ";", [["type", ["attribute", "variants", listed("", " ", bare), name], ["list", "{", ""]]] + classes)
+def sum_type_of(name, bare, classes) := listed("", ";", [declared_type_node(attributed("variants", listed("", " ", bare), name), listed("{", "", []))] + classes)
 
 // `enum Shape { Circle(r), Rect(w, h), Dot }` follows `enum`: its braced cases, one with values
 // Rust twin: types/declarations.rs enum_body_ahead
@@ -1497,18 +1530,19 @@ def enum_values_ahead(p) {
 def enum_with_values(p) {
 	p.at = blank_end(p, p.at)
 	end = name_end(p.code, p.at, p.n)
-	name = ["symbol", p.code[p.at .. end]]
+	name = symbol(p.code[p.at .. end])
 	p.at = space_end(p.code, end, p.n) + 1
 	cases = braced_items(p)
 	bare = []
 	classes = []
 	for case in case_rows(cases).map(without_case_word) {
-		if case is list and case#1 == "list" and case.length > 3 and is_symbol(case#4) {
-			classes += [variant_class(name, case#4#2, case[4 ..], [])]
+		parts = group_parts(case)
+		if parts != ø and #parts#3 > 0 and is_symbol(parts#3#1) {
+			classes += [variant_class(name, name_of(parts#3#1), parts#3[1:], [])]
 		} else if is_symbol(case) {
 			bare += [case]
 		} else {
-			return failed("a case of enum " + name#2 + " is a name with optional values")
+			return failed("a case of enum " + name_of(name) + " is a name with optional values")
 		}
 	}
 	sum_type_of(name, bare, classes)
@@ -1518,15 +1552,19 @@ def enum_with_values(p) {
 // Rust twin: sum_variants.rs case_rows
 def case_rows(cases) {
 	rows = []
-	for case in cases[3 ..] {
-		if is_list_of(case, "") and case#3 == "," { rows += case[3 ..] } else { rows += [case] }
+	for case in group_parts(cases)#3 {
+		row = group_parts(case)
+		if row != ø and row#1 == "" and row#2 == "," { rows += row#3 } else { rows += [case] }
 	}
 	rows
 }
 
 // Swift's `case circle(radius: Double)` as `circle(radius: Double)`
 // Rust twin: types/declarations.rs without_case_keyword
-def without_case_word(case) := if is_list_of(case, "") and case.length == 5 and case#4 == ["symbol", "case"] then case#5 else case
+def without_case_word(case) {
+	words = group_parts(case)
+	if words != ø and words#1 == "" and #words#3 == 2 and words#3#1 == symbol("case") then words#3#2 else case
+}
 
 // The words of the built-in types a variant's payload names: `rgb(int, int, int)` gives types, `rgb(r, g, b)` fields
 // Rust twin: analyzer builtin_type_kind
@@ -1541,17 +1579,22 @@ def variant_class(type_name, variant, payload, parameters) {
 	for field in payload {
 		position = position + 1
 		// `(T)` and `(radius: int)` arrive as groups of one
-		if is_list_of(field, "(") and field.length == 4 { field = field#4 }
-		if field is list and field#1 == "key" and field#2 == ":" {
+		if is_list_of(field, "(") and #group_parts(field)#3 == 1 { field = group_parts(field)#3#1 }
+		if is_typed_field(field) {
 			fields += [field]
-		} else if is_symbol(field) and field#2[0].lower() == field#2[0] and not BUILTIN_TYPE_WORDS.contains(field#2) {
-			fields += [["key", ":", field, ["symbol", "any"]]]
+		} else if is_symbol(field) and name_of(field)[0].lower() == name_of(field)[0] and not BUILTIN_TYPE_WORDS.contains(name_of(field)) {
+			fields += [Key(field, Op.Colon, symbol("any"))]
 		} else {
 			field_name = if payload.length == 1 then "value" else "value" + position
-			fields += [["key", ":", ["symbol", field_name], field]]
+			fields += [Key(symbol(field_name), Op.Colon, field)]
 		}
 	}
-	["type", ["attribute", "extends", type_name, ["symbol", variant]], listed("{", ";", fields.map(field => untyped(field, parameters)))]
+	declared_type_node(attributed("extends", type_name, symbol(variant)), listed("{", ";", fields.map(field => untyped(field, parameters))))
+}
+
+def is_typed_field(node) := match node {
+	Key(name, Op.Colon, kind): yes
+	_: no
 }
 
 // The digits of a number in `base` (`_` between digits), read
@@ -1630,9 +1673,9 @@ def quoted(p) {
 	written = p.code[p.at + 1 .. end - 1]
 	p.at = end
 	holed = if quote == '"' then template(written) else ø
-	if holed != ø { return ["template", holed] }
+	if holed != ø { return template_node(holed) }
 	content = unescaped(written, quote == '"')
-	[if content.length == 1 then "char" else "text", content]
+	if content.length == 1 then content[0] else content
 }
 
 // An interpolating text with a hole as its template: holes `\(x)` `\{x}` `$(x)` as `${x}`, escapes read, a literal

@@ -1,0 +1,5 @@
+# card run-wasm-lib: warp hands a module's bytes to its own runtime library, libwarp_runtime, as to any C library
+use warp_runtime
+# (module (func (export "main") (result i64) i64.const 42))
+module = [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 126, 3, 2, 1, 0, 7, 8, 1, 4, 109, 97, 105, 110, 0, 0, 10, 6, 1, 4, 0, 66, 42, 11]
+run_wasm(module)

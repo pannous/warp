@@ -1,11 +1,6 @@
 //! The `effects f` query: a function's effects as the program's answer
 use super::*;
 
-/// Rust API: resolved effects of `function` in `code`
-pub fn effects_of(code: &str, function: &str) -> Option<EffectSet> {
-	EffectReport::of(&crate::warp_parser::WarpParser::parse(code)).effects_of(function)
-}
-
 /// The effects and then the events: as a value texts like the other reflection words' answers (`f.params`), `"IO"`,
 /// `["IO" "ask"]`, `"Pure"`; else symbols, `IO`, `(IO ask)`, `Pure`
 /// `data (State IO)`: the symbols as a value, not as variables to read

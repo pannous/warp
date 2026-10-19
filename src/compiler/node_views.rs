@@ -190,14 +190,21 @@ pub fn plain_view(node: &Node) -> Node {
 	plain(node_view(node))
 }
 
-/// The plain view the analysis reads: each declared type shown in it
+/// The plain view the analysis reads: each declared type and each loop step shown in it
 pub fn analysis_view(program: &Node) -> Node {
 	plain_view(&declared_types_shown(program.clone()))
 }
 
-/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
+/// What a loop's step shows as in the analysis view, `loop·step: i++`, the way Rust's split_step tells it by its mark
+pub const SHOWN_STEP: &str = "loop·step";
+
+/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`;
+/// the step a `for` lowering appends to its loop body is marked as metadata too: shown as `loop·step: i++`
 fn declared_types_shown(node: Node) -> Node {
 	use crate::operators::Op;
+	if crate::wasm_emitter::is_step(&node) {
+		return Node::Key(Box::new(Node::Symbol(SHOWN_STEP.into())), Op::Colon, Box::new(node.drop_meta().clone()));
+	}
 	match node {
 		Node::Key(target, Op::Assign, value)
 			if let Node::Meta { node: name, data } = *target.clone()
