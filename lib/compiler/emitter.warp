@@ -852,20 +852,73 @@ dispatcher_code(f: Function): any := {
 def conditional(body: Body, test: any, yes_branch: any, no_branch: any): list {
 	c = condition(expression(body, test))
 	a = nested(body, yes_branch, 1)
-	if no_branch == ø { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.end]] }
+	if no_branch == ø { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, no_branch, 1)
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
 	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
 	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
 }
-# `while c do body`: block { loop { exit unless c; body; again } }; a `break` in body branches to the block's end
+# `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø, as Rust gives
+def unmatched(c: any, a: any, numeric: bool): list {
+	if a#1 == no_kind { return [no_kind, c + [op.if, no_value] + a#2 + [op.end]] }
+	if a#1 == "int" or a#1 == pending { return ["int", c + [op.if] + value_type("int") + converted(a, "int") + [op.else, op.i64_const, 0, op.end]] }
+	otherwise = if numeric or a#1 == "float" or a#1 == "bool" then boxed(number_value(0)) else [ref_null, gc.node]
+	["node", c + [op.if] + value_type("node") + boxed(a) + [op.else] + otherwise + [op.end]]
+}
+# `while c do body`: block { loop { exit unless c; body; again } }; a `break` in body branches to the block's end.
+# Its value is that of the body's last run, ø when it never ran (a local of the loop keeps it)
 def loop_of(body: Body, test: any, block: any): list {
+	last = fresh_local(body, "node")
+	exit_unless = entered_loop(body, test)
+	looped = nested(body, block, 2)
+	kept = if looped#1 == no_kind then looped#2 else boxed(looped) + [op.local_set] + uleb(last)
+	["node", left_loop(body, exit_unless, kept) + [op.local_get] + uleb(last)]
+}
+is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
+# the exit test of a loop, the loop entered: a `break` in its body ends it
+def entered_loop(body: Body, test: any): list {
 	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
 	body.exits += [body.depth + 1]
-	looped = nested(body, block, 2)
+	exit_unless
+}
+# the loop of its exit test and body code, the loop left
+def left_loop(body: Body, exit_unless: any, looped: any): list {
 	body.exits = body.exits[0..<(#body.exits - 1)]
-	[no_kind, [op.block, no_value, op.loop, no_value] + exit_unless + dropped(looped) + [op.br, 0, op.end, op.end]]
+	[op.block, no_value, op.loop, no_value] + exit_unless + looped + [op.br, 0, op.end, op.end]
+}
+# n for its effect alone, its value never made: a statement, so an `if` or a loop only runs its branches or body as
+# statements too (no value boxed for nothing)
+def effect(body: Body, n: any): list {
+	if is_group(n) {
+		if not is_block(n) { return dropped(statement(body, n)) }
+		code = []
+		for item in n.map(x => x) { code += effect(body, item) }
+		return code
+	}
+	if not (type(n) is key) { return dropped(statement(body, n)) }
+	operator = op_of(n)
+	left = key_of(n)
+	if operator == "then" and type(left) is key and op_of(left) == "if" {
+		return condition(expression(body, right_of_if(left))) + [op.if, no_value] + nested_effect(body, value_of(n), 1) + [op.end]
+	}
+	if operator == "else" and type(left) is key and op_of(left) == "then" and type(key_of(left)) is key and op_of(key_of(left)) == "if" {
+		c = condition(expression(body, right_of_if(key_of(left))))
+		return c + [op.if, no_value] + nested_effect(body, value_of(left), 1) + [op.else] + nested_effect(body, value_of(n), 1) + [op.end]
+	}
+	if operator == "do" and type(left) is key and op_of(left) == "while" {
+		exit_unless = entered_loop(body, value_of(left))
+		return left_loop(body, exit_unless, nested_effect(body, value_of(n), 2))
+	}
+	dropped(statement(body, n))
+}
+# a group of statements: a block, not a map or the spaced `y = 2 x`
+is_block(n: any): bool := #n > 0 and separator_of(n) != " " and (bracket_of(n) == "{" or bracket_of(n) == "" or separator_of(n) == ";") and not n.all(is_entry)
+def nested_effect(body: Body, n: any, blocks: int): list {
+	body.depth += blocks
+	code = effect(body, n)
+	body.depth -= blocks
+	code
 }
 
 # the code of n read inside `blocks` more blocks, loops or ifs
@@ -892,12 +945,25 @@ appended(body: Body, target_name: any, addition: any): any := {
 	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, expression(body, addition)])) }
 	ø
 }
+# the statements in order, the value that of the last; the value of a loop body is that of the item before the step a `for`
+# appends to it (`loop·step: i++`)
 def sequence(body: Body, items: any): list {
 	if #items == 0 { return refuse("an empty block") }
+	stepped = #items > 1 and is_loop_step(items#(#items))
+	count = if stepped then #items - 1 else #items
 	code = []
-	for item in items[0..<(#items - 1)] { code += dropped(statement(body, item)) }
-	last = statement(body, items#(#items))
+	for item in items[0..<(count - 1)] { code += effect(body, item) }
+	last = statement(body, items#count)
 	code += last#2
+	if not stepped { return [last#1, code] }
+	if last#1 == no_kind {
+		code += effect(body, items#(#items))
+		return [no_kind, code]
+	}
+	held = fresh_local(body, last#1)
+	code += [op.local_set] + uleb(held)
+	code += effect(body, items#(#items))
+	code += [op.local_get] + uleb(held)
 	[last#1, code]
 }
 # a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
@@ -1031,7 +1097,7 @@ def key_expression(body: Body, n: any): list {
 	if operator == "=" { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration(body, right) }
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
-	if operator == ":" and left == symbol("loop·step") { return expression(body, right) }
+	if is_loop_step(n) { return expression(body, right) }
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
 	if operator == ":" and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
