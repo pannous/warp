@@ -122,6 +122,7 @@ quoted_text(t: text): text := {
 # 1 for the bytes of `"` and `\`, which a quoted text escapes
 escaped_byte(b: int): int := if b == 34 or b == 92 then 1 else 0
 list_text(xs: list): text := "[" + items_text(xs) + "]"
+# the items of a list as a list shows them, a space between: `print a 3` writes its values so
 items_text(xs: list): text := {
 	inner = ""
 	for x in xs {
@@ -136,15 +137,35 @@ key_text(entry: any): text := {
 	if is_null(value) == 0 and marked_kind(value) == 8 { return key_name(entry) + node_text(value) }
 	key_name(entry) + ":" + node_code(value)
 }
-# `a + b` of values known only at run time: ø adds nothing, lists and texts join, numbers add
+# `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any): any := {
-	if is_null(a) == 1 { return b }
-	if is_null(b) == 1 { return a }
-	if kind_code(a) == 8 and kind_code(b) == 8 { return list_join(unboxed_list(a), unboxed_list(b)) }
+	# ø, also `[]` in the lowered program, beside a list is that list, beside a text "ø"; beside a number Rust fails
+	if is_null(a) == 1 and is_null(b) == 0 and kind_code(b) == 8 { return b }
+	if is_null(b) == 1 and is_null(a) == 0 and kind_code(a) == 8 { return a }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return node_text(a) + node_text(b) }
+	if is_null(a) + is_null(b) > 0 { fail() }
+	if kind_code(a) == 8 and kind_code(b) == 8 { return list_join(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_add(a, b) }
-	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) + unboxed_int(b) }
+	if kind_code(a) == 1 and kind_code(b) == 1 { return checked_add(unboxed_int(a), unboxed_int(b)) }
 	float_of_node(a) + float_of_node(b)
+}
+# a + b, a - b, a * b of ints; past i64 the ints of Rust grow unbounded, here they trap
+checked_add(a: int, b: int): int := {
+	added = a + b
+	if (b > 0 and added < a) or (b < 0 and added > a) { fail() }
+	added
+}
+checked_subtract(a: int, b: int): int := {
+	difference = a - b
+	if (b > 0 and difference > a) or (b < 0 and difference < a) { fail() }
+	difference
+}
+# 2^63 bounds the product; one rounded to it from just below traps too, loud rather than wrong
+checked_multiply(a: int, b: int): int := {
+	estimate = float(a) * float(b)
+	bound = float(4611686018427387904) + float(4611686018427387904)
+	if estimate >= bound or estimate < 0 - bound { fail() }
+	a * b
 }
 # `a += b` of values known only at run time: a list grows in place as list_append, anything else is a + b
 node_append(a: any, b: any) := {
@@ -164,6 +185,7 @@ node_equal(a: any, b: any): bool := {
 	if kind_code(a) == 16 or kind_code(b) == 16 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == 5 or kind_code(b) == 5 { return kind_code(a) == kind_code(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
+	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_order(a, b) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
 	float_of_node(a) == float_of_node(b)
 }
@@ -235,7 +257,7 @@ field_with(m: any, name: text, value: any): any := {
 	m
 }
 # 1 for a boxed text or character, else 0
-textual_node(n: any): int := if kind_code(n) == 3 or kind_code(n) == 4 then 1 else 0
+textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
 # the bytes of the code point whose UTF-8 starts with the byte lead
 code_point_width(lead: int): int := if lead < 128 then 1 else if lead < 224 then 2 else if lead < 240 then 3 else 4
 # the code point whose UTF-8 bytes start at byte `at` of t
@@ -695,6 +717,11 @@ upper_half(v: float): float := {
 float_of_node(n: any): float := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
+}
+# a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
+number_node(n: any): any := {
+	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { fail() }
+	n
 }
 # a boxed int where an int is needed; any other value traps, as Rust fails on it
 int_of_node(n: any): int := {

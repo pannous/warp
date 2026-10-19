@@ -1,0 +1,15 @@
+# emitter core: runtime.warp float_digits finds the shortest digits at the hard cases: 1e23 (its float lies below,
+# 9.999999999999999e22 is longer), the largest float (no upper neighbour), the smallest subnormal and normal, 2^63,
+# powers of two (a lower gap half the upper), and sums whose shortest text needs all 16 or 17 digits
+# [1e23 1.7976931348623157e308 5e-324 2.2250738585072014e-308 9.223372036854776e18 0.7999999999999999 0.14285714285714285 123.456 -6.666666666666667e-6 9.007199254740992e15 5e-15]
+ten23 = float(1)
+for i in 1 to 23 { ten23 = ten23 * 10 }
+largest = float(2) - float(1) / 4503599627370496
+for i in 1 to 1023 { largest = largest * 2 }
+subnormal = float(1)
+for i in 1 to 1074 { subnormal = subnormal / 2 }
+normal = float(1)
+for i in 1 to 1022 { normal = normal / 2 }
+two63 = float(1)
+for i in 1 to 63 { two63 = two63 * 2 }
+print [ten23, largest, subnormal, normal, two63, float(1) / 10 + float(7) / 10, float(1) / 7, float(123456) / 1000, float(-2) / 3 / 100000, float(9007199254740992), float(5) / 1000000000000000]

@@ -169,9 +169,13 @@ cloud_run() {
 	local report=$REPORTS/$run.txt previous
 	rank "${logs[@]}" | tee "$report"
 	mkdir -p "$(dirname "$COUNTS")"
-	# against the last complete run of the same stages: a line noting "incomplete" lacks the tests of its killed part
+	# against the last complete run of the same stages on an ancestor of this tip (another session's branch run would
+	# count that branch's fixes as regressions): a line noting "incomplete" lacks the tests of its killed part
 	previous=$(grep -v -e '^#' -e incomplete "$COUNTS" 2>/dev/null | awk -v stage="$STAGE" '
-		{ plus = index($2, "+"); if ((plus ? substr($2, plus + 1) : "") == stage) last = $2 } END { print last }')
+		{ plus = index($2, "+"); if ((plus ? substr($2, plus + 1) : "") == stage) print $2 }' | tail -r |
+		while read -r candidate; do
+			git merge-base --is-ancestor "${candidate%%+*}" "$tip" 2>/dev/null && { echo "$candidate"; break; }
+		done)
 	[ -n "$previous" ] && newly_failed "$previous" "${logs[@]}" | tee -a "$report"
 	printf '%s  %s  %s  %s\n' "$(date +%F)" "$run" "$(head -1 "$report" | sed 's/^self-hosted: //; s/ passed//')" \
 		"data/self-hosted/$run.txt" >> "$COUNTS"

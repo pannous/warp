@@ -3823,8 +3823,8 @@ PASSED:
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
-  ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
+  ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
@@ -6313,6 +6313,8 @@ PASSED:
   ✓ welcoming::test_map_broadcast_hint::the_call_form_is_hinted
   ✓ welcoming::test_map_broadcast_hint::the_method_form_is_hinted
   ✓ welcoming::test_map_broadcast_hint::the_phrase_forms_are_hinted
+  ✓ welcoming::test_near_miss_words::test_a_typo_of_a_builtin_method_warns
+  ✓ welcoming::test_near_miss_words::test_every_builtin_method_is_offered_once
   ✓ welcoming::test_open_range_slices::a_slice_from_the_start
   ✓ welcoming::test_open_range_slices::a_slice_to_the_end
   ✓ welcoming::test_own_definition_hint::the_program_s_own_parse_json_gets_no_note
@@ -6483,6 +6485,12 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✗ INCOMPLETE: 1 test binaries ended without a result (crashed or killed)
+    RERUN of tests/main.rs: 27 unfinished or failed tests
+    ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it: (no output)
+    CRASHED again, while running: (no test started)
+    rerun: 26 passed, 1 failed, crashed
 
 SUMMARY:
-16 ignored, 6480 passed, 0 failed, 6480 total tested
+16 ignored, 6482 passed, 2 failed, 6484 total tested
