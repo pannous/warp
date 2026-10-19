@@ -1,0 +1,7 @@
+# emitter: a global first declared inside a function (main holds the analyzer's bare `global total`), then read at main
+start(n: int) := {
+	global total = n
+	0
+}
+start(5)
+total + 1
