@@ -1,6 +1,7 @@
 mod test_comment_meta;
 mod test_container_characters;
 mod test_eval_word; // card eval
+mod test_eval_written_atoms; // card eval-code
 mod test_grouped_parts; // card data-op
 mod test_list_separator; // card keep-list
 mod test_node_api;

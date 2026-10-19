@@ -4,7 +4,7 @@ use super::*;
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
 /// `sheet: data` in a definition's head
 const DATA_PARAMETER: &str = ": data";
-pub(crate) const STD_MODULES: [(&str, &str); 35] = [
+pub(crate) const STD_MODULES: [(&str, &str); 36] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
@@ -40,6 +40,7 @@ pub(crate) const STD_MODULES: [(&str, &str); 35] = [
 	("case_table", include_str!("../../lib/case_table.warp")),
 	("case_tables", include_str!("../../lib/case_tables.warp")),
 	("uncertain", include_str!("../../lib/uncertain.warp")),
+	("wasmtime", include_str!("../../lib/wasmtime.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
@@ -179,8 +180,9 @@ pub fn defined_function_name(line: &str) -> &str {
 pub fn std_function_names() -> &'static std::collections::HashSet<String> {
 	static NAMES: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
 	NAMES.get_or_init(|| {
+		// `ls(…) := …`, and a bang word `is!(…) := …` (card warp-is-tests)
 		let defined = |line: &str| {
-			let name: String = line.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+			let name: String = line.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '!').collect();
 			(!name.is_empty() && line[name.len()..].starts_with('(') && line.contains(":=")).then_some(name)
 		};
 		STD_MODULES.iter().flat_map(|(_, source)| source.lines().filter_map(defined)).collect()

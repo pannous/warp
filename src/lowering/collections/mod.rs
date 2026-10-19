@@ -21,3 +21,4 @@ pub mod of_lookups;
 pub mod one_entry_maps;
 pub mod shared_arrays;
 pub mod tree_walks;
+pub mod vector_parameters;

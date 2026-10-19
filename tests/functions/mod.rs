@@ -1,7 +1,6 @@
 mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
-mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
@@ -224,5 +223,6 @@ mod test_untyped_predicate_passed; // card untyped-passed
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
+mod test_wasm_instruction_bodies; // card wasm-body
 mod test_whole_float_to_int_parameter;
 mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow // card is-early-return

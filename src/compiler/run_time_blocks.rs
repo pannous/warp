@@ -19,6 +19,40 @@ thread_local! {
 #[cfg(feature = "native")]
 pub(crate) const BLOCK_MODULES_KEPT: usize = 256;
 
+thread_local! {
+	/// The atoms of code parsed at run time that no program value holds, by their written form (held_code)
+	static WRITTEN_ATOMS: std::cell::RefCell<std::collections::HashMap<String, Node>> = Default::default();
+}
+
+/// Code parsed at run time as the program can hold it (card eval-code): an atom no program value is (π, 2√2, `1 day`,
+/// nan, 1+2i) travels as the symbol of its written form, and eval_block reads it back as the atom
+pub fn held_code(code: Node) -> Node {
+	use crate::extensions::numbers::Number;
+	match code {
+		Node::Empty | Node::True | Node::False | Node::Char(_) | Node::Text(_) | Node::Symbol(_) => code,
+		Node::Number(Number::Int(_) | Number::Float(_) | Number::BigInt(_))
+		| Node::Number(Number::Quotient(..) | Number::BigQuotient(_)) => code,
+		Node::Key(..) | Node::List(..) | Node::Meta { .. } => crate::node::children_rewritten(code, held_code),
+		Node::Type { name, body } => Node::Type { name: Box::new(held_code(*name)), body: Box::new(held_code(*body)) },
+		atom => {
+			let written = atom.serialize().trim().to_string();
+			WRITTEN_ATOMS.with_borrow_mut(|atoms| atoms.insert(written.clone(), atom));
+			Node::Symbol(written)
+		}
+	}
+}
+
+/// The atoms held_code wrote as symbols, back
+fn with_written_atoms(code: Node) -> Node {
+	match code {
+		Node::Symbol(ref name) => WRITTEN_ATOMS.with_borrow(|atoms| atoms.get(name).cloned()).unwrap_or(code),
+		Node::Type { name, body } => {
+			Node::Type { name: Box::new(with_written_atoms(*name)), body: Box::new(with_written_atoms(*body)) }
+		}
+		other => crate::node::children_rewritten(other, with_written_atoms),
+	}
+}
+
 /// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
 /// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
 /// the program's function `definitions` follow. Only the names the block or the definitions mention are bound.
@@ -33,7 +67,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
 		_ => vec![],
 	};
-	let block = spaced(block);
+	let block = spaced(with_written_atoms(block));
 	let definitions: Vec<Node> = definitions.as_items().into_iter().map(spaced).collect();
 	let mentioned = |name: &str| [&block].into_iter().chain(&definitions).any(|part| names_or_interpolates(part, name));
 	let bound: Vec<(String, Node)> =
@@ -64,10 +98,10 @@ pub(crate) fn assignment(name: &str, value: Node) -> Node {
 	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Assign, Box::new(value))
 }
 
-/// A value written into the block's program: a number, text or character as itself, anything else as data
+/// A value written into the block's program: a number, bool, text or character as itself, anything else as data
 pub(crate) fn as_written(value: Node) -> Node {
 	match value.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
+		Node::Number(_) | Node::True | Node::False | Node::Text(_) | Node::Char(_) | Node::Empty => value,
 		_ => Node::List(
 			vec![Node::Symbol(crate::lowering::blocks::DATA_WORD.to_string()), value],
 			Bracket::None,
@@ -146,10 +180,12 @@ pub(crate) fn run_cached_block(program: Node) -> Node {
 		Some(module) => module,
 		None => {
 			COMPILED_BLOCKS.with(|count| count.set(count.get() + 1));
-			let module = match lower_for_emission(program).map(|node| emit_module(&node)) {
-				Ok(Ok(module)) => module,
-				Ok(Err(type_error)) => return type_error,
-				Err(final_value) => return final_value,
+			// `a ≈ b` calls the prelude's alike, which only code generation names: loaded as for a program (card code-run)
+			let compiled =
+				loading_compiler_words(|| lower_for_emission(program.clone()).and_then(|node| emit_module(&node)));
+			let module = match compiled {
+				Ok(module) => module,
+				Err(type_error_or_final_value) => return type_error_or_final_value,
 			};
 			BLOCK_MODULES.with(|modules| {
 				let mut modules = modules.borrow_mut();

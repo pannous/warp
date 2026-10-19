@@ -153,10 +153,16 @@ run_tests_here() {
 			echo "cloud-test: the runtime stub's build failed, the executable tests build it themselves" >> "$HERE_WORK/log.txt"
 		fi
 	fi
+	# the file the tested tree's [env] names in WARP_EMIT_REFUSALS (scripts/self-hosted-suite.sh): emptied before the
+	# tests, its lines appended to the log after them (sent to stderr they reached the output the CLI tests check)
+	local refusals
+	refusals=$(sed -n 's/^WARP_EMIT_REFUSALS = "\(.*\)"$/\1/p' .cargo/config.toml 2>/dev/null)
+	[ -n "$refusals" ] && rm -f "$refusals"
 	local test_start=$SECONDS
 	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
+	[ -n "$refusals" ] && [ -f "$refusals" ] && cat "$refusals" >> "$HERE_WORK/log.txt"
 	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" > "$HERE_WORK/summary.txt"
 	{
 		echo "run: $name"

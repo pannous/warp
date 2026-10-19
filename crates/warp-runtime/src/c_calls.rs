@@ -1,7 +1,8 @@
 //! Calling C from a program, for a store of any state that keeps the run's C handles: loading libraries, the
 //! hand-linked libc functions, and one wrapper for every C function as c_signatures.rs describes it. warp links these
 //! after reading the headers (src/ffi/link.rs); an executable links the functions it carries (standalone.rs)
-use crate::c_signatures::{CFunction, CPointer, ParamType, RetType, HAND_LINKED_LIBC};
+use crate::c_signatures::{CFunction, CPointer, Failure, ParamType, RetType, HAND_LINKED_LIBC};
+use crate::c_structs::CStruct;
 use libloading::Library;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -181,8 +182,8 @@ fn wasm_param(param: ParamType) -> Option<ValType> {
 		ParamType::I64 => Some(ValType::I64),
 		ParamType::F32 => Some(ValType::F32),
 		ParamType::F64 => Some(ValType::F64),
-		ParamType::Bytes => Some(ValType::ANYREF),
-		ParamType::Out | ParamType::Length => None,
+		ParamType::Bytes | ParamType::StructIn | ParamType::StructsIn => Some(ValType::ANYREF),
+		ParamType::Out | ParamType::ErrorOut | ParamType::Length | ParamType::StructOut | ParamType::StructsOut => None,
 		ParamType::I32 | ParamType::Ptr | ParamType::Handle => Some(ValType::I32),
 	}
 }
@@ -190,7 +191,7 @@ fn wasm_param(param: ParamType) -> Option<ValType> {
 /// The wasm results of a C function: a text node, a handle id, else its number
 fn wasm_results(function: &CFunction) -> Vec<ValType> {
 	match (function.result, function.ret_type) {
-		(Some(CPointer::Text), _) => vec![ValType::ANYREF],
+		(Some(CPointer::Text | CPointer::Struct), _) => vec![ValType::ANYREF],
 		(Some(_), _) => vec![ValType::I32],
 		(None, RetType::Void) => vec![],
 		(None, RetType::I64) => vec![ValType::I64],
@@ -220,9 +221,10 @@ pub fn link_c_function<T: CallsC>(
 	let func_type = FuncType::new(engine, params, wasm_results(&function));
 	let (module, name) = (function.module.clone(), function.name.clone());
 	let thread_safe = is_thread_safe(&function.library);
+	let layouts: Vec<Option<CStruct>> = function.layouts.iter().map(|text| CStruct::of_text(text)).collect();
 	linker.func_new(&module, &name, func_type, move |mut caller, params, results| {
 		let _turn = (!thread_safe).then(|| NATIVE_CALL_TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
-		call_c_function(&mut caller, &function, func_ptr, params, results)
+		call_c_function(&mut caller, &function, &layouts, func_ptr, params, results)
 	})?;
 	Ok(())
 }
@@ -230,22 +232,29 @@ pub fn link_c_function<T: CallsC>(
 fn call_c_function<T: CallsC>(
 	caller: &mut Caller<'_, T>,
 	function: &CFunction,
+	layouts: &[Option<CStruct>],
 	func_ptr: usize,
 	params: &[Val],
 	results: &mut [Val],
 ) -> Result<()> {
-	// lives through the call: a `char **` out-pointer (strtod's endptr) is written there
-	let mut out_slot: usize = 0;
-	// live through the call too: the copies of the byte parameters
-	let mut buffers: Vec<Vec<u8>> = vec![];
-	let args = native_arguments(caller, &function.name, params, &function.param_types, &mut out_slot, &mut buffers)?;
+	// live through the call: the out-pointer slots, the copies of byte and struct parameters, the struct outputs
+	let mut memory = CallMemory::default();
+	let args = native_arguments(caller, function, layouts, params, &mut memory)?;
 	let returned = unsafe { call_native_function(func_ptr, &args, function.ret_type) };
+	let failed = match function.failure {
+		Failure::None => false,
+		Failure::NotNull => returned != 0,
+		Failure::False => returned as u8 == 0,
+	};
+	if failed || memory.error_slots.iter().any(|slot| *slot != 0) {
+		wasmtime::bail!("{} failed (C result {returned:#x})", function.name);
+	}
 	if let Some(pointee) = &function.out_pointee {
-		if out_slot == 0 {
+		if *memory.out_slot == 0 {
 			wasmtime::bail!("{} gave no {pointee} (C status {})", function.name, returned as i32);
 		}
 	}
-	let pointer = if function.out_pointee.is_some() { out_slot } else { returned as usize };
+	let pointer = if function.out_pointee.is_some() { *memory.out_slot } else { returned as usize };
 	let Some(result) = results.first_mut() else {
 		return Ok(());
 	};
@@ -256,10 +265,42 @@ fn call_c_function<T: CallsC>(
 			let text = (!pointer.is_null()).then(|| unsafe { std::ffi::CStr::from_ptr(pointer) }.to_bytes().to_vec());
 			text_node(caller, text.as_deref())?
 		}
+		Some(CPointer::Struct) => struct_output(caller, &memory)?,
 		Some(_) => Val::I32(caller.data_mut().c_handles().id_of(pointer)),
 		None => native_result(returned, function.ret_type),
 	};
 	Ok(())
+}
+
+/// What a call's arguments point to, alive through the call
+#[derive(Default)]
+struct CallMemory {
+	/// the first out-pointer's (a `char **` like strtod's endptr, or the handle that is the result)
+	out_slot: Box<usize>,
+	/// one per error-shaped out-pointer, sized before the call so their addresses stay put
+	error_slots: Vec<usize>,
+	/// the copies of byte and struct parameters
+	buffers: Vec<Vec<u8>>,
+	/// the first struct output: its layout, how many, and its buffer
+	output: Option<(CStruct, Option<usize>, usize)>,
+}
+
+/// The struct output of a call as a warp map, or a list of maps
+fn struct_output<T: CallsC>(caller: &mut Caller<'_, T>, memory: &CallMemory) -> Result<Val> {
+	let Some((layout, count, buffer)) = &memory.output else {
+		return Ok(Val::AnyRef(None));
+	};
+	let bytes = &memory.buffers[*buffer];
+	let handles = caller.data_mut().c_handles();
+	let mut pointer_id = |pointer| handles.id_of(pointer);
+	let value = match count {
+		Some(count) => serde_json::Value::Array(
+			(0..*count).map(|index| layout.read(&bytes[index * layout.size()..], &mut pointer_id)).collect(),
+		),
+		None => layout.read(bytes, &mut pointer_id),
+	};
+	let builders = crate::gc_values::Builders::of(&mut |name| caller.get_export(name))?;
+	builders.build(&value, &mut wasmtime::AsContextMut::as_context_mut(caller))
 }
 
 /// A warp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
@@ -278,57 +319,87 @@ struct NativeArguments {
 
 /// The arguments of a native call, one per C parameter: numbers as they are (a `float` in the low half of its
 /// register), a memory pointer as the address of its text in linear memory, a handle id as its C pointer; the first
-/// out-pointer gets `out_slot`, others NULL; a byte parameter points to its copy in `buffers`, its length follows
+/// out-pointer gets the out slot, others NULL, error-shaped ones a slot each; a byte or struct parameter points to its
+/// copy, the length after it says how many; a struct output points to zeroed bytes read back after the call
 fn native_arguments<T: CallsC>(
 	caller: &mut Caller<'_, T>,
-	name: &str,
+	function: &CFunction,
+	layouts: &[Option<CStruct>],
 	params: &[Val],
-	param_types: &[ParamType],
-	out_slot: &mut usize,
-	buffers: &mut Vec<Vec<u8>>,
+	memory: &mut CallMemory,
 ) -> Result<NativeArguments> {
+	let name = function.name.as_str();
 	let mut args = NativeArguments::default();
 	let (mut integer, mut float) = (0, 0);
-	let mut warp_params = params.iter();
-	let mut out_slot = Some(out_slot);
-	for ptype in param_types {
-		let value = if *ptype == ParamType::Out {
-			Some(out_slot.take().map_or(0, |slot| slot as *mut usize as u64))
-		} else if *ptype == ParamType::Length {
-			Some(buffers.last().map_or(0, Vec::len) as u64)
-		} else {
-			let Some(param) = warp_params.next() else { break };
-			match ptype {
-				ParamType::I32 => Some(param.unwrap_i32() as u64),
-				ParamType::I64 => Some(param.unwrap_i64() as u64),
-				ParamType::Ptr => Some(memory_pointer(caller, param.unwrap_i32() as usize) as u64),
-				ParamType::Handle => {
-					let id = param.unwrap_i32();
-					let pointer = caller.data_mut().c_handles().pointer(id);
-					Some(
-						pointer
-							.ok_or_else(|| wasmtime::Error::msg(format!("{name}: {id} is no C handle of this run")))?
-							as u64,
-					)
+	let mut warp_params = params.iter().peekable();
+	let mut first_out = true;
+	let error_outs = function.param_types.iter().filter(|param| **param == ParamType::ErrorOut).count();
+	memory.error_slots = vec![0; error_outs];
+	let mut error_index = 0;
+	// how many items the last bytes or structs parameter had: the Length after it
+	let mut count = 0;
+	for (index, ptype) in function.param_types.iter().enumerate() {
+		let layout = || {
+			layouts
+				.get(index)
+				.cloned()
+				.flatten()
+				.ok_or_else(|| wasmtime::Error::msg(format!("{name}: no struct layout")))
+		};
+		let value = match ptype {
+			ParamType::Out => {
+				let slot = std::mem::take(&mut first_out).then_some(&mut *memory.out_slot as *mut usize as u64);
+				Some(slot.unwrap_or(0))
+			}
+			ParamType::ErrorOut => {
+				error_index += 1;
+				memory.error_slots.get_mut(error_index - 1).map(|slot| slot as *mut usize as u64)
+			}
+			ParamType::Length => Some(count),
+			ParamType::StructOut | ParamType::StructsOut => {
+				let layout = layout()?;
+				// the size_t after a list output is passed by warp: how many
+				let items = (*ptype == ParamType::StructsOut)
+					.then(|| warp_params.peek().map_or(0, |next| next.i64().unwrap_or(0).max(0) as usize));
+				memory.buffers.push(vec![0; layout.size() * items.unwrap_or(1)]);
+				let pointer = memory.buffers.last().map(|bytes| bytes.as_ptr() as u64);
+				if memory.output.is_none() {
+					memory.output = Some((layout, items, memory.buffers.len() - 1));
 				}
-				ParamType::F32 | ParamType::F64 => {
-					let bits = if *ptype == ParamType::F32 {
-						param.unwrap_f32().to_bits() as u64
-					} else {
-						crate::floats::canonical_nan(param.unwrap_f64()).to_bits()
-					};
-					*args
-						.floats
-						.get_mut(float)
-						.ok_or_else(|| wasmtime::Error::msg(format!("{name}: more than 8 float parameters")))? = f64::from_bits(bits);
-					float += 1;
-					None
+				pointer
+			}
+			passed => {
+				let Some(param) = warp_params.next() else { break };
+				match passed {
+					ParamType::I32 => Some(param.unwrap_i32() as u64),
+					ParamType::I64 => Some(param.unwrap_i64() as u64),
+					ParamType::Ptr => Some(memory_pointer(caller, param.unwrap_i32() as usize) as u64),
+					ParamType::Handle => Some(handle_pointer(caller, name, param.unwrap_i32())? as u64),
+					ParamType::F32 | ParamType::F64 => {
+						let bits = if *passed == ParamType::F32 {
+							param.unwrap_f32().to_bits() as u64
+						} else {
+							crate::floats::canonical_nan(param.unwrap_f64()).to_bits()
+						};
+						*args
+							.floats
+							.get_mut(float)
+							.ok_or_else(|| wasmtime::Error::msg(format!("{name}: more than 8 float parameters")))? = f64::from_bits(bits);
+						float += 1;
+						None
+					}
+					ParamType::Bytes => {
+						memory.buffers.push(byte_values(caller, name, param)?);
+						count = memory.buffers.last().map_or(0, Vec::len) as u64;
+						memory.buffers.last().map(|bytes| bytes.as_ptr() as u64)
+					}
+					ParamType::StructIn | ParamType::StructsIn => {
+						let (pointer, items) = struct_values(caller, name, param, &layout()?, *passed, memory)?;
+						count = items as u64;
+						Some(pointer as u64)
+					}
+					_ => unreachable!("out-pointers, lengths and outputs are filled above"),
 				}
-				ParamType::Bytes => {
-					buffers.push(byte_values(caller, name, param)?);
-					buffers.last().map(|bytes| bytes.as_ptr() as u64)
-				}
-				ParamType::Out | ParamType::Length => unreachable!("out-pointers and lengths are filled above"),
 			}
 		};
 		if let Some(value) = value {
@@ -342,13 +413,57 @@ fn native_arguments<T: CallsC>(
 	Ok(args)
 }
 
-/// The bytes a warp value gives a `const uint8_t *`: a text's UTF-8, a list's byte values (each 0 to 255)
-fn byte_values<T>(caller: &mut Caller<'_, T>, name: &str, value: &Val) -> Result<Vec<u8>> {
+/// The C pointer of a handle id
+fn handle_pointer<T: CallsC>(caller: &mut Caller<'_, T>, name: &str, id: i32) -> Result<usize> {
+	caller
+		.data_mut()
+		.c_handles()
+		.pointer(id)
+		.ok_or_else(|| wasmtime::Error::msg(format!("{name}: {id} is no C handle of this run")))
+}
+
+/// A warp value as JSON, as C parameters read it
+fn json_value<T>(caller: &mut Caller<'_, T>, name: &str, value: &Val) -> Result<serde_json::Value> {
 	let memory = caller
 		.get_export(crate::gc_values::MEMORY)
 		.and_then(|export| export.into_memory())
 		.ok_or_else(|| wasmtime::Error::msg(format!("{name}: the program exports no memory")))?;
-	let value = crate::gc_values::json_of(value, &mut wasmtime::AsContextMut::as_context_mut(caller), memory)?;
+	crate::gc_values::json_of(value, &mut wasmtime::AsContextMut::as_context_mut(caller), memory)
+}
+
+/// A struct parameter's pointer and item count: a map (a list of maps for StructsIn) written into a buffer of
+/// `memory`, a handle id as its pointer, ø as NULL
+fn struct_values<T: CallsC>(
+	caller: &mut Caller<'_, T>,
+	name: &str,
+	value: &Val,
+	layout: &CStruct,
+	ptype: ParamType,
+	memory: &mut CallMemory,
+) -> Result<(usize, usize)> {
+	let value = json_value(caller, name, value)?;
+	let items = match (value, ptype) {
+		(serde_json::Value::Null, _) => return Ok((0, 0)),
+		(serde_json::Value::Number(id), ParamType::StructIn) => {
+			return Ok((handle_pointer(caller, name, id.as_i64().unwrap_or(-1) as i32)?, 1));
+		}
+		(serde_json::Value::Array(items), ParamType::StructsIn) => items,
+		(item, _) => vec![item],
+	};
+	let mut bytes = vec![0; layout.size() * items.len()];
+	let handles = caller.data_mut().c_handles();
+	for (index, item) in items.iter().enumerate() {
+		layout
+			.write(item, &mut bytes[index * layout.size()..], &mut |id| handles.pointer(id))
+			.map_err(|problem| wasmtime::Error::msg(format!("{name}: {problem}")))?;
+	}
+	memory.buffers.push(bytes);
+	Ok((memory.buffers.last().map_or(0, |bytes| bytes.as_ptr() as usize), items.len()))
+}
+
+/// The bytes a warp value gives a `const uint8_t *`: a text's UTF-8, a list's byte values (each 0 to 255)
+fn byte_values<T>(caller: &mut Caller<'_, T>, name: &str, value: &Val) -> Result<Vec<u8>> {
+	let value = json_value(caller, name, value)?;
 	let not_bytes = |what: &dyn std::fmt::Display| {
 		wasmtime::Error::msg(format!("{name} takes bytes: a text or a list of 0 to 255, not {what}"))
 	};

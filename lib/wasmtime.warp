@@ -1,0 +1,21 @@
+// The standard library module wasmtime (card wasmtime-ffi): `use wasmtime`, together with Homebrew's C library
+// libwasmtime, called as any C library through its headers. run(bytes) runs a module's bytes with WASI's stdout and
+// gives its main's result
+run(module_bytes: any) := {
+	// without signal-based traps: wasmtime's signal handlers would replace warp's own, warp's next trap a crash
+	engine_config = wasm_config_new()
+	wasmtime_config_signals_based_traps_set(engine_config, false)
+	engine = wasm_engine_new_with_config(engine_config)
+	store = wasmtime_store_new(engine, 0, 0)
+	context = wasmtime_store_context(store)
+	linker = wasmtime_linker_new(engine)
+	wasmtime_linker_define_wasi(linker)
+	wasi = wasi_config_new()
+	wasi_config_inherit_stdout(wasi)
+	wasmtime_context_set_wasi(context, wasi)
+	module = wasmtime_module_new(engine, module_bytes)
+	instance = wasmtime_linker_instantiate(linker, context, module)
+	main = wasmtime_instance_export_get(context, instance, "main")
+	results = wasmtime_func_call(context, main.of.func, [], 1)
+	results#1.of.i64
+}

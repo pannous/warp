@@ -59,6 +59,9 @@ pub struct CompileContext {
 	pub fast_functions: HashSet<String>,
 	/// the modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	pub early_class_modules: HashSet<PathBuf>,
+	/// the used files' classes it put in front: the loader's passes of a file read their fields (a match arm
+	/// `Holds(box) =>` binds box) though the declarations are left out of the file
+	pub early_file_classes: Vec<Node>,
 	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
 	/// class_methods reads `n + 2` of `n = note_value(C4)` as Note's plus before the module joins the program
 	pub module_returned_classes: HashMap<String, String>,
@@ -85,6 +88,9 @@ pub struct CompileContext {
 	pub written_problems: HashSet<String>,
 	/// the functions of the program being lowered, by name: a GPU kernel may call them (card gpu-functions)
 	pub(crate) program_functions: HashMap<String, ProgramFunction>,
+	/// the values the program's main level assigns its variables first, by name: a shader reads a vector of them as a
+	/// vecNf (card kernel-global-lists)
+	pub(crate) program_values: HashMap<String, crate::node::Node>,
 	/// the number of the next temporary the compile invents across passes (`race·0`, `item·0`)
 	pub fresh_number: usize,
 	/// how deep in compiles we are: only the outermost one starts its fresh numbers from 0
@@ -123,6 +129,7 @@ impl Default for CompileContext {
 			fast_program: false,
 			fast_functions: HashSet::new(),
 			early_class_modules: HashSet::new(),
+			early_file_classes: vec![],
 			module_returned_classes: HashMap::new(),
 			module_instance_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
@@ -134,6 +141,7 @@ impl Default for CompileContext {
 			float_kernels: HashMap::new(),
 			written_problems: HashSet::new(),
 			program_functions: HashMap::new(),
+			program_values: HashMap::new(),
 			fresh_number: 0,
 			compile_depth: 0,
 			compiler_words: vec![],

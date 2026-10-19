@@ -1,0 +1,7 @@
+// `text(x)` is x's text as `x as text` gives it, and `x === ø` is `x == ø` (ø and an empty list are nothing)
+shown(a: any) := text(a) + "!"
+print shown(7)
+print shown([1, "b"])
+none_yet = []
+print none_yet === ø
+none_yet !== ø

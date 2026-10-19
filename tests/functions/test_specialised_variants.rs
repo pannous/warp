@@ -21,6 +21,7 @@ fn a_constant_argument_unrolls_the_recursion() {
 
 #[test]
 fn an_unbounded_specialisation_keeps_the_call() {
+	#[cfg(feature = "native")]
 	let code = "up(x, n) := if n > 100 then x else up(x + 1, n + 1); y = 0; up(y, 0)";
 	#[cfg(feature = "native")]
 	{
