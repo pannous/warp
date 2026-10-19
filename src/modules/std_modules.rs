@@ -286,6 +286,11 @@ pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
 	})
 }
 
+/// The prelude's declaration of the class (`class Error { message: text }`), which a program's class may extend
+pub fn prelude_class(class: &str) -> Option<Node> {
+	prelude_declarations_of(&[class]).into_iter().find(|statement| matches!(statement.drop_meta(), Node::Type { .. }))
+}
+
 pub(super) fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 	prelude_head(word).map(|(_, arity, defaults)| (*arity, *defaults))
 }

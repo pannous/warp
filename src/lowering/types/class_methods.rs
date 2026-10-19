@@ -19,7 +19,7 @@ pub(crate) use instances::*;
 mod members;
 use members::*;
 
-mod inheritance;
+pub(crate) mod inheritance;
 mod json;
 mod operators;
 mod other_languages;

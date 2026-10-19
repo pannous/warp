@@ -427,6 +427,7 @@ pub fn lower(node: Node) -> Node {
 		call_results,
 		times,
 		entry_names,
+		error_classes: crate::lowering::error_classes::ErrorClasses::of(&node),
 		temporaries: Counter::default(),
 	}
 	.expand(node)
@@ -455,11 +456,14 @@ fn arity_variant(name: &str, argument_count: usize) -> Option<&'static str> {
 }
 
 /// A word the program defines (`shadowed`) is its own
-fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
+fn raise_call(items: &[Node], shadowed: &HashSet<String>, error_classes: &crate::lowering::error_classes::ErrorClasses) -> Option<Node> {
 	let [word, raised] = items else { return None };
 	let is_raise_word = |raise: &&str| word.is_symbol(raise) && !shadowed.contains(*raise);
 	if !crate::errors::run_time::RAISE_WORDS.iter().any(is_raise_word) {
 		return None;
+	}
+	if let Some(raised_as) = error_classes.raised_instance(raised) {
+		return Some(raised_as);
 	}
 	let message = crate::errors::run_time::returned_error_message(raised).unwrap_or(raised).clone();
 	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name
@@ -595,6 +599,8 @@ struct Lowering {
 	times: HashSet<String>,
 	/// The keys the program's map literals give entries: only a counting word named so may read an entry (`{size: 9}`)
 	entry_names: HashSet<String>,
+	/// The program's error classes, which `except C` and `raise C(…)` name (decision error-classes)
+	error_classes: crate::lowering::error_classes::ErrorClasses,
 	temporaries: Counter,
 }
 
@@ -877,7 +883,7 @@ impl Lowering {
 		if let Some(membership) = self.membership(items) {
 			return Some(membership);
 		}
-		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
+		if let Some(raised) = raise_call(items, &self.shadowed.borrow(), &self.error_classes) {
 			return Some(raised);
 		}
 		let head = items.first()?.symbol_name()?;

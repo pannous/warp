@@ -274,12 +274,15 @@ impl WasmGcEmitter {
 		index
 	}
 
-	/// The index of the exported global `trap_detail`, declared on first use
-	/// Leave the class of the error being raised for `catch e` to read (trap_class_global)
+	/// Leave the class of the error being raised for `catch e` to read (trap_class_global): the class a raise names (a
+	/// text: the class of that name) or computes (`error_class(e)`), ø for none
 	pub(crate) fn emit_trap_class(&mut self, func: &mut Function, class: &Node) {
-		self.trap_class_global();
-		self.emit_global_store(func, TRAP_CLASS_GLOBAL, class);
-		func.instruction(&I::Drop);
+		let index = self.trap_class_global();
+		match class.drop_meta() {
+			Node::Text(name) => self.emit_symbol_node(func, name),
+			computed => self.emit_node_instructions(func, computed),
+		}
+		func.instruction(&I::GlobalSet(index));
 	}
 
 	pub(crate) fn trap_class_global(&mut self) -> u32 {
@@ -291,6 +294,7 @@ impl WasmGcEmitter {
 		index
 	}
 
+	/// The index of the exported global `trap_detail`, declared on first use
 	pub(crate) fn trap_detail_global(&mut self) -> u32 {
 		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_DETAIL_GLOBAL) {
 			return *index;

@@ -150,7 +150,7 @@ impl WasmGcEmitter {
 			} else {
 				self.emit_text_node(func, &super::super::lists::list_ops::runtime_error_message(name));
 				let class = super::super::lists::list_ops::runtime_error_class(name);
-				self.emit_node_instructions(func, &Node::Symbol(class.to_string()));
+				self.emit_symbol_node(func, class);
 			}
 			self.emit_call(func, super::super::text::text_builtins::CLASS_ERROR);
 			func.instruction(&I::Else);
