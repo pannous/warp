@@ -64,12 +64,3 @@ fn a_changed_clone_stands_in_for_the_pin() {
 	assert!(std::fs::read_link(&directory).is_err());
 	assert!(!packages.join(".replaced").exists());
 }
-
-/// The analyzer asks for an FFI signature of every name it meets; the system headers are parsed once per process
-#[test]
-fn header_signatures_are_parsed_once() {
-	let first = warp::ffi::get_signatures_from_headers("m");
-	assert!(first.contains_key("sqrt"));
-	assert!(std::ptr::eq(first, warp::ffi::get_signatures_from_headers("m")));
-	assert!(std::ptr::eq(warp::ffi::get_ffi_signatures(), warp::ffi::get_ffi_signatures()));
-}

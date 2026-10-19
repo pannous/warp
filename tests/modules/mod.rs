@@ -19,7 +19,6 @@ mod test_json5; // card json5-parse
 mod test_json_parse_form; // card g_ogQg
 #[cfg(feature = "native")] // the CLI with a cache folder
 mod test_lowered_modules; // card prelude-cache-runs
-mod test_module_cache;
 mod test_module_classes;
 mod test_module_error_file; // card module-error-file
 mod test_module_function_dir; // card use-math

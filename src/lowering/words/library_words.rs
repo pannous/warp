@@ -1108,7 +1108,9 @@ impl Lowering {
 		{
 			return OwnMember::Has;
 		}
-		if literal.is_some() || self.instances.shape(receiver).is_some() {
+		// a sum type's value holds a variant known only at run time: `t.count` of `t: T` may be C(count)'s field
+		let is_known = literal.is_some() || self.instances.shape(receiver).is_some();
+		if is_known && !self.instances.is_sum_typed(receiver) {
 			return OwnMember::Lacks;
 		}
 		let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));

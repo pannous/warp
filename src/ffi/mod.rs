@@ -289,9 +289,49 @@ pub(crate) fn is_handle_out_pointer(c_type: &str) -> bool {
 	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char"
 }
 
-/// The C parameters a warp call passes: all but the out-pointers
-fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
-	param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
+/// What a `const T *` points to when a `size_t` after it says how many bytes: `const uint8_t *module, size_t length`
+const BYTE_TYPES: [&str; 5] = ["uint8_t", "int8_t", "char", "void", "Bytef"];
+const LENGTH_TYPE: &str = "size_t";
+
+/// Whether the C parameter at `index` takes bytes with their length in the next one: a const single pointer to bytes,
+/// then a size_t
+fn takes_bytes(c_types: &[String], index: usize) -> bool {
+	let c_type = &c_types[index];
+	c_type.matches('*').count() == 1
+		&& c_type.split_whitespace().any(|word| word == "const")
+		&& BYTE_TYPES.contains(&pointee(c_type).as_str())
+		&& c_types.get(index + 1).is_some_and(|next| bare_c_type(next) == LENGTH_TYPE)
+}
+
+/// How each C parameter crosses: a pointer by what it points to, bytes with their length, else by its wasm value type
+/// (int, bool, char, short, Color: i32)
+pub fn c_param_types(c_types: &[String]) -> Vec<ParamType> {
+	let mut types: Vec<ParamType> = vec![];
+	for (index, c_type) in c_types.iter().enumerate() {
+		types.push(match types.last() {
+			Some(ParamType::Bytes) => ParamType::Length,
+			_ if takes_bytes(c_types, index) => ParamType::Bytes,
+			_ => c_type_to_param_type(c_type),
+		});
+	}
+	types
+}
+
+/// The C parameters a warp call passes, with how they cross: all but the out-pointers and lengths
+fn warp_parameters(c_types: &[String]) -> impl Iterator<Item = (&String, ParamType)> {
+	c_types.iter().zip(c_param_types(c_types)).filter(|(_, param)| param.is_passed())
+}
+
+/// The wasm type a passed parameter has in the warp call: bytes are a value (a text, a list), pointers and handles i32
+fn param_valtype(param: ParamType) -> Option<wasm_encoder::ValType> {
+	match param {
+		ParamType::Bytes => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
+		ParamType::I64 => Some(wasm_encoder::ValType::I64),
+		ParamType::F32 => Some(wasm_encoder::ValType::F32),
+		ParamType::F64 => Some(wasm_encoder::ValType::F64),
+		ParamType::Out | ParamType::Length => None,
+		ParamType::I32 | ParamType::Ptr | ParamType::Handle => Some(wasm_encoder::ValType::I32),
+	}
 }
 
 /// What a C function's result crosses as: a text, a handle (a pointer result or the first out-pointer), else None for
@@ -337,7 +377,7 @@ pub fn c_function_of(module: &str, hsig: &FfiHeaderSignature) -> CFunction {
 		module: module.to_string(),
 		library: resolve_library_alias(module).to_string(),
 		name: hsig.name.clone(),
-		param_types: hsig.param_types.iter().map(|t| c_type_to_param_type(t)).collect(),
+		param_types: c_param_types(&hsig.param_types),
 		result: pointer_result(hsig),
 		ret_type: c_type_to_ret_type(&hsig.return_type),
 		out_pointee: hsig.param_types.iter().find(|t| is_handle_out_pointer(t)).map(|t| pointee(t)),
@@ -394,7 +434,7 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 			(
 				declared.name.clone(),
 				warp_parameters(&declared.param_types)
-					.map(|c_type| pointer_kind(c_type) == Some(CPointer::Text))
+					.map(|(c_type, param)| param == ParamType::Ptr && pointer_kind(c_type) == Some(CPointer::Text))
 					.collect(),
 			)
 		})

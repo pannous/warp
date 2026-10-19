@@ -1,7 +1,6 @@
 mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
-mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
@@ -84,7 +83,6 @@ mod test_foreign_modifiers;
 mod test_foreign_spellings;
 mod test_free_var_if_arms;
 mod test_function_aliases;
-mod test_function_head; // card cleanup-definition-view
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;

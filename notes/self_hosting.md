@@ -238,8 +238,12 @@ function and local names.
   silently), a yes/no variable, a loop's value, slices, error values (a run-time error traps, without
   Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
-- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
-  (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp feeds it (card emitter-takes,
+  decision ignore-rust: no comparison with src/analyzer). analyzer.warp `emitter_kinds(program)` gives {functions: {f:
+  {params: [k…], result: k, locals: {x: k}, elements: {xs: k}}}, variables: {x: k}, elements: {xs: k}, value: k} with
+  k one of int float char text list node (node: any value held boxed, ø included); elements: the element kind of a
+  list whose type is known. An empty map comes as null (to_json, card lib-json). tests/parser/test_self_analyzer.rs
+  checks it runs on every source of tests/parser/analyzer_twin_sources.txt.
 
 ## Value layout (card emitter-gc; the Rust emitter follows: card rust-emitter)
 Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
@@ -408,9 +412,12 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
   with the Rust pipeline (that compile shows a Rust `emit` phase).
 - WARP_SELF_ANALYSIS=1 beside the switch (card pipeline-runs): emit_module first hands each lowered program to
-  analyzer.warp `kinds` (self_hosted::check_analysis) and fails it loud on a stage error or a slot where warp's kind
-  does not cover Rust's (`… disagrees with Rust's: html_items(): list, not empty`). Step one only checks: the emitter
-  still reads src/analyzer's kinds; later warp's kinds feed it. Suite count: self-hosted-suite.sh --stage
+  analyzer.warp `kinds` (self_hosted::program_kinds; a stage error fails the program) and its kinds go to emitter.warp
+  with the program (request [view, kinds], `typed_wasm_module`, module.kinds; cards emitter-reads, emitter-takes),
+  never compared with src/analyzer's (decision ignore-rust): an unannotated parameter takes the analyzed kind instead
+  of its first call's, and a node where an analyzed program needs a list or text is unboxed (runtime.warp
+  list_of_node, text_of_node: ø is [], anything else traps). That took sorting_idiomatic, quicksort, divisors and
+  pascals-triangle into the core (2026-10-19). Suite count: self-hosted-suite.sh --stage
   analyzer=WARP_SELF_ANALYSIS.
 - Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
   refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;

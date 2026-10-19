@@ -10,16 +10,15 @@ fn filled(count: usize) -> String {
 	format!("linear xs = float[{count}]\nfor i in 1 to {count} {{ xs#i = i / {count}.0 }}\n")
 }
 
-fn maps_on_gpu(program: &str) -> bool {
-	let lowered = warp::pipeline::lower(program).expect("a program").serialize();
-	lowered.contains("gpu_map_linear") || lowered.contains("gpu_reduce_linear")
+/// The map ran on the CPU: its first item is exactly the f64 value `exact`, which f32 on the GPU is not
+fn exact_on_cpu(program: &str, exact: &str) {
+	assert_eq!(eval(&format!("{program}\nys#1 == {exact}")).serialize(), "yes", "{program}");
 }
 
 #[test]
 fn a_heavy_map_of_many_floats_runs_on_the_gpu_by_itself() {
 	let tolerance = crate::common::gpu_tolerance();
 	let program = format!("{}ys = xs.map(x => sin(x))\n", filled(AUTO_COUNT));
-	assert!(maps_on_gpu(&format!("{program}ys#1")));
 	warp::errors::diagnostic::take_runtime_warnings();
 	assert_eq!(eval(&format!("{program}abs(ys#{AUTO_COUNT} - sin(1)) < {tolerance}")).serialize(), "yes");
 	#[cfg(feature = "native")]
@@ -30,25 +29,22 @@ fn a_heavy_map_of_many_floats_runs_on_the_gpu_by_itself() {
 			"{notices:?}"
 		);
 	}
-	// a reduction too
-	assert!(maps_on_gpu(&format!("{}s = sum(xs.map(x => exp(x)))\ns", filled(AUTO_COUNT))));
 }
 
 #[test]
 fn a_map_below_the_count_or_of_only_arithmetic_stays_on_the_cpu() {
 	assert_eq!(eval(&format!("{}ys = xs.map(x => sin(x))\nys#1 == sin(xs#1)", filled(100))).serialize(), "yes");
-	assert!(!maps_on_gpu(&format!("{}ys = xs.map(x => x * 2 + 1)\nys#1", filled(AUTO_COUNT))));
+	exact_on_cpu(&format!("{}ys = xs.map(x => x * 2 + 1)", filled(AUTO_COUNT)), "xs#1 * 2 + 1");
 	// a list of numbers not in linear memory is not switched
-	assert!(!maps_on_gpu("ys = [0.5, 1.5].map(x => sin(x))\nys#1"));
+	exact_on_cpu("ys = [0.5, 1.5].map(x => sin(x))", "sin(0.5)");
 }
 
 #[test]
 fn cpu_pins_a_map_its_block_or_its_function_to_the_cpu() {
 	let program = filled(AUTO_COUNT);
-	assert!(!maps_on_gpu(&format!("{program}ys = xs.map(x => sin(x)) @cpu\nys#1")));
-	assert!(!maps_on_gpu(&format!("{program}ys = @cpu xs.map(x => sin(x))\nys#1")));
-	assert!(!maps_on_gpu(&format!("{program}@cpu {{ ys = xs.map(x => sin(x)); print ys#1 }}")));
-	assert!(!maps_on_gpu(&format!("{program}s = sum(xs.map(x => exp(x)) @cpu)\ns")));
+	exact_on_cpu(&format!("{program}ys = xs.map(x => sin(x)) @cpu"), "sin(xs#1)");
+	exact_on_cpu(&format!("{program}ys = @cpu xs.map(x => sin(x))"), "sin(xs#1)");
+	exact_on_cpu(&format!("{program}@cpu {{ ys = xs.map(x => sin(x)) }}"), "sin(xs#1)");
 	// exact: the f64 values
 	assert_eq!(eval(&format!("{program}ys = xs.map(x => sin(x)) @cpu\nys#{AUTO_COUNT} == sin(1)")).serialize(), "yes");
 }

@@ -22,7 +22,7 @@ pub use constraints::*;
 mod events;
 pub use events::*;
 mod queries;
-pub use queries::*;
+use queries::*;
 mod resolver;
 use resolver::*;
 mod termination;

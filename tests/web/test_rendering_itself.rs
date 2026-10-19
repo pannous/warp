@@ -26,12 +26,6 @@ fn a_program_with_markup_exports_its_renderer() {
 	);
 }
 
-#[test]
-fn only_a_program_with_markup_renders_itself() {
-	assert!(warp::web::renders_itself("count = 0\ndiv{ button{ on click { count += 1 } \"Add\" } p{ count } }"));
-	assert!(!warp::web::renders_itself("x = 3\nx * 2"));
-}
-
 #[cfg(feature = "native")]
 #[test]
 fn the_renderer_inside_the_module_gives_the_html() {

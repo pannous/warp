@@ -14,6 +14,8 @@ pub mod gc_values;
 pub mod host_words;
 #[cfg(feature = "engine")]
 pub mod libm;
+#[cfg(feature = "library")]
+pub mod library;
 #[cfg(feature = "engine")]
 pub mod macho;
 #[cfg(feature = "engine")]

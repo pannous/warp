@@ -1,0 +1,17 @@
+# plain_node (card rest-node) against the view route: each source lowers the same from parser.warp's nodes as from
+# the view of its tree; prints the paths that differ, then the count compared
+use "../../lib/compiler/passes.warp"
+use os
+differing = 0
+compared = 0
+for path in args {
+	source = read(path)
+	by_view = try view_of(lowered_node(node_of(plain(tree(source))))) else "failed"
+	by_node = try lowered(source) else "failed"
+	compared = compared + 1
+	if by_view != by_node {
+		differing = differing + 1
+		print path
+	}
+}
+print "compared " + compared + ", differing " + differing
