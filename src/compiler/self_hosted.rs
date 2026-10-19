@@ -8,7 +8,7 @@
 use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
 use std::path::PathBuf;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
 const SWITCH: &str = "WARP_SELF_HOSTED";

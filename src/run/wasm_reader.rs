@@ -1,7 +1,7 @@
 use crate::extensions::numbers::Number;
 use crate::node::Node;
-use crate::type_kinds::{KIND_MASK, Kind};
-use anyhow::{Result, anyhow};
+use crate::type_kinds::{Kind, KIND_MASK};
+use anyhow::{anyhow, Result};
 use num_bigint::{BigInt, Sign};
 use std::cell::RefCell;
 use wasmtime::{AsContextMut, Instance, Linker, Module, Store, StoreContextMut, Val};
@@ -194,7 +194,7 @@ thread_local! {
 }
 
 fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<crate::host::HostState>> {
-	use crate::host::{HostState, link_host_functions};
+	use crate::host::{link_host_functions, HostState};
 	let families = [imports.host, imports.wasi, imports.ffi];
 	let kept = FAMILY_LINKERS.with(|linkers| {
 		linkers
@@ -306,7 +306,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_POSITION, trap_detail_line, trap_position_line};
+pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_POSITION};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
