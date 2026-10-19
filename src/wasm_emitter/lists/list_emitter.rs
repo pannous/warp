@@ -931,20 +931,26 @@ impl WasmGcEmitter {
 		self.emit_truncating_cast(func);
 	}
 
-	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T, or an Error of
-	/// the class T (its value, decision error-classes)
+	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T or a class
+	/// extending T, or an Error of such a class (its value, decision error-classes)
 	pub(in crate::wasm_emitter) fn emit_instance_of(&mut self, func: &mut Function, instance: &Node, type_name: &str) {
 		let node_type = self.type_manager.node_type;
 		self.emit_node_instructions(func, instance);
 		let instance_local = self.node_scratch();
 		func.instruction(&I::LocalSet(instance_local));
+		let classes = self.ctx.type_registry.with_descendants(type_name);
 		let named = |emitter: &mut Self, func: &mut Function, field: u32| {
-			emitter.emit_field(func, instance_local, field);
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-			let (pointer, length) = emitter.memory_string(type_name);
-			Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-			emitter.emit_call(func, "new_symbol");
-			emitter.emit_call(func, super::super::VALUES_EQUAL);
+			for (index, class) in classes.iter().enumerate() {
+				emitter.emit_field(func, instance_local, field);
+				func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+				let (pointer, length) = emitter.memory_string(class);
+				Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+				emitter.emit_call(func, "new_symbol");
+				emitter.emit_call(func, super::super::VALUES_EQUAL);
+				if index > 0 {
+					func.instruction(&I::I32Or);
+				}
+			}
 			func.instruction(&I::I64ExtendI32U);
 		};
 		self.emit_field(func, instance_local, 0);
