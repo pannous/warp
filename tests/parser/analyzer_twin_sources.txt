@@ -1227,7 +1227,7 @@ samples/advanced/mandelbrot_canvas.warp
 samples/advanced/neural_net.warp
 samples/advanced/particles.warp
 samples/advanced/raytracer.warp
-samples/advanced/simple.warp
+samples/numbers/simple.warp
 samples/advanced/snake.warp
 samples/advanced/test.warp
 samples/conditions/control_flow.warp
