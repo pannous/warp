@@ -1,0 +1,8 @@
+# a function compiled while its caller's first reading runs knows the caller's declared result: op + s(right - 1) joins texts
+s(v: any): text := k(v, v)
+k(op: any, right: any): text := {
+	if right == 2 { return op + s(right - 1) }
+	"y"
+}
+print(s(3))
+print(s(2))
