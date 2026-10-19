@@ -566,6 +566,14 @@ float_of_node(n: any): float := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
+# a % b of floats as in mathematics, as the floats of Rust: the truncated remainder, plus |b| when below 0
+float_mod(a: float, b: float): float := {
+	if b == 0 { divide_by_zero() }
+	q = a / b
+	rest = a - b * (if q < 0 then float_ceil(q) else float_floor(q))
+	if rest < 0 { return rest + (if b < 0 then -b else b) }
+	rest
+}
 # a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
 number_node(n: any): any := {
 	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { fail() }
