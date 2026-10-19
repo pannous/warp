@@ -193,10 +193,10 @@ impl WarpParser {
 		let ahead = self.chars[self.pos..].iter().take_while(is_blank).count();
 		let blanks = &self.chars[self.pos - behind..self.pos + ahead];
 		let content_before = self.pos > behind && self.chars[self.pos - behind - 1] != '\n';
-		let content_after = match (self.peek_char(ahead), self.peek_char(ahead + 1)) {
-			('\n' | '\r' | '\0', _) | ('/', '/' | '*') | ('#', ' ' | '\t' | '\n' | '\0') => false,
-			_ => true,
-		};
+		let content_after = !matches!(
+			(self.peek_char(ahead), self.peek_char(ahead + 1)),
+			('\n' | '\r' | '\0', _) | ('/', '/' | '*') | ('#', ' ' | '\t' | '\n' | '\0')
+		);
 		blanks.contains(&'\t') && content_before && content_after
 	}
 
