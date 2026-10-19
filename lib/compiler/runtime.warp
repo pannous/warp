@@ -745,3 +745,78 @@ key_left(n: any) := entry_key(n)
 key_right(n: any) := key_value(n)
 key_operator(n: any) := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
 symbol_node(name: any) := symbol_of(node_text(name))
+
+## durations (card duration-warp; src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
+## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
+## bits (src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three
+## amounts, so they read as calendar.rs Duration does (tests/numbers/test_duration_words.rs)
+# a constant of the durations: an untyped word, as `f(): int :=` has no use yet
+second_nanos() := 1000000000
+day_nanos() := 86400 * second_nanos()
+hour_nanos() := 3600 * second_nanos()
+duration_months(n: any): int := floor_quotient(marked_kind(n), power(2, 43))
+# the 32 signed bits above the kind and the form
+duration_days(n: any): int := {
+	days = floor_quotient(marked_kind(n), power(2, 11)) % power(2, 32)
+	if days >= power(2, 31) then days - power(2, 32) else days
+}
+duration_nanos(n: any): int := unboxed_int(n)
+# `3 hours`: an amount and its unit, plural unless the amount is 1
+amount_text(amount: int, unit: text): text := {
+	if amount == 1 { return int_text(amount) + " " + unit }
+	int_text(amount) + " " + unit + "s"
+}
+# shown and the part after a space, the part alone when nothing is shown yet
+spaced(shown: text, part: text): text := if byte_count(shown) == 0 then part else shown + " " + part
+# shown and the amount of the unit, unchanged for a zero amount
+with_amount(shown: text, amount: int, unit: text): text := if amount == 0 then shown else spaced(shown, amount_text(amount, unit))
+# `1.5`, `-0.000000001`, `0`: nanoseconds as seconds with their fraction, without trailing zeros
+seconds_text(nanos: int): text := {
+	magnitude = if nanos < 0 then -nanos else nanos
+	whole = int_text(int_quotient(magnitude, second_nanos()))
+	fraction = int_remainder(magnitude, second_nanos())
+	digits = 9
+	while fraction != 0 and int_remainder(fraction, 10) == 0 {
+		fraction = int_quotient(fraction, 10)
+		digits -= 1
+	}
+	shown = whole
+	if fraction != 0 { shown = whole + "." + zeros(digits - byte_count(int_text(fraction))) + int_text(fraction) }
+	if nanos < 0 { return "-" + shown }
+	shown
+}
+# a duration as calendar.rs `Display for Duration` shows it: `1 month 2 days 3 hours`, `1.5 seconds`, `0 seconds`
+duration_parts_text(months: int, days: int, nanos: int): text := {
+	shown = with_amount(with_amount("", months, "month"), days, "day")
+	# whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
+	if nanos != 0 and int_remainder(nanos, second_nanos()) == 0 {
+		seconds = int_quotient(nanos, second_nanos())
+		shown = with_amount(shown, int_quotient(seconds, 3600), "hour")
+		shown = with_amount(shown, int_quotient(int_remainder(seconds, 3600), 60), "minute")
+		return with_amount(shown, int_remainder(seconds, 60), "second")
+	}
+	if nanos == 0 and byte_count(shown) > 0 { return shown }
+	spaced(shown, seconds_text(nanos) + " seconds")
+}
+sign_of(n: int): int := if n > 0 then 1 else if n < 0 then -1 else 0
+duration_text(n: any): text := duration_parts_text(duration_months(n), duration_days(n), duration_nanos(n))
+# -1, 0 or 1 as the difference of two durations is shorter, none or longer on every date (calendar.rs
+# Duration::compares); an order that depends on the date fails
+duration_parts_order(months: int, days: int, nanos: int): int := {
+	# an exact difference: the sign of its nanoseconds
+	if months == 0 and days == 0 { return sign_of(nanos) }
+	# a month is 28 to 31 days; negative months take more days off the longer they are
+	fewest_days = days + months * (if months < 0 then 31 else 28)
+	most_days = days + months * (if months < 0 then 28 else 31)
+	# daylight saving moves an exact part against the calendar part by at most an hour; calendar parts alone keep the hour
+	shift = if nanos != 0 then hour_nanos() else 0
+	if fewest_days * day_nanos() + nanos - shift > 0 { return 1 }
+	if most_days * day_nanos() + nanos + shift < 0 { return -1 }
+	durations_compare_differently_on_different_dates()
+}
+duration_order(a: any, b: any): int := duration_parts_order(duration_months(a) - duration_months(b), duration_days(a) - duration_days(b), duration_nanos(a) - duration_nanos(b))
+# the runtime error of duration_parts_order, named for src/wasm_emitter/control/traps.rs to read off the trace
+durations_compare_differently_on_different_dates() := {
+	fail()
+	0
+}
