@@ -1,7 +1,7 @@
 use crate::extensions::numbers::Number;
 use crate::node::Node;
-use crate::type_kinds::{Kind, KIND_MASK};
-use anyhow::{anyhow, Result};
+use crate::type_kinds::{KIND_MASK, Kind};
+use anyhow::{Result, anyhow};
 use num_bigint::{BigInt, Sign};
 use std::cell::RefCell;
 use wasmtime::{AsContextMut, Instance, Linker, Module, Store, StoreContextMut, Val};
@@ -194,7 +194,7 @@ thread_local! {
 }
 
 fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<crate::host::HostState>> {
-	use crate::host::{link_host_functions, HostState};
+	use crate::host::{HostState, link_host_functions};
 	let families = [imports.host, imports.wasi, imports.ffi];
 	let kept = FAMILY_LINKERS.with(|linkers| {
 		linkers
@@ -306,7 +306,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_POSITION};
+pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_POSITION, trap_detail_line, trap_position_line};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
@@ -397,17 +397,21 @@ fn struct_node<T>(
 	let high_byte = (kind >> 8) & 0xFF;
 	let separator = crate::wasm_emitter::separator_of_kind(kind);
 	let mut node = |val: &Val| node_along(val, store, memory, path);
+	// a runtime word that builds a node wrongly (a text kind over a non-text) fails loudly, never reads as ""
+	let malformed = || crate::node::error(&format!("malformed node: kind {kind:#x} holds no text"));
 	match Kind::of_field(kind) {
 		Some(Kind::Empty) => Node::Empty,
 		Some(Kind::Int) => int_node(store, &data, high_byte),
 		Some(Kind::Float) => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
 		Some(Kind::Codepoint) => char_node(store, &data),
-		Some(Kind::Text) => Node::Text(rope_text(store, data, child, memory)),
+		Some(Kind::Text) => rope_text(store, data, child, memory).map_or_else(malformed, Node::Text),
 		Some(Kind::Symbol) if kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
-			Node::type_value(&text_of(store, &data, memory))
+			text_of(store, &data, memory).map_or_else(malformed, |name| Node::type_value(&name))
 		}
-		Some(Kind::Symbol) => Node::Symbol(text_of(store, &data, memory)),
-		Some(Kind::Error) => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
+		Some(Kind::Symbol) => text_of(store, &data, memory).map_or_else(malformed, Node::Symbol),
+		Some(Kind::Error) => {
+			text_of(store, &data, memory).map_or_else(malformed, |text| Node::Error(Box::new(Node::Text(text))))
+		}
 		Some(Kind::Key) => {
 			Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child)))
 		}
@@ -415,7 +419,7 @@ fn struct_node<T>(
 		Some(Kind::List) => {
 			list_in(data, child, crate::wasm_emitter::bracket_of_info(high_byte), separator, store, memory, path)
 		}
-		Some(Kind::Data) => data_node(text_of(store, &data, memory)),
+		Some(Kind::Data) => text_of(store, &data, memory).map_or_else(malformed, data_node),
 		// a closure reads as the name of its function
 		Some(Kind::Function) => match child.unwrap_anyref() {
 			Some(_) => match node(&child) {
@@ -533,31 +537,31 @@ fn rope_text<T>(
 	data: Val,
 	before: Val,
 	memory: Option<wasmtime::Memory>,
-) -> String {
-	let mut pieces = vec![text_of(store, &data, memory)];
+) -> Option<String> {
+	let mut pieces = vec![text_of(store, &data, memory)?];
 	let mut before = before;
 	while let Some(structref) = before.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) {
 		let Some((_, data, earlier)) = node_fields(&structref, store) else { break };
-		pieces.push(text_of(store, &data, memory));
+		pieces.push(text_of(store, &data, memory)?);
 		before = earlier;
 	}
-	pieces.into_iter().rev().collect()
+	Some(pieces.into_iter().rev().collect())
 }
 
 /// A text's bytes: a GC byte array `$Text`, or a `$String` (ptr, len) in memory
-fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: Option<wasmtime::Memory>) -> String {
-	let read = |store: &mut StoreContextMut<'_, T>| -> Option<String> {
-		if let Ok(Some(bytes)) = data.unwrap_anyref()?.as_array(&*store) {
-			let bytes: Vec<u8> = bytes.elems(&mut *store).ok()?.map(|byte| byte.unwrap_i32() as u8).collect();
-			return String::from_utf8(bytes).ok();
-		}
-		let string = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
-		let ptr = string.field(&mut *store, 0).ok()?.unwrap_i32() as usize;
-		let len = string.field(&mut *store, 1).ok()?.unwrap_i32() as usize;
-		let bytes = memory?.data(&*store).get(ptr..ptr + len)?;
-		String::from_utf8(bytes.to_vec()).ok()
+fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: Option<wasmtime::Memory>) -> Option<String> {
+	let Some(reference) = data.unwrap_anyref() else {
+		return Some(String::new());
 	};
-	read(store).unwrap_or_default()
+	if let Ok(Some(bytes)) = reference.as_array(&*store) {
+		let bytes: Option<Vec<u8>> = bytes.elems(&mut *store).ok()?.map(|byte| byte.i32().map(|b| b as u8)).collect();
+		return String::from_utf8(bytes?).ok();
+	}
+	let string = reference.unwrap_struct(&*store).ok()?;
+	let ptr = string.field(&mut *store, 0).ok()?.i32()? as usize;
+	let len = string.field(&mut *store, 1).ok()?.i32()? as usize;
+	let bytes = memory?.data(&*store).get(ptr..ptr + len)?;
+	String::from_utf8(bytes.to_vec()).ok()
 }
 
 /// Load WASM bytes with FFI support (for native function imports)
