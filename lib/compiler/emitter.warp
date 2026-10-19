@@ -1185,10 +1185,12 @@ function_compiled(f: Function, argument_kinds: any) := {
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
 	if result != no_kind and analyzed_result_kind(f) != ø { result = analyzed_result_kind(f) }
-	if result == no_kind or result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
-	f.result = result
+	if result == "mixed" or result == pending { return refuse(f.name + " giving a " + result) }
+	# a body ending in a statement (a loop, a print) gives ø, as Rust's does
+	f.result = if result == no_kind then "node" else result
 	scope = new_scope(f)
-	f.code = converted(expression(scope, f.body), result)
+	value = expression(scope, f.body)
+	f.code = if result == no_kind then value#2 + [ref_null, gc.node] else converted(value, result)
 	f.locals = scope.kinds[(#f.parameters)..]
 	f.local_names = scope.order
 }
