@@ -27,7 +27,8 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | `x is symbol/list/any` type tests, prelude defs on demand (is_digit) | warp-self-emitter |
 | match literal and enum-symbol arms | warp-parsing |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
-| class constructor `Point(2, 3)`, the file's own globals, try, `===` | warp-self-analyzer |
+| class constructor `Point(2, 3)`, try, `===` | warp-self-analyzer |
+| the file's own globals and module constants inside functions (PRINT, SUFFIX_POWER, UNIT_WORDS, KEYWORD_FORMS …) | warp-runtime |
 | int(x), positioned, `op as Op` (keyed), an instance inside a map, a node into a typed Parser field, a write by a run-time key, pending kinds in recursive functions, `branch` called with a missing argument | warp-emitter-structures |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
