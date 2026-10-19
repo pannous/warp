@@ -161,7 +161,7 @@ items_text(xs: list): text := {
 # `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
 key_text(entry: any): text := {
 	value = key_value(entry)
-	if is_null(value) == 0 and marked_kind(value) == 8 { return key_name(entry) + node_text(value) }
+	if marked_kind(entry) == 6 { return key_name(entry) + node_text(value) }
 	key_name(entry) + ":" + node_code(value)
 }
 # `a + b` of values known only at run time: lists and texts join, numbers add
@@ -206,8 +206,9 @@ node_append(a: any, b: any) := {
 node_equal(a: any, b: any): bool := {
 	if is_null(a) == 1 or is_null(b) == 1 { return is_null(a) == is_null(b) }
 	if kind_code(a) == 6 or kind_code(b) == 6 {
-		return kind_code(a) == kind_code(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
+		return marked_kind(a) == marked_kind(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
 	}
+	if marked_kind(a) == 8 and marked_kind(b) == 8 { return map_equal(a, b) }
 	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == 16 or kind_code(b) == 16 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == 5 or kind_code(b) == 5 { return kind_code(a) == kind_code(b) and text_order(node_text(a), node_text(b)) == 0 }
@@ -223,7 +224,7 @@ list_equal(a: list, b: list): bool := {
 }
 # a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
 # its class name and the map of its fields
-fields_of(m: any): any := if kind_code(m) == 6 then key_value(m) else m
+fields_of(m: any): any := if marked_kind(m) == 6 then key_value(m) else m
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: any, name: text): int := {
 	entries = unboxed_list(fields_of(m))
@@ -232,6 +233,14 @@ map_index(m: any, name: text): int := {
 }
 # `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
 map_get(m: any, name: text): any := {
+	if is_position_part(m, name) { return position_part(m, name) }
+	if kind_code(m) == 5 { return node_text(m) }
+	if is_entry(m) and text_order(name, "name") == 0 { return key_name(m) }
+	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
+	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
+	if is_entry(m) and text_order(name, "op") == 0 { return key_operator(m) }
+	if is_plain_list(m) and text_order(name, "bracket") == 0 { return list_bracket(m) }
+	if is_plain_list(m) and text_order(name, "separator") == 0 { return list_separator(m) }
 	at = map_index(m, name)
 	if at == 0 { fail() }
 	key_value(unboxed_list(fields_of(m))#at)
@@ -244,11 +253,13 @@ map_entries(n: any): any := {
 	out
 }
 map_keys(m: any): list := {
+	if is_null(m) == 1 or (marked_kind(m) != 8 and marked_kind(m) != 6) { not_a_map() }
 	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
 map_values(m: any): list := {
+	if is_null(m) == 1 or (marked_kind(m) != 8 and marked_kind(m) != 6) { not_a_map() }
 	out = new_list(0)
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
@@ -272,7 +283,7 @@ text_index(t: text, part: text): int := {
 }
 # `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
 node_get(n: any, key: any): any := {
-	if kind_code(key) == 1 { return node_at(n, unboxed_int(key) + 1) }
+	if kind_code(key) == 1 and marked_kind(n) != 8 { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, node_text(key))
 }
 # `n[key] = value` of a value known only at run time: an int key sets the item key+1, any other key the entry named
@@ -649,7 +660,8 @@ node_is_type(n: any, type: text): bool := {
 	if type == "float" { return kind == 2 }
 	if type == "text" { return kind == 3 or kind == 4 }
 	if type == "char" { return kind == 4 }
-	if type == "list" { return kind == 8 or kind == 7 }
+	if type == "list" { return (kind == 8 and marked_kind(n) != 8) or kind == 7 }
+	if type == "map" { return marked_kind(n) == 8 }
 	if type == "key" { return kind == 6 }
 	if type == "symbol" { return kind == 5 }
 	no
@@ -882,8 +894,9 @@ node_truthy(n: any): bool := {
 	if kind == 3 or kind == 5 { return byte_count(unboxed_text(n)) > 0 }
 	yes
 }
-# `n as int` of a boxed int or exact rational, truncated toward 0
+# `n as int` of a boxed int, exact rational or float, truncated toward 0
 truncated_int(n: any): int := {
+	if is_null(n) == 0 and kind_code(n) == 2 { return truncated(unboxed_float(n)) }
 	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
 	int_quotient(exact_numerator(n), exact_denominator(n))
 }
@@ -1158,6 +1171,10 @@ not_an_int(): int := {
 	fail()
 	0
 }
+invalid_number(): int := {
+	fail()
+	0
+}
 an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
@@ -1218,6 +1235,105 @@ key_left(n: any): any := entry_key(n)
 key_right(n: any): any := key_value(n)
 key_operator(n: any): text := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
 symbol_node(name: any): any := symbol_of(node_text(name))
+# a list's bracket and separator in its kind field: the bracket's info in the byte above the kind, the separator's
+# code at bit 48 (src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
+bracket_spellings(): list := ["{", "[", "(", "<", "·other", ""]
+separator_spellings(): list := ["", " ", ",", ";", "\n", "\t"]
+bracket_unit(): int := 256
+separator_unit(): int := 281474976710656
+bracket_info(n: any): int := int_remainder(int_quotient(marked_kind(n), bracket_unit()), 256)
+separator_info(n: any): int := int_remainder(int_quotient(marked_kind(n), separator_unit()), 8)
+# `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too
+list_bracket(n: any): any := {
+	if is_null(n) == 1 or kind_code(n) != 8 or bracket_info(n) == 4 { return ø }
+	bracket_spellings()#(bracket_info(n) + 1)
+}
+list_separator(n: any): any := {
+	if is_null(n) == 1 or kind_code(n) != 8 { return ø }
+	separator_spellings()#(separator_info(n) + 1)
+}
+# the position of a spelling in spellings, from 0
+spelling_code(spellings: list, spelled: text): int := {
+	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
+	fail()
+	0
+}
+# `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; ø stays ø, as `()` parses
+bracketed_node(items: any, bracket: any): any := {
+	if is_null(items) == 1 { return items }
+	if kind_code(items) != 8 { not_a_list() }
+	code = spelling_code(bracket_spellings(), node_text(bracket))
+	list_node(marked_kind(items) + (code - bracket_info(items)) * bracket_unit(), unboxed_list(items))
+}
+separated_node(items: any, separator: any): any := {
+	if is_null(items) == 1 { return items }
+	if kind_code(items) != 8 { not_a_list() }
+	code = spelling_code(separator_spellings(), node_text(separator))
+	list_node(marked_kind(items) + (code - separator_info(items)) * separator_unit(), unboxed_list(items))
+}
+# the runtime errors Rust's run names by the function trapping (src/wasm_emitter/lists/list_ops/runtime_errors.rs)
+not_a_map(): int := {
+	fail()
+	0
+}
+# `a == b` of two maps: the same names with equal values, in any order
+map_equal(a: any, b: any): bool := {
+	if #unboxed_list(a) != #unboxed_list(b) { return no }
+	# its own search, not map_index's: map_index may still be compiling here (map_index → key_name → node_text → …
+	# node_equal → map_equal), its result kind not known yet
+	for entry in unboxed_list(a) {
+		found = no
+		for other in unboxed_list(b) {
+			if text_order(key_name(entry), key_name(other)) == 0 {
+				if not node_equal(key_value(entry), key_value(other)) { return no }
+				found = yes
+			}
+		}
+		if not found { return no }
+	}
+	yes
+}
+# whether `m.name` reads a field: m a map or an instance with an entry so named, an entry's key, value or name, a
+# symbol's name
+has_field(m: any, name: text): bool := {
+	if is_null(m) == 1 { return no }
+	if is_position_part(m, name) { return is_meta(m) == 1 }
+	if kind_code(m) == 5 { return text_order(name, "name") == 0 }
+	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 or text_order(name, "op") == 0 }
+	if is_plain_list(m) { return text_order(name, "bracket") == 0 or text_order(name, "separator") == 0 }
+	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
+	map_index(m, name) > 0
+}
+# `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
+# node_api.rs POSITIONED); any other node without a field of that name has no field line
+positioned_node(n: any, line: int, column: int): any := meta_node(n, line, column)
+is_position_part(m: any, name: text): bool := {
+	if text_order(name, "line") != 0 and text_order(name, "column") != 0 { return no }
+	not ((marked_kind(m) == 8 or marked_kind(m) == 6) and map_index(m, name) > 0)
+}
+position_part(m: any, name: text): int := if text_order(name, "line") == 0 then meta_line(m) else meta_column(m)
+# a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
+is_entry(n: any): bool := kind_code(n) == 6 and marked_kind(n) != 6
+# a list that is no map: its fields are the node's parts, `n.bracket` and `n.separator`
+is_plain_list(n: any): bool := kind_code(n) == 8 and marked_kind(n) != 8
+# a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
+swizzle_fits(p: any, letters: text): bool := {
+	if is_null(p) == 1 or kind_code(p) != 8 or marked_kind(p) == 8 { return no }
+	items = unboxed_list(p)
+	if #items < 2 or #items > 4 { return no }
+	for x in items { if is_null(x) == 1 or marked_kind(x) == 257 or (kind_code(x) != 1 and kind_code(x) != 2) { return no } }
+	for i in 0..byte_count(letters) { if letter_component(byte_at(letters, i)) > #items { return no } }
+	yes
+}
+# the place, counted from 1, of the component a letter picks: x 1, y 2, z 3, w 4
+letter_component(b: int): int := if b == 119 then 4 else b - 119
+swizzled_one(p: any, letter: text): any := unboxed_list(p)#letter_component(byte_at(letter, 0))
+swizzled(p: any, letters: text): list := {
+	items = unboxed_list(p)
+	out = new_list(0)
+	for i in 0..byte_count(letters) { out += [items#letter_component(byte_at(letters, i))] }
+	out
+}
 
 ## durations (card duration-warp; src/wasm_emitter/time times.rs duration_text, time_arithmetic.rs duration_order): a
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
@@ -1492,7 +1608,7 @@ min_int(a: int, b: int): int := if a < b then a else b
 
 ## texts as numbers at run time (card card-4; Rust's text_as_int and text_as_float in
 ## src/wasm_emitter/lists/list_ops/node_arithmetic.rs, text_as_number in src/wasm_emitter/numbers/casts.rs): a text
-## that spells no number traps, where Rust's fails with invalid_number
+## that spells no number fails with invalid_number
 # 1 for a leading - or + of t, else 0: the byte offset of what follows the sign
 sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or byte_at(t, 0) == 43) then 1 else 0
 # t starts with -
@@ -1509,7 +1625,7 @@ digit_run(t: text, start: int): int := {
 text_as_int(t: text): int := {
 	start = sign_length(t)
 	count = digit_run(t, start)
-	if count == 0 or start + count != byte_count(t) { fail() }
+	if count == 0 or start + count != byte_count(t) { invalid_number() }
 	value = 0
 	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
 	if is_negative_text(t) then -value else value
@@ -1525,14 +1641,14 @@ text_as_float(t: text): float := {
 		fraction = digit_run(t, at + 1)
 		at += 1 + fraction
 	}
-	if whole + fraction == 0 { fail() }
+	if whole + fraction == 0 { invalid_number() }
 	stop = at
 	exponent = 0
 	if at < byte_count(t) and (byte_at(t, at) == 101 or byte_at(t, at) == 69) {
 		exponent = text_as_int(bytes_between(t, at + 1, byte_count(t)))
 		at = byte_count(t)
 	}
-	if at != byte_count(t) { fail() }
+	if at != byte_count(t) { invalid_number() }
 	found = decimal_digits(t, start, stop)
 	magnitude = decimal_float(unboxed_int(found#1), unboxed_int(found#2) + exponent - fraction)
 	if is_negative_text(t) then -magnitude else magnitude

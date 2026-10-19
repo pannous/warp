@@ -6,11 +6,16 @@ const RAN_PURE: &str = "pure: ran";
 
 /// The program's output and what the lane recorded for it
 fn pure_run(name: &str, code: &str) -> (String, String) {
+	lane_run("pure", name, code)
+}
+
+/// The program's output in the lane WARP_SELF_HOSTED names, and what the lane recorded for it
+fn lane_run(lane: &str, name: &str, code: &str) -> (String, String) {
 	let scratch = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
 	let record = scratch.join(format!("pure_{name}.txt"));
 	let _ = std::fs::remove_file(&record);
 	let run = crate::common::warp_command()
-		.env("WARP_SELF_HOSTED", "pure")
+		.env("WARP_SELF_HOSTED", lane)
 		.env("WARP_EMIT_REFUSALS", &record)
 		.env("WARP_MODULE_CACHE", scratch.join("self_hosted_stage_cache"))
 		.arg(code)
@@ -23,6 +28,14 @@ fn runs_pure(name: &str, code: &str, value: &str) {
 	let (output, record) = pure_run(name, code);
 	assert!(output.contains(value), "{code}: {output}");
 	assert_eq!(record.trim(), RAN_PURE, "{code}");
+}
+
+/// WARP_SELF_HOSTED=pure-only: no usual compile behind the lane, a program outside the core fails with its refusal
+#[test]
+fn pure_only_refuses_without_the_rust_compile() {
+	assert!(lane_run("pure-only", "only_core", "1 + 2").0.contains('3'));
+	let (output, _) = lane_run("pure-only", "only_refused", "nosuchword 3");
+	assert!(output.contains("outside the core: pure: the unknown name nosuchword"), "{output}");
 }
 
 #[test]
