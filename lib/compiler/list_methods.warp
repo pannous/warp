@@ -15,8 +15,21 @@ method_call(receiver: Node, called: Node, n: Node): Node := match called {
 	_: n
 }
 
+# `x in xs`: whether a map has the key x or a list the element x; `xs contains x`, `xs has x`, `xs includes x` the same
+# written the other way round. Rust twin: library_words.rs membership (its text units, `#bytes in t`, are not here)
+contained_word = {"contains": 1, "has": 1, "includes": 1}
+
+membership(phrase_parts: list, n: Node): Node := {
+	if #phrase_parts != 3 or not is_name(phrase_parts#2) { return n }
+	middle = name_of(phrase_parts#2)
+	if middle == "in" { return List([symbol("collection_contains"), phrase_parts#3, phrase_parts#1], Bracket.Round, Separator.None) }
+	if middle in contained_word { return List([symbol("collection_contains"), phrase_parts#1, phrase_parts#3], Bracket.Round, Separator.None) }
+	n
+}
+
 list_method(n: Node): Node := match n {
 	Key(receiver, Op.Dot, called): method_call(receiver, called, n)
+	List(phrase_parts, Bracket.None, Separator.Space): membership(phrase_parts, n)
 	_: n
 }
 
