@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 # emitter core: texts as numbers at run time (runtime.warp text_as_int, text_as_float, text_as_number; card card-4)
-# [-42 12500 0.035 1.5 1e-7 1.2345678901234568e20 7 2.5]
+# [-42 12500 0.035 1.5 1e-7 1.2345678901234568e16 7 2.5]
 whole(t: text): int := t as int
 real(t: text): float := t as float
 number(t: text) := t as number
-[whole("-42"), real("12.5e3"), real("3.5e-2"), real(".15e1"), real("1e-7"), real("123456789012345678901"), number("7.0"), number("2.5")]
+[whole("-42"), real("12.5e3"), real("3.5e-2"), real(".15e1"), real("1e-7"), real("12345678901234567"), number("7.0"), number("2.5")]

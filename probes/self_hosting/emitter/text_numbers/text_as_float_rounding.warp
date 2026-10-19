@@ -1,5 +1,7 @@
 #!/usr/bin/env warp
-# emitter core: decimal scaling beyond 10^±22 and at the float range's ends (runtime.warp decimal_float; card card-4)
-# [1e23 8.988465674311579e307 1.7976931348623157e308 ∞ 1e-300 5e-324 0]
+# emitter core: decimal scaling at 10^±22 and one step beyond, a tie at 2^53, the float range's ends (runtime.warp
+# decimal_float; card card-4). Only forms Rust's ten-by-ten scaling also rounds right: beyond them warp's is correctly
+# rounded and Rust's may be an ulp off, so the twin would differ (notes/text_numbers.md)
+# [1e22 1e-22 1e23 9007199254740992 ∞ 0]
 real(t: text): float := t as float
-[real("1e23"), real("8.988465674311579e307"), real("1.7976931348623157e308"), real("1e309"), real("1e-300"), real("5e-324"), real("1e-400")]
+[real("1e22"), real("1e-22"), real("1e23"), real("9007199254740993"), real("1e309"), real("1e-400")]
