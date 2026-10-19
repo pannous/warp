@@ -196,7 +196,7 @@ pub fn seal_quoted(node: Node) -> Node {
 
 /// The code of `data e`, `data(e)` and `data(a of b)`, whose words the parser keeps as the items after data; a
 /// variable named data is no prefix: `data where it == 2`
-fn written_quote(node: &Node) -> Option<Node> {
+pub(crate) fn written_quote(node: &Node) -> Option<Node> {
 	let grouped = prefixed_group(node);
 	let Node::List(items, Bracket::None, Separator::Space) = grouped.as_ref().unwrap_or(node).drop_meta() else {
 		return None;

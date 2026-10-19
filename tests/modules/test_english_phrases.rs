@@ -12,3 +12,9 @@ fn set_phrases_come_from_the_english_module() {
 fn own_set_shadows_the_english_rule() {
 	is!("set = 7\nset + 1", 8);
 }
+
+// a quote is code as written: no rewrite rule reaches inside `data(…)`
+#[test]
+fn a_quoted_set_phrase_stays_as_written() {
+	is!("data(set width of p to 12) == parse_code(\"set width of p to 12\")", true);
+}
