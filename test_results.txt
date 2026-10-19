@@ -3819,9 +3819,11 @@ PASSED:
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
+  ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
@@ -6480,8 +6482,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_analyzer::matching_sources_keep_matching
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6477 passed, 2 failed, 6479 total tested
+16 ignored, 6479 passed, 0 failed, 6479 total tested
