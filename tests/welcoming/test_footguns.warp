@@ -14,6 +14,10 @@ square(3037000500) > 2^63' true
 is! 't=zoned(2030-10-27T02:30, "Europe/Berlin", disambiguation: earlier); t.offset' 7200
 is! 't=zoned(2030-10-27T02:30, "Europe/Berlin", disambiguation: later); t.offset' 3600
 
+# test_skipped_local_time_can_be_chosen_explicitly
+is! 't=zoned(2030-03-31T02:30, "Europe/Berlin", disambiguation: earlier); t.hour' 1
+is! 't=zoned(2030-03-31T02:30, "Europe/Berlin", disambiguation: later); t.hour' 3
+
 # test_calendar_day_is_not_24_hours
 is! '(2030-03-30T12:00[Europe/Berlin] + 1 day) - 2030-03-30T12:00[Europe/Berlin] == 23 hours' true
 is! 't=add(2030-10-26T02:30[Europe/Berlin], 1 day, disambiguation: later); t.offset' 3600

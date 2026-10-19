@@ -2,6 +2,10 @@
 
 # test_spaced_construction_of_a_declared_type
 is! 'class V { x: float, y: float }; vs = [V { x: 1, y: 2 }, V { x: 3, y: 4 }]; (vs#2).x' 3
+is! 'class V { x: float, y: float }; def f(a, b) := V { x: a, y: b }; f(5, 6).x' 5
+
+# test_field_of_a_declared_type_reads_at_run_time
+is! 'class V { x: float, y: float }; def f(a, b) := V(a, b); v = f(5, 6); v.x' 5
 
 # test_entry_named_like_a_variable_keeps_its_name
 is! 'class V { x: float, y: float }; def vec(x, y) := V { x: x, y: y }; vec(3, 4).x' 3

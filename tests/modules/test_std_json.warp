@@ -2,3 +2,4 @@
 
 # use_json_parses_and_writes_json
 is! 'use json; person = parse_json("{\\"name\\": \\"Ann\\", \\"age\\": 30}"); person.age' 30
+is! 'use json; to_json(parse_json("{\\"a\\": [true, null]}"))' '{"a":[true,null]}'

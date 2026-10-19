@@ -7,6 +7,9 @@ box.size(n) := kept = n
 size(box, 5)
 size box' 5
 
+# a_field_named_like_a_canvas_side_binds_only_inside_its_class
+is! 'class R{width:int; height:int; area() := width * height}; R(2,3).area()' 6
+
 # a_destructured_parameter_named_like_a_canvas_side
 is! 'area({width, height}) := width * height
 m = {width: 3, height: 4}

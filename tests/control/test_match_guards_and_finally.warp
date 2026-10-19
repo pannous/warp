@@ -38,6 +38,7 @@ is! 'value = 0; d = match value {
  1 => "one" }; d' 'zero'
 
 # finally_runs_and_keeps_the_value
+is! 'ran = 0; v = try { 1/0 } catch { -1 } finally { ran = 1 }; v * 10 + ran' (-9)
 is! 'try:
     x = 1/0
 except:

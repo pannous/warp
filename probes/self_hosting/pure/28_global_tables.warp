@@ -1,0 +1,13 @@
+// out: yes
+// out: condition
+// out: 82
+UNIT_WORDS = ["byte", "bytes", "char"]
+KEYWORD_FORMS = {"return": "return", "if": "condition"}
+CONDITION_POWER = 81
+SLICE_FROM_START = [[":", ":"], ["..", ".."]]
+def is_unit(word) := word in UNIT_WORDS
+def form_of_keyword(word) := KEYWORD_FORMS[word]
+def stronger() := CONDITION_POWER + #SLICE_FROM_START - 1
+print is_unit("bytes")
+print form_of_keyword("if")
+print stronger()
