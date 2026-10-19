@@ -27,6 +27,7 @@ LEFTOVER_DAYS=2
 KEPT_BRANCHES=(main HEAD)
 STALE_HOURS=${STALE_HOURS:-12}
 SUPERVISOR_TMUX=warp-supervisor
+TODO=/Users/me/dev/bin/todo  # cron's PATH lacks ~/dev/bin
 RESULT_BRANCHES='^cloud-(jobs|results)/'  # test-lane results the steward reads, never merged
 GH_TOKEN=${GH_TOKEN:-$(cat ~/.config/gh/cron-token 2>/dev/null)}; export GH_TOKEN
 
@@ -84,7 +85,8 @@ if [[ -d $DONOR && -z $(git -C $DONOR status --porcelain --untracked-files=no 2>
 fi
 
 stale=()
-todo ready --stray 2>/dev/null | awk '/^## unmerged/{on=1; next} /^##/{on=0} on && NF' |
+stray=$(cd $WARP && $TODO ready --stray 2>&1) || stale+=("todo ready --stray failed: ${stray:0:200}")
+print -r -- $stray | awk '/^## unmerged/{on=1; next} /^##/{on=0} on && NF' |
 while read -r branch card; do
   [[ $branch =~ $RESULT_BRANCHES ]] || ! older_than $STALE_HOURS origin/$branch || stale+=("$branch ($card)")
 done
