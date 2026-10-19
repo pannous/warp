@@ -659,7 +659,7 @@ key_expression(body: Body, n: any) := {
 	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
 	if operator == "-" and left == ø { return negation(body, expression(body, right)) }
-	if operator == "and" or operator == "or" { return logical(body, operator, left, right) }
+	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator == "#" and left == ø { return length(expression(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in length_words { return length(expression(body, left)) }
 	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
@@ -682,11 +682,24 @@ negation(body: Body, value: any) := {
 	["int", [op.i64_const, 0] + value#2 + [int_ops["-"]]]
 }
 # `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
+# on other values they give one of them, as Rust does: `a and b` is b when a holds, else a; `a or b` a when a holds,
+# else b (`(1==1) and 5` is 5, `x | y` with x 0 is y); a yes/no beside a number counts as 1 or 0
+logical_words = {and: "and", or: "or", "|": "or"}
 logical(body: Body, symbol: text, left: any, right: any) := {
-	a = condition(expression(body, left))
-	b = condition(expression(body, right))
-	if symbol == "and" { return ["bool", a + [op.if, type_bytes.bool] + b + [op.else, op.i64_const, 0, op.i64_eqz, op.i32_eqz, op.end]] }
-	["bool", a + [op.if, type_bytes.bool, op.i64_const, 1, op.i64_eqz, op.i32_eqz, op.else] + b + [op.end]]
+	a = expression(body, left)
+	b = expression(body, right)
+	if a#1 == "bool" and b#1 == "bool" {
+		a = condition(a)
+		b = condition(b)
+		if symbol == "and" { return ["bool", a + [op.if, type_bytes.bool] + b + [op.else, op.i64_const, 0, op.i64_eqz, op.i32_eqz, op.end]] }
+		return ["bool", a + [op.if, type_bytes.bool, op.i64_const, 1, op.i64_eqz, op.i32_eqz, op.else] + b + [op.end]]
+	}
+	kind = if a#1 == "bool" then b#1 else if b#1 == "bool" then a#1 else joint_kind(a#1, b#1)
+	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
+	held = [a#1, [op.local_get] + uleb(fresh_local(body, a#1))]
+	test = condition([a#1, a#2 + [op.local_set] + held#2[1..] + held#2])
+	given = if symbol == "and" then [b, held] else [held, b]
+	[kind, test + [op.if] + value_type(kind) + converted(given#1, kind) + [op.else] + converted(given#2, kind) + [op.end]]
 }
 
 ## functions
