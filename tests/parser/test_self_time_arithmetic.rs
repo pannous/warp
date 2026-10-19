@@ -47,7 +47,9 @@ fn clocks_go_round_and_instants_have_no_calendar() {
 		true
 	);
 	is!(
-		&arithmetic("try { shift_time(Moment(TimeForm::Instant, 0), Span(0, 1, 0)) } catch e { e.message == no_calendar }"),
+		&arithmetic(
+			"try { shift_time(Moment(TimeForm::Instant, 0), Span(0, 1, 0)) } catch e { e.message == no_calendar }"
+		),
 		true
 	);
 }
@@ -73,5 +75,8 @@ fn operands_swap_scale_and_subtract() {
 fn durations_order_when_every_date_agrees() {
 	is!(&arithmetic("duration_order(Span(1, 0, 0), Span(0, 27, 0))"), 1);
 	is!(&arithmetic("duration_order(Span(0, 0, 3), Span(0, 0, 5))"), -1);
-	is!(&arithmetic("try { duration_order(Span(1, 0, 0), Span(0, 30, 0)) } catch e { e.message == lengths_vary }"), true);
+	is!(
+		&arithmetic("try { duration_order(Span(1, 0, 0), Span(0, 30, 0)) } catch e { e.message == lengths_vary }"),
+		true
+	);
 }

@@ -10,9 +10,12 @@ fn test_time_field_of_a_position() {
 	is!("time_field_of(1, 19782, 0, 2)", 29);
 	is!("time_field_of(1, 19782, 0, 3)", 4); // a Thursday
 	is!("time_field_of(1, 19782, 0, 4)", 60);
-	is!("y = time_field_of(1, -1, 0, 0); y * 10000 + time_field_of(1, -1, 0, 1) * 100 + time_field_of(1, -1, 0, 2)", 19691231);
+	is!(
+		"y = time_field_of(1, -1, 0, 0); y * 10000 + time_field_of(1, -1, 0, 1) * 100 + time_field_of(1, -1, 0, 2)",
+		19691231
+	);
 	is!("time_field_of(1, -1, 0, 3)", 3); // a Wednesday
-	// 2024-01-31T10:30:15Z
+									   // 2024-01-31T10:30:15Z
 	is!("t = 1706697015000000000; time_field_of(0, t, 0, 5) * 3600 + time_field_of(0, t, 0, 6) * 60 + time_field_of(0, t, 0, 7)", 37815);
 	is!("time_field_of(0, 1706697015000000000, 0, 8)", 1706697015);
 	is!("time_field_of(0, -1000000000, 0, 5)", 23); // 1969-12-31T23:59:59

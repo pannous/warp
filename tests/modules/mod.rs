@@ -78,8 +78,8 @@ mod test_std_reflection_hints; // card function-repeat
 mod test_std_regex;
 mod test_std_shadowed_names; // card libm-function
 mod test_std_time;
-mod test_std_uncertain; // card uncertain-warp
 mod test_std_time_zones; // card time-zones-warp
+mod test_std_uncertain; // card uncertain-warp
 mod test_std_words; // card std-word
 mod test_use_modules;
 mod test_use_several; // card std-use

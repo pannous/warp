@@ -54,23 +54,21 @@ mod test_self_differential; // card self-differential
 #[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
 #[cfg(feature = "native")]
+mod test_self_emitter_times; // card time-primitives
+#[cfg(feature = "native")]
+mod test_self_exact_pow; // card exact-pow-warp
+#[cfg(feature = "native")]
 mod test_self_exact_rounding; // card exact-rounding-warp
 #[cfg(feature = "native")]
 mod test_self_float_as_exact; // card float-as-exact-warp
 #[cfg(feature = "native")]
 mod test_self_float_text; // card float-text-warp
 #[cfg(feature = "native")]
-mod test_self_emitter_times; // card time-primitives
-#[cfg(feature = "native")]
-mod test_self_exact_pow; // card exact-pow-warp
-#[cfg(feature = "native")]
 mod test_self_hosted_analysis; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_cache; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_views; // card warp-pipeline-suite
-#[cfg(feature = "native")]
-mod test_self_time_text; // card time-text-warp
 #[cfg(feature = "native")]
 mod test_self_lexer; // card self-lexer
 #[cfg(feature = "native")]
@@ -87,10 +85,12 @@ mod test_self_pipeline; // card parser-tree
 mod test_self_serializer; // card self-serializer
 #[cfg(feature = "native")]
 mod test_self_signatures; // Back-end focus: the analyzer's signature table
+#[cfg(feature = "native")]
+mod test_self_sort; // card sort-warp
 #[cfg(feature = "native")] // a lib/compiler file on disk
 mod test_self_time_arithmetic; // card time-arithmetic-warp
 #[cfg(feature = "native")]
-mod test_self_sort; // card sort-warp
+mod test_self_time_text; // card time-text-warp
 #[cfg(feature = "native")]
 mod test_self_words; // card library-word-tables
 mod test_semicolon_square;
