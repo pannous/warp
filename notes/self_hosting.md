@@ -206,6 +206,18 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 
 The bootstrap (warp compiling the warp-written compiler) is planned once 13–15 cover the compiler's own subset.
 
+### Bootstrap gap (card bootstrap-gap)
+`SURVEY=1 FOLDERS=lib/compiler probes/self_hosting/refusals.sh scratch/warp` → data/self_hosting/bootstrap_gap.txt:
+every refused function of lib/compiler once, by the first form refused (a fixed family uncovers the next one behind
+it). 2026-10-19, after `x == ø` / `x != ø` (23 functions): 108 of the compiler's functions refused, 22 files.
+| family | functions | owner |
+| --- | --- | --- |
+| calls of host/runtime words emitter.warp lacks: node API `bracket_of`, `symbol`, `separated`, `node_of` | ~25 | emitter-structures |
+| calls of text and library words: `slice`, `starts_with`, `ends_with`, `trim`, `is_name_char`, `is_name_start`, `is_hex_digit`, `code_point_list`, `map_get_or`, `ran_without_error`; another file's `peek`, `is_at` | ~30 | runtime |
+| a value known only at run time as a condition, text, bool or list (`if node`, `"a" + node`) | 23 | self-emitter |
+| the unknown name: a module-level constant read in a function (`type_words`, `of_word`, `prelude_text`…) | 19 | cache |
+| a parameter of kind function / bool, a result of none | 7 | cache |
+
 ## Emitter core (card emits-wasm, step 15)
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
 node_of) gives a wasm module as a list of bytes, main returning the program's value; a program outside the core gives
