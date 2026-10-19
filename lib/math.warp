@@ -97,7 +97,12 @@ trunc(x: float): float from 'm'
 log1p(x: float): float from 'm'
 expm1(x: float): float from 'm'
 
-gcd(a: int, b: int) := if b == 0 then a else gcd(b, a % b)
+gcd(a: int, b: int): int := {
+	x = if a < 0 then -a else a
+	y = if b < 0 then -b else b
+	while y != 0 { rest = x % y; x = y; y = rest }
+	x
+}
 lcm(a: int, b: int) := a / gcd(a, b) * b
 clamp(x, low, high) := if x < low then low else if x > high then high else x
 sign(x) := if x > 0 then 1 else if x < 0 then - 1 else 0
@@ -196,3 +201,36 @@ whole_part(x) := trunc(x)
 // what remains of a after taking out b as often as it fits, with the sign of a (C's fmod)
 alias fmod = remainder
 remainder(a, b) := fmod(a, b)
+
+// The exact arithmetic the runtime emits in Rust (src/wasm_emitter/numbers/exact.rs int_gcd, ratio_new, exact_div,
+// int_mod, int_euclid_div) written in warp (card ratio-gcd-warp); gcd above is int_gcd's twin, never below 0. The
+// builtins stay until a measured step calls these late (notes/ratio_gcd_warp.md);
+// tests/numbers/test_ratio_gcd_warp.rs compares them with `/`, `%`, `/!` and `rem`.
+class RatioParts {
+	numerator: int
+	denominator: int
+}
+// n/d in lowest terms with a positive denominator, as ratio_new keeps every ratio: 6/-4 is -3/2, 5/0 is 1/0 (∞), 0/0 stays
+lowest_terms(n: int, d: int): RatioParts := {
+	sign = if d < 0 then -1 else 1
+	divisor = gcd(n, d)
+	if divisor > 1 { return RatioParts(sign * n /! divisor, sign * d /! divisor) }
+	RatioParts(sign * n, sign * d)
+}
+// a/b of two exact numbers as exact_div divides them: an int whenever b divides a, by 0 the error divide by zero
+exact_quotient(a: RatioParts, b: RatioParts): RatioParts := {
+	if b.numerator == 0 { raise "divide by zero" }
+	lowest_terms(a.numerator * b.denominator, a.denominator * b.numerator)
+}
+// a % b of two ints as int_mod takes it: never below 0, the truncated remainder `rem` plus |b| when it is negative
+euclidean_remainder(a: int, b: int): int := {
+	rest = a rem b
+	if rest >= 0 then rest else if b < 0 then rest - b else rest + b
+}
+// a /! b as int_euclid_div takes it, the quotient that goes with `%` (a = q·b + r, 0 ≤ r < |b|): -7 /! 2 is -4;
+// a - rest is a multiple of b, so its `/!` is the truncated quotient
+euclidean_quotient(a: int, b: int): int := {
+	rest = a rem b
+	truncated = (a - rest) /! b
+	if rest >= 0 then truncated else if b < 0 then truncated + 1 else truncated - 1
+}
