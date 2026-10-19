@@ -7,6 +7,7 @@ is! 'total(xs) := { s=0; for x in xs { s+=x }; s }; job = go total([1,2,3]); awa
 is! 'f(ms) := { started = clock(); sleep(ms / 1000); started }; a = go f(1000); b = go f(1000); if abs(await a - await b) < 1000 then 2000 else -1' 2000
 
 # a_function_value_crosses_to_a_task
+is! 'inc = x => x + 1; apply(g, v) := g(v); job = go apply(inc, 3); await job' 4
 is! 'k = 10; add = x => x + k; apply(g, v) := g(v); job = go apply(add, 5); await job' 15
 is! 'mapit(f, xs) := xs.map(f); job = go mapit(x => x + 1, [1, 2]); await job' [2, 3]
 

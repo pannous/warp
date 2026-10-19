@@ -85,7 +85,9 @@ impl<'n> Holders<'_, 'n> {
 			{
 				let callee = items[0].drop_meta().name();
 				let function = self.functions.get(&callee);
-				let imported_changing = function.is_none() && (self.changes_arguments)(&callee);
+				// a function value (`f = function add; f(xs, 2)`) may be any function, one changing its arguments too
+				let imported_changing = (function.is_none() && (self.changes_arguments)(&callee))
+					|| crate::closures::closure_call_arity(&callee).is_some();
 				for (index, argument) in items.iter().enumerate().skip(1) {
 					// a function that never changes the list it gets, nor gives it back (`ys = f(xs)`), only reads it
 					let changed = imported_changing

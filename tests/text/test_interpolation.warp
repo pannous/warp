@@ -5,3 +5,6 @@ is! «name="x' OR '1'='1";q=sql "SELECT * FROM t WHERE name = $name";q#1» 'SELE
 is! «name="x' OR '1'='1";q=sql "SELECT * FROM t WHERE name = $name";q#2» «x' OR '1'='1»
 is! 'name="x";q=sql "SELECT * FROM t WHERE name = \\(name)";q#1' 'SELECT * FROM t WHERE name = ?'
 is! 'a="x";b="y";q=sql "SELECT * FROM t WHERE a = $a AND b = ${b}";q#1' 'SELECT * FROM t WHERE a = ? AND b = ?'
+
+# round_dollar_holes_interpolate_like_curly_ones
+is! 'a="x";q=sql "SELECT * FROM t WHERE a = $(a)";q#1' 'SELECT * FROM t WHERE a = ?'

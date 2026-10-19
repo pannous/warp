@@ -1,7 +1,0 @@
-height: length = 2 inch
-print height as cm
-print 3 cm is length
-print 4 m² is length²
-print 3 s is duration
-speed: length/duration = 3 km/h
-print speed is length/duration

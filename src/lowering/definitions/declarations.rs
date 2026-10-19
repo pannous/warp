@@ -649,6 +649,16 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		None => definition,
 	};
 	let (head, op, body) = definition_parts(definition)?;
+	// `def f(x): bool := body`, `def f(x) as bool := body`: the result type on the head of the definition
+	let head = match head.drop_meta() {
+		Node::Key(call, Op::Colon | Op::As, written_type)
+			if result_type.is_none() && matches!(call.drop_meta(), Node::List(_, Bracket::Round, _)) =>
+		{
+			result_type = Some(written_type.as_ref().clone());
+			call.as_ref().clone()
+		}
+		_ => head,
+	};
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
 		return None;
 	};

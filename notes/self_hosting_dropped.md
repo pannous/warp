@@ -218,10 +218,16 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   symbol's name.
 - Big ints (card emitter-big-ints): an int is an i64 in emitter.warp's modules, and an int beyond 64 bits fails in
   runtime.warp int_overflow ("trap detail: 0"), where Rust's promotes it to a BigInt (`x = 2^62; x * 4`, factorial 25,
-  Catalan numbers past the 35th). Source: samples/golf/catalan-numbers.short.warp (inside the core since a body ending
-  in a statement gives ø, 2026-10-19). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
+  Catalan numbers past the 35th). Sources: samples/golf/catalan-numbers.short.warp and
+  samples/golf/catalan-numbers.warp (inside the core since a body ending in a statement gives ø, 2026-10-19). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
   handles into a big-number heap).
 - Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
   Comparable witness), times and uncertain values trap there, where Rust's node_order orders them. A sorted list is a
   plain list, where Rust's keeps the bracket kind of the sorted one. Back: node_order asks the witness table and the
   time words once emitter.warp lays those out; the result takes the kind of xs.
+- A recursive call in a comprehension inside a match arm (card match-arm-comprehension): warp's module prints the
+  expected `[["s" "x"]]`, Rust's fails with "not an int at 4:28". Warp is right here; the twin is dropped until Rust's
+  lowering is fixed. Source: probes/self_hosting/match_arm_comprehension.warp (2026-10-19). Back: when the card is done.
+- Not yet read (card emitter-twin): probes/self_hosting/readiness/scan_100k.warp, where warp's module traps
+  ("trap detail: 0") and Rust's prints 40000 and 20000, and samples/web/select_binding.warp. Both differ on main
+  f9e2a9e6ba, without the changes of branch cache-fixes (2026-10-19). Back: once the card reads and fixes them.

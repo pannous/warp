@@ -94,6 +94,9 @@ fn an_exact_comparison_prints_as_bool() {
 #[test]
 fn a_function_returning_a_bool_local_gives_a_bool() {
 	is!("f() := { hit = no; hit = yes; hit }; f()", true);
+	let seen = "seen(xs) := { hit = no; for x in xs { if x > 2 { hit = yes } }; hit }; ";
+	is!(&format!("{seen}seen([1, 5])"), true);
+	is!(&format!("{seen}seen([1])"), false);
 	is!("has_any(xs) := any(xs); has_any([false, true]) == yes and type(has_any([false])) == bool", true);
 	is!("f() := { n = no; n += 1; n }; f()", 1);
 }

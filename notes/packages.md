@@ -40,6 +40,14 @@
   else (loudly) `cargo build --target wasm32-wasip1 --bin <name>` with CARGO_TARGET_DIR in the package's own build
   directory: `~/.cache/warp/packages/<name>@<version>.build` (pinned clone) or `packages/.build/<name>` (anything else).  Never run cargo inside a package directory: with the shared target-dir, a fetched uniscript of the same crate
   version overwrites ~/dev/uniscript's binary and rlib.
+  directory: `~/.cache/warp/packages/<name>@<version>.build` (pinned clone) or `packages/.build/<name>` (anything else).
+  Warp's Cargo workspace excludes the `packages/` tree, so a source fallback below a fresh checkout is independent;
+  otherwise Cargo rejects it as an undeclared member of Warp's workspace before the package can build.
+  Why: on 2026-10-02 16:54 tests/web/test_uniscript.rs `the_index_matches_the_readable_entities` ran `cargo run --release
+  -- check` inside the fetched ~/.cache/warp/packages/uniscript@1.0.0 without CARGO_TARGET_DIR, so cargo used
+  ~/.cargo/config.toml's shared target-dir and, as the same crate uniscript 1.0.0, overwrote ~/dev/uniscript's binary
+  and rlib (Sublime lost completions; its main.rs compiled against that rlib). With CARGO_TARGET_DIR set, the same
+  `cargo run` would have built the package into warp's own target instead. Never run cargo inside a package directory.
   uniscript's v1.0.0 release ships uniscript.wasm (4.2 MB): the first run downloads it once per machine, no build.
   A package publishes its tool with `cargo build --release --target wasm32-wasip1 --bin <name>` as release asset <name>.wasm.
 - Libraries: `library: "c/ffi/uniscript_c"` in a manifest (or entry) makes `use <name>` load the binding `<name>.warp` of

@@ -1,2 +1,0 @@
-names: texts = ["hi"]
-upper names  // ["HI"], as for the untyped names = ["hi"] (card typed-list-upper)

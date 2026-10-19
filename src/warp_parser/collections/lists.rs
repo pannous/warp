@@ -116,6 +116,7 @@ impl WarpParser {
 		let tag_block = std::mem::take(&mut self.tag_block);
 		// Collect all items with their following separators
 		let mut items_with_seps: Vec<(Node, Separator)> = Vec::new();
+		let mut skipped_empty = false;
 		let scope_at_entry = self.parameters_in_scope.len();
 
 		loop {
@@ -125,6 +126,15 @@ impl WarpParser {
 			}
 			// Skip whitespace but track indent for dedent detection
 			let (had_newline, line_indent) = self.skip_whitespace();
+			// a skipped ø at a line's end (`'y' ø⏎'z'`) still ends its line
+			match items_with_seps.last_mut() {
+				Some((_, separator))
+					if had_newline && std::mem::take(&mut skipped_empty) && *separator == Separator::Space =>
+				{
+					*separator = Separator::Newline
+				}
+				_ => skipped_empty = false,
+			}
 
 			// Check for dedent - exit this block if we're back to lower indent
 			if had_newline && line_indent < self.context.base_indent && bracket == Bracket::None {
@@ -196,10 +206,13 @@ impl WarpParser {
 			let consumed_input = self.pos != pos_before;
 			// `==` is loose (false equals ø): only a real ø is skipped; `sum []` keeps its empty argument
 			let is_argument = in_command && items_with_seps.len() > statement_start;
-			if matches!(item, Empty) && !(consumed_input && (close.is_some() || is_argument)) {
+			// a column keeps its place: `"y"⇥ø⇥note`
+			let is_column = matches!(items_with_seps.last(), Some((_, Separator::Tab)));
+			if matches!(item, Empty) && !(consumed_input && (close.is_some() || is_argument || is_column)) {
 				if !consumed_input {
 					self.advance();
 				}
+				skipped_empty = consumed_input;
 				continue;
 			}
 
@@ -223,6 +236,7 @@ impl WarpParser {
 				Some(comment) => item.with_comment(comment),
 				None => item,
 			};
+			let tabbed = self.at_tab_separator();
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 
@@ -256,7 +270,10 @@ impl WarpParser {
 			let in_item = items_with_seps.get(statement_start).is_some_and(
 				|(first, _)| matches!(first.drop_meta(), Symbol(word) if ITEM_WORDS.contains(&word.as_str())),
 			);
-			let sep = self.parse_separator(close, had_newline, in_command || is_command(&item), in_item);
+			let sep = match self.parse_separator(close, had_newline, in_command || is_command(&item), in_item) {
+				Separator::Space if tabbed => Separator::Tab,
+				sep => sep,
+			};
 
 			let item = match items_with_seps.last() {
 				Some((previous, Separator::Space)) if assigned_method_call(previous) && item.is_block() => {

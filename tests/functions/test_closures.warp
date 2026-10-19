@@ -12,6 +12,7 @@ is! 'twice(x):=x*2; square(x):=x*x; pick(c) := if c then twice else square; f = 
 
 # test_compose_returns_a_closure
 is! 'twice(x):=x*2; inc(x):=x+1; compose(f, g) := (x => f(g(x))); h = compose(twice, inc); h(3)' 8
+is! 'compose(f, g) := (x => f(g(x))); k=10; h = compose(y=>y+k, y=>y*2); h(3)' 16
 
 # per_site_result_kind_when_arity_mixes_function_and_int
 is! 'add(a) := (b => (c => a+b+c)); g = add(1); h = g(2); f = x => x + 1; x:int = h(3) + f(4); x' 11
