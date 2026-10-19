@@ -1,0 +1,3 @@
+prefix operator √(a: float): float := wasm f64.sqrt
+print √2.0
+print √16
