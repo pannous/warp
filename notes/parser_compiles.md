@@ -37,19 +37,22 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
   global_declaration: "kind ?"): a value of a call still compiling is a node, its readers read again at the end,
   runtime-declared 5f7ca4f819
 - a write by a run-time key (`m#(k+1) = v`, remember() in scope.warp): runtime.warp node_put, runtime-declared b1076666be
+- lower/upper (Unicode case tables), ran_without_error/try, is_error, contains alias, a missing field `try n.line else 0`
+  (walk.warp line_of): pure-builtins d1054cbdc2 (Ready)
+- `symbol("print")` in the pure lane: runs pure on pure-lane (rung check 2026-10-19 night)
 
 ## Open
 | root | owner |
 |---|---|
-| lower/upper (case tables), ran_without_error, contains alias | warp-self-emitter (pure-builtins) |
-| prelude defs on demand (is_digit), `symbol("print")` in the pure lane | warp-self-emitter |
-| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | warp-self-analyzer |
+| prelude defs on demand (is_digit) | warp-self-emitter |
+| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | done on pure-lane 2c0201b4e9: `f(x): T := e` as `f(x) := {the result: T = e; the result}`, as Rust lowers it (warp-self-analyzer) |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache: `Op.Colon` gives Colon on main (87062eb624); the stage's 'not an object' once a stage program has Op (a one-entry map named like a class read as an instance): enum-decls 24a46fd732, Ready (card class-named-entry); a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd; `use "lib/compiler/node.warp"` itself: card node-op-field-type, Later |
-| try (Rust lowers it to ran_without_error/is_error: needs those builtins) | warp-self-analyzer |
+| try (Rust lowers it to ran_without_error/is_error: needs those builtins) | `try x else y` done on pure-lane 2c0201b4e9 (lib/compiler/tries.warp, builtins merged from pure-builtins); `try {…} catch e {…}` lowers too but waits on caught_error in emitter.warp (warp-self-emitter) (warp-self-analyzer) |
 | a node into a typed Parser field (written_tree), `branch` called with a missing argument | warp-emitter-structures |
 | an instance inside a map (gaps) | gone on main 57469d5a52: warp-cache's survey has no refusal naming gaps or an instance (68 refusals, data/self_hosting/parser_gap_map_instances.txt) |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
 | user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
 | two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing |
-| "a parameter of kind ?" and "a node where a ? is needed" (7 refusals); key_node (an int where a text is needed), lines_below (gives ?), `header` read as the host word response_header on nodes, the text of a closure (data/self_hosting/parser_gap_map_instances.txt) | warp-cache |
+| "a parameter of kind ?" and "a node where a ? is needed" (7 refusals), lines_below/braced_items (gives ?) (data/self_hosting/parser_gap_map_instances.txt) | warp-cache: pending-kinds 1dd929f39c (emitter.warp settles recursive results): all 9 gone; 4 now show their case name (typed_default Assign, superscript_power Sub, conditioned Do, global_declaration Colon) and continued shows `the unknown name continue`; 65 refusals left (data/self_hosting/parser_gap_pending2.txt) |
+| a field named `header` read as the host word response_header (`p.header` → "header needs 2 arguments", Rust lane too), key_node (an int where a text is needed), the text of a closure | warp-list-result-type (branch parser-roots) |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
