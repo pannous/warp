@@ -781,6 +781,29 @@ int_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { fail() }
 	unboxed_int(n)
 }
+# `if x` of a value known only at run time: ø, 0, 0.0, no, "" and an empty list or map are no, all else yes, as Rust's
+node_truth(n: any): bool := {
+	if is_null(n) == 1 { return no }
+	kind = kind_code(n)
+	if kind == 1 { return is_ratio(n) == 1 or unboxed_int(n) != 0 }
+	if kind == 2 { return unboxed_float(n) != 0 }
+	if kind == 3 { return byte_count(unboxed_text(n)) > 0 }
+	if kind == 8 { return #unboxed_list(n) > 0 }
+	yes
+}
+# a value known only at run time given to a list: ø is the empty list, a map (kind 8 in curly braces) no list
+list_of_node(n: any): list := {
+	if is_null(n) == 1 { return new_list(0) }
+	if kind_code(n) != 8 or marked_kind(n) == 8 { not_a_list() }
+	unboxed_list(n)
+}
+# a value known only at run time given to a text: a text, or a character's text
+text_of_node(n: any): text := {
+	if is_null(n) == 0 and kind_code(n) == 3 { return unboxed_text(n) }
+	if is_null(n) == 0 and kind_code(n) == 4 { return char_text(unboxed_char(n)) }
+	not_a_text()
+	""
+}
 # `n as int` of a boxed int or exact rational, truncated toward 0
 truncated_int(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 { fail() }

@@ -235,6 +235,9 @@ converted(value: any, to: text) := {
 	if from == "int" and to == "bool" { return condition(value) }
 	if from == "node" and to == "int" { return runtime_call("int_of_node", [value])#2 }
 	if from == "node" and to == "float" { return runtime_call("float_of_node", [value])#2 }
+	if from == "node" and to == "list" { return runtime_call("list_of_node", [value])#2 }
+	if from == "node" and to == "text" { return runtime_call("text_of_node", [value])#2 }
+	if from == "node" and to == "bool" { return condition(value) }
 	if from != to and from != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
@@ -243,6 +246,8 @@ condition(value: any) := {
 	kind = value#1
 	if kind == "int" { return value#2 + [op.i64_eqz, op.i32_eqz] }
 	if kind == "float" { return value#2 + [op.f64_const] + le64(0) + [float_ops["!="]] }
+	# a text, a list or a value known only at run time: Rust's truth of it (an empty one is no)
+	if kind == "node" or kind == "text" or kind == "list" or kind == "char" { return runtime_call("node_truth", [["node", boxed(value)]])#2 }
 	# (a recursive call not yet known is taken as yes/no: wasm validation fails the module if it is not)
 	if kind != "bool" and kind != pending { refuse("a " + kind + " as a condition") }
 	value#2
@@ -465,7 +470,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
+	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with",
 	trim: "node_trim", map_get_or: "map_get_or"}
 # node_order knows no user compare: a program with classes sorts outside the core
