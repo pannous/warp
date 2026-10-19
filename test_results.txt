@@ -2693,6 +2693,8 @@ PASSED:
   ✓ modules::test_std_words::json_of_an_instance_given_its_classes
   ✓ modules::test_std_words::math_inverse_and_hyperbolic_words
   ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
+  ✓ modules::test_two_used_files::overloads_from_two_files_stay_apart
+  ✓ modules::test_two_used_files::two_files_declaring_one_function_name_both
   ✓ modules::test_use_modules::a_module_is_used_as_an_alias
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::a_programs_global_is_not_a_module_functions_local
@@ -3739,7 +3741,6 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -6316,6 +6317,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6313 passed, 0 failed, 6313 total tested
+11 ignored, 6314 passed, 1 failed, 6315 total tested
