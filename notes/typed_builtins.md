@@ -47,3 +47,15 @@ kind switches they stand for. Done in slices per word family, each with its net 
 - Traps: `.type` of an instance is reflection (class Parameter's field is `type_name`); a user function with a
   declared result passed by name fails (card function-declared); an apostrophe-heavy # comment broke
   analyzer.warp's parse (card comment-three).
+
+## Typing lib/compiler (decision compiler-typed, 2026-10-19)
+Every lib/compiler file declares parameter and result types, except the owners' analyzer.warp, emitter.warp,
+runtime.warp and the hot parser.warp. Types that are not usable yet stay `any`; each has a card:
+- a result that may be ø, `: text?`: "text? is no type" (card text-type; `int?` works)
+- a map: `{}` passed to `s: map` is "an Int" (card needs-map)
+- a character: a text's item analyzes as Text, `: char`/`: codepoint` of `s[at]` is "not a list" (card text-char)
+- `def f(x) as list {…}` is "undefined function: f" (card undefined-function); `def g(): G {…}` of a class G reads
+  `G {…}` as an instance (card def-int). Use `def f(x): list {…}` and `def g(): G := {…}`.
+- node views (`any`) wait for card node-enum's `enum Node`.
+Fixed on the way: a typed-result function's locals named like a module word (`tone`, `pattern` of sound) were
+"undefined function": modules/declarations.rs mentioned_names now reads the body through function_head.
