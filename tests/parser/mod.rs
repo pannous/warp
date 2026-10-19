@@ -53,6 +53,7 @@ mod test_self_analyzer; // card inferred-kinds
 mod test_self_differential; // card self-differential
 #[cfg(feature = "native")]
 mod test_self_emitter; // card emits-wasm
+#[cfg(feature = "native")]
 mod test_self_exact_rounding; // card exact-rounding-warp
 #[cfg(feature = "native")]
 mod test_self_float_as_exact; // card float-as-exact-warp
@@ -68,6 +69,7 @@ mod test_self_hosted_analysis; // card End-end
 mod test_self_hosted_cache; // card End-end
 #[cfg(feature = "native")]
 mod test_self_hosted_views; // card warp-pipeline-suite
+#[cfg(feature = "native")]
 mod test_self_time_text; // card time-text-warp
 #[cfg(feature = "native")]
 mod test_self_lexer; // card self-lexer
