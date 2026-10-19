@@ -386,6 +386,8 @@ subscript_name(index: any): any := {
 	if op_of(index) == "+" and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
 	ø
 }
+# `k+1`, the index `m[k]` lowers to
+is_shifted_index(index: any): bool := op_of(index) == "+" and value_of(index) == 1
 def map_get(map: any, name: text): list { runtime_call("map_get", [["node", boxed(map)], text_value_of(name)]) }
 def field_of(value: any, name: text): any { if value#1 == "node" then map_get(value, name) else refuse("the field " + name + " of a " + value#1) }
 # `m.x = v`: the map with its entry x set to v
@@ -708,6 +710,10 @@ def assignment(body: Body, target: any, value: any): list {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, expression(body, key_of(target)), subscript_name(value_of(target)), value)
 	}
+	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and is_shifted_index(value_of(target)) {
+		held = expression(body, key_of(target))
+		if held#1 == "node" { return keyed_assignment(body, key_of(target), held, expression(body, key_of(value_of(target))), value) }
+	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
 	}
@@ -762,6 +768,14 @@ def whole(value: any): list { admitted(value, "int") }
 def map_assignment(body: Body, map: any, name: text, value: any): list {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
 	set = dropped(field_assignment(map, text_value_of(name), [value#1, held]))
+	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
+}
+# `m[k] = v` of a value known only at run time, as lowered `m#(k+1) = v`: an int k sets the item k+1, any other key
+# the entry named so (runtime.warp node_put); a variable m holds the result, a map made of ø; the assignment gives v
+def keyed_assignment(body: Body, target: any, map: any, key: any, value: any): list {
+	held = [op.local_get] + uleb(fresh_local(body, value#1))
+	put = ["node", runtime_call("node_put", [map, ["node", boxed(key)], ["node", boxed([value#1, held])]])#2]
+	set = if target is symbol then dropped(assignment(body, target, put)) else dropped(put)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
@@ -1089,7 +1103,7 @@ def key_expression(body: Body, n: any): list {
 	# a function value as an operand: Rust's type error `1 + (x => x)`, its reflection `f.name` read as `(closure_new f)#("name"+1)`
 	if not (operator in closure_comparisons) and (is_closure_value(left) or is_closure_value(right)) { return refuse("a function value in " + operator) }
 	if operator == "#" and left != ø and subscript_name(right) != ø { return map_get(expression(body, left), subscript_name(right)) }
-	if operator == "#" and left != ø and op_of(right) == "+" and value_of(right) == 1 {
+	if operator == "#" and left != ø and is_shifted_index(right) {
 		target = expression(body, left)
 		if target#1 == "node" { return runtime_call("node_get", [target, ["node", boxed(expression(body, key_of(right)))]]) }
 	}

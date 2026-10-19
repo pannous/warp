@@ -275,6 +275,15 @@ node_get(n: any, key: any): any := {
 	if kind_code(key) == 1 { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, node_text(key))
 }
+# `n[key] = value` of a value known only at run time: an int key sets the item key+1, any other key the entry named
+# by its text (field_with); n, or the map made of ø
+node_put(n: any, key: any, value: any): any := {
+	if kind_code(key) == 1 {
+		node_set_at(n, unboxed_int(key) + 1, value)
+		return n
+	}
+	field_with(n, node_text(key), value)
+}
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry
 field_with(m: any, name: text, value: any): any := {
