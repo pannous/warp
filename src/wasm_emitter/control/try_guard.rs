@@ -143,13 +143,16 @@ impl WasmGcEmitter {
 				I::GlobalGet(catching.caught_global), I::I32Const(id as i32), I::I32Eq,
 				I::If(BlockType::Result(node_ref)),
 			]);
+			// the Error is of the class the raise named, a runtime error of its Python class (decision error-classes)
 			if *name == super::super::lists::list_ops::RETURNED_ERROR {
-				let detail = self.trap_detail_global();
-				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);
+				let (detail, class) = (self.trap_detail_global(), self.trap_class_global());
+				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull, I::GlobalGet(class)]);
 			} else {
 				self.emit_text_node(func, &super::super::lists::list_ops::runtime_error_message(name));
+				let class = super::super::lists::list_ops::runtime_error_class(name);
+				self.emit_node_instructions(func, &Node::Symbol(class.to_string()));
 			}
-			self.emit_call(func, super::super::text::text_builtins::ERROR_OF);
+			self.emit_call(func, super::super::text::text_builtins::CLASS_ERROR);
 			func.instruction(&I::Else);
 		}
 		self.emit_text_node(func, "error");
