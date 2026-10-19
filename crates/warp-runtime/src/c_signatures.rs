@@ -35,6 +35,18 @@ pub enum ParamType {
 	Handle,
 	/// an out-pointer, filled by the call (CPointer::Out)
 	Out,
+	/// `const uint8_t *module, size_t length`: a warp text or list of byte values, copied for the call; its length
+	/// fills the Length after it
+	Bytes,
+	/// the `size_t` after Bytes: left out of the warp call
+	Length,
+}
+
+impl ParamType {
+	/// Whether the warp call passes this parameter: out-pointers and lengths are filled by the call
+	pub fn is_passed(self) -> bool {
+		!matches!(self, ParamType::Out | ParamType::Length)
+	}
 }
 
 /// A C result's register: none, an integer, a float, or a bool (its low byte)
@@ -48,7 +60,7 @@ pub enum RetType {
 	Bool,
 }
 
-const PARAM_NAMES: [(ParamType, &str); 7] = [
+const PARAM_NAMES: [(ParamType, &str); 9] = [
 	(ParamType::I32, "i32"),
 	(ParamType::I64, "i64"),
 	(ParamType::F32, "f32"),
@@ -56,6 +68,8 @@ const PARAM_NAMES: [(ParamType, &str); 7] = [
 	(ParamType::Ptr, "ptr"),
 	(ParamType::Handle, "handle"),
 	(ParamType::Out, "out"),
+	(ParamType::Bytes, "bytes"),
+	(ParamType::Length, "length"),
 ];
 const RET_NAMES: [(RetType, &str); 6] = [
 	(RetType::Void, "void"),
