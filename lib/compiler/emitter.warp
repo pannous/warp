@@ -297,6 +297,7 @@ instance_value(body: Body, class_name: text, fields: any) := {
 	if #fields != #declared.keys { return refuse("an instance of " + class_name + " not giving each field") }
 	for field in fields {
 		kind = expression(body, value_of(field))#1
+		if not (name_of(key_of(field)) in declared) { return refuse("a field " + class_name + " does not declare") }
 		if not admits(declared[name_of(key_of(field))], kind) { return refuse("a " + kind + " for a typed field of " + class_name) }
 	}
 	name = node(node_kind_codes.symbol, text_bytes(class_name))
@@ -532,7 +533,8 @@ field_types(body: any) := {
 	types = {}
 	if kind_of(body) != "list" { return types }
 	for field in body[3..] {
-		if kind_of(field) == "symbol" { types[field#2] = ø }
+		# an optional field `left?` is untyped
+		if kind_of(field) == "symbol" { types[if field#2.ends_with("?") then field#2[0..<(#field#2 - 1)] else field#2] = ø }
 		if kind_of(field) == "key" {
 			type = field#4
 			types[field#3#2] = if kind_of(type) == "type" and kind_of(type#2) == "symbol" then type#2#2 else "?"
@@ -636,9 +638,9 @@ assignment(body: Body, target: any, value: any) := {
 	}
 	# `m[k] = v`, lowered `m#(k+1) = v`: a text k names an entry; a k known only at run time may be either
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and op_of(value_of(target)) == "+" and value_of(value_of(target)) == 1 {
-		key = expression(body, key_of(value_of(target)))
-		if key#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
-		if key#1 == "text" or key#1 == "char" { return entry_assignment(body, expression(body, key_of(target)), key, value) }
+		subscript = expression(body, key_of(value_of(target)))
+		if subscript#1 == "node" { return refuse("a write by a key known only at run time, an index or a name") }
+		if subscript#1 == "text" or subscript#1 == "char" { return entry_assignment(body, expression(body, key_of(target)), subscript, value) }
 	}
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
