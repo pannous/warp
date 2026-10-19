@@ -290,7 +290,6 @@ PASSED:
   ✓ control::test_frame_event::a_frame_handler_reading_the_view_size_runs_once_without_a_window
   ✓ control::test_frame_event::a_frame_handler_runs_once_without_a_window
   ✓ control::test_frame_event::on_key_hears_the_paint_windows_keys
-  ✓ control::test_fresh_names::a_program_lowers_alike_on_every_compile
   ✓ control::test_function_body::a_field_named_body_wins
   ✓ control::test_function_body::a_functions_body_is_its_code_as_data
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
@@ -416,7 +415,6 @@ PASSED:
   ✓ control::test_lowercase_key_names::a_bound_or_unrelated_lowercase_word_is_no_key
   ✓ control::test_lowercase_key_names::a_key_word_bound_elsewhere_says_to_write_it_in_capitals
   ✓ control::test_lowercase_key_names::a_lowercase_key_word_elsewhere_keeps_its_meaning
-  ✓ control::test_lowercase_key_names::held_key_compares_with_lowercase_key_words
   ✓ control::test_lowercase_key_names::lowercase_key_words_name_keys
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
   ✓ control::test_map_loop_words::the_words_after_a_map_are_the_body
@@ -1205,6 +1203,8 @@ PASSED:
   ✓ ffi::test_page_ids::jquery_gives_a_hint_naming_the_warp_forms
   ✓ ffi::test_page_ids::the_first_dollar_field_hints_at_bind
   ✓ ffi::test_page_ids::the_old_dollar_forms_work_with_a_hint
+  ✓ ffi::test_run_wasm_library::run_wasm_of_no_module_fails_loudly
+  ✓ ffi::test_run_wasm_library::run_wasm_runs_a_module_given_as_bytes
   ✓ ffi::test_wasi::test_fd_write
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
@@ -1500,7 +1500,6 @@ PASSED:
   ✓ functions::test_effects::test_constraint_on_non_function_is_loud
   ✓ functions::test_effects::test_declared_constraint_holds
   ✓ functions::test_effects::test_declared_constraint_violation_names_span_and_chain
-  ✓ functions::test_effects::test_effect_set_names
   ✓ functions::test_effects::test_effects_are_inferred_from_calls
   ✓ functions::test_effects::test_effects_of_query
   ✓ functions::test_effects::test_effects_propagate_through_callers_and_recursion
@@ -1532,7 +1531,6 @@ PASSED:
   ✓ functions::test_float_values_of_tuples::a_destructured_float_stays_a_float
   ✓ functions::test_float_values_of_tuples::a_function_changes_a_float_global
   ✓ functions::test_float_values_of_tuples::a_held_value_adds_into_a_float
-  ✓ functions::test_folding_in_bodies::a_call_on_a_parameter_stays
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_body_is_folded
   ✓ functions::test_folding_in_bodies::a_constant_call_in_a_loop_is_folded
   ✓ functions::test_foreign_modifiers::test_meaningful_modifiers_keep_their_meaning
@@ -1555,9 +1553,6 @@ PASSED:
   ✓ functions::test_function_aliases::test_a_bare_alias_is_the_error_with_the_fix
   ✓ functions::test_function_aliases::test_a_function_argument_stays_bare
   ✓ functions::test_function_aliases::test_an_alias_names_the_function
-  ✓ functions::test_function_head::no_function_definition
-  ✓ functions::test_function_head::the_keyword_forms
-  ✓ functions::test_function_head::the_operator_forms
   ✓ functions::test_function_keyword::func_colon_body_calls_itself_spaced
   ✓ functions::test_function_keyword::function_defines_like_def
   ✓ functions::test_function_ref_compare::a_function_value_compares_with_a_reference
@@ -1721,7 +1716,6 @@ PASSED:
   ✓ functions::test_member_phrases::an_operator_word_ends_the_phrase
   ✓ functions::test_member_phrases::the_parenthesized_call_stays_the_same
   ✓ functions::test_memoization::fib_is_memoized
-  ✓ functions::test_memoization::only_overlapping_recursion_is_memoized
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_libm_function
   ✓ functions::test_method_syntax_calls::test_method_syntax_calls_a_rounding_function
   ✓ functions::test_method_words::test_chars_of_text_literal_in_assignment
@@ -1860,7 +1854,6 @@ PASSED:
   ✓ functions::test_ported_calls::types_built_from_type_parameters_drop_with_them
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
-  ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
   ✓ functions::test_preposition_calls::a_call_with_prepositions_inside_another_call
   ✓ functions::test_preposition_calls::a_call_without_brackets_names_arguments
   ✓ functions::test_preposition_calls::a_label_without_its_colon_is_an_error
@@ -3596,6 +3589,7 @@ PASSED:
   ✓ parser::test_braceless_range_argument::a_comparison_still_ends_the_argument
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
+  ✓ parser::test_comments::test_apostrophe_in_hash_comment_hides_no_code
   ✓ parser::test_comments::test_comments
   ✓ parser::test_comments::test_comments_in_html_structure
   ✓ parser::test_comments::test_nested_block_comments
@@ -3767,12 +3761,12 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
+  ✓ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
@@ -5303,7 +5297,6 @@ PASSED:
   ✓ types::test_typed_builtins::a_result_read_off_an_argument_is_spelled_same_as_or_value_of
   ✓ types::test_typed_builtins::a_typed_builtin_called_without_parentheses_is_the_call
   ✓ types::test_typed_builtins::a_value_known_at_run_time_takes_its_overload_then
-  ✓ types::test_typed_builtins::a_value_no_overload_is_typed_for_takes_the_first_line
   ✓ types::test_typed_builtins::count_declares_a_list_a_text_and_a_map_overload
   ✓ types::test_typed_builtins::each_overload_type_is_the_librarys
   ✓ types::test_typed_builtins::the_map_and_membership_words_declare_their_kinds
@@ -5431,7 +5424,6 @@ PASSED:
   ✓ wasm::test_standalone_executable::test_warp_run_leaves_no_executable
   ✓ wasm::test_standalone_needs_runtime::a_program_with_tasks_says_tasks_need_runtime
   ✓ wasm::test_standalone_needs_runtime::fetch_says_fetch_and_files_need_runtime
-  ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_follows_main
   ✓ wasm::test_unforeseen_functions::an_unforeseen_runtime_function_runs
   ✓ wasm::test_wasm_emitter::test_wasm_roundtrip_via_is
   ✓ wasm::test_wasm_interop_rest::a_row_of_fields_among_lines
@@ -6369,10 +6361,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_rust_macros::println_prints_the_formatted_text
-  ✗ parser::test_self_emitter::core_programs_run_as_rust_runs_them
-  ✗ parser::test_self_exact_rounding::ratio_floor_and_remainder_run_as_rust_runs_them
-  ✗ parser::test_self_time_arithmetic::operands_swap_scale_and_subtract
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-12 ignored, 6366 passed, 4 failed, 6370 total tested
+12 ignored, 6358 passed, 1 failed, 6359 total tested
