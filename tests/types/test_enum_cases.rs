@@ -38,6 +38,9 @@ fn an_enum_without_values_stays_numbered() {
 
 #[test]
 fn a_case_field_named_like_a_counting_word_of_a_value_typed_with_its_enum() {
-	is!("enum T { C(count: int), D(x: int) }; f(t: T): int := match t { C(n) => n; _ => 0 }; [f(T::C(4)), f(T::D(5))]", warp::ints(vec![4, 0]));
+	is!(
+		"enum T { C(count: int), D(x: int) }; f(t: T): int := match t { C(n) => n; _ => 0 }; [f(T::C(4)), f(T::D(5))]",
+		warp::ints(vec![4, 0])
+	);
 	is!("enum T { C(size: int), D(x: int) }; f(t: T) := if t is C then t.size else 0; f(T::C(4))", 4);
 }
