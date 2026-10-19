@@ -81,7 +81,7 @@ def items(p, closer, bracket) {
 		}
 		dedent = bracket == "" and newline and line_indent(p) < p.indent
 		after = if dedent then "" else separator(p, closer, newline)
-		found += [[statement, after] for statement in statements_of(item)]
+		found += [[field_holding_lambda(statement), after] for statement in statements_of(item)]
 		if dedent { break }
 		if p.at == before { p.at = p.at + 1 }
 	}

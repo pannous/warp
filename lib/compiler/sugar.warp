@@ -133,6 +133,29 @@ typed_fields(node: any): any := match node {
 	_: node
 }
 
+// `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry reads as the lambda `(f: x) => x * 2`; a lowercase
+// word that is no type after the key is the lambda's parameter, so the entry f holds `x => x * 2`, in any bracket and
+// in a call's named argument `Holder(d: x => x + 1)`; a typed lambda `x: int => x * 2` stays one
+// Rust twin: definitions/lambdas.rs field_holding_lambda
+field_holding_lambda(item: any): any := match item {
+	Key(lambda_head, Op.Arrow, lambda_body): entry_of_lambda(lambda_head, lambda_body, item)
+	_: item
+}
+
+entry_of_lambda(lambda_head: any, lambda_body: any, item: any): any := match lambda_head {
+	Key(entry_name, Op.Colon, entry_value): { if is_pair_key(lambda_head) and entry_name is symbol and is_parameter_word(entry_value) then Key(entry_name, Op.Colon, Key(entry_value, Op.Arrow, lambda_body)) else item }
+	_: item
+}
+
+// a lambda's parameter after a key: a lowercase word that is no type, or a parenthesized group
+// Rust twin: definitions/functions.rs is_parameter_word
+is_parameter_word(node: any): bool := {
+	if is_list_of(node, "(") { return yes }
+	if not (node is symbol) { return no }
+	first = name_of(node)[0]
+	lower(first) == first and upper(first) != first and not is_type_word(name_of(node))
+}
+
 // A key of the program, no opaque view or attribute layer
 is_pair_key(node: Node): bool := key_of(node) != symbol(opaque_word) and key_of(node) != symbol(attribute_word)
 
