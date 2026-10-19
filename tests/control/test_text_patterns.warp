@@ -21,3 +21,12 @@ is! 's = "a!"; match s { c: letter + "!" => c; _ => "no" }' 'a'
 
 # a_known_name_in_a_sum_is_a_value
 is! 'p = "0x"; s = "0xff"; match s { p + "ff" => "same"; _ => "no" }' 'same'
+
+# text_holes_fit_their_types
+is! 'text_holes("/users/42", ["/users/", ""], ["int"])#1' '42'
+is! 'count(text_holes("/users/bo", ["/users/", ""], ["int"]))' 0
+is! 'text_holes("-3.25 m", ["", " m"], ["number"])#1' '-3.25'
+is! 'text_holes("0xff!", ["0x", "!"], ["hex"])#1' 'ff'
+is! 'count(text_holes("0xfg!", ["0x", "!"], ["hex"]))' 0
+is! 'text_holes("my_name", ["", ""], ["word"])#1' 'my_name'
+is! 'count(text_holes("my-name", ["", ""], ["word"]))' 0
