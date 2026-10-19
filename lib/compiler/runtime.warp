@@ -115,11 +115,11 @@ node_add(a: any, b: any): any := {
 	if kind_code(a) == 1 and kind_code(b) == 1 { return checked_add(unboxed_int(a), unboxed_int(b)) }
 	float_of_node(a) + float_of_node(b)
 }
-# a + b, a - b, a * b of ints; past i64 Rust's ints grow unbounded, here they trap
+# a + b, a - b, a * b of ints; past i64 the ints of Rust grow unbounded, here they trap
 checked_add(a: int, b: int): int := {
-	sum = a + b
-	if (b > 0 and sum < a) or (b < 0 and sum > a) { fail() }
-	sum
+	added = a + b
+	if (b > 0 and added < a) or (b < 0 and added > a) { fail() }
+	added
 }
 checked_subtract(a: int, b: int): int := {
 	difference = a - b
