@@ -21,6 +21,10 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
   pure-front d8bc25e098 (warp-parsing; lands with the pure-front merge)
 - `x === ø`, `x !== ø`: pure-lane (warp-self-analyzer); `x in xs` → collection_contains: pure-lane
 
+- the file's own globals in functions (PRINT, ARGUMENT_POWER, UNIT_WORDS, …): no root of its own, main was refused
+  first (normal lane: the def heads, ae7663fc80, data/self_hosting/parser_gap_with_def.txt names none of them; pure
+  lane: `symbol("print")`, warp-self-emitter's); globals read fine in functions (pure/28_global_tables.warp)
+
 ## Open
 | root | owner |
 |---|---|
@@ -29,7 +33,6 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | match literal and enum-symbol arms | warp-parsing |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache |
 | class constructor `Point(2, 3)`, try | warp-self-analyzer |
-| the file's own globals and module constants inside functions (PRINT, SUFFIX_POWER, UNIT_WORDS, KEYWORD_FORMS …): a
   cascade of main's refusal at `PRINT = symbol("print")`; tables read fine in functions (pure rung 28) | warp-runtime |
 | int(x), positioned, `op as Op` (keyed), an instance inside a map, a node into a typed Parser field, a write by a run-time key, pending kinds in recursive functions, `branch` called with a missing argument | warp-emitter-structures |
 | print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
