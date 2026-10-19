@@ -400,7 +400,7 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   | 59 | `view·opaque`: a class/type or error node kept whole | warp-emitter-structures (classes), warp-self-emitter (errors) |
   | 35+15+11 | untyped values: a text where an int is needed, a node where a list is needed, a node as a condition | warp-self-emitter with warp-self-analyzer's kinds |
   | 25+16 | the unknown name div; floor_quotient | warp-self-emitter |
-  | 22 | closure_new (lambdas, closures) | warp-cache |
+  | 22 | closure_new (lambdas, closures): compiled since emit-families, but for a closure's text | warp-cache |
   | 16 | the operator ‖ | open |
   | 15+14+12 | host words on nodes: std_io, foreign_call, task_spawn_values | warp-cache (low value: needs the module's node exports) |
   | 14+12 | is_type; map_entries (+ map_of_entry 6, field_with 5, collection_contains 8, key 4) | warp-emitter-structures |

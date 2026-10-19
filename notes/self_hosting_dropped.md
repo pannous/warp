@@ -198,3 +198,11 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
   `the result = x / 2; the result`). Source: probes/static_result.warp (accepted by the Integrator with
   emitter-beyond-core). Back: the lowering keeps the result type as `(body) as int` or an annotation, and the emitter
   checks a ratio against it.
+- Closures (emitter.warp closure_value, dispatcher_code): a closure is a Function $Node holding the list [its
+  target's number, the captured values…]; every `closure_call_<n>` calls one dispatcher function per arity, which
+  compares the number. Rust calls a closure of one known target directly (no closure_call_1), so
+  functions::test_call_efficiency::a_closure_of_one_known_target_is_called_directly fails with the switch: same values,
+  another module shape. Equality compares target numbers and captured values: two lambdas written alike at two places
+  are equal in Rust (its kind carries the written form's class), different here. A program giving a closure's text
+  (print, `as text`, join) is refused: the lowered view holds no written form. Back: a direct call where the analyzer
+  knows the one target; the written form in the closure.
