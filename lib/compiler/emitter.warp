@@ -500,7 +500,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
 	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
-	name_of: "node_text", Symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
+	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with",
 	trim: "node_trim", map_get_or: "map_get_or"}
 # node_order knows no user compare: a program with classes sorts outside the core
@@ -731,18 +731,21 @@ def assignment(body: Body, target: any, value: any): list {
 	[kind, converted(value, kind) + [op.local_tee] + index]
 }
 
-# `x: T = v`: x holds T's kind from here on; a value Rust would check at run time (a boxed one, a fraction, a byte's
-# range) is refused, since a trap could not say what Rust's error says
+# `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (int_admitted,
+# list_admitted), any other value Rust would check at run time (a fraction, a byte's range) is refused
 declared_kinds = {int: "int", float: "float", text: "text", list: "list"}
+admitting_words = {int: "int_admitted", list: "list_admitted"}
 def declaration(body: Body, name: text, type_name: text, value: any): list {
 	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[type_name]
 	assignment(body, symbol(name), value)
 }
-# a value as the declared kind takes it: an int widened to a float, else of that kind
+# a value as the declared kind takes it: an int widened to a float, a value known only at run time checked (a list
+# one stays a node, as Rust keeps ø), else of that kind
 def admitted(value: any, kind: text): list {
 	if value#1 == kind or value#1 == pending { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
+	if value#1 == "node" and kind in admitting_words { return runtime_call(admitting_words[kind], [value]) }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
 def whole(value: any): list { admitted(value, "int") }
@@ -1166,7 +1169,9 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 	if (kind != "int" and kind != "node") or a#1 == "float" or b#1 == "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	held = [a#1, [op.local_get] + uleb(fresh_local(body, a#1))]
 	test = condition([a#1, a#2 + [op.local_set] + held#2[1..] + held#2])
-	given = if symbol == "and" then [b, held] else [held, b]
+	# beside a value known only at run time a yes/no on the left counts as 1 or 0, one on the right stays yes/no, as Rust's
+	left = if kind == "node" and a#1 == "bool" then ["int", converted(held, "int")] else held
+	given = if symbol == "and" then [b, left] else [left, b]
 	[kind, test + [op.if] + value_type(kind) + converted(given#1, kind) + [op.else] + converted(given#2, kind) + [op.end]]
 }
 
