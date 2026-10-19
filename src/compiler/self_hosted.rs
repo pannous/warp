@@ -16,6 +16,8 @@ use std::sync::{Mutex, OnceLock};
 const SWITCH: &str = "WARP_SELF_HOSTED";
 /// WARP_SELF_HOSTED=front: parser.warp and the pass twins, the Rust emitter (a suite count of the front end alone)
 const FRONT_END_ONLY: &str = "front";
+/// WARP_SELF_HOSTED=emit: Rust's front end, emitter.warp (a program the warp front end cannot read yet still reaches it)
+const EMITTER_ONLY: &str = "emit";
 /// WARP_SELF_HOSTED=pure (card pure-runs): parser.warp, the warp passes, analyzer.warp and emitter.warp compile the
 /// source, Rust only carrying each stage's JSON to the next; a program the lane refuses compiles the usual way
 const PURE: &str = "pure";
@@ -121,14 +123,19 @@ fn emits() -> bool {
 	switch().is_some_and(|value| value != FRONT_END_ONLY)
 }
 
+/// parser.warp and the pass twins run, unless the switch says EMITTER_ONLY
+fn reads() -> bool {
+	switch().is_some_and(|value| value != EMITTER_ONLY)
+}
+
 /// The program parser.warp parses from the source; None when not self-hosted
 pub fn parse(code: &str) -> Option<Node> {
-	enabled().then(|| stage(PARSE_STAGE, &json_text(code), &[]))
+	reads().then(|| stage(PARSE_STAGE, &json_text(code), &[]))
 }
 
 /// The node the warp twin of `pass` makes of `node`; None when not self-hosted or the pass has no twin
 pub fn pass(pass: Pass, node: &Node) -> Option<Node> {
-	if !enabled() {
+	if !reads() {
 		return None;
 	}
 	let (_, index) = TWINNED_PASSES.iter().find(|(twinned, _)| std::ptr::fn_addr_eq(*twinned, pass))?;
