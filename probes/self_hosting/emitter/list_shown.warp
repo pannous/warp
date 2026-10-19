@@ -7,3 +7,6 @@ print separated(bracketed(["x", 2], ""), ",")
 print bracketed(["a", 'b'], "<")
 print separated([1 2], "\t")
 print {a: 1, b: "x"}
+# a key with its operator, a word operator between spaces: y+z, y and z
+print key(symbol("y"), "+", symbol("z"))
+print key(symbol("y"), "and", symbol("z"))

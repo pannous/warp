@@ -213,8 +213,13 @@ joined_items(xs: list, joiner: text): text := {
 key_text(entry: any): text := {
 	value = key_value(entry)
 	if marked_kind(entry) == 6 { return key_name(entry) + node_text(value) }
-	key_name(entry) + ":" + node_code(value)
+	operator = key_operator(entry)
+	if text_order(operator, ":") == 0 { return key_name(entry) + ":" + node_code(value) }
+	# `y+z`, `y and z`: a word operator between spaces
+	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
+	node_code(entry_key(entry)) + spaced + node_code(value)
 }
+is_letter_byte(b: int): bool := b >= 97 and b <= 122
 # `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any): any := {
 	# ø, also `[]` in the lowered program, beside a list is that list, beside a text "ø"; beside a number Rust fails
