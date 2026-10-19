@@ -9,9 +9,14 @@ pub struct HintPosition {
 	pub column: usize,
 }
 
-/// Run `action` without hints on this thread: a stage that repeats work already hinted (the emitter's rerun) says nothing twice
+/// Run `action` without hints on this thread: a stage that repeats work already hinted (the emitter's rerun) says nothing twice.
+/// Its positions stay its own: a side parse in the middle of the program's (the prelude read when a word is first
+/// looked up) leaves the hint position where the program's hint is about to point
 pub fn without_hints<T>(action: impl FnOnce() -> T) -> T {
-	compile_context::scoped(|context| &mut context.hints_muted, true, action)
+	let position = compile_context::read(|context| context.hint_position.clone());
+	compile_context::scoped(|context| &mut context.hint_position, position, || {
+		compile_context::scoped(|context| &mut context.hints_muted, true, action)
+	})
 }
 
 /// A hint as tests and hosts read it: a view of a Diagnostic of level Hint (see `capture_hints`)
