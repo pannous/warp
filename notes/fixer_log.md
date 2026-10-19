@@ -1,0 +1,1 @@
+- 2026-10-19 fixnow-builtin-function-add: a list given to a function value (closure_call_N) is held as Nodes, as the call may change it; main's typed-list pass had only kept it a Node list by seeing builtin·add's own `xs += [x]` (list_sharing.rs Holders)
