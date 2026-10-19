@@ -10,6 +10,7 @@
 # recursive call knows it.
 use "walk.warp"
 use math
+use os
 
 wasm_header = [0, 97, 115, 109, 1, 0, 0, 0]
 type_bytes = {int: 126, float: 124, bool: 127, char: 127}
@@ -81,6 +82,9 @@ outside_the_core = "outside the core: "
 no_kind = "none"
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
+# WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
+# refusal names each refused function's first refused form, a line each (probes/self_hosting/bootstrap_gap.sh)
+survey_setting = "WARP_EMIT_SURVEY"
 
 ## bytes
 uleb(n: int) := {
@@ -125,7 +129,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # classes: the names of the program's classes (an enum's cases with fields among them), variants its enums' bare cases
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = [] }
 
 module = Module({}, [])
 
@@ -634,20 +638,29 @@ widens(body: Body, name: text, held: text, kind: text) := {
 }
 
 # `global name = value` declares the module's variable name, which every function reads and writes; a bare
-# `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, ø until assigned
+# `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, 0 until assigned,
+# and reads it: a function declaring it on each call keeps its value
 global_declaration(body: Body, declaration: any) := {
-	if declaration is symbol { return declare_global(name_of(declaration), ["node", [ref_null, gc.node]]) }
+	if declaration is symbol {
+		entry = declared_global(name_of(declaration), "node")
+		return [entry#2, [op.global_get] + uleb(entry#1)]
+	}
 	if not (type(declaration) is key and op_of(declaration) == "=" and key_of(declaration) is symbol) {
 		return refuse("the declaration global " + form_of(declaration))
 	}
 	declare_global(name_of(key_of(declaration)), expression(body, value_of(declaration)))
 }
 declare_global(name: text, value: any) := {
+	declared_global(name, value#1)
+	global_assignment(name, value)
+}
+# the module's global name: [its index, its kind], the kind of its first declaration
+declared_global(name: text, kind: text) := {
 	if not (name in module.globals) {
-		module.globals[name] = [#module.global_order, value#1]
+		module.globals[name] = [#module.global_order, kind]
 		module.global_order += [name]
 	}
-	global_assignment(name, value)
+	module.globals[name]
 }
 global_assignment(name: text, value: any) := {
 	entry = module.globals[name]
@@ -959,6 +972,15 @@ new_scope(f: Function) := {
 }
 
 compile_function(f: Function, argument_kinds: any) := {
+	if not module.surveying { return function_compiled(f, argument_kinds) }
+	try { function_compiled(f, argument_kinds) } catch refusal {
+		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
+		module.refusals += [outside_the_core + f.name + ": " + ("" + refusal)[(#outside_the_core)..]]
+		if f.kinds == ø { f.kinds = argument_kinds.map(k => "node") }
+		f.result = "node"
+	}
+}
+function_compiled(f: Function, argument_kinds: any) := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
 	parameter_kinds = []
@@ -992,7 +1014,9 @@ value_type(kind: text) := if kind in references then references[kind] else [type
 zero_of(kind: text) := {
 	if kind == "int" { return [op.i64_const, 0] }
 	if kind == "float" { return [op.f64_const] + le64(0) }
-	if kind in references { return [ref_null] + (if kind == "node" then [110] else uleb(references[kind]#2)) }
+	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
+	if kind == "node" { return boxed(number_value(0)) }
+	if kind in references { return [ref_null] + uleb(references[kind]#2) }
 	[op.i32_const, 0]
 }
 global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
@@ -1106,6 +1130,8 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 	module.closures = []
 	module.dispatchers = []
 	module.shows_values = no
+	module.surveying = env(survey_setting) != ø
+	module.refusals = []
 	collect_types(program)
 	module.imports = if mentions(program, "print") then [fd_write] else []
 	# imported ahead of the functions, whose indices follow them: every host word the program names
@@ -1137,9 +1163,12 @@ hosted_wasm_module(program: any, runtime: any, host: any) := {
 			main.code = boxed([main.result, main.code])
 			main.result = "node"
 		}
+		if #module.refusals > 0 { throw module.refusals.join("\n") }
 		module_bytes(module.order)
 	} catch refusal {
 		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
-		"" + refusal
+		text = "" + refusal
+		if #module.refusals > 0 and text != module.refusals.join("\n") { return (module.refusals + [text]).join("\n") }
+		text
 	}
 }
