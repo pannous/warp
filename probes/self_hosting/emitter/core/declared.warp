@@ -1,0 +1,12 @@
+// `x: T = v` keeps x of kind T: a declared int divides whole (`/=` is the floor quotient), a declared float takes an int
+whole: int = 7
+whole /= 2
+print whole
+down: int = -3
+down /= 2
+print down
+ratio = 3
+ratio /= 2
+print ratio
+real: float = 3
+real * 1.5
