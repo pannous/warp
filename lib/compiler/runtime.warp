@@ -99,7 +99,7 @@ items_text(xs: list) := {
 # `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
 key_text(entry: any) := {
 	value = key_value(entry)
-	if is_null(value) == 0 and marked_kind(value) == 8 { return key_name(entry) + node_text(value) }
+	if marked_kind(entry) == 6 { return key_name(entry) + node_text(value) }
 	key_name(entry) + ":" + node_code(value)
 }
 # `a + b` of values known only at run time: ø adds nothing, lists and texts join, numbers add
@@ -117,8 +117,9 @@ node_add(a: any, b: any) := {
 node_equal(a: any, b: any) := {
 	if is_null(a) == 1 or is_null(b) == 1 { return is_null(a) == is_null(b) }
 	if kind_code(a) == 6 or kind_code(b) == 6 {
-		return kind_code(a) == kind_code(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
+		return marked_kind(a) == marked_kind(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
 	}
+	if marked_kind(a) == 8 and marked_kind(b) == 8 { return map_equal(a, b) }
 	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == 5 or kind_code(b) == 5 { return kind_code(a) == kind_code(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
@@ -132,7 +133,7 @@ list_equal(a: list, b: list) := {
 }
 # a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
 # its class name and the map of its fields
-fields_of(m: any) := if kind_code(m) == 6 then key_value(m) else m
+fields_of(m: any) := if marked_kind(m) == 6 then key_value(m) else m
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: any, name: text) := {
 	entries = unboxed_list(fields_of(m))
@@ -141,6 +142,8 @@ map_index(m: any, name: text) := {
 }
 # `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
 map_get(m: any, name: text) := {
+	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
+	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
 	at = map_index(m, name)
 	if at == 0 { fail() }
 	key_value(unboxed_list(fields_of(m))#at)
@@ -153,17 +156,20 @@ map_entries(n: any) := {
 	out
 }
 map_keys(m: any) := {
+	if is_null(m) == 1 or (marked_kind(m) != 8 and marked_kind(m) != 6) { not_a_map() }
 	out = []
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
 map_values(m: any) := {
+	if is_null(m) == 1 or (marked_kind(m) != 8 and marked_kind(m) != 6) { not_a_map() }
 	out = []
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
 }
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
 collection_contains(c: any, x: any) := {
+	if is_null(c) == 1 { return no }
 	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, node_text(x)) > 0 }
 	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) >= 0 }
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
@@ -367,7 +373,8 @@ node_is_type(n: any, type: text) := {
 	if type == "float" { return kind == 2 }
 	if type == "text" { return kind == 3 or kind == 4 }
 	if type == "char" { return kind == 4 }
-	if type == "list" { return kind == 8 or kind == 7 }
+	if type == "list" { return (kind == 8 and marked_kind(n) != 8) or kind == 7 }
+	if type == "map" { return marked_kind(n) == 8 }
 	if type == "key" { return kind == 6 }
 	if type == "symbol" { return kind == 5 }
 	no
@@ -668,3 +675,45 @@ key_left(n: any) := entry_key(n)
 key_right(n: any) := key_value(n)
 key_operator(n: any) := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
 symbol_node(name: any) := symbol_of(node_text(name))
+# the runtime errors Rust's run names by the function trapping (src/wasm_emitter/lists/list_ops/runtime_errors.rs)
+not_a_map() := {
+	fail()
+	0
+}
+# `a == b` of two maps: the same names with equal values, in any order
+map_equal(a: any, b: any) := {
+	if #unboxed_list(a) != #unboxed_list(b) { return no }
+	for entry in unboxed_list(a) {
+		at = map_index(b, key_name(entry))
+		if at == 0 { return no }
+		if not node_equal(key_value(entry), key_value(unboxed_list(b)#at)) { return no }
+	}
+	yes
+}
+# whether `m.name` reads a field: m a map or an instance with an entry so named, or an entry's key or value
+has_field(m: any, name: text) := {
+	if is_null(m) == 1 { return no }
+	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 }
+	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
+	map_index(m, name) > 0
+}
+# a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
+is_entry(n: any) := kind_code(n) == 6 and marked_kind(n) != 6
+# a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
+swizzle_fits(p: any, letters: text) := {
+	if is_null(p) == 1 or kind_code(p) != 8 or marked_kind(p) == 8 { return no }
+	items = unboxed_list(p)
+	if #items < 2 or #items > 4 { return no }
+	for x in items { if is_null(x) == 1 or marked_kind(x) == 257 or (kind_code(x) != 1 and kind_code(x) != 2) { return no } }
+	for i in 0..byte_count(letters) { if letter_component(byte_at(letters, i)) > #items { return no } }
+	yes
+}
+# the place, counted from 1, of the component a letter picks: x 1, y 2, z 3, w 4
+letter_component(b: int) := if b == 119 then 4 else b - 119
+swizzled_one(p: any, letter: text) := unboxed_list(p)#letter_component(byte_at(letter, 0))
+swizzled(p: any, letters: text) := {
+	items = unboxed_list(p)
+	out = []
+	for i in 0..byte_count(letters) { out += [items#letter_component(byte_at(letters, i))] }
+	out
+}
