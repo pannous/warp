@@ -132,6 +132,8 @@ kind_of_list(n: any, scope: any): text := {
 	if name != "" and name in call_kinds and (#n >= 2 or bracket_of(n) == "(") and binding(scope, name) == ø { return call_kinds[name] }
 	typed = typed_call_kind(n, scope)
 	if typed != ø { return typed }
+	# a call of a function parameter: no closure is known to flow in, any value of run-time kind (Rust closure_call_kind)
+	if called_closure(n) in scope.parameters { return "data" }
 	# a word nothing defines or tables (a function value, a host word): any value
 	if bracket_of(n) == "(" and #n >= 2 and separator_of(n) != "," and name != "" { return "empty" }
 	if bracket_of(n) == "(" and #n == 1 {
@@ -199,7 +201,8 @@ converted_kind(n: any, scope: any): text := {
 	if target == "hex" or target == "binary" or target == "octal" or target == "byte" { return "int" }
 	if target == "number" and kind_of(key_of(n), scope) != "float" { return "data" }
 	if type_kinds.get(target) == "float" { return "float" }
-	kind_of(key_of(n), scope)
+	# `as int`, `as exact` stay exact ints; Rust infer_type gives every other conversion its default, an int
+	"int"
 }
 
 # a loop is its last body value: a text or list as such, ø after a print, else a number or ø decided at run time
