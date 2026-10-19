@@ -1065,6 +1065,7 @@ fn last_statement_items(program: &Node) -> usize {
 /// The module of `node`; `%` and `//` use the small int_* runtime unless the module makes ratios, which takes a
 /// second emission with the ratio-aware exact_* one (card int-i64)
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
+	crate::compiler::self_hosted::check_analysis(node)?;
 	if let Some(module) = crate::compiler::self_hosted::emit(node) {
 		return module;
 	}

@@ -388,6 +388,11 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
   binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
   with the Rust pipeline (that compile shows a Rust `emit` phase).
+- WARP_SELF_ANALYSIS=1 beside the switch (card pipeline-runs): emit_module first hands each lowered program to
+  analyzer.warp `kinds` (self_hosted::check_analysis) and fails it loud on a stage error or a slot where warp's kind
+  does not cover Rust's (`… disagrees with Rust's: html_items(): list, not empty`). Step one only checks: the emitter
+  still reads src/analyzer's kinds; later warp's kinds feed it. Suite count: self-hosted-suite.sh --stage
+  analyzer=WARP_SELF_ANALYSIS.
 - Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
   refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
   585 on 2026-10-18).
