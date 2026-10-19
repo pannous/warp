@@ -163,10 +163,9 @@ node_text(n: any): text := match n {
 	_: collection_text(n)
 }
 number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
-# a map in braces, a list as list_text shows it
+# a list between its brackets (a map in braces), a time as time_text shows it
 collection_text(n: any): text := {
-	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
-	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
+	if kind_code(n) == 8 { return list_shown(n) }
 	if kind_code(n) == 18 { return time_text(n) }
 	fail()
 }
@@ -201,10 +200,11 @@ quoted_text(t: text): text := {
 escaped_byte(b: int): int := if b == 34 or b == 92 then 1 else 0
 list_text(xs: list): text := "[" + items_text(xs) + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
-items_text(xs: list): text := {
+items_text(xs: list): text := joined_items(xs, " ")
+joined_items(xs: list, joiner: text): text := {
 	inner = ""
 	for x in xs {
-		if #inner > 0 { inner += " " }
+		if #inner > 0 { inner += joiner }
 		inner += node_code(x)
 	}
 	inner
@@ -1299,6 +1299,16 @@ bracket_unit(): int := 256
 separator_unit(): int := 281474976710656
 bracket_info(n: any): int := int_remainder(int_quotient(marked_kind(n), bracket_unit()), 256)
 separator_info(n: any): int := int_remainder(int_quotient(marked_kind(n), separator_unit()), 8)
+# how a list shows its brackets and joins its items by its separator (Other's brackets as square ones)
+bracket_openings(): list := ["{", "[", "(", "<", "[", ""]
+bracket_closings(): list := ["}", "]", ")", ">", "]", ""]
+separator_joiners(): list := [" ", " ", ", ", "; ", "\n", "\t"]
+# `(1; 2)`, `'x', 2`: a list between its brackets, its items joined as its separator joins them
+list_shown(n: any): text := {
+	at = bracket_info(n) + 1
+	joiner = node_text(separator_joiners()#(separator_info(n) + 1))
+	node_text(bracket_openings()#at) + joined_items(unboxed_list(n), joiner) + node_text(bracket_closings()#at)
+}
 # `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too
 list_bracket(n: any): any := {
 	if is_null(n) == 1 or kind_code(n) != 8 or bracket_info(n) == 4 { return ø }

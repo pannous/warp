@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+# a list prints between its own brackets, its items joined by its separator, inside the core (WARP_SELF_HOSTED=pure):
+# (1 2), [1; 2], 'x', 2, <'a' 'b'>, [1	2], {a:1 b:'x'}, as the Rust pipeline prints them
+print bracketed([1 2], "(")
+print separated([1 2], ";")
+print separated(bracketed(["x", 2], ""), ",")
+print bracketed(["a", 'b'], "<")
+print separated([1 2], "\t")
+print {a: 1, b: "x"}
