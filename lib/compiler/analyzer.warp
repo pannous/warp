@@ -729,6 +729,8 @@ apply(flow: any): bool := {
 	holder = owner(context, target)
 	kind = flowing_kind(value, scope)
 	if kind == "" or target in holder.pinned { return no }
+	# a variable starting as ø becomes a list only by appending to itself, `xs = xs + [1]` (Rust type_list_by_first_append)
+	if kind == "list" and holder.kinds.get(target) == "nil" and not appends_to_itself(target, value) { return no }
 	changed = set_slot(holder, target, kind)
 	if holder.kinds[target] == "list" and kind == "list" {
 		known = holder.types.get(target)
@@ -738,6 +740,8 @@ apply(flow: any): bool := {
 	}
 	changed
 }
+
+appends_to_itself(name: text, value: any): bool := is_key(value, "+") and key_of(value) == symbol(name) and is_list_literal(value_of(value))
 
 # the list type both known (ø: none yet) and given fit: their common elements, a plain list when they have none
 joined_list_type(known: any, given: text): any := {
