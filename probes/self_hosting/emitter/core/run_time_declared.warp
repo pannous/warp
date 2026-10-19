@@ -1,0 +1,16 @@
+// a value known only at run time given to a declared variable is checked then (an int whole, a list ø or a list), and
+// beside a yes/no in `and`, `or` a yes/no on the left counts as 1 or 0, one on the right stays yes/no
+counted(a: any) := { n: int = a; n + 1 }
+listed(a: any) := { items: list = a; items }
+print counted(6)
+print counted(yes)
+print listed([1, 2])
+print #listed(ø)
+both(a: any) := a and (1 == 1)
+either(a: any) := (1 == 2) or a
+first(a: any) := (1 == 1) or a
+print both(3)
+print both("")
+print either("x")
+print first("x")
+both(0)
