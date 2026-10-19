@@ -1,10 +1,13 @@
 // card duration-warp: runtime.warp's duration words show and order the three amounts of a duration as calendar.rs
-// Duration does. The section is compiled here as an ordinary program, its intrinsics by stand-ins of plain warp
+// Duration does. The section is compiled here as an ordinary program, its intrinsics by stand-ins of plain warp and
+// its failure by 0 (`fail` is a soft keyword)
 use warp::time::calendar::Duration;
 use warp::*;
 
 const RUNTIME_WORDS: &str = "lib/compiler/runtime.warp";
 const DURATIONS_SECTION: &str = "## durations";
+/// The section ends where the next starts, after an empty line: its own header goes on over several `##` lines
+const NEXT_SECTION: &str = "\n\n## ";
 const SECOND: i128 = 1_000_000_000;
 /// The intrinsics and runtime words the section calls, in the language itself; divisors are positive there
 const STAND_INS: &str = r#"
@@ -29,14 +32,13 @@ power(base: int, exponent: int): int := {
 }
 marked_kind(n: any): int := 0
 unboxed_int(n: any): int := 0
-fail() := 0
 "#;
 
 fn duration_words() -> String {
 	let source = std::fs::read_to_string(RUNTIME_WORDS).unwrap();
 	let section = source.split_once(DURATIONS_SECTION).expect("runtime.warp has a durations section").1;
-	let section = section.split_once("\n## ").map_or(section, |(words, _)| words);
-	format!("{STAND_INS}\n# {section}")
+	let section = section.split_once(NEXT_SECTION).map_or(section, |(words, _)| words);
+	format!("{STAND_INS}\n# {}", section.replace("fail()", "0"))
 }
 
 fn duration_word(call: &str) -> String {

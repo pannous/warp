@@ -713,9 +713,10 @@ symbol_node(name: any) := symbol_of(node_text(name))
 ## time node of the duration form keeps its months and days in its kind word, above the kind's 8 and the form's 3
 ## bits (src/time/mod.rs MONTHS_SHIFT), its nanoseconds in its box. The words below the unpacking ones take the three
 ## amounts, so they read as calendar.rs Duration does (tests/numbers/test_duration_words.rs)
-second_nanos(): int := 1000000000
-day_nanos(): int := 86400 * second_nanos()
-hour_nanos(): int := 3600 * second_nanos()
+# a constant of the durations: an untyped word, as `f(): int :=` has no use yet
+second_nanos() := 1000000000
+day_nanos() := 86400 * second_nanos()
+hour_nanos() := 3600 * second_nanos()
 duration_months(n: any): int := floor_quotient(marked_kind(n), power(2, 43))
 # the 32 signed bits above the kind and the form
 duration_days(n: any): int := {
