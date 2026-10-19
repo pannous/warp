@@ -1,0 +1,4 @@
+# the built-in node's cases in a match (lib/compiler/node.warp): a key's parts and operator, a symbol's name
+f(n: Node) := match n { Key(left, op, right): op as text; Symbol(name): name; _: "other" }
+g(n: Node) := match n { Key(left, op, right): [left, right]; _: [n] }
+[f(Key(Symbol("a"), Op.Add, Symbol("b"))), f(Symbol("x")), f(3), g(Key(Symbol("a"), Op.Mul, 4)), Symbol("y") == Symbol("y")]
