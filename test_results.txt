@@ -3820,11 +3820,13 @@ PASSED:
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_emitter::core_programs_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_hosted_analysis::the_analysis_stage_gives_the_kinds_as_data
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_hosted_views::the_node_of_each_sources_view_has_that_view
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
@@ -5325,6 +5327,7 @@ PASSED:
   ✓ types::test_type_of::test_type_without_parentheses
   ✓ types::test_type_parameters::a_type_parameter_takes_a_bare_type_word
   ✓ types::test_type_parameters::a_type_parameter_takes_a_class
+  ✓ types::test_type_parameters::a_type_variable_of_a_generic_signature_takes_any_value
   ✓ types::test_type_parameters::a_value_for_a_type_parameter_is_an_error
   ✓ types::test_type_static::the_type_of_a_variable_is_its_value_type
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
@@ -6470,7 +6473,6 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_analyzer::matching_sources_keep_matching
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-16 ignored, 6466 passed, 2 failed, 6468 total tested
+16 ignored, 6469 passed, 1 failed, 6470 total tested

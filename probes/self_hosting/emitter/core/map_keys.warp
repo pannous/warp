@@ -1,0 +1,5 @@
+fun lookup(m, k) { return m[k] }
+pairs = [[1, 2], [3, 4]]
+row = pairs#2
+i = 0
+[lookup({A: 7}, "A"), lookup({b: 1, c: "x"}, "c"), row[i], row[1]]
