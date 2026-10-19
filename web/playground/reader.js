@@ -8,6 +8,7 @@ const KIND_INT = "1";
 const KIND_FLOAT = "2";
 const KIND_MASK = 0xFFn;
 const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
+const KIND_TEXT = 3n;
 const KIND_SYMBOL = "5";
 const CYCLE_MARK = "…"; // src/run/wasm_reader.rs CYCLE_MARK: a node met again inside itself (objects pointing to each other)
 const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
@@ -32,7 +33,9 @@ function readPayload(module, payload, path) {
 		case "node": return { node: readNode(module, payload, path) };
 		case "int": return { int: String(module.reflect_i64(payload)) };
 		case "float": return { float: floatPayload(module.reflect_f64(payload)) };
-		case "string": return { text: readTextBytes(module, payload) };
+		// a module compiled before texts became byte arrays (samples/wasm/shapes.wasm) keeps them as $String (ptr, len) in
+		// memory, as wasm_reader.rs text_of reads both
+		case "string": return { text: module.reflect_text_byte ? readTextBytes(module, payload) : readText(module, module.reflect_text_ptr(payload), module.reflect_text_len(payload)) };
 		case "i31": return { i31: module.reflect_i31(payload) };
 		case "big_int": {
 			const limbs = Array.from({ length: module.reflect_limb_count(payload) }, (_, index) => module.reflect_limb(payload, index) >>> 0);
@@ -69,7 +72,15 @@ function readNode(module, node, path = new Set()) {
 		tree.chain.push(readCell(module, next, path));
 	}
 	entered.forEach(cell => path.delete(cell));
-	return tree;
+	return ropeJoined(tree);
+}
+
+// a rope (text_append, src/wasm_emitter/text/text_builtins.rs) is its last piece with the texts before it along its value
+// fields: one text, as wasm_reader.rs rope_text reads it; read as a chain, "hello" + " world" lost its "hello"
+function ropeJoined(tree) {
+	if ((BigInt(tree.kind) & KIND_MASK) !== KIND_TEXT || tree.chain.length === 0) return tree;
+	const before = tree.chain.map(piece => piece.data?.text ?? "").reverse().join("");
+	return { ...tree, data: { text: before + (tree.data?.text ?? "") }, chain: [] };
 }
 
 // what main returned: a Node, or a plain number of a module that returns one
