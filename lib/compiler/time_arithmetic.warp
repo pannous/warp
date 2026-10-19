@@ -59,32 +59,32 @@ floor_split(value: int, divisor: int): [int] := {
 }
 
 # the day since 1970 and the nanoseconds into it of a date or local time (times.rs time_parts)
-day_and_nanos(m: Moment): [int] := if m.form == TimeForm::Date then [m.position, 0] else floor_split(m.position, day_nanos)
+day_and_nanos(moment: Moment): [int] := if moment.form == TimeForm::Date then [moment.position, 0] else floor_split(moment.position, day_nanos)
 
-# `m + s`, s already signed: calendar.rs `Time::add`. The month count first, then the days: 2024-01-31 + 1 month is
-# refused, + 1 month 2 days is 2024-02-31 + 2
-shift_time(m: Moment, s: Span): Moment := match m.form {
+# `moment + span`, the span already signed: calendar.rs `Time::add`. The month count first, then the days: 2024-01-31
+# + 1 month is refused, + 1 month 2 days too (no 2024-02-31 to add the days to)
+shift_time(moment: Moment, span: Span): Moment := match moment.form {
 	TimeForm::Zoned => raise no_zones
 	TimeForm::Instant => {
-		if s.has_calendar_parts() { raise no_calendar }
-		Moment(m.form, m.position + s.nano_count)
+		if span.has_calendar_parts() { raise no_calendar }
+		Moment(moment.form, moment.position + span.nano_count)
 	}
 	# a time of day goes round the clock: 23:00 + 2 hours is 01:00
 	TimeForm::Clock => {
-		if s.has_calendar_parts() { raise clock_without_calendar }
-		Moment(m.form, floor_split(m.position + s.nano_count, day_nanos)#2)
+		if span.has_calendar_parts() { raise clock_without_calendar }
+		Moment(moment.form, floor_split(moment.position + span.nano_count, day_nanos)#2)
 	}
 	_ => {
-		if m.form == TimeForm::Date and s.nano_count != 0 { raise no_time_of_day }
-		parts = day_and_nanos(m)
+		if moment.form == TimeForm::Date and span.nano_count != 0 { raise no_time_of_day }
+		parts = day_and_nanos(moment)
 		civil = date_of(parts#1 * 86400000)
-		year_and_month = floor_split(civil.year * months_per_year + civil.month - 1 + s.month_count, months_per_year)
+		year_and_month = floor_split(civil.year * months_per_year + civil.month - 1 + span.month_count, months_per_year)
 		shifted_year = year_and_month#1
 		shifted_month = year_and_month#2 + 1
-		if s.month_count != 0 and civil.day > days_in_month(shifted_year, shifted_month) { raise no_such_day }
-		epoch_day = days_from_date(shifted_year, shifted_month, civil.day) + s.day_count
+		if span.month_count != 0 and civil.day > days_in_month(shifted_year, shifted_month) { raise no_such_day }
+		epoch_day = days_from_date(shifted_year, shifted_month, civil.day) + span.day_count
 		# a date's position is its day, a local time's the nanoseconds since 1970 as if UTC
-		if m.form == TimeForm::Date then Moment(m.form, epoch_day) else Moment(m.form, epoch_day * day_nanos + parts#2 + s.nano_count)
+		if moment.form == TimeForm::Date then Moment(moment.form, epoch_day) else Moment(moment.form, epoch_day * day_nanos + parts#2 + span.nano_count)
 	}
 }
 
@@ -137,22 +137,22 @@ moment_arithmetic(moment: Moment, b: Operand, op: TimeOperator): Operand := matc
 # -1, 0 or 1 as `a` is shorter, as long or longer than `b` on every date (Duration::compare); an order that depends
 # on the date is an error. Daylight saving moves an exact part against the calendar part by at most an hour
 duration_order(a: Span, b: Span): int := {
-	d = a.plus(b.scaled(-1))
-	if not d.has_calendar_parts() {
-		if d.nano_count > 0 { return 1 }
-		if d.nano_count < 0 { return -1 }
+	difference = a.plus(b.scaled(-1))
+	if not difference.has_calendar_parts() {
+		if difference.nano_count > 0 { return 1 }
+		if difference.nano_count < 0 { return -1 }
 		return 0
 	}
-	fewest = d.day_count + d.month_count * shortest_month
-	most = d.day_count + d.month_count * longest_month
+	fewest = difference.day_count + difference.month_count * shortest_month
+	most = difference.day_count + difference.month_count * longest_month
 	# negative months take more days off the longer they are
-	if d.month_count < 0 {
+	if difference.month_count < 0 {
 		longer = fewest
 		fewest = most
 		most = longer
 	}
-	dst = if d.nano_count != 0 then hour_nanos else 0
-	if fewest * day_nanos + d.nano_count - dst > 0 { return 1 }
-	if most * day_nanos + d.nano_count + dst < 0 { return -1 }
+	dst = if difference.nano_count != 0 then hour_nanos else 0
+	if fewest * day_nanos + difference.nano_count - dst > 0 { return 1 }
+	if most * day_nanos + difference.nano_count + dst < 0 { return -1 }
 	raise lengths_vary
 }

@@ -8,24 +8,24 @@ fn arithmetic(code: &str) -> String {
 }
 
 fn date(code: &str) -> String {
-	arithmetic(&format!("d = Moment(TimeForm::Date, days_from_date(2024, 1, 15))\n{code}"))
+	arithmetic(&format!("start = Moment(TimeForm::Date, days_from_date(2024, 1, 15))\n{code}"))
 }
 
 #[test]
 fn dates_shift_by_months_then_days() {
-	is!(&date("shift_time(d, Span(3, 0, 0)).position == days_from_date(2024, 4, 15)"), true);
-	is!(&date("shift_time(d, Span(1, 2, 0)).position == days_from_date(2024, 2, 17)"), true);
-	is!(&date("shift_time(d, Span(-1, 0, 0)).position == days_from_date(2023, 12, 15)"), true);
-	is!(&date("shift_time(d, Span(12, -15, 0)).position == days_from_date(2024, 12, 31)"), true);
+	is!(&date("shift_time(start, Span(3, 0, 0)).position == days_from_date(2024, 4, 15)"), true);
+	is!(&date("shift_time(start, Span(1, 2, 0)).position == days_from_date(2024, 2, 17)"), true);
+	is!(&date("shift_time(start, Span(-1, 0, 0)).position == days_from_date(2023, 12, 15)"), true);
+	is!(&date("shift_time(start, Span(12, -15, 0)).position == days_from_date(2024, 12, 31)"), true);
 }
 
 #[test]
 fn a_missing_day_is_refused() {
 	is!(
-		&arithmetic("d = Moment(TimeForm::Date, days_from_date(2024, 1, 31))\ntry { shift_time(d, Span(1, 0, 0)) } catch e { e == no_such_day }"),
+		&arithmetic("start = Moment(TimeForm::Date, days_from_date(2024, 1, 31))\ntry { shift_time(start, Span(1, 0, 0)) } catch e { e == no_such_day }"),
 		true
 	);
-	is!(&date("try { shift_time(d, Span(0, 0, hour_nanos)) } catch e { e == no_time_of_day }"), true);
+	is!(&date("try { shift_time(start, Span(0, 0, hour_nanos)) } catch e { e == no_time_of_day }"), true);
 }
 
 #[test]
@@ -55,18 +55,18 @@ fn clocks_go_round_and_instants_have_no_calendar() {
 #[test]
 fn operands_swap_scale_and_subtract() {
 	is!(
-		&arithmetic("r = time_arithmetic(Operand::Whole(3), Operand::Lasting(Span(0, 0, hour_nanos)), TimeOperator::Mul)\nmatch r { Lasting(s) => s.nano_count == 3 * hour_nanos; _ => false }"),
+		&arithmetic("r = time_arithmetic(Operand::Whole(3), Operand::Lasting(Span(0, 0, hour_nanos)), TimeOperator::Mul)\nmatch r { Lasting(span) => span.nano_count == 3 * hour_nanos; _ => false }"),
 		true
 	);
 	is!(
-		&date("r = time_arithmetic(Operand::At(d), Operand::At(Moment(TimeForm::Date, days_from_date(2024, 1, 1))), TimeOperator::Sub)\nmatch r { Whole(n) => n; _ => 0 }"),
+		&date("r = time_arithmetic(Operand::At(start), Operand::At(Moment(TimeForm::Date, days_from_date(2024, 1, 1))), TimeOperator::Sub)\nmatch r { Whole(n) => n; _ => 0 }"),
 		14
 	);
 	is!(
-		&date("r = time_arithmetic(Operand::Lasting(Span(0, 1, 0)), Operand::At(d), TimeOperator::Add)\nmatch r { At(m) => m.position - d.position; _ => 0 }"),
+		&date("r = time_arithmetic(Operand::Lasting(Span(0, 1, 0)), Operand::At(start), TimeOperator::Add)\nmatch r { At(moment) => moment.position - start.position; _ => 0 }"),
 		1
 	);
-	is!(&date("try { time_arithmetic(Operand::At(d), Operand::At(d), TimeOperator::Add) } catch e { e == not_arithmetic }"), true);
+	is!(&date("try { time_arithmetic(Operand::At(start), Operand::At(start), TimeOperator::Add) } catch e { e == not_arithmetic }"), true);
 }
 
 #[test]
