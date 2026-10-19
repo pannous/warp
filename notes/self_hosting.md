@@ -218,8 +218,12 @@ the survey compiling it as a program, no gap.
 | a value known only at run time as a condition, text, list or bool (`if node`, `"a" + node`) | 37 | self-emitter |
 | calls of node API words emitter.warp lacks: `bracket_of`, `symbol`, `separated`, `node_of` | ~27 | emitter-structures |
 | calls of text and library words: `slice`, `starts_with`, `ends_with`, `trim`, `is_name_char`, `is_name_start`, `is_hex_digit`, `code_point_list`, `map_get_or`, `ran_without_error`; another file's `peek`, `is_at` | ~30 | runtime |
-| the unknown name left: another file's constant (`symbol`, `of_word`, `type_words` of `use words`) | ~12 | cache |
-| a parameter of kind function / bool, a result of none | 6 | cache |
+| the unknown name left: a constant assigned from a refused call (`switch_words = [symbol("switch"), …]`, `none_word`, `alias_pairs`) | 3 | clears with the node API and library-word families |
+| parser.warp: `w is not symbol` lowered to `w == not symbol`, `def f(…): T :=` keeps `def` | 3 | card self-hosted-parser |
+
+Done in the cache family (branch closure-values): `x == ø` / `x != ø`; main-level variables a function reads as
+module globals; bool parameters; parameters declared `function` (a closure is a node); `else ø` as a branch giving ø
+(a match's `_: ø`, which made functions "giving a none").
 
 ## Emitter core (card emits-wasm, step 15)
 lib/compiler/emitter.warp `wasm_module(program)`: the lowered program (pipeline::lower, as a node via walk.warp
