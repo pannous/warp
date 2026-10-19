@@ -52,3 +52,15 @@ fn for_loops_run_pure() {
 	runs_pure("for_list", "xs = [4, 5, 6]; t = 0; for x in xs { t += x }; t", "15");
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
+
+/// parser.warp reads a name glued to `!` as one word when the source defines it, and a tab between items of a line
+/// as a column separator (card parser-reads-2)
+#[test]
+fn bang_words_and_tab_columns_run_pure() {
+	runs_pure(
+		"bang_words",
+		"def is!(a, b) := a == b\ndef check!(x) := x > 2\ny = 3\n[is!(3, 3), is!(2, 3), check!(5), y != 4]",
+		"[yes no yes yes]",
+	);
+	runs_pure("tab_columns", "row = ['0-1'\t-1]; count(row)", "2");
+}
