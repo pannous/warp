@@ -22,12 +22,12 @@ const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
 /// passes.warp `stage` of the request in the worker's input file
 const PASSES_PROGRAM: &str =
 	concat!("use \"", env!("CARGO_MANIFEST_DIR"), "/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)))");
-/// analyzer.warp `kinds` of the view in the worker's input file, as JSON: a program of its own, as analyzer.warp's
-/// names clash with parser.warp's (its local `digits`, its field `.separator`)
+/// analyzer.warp `emitter_kinds` of the view in the worker's input file, as JSON (shape: notes/self_hosting.md): a
+/// program of its own, as analyzer.warp's names clash with parser.warp's (its local `digits`, its field `.separator`)
 const ANALYSIS_PROGRAM: &str = concat!(
 	"use \"",
 	env!("CARGO_MANIFEST_DIR"),
-	"/lib/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(kinds(node_of(json(read(args#1)))))"
+	"/lib/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))"
 );
 /// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
 /// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
@@ -129,8 +129,8 @@ pub fn pass(pass: Pass, node: &Node) -> Option<Node> {
 	Some(stage(*index, &view_json(&view), &handles))
 }
 
-/// The kinds analyzer.warp finds in the program `view` shows: {functions: {f: {params: [kind…], result: kind}},
-/// variables: {x: kind}, value: kind}; None when not self-hosted, the failure when warp fails
+/// The kinds analyzer.warp finds in the program `view` shows, as emitter.warp reads them (`emitter_kinds`); None when
+/// not self-hosted, the failure when warp fails
 pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
 	enabled().then(|| kinds_of(view))
 }
