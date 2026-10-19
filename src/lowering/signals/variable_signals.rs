@@ -633,9 +633,7 @@ fn calls_inside(node: &Node, function: &str) -> bool {
 /// `subject {body}`, `subject: body` or `subject do body`
 pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 	match rest {
-		[subject, body] if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-			Some((subject.clone(), body.clone()))
-		}
+		[subject, body] if body.is_block() => Some((subject.clone(), body.clone())),
 		[handler] if matches!(handler.drop_meta(), Node::Key(_, Op::Do, _)) => match handler.drop_meta() {
 			Node::Key(subject, _, body) => Some((subject.drop_meta().clone(), body.as_ref().clone())),
 			_ => unreachable!("guarded"),

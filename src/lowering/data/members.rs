@@ -114,6 +114,17 @@ pub fn builtin_members(module: &str) -> &'static [&'static str] {
 	}
 }
 
+/// Every builtin method of every type, each once, in MEMBERS_BY_TYPE order: the words a typo may be close to (near-miss)
+pub fn builtin_member_words() -> Vec<&'static str> {
+	let mut words: Vec<&'static str> = vec![];
+	for word in MEMBERS_BY_TYPE.iter().flat_map(|(_, members)| members.iter().copied()) {
+		if !words.contains(&word) {
+			words.push(word);
+		}
+	}
+	words
+}
+
 /// What `dir` and `methods` list of a type module or a value of its type (card dir-lists): the module's words in their
 /// order without its classes, then the builtin methods it does not define itself. The module words come first because test_dir pins
 /// dir(text)#1 == "repeat"; member completion (type_names) puts the builtins first on purpose
