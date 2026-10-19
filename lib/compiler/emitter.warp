@@ -89,7 +89,7 @@ prelude_prefix = "prelude·"
 survey_setting = "WARP_EMIT_SURVEY"
 
 ## bytes
-uleb(n: int) := {
+def uleb(n: int): list {
 	out = []
 	while n >= 128 {
 		out += [bit_or(bit_and(n, 127), 128)]
@@ -97,7 +97,7 @@ uleb(n: int) := {
 	}
 	out + [n]
 }
-sleb(n: int) := {
+def sleb(n: int): list {
 	out = []
 	more = yes
 	while more {
@@ -109,19 +109,19 @@ sleb(n: int) := {
 	out
 }
 # the 8 little-endian bytes of an int's low 64 bits
-le64(n: int) := {
+def le64(n: int): list {
 	out = []
 	for i in 0..8 { out += [bit_and(n >> (8 * i), 255)] }
 	out
 }
-joined(parts: any) := {
+def joined(parts: any): list {
 	out = []
 	for part in parts { out += part }
 	out
 }
-vector(parts: any) := uleb(#parts) + joined(parts)
-name_bytes(name: text) := vector(name.bytes.map(b => [b]))
-section(id: int, content: any) := [id] + uleb(#content) + content
+def vector(parts: any): list { uleb(#parts) + joined(parts) }
+def name_bytes(name: text): list { vector(name.bytes.map(b => [b])) }
+def section(id: int, content: any): list { [id] + uleb(#content) + content }
 
 ## the program's functions
 # a function as written; compiling it gives the rest
@@ -136,12 +136,12 @@ class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; b
 module = Module({}, [])
 
 
-refuse(why: text) := {
+refuse(why: text): any := {
 	throw outside_the_core + why
 }
 
 # a refused form in a few words: `key :=`, `group ( memo_known`, a name
-form_of(n: any) := {
+form_of(n: any): text := {
 	if type(n) is key { return "key " + op_of(n) }
 	if n is symbol { return name_of(n) }
 	if is_group(n) and #n > 0 and n#1 is symbol { return "group " + bracket_of(n) + " " + name_of(n#1) }
@@ -149,8 +149,8 @@ form_of(n: any) := {
 	"a " + type(n)
 }
 
-parameter_symbol(p: any) := if type(p) is key and op_of(p) == ":" then key_of(p) else p
-annotation_of(p: any) := {
+parameter_symbol(p: any): any := if type(p) is key and op_of(p) == ":" then key_of(p) else p
+annotation_of(p: any): any := {
 	if type(p) is key and op_of(p) == ":" and value_of(p) is symbol { return name_of(value_of(p)) }
 	# `xs: [int]` and other type forms Rust checks at each call: no kind, so the function is refused
 	if type(p) is key and op_of(p) == ":" { return form_of(value_of(p)) }
@@ -158,7 +158,7 @@ annotation_of(p: any) := {
 }
 
 # `(name params…) := body` at the program's top level
-definition(n: any) := {
+definition(n: any): any := {
 	if type(n) is key and op_of(n) == ":=" and bracket_of(key_of(n)) == "(" and #key_of(n) > 0 and key_of(n)#1 is symbol {
 		return key_of(n)
 	}
@@ -167,15 +167,15 @@ definition(n: any) := {
 
 # `use math`, `import f from lib`: the Rust pipeline brought the module in already, so the statement has no code
 import_words = ["use", "require", "import", "include"]
-is_import(n: any) := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in import_words
+is_import(n: any): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in import_words
 
-statements_of(n: any) := {
+def statements_of(n: any): list {
 	if is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
 	[n]
 }
 
 # the definitions of a program into `functions`, the statements left
-collect_functions(program: any, functions: any) := {
+def collect_functions(program: any, functions: any): list {
 	kept = []
 	for n in statements_of(program) {
 		head = definition(n)
@@ -188,7 +188,7 @@ collect_functions(program: any, functions: any) := {
 	kept
 }
 # the names of the functions the program defines
-defined_names(program: any) := {
+def defined_names(program: any): list {
 	names = []
 	for n in statements_of(program) {
 		head = definition(n)
@@ -204,21 +204,21 @@ defined_names(program: any) := {
 # unshared: the locals whose list nobody else holds yet (sequence keeps them), which `xs = xs + [x]` grows in place
 class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any; depth: int; exits: any; unshared: any }
 
-local_index(body: Body, name: text, kind: text) := {
+local_index(body: Body, name: text, kind: text): int := {
 	if name in body.names { return body.names[name] }
 	body.names[name] = #body.kinds
 	body.kinds += [kind]
 	body.order += [name]
 	body.names[name]
 }
-fresh_local(body: Body, kind: text) := {
+fresh_local(body: Body, kind: text): int := {
 	body.scratch += 1
 	local_index(body, "·scratch" + body.scratch, kind)
 }
 
 ## expressions: each gives [kind, code]
 # the kind both values become: a number widened to float, else a value boxed; a statement and a value stay mixed
-joint_kind(a: text, b: text) := {
+joint_kind(a: text, b: text): text := {
 	if a == pending { return b }
 	if b == pending or a == b { return a }
 	if (a == "int" and b == "float") or (a == "float" and b == "int") { return "float" }
@@ -226,7 +226,7 @@ joint_kind(a: text, b: text) := {
 	"node"
 }
 # code of kind `from` as kind `to`
-converted(value: any, to: text) := {
+def converted(value: any, to: text): list {
 	from = value#1
 	if to == "node" { return boxed(value) }
 	if from == "int" and to == "float" { return value#2 + [op.f64_convert_i64_s] }
@@ -238,7 +238,7 @@ converted(value: any, to: text) := {
 	value#2
 }
 # a value as a yes/no condition: non-zero is yes
-condition(value: any) := {
+def condition(value: any): list {
 	kind = value#1
 	if kind == "int" { return value#2 + [op.i64_eqz, op.i32_eqz] }
 	if kind == "float" { return value#2 + [op.f64_const] + le64(0) + [float_ops["!="]] }
@@ -247,7 +247,7 @@ condition(value: any) := {
 	value#2
 }
 
-number_value(n: any) := {
+def number_value(n: any): list {
 	if n is float and exact_decimal(n) != ø { return exact_decimal(n) }
 	if n is float { return ["float", [op.f64_const] + le64(float_bits(n))] }
 	if n < smallest_int or n > largest_int { return refuse("an int beyond 64 bits") }
@@ -257,7 +257,7 @@ number_value(n: any) := {
 # a decimal literal as Rust reads it: exact, a rational, when it has at most 15 significant digits (0.1 is 1/10, so
 # 0.1 + 0.2 == 0.3; 3.0 is the int 3); π's 16 stay a float (Number::is_exact_decimal)
 exact_decimal_digits = 15
-exact_decimal(n: float) := {
+exact_decimal(n: float): any := {
 	shown = "" + n
 	if shown.contains("e") or not shown.contains(".") { return ø }
 	negative = shown.starts_with("-")
@@ -279,7 +279,7 @@ exact_decimal(n: float) := {
 }
 
 # the offset of a text's bytes in the data segment, each text stored once
-text_offset(t: text) := {
+text_offset(t: text): int := {
 	if not (t in module.texts) {
 		module.texts[t] = #module.bytes
 		module.bytes += t.bytes
@@ -287,17 +287,17 @@ text_offset(t: text) := {
 	module.texts[t]
 }
 # a GC instruction with its immediates
-gc_code(name: text, immediates: any) := [gc_prefix] + uleb(gc_ops[name]) + joined(immediates.map(uleb))
+def gc_code(name: text, immediates: any): list { [gc_prefix] + uleb(gc_ops[name]) + joined(immediates.map(uleb)) }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
-node(kind_code: int, payload: any) := [op.i64_const] + sleb(kind_code) + payload + [ref_null, gc.node] + gc_code("struct_new", [gc.node])
+def node(kind_code: int, payload: any): list { [op.i64_const] + sleb(kind_code) + payload + [ref_null, gc.node] + gc_code("struct_new", [gc.node]) }
 # a text as its bytes; one character as its codepoint, as warp holds a literal "a"
-text_value(t: text) := {
+def text_value(t: text): list {
 	if #t == 1 { return ["char", [op.i32_const] + sleb(ord(t))] }
 	["text", text_bytes(t)]
 }
-text_bytes(t: text) := [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code("array_new_data", [gc.text, 0])
+def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code("array_new_data", [gc.text, 0]) }
 # a value boxed as a $Node: a number or yes/no in its box, a character as an i31
-boxed(value: any) := {
+def boxed(value: any): list {
 	kind = value#1
 	code = value#2
 	if kind == "node" { return code }
@@ -310,56 +310,56 @@ boxed(value: any) := {
 	node(node_kind_codes.int, code + gc_code("struct_new", [gc.int_box]))
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
-list_value(body: Body, items: any) := ["list", vector_code(items.map(item => boxed(expression(body, item))))]
-vector_code(item_codes: any) := {
+def list_value(body: Body, items: any): list { ["list", vector_code(items.map(item => boxed(expression(body, item))))] }
+def vector_code(item_codes: any): list {
 	code = [op.i32_const] + sleb(#item_codes) + joined(item_codes)
 	code + gc_code("array_new_fixed", [gc.items, #item_codes]) + gc_code("struct_new", [gc.list])
 }
 ## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
-entry_code(name_code: any, value_code: any) := keyed_code(node(node_kind_codes.symbol, name_code), value_code)
-keyed_code(name_node: any, value_code: any) := key_code(node_kind_codes.entry, name_node, value_code)
-key_code(kind: int, name_node: any, value_code: any) := [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node])
+def entry_code(name_code: any, value_code: any): list { keyed_code(node(node_kind_codes.symbol, name_code), value_code) }
+def keyed_code(name_node: any, value_code: any): list { key_code(node_kind_codes.entry, name_node, value_code) }
+def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node]) }
 # an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
-name_node(name: any) := {
+def name_node(name: any): list {
 	if name is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(name))) }
 	if #name == 1 { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code("ref_i31", [])) }
 	node(node_kind_codes.text, text_bytes(name))
 }
-is_entry(n: any) := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text)
+is_entry(n: any): bool := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text)
 # `{a: 1, b: "x"}`: a map
-map_value(body: Body, entries: any) := {
+def map_value(body: Body, entries: any): list {
 	codes = entries.map(e => keyed_code(name_node(key_of(e)), boxed(expression(body, value_of(e)))))
 	["node", node(node_kind_codes.map, vector_code(codes))]
 }
 # `Point{x:1 y:2}`, an instance as lowered: the entry of the class name, its value the map of the fields
 # an instance's key has no operator (Op::None), as Rust's has
-instance_value(body: Body, class_name: text, fields: any) := {
+def instance_value(body: Body, class_name: text, fields: any): list {
 	name = node(node_kind_codes.symbol, text_bytes(class_name))
 	["node", key_code(node_kind_codes.instance, name, map_value(body, fields)#2)]
 }
 # `m.x`, lowered as the subscript `m#("x"+1)`: the name's text, else ø
-subscript_name(index: any) := {
+subscript_name(index: any): any := {
 	# (type() of an arithmetic key is "operation", not key)
 	if op_of(index) == "+" and value_of(index) == 1 and key_of(index) is text { return key_of(index) }
 	ø
 }
-map_get(map: any, name: text) := runtime_call("map_get", [["node", boxed(map)], text_value_of(name)])
+def map_get(map: any, name: text): list { runtime_call("map_get", [["node", boxed(map)], text_value_of(name)]) }
 # `m.x = v`: the map with its entry x set to v
-field_assignment(map: any, name: any, value: any) := runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]])
+def field_assignment(map: any, name: any, value: any): list { runtime_call("field_with", [["node", boxed(map)], shown_text(name), ["node", boxed(value)]]) }
 # a name as a text value, even of one character (text_value gives a "char" then)
-text_value_of(name: text) := ["text", text_bytes(name)]
+def text_value_of(name: text): list { ["text", text_bytes(name)] }
 # an int as an i32 index
-index_code(value: any) := converted(value, "int") + [op.i32_wrap_i64]
+def index_code(value: any): list { converted(value, "int") + [op.i32_wrap_i64] }
 # `#x`: the characters of a text, the items of a list or map, either known only at run time
-length(value: any) := {
+def length(value: any): list {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
 	if value#1 == "list" { return ["int", value#2 + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]] }
 	if value#1 == "node" { return runtime_call("node_length", [value]) }
 	refuse("the length of a " + value#1)
 }
 # `xs#i = v`: the i-th item becomes v, boxed; the assignment gives v
-element_assignment(body: Body, list: any, index: any, value: any) := {
+def element_assignment(body: Body, list: any, index: any, value: any): list {
 	if list#1 == "node" { return runtime_call("node_set_at", [list, index, value]) }
 	if list#1 != "list" { return refuse("an assignment to an element of a " + list#1) }
 	held = uleb(fresh_local(body, value#1))
@@ -367,13 +367,13 @@ element_assignment(body: Body, list: any, index: any, value: any) := {
 	[value#1, code + gc_code("array_set", [gc.items]) + [op.local_get] + held]
 }
 # `xs#i`: the i-th item, counted from 1
-element(body: Body, list: any, index: any) := {
+def element(body: Body, list: any, index: any): list {
 	if list#1 == "node" { return runtime_call("node_at", [list, index]) }
 	if list#1 != "list" { return refuse("an element of a " + list#1) }
 	["node", checked_item(body, list, index) + gc_code("array_get", [gc.items])]
 }
 # a list's items and the 0-based place of its index-th item; an index outside 1…count fails in index_out_of_range_of
-checked_item(body: Body, list: any, index: any) := {
+def checked_item(body: Body, list: any, index: any): list {
 	held = uleb(fresh_local(body, "list"))
 	at = [op.local_get] + uleb(fresh_local(body, "int"))
 	count = ["int", [op.local_get] + held + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]]
@@ -384,7 +384,7 @@ checked_item(body: Body, list: any, index: any) := {
 	code + [op.local_get] + held + gc_code("struct_get", [gc.list, 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
 }
 # the words the runtime is written in, each one or two instructions
-intrinsic(body: Body, name: text, arguments: any) := {
+def intrinsic(body: Body, name: text, arguments: any): list {
 	values = arguments.map(a => expression(body, a))
 	if name == "new_text" { return ["text", index_code(values#1) + gc_code("array_new_default", [gc.text])] }
 	if name == "byte_count" { return ["int", values#1#2 + gc_code("array_len", []) + [op.i64_extend_i32_u]] }
@@ -472,7 +472,7 @@ type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: []}
-type_test(body: Body, subject: any, spec: text) := {
+def type_test(body: Body, subject: any, spec: text): list {
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression(body, subject))], text_value(spec)]) }
 	if not (spec in type_words) { return refuse("a test of the type " + spec) }
 	type = type_words[spec]
@@ -481,30 +481,30 @@ type_test(body: Body, subject: any, spec: text) := {
 	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
 }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
-as_node(code: any) := code + gc_code("ref_cast_null", [gc.node])
-kind_code_of(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and]
-payload(code: any, held: int) := as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [held])
-unboxed(code: any, box: int) := payload(code, box) + gc_code("struct_get", [box, 0])
+def as_node(code: any): list { code + gc_code("ref_cast_null", [gc.node]) }
+def kind_code_of(code: any): list { as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and] }
+def payload(code: any, held: int): list { as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [held]) }
+def unboxed(code: any, box: int): list { payload(code, box) + gc_code("struct_get", [box, 0]) }
 # whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
-ratio_test(code: any) := as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_test", [gc.ratio])
-ratio_part(code: any, field: int) := payload(code, gc.ratio) + gc_code("struct_get", [gc.ratio, field]) + gc_code("ref_cast_null", [gc.int_box]) + gc_code("struct_get", [gc.int_box, 0])
+def ratio_test(code: any): list { as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_test", [gc.ratio]) }
+def ratio_part(code: any, field: int): list { payload(code, gc.ratio) + gc_code("struct_get", [gc.ratio, field]) + gc_code("ref_cast_null", [gc.int_box]) + gc_code("struct_get", [gc.int_box, 0]) }
 # fd_write of the first `count` output bytes, its error code as an int
-write_output(count: any) := {
+def write_output(count: any): list {
 	word = [op.i32_store, 2, 0]
 	iovec = [op.i32_const] + sleb(iovec_address) + [op.i32_const] + sleb(output_address) + word
 	iovec += [op.i32_const] + sleb(iovec_address + 4) + count + word
 	arguments = [op.i32_const] + sleb(stdout) + [op.i32_const] + sleb(iovec_address) + [op.i32_const, 1, op.i32_const] + sleb(written_address)
 	iovec + arguments + [op.call] + uleb(import_index(fd_write)) + [op.i64_extend_i32_u]
 }
-import_index(entry: any) := {
+import_index(entry: any): int := {
 	index = -1
 	for i in 0..<#module.imports { if module.imports[i] == entry { index = i } }
 	if index < 0 { refuse("the import " + entry#2 + ", not declared") }
 	index
 }
-code_point(value: any) := ["int", value#2 + [op.i64_extend_i32_u]]
+def code_point(value: any): list { ["int", value#2 + [op.i64_extend_i32_u]] }
 # a value as the text `+` joins it with and print writes
-shown_text(value: any) := {
+def shown_text(value: any): list {
 	kind = value#1
 	if kind == "text" { return value }
 	if kind == pending { return ["text", value#2] }
@@ -518,34 +518,34 @@ shown_text(value: any) := {
 	["text", value#2 + [op.if] + references.text + text_value("yes")#2 + [op.else] + text_value("no")#2 + [op.end]]
 }
 # what `print` writes: `print a 3` each value as a list shows it, a space between
-printed_value(body: Body, n: any) := {
+def printed_value(body: Body, n: any): list {
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression(body, n) }
 	runtime_call("items_text", [list_value(body, n.map(x => x))])
 }
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
-printed(value: any) := ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]]
+def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]] }
 # whether the symbol `name` occurs in n
-mentions(n: any, name: text) := {
+mentions(n: any, name: text): bool := {
 	if n is symbol { return name_of(n) == name }
 	if type(n) is key { return mentions(key_of(n), name) or mentions(value_of(n), name) }
 	if is_group(n) { for x in n { if mentions(x, name) { return yes } } }
 	no
 }
-runtime_call(name: text, values: any) := call_values(module.runtime[name], values)
+def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }
 # the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
 # ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
-collect_types(n: any) := {
+collect_types(n: any): any := {
 	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
-record_type(name: any) := {
+record_type(name: any): any := {
 	if kind_of(name) == "symbol" { return module.classes[name#2] = yes }
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
 	if name#2 == "variants" { for variant in name#3[3..] { module.variants[variant#2] = yes } }
 	record_type(name#4)
 }
 
-local_value(body: Body, n: any) := {
+def local_value(body: Body, n: any): list {
 	name = name_of(n)
 	if not (name in body.names) and name in module.globals {
 		entry = module.globals[name]
@@ -558,7 +558,7 @@ local_value(body: Body, n: any) := {
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
 }
 
-operation(body: Body, symbol: text, a: any, b: any) := {
+def operation(body: Body, symbol: text, a: any, b: any): list {
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
 	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }
@@ -588,7 +588,7 @@ operation(body: Body, symbol: text, a: any, b: any) := {
 # an operator on boxed values, by the kinds they hold at run time: `+` is the runtime word node_add; a comparison
 # between two texts or characters orders them as texts; two ints stay ints; an exact rational with an int or another
 # stays exact; any other two are floats
-node_operation(body: Body, symbol: text, a: any, b: any) := {
+def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol == "+" { return runtime_call("node_add", [["node", a], ["node", b]]) }
 	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	right = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
@@ -605,7 +605,7 @@ node_operation(body: Body, symbol: text, a: any, b: any) := {
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + chosen(kind, texts, [kind, numbers])]
 }
 # `a == b`, `a != b` with a list or a boxed value: the runtime word node_equal compares them deeply
-equality(body: Body, symbol: text, a: any, b: any) := {
+def equality(body: Body, symbol: text, a: any, b: any): list {
 	equal = runtime_call("node_equal", [["node", boxed(a)], ["node", boxed(b)]])
 	if symbol == "==" { return equal }
 	["bool", equal#2 + [op.i32_eqz]]
@@ -613,20 +613,20 @@ equality(body: Body, symbol: text, a: any, b: any) := {
 # an operator on two Int $Nodes, one an exact rational: the runtime's exact word, a comparison by exact_order; the
 # operators without one take the floats
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div"}
-exact_operation(body: Body, symbol: text, left: any, right: any, floats: any) := {
+def exact_operation(body: Body, symbol: text, left: any, right: any, floats: any): list {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
 	if symbol in comparisons { return operation(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
 	floats
 }
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
-chosen(kind: text, a: any, b: any) := [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]
-both_of_kind(a: any, b: any, code: int) := {
+def chosen(kind: text, a: any, b: any): list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
+def both_of_kind(a: any, b: any, code: int): list {
 	test = x => kind_code_of(x) + [op.i64_const] + sleb(code) + [int_ops["=="]]
 	test(a) + test(b) + [op.i32_and]
 }
 
 # a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r
-euclidean_remainder(body: Body, a: any, b: any) := {
+def euclidean_remainder(body: Body, a: any, b: any): list {
 	divisor = uleb(fresh_local(body, "int"))
 	rest = uleb(fresh_local(body, "int"))
 	get_divisor = [op.local_get] + divisor
@@ -637,7 +637,7 @@ euclidean_remainder(body: Body, a: any, b: any) := {
 	["int", code + [op.if, type_bytes.int] + get_rest + absolute + [int_ops["+"], op.else] + get_rest + [op.end]]
 }
 
-assignment(body: Body, target: any, value: any) := {
+def assignment(body: Body, target: any, value: any): list {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø and subscript_name(value_of(target)) != ø {
 		return map_assignment(body, expression(body, key_of(target)), subscript_name(value_of(target)), value)
 	}
@@ -668,28 +668,28 @@ assignment(body: Body, target: any, value: any) := {
 # `x: T = v`: x holds T's kind from here on; a value Rust would check at run time (a boxed one, a fraction, a byte's
 # range) is refused, since a trap could not say what Rust's error says
 declared_kinds = {int: "int", float: "float", text: "text", list: "list"}
-declaration(body: Body, name: text, type_name: text, value: any) := {
+def declaration(body: Body, name: text, type_name: text, value: any): list {
 	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[type_name]
 	assignment(body, symbol(name), value)
 }
 # a value as the declared kind takes it: an int widened to a float, else of that kind
-admitted(value: any, kind: text) := {
+def admitted(value: any, kind: text): list {
 	if value#1 == kind or value#1 == pending { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
-whole(value: any) := admitted(value, "int")
+def whole(value: any): list { admitted(value, "int") }
 
 # `m.x = v` as lowered, `m#("x"+1) = v`: the assignment gives v
-map_assignment(body: Body, map: any, name: text, value: any) := {
+def map_assignment(body: Body, map: any, name: text, value: any): list {
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
 	set = dropped(field_assignment(map, text_value_of(name), [value#1, held]))
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
 # its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float
-widens(body: Body, name: text, held: text, kind: text) := {
+widens(body: Body, name: text, held: text, kind: text): bool := {
 	# a yes/no stays one (a number given to it counts as yes when not 0), an int given a yes/no takes 1 or 0
 	if body.names[name] < #body.function.parameters or held == pending or kind == pending or held == "bool" or kind == "bool" { return no }
 	joint = joint_kind(held, kind)
@@ -699,7 +699,7 @@ widens(body: Body, name: text, held: text, kind: text) := {
 # `global name = value` declares the module's variable name, which every function reads and writes; a bare
 # `global name` (the analyzer's, for a main-level variable only a function assigns) holds nodes, 0 until assigned,
 # and reads it: a function declaring it on each call keeps its value
-global_declaration(body: Body, declaration: any) := {
+def global_declaration(body: Body, declaration: any): list {
 	if declaration is symbol {
 		entry = declared_global(name_of(declaration), "node")
 		return [entry#2, [op.global_get] + uleb(entry#1)]
@@ -709,36 +709,36 @@ global_declaration(body: Body, declaration: any) := {
 	}
 	declare_global(name_of(key_of(declaration)), expression(body, value_of(declaration)))
 }
-declare_global(name: text, value: any) := {
+def declare_global(name: text, value: any): list {
 	declared_global(name, value#1)
 	global_assignment(name, value)
 }
 # the module's global name: [its index, its kind], the kind of its first declaration
-declared_global(name: text, kind: text) := {
+def declared_global(name: text, kind: text): list {
 	if not (name in module.globals) {
 		module.globals[name] = [#module.global_order, kind]
 		module.global_order += [name]
 	}
 	module.globals[name]
 }
-global_assignment(name: text, value: any) := {
+def global_assignment(name: text, value: any): list {
 	entry = module.globals[name]
 	index = uleb(entry#1)
 	[entry#2, converted(value, entry#2) + [op.global_set] + index + [op.global_get] + index]
 }
 # `return x`: x ends the function; what follows it is unreachable, of any kind
-return_value(body: Body, value: any) := {
+def return_value(body: Body, value: any): list {
 	body.returned += [value#1]
 	result = body.function.result
 	code = if result == pending then value#2 else converted(value, result)
 	[pending, code + [op.return]]
 }
 
-call(body: Body, f: Function, arguments: any) := {
+def call(body: Body, f: Function, arguments: any): list {
 	if #arguments != #f.parameters { return refuse("a call of " + f.name + " with " + #arguments + " arguments") }
 	call_values(f, arguments.map(a => expression(body, a)))
 }
-call_values(f: Function, values: any) := {
+def call_values(f: Function, values: any): list {
 	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
 	code = []
 	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
@@ -755,25 +755,25 @@ captured_marker = "·captured·"
 # the runtime words that give a value's text: a program using one (or shown_text of a list or node) has no closures
 # here, whose text is the lambda as written
 text_words = ["node_text", "list_text", "joined"]
-closure_value(body: Body, target: any, captured: any) := {
+def closure_value(body: Body, target: any, captured: any): list {
 	if not (target is symbol and name_of(target) in module.functions) { return refuse("a closure of " + form_of(target)) }
 	number = closure_number(name_of(target), #captured)
 	items = [boxed(number_value(number))] + captured.map(c => boxed(expression(body, c)))
 	["node", key_code(node_kind_codes.function, vector_code(items), name_node(target))]
 }
-closure_number(name: text, captured: int) := {
+closure_number(name: text, captured: int): int := {
 	for i in 0..<#module.closures { if module.closures[i]#1 == name { return i } }
 	module.closures += [[name, captured]]
 	#module.closures - 1
 }
 # the item i of a closure's list: 0 its number, then its captured values
-closure_item(closure: any, i: int) := ["node", payload(closure, gc.list) + gc_code("struct_get", [gc.list, 1]) + [op.i32_const] + sleb(i) + gc_code("array_get", [gc.items])]
-captured_index(name: text) := int(name.split(captured_marker)#2) + 1
-closure_call(body: Body, arity: int, arguments: any) := {
+def closure_item(closure: any, i: int): list { ["node", payload(closure, gc.list) + gc_code("struct_get", [gc.list, 1]) + [op.i32_const] + sleb(i) + gc_code("array_get", [gc.items])] }
+captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
+def closure_call(body: Body, arity: int, arguments: any): list {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
 	call_values(dispatcher(arity), arguments.map(a => expression(body, a)))
 }
-dispatcher(arity: int) := {
+dispatcher(arity: int): any := {
 	name = closure_call_prefix + arity
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
@@ -791,7 +791,7 @@ dispatcher(arity: int) := {
 # a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
 # its own, the target's call on the captured values and the arguments; a closure of another arity fails in
 # wrong_number_of_arguments (the runtime errors of Rust's src/wasm_emitter/functions/closures.rs)
-dispatcher_code(f: Function) := {
+dispatcher_code(f: Function): any := {
 	arity = #f.kinds - 1
 	closure = [op.local_get, 0]
 	number = unboxed(closure_item(closure, 0)#2, gc.int_box)
@@ -811,7 +811,7 @@ dispatcher_code(f: Function) := {
 }
 
 # `if c then a else b`, `if c then a`: the parser's keys else(then(if(ø, c), a), b)
-conditional(body: Body, test: any, yes_branch: any, no_branch: any) := {
+def conditional(body: Body, test: any, yes_branch: any, no_branch: any): list {
 	c = condition(expression(body, test))
 	a = nested(body, yes_branch, 1)
 	if no_branch == ø { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.end]] }
@@ -822,7 +822,7 @@ conditional(body: Body, test: any, yes_branch: any, no_branch: any) := {
 	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
 }
 # `while c do body`: block { loop { exit unless c; body; again } }; a `break` in body branches to the block's end
-loop_of(body: Body, test: any, block: any) := {
+def loop_of(body: Body, test: any, block: any): list {
 	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
 	body.exits += [body.depth + 1]
 	looped = nested(body, block, 2)
@@ -831,7 +831,7 @@ loop_of(body: Body, test: any, block: any) := {
 }
 
 # the code of n read inside `blocks` more blocks, loops or ifs
-nested(body: Body, n: any, blocks: int) := {
+def nested(body: Body, n: any, blocks: int): list {
 	body.depth += blocks
 	code = expression(body, n)
 	body.depth -= blocks
@@ -839,22 +839,22 @@ nested(body: Body, n: any, blocks: int) := {
 }
 
 # `break`: to the end of the innermost loop's block
-loop_exit(body: Body) := {
+def loop_exit(body: Body): list {
 	if #body.exits == 0 { return refuse("a break outside a loop") }
 	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits))]
 }
 
 # a statement's code, its value dropped
-dropped(value: any) := if value#1 == no_kind then value#2 else value#2 + [op.drop]
+def dropped(value: any): list { if value#1 == no_kind then value#2 else value#2 + [op.drop] }
 
 # `xs += e`: e's items appended to the list xs holds, in place, so every alias sees them; ø when xs holds no list
-appended(body: Body, target_name: any, addition: any) := {
+appended(body: Body, target_name: any, addition: any): any := {
 	target = expression(body, target_name)
 	if target#1 == "list" { return runtime_call("list_append", [target, expression(body, addition)]) }
 	if target#1 == "node" { return assignment(body, target_name, runtime_call("node_append", [target, expression(body, addition)])) }
 	ø
 }
-sequence(body: Body, items: any) := {
+def sequence(body: Body, items: any): list {
 	if #items == 0 { return refuse("an empty block") }
 	code = []
 	for item in items[0..<(#items - 1)] { code += dropped(statement(body, item)) }
@@ -864,7 +864,7 @@ sequence(body: Body, items: any) := {
 }
 # a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
 # simpler); a fresh list makes it unshared, a list made inside a block of the statement does not outlast it
-statement(body: Body, n: any) := {
+def statement(body: Body, n: any): list {
 	kept = []
 	for name in body.unshared { if appends_only(n, name) { kept += [name] } }
 	body.unshared = kept
@@ -877,13 +877,13 @@ statement(body: Body, n: any) := {
 	value
 }
 # `xs = []`, `xs = ø`, `xs = [a, b]`: the local name holds a list made right here
-fresh_list_name(n: any) := {
+fresh_list_name(n: any): any := {
 	if not (type(n) is key and op_of(n) == "=" and key_of(n) is symbol) { return ø }
 	if value_of(n) is ø or bracket_of(value_of(n)) == "[" { return name_of(key_of(n)) }
 	ø
 }
 # `xs = xs + e`, `xs += e` of e not mentioning xs: the name xs, else ø
-self_append_name(n: any) := {
+self_append_name(n: any): any := {
 	if not (type(n) is key and key_of(n) is symbol) { return ø }
 	name = name_of(key_of(n))
 	sum = value_of(n)
@@ -893,7 +893,7 @@ self_append_name(n: any) := {
 	name
 }
 # whether n mentions the local name only in appends to it
-appends_only(n: any, name: text) := {
+appends_only(n: any, name: text): bool := {
 	if self_append_name(n) == name { return yes }
 	if n is symbol { return name_of(n) != name }
 	if type(n) is key { return appends_only(key_of(n), name) and appends_only(value_of(n), name) }
@@ -901,7 +901,7 @@ appends_only(n: any, name: text) := {
 	yes
 }
 
-expression(body: Body, n: any) := {
+def expression(body: Body, n: any): list {
 	if n is bool { return ["bool", [op.i32_const, if n then 1 else 0]] }
 	if n is number { return number_value(n) }
 	if n is text { return text_value(n) }
@@ -914,7 +914,7 @@ expression(body: Body, n: any) := {
 	group_expression(body, n)
 }
 
-group_expression(body: Body, n: any) := {
+def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, n[2..].map(x => x)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
 		return closure_call(body, int(name_of(n#1)[(#closure_call_prefix)..]), n[1..].map(x => x))
@@ -967,7 +967,7 @@ group_expression(body: Body, n: any) := {
 	sequence(body, n.map(x => x))
 }
 
-key_expression(body: Body, n: any) := {
+def key_expression(body: Body, n: any): list {
 	operator = op_of(n)
 	left = key_of(n)
 	right = value_of(n)
@@ -1027,10 +1027,10 @@ key_expression(body: Body, n: any) := {
 	if left == ø or right == ø { return refuse("the operator " + operator) }
 	operation(body, operator, expression(body, left), expression(body, right))
 }
-right_of_if(n: any) := value_of(n)
+right_of_if(n: any): any := value_of(n)
 
 # -value; a value known only at run time as 0 - value
-negation(body: Body, value: any) := {
+def negation(body: Body, value: any): list {
 	if value#1 == "float" { return ["float", value#2 + [op.f64_neg]] }
 	if value#1 == "node" { return operation(body, "-", number_value(0), value) }
 	if value#1 != "int" { refuse("the negation of a " + value#1) }
@@ -1040,7 +1040,7 @@ negation(body: Body, value: any) := {
 # on other values they give one of them, as Rust does: `a and b` is b when a holds, else a; `a or b` a when a holds,
 # else b (`(1==1) and 5` is 5, `x | y` with x 0 is y); a yes/no beside a number counts as 1 or 0
 logical_words = {and: "and", or: "or", "|": "or"}
-logical(body: Body, symbol: text, left: any, right: any) := {
+def logical(body: Body, symbol: text, left: any, right: any): list {
 	a = expression(body, left)
 	b = nested(body, right, 1)
 	# a value whose kind the first reading of a recursive function does not know yet (pending) beside a yes/no is one
@@ -1063,13 +1063,13 @@ logical(body: Body, symbol: text, left: any, right: any) := {
 ## functions
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
-new_scope(f: Function) := {
+new_scope(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }
 
-compile_function(f: Function, argument_kinds: any) := {
+compile_function(f: Function, argument_kinds: any): any := {
 	if not module.surveying { return function_compiled(f, argument_kinds) }
 	try { function_compiled(f, argument_kinds) } catch refusal {
 		if not ("" + refusal).starts_with(outside_the_core) { throw refusal }
@@ -1078,7 +1078,7 @@ compile_function(f: Function, argument_kinds: any) := {
 		f.result = "node"
 	}
 }
-function_compiled(f: Function, argument_kinds: any) := {
+function_compiled(f: Function, argument_kinds: any): any := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
 	parameter_kinds = []
@@ -1107,9 +1107,9 @@ function_compiled(f: Function, argument_kinds: any) := {
 }
 
 ## the module
-value_type(kind: text) := if kind in references then references[kind] else [type_bytes[kind]]
+def value_type(kind: text): list { if kind in references then references[kind] else [type_bytes[kind]] }
 # a global's first value, before its declaration sets it
-zero_of(kind: text) := {
+def zero_of(kind: text): list {
 	if kind == "int" { return [op.i64_const, 0] }
 	if kind == "float" { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
@@ -1117,22 +1117,22 @@ zero_of(kind: text) := {
 	if kind in references { return [ref_null] + uleb(references[kind]#2) }
 	[op.i32_const, 0]
 }
-global_entry(name: text) := value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end]
-function_type(f: Function) := [function_type_byte] + vector(f.kinds.map(value_type)) + [1] + value_type(f.result)
-function_body(f: Function) := {
+def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end] }
+def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + [1] + value_type(f.result) }
+def function_body(f: Function): list {
 	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
 	uleb(#content) + content
 }
-index_name(i: int, name: text) := uleb(i) + name_bytes(name)
-name_map(names: any) := vector(range_list(#names).map(i => index_name(i, names#(i + 1))))
-local_name_map(f: Function) := uleb(f.index) + name_map(f.local_names)
-range_list(n: int) := {
+def index_name(i: int, name: text): list { uleb(i) + name_bytes(name) }
+def name_map(names: any): list { vector(range_list(#names).map(i => index_name(i, names#(i + 1)))) }
+def local_name_map(f: Function): list { uleb(f.index) + name_map(f.local_names) }
+def range_list(n: int): list {
 	out = []
 	for i in 0..n { out += [i] }
 	out
 }
-subsection(id: int, content: any) := [id] + uleb(#content) + content
-names_section(functions: any) := {
+def subsection(id: int, content: any): list { [id] + uleb(#content) + content }
+def names_section(functions: any): list {
 	imported = range_list(#module.imports).map(i => index_name(i, module.imports#(i + 1)#2))
 	function_names = vector(imported + functions.map(f => index_name(f.index, f.name)))
 	locals = vector(functions.map(local_name_map))
@@ -1145,7 +1145,7 @@ names_section(functions: any) := {
 	section(section_ids.custom, name_bytes("name") + content)
 }
 
-module_bytes(functions: any) := {
+def module_bytes(functions: any): list {
 	# an import's type follows the GC types in the imports' order, so a function's type is #gc_types + its index too
 	types = section(section_ids.type, vector(gc_types + module.imports.map(i => i#3) + functions.map(function_type)))
 	imported = section(section_ids.import, vector(range_list(#module.imports).map(i => import_entry(i))))
@@ -1168,22 +1168,22 @@ module_bytes(functions: any) := {
 	parts = [types, imported, declared, memory, globals, exported, segments, codes, texts]
 	wasm_header + joined(parts) + names_section(functions)
 }
-import_entry(i: int) := {
+def import_entry(i: int): list {
 	entry = module.imports#(i + 1)
 	name_bytes(entry#1) + name_bytes(entry#2) + [import_function_byte] + uleb(#gc_types + i)
 }
 
 ## host words: the program's environment, imported from the "host" module (src/host.rs)
 host_module = "host"
-host_import(name: text) := {
+def host_import(name: text): list {
 	signature = module.host[name]
 	[host_module, name, [function_type_byte] + vector(signature#1.map(host_type)) + vector(signature#2.map(host_type))]
 }
-host_type(kind: text) := if kind == "i32" then [type_bytes.char] else value_type(kind)
+def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else value_type(kind) }
 
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through functions the module exports for it (new_int…), which this one lacks
-host_call(body: Body, name: text, arguments: any) := {
+def host_call(body: Body, name: text, arguments: any): list {
 	signature = module.host[name]
 	if "node" in signature#1 or "node" in signature#2 { return refuse("the host word " + name + " on nodes") }
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
@@ -1195,23 +1195,23 @@ host_call(body: Body, name: text, arguments: any) := {
 	if result == "i32" { return ["int", code + [op.i64_extend_i32_s]] }
 	[result, code]
 }
-host_argument(value: any, kind: text) := {
+def host_argument(value: any, kind: text): list {
 	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
 	if kind == "int" { return host_int(value) }
 	converted(value, kind)
 }
 # a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
-host_int(value: any) := {
+def host_int(value: any): list {
 	if value#1 == "node" or value#1 == "float" { return runtime_call("rounded", [["float", converted(value, "float")]])#2 }
 	converted(value, "int")
 }
 
 # the module of a lowered program, or a text naming the first form outside the core; `runtime` is
 # lib/compiler/runtime.warp lowered by the same pipeline
-wasm_module(program: any, runtime: any) := hosted_wasm_module(program, runtime, {})
+wasm_module(program: any, runtime: any): any := hosted_wasm_module(program, runtime, {})
 
 # as wasm_module, the host words `host` names importable (src/compiler/self_hosted.rs passes src/host.rs's)
-hosted_wasm_module(program: any, runtime: any, host: any) := {
+hosted_wasm_module(program: any, runtime: any, host: any): any := {
 	module.functions = {}
 	module.order = []
 	module.runtime = {}
