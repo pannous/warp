@@ -9,7 +9,7 @@
 //! `get "/echo" { it.body }` keeps `it => {it.body}` to call later, `run { n + 1 }` gets `() => {n + 1}`; a lambda or a
 //! function passes as it is. Before the quotes are sealed, so no sugar pass rewrites inside an argument.
 use crate::lowering::blocks::{quote, DATA_WORD};
-use crate::lowering::nodes::{for_in_variable, function_head, is_block, parameter_name};
+use crate::lowering::nodes::{for_in_variable, function_head, parameter_name};
 use crate::node::{children_rewritten, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::IMPLICIT_PARAMETER;
@@ -117,7 +117,7 @@ pub(crate) fn is_function_type(kind: &Node) -> bool {
 fn taken(argument: Node, takes: Takes, scope: &Scope) -> Node {
 	match takes {
 		Takes::Data => quote(spliced(argument, &scope.bound)),
-		Takes::Function if is_block(&argument) => block_lambda(taken_arguments(argument, scope)),
+		Takes::Function if argument.is_block() => block_lambda(taken_arguments(argument, scope)),
 		_ => taken_arguments(argument, scope),
 	}
 }
@@ -156,10 +156,10 @@ fn taken_arguments(node: Node, scope: &Scope) -> Node {
 		}
 		// `get "/echo" { it.body }`: a spaced call's blocks
 		Node::List(items, bracket @ Bracket::None, separator @ Separator::Space) => {
-			with_taken(items, bracket, separator, scope, is_block)
+			with_taken(items, bracket, separator, scope, Node::is_block)
 		}
 		// `style{ … }`, `run{ … }`: the block is the one argument, taken as written before any part of it is
-		Node::Key(tag, Op::Colon, block) if is_block(&block) => match one_taking(&tag, scope) {
+		Node::Key(tag, Op::Colon, block) if block.is_block() => match one_taking(&tag, scope) {
 			Some(takes) => crate::node::call(&tag.name(), vec![taken(*block, takes, scope)]),
 			None => Node::Key(tag, Op::Colon, Box::new(tag_block(*block, scope))),
 		},

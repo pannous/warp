@@ -1,0 +1,8 @@
+# emitter: a closure is a Function $Node holding its target's number and the values it captured; calling it goes
+# through the dispatcher of its arity
+make_adder(n) := x => x + n
+make_scaler(k) := (a, b) => (a + b) * k
+add2 = make_adder(2)
+add10 = make_adder(10)
+scale = make_scaler(3)
+add2(5) + add10(1) + scale(1, 2)
