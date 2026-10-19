@@ -76,6 +76,8 @@ mod test_self_serializer; // card self-serializer
 #[cfg(feature = "native")]
 mod test_self_signatures; // Back-end focus: the analyzer's signature table
 #[cfg(feature = "native")]
+mod test_self_text_numbers; // card card-4
+#[cfg(feature = "native")]
 mod test_self_words; // card library-word-tables
 mod test_semicolon_square;
 mod test_spaced_children;

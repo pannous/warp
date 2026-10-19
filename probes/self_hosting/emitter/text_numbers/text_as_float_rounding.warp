@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+# emitter core: decimal scaling beyond 10^±22 and at the float range's ends (runtime.warp decimal_float; card card-4)
+# [1e23 8.988465674311579e307 1.7976931348623157e308 ∞ 1e-300 5e-324 0]
+real(t: text): float := t as float
+[real("1e23"), real("8.988465674311579e307"), real("1.7976931348623157e308"), real("1e309"), real("1e-300"), real("5e-324"), real("1e-400")]
