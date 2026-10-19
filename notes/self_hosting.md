@@ -135,6 +135,8 @@ items…], ["literal", source, node], ["attribute", name, value, node], …).
 - The twin uses `x is list`, not `type(x) == "int"` (a hint points to `type(x) == int`).
 
 ## Target pipeline shape (approved 2026-10-17, proposal in notes/self_hosting_dropped.md "Simplified shape")
+Since 2026-10-19 (decision passes-first-principles / ignore-rust): passes come from first principles, judged by the
+programs' results; the Rust passes are ignored, not ported or twinned. The shape below is a starting point only.
 parser (clean tree, parser restructuring above) → desugar table pass → scope pass (calls of word phrases, bindings
 per scope) → one word-phrase pass (`a of b`, `<selector> in|from b`, member_phrases, times_phrases, number_words; a
 table word → rewrite in the library-word-tables format, shared with parser-keyword-table) → structural passes
@@ -356,8 +358,8 @@ keep its reads far from O(i) here; the gain is the plain array.get.
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
 (wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
 `warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
-(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
-(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+(Python/JS over JSON lines) and, since card exe-c-ffi, C functions: the bridge is crates/warp-runtime/src/c_calls.rs,
+shared with warp's host, and `warp build` carries the header signatures with the machine code (notes/aot.md).
 Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
 modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
 shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
