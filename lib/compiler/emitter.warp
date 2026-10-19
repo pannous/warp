@@ -173,8 +173,8 @@ collect_functions(program: any, functions: any) := {
 
 ## one function's locals while its body is read
 # a runtime word's body may use the intrinsics
-# function: the one compiled, returned: the kinds its `return`s give
-class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any }
+# function: the one compiled, returned: the kinds its `return`s give, declared: the kind of each `x: T = v` local
+class Body { names: any; kinds: any; order: any; scratch: int; intrinsics: bool; function: any; returned: any; declared: any }
 
 local_index(body: Body, name: text, kind: text) := {
 	if name in body.names { return body.names[name] }
@@ -495,8 +495,12 @@ assignment(body: Body, target: any, value: any) := {
 	if type(target) is key and op_of(target) == "#" and key_of(target) != ø {
 		return element_assignment(body, expression(body, key_of(target)), expression(body, value_of(target)), value)
 	}
+	if type(target) is key and op_of(target) == ":" and key_of(target) is symbol and value_of(target) is symbol {
+		return declaration(body, name_of(key_of(target)), name_of(value_of(target)), value)
+	}
 	if not (target is symbol) { return refuse("an assignment to " + form_of(target)) }
 	name = name_of(target)
+	if name in body.declared { value = admitted(value, body.declared[name]) }
 	kind = value#1
 	if not (name in body.names) and name in module.globals { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
@@ -511,6 +515,22 @@ assignment(body: Body, target: any, value: any) := {
 	index = uleb(local_index(body, name, kind))
 	[kind, converted(value, kind) + [op.local_tee] + index]
 }
+
+# `x: T = v`: x holds T's kind from here on; a value Rust would check at run time (a boxed one, a fraction, a byte's
+# range) is refused, since a trap could not say what Rust's error says
+declared_kinds = {int: "int", float: "float", text: "text", list: "list"}
+declaration(body: Body, name: text, type_name: text, value: any) := {
+	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
+	body.declared[name] = declared_kinds[type_name]
+	assignment(body, symbol(name), value)
+}
+# a value as the declared kind takes it: an int widened to a float, else of that kind
+admitted(value: any, kind: text) := {
+	if value#1 == kind or value#1 == pending { return value }
+	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
+	refuse("a " + value#1 + " given to a variable declared " + kind)
+}
+whole(value: any) := admitted(value, "int")
 
 # whether a local (not a parameter) of kind `held` assigned a `kind` takes their joint kind from the next reading of
 # its function on: `x = 7; x /= 2` makes x a boxed value, `x = 0; x += 0.5` a float
@@ -633,6 +653,9 @@ key_expression(body: Body, n: any) := {
 		target = expression(body, left)
 		if target#1 == "list" { return runtime_call("list_append", [target, expression(body, right)]) }
 	}
+	if operator == "/=" and left is symbol and name_of(left) in body.declared and body.declared[name_of(left)] == "int" {
+		return assignment(body, left, runtime_call("floor_quotient", [expression(body, left), whole(expression(body, right))]))
+	}
 	if operator in compound_ops { return assignment(body, left, operation(body, compound_ops[operator], expression(body, left), expression(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression(body, left), number_value(1))) }
 	if operator == "-" and left == ø { return negation(body, expression(body, right)) }
@@ -670,7 +693,7 @@ logical(body: Body, symbol: text, left: any, right: any) := {
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
 new_scope(f: Function) := {
-	scope = Body({}, [], [], 0, f.is_runtime, f, [])
+	scope = Body({}, [], [], 0, f.is_runtime, f, [], {})
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
 }

@@ -5,7 +5,9 @@
 //! warp compiler already compiles.
 //! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
-use crate::compiler::node_views::{handled_plain_view, json_text, node_of_handled_view, plain_view, view_json};
+use crate::compiler::node_views::{
+	emitted_view, handled_plain_view, json_text, node_of_handled_view, plain_view, view_json,
+};
 use crate::node::Node;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
@@ -137,7 +139,7 @@ pub fn emit(node: &Node) -> Option<Result<crate::pipeline::CompiledModule, Node>
 	if !emits() {
 		return None;
 	}
-	let module = answer(&EMIT, view_json(&plain_view(node))).and_then(|answer| module_of(&answer));
+	let module = answer(&EMIT, view_json(&emitted_view(node))).and_then(|answer| module_of(&answer));
 	match module {
 		Err(refusal) if refusal.starts_with(OUTSIDE_THE_CORE) => {
 			log::trace!("self-hosted emit: {refusal}");

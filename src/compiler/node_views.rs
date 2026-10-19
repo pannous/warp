@@ -3,6 +3,7 @@
 //! The twin tests (tests/common/twins.rs) and the self-hosted pipeline (self_hosted.rs) both cross this bridge.
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
 
 /// A list as warp writes it: the empty list is ø
 pub fn warp_list(items: impl Iterator<Item = Node>) -> Node {
@@ -193,6 +194,25 @@ pub fn plain_view(node: &Node) -> Node {
 /// The plain view with the positions: ["at", line, column, view] around each positioned node
 pub fn positioned_plain_view(node: &Node) -> Node {
 	plain(positioned_view(node))
+}
+
+/// The plain view the emitter reads (lib/compiler/emitter.warp): a declaration's type, which the lowering keeps as
+/// metadata on the target and every view drops, shown as the source writes it, `x: int = 3`
+pub fn emitted_view(node: &Node) -> Node {
+	plain_view(&declared_types_shown(node.clone()))
+}
+
+/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
+pub fn declared_types_shown(node: Node) -> Node {
+	match node {
+		Node::Key(target, Op::Assign, value)
+			if let Node::Meta { node: name, data } = *target.clone()
+				&& matches!(*data, Node::Symbol(_)) =>
+		{
+			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
+		}
+		other => other.map_children(declared_types_shown),
+	}
 }
 
 fn plain(view: Node) -> Node {

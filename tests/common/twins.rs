@@ -4,10 +4,12 @@
 //! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
-pub use warp::compiler::node_views::{node_view, plain_view, positioned_plain_view, view_json, warp_list};
+pub use warp::compiler::node_views::{
+	emitted_view, node_view, plain_view, positioned_plain_view, view_json, warp_list,
+};
 use warp::host::with_captured_stdout;
 use warp::warp_parser::parse;
-use warp::{Node, Number, Op};
+use warp::{Node, Number};
 
 const SOURCE_FOLDERS: [&str; 2] = ["samples", "probes"];
 const SOURCE_EXTENSION: &str = "warp";
@@ -309,20 +311,7 @@ fn covers(
 /// refused or answered before code generation
 pub fn analyzed(code: &str) -> Option<(Node, Vec<String>)> {
 	let program = std::panic::catch_unwind(|| warp::pipeline::lower(code).ok()).ok()??;
-	Some((plain_view(&declared_types_shown(program.clone())), warp::analyzer::inferred_kinds(&program)))
-}
-
-/// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`
-fn declared_types_shown(node: Node) -> Node {
-	match node {
-		Node::Key(target, Op::Assign, value)
-			if let Node::Meta { node: name, data } = *target.clone()
-				&& matches!(*data, Node::Symbol(_)) =>
-		{
-			Node::Key(Box::new(Node::Key(name, Op::Colon, data)), Op::Assign, Box::new(declared_types_shown(*value)))
-		}
-		other => other.map_children(declared_types_shown),
-	}
+	Some((emitted_view(&program), warp::analyzer::inferred_kinds(&program)))
 }
 
 /// The bridge every pass twin relies on: the view of each parsed source, made a node and viewed again, is itself
@@ -351,7 +340,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	let cases = in_parallel(paths.to_vec(), |path| {
 		let text = std::fs::read_to_string(path).ok()?;
 		let lowered = std::panic::catch_unwind(|| warp::pipeline::lower(&text)).ok()?.ok()?;
-		Some((path.display().to_string(), view_json(&plain_view(&lowered)), text))
+		Some((path.display().to_string(), view_json(&emitted_view(&lowered)), text))
 	});
 	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}.json", std::process::id()));
 	let runtime_source = std::fs::read_to_string(Path::new(COMPILER_FOLDER).join(RUNTIME_WORDS)).unwrap();
