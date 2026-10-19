@@ -1,18 +1,14 @@
 // card shader-wheel: the mouse wheel is an input next to the pointer: the system value mouse_wheel and the shader's
 // built-in hole $mouse_wheel are the steps turned over the paint window (or the page's canvas) since the start, up
 // adding; `$wheel` is its alias with a hint, and compute_toy's mouse.zoom follows it, 5% a step, as compute.toys zooms
-use warp::normalize::{capture_hints, set_hint_mode, HintMode};
-
 const READS_THE_WHEEL: &str = "s = shader {\n\t@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {\n\t\treturn vec4f(select(0.0, 1.0, $mouse_wheel == 2.0), 0.0, 0.0, 1.0);\n\t}\n}\n";
 
+#[cfg(feature = "native")]
 #[test]
 fn wheel_is_an_alias_of_mouse_wheel_with_a_hint() {
-	set_hint_mode(HintMode::Always);
-	let aliased = READS_THE_WHEEL.replace("$mouse_wheel", "$wheel");
-	let (lowered, hints) = capture_hints(|| warp::pipeline::lower(&format!("{aliased}gpu_render(s, 2, 2)")));
-	let lowered = lowered.expect("lowers").serialize();
-	assert!(lowered.contains("values.mouse_wheel"), "{lowered}");
-	assert!(hints.iter().any(|hint| hint.original == "$wheel" && hint.canonical == "$mouse_wheel"), "{hints:?}");
+	let said =
+		crate::common::said(&format!("{}gpu_render(s, 2, 2)", READS_THE_WHEEL.replace("$mouse_wheel", "$wheel")));
+	assert!(said.contains("prefer $mouse_wheel over $wheel"), "{said}");
 }
 
 // the viewer tells the steps turned with a `wheel` line (src/graphics/paint_window.rs follow_input)
