@@ -284,6 +284,9 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let program = as_constructions(program, &inserted);
 	// `Node.True`, `x is Node` of a used file's enum, which sum_variants met before its declaration was in front
 	let program = crate::lowering::sum_variants::with_types_of(program, &file_classes);
+	// `Disambiguation::Earlier` of a used module's enum, which plain_enums met before its declaration was in front
+	let module_types: Vec<Node> = std_classes.iter().chain(&file_classes).cloned().collect();
+	let program = crate::lowering::plain_enums::with_cases_of(program, &module_types);
 	let program = with_implicit_class_modules(with_statements_first(program, std_classes));
 	with_statements_first(program, file_classes)
 }
