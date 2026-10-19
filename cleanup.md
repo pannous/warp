@@ -173,3 +173,10 @@
 - Route every non-literal `byte_at` text operand through the existing text-argument conversion so wrong kinds become the standard `not a text` error instead of a raw `ref.cast` trap.
 - Preserve the inline byte-loop fast path, character-to-text conversion, error propagation, and bounds checking.
 - Run the focused test before and after, then formatting, clippy, and the wasm32 check.
+
+# Package sub-build workspace cleanup
+
+- Reproduce the fresh-checkout package-tool failure with the existing focused package tests before changing production configuration.
+- Keep runtime-fetched packages outside Warp's Cargo workspace without changing or copying a fetched package's sources.
+- Cover the workspace boundary with one focused regression test under `tests/modules/`.
+- Run the focused package filters, formatting, clippy, and the wasm32 check; keep the worktree-only version suffix uncommitted.
