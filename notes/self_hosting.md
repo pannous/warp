@@ -1,6 +1,14 @@
 # Self-hosting: warp's compiler written in warp
 Roadmap card: self-hosted (board topic; its sub-cards are the steps below, notes/roadmaps.md).
 
+Milestones:
+- 2026-10-19 ~12:50: FIRST PURE RUN. With WARP_SELF_HOSTED=pure, programs run parser.warp → warp's own passes →
+  analyzer.warp → emitter.warp with no Rust pass in between (Rust only carries data between the stage workers):
+  `1 + 2`, `print "hi"`, `f(x) := x * 2; f(3)`, `while`, `xs#2`, `if … then … else` (card pure-runs,
+  warp-self-analyzer). Forms outside the lane are refused loudly and run the usual way. The lane grows to the
+  language, never the other way round: no program, test or lib code is rewritten into primitive syntax to fit it
+  (decisions compiler-high-level, no-primitive-rewrites).
+
 Goal (issue #33): write the whole parser and as many components as possible in warp itself. A secondary goal that
 must not bias the language design (wiki/Features.md "self hosting", wiki/goals.md).
 
@@ -241,15 +249,20 @@ function and local names.
 - Dev loop: probes/self_hosting/emitter/emit_lowered.sh <file.warp> (lowered text → wasm_module → validate → run).
 - Int `/` gives an exact rational (runtime word exact_ratio): an Int `$Node` holding a `$Ratio` of two `$i64box`, as
   the Rust reader reads it; exact again with ints and ratios (exact_add/sub/mul/div/order), shown as Rust shows it
-  (exact_text: 3.5, 1/3); `%` on one and a ratio with a float go through floats. `#`, `x#i` and `x#i = v` on a value
+  (exact_text: 3.5, 1/3); `%` on one is exact_mod and `floor` exact_floor (runtime.warp's exact rounding words, card
+  exact-rounding-warp, probes/self_hosting/emitter/exact/rounding.warp); a ratio with a float goes through floats. `#`, `x#i` and `x#i = v` on a value
   known only at run time call node_length / node_at / node_set_at.
 - Not in the core yet (outside, not dropped): decimals as exact rationals (the core reads a decimal as f64, so
   `1/3 + 0.5` is a float where Rust gives 5/6), ints beyond 64 bits (Rust promotes; a ratio's parts overflow
   silently), a yes/no variable, a loop's value, slices, error values (a run-time error traps, without
   Rust's message: the twin counts a failure on both sides as the same outcome), every other runtime call, among them the memo_* calls the memoization pass gives a function calling itself twice (fib), and
   library words a user function's name meets (`add` becomes add·any).
-- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp `kinds(program)`
-  (warp-self-analyzer, card inferred-kinds) lands; then the emitter reads its kinds from there.
+- Kinds come from emitter.warp's own small inference until lib/compiler/analyzer.warp feeds it (card emitter-takes,
+  decision ignore-rust: no comparison with src/analyzer). analyzer.warp `emitter_kinds(program)` gives {functions: {f:
+  {params: [k…], result: k, locals: {x: k}, elements: {xs: k}}}, variables: {x: k}, elements: {xs: k}, value: k} with
+  k one of int float char text list node (node: any value held boxed, ø included); elements: the element kind of a
+  list whose type is known. An empty map comes as null (to_json, card lib-json). tests/parser/test_self_analyzer.rs
+  checks it runs on every source of tests/parser/analyzer_twin_sources.txt.
 
 ## Value layout (card emitter-gc; the Rust emitter follows: card rust-emitter)
 Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
@@ -332,6 +345,10 @@ Ranked by Rust lines removed (≈ of lists/maps is lists-maps; trim/find words a
 | 12 | split, live-loop, try-assert, swizzle, text-set-char, contains, tree-walk-lib, parallel-map, signals | 60-80 each | |
 | 13 | text-quoted, insert-at, element-children, node-codes, reverse, log-root, zero-fill, pop-clear, codepoint-count, builtin-signatures, small-dispatch | 15-55 each | |
 
+float-as-exact-warp (2026-10-19): runtime.warp `float_as_exact` (float_digits, factors 2 and 5 taken out before the
+denominator is built) and emitter.warp `as_rational`; only `as rational` (a float `as real`/`as exact` stays a float).
+The warp runtime has no big ints: a fraction beyond 64 bits (`1e-20 as rational`) fails as int64 overflow, Rust's
+twin goes on in big ints. Rust's float_as_exact stays until the switch hands emission to warp.
 Features the moves need (cards): time-primitives, kind-reflection, float-only-ops, mutable-array, lib-constant-tables,
 lib-inlining, lib-from-runtime (late_call above is the mechanism), list-become-word. Already there: overloading by
 arity, default parameters, variadic `xs...`, operator methods on classes, block parameters, `fields(p)`.
@@ -377,8 +394,8 @@ keep its reads far from O(i) here; the gain is the plain array.get.
 Exists: `warp build x.warp` (and plain `warp x.warp`) writes a standalone executable = crates/warp-runtime stub
 (wasmtime runtime + GC, no Cranelift) + the program's .cwasm appended: hello world 1.77 MB, 109 KB of it machine code.
 `warp compile --aot` writes the .cwasm alone. The stub provides basic host words, libm, fd_write and foreign_call
-(Python/JS over JSON lines); anything else is refused: `use c; strlen("hello")` → "c.strlen used runtime"
-(scratch/aot probe). So C FFI (libloading + header.rs signatures) exists in warp but not in the stub.
+(Python/JS over JSON lines) and, since card exe-c-ffi, C functions: the bridge is crates/warp-runtime/src/c_calls.rs,
+shared with warp's host, and `warp build` carries the header signatures with the machine code (notes/aot.md).
 Idea "host from FFI + wasm": put the generic C FFI bridge into the stub; then graphics/sound/windows can be warp
 modules calling SDL/raylib/CoreAudio through FFI instead of Rust crates (wgpu, cpal, winit), and the native host
 shrinks to wasmtime + FFI bridge (see the self-hosted-modules direction). Hard parts: C callbacks on other threads
@@ -414,9 +431,12 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
   with the Rust pipeline (that compile shows a Rust `emit` phase).
 - WARP_SELF_ANALYSIS=1 beside the switch (card pipeline-runs): emit_module first hands each lowered program to
-  analyzer.warp `kinds` (self_hosted::check_analysis) and fails it loud on a stage error or a slot where warp's kind
-  does not cover Rust's (`… disagrees with Rust's: html_items(): list, not empty`). Step one only checks: the emitter
-  still reads src/analyzer's kinds; later warp's kinds feed it. Suite count: self-hosted-suite.sh --stage
+  analyzer.warp `kinds` (self_hosted::program_kinds; a stage error fails the program) and its kinds go to emitter.warp
+  with the program (request [view, kinds], `typed_wasm_module`, module.kinds; cards emitter-reads, emitter-takes),
+  never compared with src/analyzer's (decision ignore-rust): an unannotated parameter takes the analyzed kind instead
+  of its first call's, and a node where an analyzed program needs a list or text is unboxed (runtime.warp
+  list_of_node, text_of_node: ø is [], anything else traps). That took sorting_idiomatic, quicksort, divisors and
+  pascals-triangle into the core (2026-10-19). Suite count: self-hosted-suite.sh --stage
   analyzer=WARP_SELF_ANALYSIS.
 - Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
   refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
@@ -452,3 +472,25 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   variable` 184 (try 52, T# 22: forms parser.warp reads otherwise), a bare `#` left side 76 (a wrong number), `cannot
   extract a numeric value from ø` 46, database `may be ø` hints 50, `not a number` 33, hints pointing into
   lib/compiler/parser.warp (its own warnings leak into the program's output) 41.
+
+## Case table in warp (card case-table-warp, 2026-10-19, written blind in the sprint: untested)
+`use case_table` gives case_upper / case_lower / case_fold, warp over the ranges of text_unicode.rs (lib/case_table.warp:
+class CaseTable, binary search per code point). The tables are lib/case_tables.warp, generated by scripts/case_tables.py
+from Python's unicodedata (17.0 at writing; Rust's char tables may be a version behind: new letters can differ).
+Open before the Rust table goes: list indexing on cons-cell lists is linear (constant-data card: an int array), the
+module builds 9 600 ints at load, `%` and `/!` on int may pull the exact runtime; measure against the builtin first.
+
+## Time primitives (card time-primitives, 2026-10-19, untested sprint work)
+emitter.warp makes the time node of a lowered `time_of(info, position)` / `instant_at(ms)` call (Kind 18, info above
+the kind bits, an $i64box position) of the emitter kind "time" (anyref like a node; boxed as itself, every
+other use refused, so a program printing a time stays outside the core until time-text lands) and gives runtime words the intrinsics time_form, time_position, duration_months,
+duration_days (sign-extended 32 bits), zone_index, zone_offset (seconds); runtime.warp adds is_time/is_date/…,
+duration_nanos, duration_of(months, days, nanos) and local_offset_at(t) over the host word local_offset, which a
+program making a time imports (Rust: imports.rs makes_instant). Names carry a time_/duration_/zone_ prefix instead of
+the card's bare form/position/days, which runtime words use as locals. The time cards (time-field, time-text,
+time-arithmetic, time-zones) move src/wasm_emitter/time onto these. Probes: probes/self_hosting/emitter/times.
+- Times in runtime.warp (card time-text-warp): `time_text(n)` (node_text's kind 18) writes a date, an instant, a local
+  time and a time of day as times.rs emit_time_text/emit_fraction do; a duration (card duration-warp) and a zoned time
+  (needs the zone names table) trap. Unreached yet: a time constant arrives in emitter.warp as an opaque
+  ["data", "Data(…)"] view (src/compiler/node_views.rs), so the emitter refuses it and Rust takes the program; the next
+  step is a view carrying the form and position (card emitter-emits).

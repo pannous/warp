@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::OnceLock;
 #[cfg(feature = "native")]
-use wasmtime::{Engine, FuncType, Linker, Val, ValType};
+use wasmtime::{Engine, Linker};
 
 /// libc signatures as warp calls them, over what the headers declare (or miss: abs and labs are in _stdlib.h): strcmp
 /// and strncmp take (ptr, len) pairs instead of NUL-terminated pointers; (name, params, result)
@@ -168,8 +168,7 @@ pub use link::*;
 pub const LIBM: &str = "m";
 
 const SDL_PREFIX: &str = "SDL_";
-/// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
-const HAND_LINKED_LIBC: [&str; 8] = ["abs", "strlen", "atoi", "atol", "atof", "strcmp", "strncmp", "rand"];
+use warp_runtime::c_signatures::HAND_LINKED_LIBC;
 
 /// Get FFI signatures by parsing header files for a library, once per process: every name the analyzer meets is looked up here
 pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, FfiSignature> {
@@ -258,18 +257,8 @@ fn unlinkable_header_function(name: &str) -> Option<&'static str> {
 		.and_then(|declared| unlinkable_type(&declared))
 }
 
-/// What a C pointer type crosses as (notes/ffi_handles.md)
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum CPointer {
-	/// `char *`, `const unsigned char *`: a warp text (a parameter its NUL-terminated letters in linear memory)
-	Text,
-	/// `void *`, `int *`: a parameter points into linear memory; a result is a handle
-	Memory,
-	/// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
-	Handle,
-	/// `sqlite3 **ppDb`: left out of the warp call; the first one becomes the result, the others receive NULL
-	Out,
-}
+/// What a C pointer type crosses as (notes/ffi_handles.md); the C function descriptions executables carry
+pub use warp_runtime::c_signatures::{CFunction, CPointer, ParamType, RetType};
 
 /// C words that qualify a type without naming it
 const C_QUALIFIERS: [&str; 7] = ["const", "volatile", "struct", "enum", "union", "unsigned", "signed"];
@@ -300,9 +289,49 @@ pub(crate) fn is_handle_out_pointer(c_type: &str) -> bool {
 	pointer_kind(c_type) == Some(CPointer::Out) && pointee(c_type) != "char"
 }
 
-/// The C parameters a warp call passes: all but the out-pointers
-fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
-	param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
+/// What a `const T *` points to when a `size_t` after it says how many bytes: `const uint8_t *module, size_t length`
+const BYTE_TYPES: [&str; 5] = ["uint8_t", "int8_t", "char", "void", "Bytef"];
+const LENGTH_TYPE: &str = "size_t";
+
+/// Whether the C parameter at `index` takes bytes with their length in the next one: a const single pointer to bytes,
+/// then a size_t
+fn takes_bytes(c_types: &[String], index: usize) -> bool {
+	let c_type = &c_types[index];
+	c_type.matches('*').count() == 1
+		&& c_type.split_whitespace().any(|word| word == "const")
+		&& BYTE_TYPES.contains(&pointee(c_type).as_str())
+		&& c_types.get(index + 1).is_some_and(|next| bare_c_type(next) == LENGTH_TYPE)
+}
+
+/// How each C parameter crosses: a pointer by what it points to, bytes with their length, else by its wasm value type
+/// (int, bool, char, short, Color: i32)
+pub fn c_param_types(c_types: &[String]) -> Vec<ParamType> {
+	let mut types: Vec<ParamType> = vec![];
+	for (index, c_type) in c_types.iter().enumerate() {
+		types.push(match types.last() {
+			Some(ParamType::Bytes) => ParamType::Length,
+			_ if takes_bytes(c_types, index) => ParamType::Bytes,
+			_ => c_type_to_param_type(c_type),
+		});
+	}
+	types
+}
+
+/// The C parameters a warp call passes, with how they cross: all but the out-pointers and lengths
+fn warp_parameters(c_types: &[String]) -> impl Iterator<Item = (&String, ParamType)> {
+	c_types.iter().zip(c_param_types(c_types)).filter(|(_, param)| param.is_passed())
+}
+
+/// The wasm type a passed parameter has in the warp call: bytes are a value (a text, a list), pointers and handles i32
+fn param_valtype(param: ParamType) -> Option<wasm_encoder::ValType> {
+	match param {
+		ParamType::Bytes => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
+		ParamType::I64 => Some(wasm_encoder::ValType::I64),
+		ParamType::F32 => Some(wasm_encoder::ValType::F32),
+		ParamType::F64 => Some(wasm_encoder::ValType::F64),
+		ParamType::Out | ParamType::Length => None,
+		ParamType::I32 | ParamType::Ptr | ParamType::Handle => Some(wasm_encoder::ValType::I32),
+	}
 }
 
 /// What a C function's result crosses as: a text, a handle (a pointer result or the first out-pointer), else None for
@@ -314,6 +343,62 @@ pub(crate) fn pointer_result(hsig: &FfiHeaderSignature) -> Option<CPointer> {
 		Some(_) => Some(CPointer::Handle),
 		None => has_out_pointer.then_some(CPointer::Handle),
 	}
+}
+
+/// The C type's parameter: a pointer by what it points to, else by its wasm value type (int, bool, char, short, Color: i32)
+fn c_type_to_param_type(c_type: &str) -> ParamType {
+	let t = bare_c_type(c_type);
+	match (pointer_kind(t), map_c_type_to_valtype(t)) {
+		(Some(CPointer::Handle), _) => ParamType::Handle,
+		(Some(CPointer::Out), _) => ParamType::Out,
+		(Some(_), _) => ParamType::Ptr,
+		(None, Some(wasm_encoder::ValType::F32)) => ParamType::F32,
+		(None, Some(wasm_encoder::ValType::F64)) => ParamType::F64,
+		(None, Some(wasm_encoder::ValType::I64)) => ParamType::I64,
+		(None, _) => ParamType::I32,
+	}
+}
+
+/// The C type's result: a bool by its low byte, else by its wasm value type
+fn c_type_to_ret_type(c_type: &str) -> RetType {
+	match map_c_type_to_valtype(c_type) {
+		_ if bare_c_type(c_type) == "bool" => RetType::Bool,
+		None => RetType::Void,
+		Some(wasm_encoder::ValType::F32) => RetType::F32,
+		Some(wasm_encoder::ValType::F64) => RetType::F64,
+		Some(wasm_encoder::ValType::I64) => RetType::I64,
+		Some(_) => RetType::I32,
+	}
+}
+
+/// The header declaration `hsig` as a C function imported from `module` (`zlib`, whose library is `z`)
+pub fn c_function_of(module: &str, hsig: &FfiHeaderSignature) -> CFunction {
+	CFunction {
+		module: module.to_string(),
+		library: resolve_library_alias(module).to_string(),
+		name: hsig.name.clone(),
+		param_types: c_param_types(&hsig.param_types),
+		result: pointer_result(hsig),
+		ret_type: c_type_to_ret_type(&hsig.return_type),
+		out_pointee: hsig.param_types.iter().find(|t| is_handle_out_pointer(t)).map(|t| pointee(t)),
+	}
+}
+
+/// The functions of `imported` that the headers of `module`'s library declare, as C functions imported from `module`
+pub fn header_c_functions(module: &str, imported: &std::collections::HashSet<String>) -> Vec<CFunction> {
+	let library = resolve_library_alias(module);
+	// all headers first: their struct types decide how pointers cross (is_struct_type)
+	let signatures: Vec<FfiHeaderSignature> = crate::formats::ffi_parser::find_library_headers(library)
+		.iter()
+		.flat_map(|path| parse_header_file(path, library))
+		.collect();
+	// only what the module imports, once (ctype.h declares toupper twice): libc's headers declare hundreds of functions
+	let mut seen = std::collections::HashSet::new();
+	signatures
+		.iter()
+		.filter(|hsig| imported.contains(&hsig.name) && seen.insert(hsig.name.as_str()))
+		.map(|hsig| c_function_of(module, hsig))
+		.collect()
 }
 
 /// The wasm result of a C function: a text Node, a handle id, else its number
@@ -349,7 +434,7 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
 			(
 				declared.name.clone(),
 				warp_parameters(&declared.param_types)
-					.map(|c_type| pointer_kind(c_type) == Some(CPointer::Text))
+					.map(|(c_type, param)| param == ParamType::Ptr && pointer_kind(c_type) == Some(CPointer::Text))
 					.collect(),
 			)
 		})

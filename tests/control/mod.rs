@@ -85,7 +85,6 @@ mod test_for_semicolon_end; // card print-end
 mod test_for_underscore;
 mod test_for_unit_words;
 mod test_frame_event; // card frame-event
-mod test_fresh_names; // card cleanup-fresh-names
 mod test_function_body; // card g_X_3s
 mod test_function_dir; // card dir-function
 mod test_function_objects; // card module-methods

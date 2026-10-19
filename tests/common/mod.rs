@@ -211,6 +211,11 @@ pub fn chrome_runs_here(test_module: &str) -> bool {
 	in_ci
 }
 
+/// `effects of function` after `code`, as printed: `Pure`, `IO`, `(IO Unsafe)`
+pub fn effects_of(code: &str, function: &str) -> String {
+	warp::wasm_emitter::eval(&format!("{code}\neffects of {function}")).serialize()
+}
+
 pub fn fails_with(code: &str, needle: &str) {
 	match eval(code) {
 		Node::Error(message) => assert!(format!("{message}").contains(needle), "{message}"),
@@ -552,6 +557,46 @@ pub fn warp_command() -> std::process::Command {
 	command
 }
 
+/// The folder holding this checkout's libwarp_runtime (card run-wasm-lib), built once per test run: point
+/// DYLD_LIBRARY_PATH / LD_LIBRARY_PATH there and WARP_INCLUDE at runtime_library_include() to `use warp_runtime`
+#[cfg(feature = "native")]
+pub fn runtime_library_dir() -> &'static std::path::Path {
+	static DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+	DIR.get_or_init(|| {
+		let output = std::process::Command::new(env!("CARGO"))
+			.args(["rustc", "--offline", "--quiet", "-p", "warp-runtime", "--lib", "--crate-type", "cdylib"])
+			.args(["--features", "library", "--message-format=json"])
+			.current_dir(env!("CARGO_MANIFEST_DIR"))
+			.output()
+			.expect("cargo runs");
+		assert!(
+			output.status.success(),
+			"building libwarp_runtime failed: {}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+		let library_name = format!("{}warp_runtime{}", std::env::consts::DLL_PREFIX, std::env::consts::DLL_SUFFIX);
+		let built = String::from_utf8_lossy(&output.stdout)
+			.lines()
+			.filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+			.flat_map(|message| message["filenames"].as_array().cloned().unwrap_or_default())
+			.filter_map(|file| file.as_str().map(std::path::PathBuf::from))
+			.find(|file| file.file_name().is_some_and(|name| name.to_string_lossy() == library_name))
+			.expect("cargo names the built libwarp_runtime");
+		// the shared target's file is any checkout's latest build: this checkout's copy, under the name dlopen finds
+		let own = own_copy(&built, "warp_runtime_library").expect("copy libwarp_runtime");
+		let dir = own.with_extension("dir");
+		std::fs::create_dir_all(&dir).expect("the library folder");
+		std::fs::rename(&own, dir.join(library_name)).expect("libwarp_runtime in its folder");
+		dir
+	})
+}
+
+/// The folder of warp_runtime.h, the header `use warp_runtime` reads
+#[cfg(feature = "native")]
+pub fn runtime_library_include() -> std::path::PathBuf {
+	std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates/warp-runtime/include")
+}
+
 /// A copy of `binary` that only this checkout writes: named by the checkout's version and path, put in place by a
 /// rename, so a run never sees a half-written file nor another checkout's
 #[cfg(feature = "native")]
@@ -607,67 +652,6 @@ fn checkout_build(
 		.map(|info| info.with_extension(""))
 		.filter(|binary| binary.is_file())
 		.max_by_key(|binary| binary.metadata().and_then(|metadata| metadata.modified()).ok())
-}
-
-/// The index of the function `name` in the module `code` compiles to (by the wasm name section)
-pub fn function_index(code: &str, name: &str) -> Option<u32> {
-	use wasmparser::{KnownCustom, Name, Parser, Payload};
-	let bytes =
-		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
-	let names = Parser::new(0).parse_all(&bytes).filter_map(|payload| match payload.expect("valid module") {
-		Payload::CustomSection(section) => match section.as_known() {
-			KnownCustom::Name(names) => Some(names.into_iter().flatten().collect::<Vec<_>>()),
-			_ => None,
-		},
-		_ => None,
-	});
-	let functions: Vec<(u32, String)> = (names.flatten())
-		.filter_map(|subsection| match subsection {
-			Name::Function(map) => {
-				Some(map.into_iter().flatten().map(|naming| (naming.index, naming.name.to_string())))
-			}
-			_ => None,
-		})
-		.flatten()
-		.collect();
-	functions.into_iter().find(|(_, function)| function == name).map(|(index, _)| index)
-}
-
-/// How many calls the module of `code` makes to the function `name` (by the wasm name section)
-pub fn calls_to(code: &str, name: &str) -> usize {
-	use wasmparser::{KnownCustom, Name, Operator, Parser, Payload};
-	let bytes =
-		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
-	let mut index = None;
-	let mut calls = Vec::new();
-	for payload in Parser::new(0).parse_all(&bytes) {
-		match payload.expect("valid module") {
-			Payload::CustomSection(section) => {
-				if let KnownCustom::Name(names) = section.as_known() {
-					for subsection in names {
-						if let Ok(Name::Function(map)) = subsection {
-							index = map
-								.into_iter()
-								.flatten()
-								.find(|naming| naming.name == name)
-								.map(|naming| naming.index)
-								.or(index);
-						}
-					}
-				}
-			}
-			Payload::CodeSectionEntry(body) => {
-				let mut reader = body.get_operators_reader().expect("operators");
-				while !reader.eof() {
-					if let Operator::Call { function_index } = reader.read().expect("operator") {
-						calls.push(function_index);
-					}
-				}
-			}
-			_ => {}
-		}
-	}
-	index.map_or(0, |index| calls.iter().filter(|called| **called == index).count())
 }
 
 /// The (module, name) of every import of the module `code` compiles to

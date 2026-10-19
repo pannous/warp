@@ -79,15 +79,21 @@ pub(super) fn wrong_closer(message: String, written: char, closer: char, at: (us
 		.into_error()
 }
 
+/// The `#` at `chars[at]` starts a comment (WarpParser::at_hash_comment)
+pub(crate) fn hash_comment_at(chars: &[char], at: usize) -> bool {
+	let after = |offset: usize| chars.get(at + offset).copied().unwrap_or('\0');
+	if matches!(after(1), ' ' | '\t' | '\n' | '\r' | '\0' | '!' | '#') {
+		return true;
+	}
+	let word: String = (1..).map(after).take_while(|&c| is_identifier_char(c)).collect();
+	crate::modules::is_import_keyword(&word)
+}
+
 impl WarpParser {
 	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`, `#include x`, `#import f from "m"`, every import keyword) starts a comment;
 	/// `#` directly followed by anything else counts (`#s`, `#a-1`, `#f(x)`)
 	pub(super) fn at_hash_comment(&self) -> bool {
-		if matches!(self.peek_char(1), ' ' | '\t' | '\n' | '\r' | '\0' | '!' | '#') {
-			return true;
-		}
-		let word: String = (1..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
-		crate::modules::is_import_keyword(&word)
+		hash_comment_at(&self.chars, self.pos)
 	}
 
 	/// `7//2`, `x //= 3`: a `//` glued between operands, or `//=` after one, was meant as floor division; it is a
