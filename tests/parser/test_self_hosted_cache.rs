@@ -5,6 +5,7 @@ const CACHE_FOLDER: &str = "self_hosted_stage_cache";
 const CACHE_IN_A_FOLDER: &str = "self_hosted_stage_cache_in_a_folder";
 /// A folder with text.warp and list.warp
 const SHADOWING_FOLDER: &str = "probes/self_hosting/emitter/core";
+const HOST_WORDS_PROGRAM: &str = "probes/self_hosting/emitter/host_words.warp";
 
 fn self_hosted_run(cache: &std::path::Path, code: &str) -> (String, String) {
 	self_hosted_run_in(".", cache, code)
@@ -70,4 +71,15 @@ fn the_front_end_alone_leaves_emitting_to_rust() {
 	let (value, phases) = run_switched("front", ".", &cache, "square(x: int) := x * x; square(3)");
 	assert!(value.contains('9'), "{value}");
 	assert!(phases.contains("emit ("), "the Rust emitter emits: {phases}");
+}
+
+/// emitter.warp imports the host words on numbers a program calls (clock, random_below) from the host module
+#[test]
+fn the_warp_emitter_imports_host_words() {
+	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
+	self_hosted_run(&cache, "3 + 4"); // the stage programs compile with the Rust emitter, once
+	let program = std::fs::read_to_string(HOST_WORDS_PROGRAM).unwrap();
+	let (value, phases) = self_hosted_run(&cache, &program);
+	assert!(value.contains('5'), "{value}");
+	assert!(!phases.contains("emit ("), "the Rust emitter ran: {phases}");
 }
