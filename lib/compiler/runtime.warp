@@ -140,14 +140,15 @@ node_append(a: any, b: any) := {
 	}
 	node_add(a, b)
 }
-# `a == b` of values known only at run time: ø equals only ø, lists equal item by item, texts and characters as
-# texts, numbers as numbers (an int and a float alike)
+# `a == b` of values known only at run time: ø equals only ø, lists equal item by item, closures by their target and
+# captured values (emitter.warp closure_value), texts and characters as texts, numbers as numbers (an int and a float alike)
 node_equal(a: any, b: any): bool := {
 	if is_null(a) == 1 or is_null(b) == 1 { return is_null(a) == is_null(b) }
 	if kind_code(a) == 6 or kind_code(b) == 6 {
 		return kind_code(a) == kind_code(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
 	}
 	if kind_code(a) == 8 or kind_code(b) == 8 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
+	if kind_code(a) == 16 or kind_code(b) == 16 { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == 5 or kind_code(b) == 5 { return kind_code(a) == kind_code(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_order(a, b) == 0 }
@@ -714,6 +715,15 @@ index_of_node(n: any) := {
 	unboxed_int(n)
 }
 index_must_be_an_integer() := {
+	fail()
+	0
+}
+# a closure call of a value that is no closure, or of a closure of another arity
+not_a_function() := {
+	fail()
+	0
+}
+wrong_number_of_arguments() := {
 	fail()
 	0
 }
