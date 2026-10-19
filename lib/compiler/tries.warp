@@ -1,0 +1,125 @@
+# `try x else y` and `try x catch e { y }` (card pure-runs; Rust twin: src/lowering/words/library_words/guards.rs):
+# x runs inside ran_without_error, which says whether it finished (a runtime error deep inside throws the wasm tag
+# try_guard.rs catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch are checked
+# before they happen: a division by 0 directly under `try`, an index out of a list written in place.
+#   try x else y        → (try·finished = ran_without_error({try·value = x});
+#                          if try·finished and not is_error(try·value) then {try·value} else {y})
+#   try x catch e { y } → … else {e = caught_error(try·finished, try·value); y}
+#   try a / b else y    → (try·divisor = b; if try·divisor == 0 then {y} else {…a / try·divisor…})
+#   try [1 2]#i else y  → (try·list = [1 2]; try·index = i; if 1 <= try·index <= count(try·list) then … else {y})
+# Each try's names carry its number (try·value·3), as Rust's do, so two tries of a function keep their own kinds.
+use "walk.warp"
+use "phrase_blocks.warp"
+
+tries_made = {count: 0}
+
+applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
+braced(n: Node): Node := List([n], Bracket.Curly, Separator.Semicolon)
+try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semicolon)
+try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
+chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, yes_branch), Op.Else, no_branch)
+
+try_name(role: text, number: int): Node := symbol("try·" + role + "·" + number)
+
+# `try x else y`; with a catch binding (a name, else ø) the else branch binds it to the error before y
+guarded(value: Node, fallback: Node, binding: any, number: int): Node := {
+	finished = try_name("finished", number)
+	result = try_name("value", number)
+	ran = try_assigned(finished, applied_to("ran_without_error", [braced(try_assigned(result, value))]))
+	succeeded = Key(finished, Op.And, Key(ø, Op.Not, applied_to("is_error", [result])))
+	caught = if binding == ø then [] else [try_assigned(binding, applied_to("caught_error", [finished, result]))]
+	try_statements([ran, chosen_branch(succeeded, braced(result), try_statements(caught + [fallback]))])
+}
+
+divided(dividend: Node, op: any, divisor: Node, fallback: Node, number: int): Node := {
+	held = try_name("divisor", number)
+	quotient = guarded(Key(dividend, op, held), fallback, ø, number)
+	try_statements([try_assigned(held, divisor), chosen_branch(Key(held, Op.Eq, 0), braced(fallback), braced(quotient))])
+}
+
+is_written_list(n: Node): bool := match n {
+	List(written, Bracket.Square, separator): yes
+	Text(t): yes
+	_: no
+}
+
+indexed(written: Node, index: Node, fallback: Node, number: int): Node := {
+	held = try_name("list", number)
+	at = try_name("index", number)
+	within = Key(Key(at, Op.Ge, 1), Op.And, Key(at, Op.Le, applied_to("count", [held])))
+	try_statements([try_assigned(held, written), try_assigned(at, index), chosen_branch(within, braced(Key(held, Op.Hash, at)), braced(fallback))])
+}
+
+is_division(op: any): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
+
+# the value under try, its fallback, the catch binding or ø
+lowered_try(value: Node, fallback: Node, binding: any): Node := {
+	tries_made.count = tries_made.count + 1
+	number = tries_made.count
+	match value {
+		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded(value, fallback, binding, number) }
+		Key(left, op, right): {
+			if binding == ø and is_division(op) { return divided(left, op, right, fallback, number) }
+			if binding == ø and op == Op.Hash and is_written_list(left) { return indexed(left, right, fallback, number) }
+			guarded(value, fallback, binding, number)
+		}
+		_: guarded(value, fallback, binding, number)
+	}
+}
+
+# `try x`: x, else ø
+try_operand(n: Node): any := match n {
+	List(parts, Bracket.None, Separator.Space): { if #parts == 2 and parts#1 == symbol("try") then parts#2 else ø }
+	_: ø
+}
+
+# `(try x catch) (e {y})`: [x, e, y], else ø
+caught_parts(head: Node, handler: Node): any := match handler {
+	List(binding, Bracket.None, Separator.Space): {
+		if #binding != 2 or not is_name(binding#1) { return ø }
+		match head {
+			List(parts, Bracket.None, Separator.Space): { if #parts == 2 and parts#2 == symbol("catch") and try_operand(parts#1) != ø then [try_operand(parts#1), binding#1, binding#2] else ø }
+			_: ø
+		}
+	}
+	_: ø
+}
+
+# `try (x else y)`, how parser.warp reads `print try x else y`: [x, y], else ø (an `if … then … else` stays)
+else_operand(n: Node): any := match n {
+	Key(value, Op.Else, fallback): {
+		match value {
+			Key(condition, Op.Then, yes_branch): ø
+			_: [value, fallback]
+		}
+	}
+	_: ø
+}
+
+# `… try (x else y) …` with the try lowered in place, else ø
+inner_try(parts: list): any := {
+	for i in 1..<#parts {
+		if parts#i == symbol("try") and else_operand(parts#(i + 1)) != ø {
+			guarded_parts = else_operand(parts#(i + 1))
+			lowered = lowered_try(guarded_parts#1, guarded_parts#2, ø)
+			if #parts == 2 { return lowered }
+			return List(parts[0..<(i - 1)] + [lowered] + parts[(i + 1)..<#parts], Bracket.None, Separator.Space)
+		}
+	}
+	ø
+}
+
+try_form(n: Node): Node := match n {
+	Key(head, Op.Else, fallback): { if try_operand(head) != ø then lowered_try(try_operand(head), fallback, ø) else n }
+	List(parts, Bracket.None, Separator.Space): {
+		inner = inner_try(parts)
+		if inner != ø { return inner }
+		if #parts != 2 { return n }
+		caught = caught_parts(parts#1, parts#2)
+		if caught == ø { return n }
+		lowered_try(caught#1, caught#3, caught#2)
+	}
+	_: n
+}
+
+tries(program: any): any := bottom_up(program, try_form)

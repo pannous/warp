@@ -783,6 +783,8 @@ def assignment(body: Body, target: any, value: any): list {
 declared_kinds = {int: "int", float: "float", text: "text", list: "list"}
 admitting_words = {int: "int_admitted", list: "list_admitted"}
 def declaration(body: Body, name: text, type_name: text, value: any): list {
+	# `x: any = v` admits every value: the plain assignment
+	if type_name == "any" { return assignment(body, symbol(name), value) }
 	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[type_name]
 	assignment(body, symbol(name), value)
