@@ -204,10 +204,10 @@ fn is_union(word: &str) -> bool {
 /// A result checked rather than converted, where converting could lose something: a union (user 2026-10-12, `-> int or
 /// text`), a whole-number type (decision float-result: `-> int { 2.5 }` is no 2) and a collection (`: list` of a text
 /// is no list of its characters, card list-result-type), optional too (`-> int?`: an int, ø or an Error, decision
-/// error-optional); `-> text { 3 }` still converts
+/// error-optional, any `T?`: ø converts to no type, card text-type); `-> text { 3 }` still converts
 pub(crate) fn is_checked_result(word: &str) -> bool {
-	let word = word.strip_suffix('?').unwrap_or(word);
-	is_union(word)
+	word.ends_with('?')
+		|| is_union(word)
 		|| is_collection_type(word)
 		|| (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
 }

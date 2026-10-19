@@ -11,8 +11,10 @@
 #                                                      (value 1 by default; WARP_SELF_HOSTED's own replaces "front"),
 #                                                      counted apart as run <tip>+<name>; notes/self_hosting.md
 #                                                      "Back-end focus": front end only, + emitter (--stage
-#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer
-#   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh
+#                                                      emitter=WARP_SELF_HOSTED=1), + analyzer (--stage
+#                                                      analyzer=WARP_SELF_ANALYSIS: analyzer.warp checks each program)
+#   scripts/self-hosted-suite.sh --local <filters…>    here, through tests/queue.sh (after --stage …: with that stage,
+#                                                      e.g. --stage emitter=WARP_SELF_HOSTED=1 --local lists::)
 #   scripts/self-hosted-suite.sh --rank <log[.gz]>…    the count and the ranking of test logs
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
@@ -184,8 +186,8 @@ case "${1:-}" in
 			set_switch "$2"
 			shift 2
 		done
-		cloud_run "$@" ;;
+		if [ "${1:-}" = --local ]; then shift; local_run "$@"; else cloud_run "$@"; fi ;;
 	--local) shift; local_run "$@" ;;
-	--*) sed -n '2,17p' "$0"; exit 2 ;;
+	--*) sed -n '2,18p' "$0"; exit 2 ;;
 	*) cloud_run "$@" ;;
 esac

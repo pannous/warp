@@ -133,3 +133,9 @@ fn node_warp_spells_each_operator_bracket_and_separator() {
 	}
 	assert_eq!(spelled_enum("Separator").unwrap().1.len(), warp::wasm_emitter::SEPARATORS.len());
 }
+
+#[test]
+fn a_patterns_op_is_spelled_as_text() {
+	is!("n = parse(\"a+1\"); match n { Key(l, op, r): op as text, _: 0 }", "+");
+	is!("n = parse(\"(a)\"); match n { List(items, bracket, s): bracket as text, _: 0 }", "(");
+}

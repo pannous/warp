@@ -57,7 +57,7 @@ built(template: text): any := {
 	parts = pieces(template)
 	if #parts == 0 { return "" }
 	sum = parts#1
-	for part in parts[1..] { sum = key(sum, "+", part) }
+	for part in parts[1..] { sum = Key(sum, Op.Add, part) }
 	sum
 }
 
@@ -68,13 +68,13 @@ in_view(view: any): any := {
 	view
 }
 
-template_built(n: any): any := {
-	if type(n) is key and key_of(n) == symbol(opaque_word) {
-		view = value_of(n)
-		if kind_of(view) == template_kind { return built(view#2) }
-		return key(symbol(opaque_word), ":", in_view(view))
+template_built(n: Node): Node := match n {
+	Key(opaque, op, view): {
+		if opaque != symbol(opaque_word) then n
+		else if kind_of(view) == template_kind then built(view#2)
+		else Key(opaque, Op.Colon, in_view(view))
 	}
-	n
+	_: n
 }
 
 interpolated_node(n: any): any := bottom_up(n, template_built)

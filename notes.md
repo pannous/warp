@@ -64,3 +64,7 @@
 2026-10-17 interviewer: src/extensions.rs texts! Separator::Colon edit (unknown origin, user "fix it") reverted to Comma; backup data/patches/texts-macro-colon-2026-10-17.patch
 
 - 2026-10-17 parenthesized-first: parsing and lowering preserved `((try e else 0), 2)` as a round comma tuple, but inference treated it as the last element's type and list emission treated its control-flow element as a statement sequence. Round comma tuples must be classified and emitted as value collections at both boundaries.
+
+- 2026-10-19 warp-cache: with WARP_SELF_HOSTED=1, right after lib/ or the binary changed, two runs printed nothing at all (exit 0) while a third warmed the stage cache; warm and fresh-cache reruns were right. Not reproduced: maybe a run reading a kept program another run was still writing (scratch/refusals/cache shared by parallel runs).
+- 2026-10-19 warp-cache: tests/queue.sh killed a run of 7 WARP_SELF_HOSTED=1 test files at the 4 GB memory cap (each test process compiles the stage programs on a cold cache); `--test-threads=2` stayed under it.
+- 2026-10-19 warp-cache: Rust's list semantics: `+=` and push change the list every alias holds; `xs = xs + [x]` makes a new list (emitter.warp appends in place only while xs is unshared).

@@ -5,7 +5,7 @@ use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; resumes: list; breaks: list }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list }
 
 // The tree of a source: one statement as itself, several as a list
 // Rust twin: WarpParser::parse
@@ -17,7 +17,7 @@ def tree(source) {
 // The tree as the source writes it, before the sugar pass (lib/compiler/sugar.warp)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, resumes: found.resumes, breaks: found.breaks}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks}
 	items(p, ' ', "")
 }
 
@@ -985,8 +985,10 @@ def atom(p) {
 			return radix_value(p, 2)
 		}
 		written = decimal_number(p)
-		amount = if written.contains(".") or written.contains("e-") or written.contains("E-") then float(written) else int(written)
-		return with_glued_factor(p, amount)
+		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
+		// i64 a float (card int-beyond)
+		if written.contains(".") or written.contains("e-") or written.contains("E-") { return with_glued_factor(p, float(written)) }
+		return with_glued_factor(p, int(written))
 	}
 	if c == '"' or c == '\'' { return quoted(p) }
 	// `.5` is 0.5
@@ -1005,7 +1007,7 @@ def atom(p) {
 		outer_iterable = p.iterable
 		p.header = outer and c == '('
 		p.iterable = outer_iterable and c == '('
-		group = items(p, closing_of(c), "" + c)
+		group = if c == '{' then braced_items(p) else items(p, closing_of(c), "" + c)
 		p.header = outer
 		p.iterable = outer_iterable
 		return group
@@ -1020,7 +1022,7 @@ def atom(p) {
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 // Rust twin: literals.rs with_juxtaposed_factor
-def with_glued_factor(p, amount) {
+def with_glued_factor(p, amount: any) {
 	c = peek(p.code, p.at, p.n)
 	if not (is_name_start(c) or c == '(') or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
@@ -1101,14 +1103,15 @@ def named(p) {
 		referenced = function_reference(p)
 		if referenced != ø { return referenced }
 	}
-	constant = keyword_form(word.lower())
+	if word == "enum" and enum_values_ahead(p) { return enum_with_values(p) }
+	constant = if names_case(p, word.length) then "" else keyword_form(word.lower())
 	if constant == "true" { return true }
 	if constant == "false" { return false }
 	if constant == "empty" { return ø }
 	name = ["symbol", word]
 	if is_at(p.code, p.at, '{', p.n) {
 		p.at = p.at + 1
-		return ["key", ":", name, items(p, '}', "{")]
+		return ["key", ":", name, braced_items(p)]
 	}
 	if not is_at(p.code, p.at, '(', p.n) { return name }
 	p.at = p.at + 1
@@ -1121,6 +1124,39 @@ def named(p) {
 		return listed("(", "", [listed("(", "", [name] + spread(arguments)), body])
 	}
 	listed("(", "", [name] + spread(arguments))
+}
+
+// A case of an enum, no constant: `Node.True`, `Node::Empty`, `None` in `enum Bracket { Round, None }`
+// Rust twin: atoms.rs check_constants (at_member_name, at_scoped_name, in_enum_cases)
+def names_case(p, length) {
+	start = p.at - length
+	if p.enum_cases or (start > 0 and p.code[start - 1] == '.') { return true }
+	if not (start > 1 and p.code[start - 2 .. start] == "::") { return false }
+	scope = start - 2
+	while scope > 0 and is_name_char(p.code[scope - 1]) { scope = scope - 1 }
+	scope < start - 2 and p.code[scope].upper() == p.code[scope] and p.code[scope].lower() != p.code[scope]
+}
+
+// The items of a `{…}` group, the parser after its `{`; after `enum Name` they are the enum's cases
+// Rust twin: types/declarations.rs enum_name_and_cases
+def braced_items(p) {
+	outer = p.enum_cases
+	p.enum_cases = outer or enum_body_at(p)
+	block = items(p, '}', "{")
+	p.enum_cases = outer
+	block
+}
+
+// The `{` just read follows `enum Name`
+def enum_body_at(p) {
+	end = p.at - 1
+	while end > 0 and is_blank(p.code[end - 1]) { end = end - 1 }
+	start = end
+	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
+	if start == end { return false }
+	keyword_end = start
+	while keyword_end > 0 and is_blank(p.code[keyword_end - 1]) { keyword_end = keyword_end - 1 }
+	keyword_end >= 4 and p.code[keyword_end - 4 .. keyword_end] == "enum" and (keyword_end == 4 or not is_name_char(p.code[keyword_end - 5]))
 }
 
 // `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
@@ -1408,8 +1444,71 @@ def sum_type(p, name, start, parameters) {
 		if peek(p.code, after, p.n) != '|' { break }
 		p.at = after + 1
 	}
-	listed("", ";", [["type", ["attribute", "variants", listed("", " ", bare), name], ["list", "{", ""]]] + classes)
+	sum_type_of(name, bare, classes)
 }
+
+// The sum type of its bare variants by name, then the classes of the variants with a payload
+// Rust twin: sum_variants.rs sum_type
+def sum_type_of(name, bare, classes) := listed("", ";", [["type", ["attribute", "variants", listed("", " ", bare), name], ["list", "{", ""]]] + classes)
+
+// `enum Shape { Circle(r), Rect(w, h), Dot }` follows `enum`: its braced cases, one with values
+// Rust twin: types/declarations.rs enum_body_ahead
+def enum_values_ahead(p) {
+	at = name_end(p.code, blank_end(p, p.at), p.n)
+	if at == blank_end(p, p.at) { return false }
+	at = space_end(p.code, at, p.n)
+	if not is_at(p.code, at, '{', p.n) { return false }
+	depth = 0
+	while at < p.n {
+		c = p.code[at]
+		if c == '(' and depth == 1 and is_name_char(p.code[at - 1]) { return true }
+		if "([{".contains(c) {
+			depth = depth + 1
+		} else if ")]}".contains(c) {
+			if depth == 1 { return false }
+			depth = depth - 1
+		}
+		at = at + 1
+	}
+	false
+}
+
+// `enum Shape { Circle(r), Rect(w, h), Dot }`, Swift's `case circle(radius: Double)` lines: each case with values a
+// class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
+// Rust twin: types/declarations.rs parse_enum_with_values
+def enum_with_values(p) {
+	p.at = blank_end(p, p.at)
+	end = name_end(p.code, p.at, p.n)
+	name = ["symbol", p.code[p.at .. end]]
+	p.at = space_end(p.code, end, p.n) + 1
+	cases = braced_items(p)
+	bare = []
+	classes = []
+	for case in case_rows(cases).map(without_case_word) {
+		if case is list and case#1 == "list" and case.length > 3 and is_symbol(case#4) {
+			classes += [variant_class(name, case#4#2, case[4 ..], [])]
+		} else if is_symbol(case) {
+			bare += [case]
+		} else {
+			return failed("a case of enum " + name#2 + " is a name with optional values")
+		}
+	}
+	sum_type_of(name, bare, classes)
+}
+
+// The cases of an enum body, a line of several cases `Add, Sub, Mul` among lines of cases each a case
+// Rust twin: sum_variants.rs case_rows
+def case_rows(cases) {
+	rows = []
+	for case in cases[3 ..] {
+		if is_list_of(case, "") and case#3 == "," { rows += case[3 ..] } else { rows += [case] }
+	}
+	rows
+}
+
+// Swift's `case circle(radius: Double)` as `circle(radius: Double)`
+// Rust twin: types/declarations.rs without_case_keyword
+def without_case_word(case) := if is_list_of(case, "") and case.length == 5 and case#4 == ["symbol", "case"] then case#5 else case
 
 // The words of the built-in types a variant's payload names: `rgb(int, int, int)` gives types, `rgb(r, g, b)` fields
 // Rust twin: analyzer builtin_type_kind

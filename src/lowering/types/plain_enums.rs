@@ -22,8 +22,6 @@ const CASE_WORD: &str = "case";
 /// index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts; index_positions.rs)
 const COUNT_TYPES: [(&str, i64); 3] = [("int", 0), ("index", 0), ("position", 1)];
 const OTHER_ARM: &str = "_";
-/// The types a spelled case converts to its spelling: `Op.Add as text`
-const TEXT_TYPES: [&str; 2] = [crate::words::TEXT_WORD, "string"];
 
 /// The plain enums of a program: each one's cases in order, by name
 struct Enums {
@@ -137,8 +135,9 @@ fn converted(value: Node, target: Node, enums: &Enums) -> Node {
 	if enums.cases.contains_key(&target_name) {
 		return case_at(value, &target_name, enums);
 	}
-	if let Some(enum_name) =
-		enums.type_of(&value).filter(|name| enums.is_spelled(name) && TEXT_TYPES.contains(&target_name.as_str()))
+	if let Some(enum_name) = enums
+		.type_of(&value)
+		.filter(|name| enums.is_spelled(name) && node_cases::TEXT_TYPES.contains(&target_name.as_str()))
 	{
 		return call(&format!("{enum_name}·text"), vec![value]);
 	}

@@ -149,6 +149,10 @@ checks (match_exhaustive, switch unit names, index_positions, check_unit_names: 
 ## Back-end focus (user 2026-10-18 night, decisions self-hosting-back-end, compiler-typed, compiler-high-level)
 Goal: WARP_SELF_HOSTED runs parser → passes → analyzer → emitter → runtime all in warp; the suite count per stage
 shows the progress. Every compiler function typed (generic ones generically), written with classes, enums and match.
+Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the gate didn't see): a form enters
+emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it). Before sending a tip that touches
+emitter.warp or runtime.warp, run the touched area's suite tests with WARP_SELF_HOSTED=1 (scripts/self-hosted-suite.sh
+--local <filters>, + emitter switch) and compare with the same filters on main: no new failures.
 | owner | part |
 |---|---|
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |
@@ -388,6 +392,11 @@ nightly). The failure groups are cards suite-* in topic self-hosted-2, each nami
   errors). Stage modules and the emitter's lowered runtime.warp view are kept in the module cache, keyed by the
   binary, lib/ and the WARP_ settings: a warm self-hosted run takes ~0.3 s. A cold cache compiles the stage programs
   with the Rust pipeline (that compile shows a Rust `emit` phase).
+- WARP_SELF_ANALYSIS=1 beside the switch (card pipeline-runs): emit_module first hands each lowered program to
+  analyzer.warp `kinds` (self_hosted::check_analysis) and fails it loud on a stage error or a slot where warp's kind
+  does not cover Rust's (`… disagrees with Rust's: html_items(): list, not empty`). Step one only checks: the emitter
+  still reads src/analyzer's kinds; later warp's kinds feed it. Suite count: self-hosted-suite.sh --stage
+  analyzer=WARP_SELF_ANALYSIS.
 - Emit refusals ranked 2026-10-19 (probes/self_hosting/refusals.sh, every sample and probe with the switch on, each
   refusal once per program; raw list data/self_hosting/refusals.txt): 1482 programs, 810 inside the core (or no emit;
   585 on 2026-10-18).

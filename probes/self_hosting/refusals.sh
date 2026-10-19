@@ -19,15 +19,25 @@ export WARP_SELF_HOSTED=1 WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_
 run() { # <program> [setting…]: its output and exit status
 	(cd "$(dirname "$1")" && env "${@:2}" timeout "$TIMEOUT_SECONDS" "$WARP" "$1" </dev/null 2>&1; echo "exit $?")
 }
+without_diagnostics() { # the output minus warnings, hints, source excerpts and positions (the self-hosted parser keeps none yet)
+	grep -vE '^(warning|hint)|^ *[0-9]* \||^  assumed at ' | sed -E 's/ at [0-9]+:[0-9]+//g'
+}
+difference_kind() { # <self-hosted output> <Rust output>: parse (parser.warp refused), diagnostics (only they differ) or output
+	if echo "$1" | grep -q "^Error(\"Unexpected character"; then echo parse
+	elif [ "$(echo "$1" | without_diagnostics)" == "$(echo "$2" | without_diagnostics)" ]; then echo diagnostics
+	else echo output; fi
+}
 refusals_of() { # <program>: its distinct refusals in runs/<n>.txt, "inside" when none
-	local name output
+	local name output rust_output
 	name=$(echo "$1" | tr '/' '_')
 	output=$(run "$1" WARP_EMIT_REFUSALS="$WORK/runs/$name.txt")
 	[ -s "$WORK/runs/$name.txt" ] && return
 	echo inside >"$WORK/runs/$name.txt"
-	[ "$output" == "$(run "$1" -u WARP_SELF_HOSTED)" ] || echo "DIFFERENT ${1#$ROOT/}" >"$WORK/runs/$name.different"
+	rust_output=$(run "$1" -u WARP_SELF_HOSTED)
+	[ "$output" == "$rust_output" ] ||
+		echo "DIFFERENT $(difference_kind "$output" "$rust_output") ${1#$ROOT/}" >"$WORK/runs/$name.different"
 }
-export -f run refusals_of
+export -f run without_diagnostics difference_kind refusals_of
 find "$root/samples" "$root/probes" -name "*.warp" | grep -E -- "$filter" | grep -vE "raylib|sdl" | sort |
 	xargs -P "$PARALLEL_RUNS" -I{} bash -c 'refusals_of "$1"' _ {}
 programs=$(ls "$work/runs"/*.txt | wc -l | tr -d ' ')
@@ -35,7 +45,7 @@ inside=$(grep -lx inside "$work/runs"/*.txt | wc -l | tr -d ' ')
 different=$(cat "$work/runs"/*.different 2>/dev/null)
 {
 	echo "$programs programs, $inside inside the core (or no emit), $(echo -n "$different" | grep -c .) of them printing otherwise than Rust's"
-	[ -n "$different" ] && echo "$different"
+	[ -n "$different" ] && echo "$different" | awk '{print $2}' | sort | uniq -c && echo "$different" | sort
 	echo "refusals, once per program:"
 	for run in "$work/runs"/*.txt; do sort -u "$run"; done | grep -vx inside | sort | uniq -c | sort -rn
 } >"$report"
