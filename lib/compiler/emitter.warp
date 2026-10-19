@@ -947,8 +947,17 @@ key_expression(body: Body, n: any) := {
 		return [name_of(right), converted(value, name_of(right))]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
+	if (operator == "==" or operator == "!=") and (left == ø) != (right == ø) {
+		return none_test(operator, expression(body, if left == ø then right else left))
+	}
 	if left == ø or right == ø { return refuse("the operator " + operator) }
 	operation(body, operator, expression(body, left), expression(body, right))
+}
+# `x == ø`, `x != ø`: ø is the null reference, which a text, list or node may be; a number or bool never is
+none_test(operator: text, value: any) := {
+	if not (value#1 in references) { return ["bool", dropped(value) + [op.i32_const, if operator == "==" then 0 else 1]] }
+	is_none = value#2 + [op.ref_is_null]
+	["bool", if operator == "==" then is_none else is_none + [op.i32_eqz]]
 }
 right_of_if(n: any) := value_of(n)
 
