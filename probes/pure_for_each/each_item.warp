@@ -1,0 +1,6 @@
+basket = [{price: 2} {price: 3}]
+t = 0
+for each item in basket { t = t + item.price }
+each item in basket: t = t + item.price
+for each in [10, 20] { t = t + each }
+print t

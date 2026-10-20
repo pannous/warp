@@ -5,6 +5,21 @@
 - Preserve object order, array grouping and separators, integer/float handling, booleans, nulls, and the codepoint sentinel.
 - Run the focused JSON and headless tests, formatting, clippy, and the wasm32 check.
 
+# Cloud-test disk-exhaustion cleanup
+
+- Reproduce a build that still reports `No space left on device` after the existing clean retry with a focused shell probe.
+- Report persistent disk exhaustion as an environmental result instead of a red code verdict.
+- Drop the affected pooled cloud session by its job id so its full VM is not reused, while keeping the failure loud in the result and dropped-session log.
+- Reuse the existing result collection and pool helpers; keep ordinary build failures and successful retries unchanged.
+- Run the focused cloud probes, queued targeted test, formatting/style checks, clippy, wasm32 check, and Playground workflow.
+
+# Cloud-test run identity cleanup
+
+- Reproduce two launches of one branch and tip with different filters or environment settings resolving to the same run id.
+- Derive one deterministic run identity from the branch, tip, base, environment settings, and test arguments, and reuse it for launch, cloud execution, collection, and saved artifacts.
+- Keep identical invocations coalesced while making the transient job ref unique across concurrent launcher processes.
+- Update the cloud-lane guide and the self-hosted suite's result lookup, then run the focused cloud probes and prescribed gates.
+
 # Delete-list cleanup
 
 - Reproduce deletion of a list variable with a new focused probe test.

@@ -69,11 +69,11 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 	(kind, type_name.map(|name| Box::new(Node::Symbol(name))))
 }
 
-/// The body of a function definition `f(x) = …`, `f(x) := …`, `def f(x) {…}`: its variables are the function's own
+/// The body of a function definition `f(x) = …`, `f(x) := …`, `f(x): list := …`, `def f(x) {…}`: its variables are the
+/// function's own, never the enclosing program's (where locals of one name in many functions widened each other forever)
 pub(super) fn function_definition_body(node: &Node) -> Option<&Node> {
-	let starts_with_symbol = |items: &[Node]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)));
 	match node.drop_meta() {
-		Node::Key(left, Op::Assign | Op::Define, body) if matches!(left.drop_meta(), Node::List(items, _, _) if starts_with_symbol(items)) => {
+		Node::Key(left, Op::Assign | Op::Define, body) if super::user_functions::signature(left).is_some() => {
 			Some(body)
 		}
 		Node::List(items, _, _) if items.len() >= 2 && items[0].symbol_name().is_some_and(is_function_keyword) => {
@@ -330,7 +330,7 @@ fn set_widened_list_type(scope: &mut Scope, name: &str, widened: String) {
 	if let Some(local) = scope.own_binding_mut(name) {
 		local.type_node = Some(type_node.clone());
 	}
-	scope.widened_bindings.insert(name.to_string(), (Kind::List, Some(type_node)));
+	scope.widen_binding(name, Kind::List, Some(type_node));
 }
 
 /// `ys = ["a"]; ys = [3]`: a variable given lists of two element types holds the items of both, of their common type
@@ -374,7 +374,7 @@ pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 			local.kind = Kind::Float;
 			// a read before this write (`y = x * 2` earlier in the loop) is a float too, once collected again
 			if is_local {
-				scope.widened_bindings.insert(name.to_string(), (Kind::Float, None));
+				scope.widen_binding(name, Kind::Float, None);
 			}
 		}
 	}
@@ -409,7 +409,7 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 		local.type_node = None;
 		// a read before this write (`x2 = x1` earlier in the loop) holds the Node too, once collected again
 		if scope.locals.contains_key(name) {
-			scope.widened_bindings.insert(name.to_string(), (Kind::Empty, None));
+			scope.widen_binding(name, Kind::Empty, None);
 		}
 	}
 }
@@ -562,6 +562,14 @@ impl Scope {
 		match self.locals.contains_key(name) {
 			true => self.locals.get_mut(name),
 			false => self.globals.get_mut(name),
+		}
+	}
+
+	/// `name` holds `kind` from its definition on once collected again (collect_variables); a Node stays one, so the
+	/// collections end: a list widening after it would turn it back and forth
+	fn widen_binding(&mut self, name: &str, kind: Kind, type_node: Option<Box<Node>>) {
+		if self.widened_bindings.get(name).is_none_or(|(widened, _)| *widened != Kind::Empty) {
+			self.widened_bindings.insert(name.to_string(), (kind, type_node));
 		}
 	}
 

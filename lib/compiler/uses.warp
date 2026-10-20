@@ -24,7 +24,7 @@ used_in(program: any, folder: text): any := {
 # writes it out (the std modules are lib/<name>.warp)
 module_text(n: any): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol("module_source") and n#2 is text) { return n }
-	source = file_text(folder_of(module_directory) + "/" + n#2 + module_extension)
+	source = file_text(std_module_path(n#2))
 	if source == ø then n else source
 }
 
@@ -44,10 +44,18 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 	[declarations, seen]
 }
 
+# lib/<name>.warp, a standard module's file (the std modules are the files of lib/, the folder above this one)
+std_module_path(name: text): text := folder_of(module_directory) + "/" + name + module_extension
+
+# what a `use` statement names, ø for another statement
+use_target(statement: any): any := {
+	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
+	statement#2
+}
+
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: any, folder: text): any := {
-	if not (is_group(statement) and #statement == 2 and statement#1 is symbol and name_of(statement#1) in import_keywords) { return ø }
-	module = statement#2
+	module = use_target(statement)
 	if module is text { return path_in(folder, module) }
 	if not (module is symbol) { return ø }
 	path = path_in(folder, name_of(module) + module_extension)
@@ -67,8 +75,10 @@ statements_in(program: any): list := {
 }
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
-# `global x = 0`, `def f(x) …`; not its main-level statements
+# `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program); not its
+# main-level statements
 is_declaration(statement: any): bool := {
+	if declared_enum(statement) != ø { return yes }
 	if type(statement) is key {
 		operator = op_of(statement)
 		left = key_of(statement)

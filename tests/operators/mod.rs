@@ -39,6 +39,7 @@ mod test_operator_parsing;
 mod test_operator_precedence;
 mod test_operator_spellings; // card operator-spelling
 mod test_operators;
+mod test_or_chain_once; // card or-once
 mod test_pipe_stages;
 mod test_pipeline;
 mod test_postfix_words;

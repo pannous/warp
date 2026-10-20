@@ -73,6 +73,8 @@ mod test_type_word_shadowed; // card local-named-like-2
 mod test_undefined_in_text_sum; // card compile-path
 mod test_unknown_prefix_word;
 mod test_unknown_word_error;
+#[cfg(feature = "native")] // runs the warp binary
+mod test_used_file_positions; // card warning-file
 mod test_variable_applied; // card error-local
 mod test_warning_levels; // card warning-levels
 mod test_warning_mode;

@@ -82,3 +82,9 @@
 - 2026-10-18 julia-floor-divide: Unicode math operator aliases are declared in lib/math.warp and read into the Rust operator table, while lib/compiler/parser.warp keeps a direct SYMBOL_OPERATORS twin; compound glyph aliases such as ÷= must be declared in both places and ordered before their shorter glyph.
 
 - emitter.warp: a runtime word compiled as an arity variant is named `word·arity` (returned_error·0); error_throw uses the word before the `·`. A one-statement curly block assigned as a value (`x = {f(1)}`) is data natively, so lowerings must splice a block's statement, not hold the block (tries.warp, 2026-10-20).
+2026-10-20 build-failing-space: cloud-test.sh already deleted target/ and retried ENOSPC once, but a second ENOSPC flowed through the ordinary summary as red and collect() returned that full VM to the pool. Persistent ENOSPC needs its own environmental result and job-to-session retirement at collection time, where the pool identity is known.
+
+- 2026-10-20 self-emitter: probes/self_hosting/refusals.sh keeps WARP_MODULE_CACHE in <checkout>/scratch/refusals/cache; after a rebase onto a lib with a new stage protocol the cached stages make every rung "inside, 0 ran pure". Delete that cache dir before a ladder run on a rebased branch.
+- 2026-10-20 self-emitter: Rust's iterate() (src/lowering/definitions/lambdas.rs) freshened only out/item/acc…, so `xs.any(s => ys.any(w => …))` shared `hit`: the inner loop reset the outer result (card rust-lambdas). `warp lower '<code>'` shows such inlined templates at once.
+- 2026-10-20 self-emitter: the views (node_views.rs, walk.warp plain_node) carry no positions or comments, so `(data e).line` can't be right in the self-hosted lanes; emitter.warp refuses such quotes.
+- 2026-10-20 cloud-test: branch plus tip was not a run identity; settings and filter variants could collect one another's result, so the normalized invocation now identifies the launch, result, collection, and artifacts together.

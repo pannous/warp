@@ -1,0 +1,76 @@
+# The diagnostics of the warp compiler (card pure-diagnostics, decision diagnostics-files): a check finds a fact, a
+# node such as `kind_change(x, Int, List)`, and `diagnose(fact)` says it with the message of the first row it
+# matches in errors.data, then warnings.data, then hints.data. A row is `pattern TAB message`: the pattern a node
+# whose `$name` parts take any node (`data(…)` quotes it), the message a text whose `{name}` holes give that part and
+# `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says the warnings and fails on an error.
+use "parser.warp"
+use "words.warp"
+
+# the message files in the order a fact is looked up, each with the level of its messages
+message_files = [["errors.data", "error"], ["warnings.data", "warning"], ["hints.data", "hint"]]
+quoting_word = "data"
+hole_mark = "$"
+
+# [level, message] of each fact diagnosed so far
+global diagnosed = []
+# [level, pattern, message] of every row of the message files, read at the first fact
+global message_rows = ø
+
+diagnose(fact: any): any := {
+	diagnosed += [said_fact(fact)]
+	fact
+}
+
+# [level, message] of the first row the fact matches; a fact no row matches is an error naming it, loudly
+said_fact(fact: any): list := {
+	for row in rows() {
+		bound = {}
+		if matches(row#2, fact, bound) { return [row#1, filled(row#3, bound)] }
+	}
+	["error", "no message for the diagnostic ${fact} in lib/compiler/" + message_files.map(file => file#1).join(", ")]
+}
+
+rows(): list := {
+	if message_rows == ø { message_rows = message_files.map(file => rows_of(file#1, file#2)).flatten() }
+	message_rows
+}
+
+# the rows of a message file as plain warp data: a list of lines, each a tab-separated [pattern, message]
+rows_of(file: text, level: text): list := {
+	source = try read(module_directory + "/" + file) else ""
+	lines = statements_in(plain_node(parsed(source)))
+	lines.filter(line => line != ø).map(line => [level, unquoted(line#1), line#2])
+}
+unquoted(pattern: any): any := if is_group(pattern) and #pattern == 2 and pattern#1 == symbol(quoting_word) then pattern#2 else pattern
+
+# whether n has the pattern's shape, each part a hole takes put in `bound`: a hole takes any node, a key or group
+# matches part by part, any other node only itself
+matches(pattern: any, n: any, bound: any): bool := {
+	if pattern is symbol and name_of(pattern).starts_with(hole_mark) {
+		bound[name_of(pattern)[1..]] = n
+		return yes
+	}
+	if type(pattern) is key {
+		return type(n) is key and op_of(n) == op_of(pattern) and matches(key_of(pattern), key_of(n), bound) and matches(value_of(pattern), value_of(n), bound)
+	}
+	if is_group(pattern) {
+		if not is_group(n) or bracket_of(n) != bracket_of(pattern) or #n != #pattern { return no }
+		for index in 0 ..< #pattern { if not matches(pattern[index], n[index], bound) { return no } }
+		return yes
+	}
+	pattern == n
+}
+
+# the message with each hole `{name}` or `{a name}` filled from the bound parts
+filled(message: text, bound: any): text := {
+	pieces = message.split("{")
+	result = pieces#1
+	for piece in pieces[1..] {
+		hole = piece.split("}")#1
+		words = hole.split(" ")
+		part = shown(bound[words#(#words)])
+		result += (if #words == 2 and words#1 == "a" then with_article(part) else part) + piece[(#hole + 1)..]
+	}
+	result
+}
+shown(part: any): text := if part is symbol then name_of(part) else if part is text then part else "${part}"

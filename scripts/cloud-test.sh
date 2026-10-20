@@ -9,7 +9,7 @@
 #       adds it to the card (`todo note`); --no-wait only launches: fetch later with --result;
 #       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will (--on <base>: into
 #       origin/<base>, e.g. a batch branch)
-#   scripts/cloud-test.sh --result [--card <card>] <branch> <tip>     wait for and collect a launched run's result
+#   scripts/cloud-test.sh --result [same options] [--card <card>] <branch> <tip> [same filters]   collect a --no-wait run
 #   scripts/cloud-test.sh --summarize <cargo test log> [environmental list] [known failures]    the result's summary of any log
 # The cloud session runs this same script from origin/main (the tip may predate it) with --job <job>, which reads the
 # job's arguments from the branch cloud-jobs/<job> and runs them as --run-here: it checks out
@@ -52,7 +52,12 @@ USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
 fail() { echo "cloud-test: $*" >&2; exit 1; }
-run_name() { echo "$(printf %s "$1" | tr -c 'A-Za-z0-9._-' '-')-${2:0:8}"; }
+run_name() {
+	local branch=$1 tip=$2 signature
+	shift 2
+	signature=$(printf '%s\0' "$@" | git hash-object --stdin | cut -c1-12)
+	echo "$(printf %s "$branch" | tr -c 'A-Za-z0-9._-' '-')-${tip:0:8}-$signature"
+}
 credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-9.]*\) .*/\1/p'; }
 
 # ---------------------------------------------------------------- the cloud side
@@ -80,6 +85,20 @@ make_room() {
 	echo "$free GB free, $(free_gb) GB after dropping target/"
 }
 
+detect_build_environment() {
+	local status=$1 log=$2
+	[ "$status" -ne 0 ] && grep -q 'No space left on device' "$log" && echo "disk exhausted after a clean rebuild"
+}
+
+write_summary() {
+	local log=$1 environmental=$2 known=$3 environment=$4
+	if [ -n "$environment" ]; then
+		printf 'verdict: environmental\nenvironment: %s\npassed: 0, failed: 0 (build did not reach tests), ignored: 0\n' "$environment"
+	else
+		summarize "$log" "$environmental" "$known"
+	fi
+}
+
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
 run_tests_here() {
 	CLOUD_REPO=$PWD
@@ -92,8 +111,11 @@ run_tests_here() {
 		esac
 	done
 	local branch=$1 tip=$2; shift 2
-	local name started build_seconds test_seconds checkout lock_matches=""
-	name=$(run_name "$branch" "$tip")
+	local name started build_seconds test_seconds checkout lock_matches="" build_environment="" setting
+	local identity=()
+	[ -n "$base" ] && identity+=(--on "$base")
+	for setting in ${settings[@]+"${settings[@]}"}; do identity+=(--env "$setting"); done
+	name=$(run_name "$branch" "$tip" "${identity[@]}" "$@")
 	started=$SECONDS
 	local branch_ref
 	for branch_ref in "$branch" main vendor $base; do
@@ -150,6 +172,7 @@ run_tests_here() {
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
 		build_status=$?
 	fi
+	build_environment=$(detect_build_environment "$build_status" "$HERE_WORK/log.txt")
 	build_seconds=$((SECONDS - build_start))
 	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
 	# `cargo build --offline` found no miniz_oxide in the VM's registry cache (card cloud-stub-offline); the page stub is
@@ -163,7 +186,7 @@ run_tests_here() {
 	fi
 	# the file the --env settings name in WARP_EMIT_REFUSALS (scripts/self-hosted-suite.sh): emptied before the tests,
 	# its lines appended to the log after them (sent to stderr they reached the output the CLI tests check)
-	local refusals="" setting
+	local refusals=""
 	for setting in ${settings[@]+"${settings[@]}"}; do
 		[[ "$setting" == WARP_EMIT_REFUSALS=* ]] && refusals=${setting#*=}
 	done
@@ -174,7 +197,7 @@ run_tests_here() {
 		env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
 	[ -n "$refusals" ] && [ -f "$refusals" ] && cat "$refusals" >> "$HERE_WORK/log.txt"
-	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" > "$HERE_WORK/summary.txt"
+	write_summary "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" "$build_environment" > "$HERE_WORK/summary.txt"
 	{
 		echo "run: $name"
 		echo "branch: $branch"
@@ -182,7 +205,7 @@ run_tests_here() {
 		echo "tests: ${*:-all}"
 		[ ${#settings[@]} -gt 0 ] && echo "env: ${settings[*]}"
 		echo "verdict: $(sed -n 's/^verdict: //p' "$HERE_WORK/summary.txt")"
-		[ $build_status -ne 0 ] && echo "build: FAILED (log.txt.gz)"
+		[ $build_status -ne 0 ] && echo "build: $([ -n "$build_environment" ] && echo ENVIRONMENTAL || echo FAILED) (log.txt.gz)"
 		grep -v '^verdict: ' "$HERE_WORK/summary.txt"
 		echo "wall: build ${build_seconds} s, tests ${test_seconds} s, total $((SECONDS - started)) s"
 		echo "machine: $(nproc 2>/dev/null) cores, $(free -g 2>/dev/null | awk '/^Mem:/ { print $2 " GB" }'), $(rustc --version)"
@@ -406,8 +429,8 @@ launch() {
 	[[ "$tip" =~ ^[0-9a-f]{40}$ ]] || fail "the tip must be a full 40-hex commit id (git rev-parse output), not '$tip'"
 	git -C "$MAIN_CHECKOUT" fetch -q origin "$branch" || fail "branch $branch is not on origin"
 	git -C "$MAIN_CHECKOUT" merge-base --is-ancestor "$tip" "origin/$branch" || fail "tip $tip is not on origin/$branch: push first"
-	name=$(run_name "$branch" "$tip")
-	job=$name-$(date +%s)
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
+	job=$name-$(date +%s)-$$
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	mkdir -p "$folder"
 	rm -f "$folder/result.md"
@@ -456,10 +479,26 @@ release_session() {
 	unlock_pool
 }
 
+finish_session() {
+	local job=$1 result=$2 reason file
+	reason=$(sed -n 's/^environment: //p' "$result")
+	if [ -z "$reason" ]; then
+		release_session "$job"
+		return
+	fi
+	lock_pool
+	for file in "$POOL"/session_*; do
+		[ -e "$file" ] || continue
+		[ "$(pool_field "$file" job 2>/dev/null)" = "$job" ] && drop_session "$file" "$reason"
+	done
+	unlock_pool
+}
+
 collect() {
 	local branch=$1 tip=$2 card=$3
 	local name folder ref deadline
-	name=$(run_name "$branch" "$tip")
+	shift 3
+	name=$(run_name "$branch" "$tip" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$@")
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	ref=refs/heads/$RESULTS_PREFIX/$name
 	deadline=$((SECONDS + WAIT_HOURS * 3600))
@@ -475,7 +514,7 @@ collect() {
 	grep -h '^session:\|^credit used before' "$folder/launch.txt" >> "$folder/result.md" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" push -q origin --delete "$RESULTS_PREFIX/$name" "$JOBS_PREFIX/$(pool_field "$folder/launch.txt" job)" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" update-ref -d "refs/remotes/origin/$RESULTS_PREFIX/$name"
-	release_session "$(pool_field "$folder/launch.txt" job)"
+	finish_session "$(pool_field "$folder/launch.txt" job)" "$folder/result.md"
 	cat "$folder/result.md"
 	echo "(log: $folder/log.txt.gz)"
 	[ -n "$card" ] && todo note "$card" "cloud test $(sed -n 's/^verdict: //p' "$folder/result.md"): $(sed -n 's/^tests: //p' "$folder/result.md") at ${tip:0:8}, $(sed -n 's/^passed: //p' "$folder/result.md"); $(sed -n 's/^wall: //p' "$folder/result.md")$(sed -n '/^failures:/,/^[a-z]/{/^  /p;}' "$folder/result.md" | head -10 | tr '\n' ';')" > /dev/null
@@ -506,6 +545,6 @@ main() {
 	done
 	[ $# -ge 2 ] || { sed -n '2,17p' "$0"; exit 2; }
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
-	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
+	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card" "${@:3}"
 }
 main "$@"; exit

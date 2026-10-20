@@ -7,9 +7,18 @@
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
 opaque_word = "view·opaque"
 
+# the arm of a match any value takes, `_: …`
+other_arm = "_"
+
 kind_of(view: any): text := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
 is_group(n: any): bool := bracket_of(n) != ø
+is_curly_group(n: any): bool := is_group(n) and bracket_of(n) == "{"
+# a key of that operator, `is_key(n, Op.Colon)` of `a: 1`
+is_key(n: any, op: Op): bool := match n {
+	Key(_, written, _): written == op
+	_: no
+}
 
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
@@ -80,6 +89,14 @@ view_of(n: Node): any := match n {
 	_: n
 }
 
+# the name of a type declaration's view: `P` of ["symbol", "P"], under the attribute layers of an enum's cases or a
+# base class
+declared_type_name(name: any): any := {
+	if name#1 == "symbol" { return name#2 }
+	if name#1 == "attribute" { return declared_type_name(name#4) }
+	ø
+}
+
 # the view of a key: an opaque view and an attribute layer as they were written
 key_view(left: Node, op: text, right: Node): any := {
 	if left == symbol(opaque_word) { return right }
@@ -94,6 +111,8 @@ group_like(n: Node, items: list): Node := match n {
 }
 
 # the call `name(arguments…)`
+# the symbol `word`
+is_word(n: any, word: text): bool := n == symbol(word)
 call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
 
 # a node with f applied to each of its children

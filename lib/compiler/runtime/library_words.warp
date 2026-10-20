@@ -11,16 +11,10 @@ node_slice(x: any, start: any, to: any = ø): any := {
 	not_a_list()
 }
 character_slice(t: text, from: int, to: int): text := {
-	start = character_offset_of(t, from)
-	stop = character_offset_of(t, to)
+	start = character_start(t, from + 1)
+	stop = character_start(t, to + 1)
 	if stop <= start { return "" }
 	bytes_between(t, start, stop)
-}
-# the byte offset after t's first count characters (grapheme clusters); past the last, the byte count
-character_offset_of(t: text, count: int): int := {
-	at = 0
-	for i in 0..<count { if at < byte_count(t) { at = character_end(t, at) } }
-	at
 }
 items_slice(items: list, from: int, to: int): list := {
 	count = min_int(to, #items) - from

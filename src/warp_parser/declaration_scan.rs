@@ -52,6 +52,19 @@ pub(crate) fn is_plain_name(word: &str) -> bool {
 /// The type names a source declares: the word after `class`, `struct`, `record` or `type` (not the call `type(x)`),
 /// outside comments and texts (`// the type end` declares nothing)
 pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<String> {
+	scan_types_after(source, declares_type)
+}
+
+/// The type names a source declares, its enums' too: what `==` compares with as a type, never testing one
+pub(crate) fn scan_type_names(source: &str) -> std::collections::HashSet<String> {
+	scan_types_after(source, |word| declares_type(word) || word == ENUM_WORD)
+}
+
+fn declares_type(word: &str) -> bool {
+	TYPE_DECLARATION_WORDS.contains(&word) || word == RECORD_WORD || word == "type"
+}
+
+fn scan_types_after(source: &str, declares: fn(&str) -> bool) -> std::collections::HashSet<String> {
 	let source = code_only(source);
 	// word pairs within a line: `x = type` ending one declares nothing with the next line's first word
 	let pairs = source.lines().flat_map(|line| {
@@ -59,7 +72,7 @@ pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<Str
 		words.windows(2).map(|pair| (pair[0], pair[1])).collect::<Vec<_>>()
 	});
 	pairs
-		.filter(|(word, _)| TYPE_DECLARATION_WORDS.contains(word) || *word == RECORD_WORD || *word == "type")
+		.filter(|(word, _)| declares(word))
 		// the name right after the word: `class Point{`, `class Point(val x: Int)`, `record Point(int X)`, `class P:`;
 		// `record = find(…)` declares nothing
 		.filter_map(|(_, next)| {

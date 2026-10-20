@@ -1,0 +1,2 @@
+def code_points(text: text) := [point for point in text.codepoints]
+print count(code_points("héllo"))
