@@ -1,0 +1,6 @@
+// a class may extend a runtime error's class (card myindexerror-extends)
+class MyIndexError extends IndexError {}
+a = try raise MyIndexError("mine") except LookupError as e: e.message
+b = try raise MyIndexError("mine") except IndexError: 2
+c = try (try raise MyIndexError("mine") except KeyError: 1) except Error: 3
+print a b c

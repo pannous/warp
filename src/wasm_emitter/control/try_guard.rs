@@ -125,6 +125,7 @@ impl WasmGcEmitter {
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(1), I::Br(1), I::End]); // caught
 		func.instruction(&I::GlobalSet(catching.caught_global)); // the error id, for `catch e`
+		self.emit_keep_caught_position(func);
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(0), I::End]);
 	}

@@ -1,0 +1,2 @@
+# used by used/twice.warp
+next(x: int): int := x + 1

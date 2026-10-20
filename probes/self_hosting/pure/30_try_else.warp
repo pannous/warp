@@ -1,0 +1,14 @@
+// out: 0
+// out: 5
+// out: -1
+// out: 7
+// out: none
+quotient(x: int): int := try 10 / x else 0
+print quotient(0)
+print quotient(2)
+at_nine(xs: list): int := try xs#9 else - 1
+print at_nine([1, 2])
+y = try 7 else 9
+print y
+first(items: any): any := try items#1 else "none"
+print first([])

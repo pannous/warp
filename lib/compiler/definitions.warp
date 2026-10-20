@@ -13,6 +13,15 @@ is_keyword(n: Node): bool := match n {
 
 defined(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): { if #parts == 2 then Key(parts#1, Op.Define, parts#2) else n }
+	# `def f(x): T { body }`, as the parser keeps it `f(x): (T {body})`: the result held as a T (result_held)
+	Key(head, Op.Colon, typed_body): typed_block(head, typed_body, n)
+	_: n
+}
+typed_block(head: Node, typed_body: Node, n: Node): Node := match typed_body {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 2 and bracket_of(parts#2) == "{" { return result_held(Key(head, Op.Colon, parts#1), parts#2, n) }
+		n
+	}
 	_: n
 }
 
@@ -36,7 +45,24 @@ definition(n: Node): Node := match n {
 		n
 	}
 	Key(head, Op.Assign, body): { if is_head(head) then Key(head, Op.Define, body) else n }
+	Key(annotated, Op.Define, body): result_held(annotated, body, n)
 	_: n
+}
+
+# `f(x): T := e`: `f(x) := {the result: T = e; the result}`, the result held as a T, as Rust lowers it
+result_held(annotated: Node, body: Node, n: Node): Node := match annotated {
+	Key(head, Op.Colon, result_type): {
+		if not is_call(head) { return n }
+		result = symbol("the result")
+		Key(head, Op.Define, List([Key(Key(result, Op.Colon, result_type), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
+	}
+	_: n
+}
+
+# `f(x: int, y)`: a name applied to parameters
+is_call(n: Node): bool := match n {
+	List(call, Bracket.Round, Separator.None): #call > 0 and is_name(call#1)
+	_: no
 }
 
 definitions(program: any): any := bottom_up(program, definition)

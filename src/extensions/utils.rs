@@ -10,6 +10,13 @@ const NO_NETWORK: &str = "no network in this build of warp (compiled without the
 /// it is https (card pannous-com)
 const DEFAULT_SCHEME: &str = "https";
 const SCHEME_MARK: &str = "://";
+/// The values that turn a WARP_ setting off, as unset does
+const OFF_VALUES: [&str; 5] = ["", "0", "false", "no", "off"];
+
+/// The environment setting's value; None when it is unset or off (OFF_VALUES, any case)
+pub fn setting(name: &str) -> Option<String> {
+	std::env::var(name).ok().filter(|value| !OFF_VALUES.contains(&value.to_lowercase().as_str()))
+}
 
 pub fn with_default_scheme(url: &str) -> String {
 	if url.starts_with(SCHEME_MARK) {

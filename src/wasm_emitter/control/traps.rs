@@ -67,6 +67,8 @@ pub const TRAP_POSITION: &str = "trap_position";
 pub const TRAP_POSITION_PREFIX: &str = "trap position: ";
 /// The global behind the export `trap_position`
 pub(in crate::wasm_emitter) const TRAP_POSITION_GLOBAL: &str = "trap·position";
+/// Where `trap_position` stood when the latest `try` caught an error, for `raise_on` to raise it on from there
+const CAUGHT_POSITION_GLOBAL: &str = "trap·caught·position";
 
 /// The bits of the column in `trap_position`, an i32 (smaller code than an i64 per statement): columns to 4095
 pub(in crate::wasm_emitter) const COLUMN_BITS: u32 = 12;
@@ -148,6 +150,10 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		let mark = rest.strip_prefix(crate::node::ATTRIBUTE_MARK).map_or("", |_| "@");
 		let name: String = rest[mark.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
 		format!("{}{mark}{name}", lists::list_ops::NO_FIELD_MESSAGE)
+	});
+	let missing_field = missing_field.or_else(|| {
+		let name = trace.contains(lists::list_ops::MISSING_FIELD).then(|| trap_detail(trace)).flatten()?;
+		Some(format!("{}{}", lists::list_ops::NO_FIELD_MESSAGE, unquoted(&name)))
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
@@ -261,6 +267,27 @@ impl WasmGcEmitter {
 		};
 		let global = self.trap_position_global();
 		Self::emit_list(func, &[I32Const(encoded), I::GlobalSet(global)]);
+	}
+
+	/// Keep the position of the error a `try` caught (emit_restore_caught_position)
+	pub(crate) fn emit_keep_caught_position(&mut self, func: &mut Function) {
+		let (position, caught) = (self.trap_position_global(), self.caught_position_global());
+		Self::emit_list(func, &[I::GlobalGet(position), I::GlobalSet(caught)]);
+	}
+
+	/// The position of the caught error as the one a runtime error reports
+	pub(crate) fn emit_restore_caught_position(&mut self, func: &mut Function) {
+		let (position, caught) = (self.trap_position_global(), self.caught_position_global());
+		Self::emit_list(func, &[I::GlobalGet(caught), I::GlobalSet(position)]);
+	}
+
+	fn caught_position_global(&mut self) -> u32 {
+		if let Some((index, _)) = self.ctx.user_globals.get(CAUGHT_POSITION_GLOBAL) {
+			return *index;
+		}
+		let index = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
+		self.ctx.user_globals.insert(CAUGHT_POSITION_GLOBAL.to_string(), (index, Kind::Int));
+		index
 	}
 
 	/// The index of the exported global `trap_position`, declared on first use

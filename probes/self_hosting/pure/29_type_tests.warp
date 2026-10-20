@@ -1,0 +1,11 @@
+// out: yes
+// out: no
+// out: yes
+// out: yes
+x = 3
+print x is int
+print x is list
+xs = [1]
+print xs is list
+text = "a"
+print text == "a"
