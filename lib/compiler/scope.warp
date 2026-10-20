@@ -7,7 +7,7 @@ use "walk.warp"
 use "words.warp"
 
 # how a binding form gives a name its meaning
-enum Meaning { Function, Variable, Parameter, Loop, Field }
+enum Meaning { Function, Variable, Parameter, Loop, Field, Type }
 
 # the name a binding form gives: `x`, `x: int`, `x: int = 1`; ø for anything else
 binding_name(n: Node): any := match n {
@@ -78,6 +78,7 @@ word_meanings(word: Node, next: Node): list := match word {
 	Symbol(name): {
 		if name == "for" then [[binding_name(next), Meaning.Loop]]
 		else if function_keywords contains name then function_meanings(definition_head(next))
+		else if name == enum_word then [[binding_name(next), Meaning.Type]]
 		else []
 	}
 	_: []
@@ -100,6 +101,7 @@ meanings_of(n: Node): list := match n {
 key_meanings(target: Node, op: Op, value: Node): list := {
 	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
 	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
+	if target == symbol(opaque_word) and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
 	[]
 }
 
@@ -159,8 +161,6 @@ scope_of(program: Node): any := {
 }
 
 binds(scope: any, name: text): bool := scope.has(name)
-# bound as anything but a field: `{symbol: "symbol"}` leaves the word symbol free (Rust type_tests.rs bound_otherwise)
-binds_besides_fields(scope: any, name: text): bool := scope.has(name) and scope[name].any(meaning => meaning != "field")
 binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning
 # the meanings that make a name a value where it stands: a variable, a parameter, a loop variable (a field or a function
 # of that name is no value there)

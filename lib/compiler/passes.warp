@@ -46,9 +46,10 @@ lowered_node(n: any): any := {
 }
 
 # the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
-# it uses from `folder` (uses.warp) and the prelude's definitions they reach (prelude_words.warp)
+# it uses from `folder` (uses.warp) and the definitions they reach of the standard modules they use and of the
+# prelude (prelude_words.warp)
 lowered_program(source: text, folder: text, prelude: text): Node := lowered_node(with_used(plain_node(parsed(source)), folder, prelude))
-with_used(program: Node, folder: text, prelude: text): Node := with_prelude(with_uses(program, folder), prelude)
+with_used(program: Node, folder: text, prelude: text): Node := with_reached(with_used_modules(with_uses(program, folder), folder), prelude, no)
 
 # the source text as the passes leave it, as its view
 lowered(source: text, folder: text, prelude: text): any := view_of(lowered_program(source, folder, prelude))

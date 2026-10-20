@@ -56,6 +56,16 @@ fn for_loops_run_pure() {
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
 
+/// lib/compiler/parser.warp reads `for each x in xs` and `each x in xs` as `for x in xs`; a loop variable named `each`
+/// stays one (card pure-error-undefined)
+#[test]
+fn for_each_loops_run_pure() {
+	let basket = "basket = [{price: 2} {price: 3}]; t = 0;";
+	runs_pure("for_each", &format!("{basket} for each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("each_in", &format!("{basket} each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("variable_each", "t = 0; for each in [10, 20] { t = t + each }; t", "30");
+}
+
 /// node_matches.warp: an arm of a number, text or character tests the subject equals it
 #[test]
 fn match_values_run_pure() {
@@ -283,6 +293,31 @@ fn kind_changes_fail_pure() {
 	let (output, _) = lane_run("pure-only", "body_kind_change", "f() := (x = 1; x = \"a\"; x); f()");
 	assert!(output.contains("x was an Int, is given a Text"), "{output}");
 	runs_pure("kinds_that_mix", "x = 1; x = 2.5; x", "2.5");
+}
+
+/// card uses-std-modules: a standard module a program uses by name (`use case_tables`, lib/case_tables.warp) brings
+/// the definitions the program reaches, its values included, in front of the program
+#[test]
+fn std_modules_run_pure() {
+	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
+}
+
+/// lib/compiler/emitter.warp: an instance leaving out fields gives them their declared defaults, an optional field ø
+/// (card pure-field-defaults)
+#[test]
+fn field_defaults_run_pure() {
+	runs_pure("call_defaults", "class point{x:int=0; y:int=3}; point(5)", "point{x:5 y:3}");
+	runs_pure("brace_defaults", "class counter{n=0; step:int=1}; c = counter{}; c.n + c.step", "1");
+	runs_pure("optional_field", "class opt { a: int; b? }; opt(4).a", "4");
+}
+
+/// lib/compiler/emitter.warp: a named argument `name = value` takes its parameter's or field's place (P37), a left-out
+/// one its default (card pure-named-arguments)
+#[test]
+fn named_arguments_run_pure() {
+	runs_pure("named_call", "f(a, b) := a * 10 + b; f(b=2, a=7)", "72");
+	runs_pure("named_instance", "class P { x: int; y: int }; p = P(y=2, x=7); p.x * 10 + p.y", "72");
+	runs_pure("named_and_default", "class P { x: int; y: int = 5 }; P(x=1)", "P{x:1 y:5}");
 }
 
 /// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter

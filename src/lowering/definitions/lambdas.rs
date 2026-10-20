@@ -25,8 +25,8 @@ const CALL_PLACEHOLDER: &str = "loop_call";
 const LOOP_ITEM_PREFIX: &str = "loop_item_";
 
 /// An iteration word over a list: the arguments between the list and the function, the arguments of the function
-/// (`reduce` and `fold` take the accumulator and the item), and the loop it lowers to. `out`, `item`, `acc`, `list`, `index`
-/// are replaced by fresh names. A loop appends with `out = out + [x]`, never `out.add(x)`, which a user function `add`
+/// (`reduce` and `fold` take the accumulator and the item), and the loop it lowers to. Every variable of the loop (`out`,
+/// `item`, `hit`, … as iterate lists them) gets a fresh name, so a loop inside the function keeps its own. A loop appends with `out = out + [x]`, never `out.add(x)`, which a user function `add`
 /// would take.
 struct Iteration {
 	word: &'static str,
@@ -1320,7 +1320,7 @@ impl Lowering {
 	fn iterate(&self, iteration: &Iteration, list: Node, extras: Vec<Node>, function: Node) -> Option<Node> {
 		let names: Vec<(&str, String)> = [
 			"out", "item", "acc", "list", "index", "value", "moving", "size", "width", "merged", "low", "middle",
-			"high", "left", "right",
+			"high", "left", "right", "hit", "held", "found", "searching",
 		]
 		.into_iter()
 		.map(|name| (name, self.fresh(&format!("loop_{name}"))))

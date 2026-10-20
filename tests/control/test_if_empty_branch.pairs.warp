@@ -11,3 +11,7 @@
 # a_branch_printing_a_number_gives_empty
 'b = 3; if b > 0 {print b}; 5'	5
 'f(b) := { if b > 0 then {print b}; 0 }; f(3); 5'	5
+
+# an_element_of_a_list_from_an_if_keeps_its_type
+'n = 1; d = if n == 1 then ["ab", "cd"] else ø; k = d#2; k'	'cd'
+'n = 1; d = if n == 1 then ["ab", "cd"] else ["x"]; k = d#2; k'	'cd'

@@ -91,6 +91,14 @@ view_of(n: Node): any := match n {
 	_: n
 }
 
+# the name of a type declaration's view: `P` of ["symbol", "P"], under the attribute layers of an enum's cases or a
+# base class
+declared_type_name(name: any): any := {
+	if name#1 == "symbol" { return name#2 }
+	if name#1 == "attribute" { return declared_type_name(name#4) }
+	ø
+}
+
 # the view of a key: an opaque view and an attribute layer as they were written
 key_view(left: Node, op: text, right: Node): any := {
 	if left == symbol(opaque_word) { return right }
