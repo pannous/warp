@@ -1,0 +1,1 @@
+skip(text, at, n) := { while at < n and text[at] == ' ' { at = at + 1 }; at }; t = "  x"; skip(t, 0, t.length)
