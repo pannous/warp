@@ -940,8 +940,11 @@ def assignment(body: Body, target: any, value: any): list {
 	if not (name in body.names) and is_shared and body.function.name == "main" { return declare_global(name, value) }
 	if is_global(body, name) and not is_shared { return global_assignment(name, value) }
 	if not (name in body.names) and name in body.function.widened { kind = body.function.widened[name] }
-	# analyzer.warp's kind of the local, unless a value not held as that kind widened it (`x = 10.0; x = floor(2.5)`)
-	if not (name in body.names) and not (name in body.function.widened) and analyzed_local_kind(body.function, name) != ø { kind = analyzed_local_kind(body.function, name) }
+	# analyzer.warp's kind of the local, unless a value not held as that kind widened it (`x = 10.0; x = floor(2.5)`);
+	# a node stays one where the analyzer found a list: a $List holds no bracket or separator (bracketed(xs, "("))
+	if not (name in body.names) and not (name in body.function.widened) and analyzed_local_kind(body.function, name) != ø and not (kind == "node" and analyzed_local_kind(body.function, name) == "list") {
+		kind = analyzed_local_kind(body.function, name)
+	}
 	# the last reading of a function in a cycle: a local given the value of a call still compiling holds a node until
 	# the function is read again (module.rereads)
 	if not (name in body.names) and kind == pending and body.function.result != pending { kind = "node" }
