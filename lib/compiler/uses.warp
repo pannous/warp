@@ -1,6 +1,7 @@
 # The pure lane follows `use` (card pure-follows-use): a program's `use "lexer.warp"` brings in the declarations of
 # that file, read from the program's folder, as src/modules/loader.rs brings them; each used file once, the files it
-# uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written.
+# uses ahead of it. A `use` naming no file of the folder (`use os`, a std module) stays as written, a used file's
+# with the declarations it brings.
 use os
 
 import_keywords = ["use", "require", "import", "include"]
@@ -43,7 +44,7 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 			used = statements_in(with_module_directory(plain_node(parsed(file_text(file))), folder_of(file)))
 			inner = declarations_used(used, folder_of(file), seen)
 			seen = inner#2
-			declarations += inner#1 + used.filter(s => is_declaration(s) and file_used(s, folder_of(file)) == ø)
+			declarations += inner#1 + used.filter(s => (is_declaration(s) or is_module_use(s)) and file_used(s, folder_of(file)) == ø)
 		}
 	}
 	[declarations, seen]
@@ -58,6 +59,8 @@ use_target(statement: any): any := {
 	statement#2
 }
 
+# `use math` in a used file: a standard module, which the program then uses too (src/modules/loader.rs)
+is_module_use(statement: any): bool := use_target(statement) != ø
 # the path of the file of the folder a `use` statement names, ø for another statement or a module of no such file
 file_used(statement: any, folder: text): any := {
 	module = use_target(statement)

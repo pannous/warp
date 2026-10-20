@@ -1,0 +1,3 @@
+// a used file that uses a standard module (math): its gcd reaches the program
+use math
+divisor(a: int, b: int): int := gcd(a, b)
