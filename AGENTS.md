@@ -142,7 +142,7 @@ These are reexported in `lib.rs` for test access via `use warp::*`.
 
 0. **Check state** - git log, git status
 1. **Modify parser or emitter** - `.warp` changes under lib/ run at once with the one shared build:
-   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp-debug <program>` (no local cargo builds besides main's)
+   `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` (no local cargo builds besides main's)
 2. **Add tests** - Create or update tests in `tests/`
 3. **Run tests** - in the cloud: `scripts/cloud-test.sh --card <card> <branch> <tip> <filters>`
 

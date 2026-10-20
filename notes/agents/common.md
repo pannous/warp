@@ -133,10 +133,10 @@ After a context swap, this file and your role file win over anything a handover 
 - Every CLI run of a program that might paint gets `WARP_NO_WINDOW=1` (no windows on the user's screen), except in try
   lines for the user: it also mutes sound and prints MIDI as hex.
 - Quick check first, before the cloud lane: run the .warp code you wrote or touched through the shared binary from
-  your worktree, `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp-debug probes/<x>.warp`, and for compiler work through the
-  self-hosted pipeline: `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 /Users/me/dev/bin/warp-debug probes/<x>.warp` (=front:
+  your worktree, `WARP_NO_WINDOW=1 /Users/me/dev/bin/warp probes/<x>.warp`, and for compiler work through the
+  self-hosted pipeline: `WARP_NO_WINDOW=1 WARP_SELF_HOSTED=1 /Users/me/dev/bin/warp probes/<x>.warp` (=front:
   front end only). The stages load your worktree's lib/compiler/*.warp at run time, so edits there need no rebuild; the first run after an edit compiles
-  the stage programs (~90 s, prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
+  the stage programs (~35 s with the optimized /Users/me/dev/bin/warp, ~2 min with warp-debug: use warp-debug only for a backtrace; prints their hints), later runs take ~0.1 s. It catches undefined words, parse errors
   and wrong values in seconds. `WARP_EMIT_REFUSALS=/dev/stderr` shows whether emitter.warp refused the program
   (`outside the core: …`, then the Rust emitter emitted it); `WARP_HINTS=0` hides hints (the stage programs' own
   warnings still show: card cli-show). Then the targeted tests in the cloud lane.
@@ -205,7 +205,7 @@ After a context swap, this file and your role file win over anything a handover 
      and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix): `todo ready <card>
      --express`; the Integrator pushes it to main untested at once, the gate follows. When the user says "express" or
      "quickly", they expect about a minute: one targeted test or none, give the user a try line with
-     `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp-debug` (a Rust change: after its express landing), ready it express.
+     `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp` (a Rust change: after its express landing), ready it express.
   4. Optional: one line to warp-reviewer ("<card> ready"); it reads `todo list Ready` anyway. Report one line to the
      Supervisor.
   The Integrator merges only Ready cards and closes them. A bounce (failing test, semantic conflict, reviewer veto)

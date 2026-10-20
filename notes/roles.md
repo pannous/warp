@@ -33,7 +33,7 @@ After each batch of questions, and whenever idle, `todo try --new` lists finishe
   nothing waits for brew.
 - A feature is announced once its batch is pushed (workers run `todo done` only after their branch is on main). A
   worker may hand over a try line as soon as its targeted test passes on its branch, with the shared binary
-  (`WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp-debug`).
+  (`WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp`).
 - Format: the Interviewer's FINAL reply of a turn (the user's app shows only the final message in full) lists each
   feature as a ```sh code block with the expected result after it; no popup follows. Shape: `warp 'a = 1; b = 2; a + b'`,
   the program right after `warp`, statements joined by semicolons, no echo/printf pipes or newlines; a branch-only
