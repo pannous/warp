@@ -104,8 +104,8 @@ impl WasmGcEmitter {
 				data: file.as_bytes().into(),
 			});
 		}
-		if crate::compiler::compile_context::read(|context| context.counts_fuel) {
-			self.module.section(&CustomSection { name: crate::host::FUEL_SECTION.into(), data: [].as_slice().into() });
+		if let Some(mark) = crate::host::fuel_mark() {
+			self.module.section(&mark);
 		}
 		if !self.live_loops.is_empty() {
 			let names = self.live_loops.iter().cloned().collect::<Vec<_>>().join(crate::host::USER_FUNCTIONS_SEPARATOR);

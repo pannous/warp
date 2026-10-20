@@ -1,0 +1,10 @@
+// out: x is 3!
+// out: a 3
+// out: 2 4
+// out: yes
+x = 3
+print "x is " x "!"
+print "a" 3
+print 1 + 1 2 + 2
+sq(n: int) := n * n
+print (sq 2 == 4)
