@@ -88,6 +88,8 @@ mod test_use_several; // card std-use
 #[cfg(feature = "native")] // files beside the program: not in the browser build
 mod test_used_enums; // card rust-lane
 mod test_used_module_bare_words; // card one-dispatch
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_used_types; // card types-back
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
 mod test_wasm_modules; // card read-chron // card map-key // card two-used-files

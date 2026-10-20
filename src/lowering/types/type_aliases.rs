@@ -31,6 +31,11 @@ pub(crate) fn resolved_aliases(node: &Node) -> HashMap<String, String> {
 	aliases.keys().filter_map(|name| Some((name.clone(), target(name, &aliases)?))).collect()
 }
 
+/// `type Name = string`, a declaration naming another type
+pub(crate) fn is_alias(node: &Node) -> bool {
+	alias(node.drop_meta()).is_some()
+}
+
 /// `type Name = string`: (Name, string)
 fn alias(node: &Node) -> Option<(String, String)> {
 	let Node::Key(declared, Op::Assign, target) = node else {

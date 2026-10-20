@@ -473,7 +473,8 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 		_ if crate::analyzer::type_word_kind(word).is_some()
 			|| crate::analyzer::plural_element_type(word).is_some()
 			|| word == "list"
-			|| word.starts_with("list of ") =>
+			|| word.starts_with("list of ")
+			|| crate::lowering::declarations::is_collection_type_word(word) =>
 		{
 			FieldStorage::Node
 		}

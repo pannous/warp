@@ -1,0 +1,3 @@
+# domain types a program takes from a used file (test_used_types.rs)
+type Name = text
+class Scope { kinds: map = {} }
