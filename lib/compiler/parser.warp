@@ -856,7 +856,7 @@ OPERATOR_LEVELS = {"prefix": 155, "suffix": 165, "infix": 140}
 def operator_call(glyph, arguments) := listed("(", "", [symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
 
 // The kind of operator a declaration's first word declares, else ""
-def declared_kind(word) := if word == "operator" then "infix" else if OPERATOR_KINDS.contains(word) then word else ""
+def operator_kind_word(word) := if word == "operator" then "infix" else if OPERATOR_KINDS.contains(word) then word else ""
 
 // A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), no letter or digit;
 // raised digits too (`suffix operator ³`)
@@ -983,7 +983,7 @@ def declared_level(declared, glyph) {
 // [glyph, kind, level] of the operator a statement's words declare, else []
 def operator_declared(words) {
 	if words.length == 0 { return [] }
-	kind = declared_kind(words#1)
+	kind = operator_kind_word(words#1)
 	rest = words[1 .. words.length]
 	glyph = if kind == "" then "" else declared_operator(kind, rest)
 	if glyph != "" and operator_alias(words).length == 0 { return [glyph, kind, OPERATOR_LEVELS[kind]] }
@@ -1013,7 +1013,7 @@ def operator_declaration(p, word) {
 	end = p.at
 	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end = end + 1 }
 	words = blank_words(p.code[p.at + word.length .. end])
-	kind = declared_kind(word)
+	kind = operator_kind_word(word)
 	glyph = declared_operator(kind, words)
 	if glyph == "" { return ø }
 	p.at = p.at + word.length
