@@ -167,6 +167,8 @@ number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_
 collection_text(n: any): text := {
 	if kind_code(n) == 8 { return list_shown(n) }
 	if kind_code(n) == 18 { return time_text(n) }
+	# a closure: its lambda as written (emitter.warp closure_text_code)
+	if kind_code(n) == 16 { return closure_text(n) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
@@ -271,6 +273,9 @@ node_equal(a: any, b: any): bool := {
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_order(a, b) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
+	# times: the same form at the same position; any other value besides a number is none of the numbers
+	if kind_code(a) == 18 and kind_code(b) == 18 { return marked_kind(a) == marked_kind(b) and unboxed_int(a) == unboxed_int(b) }
+	if numeric_node(a) + numeric_node(b) < 2 { return no }
 	float_of_node(a) == float_of_node(b)
 }
 list_equal(a: list, b: list): bool := {
@@ -279,15 +284,21 @@ list_equal(a: list, b: list): bool := {
 	yes
 }
 # a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
-# its class name and the map of its fields
-fields_of(m: any): any := if marked_kind(m) == 6 then key_value(m) else m
+# its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's keys(n:20) is [n]
+fields_of(m: any): any := {
+	if marked_kind(m) != 6 { return m }
+	fields = key_value(m)
+	if is_null(fields) == 0 and kind_code(fields) == 8 then fields else map_of([m])
+}
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: any, name: text): int := {
 	entries = unboxed_list(fields_of(m))
 	for i in 1 to #entries { if text_order(key_name(entries#i), name) == 0 { return i } }
 	0
 }
-# `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
+# 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
+has_fields(m: any): int := if is_null(m) == 0 and is_null(fields_of(m)) == 0 and kind_code(fields_of(m)) == 8 then 1 else 0
+# `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: any, name: text): any := {
 	if is_position_part(m, name) { return position_part(m, name) }
 	if kind_code(m) == 5 { return node_text(m) }
@@ -297,8 +308,8 @@ map_get(m: any, name: text): any := {
 	if is_entry(m) and text_order(name, "op") == 0 { return key_operator(m) }
 	if is_plain_list(m) and text_order(name, "bracket") == 0 { return list_bracket(m) }
 	if is_plain_list(m) and text_order(name, "separator") == 0 { return list_separator(m) }
-	at = map_index(m, name)
-	if at == 0 { fail() }
+	at = if has_fields(m) == 1 then map_index(m, name) else 0
+	if at == 0 { missing_field(name) }
 	key_value(unboxed_list(fields_of(m))#at)
 }
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
@@ -363,6 +374,8 @@ field_with(m: any, name: text, value: any): any := {
 # 1 for a boxed text or character, else 0
 # `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
 is_nothing(n: any): bool := if is_null(n) == 1 then yes else kind_code(n) == 8 and #unboxed_list(n) == 0
+# `is_error(x)`: x is an Error value (kind code 11)
+node_is_error(n: any): bool := is_null(n) == 0 and kind_code(n) == 11
 textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
 # the bytes of the code point whose UTF-8 starts with the byte lead
 code_point_width(lead: int): int := if lead < 128 then 1 else if lead < 224 then 2 else if lead < 240 then 3 else 4
@@ -499,13 +512,15 @@ list_append(a: list, b: list): list := {
 	set_count(a, start + added)
 	a
 }
-# `n#i` of a value known only at run time, counted from 1: a list's item, a text's character
+# `n#i` of a value known only at run time, counted from 1: a list's item, a text's character; ø has none ("1 not in
+# an empty list"), any other value fails as Rust's "not a list"
 node_at(n: any, index: int): any := {
+	if is_null(n) == 1 { index_out_of_range_of(index, 0) }
 	if kind_code(n) == 8 { return unboxed_list(n)#index }
 	if kind_code(n) == 3 { return text_char(unboxed_text(n), index) }
 	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
 	if kind_code(n) == 4 and index == 1 { return n }
-	fail()
+	not_a_list()
 }
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: any): int := {
@@ -1005,9 +1020,10 @@ int_text(n: int): text := {
 	}
 	out
 }
-# a character's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
-char_text(c: char): text := {
-	n = code_of(c)
+char_text(c: char): text := code_point_text(code_of(c))
+# a code point's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
+code_point_text(code: int): text := {
+	n = code
 	count = if n < 128 then 1 else if n < 2048 then 2 else if n < 65536 then 3 else 4
 	out = new_text(count)
 	for i in count - 1 down to 1 {
@@ -1289,6 +1305,12 @@ index_must_be_an_integer(): int := {
 	fail()
 	0
 }
+# `m.name` of a value without the field `name` known only at run time: "no field name"
+missing_field(name: text): int := {
+	global trap_detail = held(name)
+	fail()
+	0
+}
 # `x as rational` of ∞ or NaN: "not a finite number"
 not_a_finite_number() := {
 	fail()
@@ -1542,7 +1564,8 @@ time_form(n: any): int := int_remainder(int_quotient(marked_kind(n), 256), 8)
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
 time_text(n: any): text := {
 	form = time_form(n)
-	if form == duration_form() or form == zoned_form() { time_form_not_in_warp() }
+	if form == duration_form() { return duration_text(n) }
+	if form == zoned_form() { time_form_not_in_warp() }
 	position = unboxed_int(n)
 	if form == date_form() { return date_text(position) }
 	days = floor_quotient(position, day_nanos())
@@ -1585,7 +1608,7 @@ fraction_text(fraction: int): text := {
 }
 # n with leading zeros to count digits
 padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
-# a duration or a zoned time in time_text: "time form not in warp"
+# a zoned time in time_text: "time form not in warp" (its zone names are Rust's alone)
 time_form_not_in_warp() := {
 	fail()
 	0
