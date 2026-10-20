@@ -99,7 +99,8 @@ gc_ops = {struct_new: 0, struct_get: 2, struct_set: 5, ref_cast_null: 23, array_
 # the abstract heap type i31 (a character boxed in a $Node), as a cast's immediate
 i31_type = 108
 ref_null = 208
-int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89}
+int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "<=": 87, ">=": 89,
+	"rem": 129, "xor": 133, "<<": 134, ">>": 135}
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
@@ -710,7 +711,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error"}
+	trim: "node_trim", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
@@ -1193,7 +1194,7 @@ placed_arguments(names: any, arguments: any): any := {
 	for argument in arguments {
 		if is_named_argument(argument, names) {
 			name = name_of(key_of(argument))
-			at = names.index_of(name) - 1
+			at = range_list(#names).filter(i => names[i] == name)#1
 			while #slots <= at { slots += [ø] }
 			if slots[at] != ø { return ø }
 			slots[at] = [value_of(argument)]
