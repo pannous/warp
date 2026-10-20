@@ -231,6 +231,3 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Not yet read (card emitter-twin): probes/self_hosting/readiness/scan_100k.warp, where warp's module traps
   ("trap detail: 0") and Rust's prints 40000 and 20000, and samples/web/select_binding.warp. Both differ on main
   f9e2a9e6ba, without the changes of branch cache-fixes (2026-10-19). Back: once the card reads and fixes them.
-- A cycle calling a function with another argument kind than its first call (card cycle-argument-kinds): `f` of a
-  list, then `g` calls `f` of an item; warp's module traps, Rust's gives 1. Source (the card's reproduction):
-  probes/self_hosting/emitter/cycle_argument_kinds.warp (2026-10-20). Back: when the card is done.
