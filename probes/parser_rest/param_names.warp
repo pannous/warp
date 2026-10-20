@@ -1,0 +1,9 @@
+names_of(items: list): list := {
+	names = []
+	for parameter in items[1:] {
+		if parameter is key { parameter = key_of(parameter) }
+		if parameter is symbol { names = names + [name_of(parameter)] }
+	}
+	names
+}
+print names_of([1, 2])
