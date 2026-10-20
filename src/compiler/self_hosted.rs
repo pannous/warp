@@ -146,7 +146,7 @@ fn reads() -> bool {
 
 /// The program parser.warp parses from the source; None when not self-hosted
 pub fn parse(code: &str) -> Option<Node> {
-	reads().then(|| crate::warp_parser::sugar::equalities_read(stage(PARSE_STAGE, &json_text(code), &[])))
+	reads().then(|| crate::warp_parser::sugar::equalities_read(stage(PARSE_STAGE, &json_text(code), &[]), code))
 }
 
 /// The node the warp twin of `pass` makes of `node`; None when not self-hosted or the pass has no twin

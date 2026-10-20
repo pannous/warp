@@ -400,7 +400,7 @@ pub fn equality_operand(subject: &Node, word: Node) -> Node {
 	}
 }
 
-fn marked_operand(word: &str) -> Node {
+pub(crate) fn marked_operand(word: &str) -> Node {
 	marked(Node::Symbol(word.to_string()))
 }
 
