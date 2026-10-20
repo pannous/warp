@@ -188,6 +188,9 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_classes::a_declared_error_class_raises_and_catches
+  ✓ control::test_error_classes::an_undeclared_error_class_is_named
+  ✓ control::test_error_classes::except_catches_its_class_and_lets_others_pass
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_not_in_data::test_a_list_of_values_and_a_handled_error_stay
   ✓ control::test_error_not_in_data::test_a_parameter_declared_a_list_of_a_union_takes_index_writes
@@ -6320,4 +6323,4 @@ FAILED:
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6314 passed, 1 failed, 6315 total tested
+11 ignored, 6317 passed, 1 failed, 6318 total tested

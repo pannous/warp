@@ -418,3 +418,6 @@ is!(warp: text, expected: any) := {
 	if not passed then print("✗ is! \"" + warp + "\" " + str(expected) + ": got " + str(got))
 	passed
 }
+
+// The class of every error (decision error-classes): `class ParseError: Error` declares one, `except Error` catches all
+class Error { message: text }
