@@ -187,3 +187,10 @@
 - Route `÷` and `÷=` through the existing `FloorDiv` and `FloorDivAssign` operators; do not add a parallel arithmetic path.
 - Emit one shared newcomer note that explains Julia-compatible floor division and names `/` for plain division.
 - Keep the Rust and self-hosted parser operator tables aligned, update the two specified wiki sections, and run the focused parser tests, clippy, and wasm32 check.
+
+# Global size alias cleanup
+
+- Reproduce `size(xs)` as an ordinary program outcome before changing production code.
+- Reuse the prelude alias mechanism and the existing `count` implementation; do not add another counting path.
+- Preserve program-defined `size` functions and object fields/methods where normal dispatch gives them precedence.
+- Add focused outcome coverage, then run the targeted test, formatting, style, clippy, and wasm32 checks.

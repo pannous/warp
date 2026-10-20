@@ -199,6 +199,7 @@ mod test_rust_return_arrow;
 mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;
+mod test_size_count_alias; // card size-count
 mod test_soft_keywords;
 mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
