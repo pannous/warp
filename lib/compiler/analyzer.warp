@@ -94,10 +94,19 @@ held_kind(value: any, scope: any): text := {
 # the last statement of a block, or the node itself
 last_statement(n: any): any := if is_block(n) and #n > 0 then last_statement(n#(#n)) else n
 
-branch_kind(branch: any, scope: any): text := {
-	if is_block(branch) and separator_of(branch) == " " and #branch > 1 { return held_kind(separated(bracketed(branch.map(x => x), ""), " "), scope) }
-	if is_block(branch) and #branch > 0 { return branch_kind(branch#(#branch), scope) }
-	held_kind(branch, scope)
+# what a branch computes: its last statement, the words of one line as one call
+computed(branch: any): any := {
+	if is_block(branch) and separator_of(branch) == " " and #branch > 1 { return separated(bracketed(branch.map(x => x), ""), " ") }
+	if is_block(branch) and #branch > 0 { return computed(branch#(#branch)) }
+	branch
+}
+branch_kind(branch: any, scope: any): text := held_kind(computed(branch), scope)
+
+# `name := {…}` holds what the block computes (a body run at each read), `name = {…}` the block; a map or a comma list
+# stays data
+assigned_value(n: any): any := {
+	value = value_of(n)
+	if op_of(n) == ":=" and is_block(value) and separator_of(value) != "," and not all_of(value, part => is_key(part, ":")) { computed(value) } else { value }
 }
 
 raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
@@ -168,7 +177,7 @@ kind_of_key(n: any, scope: any): text := {
 	if op == ".." or op == "..<" or op == "to" or op == "…" { return "list" }
 	if op == "±" { return "data" }
 	if op in arithmetic_ops and not is_empty(key_of(n)) { return arithmetic_kind(kind_of(key_of(n), scope), op, kind_of(value_of(n), scope)) }
-	if op == "=" or op == ":=" { return held_kind(value_of(n), scope) }
+	if op == "=" or op == ":=" { return held_kind(assigned_value(n), scope) }
 	if op in compound_ops { return compound_kind(kind_of(key_of(n), scope), compound_ops[op], kind_of(value_of(n), scope)) }
 	if (op == "++" or op == "--") and kind_of(key_of(n), scope) == "float" { return "float" }
 	if op == ":" { return if key_of(n) == symbol("global") then kind_of(value_of(n), scope) else "key" }
@@ -637,12 +646,12 @@ is_sequence(n: any): bool := is_group(n) and bracket_of(n) == "" and (separator_
 
 gather(n: any, context: text, flows: any): list := {
 	# `f := …` defines a variable as well (Rust define_new in collect_variables)
-	if is_definition(n) and is_key(n, ":=") and key_of(n) is symbol { flows += [["variable", context, name_of(key_of(n)), value_of(n)]] }
+	if is_definition(n) and is_key(n, ":=") and key_of(n) is symbol { flows += [["variable", context, name_of(key_of(n)), assigned_value(n)]] }
 	if is_definition(n) { return flows }
 	if type(n) is key and (op_of(n) == "=" or op_of(n) == ":=") {
 		gather(value_of(n), context, flows)
 		target = key_of(n)
-		if target is symbol { flows += [["variable", context, name_of(target), value_of(n)]] }
+		if target is symbol { flows += [["variable", context, name_of(target), assigned_value(n)]] }
 		if is_key(target, "#") and key_of(target) is symbol { flows += [["element", context, name_of(key_of(target)), value_of(n)]] }
 		if is_key(target, ":") and key_of(target) is symbol { declare(name_of(key_of(target)), value_of(target), context) }
 		return flows

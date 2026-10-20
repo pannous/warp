@@ -130,3 +130,10 @@ fn program_names_run_pure() {
 	runs_pure("statement_block", "add := { it + 1 }; add 2", "3");
 	runs_pure("value_definition", "limit := 3; f(a) := a > limit; f 4", "yes");
 }
+
+/// `name := {…}` holds what the block computes, not the block (card analyzer-reads): `hi()` is 7, an int
+#[test]
+fn block_definitions_hold_their_value_pure() {
+	runs_pure("block_value", "hi := { 3 + 4 }; hi()", "7");
+	runs_pure("block_value_added", "hi := { 3 + 4 }; hi() + 1", "8");
+}
