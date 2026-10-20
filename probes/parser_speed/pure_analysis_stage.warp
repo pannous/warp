@@ -1,0 +1,9 @@
+// The milliseconds of the pure lane's analysis stage (analyzer.warp emitter_kinds) on the view pure_passes_stage.warp
+// wrote to args#1. Run from this folder: WARP_LIB=<checkout>/lib warp pure_analysis_stage.warp <view.json>
+use "../../lib/compiler/analyzer.warp"
+use os
+use json
+probe_view = json(read(args#1))
+probe_started = clock()
+emitter_kinds(node_of(probe_view))
+print("analysis stage " + (clock() - probe_started) + " ms")

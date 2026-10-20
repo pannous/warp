@@ -1,13 +1,14 @@
 # What the names of a program are (target pipeline shape, notes/self_hosting.md): one walk that knows every binding
-# form, read by the passes that ask "does the program give this word a meaning?". For now one scope for the whole
-# program; scopes per block come with the application pass.
+# form, read by the passes that ask "does the program give this word a meaning?". One scope for the whole program, or
+# one per function (scope_with outer_nodes_in, then the function's own nodes); scopes per block come with the
+# application pass.
 # `x = v` a variable (a function when v is a lambda), `f(a) := …` / `f(a) = …` / `def f(a) {…}` a function and its
 # parameters, `for x in …` a loop variable, `a => …` a parameter, `{k: v}` a field.
 use "walk.warp"
 use "words.warp"
 
 # how a binding form gives a name its meaning
-enum Meaning { Function, Variable, Parameter, Loop, Field }
+enum Meaning { Function, Variable, Parameter, Loop, Field, Type }
 
 # the name a binding form gives: `x`, `x: int`, `x: int = 1`; ø for anything else
 binding_name(n: Node): any := match n {
@@ -78,6 +79,7 @@ word_meanings(word: Node, next: Node): list := match word {
 	Symbol(name): {
 		if name == "for" then [[binding_name(next), Meaning.Loop]]
 		else if function_keywords contains name then function_meanings(definition_head(next))
+		else if name == enum_word then [[binding_name(next), Meaning.Type]]
 		else []
 	}
 	_: []
@@ -100,6 +102,7 @@ meanings_of(n: Node): list := match n {
 key_meanings(target: Node, op: Op, value: Node): list := {
 	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
 	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
+	if target == symbol(opaque_word) and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
 	[]
 }
 
@@ -117,14 +120,19 @@ field_meanings(item: Node): list := match item {
 }
 
 # every key and list of a program, the program first; an opaque view's parts (a type's name and body) as nodes
-nodes_in(top: Node): list := {
+nodes_in(top: Node): list := nodes_kept(top, n => yes)
+
+# the nodes `kept` accepts, the program first, without the parts of one it refuses
+nodes_kept(top: Node, kept: function): list := {
 	found = []
 	unvisited = [top]
 	while #unvisited > 0 {
 		n = unvisited#(#unvisited)
 		unvisited = unvisited[0 ..< #unvisited - 1]
-		found += [n]
-		unvisited += parts_of(n)
+		if kept(n) {
+			found += [n]
+			unvisited += parts_of(n)
+		}
 	}
 	found
 }
@@ -150,13 +158,27 @@ remember(scope: any, pairs: list): any := {
 }
 
 # name → its meanings, of the whole program
-scope_of(program: Node): any := {
+scope_of(program: Node): any := scope_with({}, nodes_in(program))
+
+# a copy of the scope with the names the nodes give added
+scope_with(outer: any, nodes: list): any := {
 	scope = {}
-	for n in nodes_in(program) {
+	for name in outer.keys { scope[name] = outer[name] }
+	for n in nodes {
 		scope = remember(remember(scope, meanings_of(n)), fields_of(n))
 	}
 	scope
 }
+
+# `f(a) := …`, `f(a) = …`: a function's definition, whose parameters and locals no other function sees
+is_function_definition(n: Node): bool := match n {
+	Key(target, op, value): (op == Op.Assign or op == Op.Define) and is_round(target) and #items_of(target) > 0
+	_: no
+}
+
+# the nodes outside the bodies of functions, whose names every function sees (Rust type_tests.rs
+# collect_outer_assigned_names)
+outer_nodes_in(top: Node): list := nodes_kept(top, n => not is_function_definition(n))
 
 binds(scope: any, name: text): bool := scope.has(name)
 binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning

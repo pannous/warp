@@ -71,7 +71,7 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 	let constants: Vec<(String, Node)> = captured_variables(function, main)
 		.into_iter()
 		.map(|(name, _)| name)
-		.filter(|name| !main.is_global(name) && changes_in(body, name).is_empty() && is_read_as_value_only(body, name))
+		.filter(|name| !main.is_global(name) && is_constant_within(body, name))
 		.filter_map(|name| constant_binding(statements, index, &name).map(|value| (name, value)))
 		.collect();
 	if constants.is_empty() {
@@ -119,6 +119,12 @@ fn is_plain_symbol(node: &Node) -> bool {
 /// A function or lambda defined inside the body: its parameters could shadow a main-level name
 fn contains_definition(body: &Node) -> bool {
 	any_part(body, |node| matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)))
+}
+
+/// Does `name` stay what it is bound to throughout `body`, so its value may stand in its place: never changed, only read
+/// as a value (a parameter counting up, `at = at + 1`, keeps its name)
+fn is_constant_within(body: &Node, name: &str) -> bool {
+	changes_in(body, name).is_empty() && is_read_as_value_only(body, name)
 }
 
 /// Is every use of `name` in `node` a read of its value: not a property (`m.k`), a key (`m#k`, `{k: 1}`), a target
@@ -396,14 +402,20 @@ impl Specialiser {
 		let constants: Vec<(String, Node)> = parameters
 			.iter()
 			.zip(arguments)
-			.filter(|(_, argument)| constant(argument))
+			.filter(|(parameter, argument)| constant(argument) && is_constant_within(&definition.body, parameter))
 			.map(|(parameter, argument)| (parameter.clone(), argument.drop_meta().clone()))
 			.collect();
 		if constants.is_empty() || constants.len() == arguments.len() {
 			return None;
 		}
 		let variant = self.variant(&definition, &constants, depth)?;
-		let kept: Vec<Node> = arguments.iter().filter(|argument| !constant(argument)).cloned().collect();
+		let substituted = |parameter: &String| constants.iter().any(|(constant, _)| constant == parameter);
+		let kept: Vec<Node> = parameters
+			.iter()
+			.zip(arguments)
+			.filter(|(parameter, _)| !substituted(parameter))
+			.map(|(_, argument)| argument.clone())
+			.collect();
 		Some(call(&variant, kept))
 	}
 

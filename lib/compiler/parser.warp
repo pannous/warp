@@ -35,7 +35,9 @@ def written_tree(source) {
 // Rust twin: declaration_scan.rs defined_name, lookahead.rs defines_bang_word
 def bang_words(source) {
 	found = []
+	# only a line with `!(` can define one: the prelude's scan, at every start of a stage program, took 60 ms
 	for line in source.split("\n") {
+		if not line.contains("!(") { continue }
 		at = blank_end_of(line, 0)
 		if starts_at(line, "def ", at) { at = blank_end_of(line, at + 4) }
 		end = name_end(line, at, line.length)
@@ -432,6 +434,32 @@ def code_after(p, at) := if line_ends_after(p, at) then '\n' else p.code[p.resum
 
 def skip_spaces(p) {
 	p.at = blank_end(p, p.at)
+	continuation = line_continuation_length(p)
+	if continuation > 0 {
+		p.at = p.at + continuation
+		skip_spaces(p)
+	}
+}
+
+// The width of `\` ending its line with the newline, or of a line break and the indentation before what continues the
+// line: a method call or `|>` starting the next line (`numbers⏎    .map(square)`), `else` starting it, or the line
+// ending in then/else (`if c then⏎ a⏎ else⏎ b`); else 0
+// Rust twin: scanning.rs line_continuation_length
+def line_continuation_length(p) {
+	c = peek(p.code, p.at, p.n)
+	if c == '\n' or c == '\r' {
+		at = p.at
+		while at < p.n and is_blank(p.code[at]) { at = at + 1 }
+		next = peek(p.code, at + 1, p.n)
+		starts_method = is_at(p.code, at, '.', p.n) and is_name_char(next) and not is_digit(next)
+		starts_pipeline = is_at(p.code, at, '|', p.n) and next == '>'
+		ends_in_branch_word = ["then", "else"] contains word_before(p)
+		return if starts_method or starts_pipeline or keyword_at_position(p, "else", at) or ends_in_branch_word then at - p.at else 0
+	}
+	if c != '\\' { return 0 }
+	end = spaces_end(p, p.at + 1)
+	if is_at(p.code, end, '\r', p.n) { end = end + 1 }
+	if is_at(p.code, end, '\n', p.n) then end + 1 - p.at else 0
 }
 
 // An expression of operators binding at least `min_power` on the left
@@ -1478,30 +1506,48 @@ def branch_value(p, min_power) {
 
 def keyword_at_position(p, word, at) := starts_at(p.code, word, at) and not (at + word.length < p.n and is_name_char(p.code[at + word.length]))
 
-// `for x in xs {…}`: the loop variable, the iterable and the body, else ø, nothing read
+// `for x in xs {…}` or `for each x in xs {…}`: the loop variable, the iterable and the body, else ø, nothing read
 // Rust twin: loops.rs try_parse_for_in, for_iterable_and_body_word
 def looped(p) {
 	before = p.at
 	p.at = p.at + 3
 	skip_spaces(p)
-	variable = loop_variable(p)
-	if variable != ø {
-		skip_spaces(p)
-		if keyword_at(p, "in") {
-			p.at = p.at + 2
-			skip_spaces(p)
-			p.iterable = true
-			iterable = header_expression(p, 81)
-			p.iterable = false
-			skip_spaces(p)
-			return listed("", " ", [symbol("for"), variable, symbol("in"), iterable, loop_body(p)])
-		}
+	if keyword_at(p, "each") and not keyword_at_position(p, "in", spaces_end(p, p.at + 4)) {
+		p.at = p.at + 4
 	}
+	named = named_loop(p)
+	if named != ø { return named }
 	p.at = before + 3
 	skip_spaces(p)
 	ranged = ranged_loop(p)
 	if ranged == ø { p.at = before }
 	ranged
+}
+
+// `each x in xs {…}` is `for each x in xs {…}`, else ø, nothing read
+// Rust twin: atoms.rs keyword_form, loop_variable_in_follows
+def each_loop(p) {
+	before = p.at
+	p.at = p.at + 4
+	skip_spaces(p)
+	named = named_loop(p)
+	if named == ø { p.at = before }
+	named
+}
+
+// `x in xs {…}` after `for`: the loop over the named variable, else ø
+def named_loop(p) {
+	variable = loop_variable(p)
+	if variable == ø { return ø }
+	skip_spaces(p)
+	if not keyword_at(p, "in") { return ø }
+	p.at = p.at + 2
+	skip_spaces(p)
+	p.iterable = true
+	iterable = header_expression(p, 81)
+	p.iterable = false
+	skip_spaces(p)
+	listed("", " ", [symbol("for"), variable, symbol("in"), iterable, loop_body(p)])
 }
 
 // `for 1…100: print it`, `for xs {…}` and `for 0 to 2` with the lines indented below: a loop over the iterable without
@@ -1625,6 +1671,10 @@ def atom(p) {
 	// a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
 	if keyword_at(p, "for") {
 		loop = looped(p)
+		if loop != ø { return loop }
+	}
+	if keyword_at(p, "each") {
+		loop = each_loop(p)
 		if loop != ø { return loop }
 	}
 	if is_name_start(c) { return named(p) }

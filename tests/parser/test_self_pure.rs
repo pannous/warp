@@ -56,6 +56,16 @@ fn for_loops_run_pure() {
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
 
+/// lib/compiler/parser.warp reads `for each x in xs` and `each x in xs` as `for x in xs`; a loop variable named `each`
+/// stays one (card pure-error-undefined)
+#[test]
+fn for_each_loops_run_pure() {
+	let basket = "basket = [{price: 2} {price: 3}]; t = 0;";
+	runs_pure("for_each", &format!("{basket} for each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("each_in", &format!("{basket} each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("variable_each", "t = 0; for each in [10, 20] { t = t + each }; t", "30");
+}
+
 /// node_matches.warp: an arm of a number, text or character tests the subject equals it
 #[test]
 fn match_values_run_pure() {
@@ -365,6 +375,24 @@ fn std_modules_run_pure() {
 	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
 }
 
+/// lib/compiler/emitter.warp: an instance leaving out fields gives them their declared defaults, an optional field ø
+/// (card pure-field-defaults)
+#[test]
+fn field_defaults_run_pure() {
+	runs_pure("call_defaults", "class point{x:int=0; y:int=3}; point(5)", "point{x:5 y:3}");
+	runs_pure("brace_defaults", "class counter{n=0; step:int=1}; c = counter{}; c.n + c.step", "1");
+	runs_pure("optional_field", "class opt { a: int; b? }; opt(4).a", "4");
+}
+
+/// lib/compiler/emitter.warp: a named argument `name = value` takes its parameter's or field's place (P37), a left-out
+/// one its default (card pure-named-arguments)
+#[test]
+fn named_arguments_run_pure() {
+	runs_pure("named_call", "f(a, b) := a * 10 + b; f(b=2, a=7)", "72");
+	runs_pure("named_instance", "class P { x: int; y: int }; p = P(y=2, x=7); p.x * 10 + p.y", "72");
+	runs_pure("named_and_default", "class P { x: int; y: int = 5 }; P(x=1)", "P{x:1 y:5}");
+}
+
 /// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter
 /// of kind Op, Bracket or Separator holds the text a node carries, and a type variable `T` any value
 #[test]
@@ -374,4 +402,22 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
 	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
+}
+
+/// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
+/// another function, `else` on the next line, a prelude alias beside a function of other arity, min and max, a member
+/// naming a library word, `/!` of a value known only at run time, the keys of `{}`
+#[test]
+fn parser_words_run_pure() {
+	let probe = |name: &str| format!("{}/probes/parser_rest/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("type_test_beside_local", &probe("is_shadowed"), "no\nyes\n3\nyes");
+	runs_pure("else_on_next_line", &probe("else_lines"), "[2]");
+	runs_pure("then_on_next_line", &probe("then_line"), "4");
+	runs_pure("method_on_next_line", &probe("method_line"), "[2 4]");
+	runs_pure("alias_beside_arity", &probe("overload"), "16\n42");
+	runs_pure("min_max", &probe("min_max"), "2\n5\n9\n1\n2\n1");
+	runs_pure("member_words", &probe("plurals"), "['h' 'é' 'l' 'l' 'o']\n['a' 'b']\n['a' 'b']\n['a' 'b']\n[1 2]\n5");
+	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
+	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
+	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
 }
