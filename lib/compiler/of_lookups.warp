@@ -15,7 +15,6 @@ selecting_words = ["in", "from"]
 # the selector words the program at hand does not bind, set by of_lookups
 global selectors = []
 
-is_word(n: any, word: text): bool := n == symbol(word)
 is_bare_phrase(n: Node): bool := match n {
 	List(words, Bracket.None, Separator.Space): yes
 	_: no

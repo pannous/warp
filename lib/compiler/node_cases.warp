@@ -1,0 +1,41 @@
+# A value of kind Node (card pure-node-values; Rust twin src/lowering/types/node_cases.rs): `Node` is the type of any
+# node, so `n: Node`, `f(…): Node` and `x: Node = v` hold any value; `Node.Key` is the case Key; after the matches took
+# their patterns apart (node_matches.warp), `Key(a, op, b)` builds the key, `List(items, bracket, separator)` the list,
+# unless the program gives Key or List a meaning of its own. Op, Bracket and Separator cases are the texts a node
+# carries by then (`Op.Add` is "+"), so `"+" as Op` is the text itself.
+use "walk.warp"
+use "scope.warp"
+
+node_type = "Node"
+spelled_enums = ["Op", "Bracket", "Separator"]
+# `Node.True` and the cases without values
+valued_cases = {"True": yes, "False": no, "Empty": ø}
+
+# `Node.Key` → Key, `Node.True` → yes, `Node.Key(a, op, b)` → the key built (the parser reads `Node . Key(…)`)
+node_case(case_name: Node): Node := match case_name {
+	Symbol(name): if name in valued_cases then valued_cases[name] else case_name
+	_: case_name
+}
+
+# `Key(a, op, b)` → key(a, op, b); `List(xs, bracket, separator)` → separated(bracketed(xs, bracket), separator)
+construction(parts: list, n: Node, builds: any): Node := {
+	if #parts != 4 or not (parts#1 is symbol) or not (name_of(parts#1) in builds) { return n }
+	if name_of(parts#1) == "Key" { return call_of("key", [parts#2, parts#3, parts#4]) }
+	call_of("separated", [call_of("bracketed", [parts#2, parts#3]), parts#4])
+}
+
+node_value(n: Node, builds: any): Node := match n {
+	Key(owner, Op.Dot, case_name): if is_word(owner, node_type) then node_case(case_name) else n
+	Key(owner, Op.Scope, case_name): if is_word(owner, node_type) then node_case(case_name) else n
+	Key(subject, Op.Colon, type): if is_word(type, node_type) then Key(subject, Op.Colon, symbol("any")) else n
+	Key(value, Op.As, type): if type is symbol and name_of(type) in spelled_enums then value else n
+	List(parts, Bracket.Round, Separator.None): construction(parts, n, builds)
+	_: n
+}
+
+node_cases(program: any): any := {
+	scope = scope_of(program)
+	builds = {}
+	for case in ["Key", "List"] { if not binds_besides_fields(scope, case) { builds[case] = yes } }
+	bottom_up(program, n => node_value(n, builds))
+}
