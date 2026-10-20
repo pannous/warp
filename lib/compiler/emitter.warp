@@ -1642,9 +1642,9 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	parameter_kinds = []
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
-		if annotation == ø { annotation = analyzed_parameter_kind(f, i) }
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
+		if annotation == ø and analyzed_parameter_kind(f, i) != ø { annotation = analyzed_or(given, analyzed_parameter_kind(f, i)) }
 		if parameter_key(f, i) in module.literal_arguments {
 			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
 		}
