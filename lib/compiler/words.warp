@@ -74,3 +74,6 @@ type_kinds = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", r
 	float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float", fast: "float",
 	text: "text", str: "text", string: "text", codepoint: "codepoint", char: "codepoint", character: "codepoint",
 	bool: "int", boolean: "int", symbol: "symbol", function: "function", closure: "function", real: "empty", exact: "empty"}
+
+# `a word`, `an item`: the word after its indefinite article (the stages' messages, emitter and diagnostics)
+with_article(word: text): text := (if "AEIOUaeiou".contains(word#1) then "an " else "a ") + word
