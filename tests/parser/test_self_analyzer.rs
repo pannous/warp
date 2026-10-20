@@ -22,6 +22,7 @@ fn kinds_of_functions_variables_and_value() {
 
 #[test]
 fn matching_sources_keep_matching() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let listed = std::fs::read_to_string(MATCHING_SOURCES).expect("the list of matching sources");
 	let paths: Vec<PathBuf> = listed.lines().filter(|line| !line.is_empty()).map(PathBuf::from).collect();
 	analyzer_runs(&paths);
@@ -31,6 +32,7 @@ fn matching_sources_keep_matching() {
 #[test]
 #[ignore = "writes data/self_analyzer/cases.jsonl (~9 min); run with --ignored"]
 fn survey_rust_kinds() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let mut out = String::new();
 	for path in sources() {
 		if let Some((program, kinds)) = analyzed(&std::fs::read_to_string(&path).unwrap()) {
