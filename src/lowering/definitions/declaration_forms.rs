@@ -784,7 +784,9 @@ fn folded_group(parameter: &Node, classes: &[&str]) -> Node {
 				folded => Node::List(folded.to_vec(), bracket.clone(), separator.clone()),
 			}
 		}
-		Node::Key(declaration, op @ (Op::Assign | Op::Define), default) if plural_typed(declaration, classes).is_some() => {
+		Node::Key(declaration, op @ (Op::Assign | Op::Define), default)
+			if plural_typed(declaration, classes).is_some() =>
+		{
 			Node::Key(Box::new(plural_typed(declaration, classes).expect("guarded")), *op, default.clone())
 		}
 		_ => plural_typed(parameter, classes).unwrap_or_else(|| parameter.clone()),

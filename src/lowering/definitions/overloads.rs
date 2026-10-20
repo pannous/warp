@@ -423,19 +423,21 @@ fn list_element_variables(
 ) -> HashMap<String, Option<String>> {
 	let mut elements: HashMap<String, Option<String>> = HashMap::new();
 	node.visit(&mut |node| {
-		if let Node::Key(target, Op::Assign | Op::Define, value) = node
-			&& let Node::Symbol(name) = target.drop_meta()
-		{
-			let element = literal_element_type(value, classes, variables);
-			elements
-				.entry(name.clone())
-				.and_modify(|known| {
-					if *known != element {
-						*known = None
-					}
-				})
-				.or_insert(element);
-		}
+		let Node::Key(target, Op::Assign | Op::Define, value) = node else {
+			return;
+		};
+		let Node::Symbol(name) = target.drop_meta() else {
+			return;
+		};
+		let element = literal_element_type(value, classes, variables);
+		elements
+			.entry(name.clone())
+			.and_modify(|known| {
+				if *known != element {
+					*known = None
+				}
+			})
+			.or_insert(element);
 	});
 	elements
 }
@@ -964,7 +966,9 @@ fn element_fit(element: Option<&str>, type_name: &str) -> Option<u32> {
 	};
 	let Some(element) = element else { return Some(0) };
 	match type_word_kind(element) {
-		_ if crate::type_tests::canonical_spec_word(element) == crate::type_tests::canonical_spec_word(wanted) => Some(0),
+		_ if crate::type_tests::canonical_spec_word(element) == crate::type_tests::canonical_spec_word(wanted) => {
+			Some(0)
+		}
 		Some(kind) => fit(kind, wanted),
 		None => None,
 	}
@@ -1125,9 +1129,8 @@ impl ParameterOverloads {
 		if !(0..arguments.len()).all(is_known) && scores.len() > 1 {
 			let candidates: Vec<&Vec<String>> = scores.iter().map(|(_, types)| *types).collect();
 			// a list of untold elements is tested at run time, as an argument of unknown kind
-			let tested_kinds: Vec<Option<Kind>> = (0..arguments.len())
-				.map(|position| kinds[position].filter(|_| !elements_untold(position)))
-				.collect();
+			let tested_kinds: Vec<Option<Kind>> =
+				(0..arguments.len()).map(|position| kinds[position].filter(|_| !elements_untold(position))).collect();
 			return Some(Self::dispatched(&name, &candidates, &tested_kinds, arguments, &no_variant));
 		}
 		let best = scores.iter().map(|(score, _)| *score).min();
@@ -1163,11 +1166,7 @@ impl ParameterOverloads {
 			.into_iter()
 			.zip(kinds)
 			.map(|(argument, kind)| match (kind, argument.drop_meta()) {
-				(None, Node::List(..) | Node::Key(..)) => {
-					let temporary = Node::Symbol(format!("overload·{}", super::nodes::fresh_number()));
-					bindings.push(assign(temporary.clone(), argument));
-					temporary
-				}
+				(None, Node::List(..) | Node::Key(..)) => super::nodes::bound_once("overload", argument, &mut bindings),
 				_ => argument,
 			})
 			.collect();
@@ -1186,20 +1185,14 @@ impl ParameterOverloads {
 		let mut ordered = candidates.to_vec();
 		ordered.sort_by_key(|types| (std::cmp::Reverse(tested_types(types).len()), widened(types)));
 		let refusal = call(crate::words::RAISE_WORD, vec![Node::Text(no_variant.to_string())]);
-		let chain = ordered.iter().rev().fold(refusal, |otherwise, types| {
+		let cases = ordered.iter().map(|types| {
 			let variant = call(&Self::variant_name(name, types), arguments.clone());
 			let tests = tested_types(types).into_iter().filter_map(|(argument, type_name)| {
 				let tested = if takes_widened(&type_name) { crate::words::NUMBER_WORD } else { &type_name };
 				crate::lowering::type_tests::declared_type_test(argument, tested)
 			});
-			match tests.reduce(|all, test| key(all, Op::And, test)) {
-				Some(test) => super::nodes::if_then_else(test, variant, otherwise),
-				None => variant,
-			}
+			(tests.reduce(|all, test| key(all, Op::And, test)), variant)
 		});
-		match bindings.is_empty() {
-			true => chain,
-			false => Node::List([bindings, vec![chain]].concat(), Bracket::Round, Separator::Semicolon),
-		}
+		super::nodes::after_bindings(bindings, super::nodes::tested_cases(cases.collect(), refusal))
 	}
 }
