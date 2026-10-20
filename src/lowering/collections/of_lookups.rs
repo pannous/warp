@@ -51,7 +51,7 @@ fn rewrite(node: Node, selectors: &[&str]) -> Node {
 			bracket @ (Bracket::None | Bracket::Round | Bracket::Curly),
 			separator @ (Separator::Space | Separator::None),
 		) if !is_spaced_definition(&items) => {
-			let items = folded_casts(looked_up(type_of_called(items), selectors));
+			let items = looked_up(folded_casts(type_of_called(items)), selectors);
 			match (items.len(), &bracket) {
 				(1, Bracket::None) => items.into_iter().next().expect("one item"),
 				_ => Node::List(items, bracket, separator),
@@ -189,8 +189,6 @@ fn is_type_head(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(word) => crate::type_tests::COLLECTION_WORDS.contains(&crate::warp_parser::list_type_head(word)),
 		Node::Key(_, Op::Colon, _) => true,
-		// `[] as list of int`: the cast's type
-		Node::Key(_, Op::As, type_word) => is_type_head(type_word),
 		_ => false,
 	}
 }
