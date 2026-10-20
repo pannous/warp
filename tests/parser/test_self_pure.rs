@@ -411,6 +411,17 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
 }
 
+/// lib/compiler/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
+/// the constructors the module exports for the host, as Rust's do (card emitter-imports)
+#[test]
+fn host_words_on_nodes_run_pure() {
+	runs_pure("parse_at_run_time", "t = \"1 + 2\"; parse(t)", "1+2");
+	runs_pure("parsed_operator", "t = \"a * b\"; parse(t).op", "*");
+	runs_pure("parse_failure_caught", "t = \"((\"; try { parse(t) } catch e { \"bad\" }", "bad");
+	runs_pure("std_pure_json", "use json; parse_json(\"[1, 2, 3]\")", "[1 2 3]");
+	runs_pure("std_pure_hash", "use hash; crc32(\"abc\")", "891568578");
+}
+
 /// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
 /// another function, `else` on the next line, a prelude alias beside a function of other arity, min and max, a member
 /// naming a library word, `/!` of a value known only at run time, the keys of `{}`
@@ -450,4 +461,13 @@ fn parser_words_run_pure() {
 #[test]
 fn long_float_literals_read_pure() {
 	runs_pure("long_float_literal", "x = 8.33333333332248946124e+03; x - 8333", "0.33333332248912484");
+}
+
+/// card text-cache-lru: the pure runtime keeps the count and walks of a lexer's source while it compares short words
+/// with it (`starts_at`); the words took them by turns, so each `source.length` recounted the source (minutes)
+#[test]
+fn a_lexer_over_short_words_takes_linear_time_pure() {
+	let starts_at = "def starts_at(source: any, part: text, at: int): bool { i = 0; while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }; i == part.length }";
+	let lexer = format!("{starts_at}; src = \"\"; for k in 0..2000 {{ src = src + \"abc def ghi \" }}; words = [\"de\", \"gh\", \"zz\", \"def\"]; hits = 0; t0 = clock(); for at in 0..src.length {{ for word in words {{ if starts_at(src, word, at) {{ hits += 1 }} }} }}; if clock() - t0 < 3000 then hits else -1");
+	runs_pure("lexer_short_words", &lexer, "6000");
 }

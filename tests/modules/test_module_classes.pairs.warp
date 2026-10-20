@@ -8,3 +8,6 @@
 
 # a_used_modules_instance_reads_a_field_named_like_a_word
 'tests/warp/module_class/bus_fields.warp'	9
+
+# a_class_reaches_through_a_file_used_by_a_dotted_path
+'tests/warp/module_class/through/main.warp'	41
