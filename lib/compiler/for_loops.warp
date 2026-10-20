@@ -116,7 +116,7 @@ unit_type_words = ["byte", "codepoint"]
 
 # `for int in xs body`: a type word as the loop variable visits only the items of that type, under its own name
 # (Rust twin: for_loop/headers.rs type_test)
-filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and not (name_of(variable) in unit_type_words)
+filters_by_type(variable: Node): bool := variable is symbol and is_type_word(name_of(variable)) and name_of(variable) not in unit_type_words
 
 lowered_for(n: Node, maps: list): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {

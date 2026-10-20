@@ -114,7 +114,7 @@ names_a_key(index: any): bool := {
 with_written_items_marked(call: any): any := {
 	if not is_group(call) { return call }
 	parts = items_of(call)
-	if #parts < 2 or not (parts#1 is symbol) or not (name_of(parts#1) in item_writing_methods) { return call }
+	if #parts < 2 or not (parts#1 is symbol) or name_of(parts#1) not in item_writing_methods { return call }
 	written = parts[1..]
 	group_like(call, [parts#1] + written.map(item => if is_key(item, Op.Colon) then item else shown_written(item, list_item_mark)))
 }

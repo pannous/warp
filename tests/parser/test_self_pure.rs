@@ -411,6 +411,14 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
 }
 
+/// lib/compiler/parser.warp reads every negated spelling as Rust's spellings.rs NEGATED_SPELLINGS: `x not in xs`,
+/// `x ∉ xs`, `a nand b`, `a ⊼ b`, `a ¬& b`, `x is not y`, `x isn't y` are the negated operation
+#[test]
+fn negated_operators_run_pure() {
+	let code = "print 5 not in [1 2 3]; print 2 ∉ [1 2 3]; print yes nand no; print yes ⊼ yes; print yes ¬& no; print 3 is not 4; print 3 isn't 3";
+	runs_pure("negated", code, "yes\nno\nyes\nno\nyes\nyes\nno");
+}
+
 /// lib/compiler/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
 /// the constructors the module exports for the host, as Rust's do (card emitter-imports)
 #[test]
