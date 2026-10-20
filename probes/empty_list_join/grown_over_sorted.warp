@@ -1,0 +1,8 @@
+parts(n: any): list := [n, n]
+f(ws: list): any := {
+	if #ws == 0 { return ws }
+	out = []
+	for w in ws.sort() { out += parts(w) }
+	out + [9]
+}
+print(f([2, 1]))
