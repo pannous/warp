@@ -19,6 +19,9 @@ fn unicode_operators_are_their_ascii_spelling() {
 	is!("3 ≠ 4", true);
 	is!("3 × 4", 12);
 	is!("8 ÷ 4", 2);
+	is!("7 ÷ 2", 3);
+	is!("-7 ÷ 2", -4);
+	is!("x = 7; x ÷= 2; x", 3);
 	is!("¬ false", true);
 	is!("√16", 4);
 }

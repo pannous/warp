@@ -59,6 +59,8 @@ pub(in crate::wasm_emitter) const UNIT_AT_RUN_TIME: &str =
 	" (a unit: quantities compute in functions, loops, lists, branches and print, but not in this use yet; notes/units_runtime.md)";
 /// The global behind the export `trap_detail`: not a warp name, so no user global meets it
 pub(in crate::wasm_emitter) const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
+/// The class `raise_as` raised its error as, which `catch e` gives the Error (decision error-classes); ø for a plain raise
+const TRAP_CLASS_GLOBAL: &str = "trap·class";
 /// The exported global where a program leaves the source position of the statement it runs, for its runtime errors
 pub const TRAP_POSITION: &str = "trap_position";
 /// How a trapped run carries that position into its error: `trap position: <line << 12 | column>`
@@ -273,6 +275,26 @@ impl WasmGcEmitter {
 		let index = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
 		self.exports.export(TRAP_POSITION, ExportKind::Global, index);
 		self.ctx.user_globals.insert(TRAP_POSITION_GLOBAL.to_string(), (index, Kind::Int));
+		index
+	}
+
+	/// Leave the class of the error being raised for `catch e` to read (trap_class_global): the class a raise names (a
+	/// text: the class of that name) or computes (`error_class(e)`), ø for none
+	pub(crate) fn emit_trap_class(&mut self, func: &mut Function, class: &Node) {
+		let index = self.trap_class_global();
+		match class.drop_meta() {
+			Node::Text(name) => self.emit_symbol_node(func, name),
+			computed => self.emit_node_instructions(func, computed),
+		}
+		func.instruction(&I::GlobalSet(index));
+	}
+
+	pub(crate) fn trap_class_global(&mut self) -> u32 {
+		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_CLASS_GLOBAL) {
+			return *index;
+		}
+		let index = self.declare_mutable_global(Kind::Empty);
+		self.ctx.user_globals.insert(TRAP_CLASS_GLOBAL.to_string(), (index, Kind::Empty));
 		index
 	}
 

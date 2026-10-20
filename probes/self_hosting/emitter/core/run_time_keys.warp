@@ -1,0 +1,16 @@
+// `m[k] = v` with a key known only at run time (scope.warp remember): a text names an entry, an int sets an item;
+// ø becomes a map (runtime.warp node_put)
+remember(scope: any, pairs: list): any := {
+	for pair in pairs {
+		name = pair#1
+		if not scope.has(name) { scope[name] = [] }
+		scope[name] = scope[name] + [pair#2]
+	}
+	scope
+}
+set_item(xs: any, i: int): any := {
+	xs[i] = 7
+	xs
+}
+print remember({}, [["key", 1], ["key", 2], ["b", 3]])
+set_item([1, 2, 3], 1)

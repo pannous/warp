@@ -18,6 +18,13 @@ fn main() {
 	if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
 		println!("cargo:rustc-link-arg-bin=warp=-Wl,-stack_size,{MAIN_STACK_BYTES:#x}");
 	}
+	// a WARP_COMMIT given by the builder (scripts/cloud-test.sh) names the build without git: a warm VM's next job,
+	// another commit of the same tree, then reuses the build instead of recompiling warp-lang for its new reflog line
+	println!("cargo:rerun-if-env-changed=WARP_COMMIT");
+	if let Ok(commit) = std::env::var("WARP_COMMIT") {
+		println!("cargo:rustc-env=WARP_COMMIT={commit}");
+		return;
+	}
 	// logs/HEAD grows on every commit, checkout and reset, also of a worktree (its own git dir)
 	// (a missing file would rerun this on every build)
 	if let Some(head_log) =

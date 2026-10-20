@@ -188,6 +188,9 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_classes::a_declared_error_class_raises_and_catches
+  ✓ control::test_error_classes::an_undeclared_error_class_is_named
+  ✓ control::test_error_classes::except_catches_its_class_and_lets_others_pass
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_not_in_data::test_a_list_of_values_and_a_handled_error_stay
   ✓ control::test_error_not_in_data::test_a_parameter_declared_a_list_of_a_union_takes_index_writes
@@ -877,7 +880,6 @@ PASSED:
   ✓ control::test_threads::function_values_cross_to_a_task
   ✓ control::test_threads::lists_cross_to_a_task
   ✓ control::test_threads::stop_ends_a_running_task
-  ✓ control::test_threads::tasks_run_at_the_same_time
   ✓ control::test_threads::texts_floats_characters_and_lists_cross_to_a_task
   ✓ control::test_threads::try_catches_the_failure_of_a_task
   ✓ control::test_time_of_day::a_time_of_day_must_be_one
@@ -1871,6 +1873,7 @@ PASSED:
   ✓ functions::test_property_access::test_of_and_possessive
   ✓ functions::test_property_access::test_of_lookup_is_an_assignment_target
   ✓ functions::test_property_access::test_print_of_lookup_prints_the_field
+  ✓ functions::test_property_assign::test_a_map_entry_named_like_a_class_stays_an_entry
   ✓ functions::test_property_assign::test_a_one_entry_object_counts_one_pair
   ✓ functions::test_property_assign::test_assign_a_field
   ✓ functions::test_property_assign::test_assign_a_nested_field
@@ -2228,6 +2231,7 @@ PASSED:
   ✓ lists::test_list_parameters::implicit_it_indexed_as_list
   ✓ lists::test_list_parameters::indexed_parameter_can_be_called_repeatedly_and_combined
   ✓ lists::test_list_parameters::named_parameter_indexed_as_list
+  ✓ lists::test_list_passed_to_function_value::a_list_passed_to_a_function_value_is_changed_in_place
   ✓ lists::test_list_plus_number::a_list_literal_plus_a_number_asks
   ✓ lists::test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ lists::test_list_plus_number::each_reading_has_its_explicit_form
@@ -2691,6 +2695,8 @@ PASSED:
   ✓ modules::test_std_words::json_of_an_instance_given_its_classes
   ✓ modules::test_std_words::math_inverse_and_hyperbolic_words
   ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
+  ✓ modules::test_two_used_files::overloads_from_two_files_stay_apart
+  ✓ modules::test_two_used_files::two_files_declaring_one_function_name_both
   ✓ modules::test_use_modules::a_module_is_used_as_an_alias
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::a_programs_global_is_not_a_module_functions_local
@@ -3747,8 +3753,13 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
+  ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
+  ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
+  ✓ parser::test_self_pure::recursive_results_run_pure
+  ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
@@ -6311,7 +6322,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ control::test_threads::tasks_run_at_the_same_time
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6308 passed, 1 failed, 6309 total tested
+11 ignored, 6319 passed, 2 failed, 6321 total tested

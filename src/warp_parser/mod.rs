@@ -150,6 +150,7 @@ pub(crate) const TIMES_WORD: &str = "times";
 pub const TEXT_TIMES: &str = "times·text";
 /// The severe warning on a `//` comment meant as floor division, `7//2` (decision floor-division)
 pub const FLOOR_DIVISION_TOPIC: &str = "floor-division-comment";
+const JULIA_FLOOR_DIVISION_TOPIC: &str = "julia-floor-division";
 const FLOOR_DIVISION: &str = "/!";
 
 /// Superscript digits ⁰…⁹ in digit order: `3⁴` is 3^4 and a run of them is one exponent (`2¹⁰` is 2^10)
