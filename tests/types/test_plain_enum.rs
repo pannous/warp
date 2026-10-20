@@ -64,6 +64,13 @@ fn a_case_converts_to_its_index_or_position() {
 	is!(&with_coin("xs = [10 20 30]; xs#(Coin.Dime as position)"), 30);
 }
 
+// card enum-is-test: `x is Coin` is whether x is one of Coin's cases, whatever x holds
+#[test]
+fn only_a_case_is_of_its_enum_type() {
+	is!("enum Coin { Penny, Dime }; x = 3; x is Coin", false);
+	is!("enum Coin { Penny, Dime }; coins = [Penny, Dime]; coins.all(c => c is Coin)", true);
+}
+
 // card enum-case-after-statement: a bare `Coin.Dime` statement keeps the later cases and type tests working
 #[test]
 fn case_statement_then_type_test() {

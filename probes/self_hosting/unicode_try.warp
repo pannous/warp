@@ -1,0 +1,6 @@
+// parser.warp reads arrow operators and free symbols (card unicode-glyphs); run with WARP_SELF_HOSTED=front
+// out: 4
+// out: [↯ ⌘]
+x = 8↓2 + 1
+print x
+print [↯ ⌘]
