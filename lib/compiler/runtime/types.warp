@@ -23,6 +23,22 @@ node_is_type(n: any, type: text): bool := {
 	if type == "error" { return kind == 11 }
 	no
 }
+# `type(x).name` of a value known only at run time, as Rust names its kind: ø and [] are empty
+node_type_name(n: any): text := {
+	if is_nothing(n) { return "empty" }
+	if marked_kind(n) == 257 { return "bool" }
+	if marked_kind(n) == 8 { return "map" }
+	kind = kind_code(n)
+	if kind == 1 { return if is_ratio(n) == 1 then "rational" else "int" }
+	if kind == 2 { return "float" }
+	if kind == 3 { return "text" }
+	if kind == 4 { return "codepoint" }
+	if kind == 5 { return "symbol" }
+	if kind == 6 { return "key" }
+	if kind == 7 or kind == 8 { return "list" }
+	if kind == 11 { return "error" }
+	"node"
+}
 # `x is Name` of a class: an instance is an entry keyed by its class's name
 instance_of(n: any, name: text): bool := {
 	if is_null(n) == 1 or kind_code(n) != 6 { return no }

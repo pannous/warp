@@ -207,7 +207,7 @@ form_of(n: any): text := {
 	if n is symbol { return name_of(n) }
 	if is_group(n) and #n > 0 and n#1 is symbol { return "group " + bracket_of(n) + " " + name_of(n#1) }
 	if is_group(n) { return "group " + bracket_of(n) }
-	"a " + type(n)
+	"a " + type(n).name
 }
 
 # `y = 2`: the parameter y, its default 2
@@ -1751,6 +1751,8 @@ def key_expression(body: Body, n: any): list {
 	if operator == "." and right is symbol and name_of(right) in counting_properties {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
+	# `type(x).name`
+	if operator == "." and right == symbol("name") and is_type_call(left) { return runtime_call("node_type_name", [["node", boxed(expression_code(body, left#2))]]) }
 	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
 		word = member_word(name_of(right))
 		return field_or_word(body, expression_code(body, left), name_of(right), value => runtime_call(word, [value]))
@@ -1791,6 +1793,7 @@ def analyzed_element(body: Body, list: any, index: any): list {
 	[kind, converted(value, kind)]
 }
 right_of_if(n: any): any := value_of(n)
+is_type_call(n: any): bool := is_group(n) and #n == 2 and n#1 == symbol("type")
 # `x as rational` of a float: the runtime's float_as_exact (decision float-as-rational); other kinds Rust takes
 def as_rational(value: any): list {
 	if value#1 == "float" { return runtime_call("float_as_exact", [value]) }

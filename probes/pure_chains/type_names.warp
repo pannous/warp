@@ -1,0 +1,12 @@
+// type(x).name of values known only at run time and of typed ones
+f(n: any): text := type(n).name
+print(f(5))
+print(f(2.5))
+print(f("xy"))
+print(f(yes))
+print(f([1, 2]))
+print(f(ø))
+print(f(error("e")))
+m = {a: 1, b: 2}
+print(f(m))
+print("a " + type(1.0e300).name)
