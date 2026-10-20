@@ -18,11 +18,11 @@ filled(200000)";
 #[test]
 fn a_list_held_last_keeps_its_items() {
 	is!(FILLED_THEN_HELD, 199999);
-	is!("class Box { items: list }; xs = [1, 2, 3]; xs[1] = 5; b = Box{items: xs}; b.items", [1, 5, 3]);
+	is!("class Box { items: list }; xs = [1, 2, 3]; xs[1] = 5; b = Box{items: xs}; b.items", warp::ints(vec![1, 5, 3]));
 }
 
 #[test]
 fn a_list_changed_after_its_holder_is_shared() {
-	is!("class Box { items: list }; xs = [1, 2, 3]; b = Box{items: xs}; xs[1] = 5; b.items", [1, 5, 3]);
-	is!("class Box { items: list }; xs = [1, 2]; for i in 1..3 { b = Box{items: xs}; xs[0] = i }; b.items", [2, 2]);
+	is!("class Box { items: list }; xs = [1, 2, 3]; b = Box{items: xs}; xs[1] = 5; b.items", warp::ints(vec![1, 5, 3]));
+	is!("class Box { items: list }; xs = [1, 2]; for i in 1..3 { b = Box{items: xs}; xs[0] = i }; b.items", warp::ints(vec![2, 2]));
 }
