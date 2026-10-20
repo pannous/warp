@@ -181,7 +181,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {}; unannotated: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; reads_positions: bool = no; literal_arguments: any = {}; unannotated: any = {} }
 
 module = Module({}, [])
 
@@ -1476,7 +1476,16 @@ def expression_code(body: Body, n: any): list {
 is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(data_word)
 # `print data (a + 1)`: the quote is the last item
 ends_in_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n > 2 and n#(#n - 1) == symbol(data_word)
+# `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
+position_fields = ["line", "column", "comment"]
+reads_position(n: any): bool := {
+	if type(n) is key and op_of(n) == "." and value_of(n) is symbol and name_of(value_of(n)) in position_fields { return yes }
+	if type(n) is key and op_of(n) == "#" and type(value_of(n)) is key and key_of(value_of(n)) is text and key_of(value_of(n)) in position_fields { return yes }
+	if type(n) is key { return reads_position(key_of(n)) or reads_position(value_of(n)) }
+	is_group(n) and n.any(reads_position)
+}
 def quoted_code(body: Body, e: any): list {
+	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
 	if e is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(e))) }
 	# `data (a + 1)`: parentheses around one item only group it
 	if is_group(e) and bracket_of(e) == "(" and #e == 1 { return quoted_code(body, e#1) }
@@ -2054,6 +2063,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.closures = []
 	module.dispatchers = []
 	module.counts_fuel = uses_fuel(program)
+	module.reads_positions = reads_position(program)
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
 	module.literal_arguments = {}
