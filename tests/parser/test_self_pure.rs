@@ -325,4 +325,5 @@ fn parser_words_run_pure() {
 	runs_pure("coalesce", &probe("coalesce"), "2\n1\n-2");
 	runs_pure("recursive_join", &probe("recursive_join"), "[3 2 1]\n[2 1 0]");
 	runs_pure("type_module_words", &probe("type_module_words"), "[1 2 3]\n[1 2]\n7");
+	runs_pure("nested_case_patterns", &probe("nested_patterns"), "label\n2\nother");
 }
