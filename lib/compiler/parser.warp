@@ -1677,7 +1677,7 @@ def is_free_symbol(p, c) {
 // `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;
 // `[↯ ↯]` and `print ↯` read the glyph as a value
 // Rust twin: operators.rs try_parse_free_infix, free_symbol_follows
-def free_infix_at(p, left) := left != ø and is_free_symbol(p, p.code[p.at]) and operand_follows(p, 1) and not is_free_symbol(p, code_after(p, p.at + 1))
+def free_infix_at(p, left) := left != ø and is_free_symbol(p, peek(p.code, p.at, p.n)) and operand_follows(p, 1) and not is_free_symbol(p, code_after(p, p.at + 1))
 
 // The URL after its scheme word, up to a blank, a separator, a closer or a quote
 // Rust twin: literals/paths.rs parse_url, is_url_terminator
