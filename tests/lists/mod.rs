@@ -42,6 +42,7 @@ mod test_index_assignment;
 mod test_index_out_of_range;
 mod test_inserted_word; // card insert-at-warp
 pub(crate) mod test_int_map; // card int-map
+mod test_join_unknown_parts; // card warp-profile: `out += part` of an `any` part grows in place
 mod test_key_lookup;
 mod test_key_subscript_hint;
 mod test_keys_of_a_value; // card keys-value
@@ -89,7 +90,6 @@ mod test_number_keys;
 mod test_number_list_elements; // card winamp-like
 mod test_numbered_fields;
 mod test_object_list_walk; // orm identity map: index walks of object lists
-mod test_join_unknown_parts; // card warp-profile: `out += part` of an `any` part grows in place
 mod test_one_entry_map_parts; // card age-name
 mod test_one_entry_map_text;
 mod test_pair_values;
