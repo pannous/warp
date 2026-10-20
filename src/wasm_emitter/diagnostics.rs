@@ -54,9 +54,10 @@ impl WasmGcEmitter {
 		let captured = (self.compiling.as_ref().and_then(|function| self.ctx.captures.get(function)))
 			.is_some_and(|captures| captures.iter().any(|(captured, _)| captured == name));
 		captured
-			|| self.scope.lookup(name).is_some_and(|local| {
-				local.is_param || self.compiling.is_some() || self.loop_variables.contains(name)
-			})
+			|| self
+				.scope
+				.lookup(name)
+				.is_some_and(|local| local.is_param || self.compiling.is_some() || self.loop_variables.contains(name))
 	}
 
 	/// A name that is no variable, global, function or `$n` parameter here
