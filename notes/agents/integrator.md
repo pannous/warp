@@ -23,7 +23,7 @@ Read notes/agents/common.md and notes/roles.md.
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
 - Warp-only branches land at once (user): a branch that changes no Rust (nothing in src/, crates/, tests/**/*.rs,
   Cargo.*, build.rs; only .warp files, lib/, samples/, probes, notes) needs only the warp test run, not the Rust
-  suite: run its changed and dependent .warp tests with main's binary (/Users/me/dev/bin/warp-debug), push it when
+  suite: run its changed and dependent .warp tests with main's binary (/Users/me/dev/bin/warp), push it when
   green, without waiting for a batch's cloud suite.
 - Self-hosting twins (tests/common/twins.rs: test_self_parser, test_self_pipeline, test_self_analyzer …) never bounce
   a branch: the warp compiler captures the spirit of the wiki, not an exact copy of Rust (decisions
