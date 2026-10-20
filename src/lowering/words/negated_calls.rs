@@ -32,8 +32,8 @@ fn negate_calls(
 ) -> Node {
 	if let Some((head, body, rebuild)) = crate::type_tests::function_definition(&node) {
 		let mut inner = locals.clone();
-		inner.extend(crate::lowering::memoization::head_parameters(&head));
-		crate::library_words::collect_assigned_names(&body, &mut inner);
+		let parameters = crate::lowering::memoization::head_parameters(&head).into_iter().collect();
+		inner.extend(crate::program_names::bound_in_body(parameters, &body));
 		return rebuild(head, negate_calls(body, functions, bound, &inner));
 	}
 	// `int[100]` is the subscript `int#101` of a typed array: a type or library word takes no count

@@ -40,3 +40,9 @@ fn a_local_named_like_a_function_returned_is_no_function_value() {
 fn a_lambda_captures_a_local_named_like_a_function() {
 	is!("numbers(t: text): list := [t]\nwide(words: list): bool := { numbers = {\"int\": 1}; words.all(w => w in numbers) }\nwide([\"int\"])", true);
 }
+
+/// A loop variable named like a function is the loop's item: `call#1` reads its first element, no call of call(#1)
+#[test]
+fn a_loop_variable_named_like_a_function_is_indexed() {
+	is!("call(n: int): int := n\nnamed(name: text): text := name\nf(xs: list): text := { out = \"\"; for call in xs { out = named(call#1) }; out }\nf([[\"a\", 1]])", "a");
+}
