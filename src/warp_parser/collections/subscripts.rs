@@ -137,7 +137,12 @@ pub fn subscript_key(one_based_index: &Node) -> Option<&Node> {
 }
 
 pub(crate) fn is_unindexable_keyword(node: &Node) -> bool {
-	node.symbol_name().is_some_and(|word| UNINDEXABLE_KEYWORDS.contains(&word))
+	node.symbol_name().is_some_and(takes_a_value)
+}
+
+/// A keyword a value follows (`return [x]`, `then -1`): what comes after it starts an operand
+pub(crate) fn takes_a_value(word: &str) -> bool {
+	UNINDEXABLE_KEYWORDS.contains(&word)
 }
 
 /// `id=1 kind="x"` in brackets: each attribute

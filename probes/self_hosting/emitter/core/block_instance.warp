@@ -1,0 +1,10 @@
+// a function body whose last statement is an instance of a declared class, beside other statements, is a block
+// giving the instance (parser.warp's lexer: gaps ends in `Gaps{resumes: resumes, breaks: breaks}`)
+class Pair { a: list; b: list }
+def make(n: int): Pair := {
+	xs = n times [0]
+	ys = n times [1]
+	Pair{a: xs, b: ys}
+}
+p = make(3)
+#p.a + #p.b * 10

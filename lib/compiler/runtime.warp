@@ -1291,6 +1291,15 @@ index_out_of_range_of(index: int, count: int): int := {
 	fail()
 	0
 }
+# `raise X`: the run fails with X as its message (Rust's returned_error, src/wasm_emitter/control/traps.rs)
+returned_error(): int := {
+	fail()
+	0
+}
+raised(value: any): int := {
+	global trap_detail = value
+	returned_error()
+}
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: any): int := {
 	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
