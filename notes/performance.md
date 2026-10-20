@@ -55,6 +55,12 @@ host's side; compile time with probes/perf/xctrace_summary.py (unstripped build:
 - **Big literals**: a 100 KB literal of 2200 records compiles in seconds (each word reads only its token, LineInfo
   keeps no whole line).
 
+- **A list's items in one walk** (list_runtime.rs emit_item_cells_walk): list_items fills an array that grows when
+  full (grown_when_full, push's growth too) instead of walking the cells twice, and node_count counts with
+  list_item_count, no array: pure-only passes.warp 48 → 41 s.
+- **Spelled cases**: `op == Op.Add` compares with "+" (a written case folds to its spelling), and Op·text gives a
+  text back before its ~70 match arms (plain_enums.rs spelled_text, node_cases.rs spelling_functions).
+
 Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loops over typed lists, map, append:
 2 million items in under 0.1 s.
 
@@ -72,6 +78,25 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   exact math (a scaled-decimal i64 representation would drop it). A shown frame in a window goes through frame_bytes →
   a 4 MB pipe write → a texture upload in the paint-window process.
 
+- The self-hosted stages (pure-only passes.warp, ~41 s warm): parse stage profile (data/speed/prof): closure entries
+  ~19% self (calls through a function value: bottom_up visits every node in every pass), text_literal 14%,
+  list_items + list_item_count 14% (scope.warp nodes_kept keeps its stack in a cons list: `unvisited#(#unvisited)` and
+  a slice per step), text_bytes_equal + values_equal ~9%.
+- Tried, no gain: Binaryen wasm-opt -O2/-O3/-Oz (Cranelift does that work); only -O3 with aggressive inlining runs
+  12-19% faster, at 2.4x size and +1.2 s wasmtime compile (card wasm-opt-inline, probes/perf/wasm_opt_bench.sh).
+  wasmtime's own inlining measured slower. Interning text literals (one text per literal, kept in a global array)
+  ran 4% slower: text_literal's profile share is its call count, not its work.
+- Reading a guest profile: samples fall on function entries and loop headers (epoch ticks, notes/profiling.md), so a
+  tiny function called very often (text_literal, closure_entry_*) shows a large self share without costing much;
+  look for the callers that call it so often (profile_self_time.py <file> <rows> <function>).
+
+## Timing the self-hosted stages
+- Time against a frozen copy of lib/ (`cp -R lib scratch/speed/lib_frozen`, `WARP_LIB=` it, run in its compiler/):
+  every push to lib/compiler by another session recompiles the four stage programs (~40 s) in the middle of an A/B,
+  which once made a 15% swing look like a result. Discard the first run of each binary (it compiles the stages).
+- The Mac is shared: alternate the two binaries round by round and compare `user` time, not `real`.
+- `WARP_PHASE_TIMES=1` names each emission rerun with the needs that caused it (6 per cold stage compile, ~6.7 s).
+
 ## Compile time
 - Shared analysis state: function kinds and closure targets are `Rc` (analyzer FunctionKinds, ClosureTargets); passes
   needing only names/params/bodies take analyzer::function_definitions; name sets (names_given, called_names) are
@@ -82,6 +107,7 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   analyse_user_functions on programs of many mutually calling functions (collect_variables, refine_return_kinds).
 - Tried, no gain: a per-thread cache of parsed std modules (cloning the tree costs about what parsing it does).
 - Program cache (src/run/program_cache.rs): `warp <file>` keeps the compiled module next to the machine-code cache, so
-  a second run skips the compile. A compile that prints anything (a hint!) is not kept. Probes:
+  a second run skips the compile; its hints, warnings and assumptions are said again by each run. The working
+  directory is part of the key (probes/pure_chain/run.sh runs emit.warp from its own folder for that). Probes:
   probes/program_cache/cli_cache.sh, probes/program_cache/samples_twice.sh (samples whose two runs differ do so
   without the cache too: timings, random weights, stored rows, GPU frame counts).
