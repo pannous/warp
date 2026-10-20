@@ -724,9 +724,8 @@ fn of_typed(items: &[Node]) -> Option<(Node, usize)> {
 /// `list`: the one parameter `xs:"list of int"` every later pass reads (overloads, arity, the analyzer). The plural of
 /// a declared type is a list of it as `ints` is of int: `play(xs: notes)`, `xs: notes = […]` take a `list of note`
 pub fn lower_list_parameters(node: Node) -> Node {
-	let mut registry = crate::type_kinds::TypeRegistry::new();
-	collect_all_types(&mut registry, &node);
-	let classes: Vec<&str> = registry.types().iter().map(|type_def| type_def.name.as_str()).collect();
+	let declared = crate::lowering::nodes::declared_class_names(&node);
+	let classes: Vec<&str> = declared.iter().map(String::as_str).collect();
 	with_list_parameters(node, &classes)
 }
 
