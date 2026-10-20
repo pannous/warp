@@ -1,0 +1,4 @@
+class note{pitch:int}
+class file{name:text}
+print [note(1), note(2)] is list of note
+print [note(1), file("a")] is list of note
