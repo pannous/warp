@@ -4,6 +4,7 @@ mod test_all_calls;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
+mod test_nested_iterations; // card rust-lambdas
 mod test_argument_cast;
 mod test_argument_kinds;
 mod test_argument_labels;
