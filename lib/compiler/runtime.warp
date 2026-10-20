@@ -503,6 +503,8 @@ list_append(a: list, b: list): list := {
 node_at(n: any, index: int): any := {
 	if kind_code(n) == 8 { return unboxed_list(n)#index }
 	if kind_code(n) == 3 { return text_char(unboxed_text(n), index) }
+	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
+	if kind_code(n) == 4 and index == 1 { return n }
 	fail()
 }
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
