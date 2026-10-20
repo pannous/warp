@@ -214,7 +214,7 @@ fn is_tests_types_and_equality_compares_self_hosted() {
 			("isnt_value", "x = 4; x isn't 4", "no"),
 		] {
 			let (output, _) = lane_run(lane, name, code);
-			assert!(output.lines().any(|line| line.trim() == value), "{lane} {code}: {output}");
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
 		}
 	}
 }
