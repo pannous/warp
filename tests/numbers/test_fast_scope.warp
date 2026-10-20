@@ -7,3 +7,12 @@ x * 4' 0
 is! 'fast
 x = 1.0
 sin(x) == 0.8414709848078937' true
+
+# fast_decimals_are_floats
+is! 'fast
+0.5 + 0.25' 0.75
+is! 'fast
+x = 0.5
+x * 2' 1.0
+is! 'fast
+1.5 + 1' 2.5

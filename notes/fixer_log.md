@@ -1,1 +1,2 @@
 - 2026-10-19 fixnow-builtin-function-add: a list given to a function value (closure_call_N) is held as Nodes, as the call may change it; main's typed-list pass had only kept it a Node list by seeing builtin·add's own `xs += [x]` (list_sharing.rs Holders)
+- 2026-10-20 fast-decimals: fast code reads its decimals as floats (use_statements.rs machine_numbers, was float_division): `fast` then `0.5 + 0.25` gave 0, the exact ratio taken for a machine int
