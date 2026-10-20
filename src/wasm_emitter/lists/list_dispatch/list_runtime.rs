@@ -152,7 +152,7 @@ impl WasmGcEmitter {
 		self.emit_item_cells_walk(LIST_ITEM_COUNT, true);
 	}
 
-	/// One walk along the cells, the items stored in an array that doubles when full, or only counted
+	/// One walk along the cells, the items stored in an array that grows when full (grown_when_full), or only counted
 	fn emit_item_cells_walk(&mut self, name: &'static str, counts_only: bool) {
 		let (array, list) = self.typed_list_types(ElementType::Node);
 		let node = self.type_manager.node_type;
@@ -192,6 +192,9 @@ impl WasmGcEmitter {
 			}
 			Self::emit_list(f, &[I::Return, I::End]);
 			// a cell that is no list is the last item (a non-list node the only one)
+			if !counts_only {
+				Self::emit_list(f, &[I::I32Const(0), I::ArrayNewDefault(array), I::LocalSet(items)]);
+			}
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(0), I::LocalSet(cell),
@@ -213,19 +216,12 @@ impl WasmGcEmitter {
 			match counts_only {
 				true => Self::emit_list(f, &[I::Drop]),
 				#[rustfmt::skip]
-				false => Self::emit_list(f, &[
-					I::LocalSet(item),
-					I::LocalGet(items), I::RefIsNull, I::If(BlockType::Empty),
-						I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array), I::LocalSet(items),
-					I::End,
-					I::LocalGet(count), I::LocalGet(items), I::ArrayLen, I::I32Eq, I::If(BlockType::Empty),
-						I::LocalGet(count), I::I32Const(1), I::I32Shl, I::ArrayNewDefault(array), I::LocalSet(grown),
-						I::LocalGet(grown), I::I32Const(0), I::LocalGet(items), I::I32Const(0), I::LocalGet(count),
-						I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-						I::LocalGet(grown), I::LocalSet(items),
-					I::End,
-					I::LocalGet(items), I::LocalGet(count), I::LocalGet(item), I::ArraySet(array),
-				]),
+				false => {
+					f.instruction(&I::LocalSet(item));
+					let keep_grown = [I::LocalGet(grown), I::LocalSet(items)];
+					Self::emit_list(f, &grown_when_full(array, &[I::LocalGet(count)], &[I::LocalGet(items)], grown, &keep_grown));
+					Self::emit_list(f, &[I::LocalGet(items), I::LocalGet(count), I::LocalGet(item), I::ArraySet(array)]);
+				}
 			}
 			Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
 			Self::emit_list(f, &[I::LocalGet(listed), I::I32Eqz, I::BrIf(1)]);
@@ -238,13 +234,7 @@ impl WasmGcEmitter {
 			if counts_only {
 				return Self::emit_list(f, &[I::LocalGet(count), I::I64ExtendI32U]);
 			}
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(items), I::RefIsNull, I::If(BlockType::Empty),
-					I::I32Const(0), I::ArrayNewDefault(array), I::LocalSet(items),
-				I::End,
-				I::LocalGet(count), I::LocalGet(items), I::RefAsNonNull,
-			]);
+			Self::emit_list(f, &[I::LocalGet(count), I::LocalGet(items), I::RefAsNonNull]);
 			// a list keeps its kind (brackets), a single item is a `[…]` list
 			Self::emit_list(f, &field(0, 0));
 			f.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
