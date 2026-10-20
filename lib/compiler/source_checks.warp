@@ -94,7 +94,7 @@ dropped_value(statement: any, spellings: any): any := {
 # `y = x.upper!` changes x too
 assigned_mutation(n: any, spellings: any): any := {
 	if not (is_operator(n, "=") or is_operator(n, ":=")) { return ø }
-	variable = mutated_variable(value_of(n), spellings)
+	variable = marked_copy_variable(value_of(n), spellings)
 	if variable != ø { diagnose(call_of("assigned_mutation", ["${without_mark(key_of(n))}", variable])) }
 	ø
 }
@@ -123,7 +123,7 @@ copy_call(call: any, spellings: any): any := {
 	if found#3 then ø else [found#1, found#2]
 }
 # the variable a marked copy call changes
-mutated_variable(value: any, spellings: any): any := {
+marked_copy_variable(value: any, spellings: any): any := {
 	found = copy_word_call(value, spellings)
 	if found == ø { return ø }
 	if found#3 then found#2 else ø
