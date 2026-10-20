@@ -7,6 +7,9 @@
 # a view kind with no node of its own in warp (an error, a type, sealed data): kept as written, behind this word
 opaque_word = "view·opaque"
 
+# the arm of a match any value takes, `_: …`
+other_arm = "_"
+
 kind_of(view: any): text := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
 is_group(n: any): bool := bracket_of(n) != ø
