@@ -89,7 +89,7 @@ is_map(n: Node, maps: list): bool := match n {
 }
 
 # the key a value names: a written text or character as it is, a number its digits, anything else its text
-entry_key(written: Node): Node := {
+key_text_of(written: Node): Node := {
 	if written is text or written is codepoint { return written }
 	if written is number { return "" + written }
 	call_of(key_text_word, [written])
@@ -97,14 +97,14 @@ entry_key(written: Node): Node := {
 
 # `d#2`, `d#(k+1)` of a map d: the entry keyed by the subscript's text
 keyed_index(subscript: Node, maps: list): Node := match subscript {
-	Key(written, Op.Add, one): { if one == 1 then Key(entry_key(number_keyed(written, maps)), Op.Add, 1) else number_keyed(subscript, maps) }
-	_: { if subscript is number then Key(entry_key(subscript - 1), Op.Add, 1) else number_keyed(subscript, maps) }
+	Key(written, Op.Add, one): { if one == 1 then Key(key_text_of(number_keyed(written, maps)), Op.Add, 1) else number_keyed(subscript, maps) }
+	_: { if subscript is number then Key(key_text_of(subscript - 1), Op.Add, 1) else number_keyed(subscript, maps) }
 }
 
 # `d.remove(k)` of a map d removes the entry keyed by k's text
 keyed_method(called: Node, maps: list): Node := match called {
 	List(items, bracket, separator): {
-		if #items == 2 and items#1 == symbol("remove") then List([items#1, entry_key(number_keyed(items#2, maps))], bracket, separator) else number_keyed(called, maps)
+		if #items == 2 and items#1 == symbol("remove") then List([items#1, key_text_of(number_keyed(items#2, maps))], bracket, separator) else number_keyed(called, maps)
 	}
 	_: number_keyed(called, maps)
 }
@@ -115,7 +115,7 @@ text_keyed(literal: Node): Node := match literal {
 	_: literal
 }
 text_keyed_entry(item: Node): Node := match item {
-	Key(written, Op.Colon, value): Key(entry_key(written), Op.Colon, value)
+	Key(written, Op.Colon, value): Key(key_text_of(written), Op.Colon, value)
 	_: item
 }
 
@@ -123,7 +123,7 @@ text_keyed_entry(item: Node): Node := match item {
 keyed_word_call(items: list, maps: list): bool := #items >= 3 and items#1 is symbol and name_of(items#1) in key_words and is_map(items#2, maps)
 word_call_keyed(items: list, maps: list): list := {
 	keyed_items = items.map(x => number_keyed(x, maps))
-	keyed_items#3 = entry_key(keyed_items#3)
+	keyed_items#3 = key_text_of(keyed_items#3)
 	keyed_items
 }
 
