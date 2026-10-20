@@ -284,6 +284,29 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
 
+/// lib/compiler/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
+/// variable (card pure-field-slice)
+#[test]
+fn field_slices_run_pure() {
+	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
+}
+
+/// lib/compiler/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
+#[test]
+fn assigned_it_blocks_run_pure() {
+	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
+}
+
+/// lib/compiler/min_max.warp: min and max of arguments, of a list literal, of a list known at run time (card
+/// pure-library-words)
+#[test]
+fn extrema_run_pure() {
+	runs_pure("max_of_arguments", "max(3, 9, 4)", "9");
+	runs_pure("min_of_literal", "min([4, 1, 6])", "1");
+	runs_pure("max_of_computed", "xs = [5, 2, 7]; max(xs.map(x => x * 2))", "14");
+	runs_pure("min_of_variable", "xs = [5, 2, 7]; min(xs) + max(1.5, 1)", "3.5");
+}
+
 /// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
 /// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
 /// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)
@@ -386,4 +409,58 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
 	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
+}
+
+/// lib/compiler/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
+/// the constructors the module exports for the host, as Rust's do (card emitter-imports)
+#[test]
+fn host_words_on_nodes_run_pure() {
+	runs_pure("parse_at_run_time", "t = \"1 + 2\"; parse(t)", "1+2");
+	runs_pure("parsed_operator", "t = \"a * b\"; parse(t).op", "*");
+	runs_pure("parse_failure_caught", "t = \"((\"; try { parse(t) } catch e { \"bad\" }", "bad");
+	runs_pure("std_pure_json", "use json; parse_json(\"[1, 2, 3]\")", "[1 2 3]");
+	runs_pure("std_pure_hash", "use hash; crc32(\"abc\")", "891568578");
+}
+
+/// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
+/// another function, `else` on the next line, a prelude alias beside a function of other arity, min and max, a member
+/// naming a library word, `/!` of a value known only at run time, the keys of `{}`
+#[test]
+fn parser_words_run_pure() {
+	let probe = |name: &str| format!("{}/probes/parser_rest/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("type_test_beside_local", &probe("is_shadowed"), "no\nyes\n3\nyes");
+	runs_pure("else_on_next_line", &probe("else_lines"), "[2]");
+	runs_pure("then_on_next_line", &probe("then_line"), "4");
+	runs_pure("method_on_next_line", &probe("method_line"), "[2 4]");
+	runs_pure("alias_beside_arity", &probe("overload"), "16\n42");
+	runs_pure("min_max", &probe("min_max"), "2\n5\n9\n1\n2\n1");
+	runs_pure("member_words", &probe("plurals"), "['h' 'é' 'l' 'l' 'o']\n['a' 'b']\n['a' 'b']\n['a' 'b']\n[1 2]\n5");
+	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
+	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
+	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
+	runs_pure("arity_overloads", &probe("arity_overloads"), "6\n6\n14\n6\n10\n1\n10\n12");
+	runs_pure("type_of_is", &probe("type_of_is"), "yes\nno\nyes");
+	runs_pure("match_arm_forms", &probe("match_arms"), "x\nfirst\nb\nother");
+	runs_pure("coalesce", &probe("coalesce"), "2\n1\n-2");
+	runs_pure("recursive_join", &probe("recursive_join"), "[3 2 1]\n[2 1 0]");
+	runs_pure("type_module_words", &probe("type_module_words"), "[1 2 3]\n[1 2]\n7");
+	runs_pure("nested_case_patterns", &probe("nested_patterns"), "label\n2\nother");
+	runs_pure("error_values", &probe("error_value"), "1\ntoo many\nyes");
+	let chain = |name: &str| format!("{}/probes/pure_chains/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("library_word_mapped", &chain("slice_named"), "['b']\n[2 1]");
+	runs_pure("chained_iterations", &chain("sorted_then_mapped"), "[\"use a\" \"use b\"]\n[4 6]");
+	runs_pure("module_directory", &chain("home_folder/own_folder"), "home_folder\nhelpers");
+	runs_pure("read_files", &chain("files/read_file"), "zweite Zeile ü\n26\nnone");
+	runs_pure("loop_variable_scope", &chain("slice_loops"), "['b' 'c']");
+	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
+	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
+}
+
+/// card text-cache-lru: the pure runtime keeps the count and walks of a lexer's source while it compares short words
+/// with it (`starts_at`); the words took them by turns, so each `source.length` recounted the source (minutes)
+#[test]
+fn a_lexer_over_short_words_takes_linear_time_pure() {
+	let starts_at = "def starts_at(source: any, part: text, at: int): bool { i = 0; while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }; i == part.length }";
+	let lexer = format!("{starts_at}; src = \"\"; for k in 0..2000 {{ src = src + \"abc def ghi \" }}; words = [\"de\", \"gh\", \"zz\", \"def\"]; hits = 0; t0 = clock(); for at in 0..src.length {{ for word in words {{ if starts_at(src, word, at) {{ hits += 1 }} }} }}; if clock() - t0 < 3000 then hits else -1");
+	runs_pure("lexer_short_words", &lexer, "6000");
 }

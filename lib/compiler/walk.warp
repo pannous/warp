@@ -23,6 +23,9 @@ is_key(n: any, op: Op): bool := match n {
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
 attribute_word = "view·attribute"
+# `x!` of a name no mutation takes: run as Rust runs what blocks.rs inlines no block for, `unwrap(x)`
+mutated_mark = "mutated"
+unwrap_word = "unwrap"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
@@ -50,10 +53,12 @@ without_layers(view: any, attributes: bool): any := {
 	view
 }
 
-# the node parser.warp builds as plain gives its view: no attribute layers, an empty group as ø but the empty map `{}`
-# (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque type or error whole
+# the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
+# the empty map `{}` (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque
+# type or error whole
 plain_node(n: any): any := match n {
 	Key(left, op, right): {
+		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
 		if left == symbol(attribute_word) { return plain_node(right#3) }
 		if left == symbol(opaque_word) { return if is_empty_group(right) and right#2 != "{" then ø else n }
 		Key(plain_node(left), op, plain_node(right))
@@ -118,8 +123,21 @@ call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments
 # a node with f applied to each of its children
 children(n: Node, f: function): Node := match n {
 	Key(left, op, right): { if left == symbol(opaque_word) then n else Key(f(left), op, f(right)) }
-	List(items, bracket, separator): List(items.map(f), bracket, separator)
+	List(items, bracket, separator): List(items_walked(items, (bracket == Bracket.None and separator == Separator.Space) or (bracket == Bracket.Round and separator == Separator.None), f), bracket, separator)
 	_: n
+}
+
+# `data e`, `print data e`, `f(data e)`: in a line or a call the item after the word is code as written, which no
+# pass rewrites (Rust lowers no quote)
+quote_word = "data"
+def items_walked(items: list, quoting_allowed: bool, f: function): list {
+	walked = []
+	quoting = no
+	for item in items {
+		walked += [if quoting then item else f(item)]
+		quoting = quoting_allowed and item == symbol(quote_word)
+	}
+	walked
 }
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest

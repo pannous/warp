@@ -17,6 +17,7 @@ has_fields(m: any): int := if is_null(m) == 0 and is_null(fields_of(m)) == 0 and
 # `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: any, name: text): any := {
 	if is_position_part(m, name) { return position_part(m, name) }
+	if is_list_part(m, name) { return list_part(m, name) }
 	if kind_code(m) == 5 { return node_text(m) }
 	if is_error_message(m, name) { return unboxed_text(m) }
 	# a field of that name wins over the part reader: `.key` of the code `key = 3` is 3 (card node-part-clash)
@@ -25,8 +26,6 @@ map_get(m: any, name: text): any := {
 	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
 	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
 	if is_entry(m) and text_order(name, "op") == 0 { return key_operator(m) }
-	if is_plain_list(m) and text_order(name, "bracket") == 0 { return list_bracket(m) }
-	if is_plain_list(m) and text_order(name, "separator") == 0 { return list_separator(m) }
 	at = if has_fields(m) == 1 then map_index(m, name) else 0
 	if at == 0 { missing_field(name) }
 	key_value(unboxed_list(fields_of(m))#at)
@@ -39,14 +38,18 @@ map_entries(n: any): any := {
 	out
 }
 map_keys(m: any): list := {
-	if is_null(m) == 1 or (marked_kind(m) != 8 and marked_kind(m) != 6) { not_a_map() }
+	# `{}` is the empty value: its keys are the empty value too, as Rust's
+	if is_null(m) == 1 { return m }
 	out = new_list(0)
+	if marked_kind(m) != 8 and marked_kind(m) != 6 { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
 map_values(m: any): list := {
-	if is_null(m) == 1 or (marked_kind(m) != 8 and marked_kind(m) != 6) { not_a_map() }
+	# `{}` is the empty value: its values are the empty value too, as Rust's
+	if is_null(m) == 1 { return m }
 	out = new_list(0)
+	if marked_kind(m) != 8 and marked_kind(m) != 6 { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
 }
