@@ -515,7 +515,7 @@ impl WasmGcEmitter {
 		crate::analyzer::extract_signal_polls(&mut self.ctx);
 		self.type_errors.append(&mut self.ctx.parameter_conflicts);
 		self.scope.function_kinds = self.user_function_kinds().into();
-		crate::analyzer::note_bool_functions(self.ctx.user_functions.values());
+		crate::analyzer::note_bool_functions(self.ctx.user_functions.values(), &self.ctx.closure_targets);
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);

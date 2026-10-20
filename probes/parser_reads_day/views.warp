@@ -1,0 +1,4 @@
+use "../../lib/compiler/parser.warp"
+for code in ["1 day", "1day", "1 month 2 days", "90 minutes", "2.5 hours", "3m", "5 kg", "{year:1970 month:1}"] {
+	print str(plain(tree(code)))
+}

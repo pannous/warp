@@ -166,3 +166,35 @@ fn block_definitions_hold_their_value_pure() {
 	runs_pure("block_value", "hi := { 3 + 4 }; hi()", "7");
 	runs_pure("block_value_added", "hi := { 3 + 4 }; hi() + 1", "8");
 }
+
+/// parser.warp reads an integer and a time unit word as the duration Rust's parser makes (card parser-reads-day):
+/// `1day` is no `1*day`, and `1 day in h` converts
+#[test]
+fn durations_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("duration_in_unit", "d = 1 day; d in h", "24h"),
+			("glued_duration", "1day + 1 day", "2 days"),
+			("compound_duration", "1 month 2 days", "1 month 2 days"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// A call leaving out trailing parameters takes their defaults, in the program's functions and runtime words alike
+#[test]
+fn defaults_run_pure() {
+	runs_pure("default_given", "add(x, y = 2) := x + y; add(1)", "3");
+	runs_pure("default_typed", "add(x: int, y: int = 2) := x + y; add(1, 5)", "6");
+	runs_pure("default_runtime_word", "xs = [1, 2, 3]; xs.slice(1)", "[2 3]");
+}
+
+/// A map that starts as `{}` or `{1: 5}` is keyed by texts, so a number key names an entry (P34, card integer-key)
+#[test]
+fn number_keys_run_pure() {
+	runs_pure("number_key_empty_map", "m = {}; m[1] = 2; m", "{1:2}");
+	runs_pure("number_key_runtime", "d = {}; k = 4; d[k] = 7; d[k]", "7");
+	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
+}
