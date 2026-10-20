@@ -22,7 +22,9 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 		return Some(Kind::Empty);
 	}
 	// `m:map`, `m: map of int`: a map, held as a Node; `{a:1}` given to it is upgraded to the map of its entry (one_entry_maps.rs)
-	if type_name == ANY_TYPE || is_map_type(&type_name) || union_parts(&type_name).is_some() {
+	// `t: text?` may hold ø: a Node too (variables::declared_kind)
+	if type_name == ANY_TYPE || type_name.ends_with('?') || is_map_type(&type_name) || union_parts(&type_name).is_some()
+	{
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
