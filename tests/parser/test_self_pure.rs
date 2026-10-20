@@ -322,4 +322,5 @@ fn parser_words_run_pure() {
 	runs_pure("arity_overloads", &probe("arity_overloads"), "6\n6\n14\n6\n10\n1\n10\n12");
 	runs_pure("type_of_is", &probe("type_of_is"), "yes\nno\nyes");
 	runs_pure("match_arm_forms", &probe("match_arms"), "x\nfirst\nb\nother");
+	runs_pure("coalesce", &probe("coalesce"), "2\n1\n-2");
 }
