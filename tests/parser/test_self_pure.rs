@@ -130,3 +130,20 @@ fn program_names_run_pure() {
 	runs_pure("statement_block", "add := { it + 1 }; add 2", "3");
 	runs_pure("value_definition", "limit := 3; f(a) := a > limit; f 4", "yes");
 }
+
+/// A curly list as a value is the list of its values, a body or branch runs its block, as Rust gives them (card
+/// emitter-runs): emitter.warp ran `{1, 2}` as statements, giving 2
+#[test]
+fn curly_lists_are_values_self_hosted() {
+	for lane in ["1", "pure"] {
+		let gives = |name: &str, code: &str, value: &str| {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "lane {lane}, {code}: {output}");
+		};
+		gives("comma_list", "xs = {1, 2}; xs", "{1 2}");
+		gives("spaced_list", "hi := {3 4}; hi()", "{3 4}");
+		gives("argument_list", "g(x) := x; g({1, 2})", "{1 2}");
+		gives("body_block", "f() := {1, 2}; f()", "» 2");
+		gives("branch_block", "if yes {1, 2} else {5}", "» 2");
+	}
+}
