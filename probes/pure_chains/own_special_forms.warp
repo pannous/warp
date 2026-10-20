@@ -6,5 +6,4 @@ print(wasm_instruction(1, 2))
 print(ran_without_error(3, 4))
 print(lowest(2.5))
 items = [1, 2]
-// the Rust lane fails here: card rust-lane-program
 print(try items#5 else 0)

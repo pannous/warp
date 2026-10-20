@@ -1,7 +1,7 @@
 //! `try X else Y` catches a runtime error however deep inside X it happens (user decision #34), with the wasm
 //! exception-handling proposal: every runtime error function (`index_out_of_range`, …) throws the tag `warp_error`
 //! with its error id while a `try` is running, and traps as before otherwise, so an uncaught error keeps its message.
-//! `ran_without_error{statement}` runs the statement inside a `try_table` catching that tag: 1 when it finished, 0 when
+//! `ran·without·error{statement}` runs the statement inside a `try_table` catching that tag: 1 when it finished, 0 when
 //! an error was thrown. The id of the caught error is dropped: the user decided against naming it (only
 //! `try X else Y`). A jump out of a `try` (return, break, continue) lowers the depth first
 //! (`emit_leave_tries`).
@@ -11,8 +11,8 @@ use crate::node::Node;
 use wasm_encoder::*;
 use Instruction as I;
 
-/// The marker call `try X else Y` lowers to (library_words::lower_try): `ran_without_error{try_tmp = X}`
-pub const RAN_WITHOUT_ERROR: &str = "ran_without_error";
+/// The marker call `try X else Y` lowers to (library_words::lower_try): `ran·without·error{try_tmp = X}`, a name no program defines
+pub const RAN_WITHOUT_ERROR: &str = "ran·without·error";
 const ERROR_TAG_NAME: &str = "warp_error";
 const TRY_DEPTH_GLOBAL: &str = "try_depth";
 const CAUGHT_ERROR_GLOBAL: &str = "caught_error_id";
@@ -108,7 +108,7 @@ impl WasmGcEmitter {
 		]);
 	}
 
-	/// `ran_without_error{statement}` as i64: 1 when the statement finished, 0 when a runtime error was thrown in it.
+	/// `ran·without·error{statement}` as i64: 1 when the statement finished, 0 when a runtime error was thrown in it.
 	/// The depth goes up for the statement and back down on both paths.
 	pub(in crate::wasm_emitter) fn emit_ran_without_error(&mut self, func: &mut Function, statement: &Node) {
 		let catching = self.declare_error_catching();

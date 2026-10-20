@@ -1347,7 +1347,7 @@ dispatcher_code(f: Function): any := {
 	f.code = code + dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable]
 }
 
-# `ran_without_error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
+# `ran·without·error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
 # in it; the depth goes up for the statement and back down on both paths (a jump out of it would skip that: refused)
 def ran_without_error(body: Body, statement: any): list {
 	for jump in ["return", "break", "continue"] { if mentions_name(statement, jump) { return refuse("a " + jump + " out of a try") } }
@@ -1589,9 +1589,9 @@ def group_expression(body: Body, n: any): list {
 		return closure_item(expression_code(body, n#2)#2, captured_index(name_of(n#1)))
 	}
 	# the forms `wasm i64.rem_s` and `try` lower to, ahead of the program's functions: emitter.warp has a
-	# wasm_instruction and a ran_without_error of its own
+	# wasm_instruction of its own
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ran_without_error") { return ran_without_error(body, n#2) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ran·without·error") { return ran_without_error(body, n#2) }
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions and not is_runtime_word(body, name_of(n#1)) {
 		return call(body, module.functions[name_of(n#1)], n[1..].map(x => x))
 	}
@@ -2119,7 +2119,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.globals = {}
 	module.runtime_globals = []
 	module.global_order = []
-	module.catches_errors = mentions_name(program, "ran_without_error")
+	module.catches_errors = mentions_name(program, "ran·without·error")
 	if module.catches_errors {
 		declared_global(try_depth_name, "int")
 		declared_global(failed_in_name, "text")

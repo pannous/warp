@@ -1,8 +1,8 @@
 # `try x else y` and `try x catch e { y }` (card pure-runs; Rust twin: src/lowering/words/library_words/guards.rs):
-# x runs inside ran_without_error, which says whether it finished (a runtime error deep inside throws the wasm tag
+# x runs inside ran·without·error, which says whether it finished (a runtime error deep inside throws the wasm tag
 # try_guard.rs catches); x's value counts unless it is an Error, else y. The errors wasm cannot catch are checked
 # before they happen: a division by 0 directly under `try`, an index out of a list written in place.
-#   try x else y        → (try·finished = ran_without_error({try·value = x});
+#   try x else y        → (try·finished = ran·without·error({try·value = x});
 #                          if try·finished and not is_error(try·value) then {try·value} else {y})
 #   try x catch e { y } → … else {e = caught_error(try·finished, try·value); y}
 #   try a / b else y    → (try·divisor = b; if try·divisor == 0 then {y} else {…a / try·divisor…})
@@ -27,7 +27,7 @@ try_name(role: text, number: int): Node := symbol("try·" + role + "·" + number
 guarded(value: Node, fallback: Node, binding: any, number: int): Node := {
 	finished = try_name("finished", number)
 	result = try_name("value", number)
-	ran = try_assigned(finished, applied_to("ran_without_error", [braced(try_assigned(result, value))]))
+	ran = try_assigned(finished, applied_to("ran·without·error", [braced(try_assigned(result, value))]))
 	succeeded = Key(finished, Op.And, Key(ø, Op.Not, applied_to("is_error", [result])))
 	otherwise = if binding == ø then braced(fallback) else List([try_assigned(binding, applied_to("caught_error", [finished, result])), fallback], Bracket.Curly, Separator.Semicolon)
 	try_statements([ran, chosen_branch(succeeded, braced(result), otherwise)])
