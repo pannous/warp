@@ -232,16 +232,20 @@ impl WasmGcEmitter {
 	/// Emit string pointer and length for FFI calls
 	pub(in crate::wasm_emitter) fn emit_string_ptr_len(&mut self, func: &mut Function, node: &Node) {
 		if self.is_runtime_text(node) {
-			let text = self.emit_runtime_text_node(func, node);
-			self.emit_text_field(func, text, 0);
-			self.emit_text_field(func, text, 1);
-			return;
+			return self.emit_run_time_ptr_len(func, node);
 		}
 		let (pointer, length) = match self.compile_time_string(node) {
 			CompileTimeString::Stored(pointer, length) => (pointer, length),
 			CompileTimeString::Spelled(text) => self.memory_string(&text),
 		};
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+	}
+
+	/// Pointer and length of the text form of a value made at run time
+	pub(in crate::wasm_emitter) fn emit_run_time_ptr_len(&mut self, func: &mut Function, node: &Node) {
+		let text = self.emit_runtime_text_node(func, node);
+		self.emit_text_field(func, text, 0);
+		self.emit_text_field(func, text, 1);
 	}
 
 	/// Emit only string pointer for C-style FFI calls (null-terminated strings)
