@@ -61,13 +61,9 @@ impl WasmGcEmitter {
 					]);
 				}
 				// items added at the end leave each cell at its index: the index cursor stays, and the count of another
-				// list, so a loop over a list appending to this one walks on (a comprehension over a table's rows)
+				// list, so a loop over a list appending to this one walks on (a comprehension over a table's rows); this
+				// list's count grows by the items (emit_count_grown), so a worklist's `at <= #waiting` counts it once
 				Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Extended]));
-				if let Some(counted) = s.list_cursor(CursorPart::Counted) {
-					Self::emit_list(f, &[I::GlobalGet(counted), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty)]);
-					Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Counted]));
-					f.instruction(&I::End);
-				}
 				s.emit_item_as_list(f, items, kind);
 				s.emit_item_check(f, super::super::super::declared_values::LIST_ITEMS_CHECK, list, items);
 				s.emit_empty_as_null(f, items);
@@ -104,6 +100,7 @@ impl WasmGcEmitter {
 					}
 					f.instruction(&set(field_index));
 				}
+				s.emit_count_grown(f, list, &copy);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::LocalGet(list), I::RefAsNonNull, I::Return,
@@ -127,6 +124,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalGet(walk_start));
 				walk_to_last(s, f);
 				Self::emit_list(f, &[I::LocalGet(copy.cell), I::LocalGet(copy.result), set(2)]);
+				s.emit_count_grown(f, list, &copy);
 				if let Some((extended, last)) = extended_last {
 					f.instruction(&I::LocalGet(copy.result));
 					walk_to_last(s, f);
@@ -138,6 +136,20 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull]);
 			},
 		);
+	}
+
+	/// The kept count of the list in local `list`, when it is the one counted last, grown by the cells copied onto it
+	fn emit_count_grown(&self, f: &mut Function, list: u32, copy: &CopyCells) {
+		let Some((counted, count)) = self.list_cursor(CursorPart::Counted).zip(self.list_cursor(CursorPart::Count))
+		else {
+			return;
+		};
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::GlobalGet(counted), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty),
+				I::GlobalGet(count), I::LocalGet(copy.cells), I::ArrayLen, I::I64ExtendI32U, I::I64Add, I::GlobalSet(count),
+			I::End,
+		]);
 	}
 
 	/// list_become(list, fresh): the list takes the items of the fresh list in place, every holder sees them (`xs.pop(i)`,

@@ -4,6 +4,8 @@ divide_by_zero(): int := {
 	fail()
 	0
 }
+# `error("boom")`: the Error of the message, a value, not raised (Rust's text_builtins.rs error)
+error_node(message: any): any := error_of(node_text(message))
 # `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
 # emit_data_item); `q.k = e`, `{k: e}`: a field holds none
 held_list_item(item: any): any := {
@@ -43,6 +45,10 @@ not_an_int(): int := {
 	0
 }
 not_a_character(): int := {
+	fail()
+	0
+}
+invalid_code_point(): int := {
 	fail()
 	0
 }

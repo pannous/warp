@@ -151,7 +151,13 @@ impl WasmGcEmitter {
 			let kind = branch_type(emitter, value);
 			emitter.is_structured_value(value) || kind.is_ref() || kind == Kind::Codepoint
 		};
-		if is_node_valued(self, &then_value) || else_value.as_ref().is_some_and(|value| is_node_valued(self, value)) {
+		// `if c then 2 else true`: a bool beside a number keeps its mark, as a Node (card rust-lane-if)
+		let is_bool = |emitter: &Self, value: &Node| crate::analyzer::is_boolean(value, &emitter.scope);
+		let mixes_bool = else_value.as_ref().is_some_and(|value| is_bool(self, &then_value) != is_bool(self, value));
+		if mixes_bool
+			|| is_node_valued(self, &then_value)
+			|| else_value.as_ref().is_some_and(|value| is_node_valued(self, value))
+		{
 			self.emit_condition(func, condition, Self::emit_block_value);
 			func.instruction(&I::If(BlockType::Result(Ref(self.node_ref(true))))); // a local holds a nullable ref
 			self.emit_node_instructions(func, &then_value);

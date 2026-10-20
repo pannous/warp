@@ -23,6 +23,9 @@ is_key(n: any, op: Op): bool := match n {
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
 attribute_word = "view·attribute"
+# `x!` of a name no mutation takes: run as Rust runs what blocks.rs inlines no block for, `unwrap(x)`
+mutated_mark = "mutated"
+unwrap_word = "unwrap"
 
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
@@ -50,10 +53,12 @@ without_layers(view: any, attributes: bool): any := {
 	view
 }
 
-# the node parser.warp builds as plain gives its view: no attribute layers, an empty group as ø but the empty map `{}`
-# (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque type or error whole
+# the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
+# the empty map `{}` (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque
+# type or error whole
 plain_node(n: any): any := match n {
 	Key(left, op, right): {
+		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
 		if left == symbol(attribute_word) { return plain_node(right#3) }
 		if left == symbol(opaque_word) { return if is_empty_group(right) and right#2 != "{" then ø else n }
 		Key(plain_node(left), op, plain_node(right))
@@ -115,11 +120,50 @@ group_like(n: Node, items: list): Node := match n {
 is_word(n: any, word: text): bool := n == symbol(word)
 call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
 
+# the numbers of the names the passes make, counted across all of them as Rust's nodes.rs fresh_number counts
+global names_made = 0
+fresh_number(): int := {
+	names_made += 1
+	names_made
+}
+# `item·3`: a name a pass makes, its role and its number
+fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
+
+# a program's statements: a sequence's, by `;` or by lines, else the one statement it is
+is_statement_sequence(program: any): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
+statements_in(program: any): list := if is_statement_sequence(program) then items_of(program) else [program]
+
 # a node with f applied to each of its children
 children(n: Node, f: function): Node := match n {
 	Key(left, op, right): { if left == symbol(opaque_word) then n else Key(f(left), op, f(right)) }
-	List(items, bracket, separator): List(items.map(f), bracket, separator)
+	List(items, bracket, separator): List(items_walked(items, (bracket == Bracket.None and separator == Separator.Space) or (bracket == Bracket.Round and separator == Separator.None), f), bracket, separator)
 	_: n
+}
+
+# the parts of a node, as `children` walks them: a key's two sides, a group's items; none of an opaque view
+parts_of(n: any): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then [] else [left, right] }
+	List(items, bracket, separator): items
+	_: []
+}
+# the parts of a node, an opaque view's too: a type's name and body as nodes
+parts_within(n: any): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then opaque_parts(right) else [left, right] }
+	_: parts_of(n)
+}
+opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
+
+# `data e`, `print data e`, `f(data e)`: in a line or a call the item after the word is code as written, which no
+# pass rewrites (Rust lowers no quote)
+quote_word = "data"
+def items_walked(items: list, quoting_allowed: bool, f: function): list {
+	walked = []
+	quoting = no
+	for item in items {
+		walked += [if quoting then item else f(item)]
+		quoting = quoting_allowed and item == symbol(quote_word)
+	}
+	walked
 }
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
@@ -153,8 +197,13 @@ reported(view: any): list := {
 	[view, found]
 }
 
-# whether the symbol `word` occurs anywhere in n, inside an opaque view too
-mentions(n: any, word: text): bool := view_has(view_of(n), part => part == ["symbol", word])
+# whether the symbol `word` occurs anywhere in n, inside an opaque layer too
+mentions(n: any, word: text): bool := match n {
+	Symbol(name): name == word
+	Key(left, _, right): { if left == symbol(opaque_word) then view_has(right, part => part == ["symbol", word]) else mentions(left, word) or mentions(right, word) }
+	List(items, _, _): items.any(item => mentions(item, word))
+	_: no
+}
 
 # whether `found` holds for the view or a part of it
 view_has(view: any, found: function): bool := {

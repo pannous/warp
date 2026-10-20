@@ -157,34 +157,32 @@ impl WasmGcEmitter {
 		// text_grapheme_offset(text, index): byte index of the grapheme at the 1-based index, trapping out of range. It
 		// walks on from the nearest text cursor at or before the index in the same text, or back from one past it (a
 		// look back, `src#(i-1)`, text_grapheme_back), then moves that text's cursor there: a scan takes linear time. A
-		// text without a cursor takes the one with the smallest index, the cheapest to walk again, so short texts read
-		// by turns (`word#j`) leave a long text's cursor where it is (card long-text)
-		let locals = vec![int, int, long, long, int, long, int, long, bytes_type];
+		// text without a cursor takes the one used least recently; a short text takes none, so words read by turns
+		// (`word#j`) leave a long text's cursor where it is (cards long-text, text-cache-lru)
+		let locals = vec![int, int, long, long, int, long, int, long, bytes_type, long];
 		self.runtime_function("text_grapheme_offset", vec![node_ref, long], vec![int], locals, |s, f| {
-			let (pointer, end, wanted, base, back, back_index, slot, least, bytes) = (2, 3, 4, 5, 6, 7, 8, 9, 10);
+			let (pointer, end, wanted, base, back, back_index, slot, least, bytes, stamp) =
+				(2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
 			s.emit_text_bounds(f, (bytes, pointer, end));
 			Self::emit_list(f, &[I::LocalGet(1), I::LocalSet(wanted), I::I64Const(1), I::LocalSet(base)]);
 			let cursors = s.text_cursors();
-			for &(text, index, at) in &cursors {
-				#[rustfmt::skip]
-				let in_this_text = [
-					I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
-					I::I32And,
-				];
-				Self::emit_list(f, &in_this_text);
+			// the slot of the cursor holding this text, -1 for none (emit_move_text_cursor)
+			Self::emit_if_long_text(f, end);
+			Self::emit_list(f, &[I32Const(-1), I::LocalSet(slot)]);
+			for (number, &(text, index, at, _)) in cursors.iter().enumerate() {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
+					I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::If(BlockType::Empty),
+					I32Const(number as i32), I::LocalSet(slot),
+					I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
 					I::GlobalGet(index), I::LocalGet(wanted), I::I64LeS, I::I32And, I::GlobalGet(index),
 					I::LocalGet(base), I::I64GtS, I::I32And, I::If(BlockType::Empty),
 						I::GlobalGet(at), I::LocalSet(pointer),
 						I::GlobalGet(index), I::LocalSet(base),
 					I::End,
-				]);
-				Self::emit_list(f, &in_this_text);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
+					I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
 					I::GlobalGet(index), I::LocalGet(wanted), I::I64GtS, I::I32And, I::LocalGet(base),
 					I::LocalGet(wanted), I::I64LtS, I::I32And, I::If(BlockType::Empty),
 						I::LocalGet(bytes), I::GlobalGet(at), I::LocalGet(end), I::GlobalGet(index), I::LocalGet(wanted),
@@ -199,8 +197,10 @@ impl WasmGcEmitter {
 						I::LocalGet(back_index), I::LocalSet(base),
 					I::End,
 					I::End,
+					I::End,
 				]);
 			}
+			f.instruction(&I::End);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(wanted), I::LocalGet(base), I::I64Sub, I::I64Const(1), I::I64Add, I::LocalSet(1),
@@ -215,26 +215,29 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalSet(pointer));
 			Self::emit_index_compare(f, I::I64Sub);
 			Self::emit_list(f, &[I::LocalSet(1), I::Br(0), I::End, I::End]);
-			s.emit_move_text_cursor(f, &cursors, (bytes, wanted, pointer), (slot, least));
-			f.instruction(&I::LocalGet(pointer));
+			Self::emit_if_long_text(f, end);
+			s.emit_move_text_cursor(f, &cursors, (bytes, wanted, pointer), (slot, least, stamp));
+			Self::emit_list(f, &[I::End, I::LocalGet(pointer)]);
 		});
 
 		// text_grapheme_count(text) -> i64
-		let locals = vec![int, int, long, bytes_type, int, long];
+		let locals = vec![int, int, long, bytes_type, int, long, long];
 		self.runtime_function("text_grapheme_count", vec![node_ref], vec![long], locals, |s, f| {
 			s.emit_codepoint_counts_one(f);
-			let (pointer, end, count, bytes, slot, least) = (1, 2, 3, 4, 5, 6);
+			let (pointer, end, count, bytes, slot, least, stamp) = (1, 2, 3, 4, 5, 6, 7);
 			s.emit_text_bounds(f, (bytes, pointer, end));
-			// a text counted before (its bytes never change): its count
+			// a long text counted before (its bytes never change): its count
 			let counted = s.texts_counted();
-			for &(counted_text, counted_count) in &counted {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(bytes), I::GlobalGet(counted_text), I::RefEq, I::If(BlockType::Empty),
-						I::GlobalGet(counted_count), I::Return,
-					I::End,
-				]);
+			Self::emit_if_long_text(f, end);
+			for &(counted_text, counted_count, used) in &counted {
+				Self::emit_list(
+					f,
+					&[I::LocalGet(bytes), I::GlobalGet(counted_text), I::RefEq, I::If(BlockType::Empty)],
+				);
+				s.emit_next_stamp(f);
+				Self::emit_list(f, &[I::GlobalSet(used), I::GlobalGet(counted_count), I::Return, I::End]);
 			}
+			f.instruction(&I::End);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::Block(BlockType::Empty),
@@ -251,12 +254,18 @@ impl WasmGcEmitter {
 				I::End,
 				I::End,
 			]);
-			// it replaces the smaller count: a short text counted between the counts of a long one leaves it (card
-			// text-slice: `count(t[a:b])` in a loop recounted t at each slice)
-			Self::emit_least_slot(f, counted.iter().map(|&(_, counted_count)| counted_count), slot, least);
-			let parts = counted.iter().map(|&(text, text_count)| [(text, bytes), (text_count, count)]);
+			// a long text replaces the count used least recently: a short one counted between the counts of a long one
+			// leaves it (card text-slice: `count(t[a:b])` in a loop recounted t at each slice), and so does a long text
+			// counted once, long ago (card text-cache-lru: the largest file parsed held a slot, the file parsed now and
+			// its words took the other by turns)
+			Self::emit_if_long_text(f, end);
+			Self::emit_least_slot(f, counted.iter().map(|&(_, _, used)| used), slot, least);
+			s.emit_next_stamp(f);
+			f.instruction(&I::LocalSet(stamp));
+			let parts =
+				counted.iter().map(|&(text, text_count, used)| [(text, bytes), (text_count, count), (used, stamp)]);
 			Self::emit_set_slot(f, slot, parts);
-			f.instruction(&I::LocalGet(count));
+			Self::emit_list(f, &[I::End, I::LocalGet(count)]);
 		});
 
 		// text_codepoint_count(text) -> i64: every byte but a continuation byte (10xxxxxx) starts a code point
@@ -308,25 +317,38 @@ impl WasmGcEmitter {
 	}
 
 	/// The cursor of the text in local `bytes` set to grapheme `wanted` at byte index `pointer`: the cursor holding that
-	/// text, else the one with the smallest index (locals `slot` and `least` are scratch)
+	/// text, local `slot` (-1 when none holds it), else the one used least recently (locals `least` and `stamp` are
+	/// scratch)
 	fn emit_move_text_cursor(
 		&self,
 		f: &mut Function,
-		cursors: &[(u32, u32, u32)],
+		cursors: &[(u32, u32, u32, u32)],
 		(bytes, wanted, pointer): (u32, u32, u32),
-		(slot, least): (u32, u32),
+		(slot, least, stamp): (u32, u32, u32),
 	) {
-		Self::emit_least_slot(f, cursors.iter().map(|&(_, index, _)| index), slot, least);
-		for (number, &(text, _, _)) in cursors.iter().enumerate() {
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::If(BlockType::Empty),
-					I::I32Const(number as i32), I::LocalSet(slot),
-				I::End,
-			]);
-		}
-		let parts = cursors.iter().map(|&(text, index, at)| [(text, bytes), (index, wanted), (at, pointer)]);
+		Self::emit_list(f, &[I::LocalGet(slot), I32Const(0), I::I32LtS, I::If(BlockType::Empty)]);
+		Self::emit_least_slot(f, cursors.iter().map(|&(_, _, _, used)| used), slot, least);
+		f.instruction(&I::End);
+		self.emit_next_stamp(f);
+		f.instruction(&I::LocalSet(stamp));
+		let parts = cursors
+			.iter()
+			.map(|&(text, index, at, used)| [(text, bytes), (index, wanted), (at, pointer), (used, stamp)]);
 		Self::emit_set_slot(f, slot, parts);
+	}
+
+	/// The next stamp of text_cache_clock, pushed: the clock moved on by one use of a text cursor or count
+	fn emit_next_stamp(&self, f: &mut Function) {
+		let Some(clock) = self.text_cache_clock() else {
+			f.instruction(&I::I64Const(0));
+			return;
+		};
+		Self::emit_list(f, &[I::GlobalGet(clock), I::I64Const(1), I::I64Add, I::GlobalSet(clock), I::GlobalGet(clock)]);
+	}
+
+	/// Opens a block taken when the text of local `end` bytes is long enough for the text cursors and counts
+	fn emit_if_long_text(f: &mut Function, end: u32) {
+		Self::emit_list(f, &[I::LocalGet(end), I32Const(SHORT_TEXT), I::I32GeU, I::If(BlockType::Empty)]);
 	}
 
 	/// Local `slot` set to the number of the slot whose i64 global in `keys` is smallest, the first of equals (local

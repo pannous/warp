@@ -92,7 +92,7 @@ extremum_node(n: Node, extrema: any): Node := {
 builtin_extrema(program: any): any := {
 	defined = nodes_in(program).filter(is_function_definition).map(definition => head_word(key_of(definition)))
 	extrema = {}
-	for name in better_by_extremum.keys { if not (name in defined) { extrema[name] = better_by_extremum[name] } }
+	for name in better_by_extremum.keys { if name not in defined { extrema[name] = better_by_extremum[name] } }
 	extrema
 }
 

@@ -237,10 +237,13 @@ def items(p, closer, bracket) {
 
 // `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
 // Rust twin: conditions.rs ends_with_clause_word
-def follows_clause_word(found) {
-	if found.length == 0 { return false }
-	previous = found#(found.length)#1
-	previous is symbol and keyword_form(name_of(previous)) == "clause"
+def follows_clause_word(found) := found.length > 0 and ends_with_clause_word(found#(found.length)#1)
+
+// `where`, `match`, alone or the last word of `for i in xs where`: a word whose condition or subject follows
+def ends_with_clause_word(node) := match node {
+	Symbol(word): keyword_form(word) == "clause"
+	List(parts, Bracket.None, separator): parts.length > 0 and ends_with_clause_word(parts#(parts.length))
+	_: false
 }
 
 // `line:column` of the character at `at`, both from 1
@@ -478,6 +481,8 @@ def header_expression(p, min_power) {
 // `left` and the operators after it binding at least `min_power`
 // Rust twin: expressions.rs continue_expr
 def continued(p, left, min_power) {
+	// a prefix `if` inside a tighter operand took its own `then` (owns_branches), so its `else` too
+	took_own_then = false
 	while true {
 		if tab_separates(p) { break }
 		skip_spaces(p)
@@ -542,17 +547,19 @@ def continued(p, left, min_power) {
 			left = if written == "/!=" then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
-			if 115 < min_power { break }
+			if MEMBERSHIP_POWERS#1 < min_power { break }
 			p.at = p.at + membership#1.length
 			skip_blanks(p)
-			left = listed("", " ", [left, symbol(membership#2), expression(p, 116)])
-		} else if negated_is_at(p).length > 0 {
-			// `x is not 4` and `x isn't 4` are `not (x is 4)` (Rust twin: spellings.rs NEGATED_SPELLINGS)
-			powers = binding_powers("is")
+			left = membership_test(left, membership#2, expression(p, MEMBERSHIP_POWERS#2))
+		} else if negated_at(p) != "" {
+			// `x is not 4`, `x not in xs`, `a nand b`: `not (x is 4)`, `not (x in xs)`, `not (a and b)`
+			written = negated_at(p)
+			positive = NEGATED_SPELLINGS[written]
+			powers = if positive == "in" then MEMBERSHIP_POWERS else binding_powers(positive)
 			if powers#1 < min_power { break }
-			p.at = p.at + negated_is_at(p).length
+			p.at = p.at + written.length
 			skip_blanks(p)
-			left = Key(ø, Op.Not, Key(left, Op.Is, expression(p, powers#2)))
+			left = Key(ø, Op.Not, operation(left, positive, expression(p, powers#2)))
 		} else if down_to_at(p) > 0 {
 			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
 			powers = binding_powers("to")
@@ -572,13 +579,15 @@ def continued(p, left, min_power) {
 			}
 			if op.length == 0 {
 				if not applies(p, left, min_power) { break }
-				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power))])
+				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left))])
 				continue
 			}
 			powers = binding_powers(op#2)
 			// one arrow, but `=>` binds as written: its body takes an assignment (Rust twin: Op::spelled_binding_power)
 			if op#1 == "=>" { powers = binding_powers("=>") }
-			if powers#1 < min_power { break }
+			owns = owns_branches(left, op#2, took_own_then)
+			if powers#1 < min_power and not owns { break }
+			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			p.at = p.at + op#1.length
 			// `f(n):` ending its line: the block indented below is its value
 			block = if op#1 == ":" and ends_line(p, p.at) then indented_block(p) else ø
@@ -597,6 +606,16 @@ def continued(p, left, min_power) {
 		}
 	}
 	left
+}
+
+// A prefix `if` takes its own `then` and `else` wherever it stands: `pattern: if c then a else b` is the arm giving the
+// whole if, though `:` binds tighter than `then`. Only an `else` after a `then` the if took this way: `if a then if b
+// then c else d` keeps its else for the outer if.
+// Rust twin: expressions.rs owns_branches
+def owns_branches(left, op, took_own_then) := match left {
+	Key(condition, Op.If, test): op == "then" and condition == ø
+	Key(branches, Op.Then, value): op == "else" and took_own_then
+	_: false
 }
 
 // `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
@@ -670,12 +689,17 @@ def opens_block(p, width) {
 }
 
 // `is not`, `isn't` at the parser's position, else ""
-def negated_is_at(p) {
-	for word in ["is not", "isn't", "isn’t"] {
-		if keyword_at(p, word) { return word }
-	}
-	""
-}
+// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)`, `x isn't 4`
+// `not (x is 4)`, Python's `x not in xs` `not (x in xs)`
+// Rust twin: spellings.rs NEGATED_SPELLINGS
+NEGATED_SPELLINGS = {"nand": "and", "¬&": "and", "⊼": "and", "is not": "is", "isn't": "is", "isn’t": "is", "not in": "in", "∉": "in"}
+def negated_at(p) := NEGATED_SPELLINGS.keys.find(written => keyword_at(p, written)) ?? ""
+
+// how tightly `x in xs` binds on its left and right
+MEMBERSHIP_POWERS = [115, 116]
+def membership_test(left, word, right) := listed("", " ", [left, symbol(word), right])
+// `a and b`, `x is 4`, `x in xs` of the operator's spelling
+def operation(left, spelling, right) := if spelling == "in" then membership_test(left, spelling, right) else keyed(spelling, left, right)
 
 // `x in xs`, `xs contains x`: the membership word at the parser's position as [written, word], else []; `x is in xs` is
 // `x in xs`
@@ -1632,7 +1656,10 @@ def atom(p) {
 		written = decimal_number(p)
 		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
 		// i64 a float (card int-beyond)
-		if written.contains(".") or written.contains("e-") or written.contains("E-") { return with_glued_factor(p, float(written)) }
+		// `1.5e-7` is a float, as measurements and other programs write it (decision exact-decimals; Rust twin:
+		// numbers.rs scientific_float); `1e3` stays the integer 1000 (decimal_number writes its zeros), `0.5` exact
+		if written.contains("e") { return Key(float(written), Op.As, symbol("float")) }
+		if written.contains(".") { return with_glued_factor(p, float(written)) }
 		literal = p.code[number_start .. p.at]
 		if not (literal.contains("e") or literal.contains("E")) {
 			duration = with_time_unit(p, int(written))
@@ -1969,7 +1996,7 @@ def time_unit_at(p, at: int) {
 	end = at
 	while end < p.n and (is_alphanumeric(p.code[end]) or p.code[end] == '_') { end = end + 1 }
 	word = p.code[at .. end]
-	if not (word in TIME_UNITS) { return ø }
+	if word not in TIME_UNITS { return ø }
 	after = end
 	while is_at(p.code, after, ' ', p.n) { after = after + 1 }
 	starts_entry = is_at(p.code, after, ':', p.n) or (is_at(p.code, after, '=', p.n) and not is_at(p.code, after + 1, '=', p.n))

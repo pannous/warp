@@ -32,6 +32,17 @@ pub(in crate::wasm_emitter) fn node_arithmetic_dependencies() -> Vec<Dependency>
 pub const TEXT_AS_FLOAT: &str = "text_as_float";
 /// 10^22 is the largest power of ten an f64 holds exactly
 const EXACT_POWERS_OF_TEN: i32 = 22;
+/// The digits of a text read as a float kept exactly (below 10^18, so an i64); later ones only move the point
+const SIGNIFICANT_DIGITS: i32 = 18;
+/// A text's float beyond 10^308 is ∞, below 10^-325 0
+const LARGEST_MAGNITUDE: i32 = 308;
+const SMALLEST_MAGNITUDE: i32 = -325;
+/// Beyond 10^±290 a text's float is scaled to 10^20 inside and back after, so no product overflows
+const SCALING_MAGNITUDE: i32 = 290;
+const SCALED_BACK: i32 = 20;
+const SCALED_BACK_POWER: f64 = 1e20;
+/// 2^27 + 1: Veltkamp's split of a double into two 26-bit halves
+const VELTKAMP_SPLITTER: f64 = 134217729.0;
 /// The educate-once topic of `"ab"*2`, whose explicit form is `2 times "ab"`
 pub(super) const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 
@@ -365,22 +376,27 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// text_as_float as lib/compiler/runtime/text_numbers.warp reads it: the first SIGNIFICANT_DIGITS digits as an exact
+	/// i64, the double-double hi + lo of it scaled by exact powers of ten (Dekker's products), one rounding at the end,
+	/// so more digits than a double holds read to the nearest float, not rounded digit by digit
 	pub(in crate::wasm_emitter) fn emit_text_as_float(&mut self) {
 		if !self.should_emit_function(TEXT_AS_FLOAT) {
 			return;
 		}
 		let node_ref = Ref(self.node_ref(false));
 		let float_box = self.type_manager.f64_box_type;
-		let mut locals = vec![ValType::I32; 4];
-		locals.push(ValType::F64);
-		locals.extend([ValType::I32; 4]);
-		locals.push(ValType::F64);
+		let mut locals = vec![ValType::I32; 12];
+		locals.push(ValType::I64);
+		locals.extend([ValType::F64; 10]);
 		locals.push(self.text_ref());
 		let text_type = self.type_manager.text_type;
 		self.runtime_function(TEXT_AS_FLOAT, vec![node_ref], vec![ValType::F64], locals, |s, f| {
-			let (pointer, end, negative, digit, value, scale_digits, digits, exponent, exponent_negative, power) =
-				(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-			let bytes = 11;
+			let (pointer, end, negative, digit, exponent, exponent_negative) = (1, 2, 3, 4, 5, 6);
+			let (digits, kept, shift, step, count, back) = (7, 8, 9, 10, 11, 12);
+			let mantissa = 13;
+			let (value, hi, lo, power, product, quotient) = (14, 15, 16, 17, 18, 19);
+			let halves = [20, 21, 22, 23];
+			let bytes = 24;
 			let at_end = [I::LocalGet(pointer), I::LocalGet(end), I::I32GeU];
 			let byte = [I::LocalGet(bytes), I::LocalGet(pointer), I::ArrayGetU(text_type)];
 			let advance = [I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer)];
@@ -414,7 +430,8 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			sign(f, negative);
 			f.instruction(&I::End);
-			// digits, with a point among them: value collects them all, scale_digits counts those after the point
+			// digits, with a point among them: mantissa keeps the first significant ones, shift counts those dropped up
+			// and those after the point down
 			let digits_loop = |f: &mut Function, after_point: bool| {
 				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 				Self::emit_list(f, &at_end);
@@ -423,12 +440,16 @@ impl WasmGcEmitter {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I32Const('0' as i32), I::I32Sub, I::LocalTee(digit), I32Const(9), I::I32GtU, I::BrIf(1),
-					I::LocalGet(value), I::F64Const(10.0.into()), I::F64Mul, I::LocalGet(digit), I::F64ConvertI32U,
-					I::F64Add, I::LocalSet(value),
 					I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits),
+					I::LocalGet(kept), I32Const(SIGNIFICANT_DIGITS), I::I32LtU, I::If(BlockType::Empty),
+					I::LocalGet(mantissa), I::I64Const(10), I::I64Mul, I::LocalGet(digit), I::I64ExtendI32U, I::I64Add,
+					I::LocalTee(mantissa), I::I64Const(0), I::I64Ne, I::LocalGet(kept), I::I32Add, I::LocalSet(kept),
+					I::Else,
+					I::LocalGet(shift), I32Const(1), I::I32Add, I::LocalSet(shift),
+					I::End,
 				]);
 				if after_point {
-					Self::emit_list(f, &[I::LocalGet(scale_digits), I32Const(1), I::I32Add, I::LocalSet(scale_digits)]);
+					Self::emit_list(f, &[I::LocalGet(shift), I32Const(1), I::I32Sub, I::LocalSet(shift)]);
 				}
 				Self::emit_list(f, &advance);
 				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
@@ -475,49 +496,72 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::I32Eqz]);
 			s.emit_fail_if(f, "invalid_number");
-			// the power of ten: the written exponent less the digits after the point. One exact power (10^22 at most is
-			// exact in f64) multiplies or divides the digits once, so "3.5e-2" is 35 / 1000 = 0.035 like the literal
-			// (ten by ten rounds at each step: 0.034999999999999996); beyond 10^±22 the digits go ten by ten up to it,
-			// as a power of 10^310 would be ∞ ("1e-310" is no 0)
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I32Const(0), I::LocalGet(exponent), I::I32Sub, I::LocalGet(exponent), I::LocalGet(exponent_negative),
-				I::Select, I::LocalGet(scale_digits), I::I32Sub, I::LocalSet(exponent),
+				I::Select, I::LocalGet(shift), I::I32Add, I::LocalSet(shift),
 			]);
-			let ten_by_ten = [
-				(EXACT_POWERS_OF_TEN, I::I32GtS, I::F64Mul, I::I32Sub),
-				(-EXACT_POWERS_OF_TEN, I::I32LtS, I::F64Div, I::I32Add),
-			];
-			for (limit, beyond, step, towards_limit) in ten_by_ten {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-					I::LocalGet(exponent), I32Const(limit), beyond, I::I32Eqz, I::BrIf(1),
-					I::LocalGet(value), I::F64Const(10.0.into()), step, I::LocalSet(value),
-					I::LocalGet(exponent), I32Const(1), towards_limit, I::LocalSet(exponent),
-					I::Br(0), I::End, I::End,
-				]);
-			}
+			// mantissa · 10^shift (decimal_float in text_numbers.warp): 0, ∞ beyond 10^308, 0 below 10^-325; beyond
+			// 10^±290 scaled to 10^20 inside and back after, so no step overflows
+			let magnitude = digit;
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(exponent), I32Const(0), I::I32LtS, I::LocalSet(exponent_negative),
-				I::F64Const(1.0.into()), I::LocalSet(power),
+				I::F64Const(0.0.into()), I::LocalSet(value), I::Block(BlockType::Empty),
+				I::LocalGet(mantissa), I::I64Eqz, I::BrIf(0),
+				I::LocalGet(kept), I32Const(1), I::I32Sub, I::LocalGet(shift), I::I32Add, I::LocalSet(magnitude),
+				I::LocalGet(magnitude), I32Const(LARGEST_MAGNITUDE), I::I32GtS, I::If(BlockType::Empty),
+				I::F64Const(f64::INFINITY.into()), I::LocalSet(value), I::Br(1), I::End,
+				I::LocalGet(magnitude), I32Const(SMALLEST_MAGNITUDE), I::I32LtS, I::BrIf(0),
+				I::LocalGet(mantissa), I::F64ConvertI64S, I::LocalSet(hi),
+				I::LocalGet(mantissa), I::LocalGet(hi), I::I64TruncF64S, I::I64Sub, I::F64ConvertI64S, I::LocalSet(lo),
+				I32Const(SCALED_BACK), I32Const(-SCALED_BACK), I32Const(0),
+				I::LocalGet(magnitude), I32Const(-SCALING_MAGNITUDE), I::I32LtS, I::Select,
+				I::LocalGet(magnitude), I32Const(SCALING_MAGNITUDE), I::I32GtS, I::Select, I::LocalTee(back),
+				I::LocalGet(shift), I::I32Sub, I32Const(-1), I::I32Mul, I::LocalSet(shift),
 			]);
-			for (more, towards_zero) in [(I::I32GtS, I::I32Sub), (I::I32LtS, I::I32Add)] {
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-					I::LocalGet(exponent), I32Const(0), more, I::I32Eqz, I::BrIf(1),
-					I::LocalGet(power), I::F64Const(10.0.into()), I::F64Mul, I::LocalSet(power),
-					I::LocalGet(exponent), I32Const(1), towards_zero, I::LocalSet(exponent),
-					I::Br(0), I::End, I::End,
-				]);
-			}
+			// by at most 10^22 a step, each power exact: a product's error is Dekker's exact product, a quotient's the
+			// remainder of its exact product; renormalized after each, so hi is the nearest float
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(value), I::LocalGet(power), I::F64Div,
-				I::LocalGet(value), I::LocalGet(power), I::F64Mul,
-				I::LocalGet(exponent_negative), I::Select, I::LocalSet(value),
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(shift), I::I32Eqz, I::BrIf(1),
+				I32Const(EXACT_POWERS_OF_TEN), I32Const(-EXACT_POWERS_OF_TEN), I::LocalGet(shift),
+				I::LocalGet(shift), I32Const(-EXACT_POWERS_OF_TEN), I::I32LtS, I::Select,
+				I::LocalGet(shift), I32Const(EXACT_POWERS_OF_TEN), I::I32GtS, I::Select, I::LocalSet(step),
+				I::LocalGet(step), I32Const(0), I::I32LtS, I::If(BlockType::Result(ValType::I32)),
+				I32Const(0), I::LocalGet(step), I::I32Sub, I::Else, I::LocalGet(step), I::End, I::LocalSet(count),
+			]);
+			Self::emit_power_of_ten(f, count, power);
+			let product_error = |f: &mut Function, a: u32| Self::emit_product_error(f, (a, power, product), halves);
+			Self::emit_list(f, &[I::LocalGet(step), I32Const(0), I::I32GtS, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(hi), I::LocalGet(power), I::F64Mul, I::LocalSet(product)]);
+			product_error(f, hi);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(lo), I::LocalGet(power), I::F64Mul, I::F64Add, I::LocalSet(lo),
+				I::LocalGet(product), I::LocalSet(hi),
+				I::Else,
+				I::LocalGet(hi), I::LocalGet(power), I::F64Div, I::LocalTee(quotient), I::LocalGet(power), I::F64Mul,
+				I::LocalSet(product),
+				I::LocalGet(hi), I::LocalGet(product), I::F64Sub,
+			]);
+			product_error(f, quotient);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::F64Sub, I::LocalGet(lo), I::F64Add, I::LocalGet(power), I::F64Div, I::LocalSet(lo),
+				I::LocalGet(quotient), I::LocalSet(hi),
+				I::End,
+				I::LocalGet(hi), I::LocalGet(lo), I::F64Add, I::LocalTee(product),
+				I::LocalGet(hi), I::F64Sub, I::LocalGet(lo), I::F64Sub, I::F64Neg, I::LocalSet(lo),
+				I::LocalGet(product), I::LocalSet(hi),
+				I::LocalGet(shift), I::LocalGet(step), I::I32Sub, I::LocalSet(shift),
+				I::Br(0), I::End, I::End,
+				I::LocalGet(hi), I::LocalSet(value),
+				I::LocalGet(back), I::I32Eqz, I::BrIf(0),
+				I::LocalGet(value), I::F64Const(SCALED_BACK_POWER.into()), I::F64Mul,
+				I::LocalGet(value), I::F64Const(SCALED_BACK_POWER.into()), I::F64Div,
+				I::LocalGet(back), I32Const(0), I::I32GtS, I::Select, I::LocalSet(value),
+				I::End,
 			]);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -525,6 +569,40 @@ impl WasmGcEmitter {
 				I::Select,
 			]);
 		});
+	}
+
+	/// 10^count (count from 0 to 22, so exact) into the f64 local `power`; count is used up
+	fn emit_power_of_ten(f: &mut Function, count: u32, power: u32) {
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::F64Const(1.0.into()), I::LocalSet(power),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+			I::LocalGet(count), I::I32Eqz, I::BrIf(1),
+			I::LocalGet(power), I::F64Const(10.0.into()), I::F64Mul, I::LocalSet(power),
+			I::LocalGet(count), I32Const(1), I::I32Sub, I::LocalSet(count),
+			I::Br(0), I::End, I::End,
+		]);
+	}
+
+	/// a · b − product exactly (Dekker, floats.warp product_error): each factor split into its upper 26 bits and the
+	/// rest (Veltkamp), the partial products summed; the f64 locals `halves` hold the parts
+	fn emit_product_error(f: &mut Function, (a, b, product): (u32, u32, u32), halves: [u32; 4]) {
+		let [a_hi, a_lo, b_hi, b_lo] = halves;
+		for (factor, upper, rest) in [(a, a_hi, a_lo), (b, b_hi, b_lo)] {
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(factor), I::F64Const(VELTKAMP_SPLITTER.into()), I::F64Mul, I::LocalTee(upper),
+				I::LocalGet(upper), I::LocalGet(factor), I::F64Sub, I::F64Sub, I::LocalTee(upper),
+				I::LocalGet(factor), I::F64Sub, I::F64Neg, I::LocalSet(rest),
+			]);
+		}
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::LocalGet(a_hi), I::LocalGet(b_hi), I::F64Mul, I::LocalGet(product), I::F64Sub,
+			I::LocalGet(a_hi), I::LocalGet(b_lo), I::F64Mul, I::F64Add,
+			I::LocalGet(a_lo), I::LocalGet(b_hi), I::F64Mul, I::F64Add,
+			I::LocalGet(a_lo), I::LocalGet(b_lo), I::F64Mul, I::F64Add,
+		]);
 	}
 }
 
