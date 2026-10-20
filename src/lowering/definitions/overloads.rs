@@ -397,7 +397,8 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	}
 	let variables =
 		crate::analyzer::agreeing_kinds(&node, HashMap::new(), |_, value| Some(argument_kind(value, &HashMap::new())));
-	let mut renaming = ParameterOverloads { overloaded, variables, seen: HashMap::new() };
+	let mut renaming =
+		ParameterOverloads { overloaded, variables, seen: HashMap::new(), declared: vec![HashMap::new()] };
 	renaming.rewrite(node)
 }
 
@@ -727,6 +728,9 @@ trait VariantRenaming {
 	/// The variant name of this definition of `name`, None when the name is not overloaded
 	fn renamed(&mut self, name: &str, parameters: &[Node]) -> Option<String>;
 	fn resolve_call(&mut self, node: &Node) -> Option<Node>;
+	/// A definition's body is rewritten between these two, its parameters in scope
+	fn entered(&mut self, _parameters: &[Node]) {}
+	fn left(&mut self) {}
 
 	fn rewrite(&mut self, node: Node) -> Node {
 		if let Some(renamed) = self.rewrite_definition(&node) {
@@ -748,7 +752,9 @@ trait VariantRenaming {
 		let Node::Key(target, op, _) = node.drop_meta() else {
 			return None;
 		};
+		self.entered(&definition.head[1..]);
 		let body = Box::new(self.rewrite(definition.body.clone()));
+		self.left();
 		let Some(variant) = self.renamed(&definition.head[0].name(), &definition.head[1..]) else {
 			return Some(Node::Key(target.clone(), *op, body));
 		};
@@ -893,6 +899,9 @@ struct ParameterOverloads {
 	variables: HashMap<String, Option<Kind>>,
 	/// Definitions of each overloaded name renamed so far, in declaration order
 	seen: HashMap<String, usize>,
+	/// The parameters and declared variables in scope with their declared type (`n: any`, `leaf: any = "abc"`; none
+	/// for an untyped parameter, which hides an outer one), innermost last
+	declared: Vec<HashMap<String, Option<String>>>,
 }
 
 impl VariantRenaming for ParameterOverloads {
@@ -905,11 +914,42 @@ impl VariantRenaming for ParameterOverloads {
 	}
 
 	fn resolve_call(&mut self, node: &Node) -> Option<Node> {
+		if let Node::Key(declaration, Op::Assign, _) = node.drop_meta() {
+			self.declare(declaration, false);
+		}
 		self.resolve_typed_call(node)
+	}
+
+	fn entered(&mut self, parameters: &[Node]) {
+		self.declared.push(HashMap::new());
+		parameters.iter().for_each(|parameter| self.declare(parameter, true));
+	}
+
+	fn left(&mut self) {
+		self.declared.pop();
 	}
 }
 
 impl ParameterOverloads {
+	/// `n: any`, `leaf: any = …`: a parameter or a declared variable of the innermost scope, with its declared type
+	fn declare(&mut self, declaration: &Node, is_parameter: bool) {
+		let type_name = parameter_type(declaration);
+		let Some(name) = super::nodes::parameter_name(declaration).filter(|_| is_parameter || type_name.is_some())
+		else {
+			return;
+		};
+		self.declared.last_mut().expect("the program's scope").insert(name, type_name);
+	}
+
+	/// The type an argument naming a declared variable was declared with, `any` only where a variant takes `any` there
+	/// (else the run time tests the value)
+	fn declared_type(&self, argument: &Node, position: usize, variants: &[Vec<String>]) -> Option<String> {
+		let name = argument.ungrouped().symbol_name()?;
+		let type_name = self.declared.iter().rev().find_map(|scope| scope.get(name))?.as_ref()?;
+		let any_variant = variants.iter().any(|types| types[position] == ANY_TYPE);
+		(type_name != ANY_TYPE || any_variant).then(|| type_name.clone())
+	}
+
 	fn variant_name(name: &str, types: &[String]) -> String {
 		// `f·list_of_int`: one word
 		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, &type_name.replace(' ', "_")))
@@ -928,18 +968,35 @@ impl ParameterOverloads {
 			return None;
 		}
 		let name = head.drop_meta().name();
-		let kinds: Vec<Option<Kind>> =
-			arguments.iter().map(|argument| argument_kind(argument, &self.variables)).collect();
-		// an argument of a kind unknown at compile time fits every type for now: the run time tests it
+		let variants: Vec<Vec<String>> = variants.into_iter().filter(|types| types.len() == arguments.len()).collect();
+		let declared: Vec<Option<String>> = arguments
+			.iter()
+			.enumerate()
+			.map(|(position, argument)| self.declared_type(argument, position, &variants))
+			.collect();
+		let kinds: Vec<Option<Kind>> = arguments
+			.iter()
+			.zip(&declared)
+			.map(|(argument, declared)| match declared.as_deref() {
+				Some(type_name) if type_name != ANY_TYPE => {
+					overload_kind(type_name).or_else(|| argument_kind(argument, &self.variables))
+				}
+				_ => argument_kind(argument, &self.variables),
+			})
+			.collect();
+		// an argument declared `any` (a Node) fits only an `any` variant; an argument of a kind unknown at compile time
+		// fits every type for now: the run time tests it
+		let fits_argument = |position: usize, type_name: &str| match (declared[position].as_deref(), kinds[position]) {
+			(Some(ANY_TYPE), _) => (type_name == ANY_TYPE).then_some(0),
+			(_, Some(kind)) => fit(kind, type_name),
+			(_, None) => Some(0),
+		};
+		let is_known = |position: usize| kinds[position].is_some() || declared[position].as_deref() == Some(ANY_TYPE);
 		let scores: Vec<(u32, &Vec<String>)> = variants
 			.iter()
-			.filter(|types| types.len() == arguments.len())
 			.filter_map(|types| {
-				let fits: Option<Vec<u32>> = kinds
-					.iter()
-					.zip(types.iter())
-					.map(|(kind, type_name)| kind.map_or(Some(0), |kind| fit(kind, type_name)))
-					.collect();
+				let fits: Option<Vec<u32>> =
+					types.iter().enumerate().map(|(position, type_name)| fits_argument(position, type_name)).collect();
 				Some((fits?.iter().sum(), types))
 			})
 			.collect();
@@ -948,7 +1005,7 @@ impl ParameterOverloads {
 			variants.iter().map(|types| format!("{name}({})", types.join(", "))).collect::<Vec<_>>().join(", ");
 		let no_variant = format!("`{written}` fits no single variant of {listed}");
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
-		if kinds.iter().any(Option::is_none) && scores.len() > 1 {
+		if !(0..arguments.len()).all(is_known) && scores.len() > 1 {
 			let candidates: Vec<&Vec<String>> = scores.iter().map(|(_, types)| *types).collect();
 			return Some(Self::dispatched(&name, &candidates, &kinds, arguments, &no_variant));
 		}
