@@ -504,7 +504,7 @@ impl WasmGcEmitter {
 			None if self.has_unknown_static_type(value) => {
 				let held = self.node_scratch();
 				self.emit_node_instructions(func, value);
-				func.instruction(&I::LocalTee(held));
+				func.instruction(&I::LocalSet(held));
 				self.emit_field(func, held, 0);
 				Self::emit_kind_test(func, Kind::Int as i64, I::I64Eq);
 				Self::emit_list(func, &[I::If(BlockType::Result(ValType::I32)), I::LocalGet(held), I::RefAsNonNull]);
