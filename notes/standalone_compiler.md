@@ -58,15 +58,16 @@ compare with Rust stages; they retire with those lanes (decision self-hosting: t
    an input file in the cache folder (as the stage workers do now) and passes its folder as the program's folder
    (`args#3`, else the source file's folder).
 3. Output: Rust reads back the wasm file `args#2` names: bytes, no conversion. A refusal is the compiler program's
-   error (its message "outside the core: …"): under `pure-only` it is the program's error, under `pure` it is
-   recorded (WARP_EMIT_REFUSALS) and the program compiles the usual way, as today.
+   error (its message "outside the core: …") and the program's error, recorded in WARP_EMIT_REFUSALS: no Rust
+   compile behind the stages (supervisor, 2026-10-20: the silent fallback hid gaps).
 4. Run: the produced module through `run_module` with WASI and the host imports it names (`imports_from`), plus the
    fuel mark as today.
 
 The same file runs from the command line with no switch at all: `warp lib/compiler/compiler.warp app.warp app.wasm`,
 then `warp app.wasm`. That is the independence the decision asks for; the Rust lane is only a convenience around it.
 
-### WARP_SELF_HOSTED=pure-only / pure
+### WARP_SELF_HOSTED=pure (alias pure-only)
+pure and pure-only become one lane with no fallback; `pure-only` stays as an alias with a note.
 pipeline::eval_source → self_hosted::pure_module(code) → (new, small) `standalone::compiled(code)`: kept compiler
 module, input file, run it, read the wasm file. `pure_bytes` and its three stage round trips go. The ladder
 (probes/self_hosting/refusals.sh --pure) must count at least as many right programs as before the switch.
@@ -78,10 +79,9 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
    analyzer×scope: parameters_of; analyzer×serializer: is_empty; analyzer×multiple_assignments: statements;
    emitter×parser: expression, global_declaration, statements_of; emitter×node_matches: chosen;
    emitter×definitions: definition; emitter×for_loops: is_entry; emitter×clauses: joined.
-   Recommended: the general rule wiki/use.md already promises between a program and a module ("the module's own code
-   keeps calling its own play") extended to file and file: a used file's own code calls its own word; the error only
-   when a file that sees both calls the word itself. Language card (file-own-words); question to warp-interviewer.
-   Fallback if the rule is declined: rename the analyzer's and emitter's helpers to say what differs.
+   Decided (supervisor, 2026-10-20): the general rule wiki/use.md already promises between a program and a module
+   ("the module's own code keeps calling its own play"), file and file alike: a used file's own code calls its own
+   word; the error only when a file that sees both calls the word itself. No renames (card file-own-words).
 2. Runtime words lowered by warp: runtime.warp through `lowered_program` (folder lib/, so uses.warp splices its
    `use case_tables`) runs (cold 2 min), with warnings that `Round`, `Add`, `Define` name nothing (enum variants
    written bare in runtime.warp: warp-compiler-enums). Whether emitter.warp emits the same from it as from Rust's
@@ -94,7 +94,7 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
    library_folder from WARP_LIB or the compiler file's own folder.
 
 ## Steps
-1. This note (done when warp-supervisor agrees).
+1. This note (approved by warp-supervisor 2026-10-20).
 2. Clashes: rule or renames (1 above).
 3. compiler.warp + host_words.warp; probe it from the command line on the pure ladder.
 4. self_hosted.rs: pure/pure-only run the compiler module; pure_bytes, JSON setups go; ladder counts ≥ before.
