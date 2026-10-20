@@ -1,12 +1,12 @@
-# `x is int`, `n is symbol` (card pure-type-tests): parser.warp reads `is` as ==, so `x == T` of a type word T the
-# program binds nowhere (no variable, parameter or function of that name) is the type test is_type(x, "T"), as Rust's
-# src/lowering/types/type_tests.rs lowers it
+# `x is int`, `n is symbol` (card pure-type-tests): parser.warp reads `is` as ==, so `x == T` of a type word T no
+# variable, parameter or loop variable of the program names (a field `{symbol: …}` does not) is the type test
+# is_type(x, "T"), as Rust's src/lowering/types/type_tests.rs lowers it
 use "walk.warp"
 use "words.warp"
 use "scope.warp"
 
 tested_word_call(subject: Node, word: text, n: Node, scope: any): Node :=
-	if is_tested_type_word(word) and not binds(scope, word) then call_of("is_type", [subject, word]) else n
+	if is_tested_type_word(word) and not binds_value(scope, word) then call_of("is_type", [subject, word]) else n
 
 tested_type_call(subject: Node, type: Node, n: Node, scope: any): Node := match type {
 	Symbol(word): tested_word_call(subject, word, n, scope)

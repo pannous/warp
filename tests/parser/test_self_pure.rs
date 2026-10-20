@@ -217,3 +217,11 @@ fn lambdas_run_pure() {
 		"[4 8]",
 	);
 }
+
+/// lib/compiler/type_tests.warp: a field named like a type word (`{symbol: …}`) leaves `x is symbol` a type test, only
+/// a variable of that name is compared (card pure-lane-symbol)
+#[test]
+fn type_words_named_by_fields_run_pure() {
+	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
+	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
+}
