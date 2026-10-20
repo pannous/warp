@@ -77,6 +77,25 @@ fn enum_cases_run_pure() {
 	);
 }
 
+/// plain_enums.warp converts a case to its index and back, node_matches.warp takes `other:` as the default arm and a
+/// case named like a type word (`Int` of node.warp's Kind) as the case (card enum-leftovers)
+#[test]
+fn enum_conversions_and_default_arms_run_pure() {
+	let coin = "enum Coin { Penny, Nickel, Dime }";
+	runs_pure("case_as_int", &format!("{coin}\nCoin.Dime as int"), "2");
+	runs_pure("case_as_position", &format!("{coin}\nCoin.Dime as position"), "3");
+	runs_pure("int_as_case", &format!("{coin}\n2 as Coin"), "Dime");
+	runs_pure("case_call", &format!("{coin}\nCoin(1)"), "Nickel");
+	let cost = "cost(c) := match c { Penny: 1; other: 3 }";
+	runs_pure("other_arm", &format!("{coin}\n{cost}\ncost(Coin.Dime) * 10 + cost(Coin.Penny)"), "31");
+	let name = "name(k) := match k { Int: \"int\"; Float: \"float\"; _: \"node\" }";
+	runs_pure(
+		"type_named_cases",
+		&format!("enum Kind {{ Empty, Int, Float }}\n{name}\nname(Kind.Int) + name(Kind.Empty)"),
+		"intnode",
+	);
+}
+
 /// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
 /// read, as parser.warp's expression, atom and continued do
 #[test]
@@ -264,4 +283,15 @@ fn kind_changes_fail_pure() {
 	let (output, _) = lane_run("pure-only", "body_kind_change", "f() := (x = 1; x = \"a\"; x); f()");
 	assert!(output.contains("x was an Int, is given a Text"), "{output}");
 	runs_pure("kinds_that_mix", "x = 1; x = 2.5; x", "2.5");
+}
+
+/// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter
+/// of kind Op, Bracket or Separator holds the text a node carries, and a type variable `T` any value
+#[test]
+fn enums_of_used_files_and_type_variables_run_pure() {
+	let probe = |name: &str| format!("{}/probes/compiler_enums/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("used_enum", &probe("f_used_enum2"), "Function\nyes\nyes");
+	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
+	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
+	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
 }

@@ -31,7 +31,11 @@ Errors are the same runtime functions (`index_out_of_range`, `index_must_be_an_i
 Lists are shared (P200b, card shared-lists): `ys = xs` shares the typed array, so an item set or added through either
 shows in both; `xs = xs + [v]` copies first while the list is aliased (TypedList.aliased). A typed list some holder keeps
 as Nodes (an argument to a function that changes it, an item or field, an untyped alias) stays a Node list
-(wasm_emitter/list_sharing.rs held_elsewhere, find_typed_lists), as one conversion would part the two.
+(wasm_emitter/list_sharing.rs held_elsewhere, find_typed_lists), as one conversion would part the two. Unless the
+holding is the list's last use (typed_list_finding.rs held_last: no loop around it, no mention of the list after it):
+then it is filled as an array and converted once there (lexer.warp `Gaps{resumes: resumes, …}` after the loop filling
+it was O(n²), 1.2 s for a 34 KB source; 200000 items 51 s → tests/lists/test_list_held_last.rs). A list field itself
+is still cons cells, so `box.items[i]` walks i cells (card list-field).
 
 `sum`, `map`, `each`, element-wise `xs * 2` are lowered to loops before emission (library_words.rs, lambdas.rs,
 analyzer::element_wise); those loops reach the dispatch layer as count / element / append, so they get the array for free.

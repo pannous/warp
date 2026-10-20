@@ -111,6 +111,11 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
   name (`line.length` beside a map with a key length) was typed a text.
 - Step 3 written: lib/compiler/compiler.warp and host_words.warp. Not yet through: the next probe needs the scope fixes
   in the shared build. Probe: `cd scratch/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../lib/compiler/compiler.warp app.warp app.wasm`.
+- Blocked on compile time (card analyzer-settle): compiler.warp does not finish compiling (>30 min CPU); even
+  `use passes+emitter; print(1)` takes >15 min, while each stage alone compiles in ~30 s. A sample of warp-debug
+  shows analyzer::user_functions::flow::settle (src/analyzer/user_functions/flow.rs) looping up to Σ(params+1)
+  rounds, each a whole-program flows() walk through collect_variables: quadratic in the ~2000 functions. Fix idea: a
+  worklist that re-flows only functions whose callers' argument kinds changed.
 
 ## Coordination
 - warp-self-analyzer (pure lane, branch prelude-for-pure): compiler.warp only composes their stages; their passes,

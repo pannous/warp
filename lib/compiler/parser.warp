@@ -5,6 +5,7 @@ use "lexer.warp"
 use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
+use "foreign_forms.warp"
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool }
 
@@ -908,6 +909,8 @@ def prefixed(p) {
 		loop = looped(p)
 		return if loop == ø then atom(p) else loop
 	}
+	foreign = foreign_form(p, word)
+	if foreign != ø { return foreign }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else count_worded(p)
 	if declared != ø { return declared }
 	if PREFIX_OPERATORS.contains(form) and not after_member_dot(p) { return word_prefixed(p, word, form) }
@@ -1805,7 +1808,10 @@ def enum_body_at(p) {
 
 // `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
 // follows: `map function square on xs`); `function add(x) {…}` defines it
+// `function f`, `func f`: the function f as a value, marked as Rust's parser marks it (closures.rs
+// FUNCTION_REFERENCE_MARK), so the closure pass makes it a closure, a nested one too
 // Rust twin: definitions/functions.rs function_reference_after
+FUNCTION_REFERENCE_MARK = "function_reference"
 def function_reference(p) {
 	at = blank_end(p, p.at)
 	if at == p.at or at >= p.n or not is_alpha(p.code[at]) { return ø }
@@ -1814,7 +1820,7 @@ def function_reference(p) {
 	next_word = p.code[rest .. name_end(p.code, rest, p.n)]
 	if not (rest >= p.n or ";,)]}\n".contains(p.code[rest]) or next_word == "on" or next_word == "is") { return ø }
 	p.at = end
-	symbol(p.code[at .. end])
+	attributed(FUNCTION_REFERENCE_MARK, true, symbol(p.code[at .. end]))
 }
 
 // The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter
@@ -1986,6 +1992,8 @@ def declared_type(p, word) {
 	skip_blanks(p)
 	end = symbol_end(p.code, p.at, p.n)
 	name = symbol(p.code[p.at .. end])
+	// `mixin Name {…}`: the type its classes take the methods of (foreign_forms.warp)
+	if word == "mixin" { name = attributed("mixin", true, name) }
 	p.at = end
 	parameters = type_parameters(p)
 	ends_statement = ";}\n".contains(peek(p.code, blank_end(p, p.at), p.n))

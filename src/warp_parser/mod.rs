@@ -397,7 +397,8 @@ impl WarpParser {
 			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
-		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None));
+		let types = if options.data_mode { Default::default() } else { declaration_scan::scan_type_names(input) };
+		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None), &types);
 		if options == ParserOptions::default() {
 			crate::normalize::check_style(&program);
 		}

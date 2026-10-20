@@ -1,0 +1,11 @@
+# Rust lane: a local holding `if c then [texts] else ø` reads its element as an int (card rust-lane-local)
+q(flag: bool): any := {
+	declared = if flag then ["ww", "WW"] else ø
+	declared#1
+}
+r(flag: bool): any := {
+	declared = ["ww", "WW"]
+	declared#1
+}
+print q(yes)
+print r(yes)

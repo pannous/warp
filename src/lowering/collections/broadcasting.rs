@@ -6,9 +6,7 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{
-	any_part, call, called_name, children_rewritten, is_colon_pair, key, parameter_name, word_headed, Counter,
-};
+use super::nodes::{any_part, call, called_name, children_rewritten, is_colon_pair, key, word_headed, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -297,7 +295,7 @@ fn spaced(node: &Node, first: &dyn Fn(&Node) -> String) -> String {
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 	if let Some((head, body, rebuild)) = crate::lowering::type_tests::function_definition(&node) {
-		if let Some(inner) = without_parameters(&head, arities) {
+		if let Some(inner) = without_bound(&node, arities) {
 			return rebuild(head, nest_prefix_calls(body, &inner));
 		}
 	}
@@ -453,14 +451,16 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 	}
 }
 
-/// In a function's body its parameters are values, no functions of the same name: `f(name) := contains(name, "-")`
-/// beside a class's name() method
-fn without_parameters(head: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
-	let Node::List(items, _, _) = head.drop_meta() else { return None };
-	let shadowed: Vec<String> =
-		items.iter().skip(1).filter_map(parameter_name).filter(|name| arities.contains_key(name)).collect();
-	let unshadowed = arities.iter().filter(|(name, _)| !shadowed.contains(name));
-	(!shadowed.is_empty()).then(|| unshadowed.map(|(name, arity)| (name.clone(), *arity)).collect())
+/// In a function's body the names it binds (parameters, locals, loop variables: program_names.rs, the one scope rule)
+/// are values, no functions of the same name: `f(name) := contains(name, "-")` beside a class's name() method,
+/// `digits = t; slice digits 1 ø` beside a used file's digits(…)
+fn without_bound(definition: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
+	let bound = crate::program_names::bound_inside(definition)?;
+	let unbound = arities.iter().filter(|(name, _)| !bound.contains(*name));
+	bound
+		.iter()
+		.any(|name| arities.contains_key(name))
+		.then(|| unbound.map(|(name, arity)| (name.clone(), *arity)).collect())
 }
 
 /// `1, add 2, 3` → `1, add 2 3`: the first braceless call short of arguments takes the items after its comma, wherever

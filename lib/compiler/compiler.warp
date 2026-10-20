@@ -1,0 +1,26 @@
+# The warp compiler as one warp program (card standalone, notes/standalone_compiler.md): source text in, wasm bytes out,
+# its stages handing each other plain warp values. `warp lib/compiler/compiler.warp app.warp app.wasm`, then
+# `warp app.wasm`; a form beyond the emitter's core is the compile's error ("outside the core: …")
+use "passes.warp"
+use "analyzer.warp"
+use "emitter.warp"
+use "host_words.warp"
+use os
+use file
+
+# lib/: WARP_LIB, else the folder above this file's
+library_folder = env("WARP_LIB") ?? folder_of(module_directory)
+
+# the runtime words, lowered by the same passes as a program
+runtime_words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler")
+
+# the wasm module of the source, as bytes
+compile(source: text, folder: text): list := {
+	program = lowered_program(source, folder)
+	typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
+}
+
+# warp compiler.warp <source file> <wasm file> [<folder of the source's uses>]
+source_file = args#1
+folder = if #args > 2 then args#3 else folder_of(source_file)
+write_bytes(args#2, compile(read(source_file), folder))

@@ -38,7 +38,7 @@ is_count_phrase(word: any, body: any, scope: any, bound: list): bool := word is 
 
 is_count_word(word: text, scope: any, bound: list): bool := {
 	if count_of(word) == ø or (bound contains word) { return false }
-	not binds_as(scope, word, "function")
+	not binds_as(scope, word, Meaning.Function)
 }
 
 // The name `x = …` or `f(a) := …` binds
