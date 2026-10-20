@@ -3754,6 +3754,7 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
@@ -6325,4 +6326,4 @@ FAILED:
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6319 passed, 1 failed, 6320 total tested
+11 ignored, 6320 passed, 1 failed, 6321 total tested
