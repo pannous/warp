@@ -58,6 +58,7 @@ something wrong use a `Diagnostic` (error) or a warning (`diagnostic::ask`). Tes
 |---|---|---|---|
 | `a upto b` (upto) | warp_parser `range_reading` | exclusive | `..<` exclusive, `...` inclusive |
 | `for i in 0..n-1` (kotlin-range) | same | exclusive (warp) | `..<`, `...` (Kotlin's inclusive) |
+| `n is key` with a variable `key` (shadowed-type-word) | type_tests.rs `warn_shadowed_type_word` | the variable's value | `n == key`, `n is a key` (an article is always the type) |
 | `1 -1` (signed-operand) | warp_parser `signed_number_starts_a_list` | the list | `1 (-1)` list (also inside `[…]`), `1 - 1` |
 | `n = …` in a function, main has n (local-or-global) | analyzer `ask_local_or_global` | new local | `let n =` there; `global n=` at main's assignment |
 | `[x]*n` (list-times, error) | analyzer `list_times` | none | `n times [x]`, `[x].map(x => x*n)` |

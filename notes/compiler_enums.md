@@ -52,13 +52,14 @@ Mapping of today's words: "int" int, "float" float, "rational" rational, "codepo
 number of run-time kind) number, "empty"/"node" (any node) any, "bool" bool, "" (unknown) ø. "list of int" is
 `list of int` once types carry their element type, until then `[list, int]`. The emitter's held kinds are the same
 types (one vocabulary: Held goes too). The printed analysis (`f(int) -> float`) is "${t}". No new enum, nothing
-duplicated, and no case name collides with a type (R1 no longer blocks this plan, still worth fixing).
+duplicated, and no case name collides with a type (R1 is fixed anyway: rust-lane, enum-case-names).
+A type value prints `class int` (decision type-text); the analysis text spells a kind with `t.name` → int.
 
-Needs, probes/compiler_enums/f_type_values.warp (2026-10-20):
-- T1 pure lane: a built-in type as a value, `k = int`: "the unknown name int".
-- T2 Rust lane: `[int, float, codepoint] contains text`-style membership gives no; a match on a value declared
-  `type` with arms naming types (`match t { int: …; float: … }`) takes `_` (the arms test t's own type); "${list}"
-  prints "class list" where "list" is meant.
+Needs, probes/compiler_enums/f_type_values*.warp, f_type_match.warp (2026-10-20):
+- T1 pure lane: a built-in type as a value, `k = int`: "the unknown name int" (card pure-lane-reads).
+- T2 Rust lane (card rust-lane-int): a match on a value declared `type` with arms naming types (`match t { int: …;
+  float: … }`) takes `_`, the arms test t's own type; `t: type = int` is "unknown type type". Membership
+  (`[int, text] contains k`) works; the first probe's "no" was right.
 
 ## Declarations (superseded for Kind and Held by the section above)
 

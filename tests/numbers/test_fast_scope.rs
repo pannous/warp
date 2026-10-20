@@ -24,6 +24,15 @@ fn a_fast_program_is_machine_arithmetic() {
 	is!("fast = 2; fast + 1", 3);
 }
 
+// card fast-decimals: a decimal of fast code is a float, never an exact ratio taken for a machine int
+#[test]
+fn fast_decimals_are_floats() {
+	is!("fast\n0.5 + 0.25", 0.75);
+	is!("fast\nx = 0.5\nx * 2", 1.0);
+	is!("fast\n1.5 + 1", 2.5);
+	is!("fast f(x) := x + 0.25; f(0.5)", 0.75);
+}
+
 #[test]
 fn fast_types_are_machine_types() {
 	is!("x: fast int = 3; x + 1", 4);
