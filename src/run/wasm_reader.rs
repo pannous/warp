@@ -92,8 +92,8 @@ fn run_main<S: 'static>(
 ) -> Result<(Val, Store<S>, Instance)> {
 	crate::sound::start_run();
 	let (engine, _) = engine_for(bytes);
-	let mut store = crate::util::limited_store(&engine, state);
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
+	let mut store = crate::util::profiled_store(&engine, state, &module);
 	let mut linker = Linker::new(&engine);
 	link(&mut linker, &engine, &module)?;
 	define_imported_entities(&mut linker, &mut store, &module)?;
