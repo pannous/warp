@@ -209,6 +209,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		any(&["exact_euclid_div"], &[INT_RUNTIME]),
 		any(&[FLOAT_AS_EXACT], &[INT_RUNTIME, "new_int"]),
 		any(&[LIST_EXTEND], &["list_concat"]), // of a non-list
+		any(&[NODE_ADD_ASSIGN], &[LIST_EXTEND, NODE_ADD]),
 		// two lists added are concatenated, two texts too, a text and a number joined
 		any(&[NODE_ADD], &["list_concat", TEXT_CONCAT, TEXT_OF, LIST_JOIN]),
 		any(&[TEXT_AS_NUMBER], &[TEXT_AS_FLOAT, INT_RUNTIME, "exact_div", "new_text", "new_int", "new_float"]),
