@@ -15,3 +15,5 @@ negative_modulo($left, $right)	"`{left} % {right}`: % is Euclidean as in mathema
 float_equality($left, $right)	"`{left} == {right}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"	"use ≈ or exact numbers"
 float_inequality($left, $right)	"`{left} != {right}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"	"use ≈ or exact numbers"
 arithmetic_conversion($whole, $target, $tight)	"`{whole} as {target}` converts the whole `{whole}`, not only its last operand"	"({whole}) as {target} or {tight}"	"arithmetic-conversion@{whole} as {target}"
+# main_globals.warp: `n = …` in a function where main has an n, taken as a new local of the function
+local_or_global($name, $function)	"does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}? (taking a new local of {function})"	"let {name} = …"	"local-or-global@{name} = …"

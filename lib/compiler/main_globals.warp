@@ -1,0 +1,97 @@
+# A function changes a main-level variable only when it is declared `global` (wiki/effects.md; card port-remaining;
+# Rust twin: src/analyzer/main_globals.rs): updating main's n from a function (`n += 1`, `xs[i] = 9`, `xs.add(x)`)
+# is the error main_variable_change(n), binding it fresh (`n = 5`) the warning local_or_global(n, f), taking it as
+# the function's own local.
+use "walk.warp"
+use "uses.warp"
+use "sugar.warp"
+use "kind_changes.warp"
+use "diagnostics.warp"
+
+# the words of the methods that change their list (Rust is_list_mutating_method)
+list_changing_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
+# the declarations that make a name the function's own: `let n = 5` (Rust is_declaration_word)
+local_words = ["let", "var", "const", "constant", "final", "val"]
+counting_operators = ["++", "--"]
+compound_assignments = ["+=", "-=", "*=", "/=", "%=", "^="]
+# the operators a changed target is reached through: `xs#i`, `p.x`, the declared `k: int`
+target_operators = ["#", ".", ":"]
+
+# the lowered program, the first change of a main-level variable from one of the functions `own_names` defines (not a
+# used module's or the prelude's) diagnosed
+main_globals(program: any, own_names: list): any := {
+	main_names = main_variables(program)
+	global_names = global_variables(program)
+	for function_definition in nodes_in(program).filter(is_definition) {
+		defined_function = defined_name(function_definition)
+		if defined_function in own_names {
+			body = value_of(function_definition)
+			own = parameter_names(key_of(function_definition))
+			decided = {}
+			for name in changed_names(body) {
+				if name in main_names and not (name in global_names) and not (name in own) and not (name in decided) and not declares_local(body, name) {
+					decided[name] = yes
+					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name])) }
+					diagnose(call_of("local_or_global", [name, defined_function]))
+				}
+			}
+		}
+	}
+	program
+}
+
+# the variables main assigns, outside the function definitions
+main_variables(program: any): any := {
+	found = {}
+	for statement in statements_in(program) { add_assigned(statement, found) }
+	found
+}
+add_assigned(n: any, found: any): any := {
+	if is_definition(n) { return ø }
+	if is_operator(n, "=") {
+		target = key_of(n)
+		if is_operator(target, ":") and key_of(target) == symbol(global_word) { target = value_of(target) }
+		name = changed_root(target)
+		if name != ø { found[name] = yes }
+	}
+	for part in parts_of(n) { add_assigned(part, found) }
+	ø
+}
+
+# the variables the body changes, in source order: `n = …`, `n += …`, `n++`, `xs#i = …`, `xs.add(x)`
+changed_names(n: any): list := {
+	found = []
+	name = changed_variable(n)
+	if name != ø { found += [name] }
+	for part in parts_of(n) { found += changed_names(part) }
+	found
+}
+changed_variable(n: any): any := {
+	if not (type(n) is key) { return ø }
+	op = op_of(n)
+	if op == "=" or op in counting_operators or op in compound_assignments { return changed_root(key_of(n)) }
+	if op == "." and key_of(n) is symbol and is_group(value_of(n)) and #value_of(n) > 0 and value_of(n)#1 is symbol and name_of(value_of(n)#1) in list_changing_methods { return name_of(key_of(n)) }
+	ø
+}
+changed_root(target: any): any := {
+	if target is symbol { return name_of(target) }
+	if type(target) is key and op_of(target) in target_operators { return changed_root(key_of(target)) }
+	ø
+}
+
+# `let n = 5` in the body: n is explicitly the function's own
+declares_local(body: any, name: text): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_words and leftmost_name(n#2) == name)
+
+# how the body first mentions the name: binding it fresh (`primes = []`, the function's own local, as in Python),
+# reading or updating it (main's variable), or not at all ("")
+fresh_mention = "fresh"
+read_mention = "read"
+first_mention(n: any, name: text): text := {
+	if is_operator(n, "=") and key_of(n) == symbol(name) { return if mentions(value_of(n), name) then read_mention else fresh_mention }
+	if n == symbol(name) { return read_mention }
+	for part in parts_of(n) {
+		mention = first_mention(part, name)
+		if mention != "" { return mention }
+	}
+	""
+}

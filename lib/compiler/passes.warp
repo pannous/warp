@@ -29,6 +29,7 @@ use "sleep_durations.warp"
 use "lambdas.warp"
 use "kind_changes.warp"
 use "source_checks.warp"
+use "main_globals.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
@@ -54,7 +55,9 @@ lowered(source: text, folder: text, prelude: text): any := view_of(lowered_progr
 # pure-diagnostics): the checks of the program as written, then those of the lowered program, as Rust runs them
 checked(source: text, folder: text, prelude: text): list := {
 	program = plain_node(source_checks(parsed(source), prelude))
-	[view_of(kind_changes(lowered_node(with_used(program, folder, prelude)))), diagnosed]
+	own_names = statements_in(program).map(declared_name)
+	lowered_checked = main_globals(kind_changes(lowered_node(with_used(program, folder, prelude))), own_names)
+	[view_of(lowered_checked), diagnosed]
 }
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
