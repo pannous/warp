@@ -51,9 +51,12 @@ fn the_warp_emitter_emits_inside_its_core() {
 	let (closure, phases) = self_hosted_run(&cache, "x = 3; f = y => x + y; f(4)");
 	assert!(closure.contains('7'), "{closure}");
 	assert!(!phases.contains("emit ("), "a closure over a variable is inside the core: {phases}");
-	let (beyond, phases) = self_hosted_run(&cache, "x = 3; g = y => z => x + y + z; g(1)(2)");
-	assert!(beyond.contains('6'), "{beyond}");
-	assert!(phases.contains("emit ("), "a closure giving a closure is beyond the core: {phases}");
+	let (curried, phases) = self_hosted_run(&cache, "x = 3; g = y => z => x + y + z; g(1)(2)");
+	assert!(curried.contains('6'), "{curried}");
+	assert!(!phases.contains("emit ("), "a closure giving a closure is inside the core: {phases}");
+	let (beyond, phases) = self_hosted_run(&cache, "try { fail(\"no\") } catch e { 5 }");
+	assert!(beyond.contains('5'), "{beyond}");
+	assert!(phases.contains("emit ("), "a try is beyond the core: {phases}");
 }
 
 /// The stage programs compile from warp's lib/ alone: a folder whose text.warp and list.warp would shadow the standard
