@@ -516,17 +516,19 @@ def continued(p, left, min_power) {
 			left = if written == "/!=" then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			membership = membership_at(p)
-			if 115 < min_power { break }
+			if MEMBERSHIP_POWERS#1 < min_power { break }
 			p.at = p.at + membership#1.length
 			skip_blanks(p)
-			left = listed("", " ", [left, symbol(membership#2), expression(p, 116)])
-		} else if negated_is_at(p).length > 0 {
-			// `x is not 4` and `x isn't 4` are `not (x is 4)` (Rust twin: spellings.rs NEGATED_SPELLINGS)
-			powers = binding_powers("is")
+			left = membership_test(left, membership#2, expression(p, MEMBERSHIP_POWERS#2))
+		} else if negated_at(p) != "" {
+			// `x is not 4`, `x not in xs`, `a nand b`: `not (x is 4)`, `not (x in xs)`, `not (a and b)`
+			written = negated_at(p)
+			positive = NEGATED_SPELLINGS[written]
+			powers = if positive == "in" then MEMBERSHIP_POWERS else binding_powers(positive)
 			if powers#1 < min_power { break }
-			p.at = p.at + negated_is_at(p).length
+			p.at = p.at + written.length
 			skip_blanks(p)
-			left = Key(ø, Op.Not, Key(left, Op.Is, expression(p, powers#2)))
+			left = Key(ø, Op.Not, operation(left, positive, expression(p, powers#2)))
 		} else if down_to_at(p) > 0 {
 			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
 			powers = binding_powers("to")
@@ -644,12 +646,17 @@ def opens_block(p, width) {
 }
 
 // `is not`, `isn't` at the parser's position, else ""
-def negated_is_at(p) {
-	for word in ["is not", "isn't", "isn’t"] {
-		if keyword_at(p, word) { return word }
-	}
-	""
-}
+// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)`, `x isn't 4`
+// `not (x is 4)`, Python's `x not in xs` `not (x in xs)`
+// Rust twin: spellings.rs NEGATED_SPELLINGS
+NEGATED_SPELLINGS = {"nand": "and", "¬&": "and", "⊼": "and", "is not": "is", "isn't": "is", "isn’t": "is", "not in": "in", "∉": "in"}
+def negated_at(p) := NEGATED_SPELLINGS.keys.find(written => keyword_at(p, written)) ?? ""
+
+// how tightly `x in xs` binds on its left and right
+MEMBERSHIP_POWERS = [115, 116]
+def membership_test(left, word, right) := listed("", " ", [left, symbol(word), right])
+// `a and b`, `x is 4`, `x in xs` of the operator's spelling
+def operation(left, spelling, right) := if spelling == "in" then membership_test(left, spelling, right) else keyed(spelling, left, right)
 
 // `x in xs`, `xs contains x`: the membership word at the parser's position as [written, word], else []; `x is in xs` is
 // `x in xs`
