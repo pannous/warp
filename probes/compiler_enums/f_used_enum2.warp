@@ -1,0 +1,5 @@
+use "used/meanings.warp"
+print first_meaning
+f(m: Meaning): bool := m == Meaning.Function
+print f(first_meaning)
+print f(Meaning.Function)

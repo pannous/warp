@@ -1,0 +1,153 @@
+## exact rationals: int `/` gives one, an int over a positive int in lowest terms (the Rust twin's Number::Quotient),
+## held in an Int $Node as a $Ratio (intrinsics is_ratio, ratio_of, ratio_numerator, ratio_denominator)
+int_gcd(a: int, b: int): int := {
+	if a < 0 { a = -a }
+	if b < 0 { b = -b }
+	while b != 0 {
+		rest = int_remainder(a, b)
+		a = b
+		b = rest
+	}
+	a
+}
+# n/d in lowest terms, an int when d divides n; d 0 traps, as Rust's divide by zero fails
+exact_ratio(n: int, d: int): any := {
+	if d == 0 { divide_by_zero() }
+	divisor = int_gcd(n, d)
+	if d < 0 { divisor = -divisor }
+	n = int_quotient(n, divisor)
+	d = int_quotient(d, divisor)
+	if d == 1 { return n }
+	ratio_of(n, d)
+}
+# the numerator and denominator of an Int $Node, an int its own numerator over 1
+exact_numerator(n: any): int := if is_ratio(n) == 1 then ratio_numerator(n) else unboxed_int(n)
+exact_denominator(n: any): int := if is_ratio(n) == 1 then ratio_denominator(n) else 1
+exact_add(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) + exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_sub(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b) - exact_numerator(b) * exact_denominator(a), exact_denominator(a) * exact_denominator(b))
+exact_mul(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_numerator(b), exact_denominator(a) * exact_denominator(b))
+exact_div(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denominator(b), exact_denominator(a) * exact_numerator(b))
+# -1, 0 or 1 as a is below, equal to or above b (denominators are positive)
+exact_order(a: any, b: any): int := {
+	left = exact_numerator(a) * exact_denominator(b)
+	right = exact_numerator(b) * exact_denominator(a)
+	if left < right then -1 else if left > right then 1 else 0
+}
+# an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
+# any other as n/d
+exact_text(n: any): text := {
+	if is_ratio(n) == 0 { return int_text(unboxed_int(n)) }
+	numerator = ratio_numerator(n)
+	denominator = ratio_denominator(n)
+	twos = factor_count(denominator, 2)
+	fives = factor_count(denominator, 5)
+	if denominator != int_pow(2, twos) * int_pow(5, fives) { return int_text(numerator) + "/" + int_text(denominator) }
+	digits = max_int(twos, fives)
+	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
+	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
+	magnitude = int_text(if scaled < 0 then -scaled else scaled)
+	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
+	whole = byte_count(padded) - digits
+	out = new_text(byte_count(padded) + 1)
+	copy_text(out, 0, padded, 0, whole)
+	set_byte(out, whole, 46)
+	copy_text(out, whole + 1, padded, whole, digits)
+	if numerator < 0 { return "-" + out }
+	out
+}
+# how often factor divides n
+factor_count(n: int, factor: int): int := {
+	count = 0
+	while n != 0 and int_remainder(n, factor) == 0 {
+		n = int_quotient(n, factor)
+		count += 1
+	}
+	count
+}
+power(base: int, exponent: int): int := {
+	out = 1
+	for i in 0..exponent { out = out * base }
+	out
+}
+# `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
+# src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
+# 14142135623730951/10^16; ∞ and NaN have no fraction
+float_as_exact(x: float): any := {
+	# x - x is 0 for every finite x, NaN for ∞ and NaN
+	if x - x != 0 { not_a_finite_number() }
+	if x == 0 { return exact_ratio(0, 1) }
+	sign = if x < 0 then -1 else 1
+	# `then -x else` reads as a subtraction from then
+	magnitude = if x < 0 then 0 - x else x
+	found = float_digits(magnitude)
+	digits = unboxed_int(found#1)
+	shift = unboxed_int(found#2)
+	if shift <= 0 { return exact_ratio(sign * multiplied_within_64_bits(digits, 10, -shift), 1) }
+	# digits / (2^shift · 5^shift), the common factors taken out first so the denominator fits where it can
+	twos = shift
+	fives = shift
+	while twos > 0 and int_remainder(digits, 2) == 0 {
+		digits = int_quotient(digits, 2)
+		twos -= 1
+	}
+	while fives > 0 and int_remainder(digits, 5) == 0 {
+		digits = int_quotient(digits, 5)
+		fives -= 1
+	}
+	exact_ratio(sign * digits, multiplied_within_64_bits(multiplied_within_64_bits(1, 5, fives), 2, twos))
+}
+# n · factor^times of n ≥ 0; beyond 64 bits it fails as an int64 overflow (Rust's twin goes on in big ints)
+multiplied_within_64_bits(n: int, factor: int, times: int): int := {
+	for i in 0..times {
+		if n > int_quotient(9223372036854775807, factor) { overflow_of_int64() }
+		n = n * factor
+	}
+	n
+}
+# a text of count zero digits
+zeros(count: int): text := {
+	out = new_text(if count > 0 then count else 0)
+	for i in 0..count { set_byte(out, i, 48) }
+	out
+}
+# `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
+floor_quotient(a: int, b: int): int := {
+	q = int_quotient(a, b)
+	if a - q * b < 0 {
+		if b > 0 { q -= 1 } else { q += 1 }
+	}
+	q
+}
+# `base ^ exponent` of exact numbers (src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
+# inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names
+exact_pow(base: any, exponent: any): any := {
+	if is_ratio(exponent) == 1 { fail() }
+	times = unboxed_int(exponent)
+	if times < 0 {
+		base = exact_ratio(exact_denominator(base), exact_numerator(base))
+		times = -times
+	}
+	if is_ratio(base) == 0 { return int_pow(unboxed_int(base), times) }
+	# a ratio in lowest terms stays in lowest terms raised to any power
+	ratio_of(int_pow(ratio_numerator(base), times), int_pow(ratio_denominator(base), times))
+}
+# base ^ exponent by squaring, exponent at least 0 (src/wasm_emitter/numbers/big_int/slow_paths.rs int_pow); a product
+# beyond the int range fails in int_overflow, where Rust's turns into a big int
+int_pow(base: int, exponent: int): int := {
+	if exponent < 0 { fail() }
+	result = 1
+	while exponent > 0 {
+		if int_remainder(exponent, 2) == 1 { result = checked_product(result, base) }
+		exponent = int_quotient(exponent, 2)
+		if exponent > 0 { base = checked_product(base, base) }
+	}
+	result
+}
+# a * b, failing in int_overflow when the product leaves the int range
+checked_product(a: int, b: int): int := {
+	product = a * b
+	# -1 · smallest leaves the range, and its quotient check would trap itself
+	overflowed = if a == -1 then b == least_int() else a != 0 and int_quotient(product, a) != b
+	if overflowed { int_overflow() }
+	product
+}

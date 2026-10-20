@@ -1,0 +1,55 @@
+# Lists known only at run time: joining, growing, indexing, counting, filling, summing
+list_join(a: list, b: list): list := {
+	out = new_list(#a + #b)
+	copy_items(out, 0, a, 0, #a)
+	copy_items(out, #a, b, 0, #b)
+	out
+}
+# `a += b`: b's items after a's in a itself, so every alias of a sees them; a full array is replaced by one twice
+# as large, so appending one item at a time copies each item a bounded number of times
+list_append(a: list, b: list): list := {
+	start = #a
+	added = #b
+	if start + added > item_room(a) {
+		grown = new_list(max_int(start + added, 2 * item_room(a)))
+		copy_items(grown, 0, a, 0, start)
+		adopt_items(a, grown)
+	}
+	copy_items(a, start, b, 0, added)
+	set_count(a, start + added)
+	a
+}
+# `n#i` of a value known only at run time, counted from 1: a list's item, a text's character; ø has none ("1 not in
+# an empty list"), any other value fails as Rust's "not a list"
+node_at(n: any, index: int): any := {
+	if is_null(n) == 1 { index_out_of_range_of(index, 0) }
+	if kind_code(n) == 8 { return unboxed_list(n)#index }
+	if kind_code(n) == 3 { return text_char(unboxed_text(n), index) }
+	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
+	if kind_code(n) == 4 and index == 1 { return n }
+	not_a_list()
+}
+# `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
+node_length(n: any): int := {
+	# ø, also an empty list `[]` in the lowered program, holds nothing
+	if is_null(n) == 1 { return 0 }
+	if kind_code(n) == 8 { return #unboxed_list(n) }
+	if kind_code(n) == 3 { return text_count(unboxed_text(n)) }
+	if kind_code(n) == 4 { return 1 }
+	fail()
+}
+# `n#i = value` of a list known only at run time, in the list itself, so every alias sees it
+node_set_at(n: any, index: int, value: any): any := {
+	if kind_code(n) != 8 { fail() }
+	items = unboxed_list(n)
+	items#index = value
+	value
+}
+# `int[n]`: a list of count zeros
+zero_fill(count: int, filler: any): list := {
+	out = new_list(count)
+	for i in 1 to count { out#i = filler }
+	out
+}
+# `sum(xs)` as `list_sum(xs, loop)`: the loop the lowering wrote gives it
+list_sum(xs: list, computed: any): any := computed
