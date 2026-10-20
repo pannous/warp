@@ -19,6 +19,7 @@ use "node_matches.warp"
 use "type_tests.warp"
 use "tries.warp"
 use "prelude_words.warp"
+use "uses.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
@@ -32,17 +33,18 @@ lowered_node(n: any): any := {
 	n
 }
 
-# the program as the passes leave it, from parser.warp's nodes (card rest-node): what pure runs hand to analyzer.warp
-lowered_program(source: text): Node := lowered_node(plain_node(parsed(source)))
+# the program as the passes leave it, from parser.warp's nodes (card rest-node), with the declarations of the files
+# it uses from `folder` (uses.warp): what pure runs hand to analyzer.warp
+lowered_program(source: text, folder: text): Node := lowered_node(with_uses(plain_node(parsed(source)), folder))
 
 # the source text as the passes leave it, as its view
-lowered(source: text): any := view_of(lowered_program(source))
+lowered(source: text, folder: text): any := view_of(lowered_program(source, folder))
 
 # One stage of a compile Rust drives (card warp-pipeline-suite, src/compiler/self_hosted.rs): [0, source] gives the
-# parse tree's view, [i, view] the view after passes#i, ["pure", source] the view after all of them, with the
-# definitions of the prelude's text it reaches (card pure-runs)
+# parse tree's view, [i, view] the view after passes#i, ["pure", source, folder] the view after all of them (card
+# pure-runs), with the definitions of the prelude's text it reaches and the program's uses read from its folder
 stage(request: any, prelude: text): any := {
-	if request#1 == "pure" { return lowered(with_prelude(request#2, prelude)) }
+	if request#1 == "pure" { return lowered(with_prelude(request#2, prelude), request#3) }
 	if request#1 == 0 { return bridged(tree(request#2)) }
 	pass = passes#(request#1)
 	view_of(pass(node_of(request#2)))

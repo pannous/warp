@@ -188,7 +188,9 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_classes::a_class_extends_a_runtime_error_class
   ✓ control::test_error_classes::a_declared_error_class_raises_and_catches
+  ✓ control::test_error_classes::an_error_passed_on_keeps_its_position
   ✓ control::test_error_classes::an_undeclared_error_class_is_named
   ✓ control::test_error_classes::except_catches_its_class_and_lets_others_pass
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
@@ -880,6 +882,7 @@ PASSED:
   ✓ control::test_threads::function_values_cross_to_a_task
   ✓ control::test_threads::lists_cross_to_a_task
   ✓ control::test_threads::stop_ends_a_running_task
+  ✓ control::test_threads::tasks_run_at_the_same_time
   ✓ control::test_threads::texts_floats_characters_and_lists_cross_to_a_task
   ✓ control::test_threads::try_catches_the_failure_of_a_task
   ✓ control::test_time_of_day::a_time_of_day_must_be_one
@@ -3749,10 +3752,10 @@ PASSED:
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
+  ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
-  ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
@@ -5096,6 +5099,7 @@ PASSED:
   ✓ types::test_struct_types::test_magic_object_roundtrip
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
+  ✓ types::test_subclass_is::an_instance_is_of_its_parent_classes
   ✓ types::test_sum_types::generic_type_parameters_in_square_brackets
   ✓ types::test_sum_types::variant_with_payload_constructs_and_matches
   ✓ types::test_sum_types::variants_are_the_sum_type
@@ -6322,8 +6326,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ control::test_threads::tasks_run_at_the_same_time
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
 
 SUMMARY:
-11 ignored, 6319 passed, 2 failed, 6321 total tested
+11 ignored, 6323 passed, 2 failed, 6325 total tested

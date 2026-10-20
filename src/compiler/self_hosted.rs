@@ -117,7 +117,7 @@ static EMIT: Stage =
 /// The switch's value: None when off
 fn switch() -> Option<&'static str> {
 	static VALUE: OnceLock<Option<String>> = OnceLock::new();
-	let value = VALUE.get_or_init(|| std::env::var(SWITCH).ok()).as_deref();
+	let value = VALUE.get_or_init(|| crate::setting(SWITCH)).as_deref();
 	value.filter(|_| !IN_WORKER.with(|inside| inside.get()))
 }
 
@@ -160,7 +160,7 @@ pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
 /// kinds alone, never compared with src/analyzer's: decision ignore-rust); an error when the stage fails; None when off
 pub fn program_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> {
 	static ANALYZES: OnceLock<bool> = OnceLock::new();
-	if !enabled() || !*ANALYZES.get_or_init(|| std::env::var_os(ANALYSIS_SWITCH).is_some()) {
+	if !enabled() || !*ANALYZES.get_or_init(|| crate::setting(ANALYSIS_SWITCH).is_some()) {
 		return Ok(None);
 	}
 	kinds_of(&analysis_view(program)).map(Some).map_err(|failure| crate::node::error(&failure))
@@ -235,10 +235,17 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
 fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
-	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}]", json_text(code)))?;
+	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
 	let kinds: String =
 		serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
 	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
+}
+
+/// The folder the program's `use`s name files of, as an absolute path: its file's, else the working directory
+fn program_folder() -> String {
+	let file = crate::modules::program_file();
+	let folder = file.as_deref().map(crate::modules::folder_of).unwrap_or_else(|| PathBuf::from("."));
+	folder.canonicalize().unwrap_or(folder).display().to_string()
 }
 
 /// The refusal's lines (one, or one per refused function under SURVEY_SETTING) in the file REFUSALS_FILE names, when
@@ -256,7 +263,7 @@ fn record_refusal(refusal: &str) {
 /// Appends the lines to the file REFUSALS_FILE names, when set
 fn record_lines(lines: &str) {
 	use std::io::Write;
-	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
+	let Some(file) = crate::setting(REFUSALS_FILE) else { return };
 	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }
