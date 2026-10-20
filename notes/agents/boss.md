@@ -7,8 +7,8 @@ report back to it) can replace our tmux workers (notes/agents/start.sh, ~/dev/bi
 Read notes/agents/common.md and notes/agents/supervisor.md: the fleet rules apply.
 - Cards: `~/dev/bin/todo list Soon`, `todo take <card> <session> --keep-name`, `todo done <card> <commit> --try "how"`.
 - Each nested session gets one card: its own branch in a cowtree worktree
-  (`cowtree add /Volumes/Worktrees/<card> -b <card> origin/main`), targeted tests only via
-  `tests/queue.sh -- <filter>`, clippy, push the branch.
+  (`cowtree add /Volumes/Worktrees/<card> -b <card> origin/main`), targeted tests only, in the cloud
+  lane (`scripts/cloud-test.sh`), clippy, push the branch.
 - Finished branches: targeted tests, `git merge origin/main`, push, `todo ready <card>` (notes/agents/common.md "Done");
   warp-integrator merges the Ready column and pushes main.
 - warp-supervisor (tmux) runs the main fleet: tell it which cards you take, so no card is worked twice.

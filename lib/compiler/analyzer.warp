@@ -109,8 +109,6 @@ assigned_value(n: any): any := {
 	if op_of(n) == ":=" and is_block(value) and separator_of(value) != "," and not all_of(value, part => is_key(part, ":")) { computed(value) } else { value }
 }
 
-raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
-
 # the branch ends in an error raised: `error "…"`, `raise …`, `throw …`
 raises_error(branch: any): bool := {
 	last = last_statement(branch)

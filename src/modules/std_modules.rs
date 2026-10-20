@@ -56,7 +56,7 @@ pub(crate) const QUALIFIER: char = '·';
 pub(crate) const PRELUDE_WORDS: [(&str, &[&str]); 2] =
 	[("file", &["write", "exists", "write_bytes", "read_bytes"]), ("os", &["exec"])];
 /// warp's own lib/<module>.warp of a standard module: the source the binary embeds (natively the lib folder of the
-/// repository it was built from, or any file of the same text: lib/ of another warp checkout, card local-lib; in the
+/// checkout at hand (library_folder), or any file of the same text: lib/ of another warp checkout, card local-lib; in the
 /// browser lib/ of the served repository, the page's file root)
 pub(super) fn is_embedded_std_file(path: &Path) -> bool {
 	let Some(source) = path.file_stem().and_then(|stem| stem.to_str()).and_then(std_module) else {
@@ -65,7 +65,7 @@ pub(super) fn is_embedded_std_file(path: &Path) -> bool {
 	let folder = path.parent().unwrap_or(Path::new(""));
 	let is_standard_folder = match cfg!(feature = "native") {
 		true => {
-			let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
+			let standard_folder = library_folder().canonicalize().ok();
 			standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
 		}
 		false => folder == Path::new(STD_FOLDER),

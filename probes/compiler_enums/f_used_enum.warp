@@ -1,0 +1,3 @@
+use "used/meanings.warp"
+print Meaning.Variable
+print first_meaning == Meaning.Function
