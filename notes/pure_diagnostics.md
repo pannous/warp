@@ -12,9 +12,10 @@ The warp compiler's errors, warnings and hints are facts plus message files, no 
   `TAB "topic@expression"`, what "got it" silences (Diagnostic::about): `"and-or@{condition} and {middle} or {otherwise}"`.
 - A fact no row matches is an error naming it, so a missing message is loud.
 - The pure passes stage (passes.warp `checked`) answers `[view, diagnosed]`, each diagnosed entry
-  `[level, message, fix, topic@expression]`. src/compiler/self_hosted.rs `reported` makes an error the program's
-  value, in both pure modes, and says warnings and hints through errors::diagnostic::report, which also fails them
-  under `use strict` and skips what was acknowledged with "got it".
+  `[level, message, fix, topic@expression]`. src/compiler/self_hosted.rs `diagnosed` makes an error the program's
+  value, in both pure modes; the warnings and hints are said through errors::diagnostic::report once the pure lane
+  made the module (a later refusal leaves them to the Rust lane, which says its own), failing under `use strict`
+  (in_source_mode) and skipping what was acknowledged with "got it".
 
 Where the checks run (`checked`), as the Rust pipeline orders them:
 - on parser.warp's nodes as written, attribute layers kept (source_checks.warp): an error the parser left in the tree
