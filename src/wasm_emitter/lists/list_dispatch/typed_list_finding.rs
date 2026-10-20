@@ -173,8 +173,8 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if op.is_arithmetic() || op.is_prefix() => {
 				(left.is_empty_node() || is_number(left)) && is_number(right)
 			}
-			Node::List(items, _, _) => {
-				items.first().is_some_and(|head| self.user_function_head(head).is_some())
+			Node::List(items, bracket, _) => {
+				items.first().is_some_and(|head| self.user_function_head(head, bracket).is_some())
 			}
 			_ => false,
 		}

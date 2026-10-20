@@ -392,9 +392,9 @@ impl WasmGcEmitter {
 				.or_else(|| self.ctx.user_globals.get(name).map(|&(_, kind)| kind))
 				.unwrap_or(Kind::Symbol),
 			// Call of a user function, also braceless: `f 3`
-			Node::List(items, _, _)
+			Node::List(items, bracket, _)
 				if items.len() >= 2
-					&& let Some(name) = self.user_function_head(&items[0]) =>
+					&& let Some(name) = self.user_function_head(&items[0], bracket) =>
 			{
 				if let Some(arity) = crate::closures::closure_call_arity(name) {
 					let callee = items.get(1).and_then(Node::symbol_name);
