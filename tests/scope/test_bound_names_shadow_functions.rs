@@ -60,3 +60,14 @@ fn a_local_lambda_is_called_beside_a_same_named_function_holder() {
 fn a_local_holding_a_calls_value_is_sliced_beside_a_def_of_its_name() {
 	is!("def items(p: list, closer: text, bracket: text): list := p\nitems_of(xs: list): any := xs\nt(xs: list): any := { items = items_of(xs); arguments = items[1..]; #arguments }\nt([3, 9, 4])", 2);
 }
+
+/// A function nested by a lambda reads its enclosing body's local, beside a function of that name elsewhere (card
+/// standalone: emitter.warp's `held = …; part = i => as_node(held) …` beside multiple_assignments.warp's held(name, suffix)
+/// gave 'held needs 2 arguments')
+#[test]
+fn a_lambda_reads_an_enclosing_local_named_like_a_function() {
+	let held = "held(name: text, suffix: text): text := name + suffix\n";
+	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => held; part(n) }}\nf(1)"), warp::warp_parser::parse("[1 2]"));
+	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => #held + i; part(n) }}\nf(1)"), 3);
+	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => held#1 + i; part(n) }}\nf(1)"), 2);
+}
