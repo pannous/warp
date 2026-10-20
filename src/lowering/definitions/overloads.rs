@@ -974,10 +974,10 @@ fn element_fit(element: Option<&str>, type_name: &str) -> Option<u32> {
 	}
 }
 
-/// `[file]` of `list of file`, as a cast writes it
-fn bracketed(list_type: &str) -> String {
+/// `files` of `list of file`, the cast of `[] as files` (`[] as [file]` converts each item instead)
+fn plural(list_type: &str) -> String {
 	match crate::analyzer::list_element_type(list_type) {
-		Some(element) => format!("[{element}]"),
+		Some(element) => crate::extensions::strings::english_plural(element),
 		None => list_type.to_string(),
 	}
 }
@@ -1084,16 +1084,12 @@ impl ParameterOverloads {
 		}
 	}
 
-	/// `[] as [file]`, `[] as files`, `[] as ints`: the list and the list type it is cast to, which picks the variant
+	/// `[] as files`, `[] as ints`: the list and the list type it is cast to, which picks the variant
 	fn as_list_type(&self, argument: &Node) -> Option<(Node, String)> {
 		let Node::Key(list, Op::As, type_node) = argument.ungrouped() else {
 			return None;
 		};
 		let type_name = match type_node.drop_meta() {
-			Node::List(items, Bracket::Square, _) => match items.as_slice() {
-				[element] => format!("{}{}", crate::analyzer::LIST_OF_PREFIX, element.symbol_name()?),
-				_ => return None,
-			},
 			Node::Symbol(word) if crate::analyzer::names_list_type(word) => word.clone(),
 			Node::Symbol(word) => {
 				let classes: Vec<&str> = self.classes.iter().map(String::as_str).collect();
@@ -1134,7 +1130,7 @@ impl ParameterOverloads {
 				None => self.declared_type(argument, position, &variants),
 			})
 			.collect();
-		// the list of `[] as [file]` goes to the variant as it is: the cast picked the variant
+		// the list of `[] as files` goes to the variant as it is: the cast picked the variant
 		let arguments: Vec<Node> = arguments
 			.iter()
 			.zip(cast)
@@ -1171,7 +1167,7 @@ impl ParameterOverloads {
 				let question = format!("`[]` fits every variant of {name}: which list is it?");
 				let readings = list_types
 					.iter()
-					.map(|type_name| reading(type_name, &format!("[] as {}", bracketed(type_name))))
+					.map(|type_name| reading(type_name, &format!("[] as {}", plural(type_name))))
 					.collect();
 				let asked = Ask::new(TOPIC, question, readings, Fallback::Warning).written("[]").at_node(argument);
 				let taken = match ask(&asked) {

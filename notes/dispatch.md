@@ -136,7 +136,7 @@ written (`[note(60)]`, `[1, 2]`), a variable assigned such lists, a declared lis
 and a plain `list` variant takes what no list-of variant fits. Items only the run time knows go by the first item's
 type (decision list-variant-dispatch): `is_type(xs, "list of note") and (count(xs) == 0 or is_type(xs#1, "note"))`,
 as a list keeps no item type at run time. An empty list fits every variant and takes the first declared; a literal
-`play([])` says so in a got-it warning naming `[] as [file]`, and a cast `[] as [file]`, `[] as files` picks the variant
+`play([])` says so in a got-it warning naming `[] as files`, and that cast picks the variant (`[] as [file]` converts items instead)
 (the overload strips the cast: card cast-list). The plural of a declared type is a list of it as
 `ints` is of int. `xs: list of int` and `xs: int list` in a head fold to the one parameter `xs:"list of int"` early
 (declaration_forms lower_list_parameters), so arity, overloads and the analyzer see one parameter.
