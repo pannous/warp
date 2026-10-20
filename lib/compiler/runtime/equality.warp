@@ -9,9 +9,9 @@ node_equal(a: any, b: any): bool := {
 	if marked_kind(a) == Marked.Map and marked_kind(b) == Marked.Map { return map_equal(a, b) }
 	if kind_code(a) == Kind.List or kind_code(b) == Kind.List { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
 	if kind_code(a) == Kind.Function or kind_code(b) == Kind.Function { return kind_code(a) == kind_code(b) and list_equal(unboxed_list(a), unboxed_list(b)) }
-	if kind_code(a) == Kind.Symbol or kind_code(b) == Kind.Symbol { return kind_code(a) == kind_code(b) and text_order(node_text(a), node_text(b)) == 0 }
+	if kind_code(a) == Kind.Symbol or kind_code(b) == Kind.Symbol { return kind_code(a) == kind_code(b) and text_order(unboxed_text(a), unboxed_text(b)) == 0 }
 	if textual_node(a) or textual_node(b) { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and is_ratio(a) or is_ratio(b) { return exact_order(a, b) == 0 }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_ratio(a) or is_ratio(b)) { return exact_order(a, b) == 0 }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return unboxed_int(a) == unboxed_int(b) }
 	# times: the same form at the same position; any other value besides a number is none of the numbers
 	if kind_code(a) == Kind.Time and kind_code(b) == Kind.Time { return marked_kind(a) == marked_kind(b) and unboxed_int(a) == unboxed_int(b) }

@@ -474,6 +474,29 @@ fn parser_words_run_pure() {
 	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
 }
 
+/// A type's name is a value, `k = int` prints `class int` (decision type-text); a parameter, a result or a variable
+/// declared `type` holds one, a map entry named by it is found, and a match arm of a type word tests the subject's type
+/// (card pure-lane-reads); `float[2]` stays the typed array
+#[test]
+fn type_values_run_pure() {
+	runs_pure("type_value", "k = int; k", "class int");
+	runs_pure("type_value_member", "k = text; [int, text] contains k", "yes");
+	runs_pure(
+		"type_value_parameter",
+		"wider(a: type, b: type): type := if [a, b] contains float then float else int; wider(int, float)",
+		"class float",
+	);
+	runs_pure("type_value_key", "held = {int: 1, float: 2}; held[float]", "2");
+	runs_pure("type_arm", "name(t: any): text := match t { int: \"whole\"; _: \"other\" }; name(3)", "whole");
+	runs_pure("typed_array", "ys = float[2]; ys", "[0 0]");
+	runs_pure(
+		"type_value_arm",
+		"name(t: type): text := match t { int: \"whole\"; float: \"real\"; _: \"other\" }; name(float)",
+		"real",
+	);
+	runs_pure("type_value_covered", "f(t: type) := t is number; f(int)", "yes");
+}
+
 /// `n as char` (decision digit-as-char): a digit 0…9 is its digit character, another number the character of its code
 /// point, one no character has an error (card pure-lane-x02)
 #[test]

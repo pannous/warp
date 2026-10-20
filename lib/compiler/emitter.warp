@@ -870,6 +870,8 @@ field_defaults(body: any): any := {
 
 # a runtime word sees only the globals runtime.warp declares, never those of the program
 is_global(body: Body, name: text): bool := name not in body.names and name in module.globals and (not body.intrinsics or name in module.runtime_globals)
+# a built-in type's name, `type` or a declared class's
+names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
 def local_value(body: Body, n: any): list {
 	name = name_of(n)
 	if is_global(body, name) {
@@ -878,6 +880,8 @@ def local_value(body: Body, n: any): list {
 	}
 	# a bare enum case is its name, a symbol, at run time
 	if name not in body.names and name in module.variants { return ["node", node(Kind.Symbol, text_bytes(name))] }
+	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
+	if name not in body.names and names_a_type_value(name) { return ["node", node(Marked.TypeValue, text_bytes(name))] }
 	if name not in body.names { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -1039,8 +1043,8 @@ def assignment(body: Body, target: any, value: any): list {
 # bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
 declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
 def declaration(body: Body, name: text, type_name: text, value: any): list {
-	# `x: any = v` admits every value: the plain assignment
-	if type_name == "any" { return assignment(body, symbol(name), value) }
+	# `x: any = v` admits every value: the plain assignment; `t: type = int` too, a type value is a node like any
+	if type_name == "any" or type_name == "type" { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name) }
@@ -1953,6 +1957,8 @@ def collect_literal_arguments(n: any) {
 	}
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
+# the annotations of a parameter held as a node: any value, a function, a type value `int`
+node_annotations = ["any", "function", "type"]
 function_compiled(f: Function, argument_kinds: any): any := {
 	placed(f)
 	parameter_kinds = []
@@ -1965,7 +1971,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
 		}
 		if annotation == ø { module.unannotated[parameter_key(f, i)] = yes }
-		parameter_kinds += [if annotation == ø then given else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
+		parameter_kinds += [if annotation == ø then given else if annotation in node_annotations or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds

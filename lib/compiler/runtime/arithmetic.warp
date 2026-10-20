@@ -9,7 +9,7 @@ node_add(a: any, b: any): any := {
 	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
 	if is_null(a) or is_null(b) { fail() }
 	if kind_code(a) == Kind.List and kind_code(b) == Kind.List { return list_join(unboxed_list(a), unboxed_list(b)) }
-	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and is_ratio(a) or is_ratio(b) { return exact_add(a, b) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_ratio(a) or is_ratio(b)) { return exact_add(a, b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return checked_add(unboxed_int(a), unboxed_int(b)) }
 	float_of_node(a) + float_of_node(b)
 }
