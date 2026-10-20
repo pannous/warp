@@ -112,10 +112,11 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
 - Step 3 written: lib/compiler/compiler.warp and host_words.warp. Not yet through: the next probe needs the scope fixes
   in the shared build. Probe: `cd scratch/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../lib/compiler/compiler.warp app.warp app.wasm`.
 - Blocked on compile time (card analyzer-settle): compiler.warp does not finish compiling (>30 min CPU); even
-  `use passes+emitter; print(1)` takes >15 min, while each stage alone compiles in ~30 s. A sample of warp-debug
-  shows analyzer::user_functions::flow::settle (src/analyzer/user_functions/flow.rs) looping up to Σ(params+1)
-  rounds, each a whole-program flows() walk through collect_variables: quadratic in the ~2000 functions. Fix idea: a
-  worklist that re-flows only functions whose callers' argument kinds changed.
+  `use passes+emitter; print(1)` takes >45 min, while each stage alone compiles in ~30 s. A 23-min sample of the
+  whole warp-debug run (probes/sample_inclusive.py) put 98% of it in one caller: run_time_blocks::data_holders ran
+  the whole kind inference (flow::settle, its main-program walk restarting thousands of times) only to learn the
+  program's function names. Branch analyzer-settle reads them with function_definitions (no inference), law.rs's
+  function_definition too. Still open: why one inference of that pass state takes minutes.
 
 ## Coordination
 - warp-self-analyzer (pure lane, branch prelude-for-pure): compiler.warp only composes their stages; their passes,
