@@ -553,23 +553,14 @@ impl WasmGcEmitter {
 	/// (`r = error "b"; "a" + r`, card error-value-kind)
 	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
 		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
-		let node_type = self.type_manager.node_type;
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
 		self.emit_structure_as_literal(func, held, &STRUCTURE_KINDS);
 		self.emit_field(func, held, 0);
 		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 		Self::emit_list(func, &[I::If(BlockType::Result(node_ref))]);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::LocalGet(held), I::RefAsNonNull,
-			I::Else,
-				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held),
-		]);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
-		]);
+		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::Else]);
+		self.emit_one_item_list(func, held);
 		self.emit_empty_text(func);
 		self.emit_call(func, super::super::reflection::library_ops::LIST_JOIN);
 		func.instruction(&I::End);
