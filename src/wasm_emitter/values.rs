@@ -179,7 +179,7 @@ impl WasmGcEmitter {
 		if let [word, instance, type_name] = items {
 			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
 				if name == crate::words::INSTANCE_OF {
-					self.emit_instance_of(func, instance, type_name);
+					self.emit_instance_of(func, instance, &[type_name.clone()]);
 					return true;
 				}
 			}
