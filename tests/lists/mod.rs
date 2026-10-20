@@ -54,6 +54,7 @@ mod test_list_arithmetic;
 mod test_list_compound_add;
 mod test_list_held_last; // card profile-stage-programs
 mod test_list_identity; // card w0-list-writes
+mod test_list_item_conversions; // card room-conversions
 mod test_list_literal_sign; // decision list-sign
 mod test_list_methods; // card list-methods
 mod test_list_number_comparison;

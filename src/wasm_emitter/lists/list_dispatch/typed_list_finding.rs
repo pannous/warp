@@ -99,6 +99,41 @@ pub(super) fn held_last(program: &Node, members: &[String], places: &[&Node]) ->
 	found[first..].iter().all(|(mention, loops)| *loops == 0 && is_place(mention))
 }
 
+/// Whether an array made of a Node list each time `name` is assigned (Source::Converted, one pass over its items) is read
+/// by index more often than it is made: some `name#i` or `#name` runs in a loop inside every loop around an assignment
+/// of it. `for room in rooms { s += room#i }` makes `room` once a round and reads it once, which the cons cells' cursor
+/// serves at once (card room-conversions)
+pub(super) fn reads_outrun_conversions(program: &Node, name: &str) -> bool {
+	fn walk(node: &Node, name: &str, loops: &mut Vec<usize>, count: &mut usize, found: &mut (Vec<Vec<usize>>, Vec<Vec<usize>>)) {
+		let node = node.drop_meta();
+		let is_loop = is_while_loop(node);
+		if is_loop {
+			loops.push(*count);
+			*count += 1;
+		}
+		match node {
+			Node::Key(target, Op::Assign | Op::Define, _) if target.drop_meta().is_symbol(name) => found.0.push(loops.clone()),
+			Node::Key(list, Op::Hash, index) => {
+				let counted = if list.is_empty_node() { index } else { list };
+				if counted.drop_meta().is_symbol(name) {
+					found.1.push(loops.clone());
+				}
+			}
+			_ => {}
+		}
+		node.visited_children().into_iter().for_each(|child| walk(child, name, loops, count, found));
+		if is_loop {
+			loops.pop();
+		}
+	}
+	let mut found = (Vec::new(), Vec::new());
+	walk(program, name, &mut Vec::new(), &mut 0, &mut found);
+	let (assignments, reads) = found;
+	reads.iter().any(|read| {
+		assignments.iter().all(|assigned| read.len() > assigned.len() && read.starts_with(assigned))
+	})
+}
+
 /// The items of `xs += [a b]`
 pub(super) fn extended_items(value: &Node) -> Option<&[Node]> {
 	match value.drop_meta() {
@@ -532,15 +567,18 @@ impl WasmGcEmitter {
 			};
 			let parted: Vec<String> = typed.keys().filter(|name| shared_as_nodes(name)).cloned().collect();
 			if parted.is_empty() {
-				// a Node list pays a conversion wherever it is used as a whole: worth it for one that is indexed or counted, and
-				// for one appended to (map, filter), which as cons cells walks the whole list per append
+				// a Node list pays a conversion wherever it is used as a whole: worth it for one that is indexed or counted (more
+				// often than it is converted), and for one appended to (map, filter), which as cons cells walks the whole list
+				// per append
 				let indexed = indexed_lists(program);
 				let appended = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Append(_)));
+				let converted = |name: &String| sources[name].iter().any(|source| matches!(source, Source::Converted { .. }));
+				let pays = |name: &String| {
+					indexed.contains(name) && (!converted(name) || reads_outrun_conversions(program, name))
+				};
 				return typed
 					.into_iter()
-					.filter(|(name, element)| {
-						*element != Some(ElementType::Node) || indexed.contains(name) || appended(name)
-					})
+					.filter(|(name, element)| *element != Some(ElementType::Node) || pays(name) || appended(name))
 					.filter_map(|(name, element)| {
 						let aliased = groups[&name].len() > 1 && self.appends_while_aliased(program, &name, &[]);
 						let list = TypedList { element: element?, updated: group_updated(&name), aliased };
