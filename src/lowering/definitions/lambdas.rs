@@ -1319,8 +1319,25 @@ impl Lowering {
 	/// The loop of an iteration word with the body of a literal function inlined
 	fn iterate(&self, iteration: &Iteration, list: Node, extras: Vec<Node>, function: Node) -> Option<Node> {
 		let names: Vec<(&str, String)> = [
-			"out", "item", "acc", "list", "index", "value", "moving", "size", "width", "merged", "low", "middle",
-			"high", "left", "right", "hit", "held", "found", "searching",
+			"out",
+			"item",
+			"acc",
+			"list",
+			"index",
+			"value",
+			"moving",
+			"size",
+			"width",
+			"merged",
+			"low",
+			"middle",
+			"high",
+			"left",
+			"right",
+			"hit",
+			"held",
+			"found",
+			"searching",
 		]
 		.into_iter()
 		.map(|name| (name, self.fresh(&format!("loop_{name}"))))
