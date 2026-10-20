@@ -639,8 +639,11 @@ impl WasmGcEmitter {
 		rerun.discovered_needs = needs.into_iter().chain(self.discovered_needs.drain()).collect();
 		rerun.inherited_needs = rerun.discovered_needs.clone();
 		trace!("emitting again for {:?}", rerun.discovered_needs);
+		// each rerun also listed under the needs that caused it, the ones the analysis should have foreseen
+		let phase = format!("emit rerun for {:?}", rerun.inherited_needs);
 		let emit_again = || crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass hinted it
-		crate::compiler::phase_times::timed("emit rerun", emit_again);
+		use crate::compiler::phase_times::{timed, timed_as};
+		timed("emit rerun", || timed_as(|| phase, emit_again));
 		*self = rerun;
 	}
 
