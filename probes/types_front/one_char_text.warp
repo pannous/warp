@@ -1,0 +1,9 @@
+# a one-character text literal is a text, also in a branch: the pure lane must not take "\n" for a char
+def plain(newline: bool): text {
+	if newline then "\n" else " "
+}
+def early(newline: bool): text {
+	if newline { return ";" }
+	","
+}
+print(plain(no) + early(yes) + early(no) + "|")
