@@ -11,12 +11,15 @@ use file
 # lib/: WARP_LIB, else the folder above this file's
 library_folder = env("WARP_LIB") ?? folder_of(module_directory)
 
+# the prelude's text, whose definitions a program reaches (prelude_words.warp)
+prelude_source = read(library_folder + "/prelude.warp")
+
 # the runtime words, lowered by the same passes as a program
-runtime_words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler")
+runtime_words = lowered_program(read(library_folder + "/compiler/runtime.warp"), library_folder + "/compiler", prelude_source)
 
 # the wasm module of the source, as bytes
 compile(source: text, folder: text): list := {
-	program = lowered_program(source, folder)
+	program = lowered_program(source, folder, prelude_source)
 	typed_wasm_module(program, runtime_words, host_words, emitter_kinds(program))
 }
 

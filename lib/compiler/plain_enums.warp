@@ -72,9 +72,7 @@ subjects_in(n: any, enums: any, subjects: any): any := {
 		_: ø
 	}
 	if declared != ø {
-		subject = declared#1
-		enum_name = declared#2
-		subjects[subject] = if subject in subjects and subjects[subject] != enum_name then "" else enum_name
+		subjects[declared#1] = if declared#1 in subjects and subjects[declared#1] != declared#2 then "" else declared#2
 	}
 	if is_group(n) or n is key { for part in children_of(n) { subjects_in(part, enums, subjects) } }
 	subjects
@@ -125,7 +123,7 @@ match_over(value: Node, arms: list, enums: any): Node := matched(value, arms, ø
 # enum type
 case_number(value: Node, cases: list, first: int, enums: any): Node := {
 	numbers = 1 to #cases
-	if is_name(value) and name_of(value) in cases { return cases.index_of(name_of(value)) - 1 + first }
+	if is_name(value) and name_of(value) in cases { return numbers.filter(i => cases#i == name_of(value))#1 - 1 + first }
 	match_over(value, numbers.map(i => Key(symbol(cases#i), Op.Colon, i - 1 + first)), enums)
 }
 
