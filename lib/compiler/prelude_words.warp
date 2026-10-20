@@ -15,7 +15,7 @@ definition_slices(source: text): list := {
 	name = ""
 	written = ""
 	for line in source.split("\n") {
-		started = defined_name(line)
+		started = name_defined_in(line)
 		if started != "" {
 			if name != "" { slices += [[name, written]] }
 			name = started
@@ -33,7 +33,7 @@ definition_slices(source: text): list := {
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), else ""
-defined_name(line: text): text := {
+name_defined_in(line: text): text := {
 	leading = leading_name(line)
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if leading == "" { return "" }
