@@ -1,6 +1,6 @@
 # `a + b`, `a += b` of values known only at run time, and int arithmetic that traps past 64 bits
 # `a + b` of values known only at run time: lists and texts join, numbers add
-node_add(a: any, b: any): any := {
+node_add(a: Node, b: Node): Node := {
 	# ø, also `[]` in the lowered program, beside a list is that list (ø + ø the empty list), beside a text "ø"; beside
 	# a number Rust fails
 	if is_null(a) and is_null(b) { return a }
@@ -32,7 +32,7 @@ checked_multiply(a: int, b: int): int := {
 	a * b
 }
 # `a += b` of values known only at run time: a list grows in place as list_append, anything else is a + b
-node_append(a: any, b: any) := {
+node_append(a: Node, b: Node) := {
 	if not is_null(a) and not is_null(b) and kind_code(a) == Kind.List and kind_code(b) == Kind.List {
 		return list_append(unboxed_list(a), unboxed_list(b))
 	}

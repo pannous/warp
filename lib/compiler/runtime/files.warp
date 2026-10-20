@@ -2,7 +2,7 @@
 
 # `read(path)`: the file's text, or the Error of the host's reason. The path's bytes go to the output area, the host
 # writes its answer past the memory's end and gives its place and length, a negative length for a failure's reason
-read_file(path: any): any := {
+read_file(path: Node): Node := {
 	t = text_of_textual(path)
 	count = byte_count(t)
 	for i in 0..<count { output_byte(i, byte_at(t, i)) }

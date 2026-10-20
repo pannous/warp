@@ -1,7 +1,7 @@
 # Values as they print: the text of any value known only at run time
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 # a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names
-node_text(n: any): text := if names_a_type(n) then "class " + unboxed_text(n) else match n {
+node_text(n: Node): text := if names_a_type(n) then "class " + unboxed_text(n) else match n {
 	ø: char_text("ø")
 	Number(_): number_text(n)
 	Char(_): char_text(unboxed_char(n))
@@ -12,9 +12,9 @@ node_text(n: any): text := if names_a_type(n) then "class " + unboxed_text(n) el
 	False: "no"
 	_: collection_text(n)
 }
-number_text(n: any): text := if kind_code(n) == Kind.Int then exact_text(n) else float_text(unboxed_float(n))
+number_text(n: Node): text := if kind_code(n) == Kind.Int then exact_text(n) else float_text(unboxed_float(n))
 # a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
-collection_text(n: any): text := {
+collection_text(n: Node): text := {
 	if kind_code(n) == Kind.List { return list_shown(n) }
 	if node_is_error(n) { return unboxed_text(n) }
 	if kind_code(n) == Kind.Time { return time_text(n) }
@@ -23,7 +23,7 @@ collection_text(n: any): text := {
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
-node_code(n: any): text := match n {
+node_code(n: Node): text := match n {
 	Char(_): "'" + node_text(n) + "'"
 	Text(_): text_code(unboxed_text(n))
 	_: node_text(n)
@@ -63,7 +63,7 @@ joined_items(xs: list, joiner: text): text := {
 	inner
 }
 # `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
-key_text(entry: any): text := {
+key_text(entry: Node): text := {
 	value = key_value(entry)
 	if marked_kind(entry) == Marked.Instance { return key_name(entry) + node_text(value) }
 	operator = key_operator(entry)

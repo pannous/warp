@@ -1,7 +1,7 @@
 # `a == b` of values known only at run time
 # `a == b` of values known only at run time: ø equals only ø, lists equal item by item, closures by their target and
 # captured values (emitter.warp closure_value), texts and characters as texts, numbers as numbers (an int and a float alike)
-node_equal(a: any, b: any): bool := {
+node_equal(a: Node, b: Node): bool := {
 	if is_null(a) or is_null(b) { return is_null(a) == is_null(b) }
 	if kind_code(a) == Kind.Key or kind_code(b) == Kind.Key {
 		return code_free_kind(a) == code_free_kind(b) and text_order(key_name(a), key_name(b)) == 0 and node_equal(key_value(a), key_value(b))
@@ -24,7 +24,7 @@ list_equal(a: list, b: list): bool := {
 	yes
 }
 # `a == b` of two maps: the same names with equal values, in any order
-map_equal(a: any, b: any): bool := {
+map_equal(a: Node, b: Node): bool := {
 	if #unboxed_list(a) != #unboxed_list(b) { return no }
 	# its own search, not map_index's: map_index may still be compiling here (map_index → key_name → node_text → …
 	# node_equal → map_equal), its result kind not known yet

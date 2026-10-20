@@ -2,7 +2,7 @@
 # the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
 # `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
 # or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
-node_slice(x: any, start: any, to: any = ø): any := {
+node_slice(x: Node, start: Node, to: Node = ø): Node := {
 	from = if is_null(start) then 0 else index_of_node(start)
 	stop = if is_null(to) then node_length(x) else index_of_node(to)
 	if from < 0 or stop < 0 { index_out_of_range() }
@@ -24,11 +24,11 @@ items_slice(items: list, from: int, to: int): list := {
 	out
 }
 # `starts_with(t, part)`, `ends_with(t, part)`: 1 when part's bytes begin or end t, else 0, as Rust's give an int
-node_starts_with(t: any, part: any): int := if text_starts_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
-node_ends_with(t: any, part: any): int := if text_ends_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
-node_trim(t: any): text := text_trim(text_of_textual(t))
+node_starts_with(t: Node, part: Node): int := if text_starts_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
+node_ends_with(t: Node, part: Node): int := if text_ends_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
+node_trim(t: Node): text := text_trim(text_of_textual(t))
 # a text or a character as its text; anything else fails
-text_of_textual(n: any): text := {
+text_of_textual(n: Node): text := {
 	if not textual_node(n) { not_a_text() }
 	node_text(n)
 }
@@ -41,7 +41,7 @@ bytes_between(t: text, start: int, stop: int): text := {
 	out
 }
 # `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only, as Rust joins
-joined(xs: list, separator: any): text := {
+joined(xs: list, separator: Node): text := {
 	between = node_text(separator)
 	out = ""
 	count = 0
@@ -54,14 +54,14 @@ joined(xs: list, separator: any): text := {
 	out
 }
 # `n times "ab"`: t n times over
-repeated_text(n: int, t: any): text := {
+repeated_text(n: int, t: Node): text := {
 	piece = node_text(t)
 	out = new_text(n * byte_count(piece))
 	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
 	out
 }
 # `t.split(separator)`: the texts between separator's places in t
-split_text(t: text, separator: any): list := {
+split_text(t: text, separator: Node): list := {
 	between = node_text(separator)
 	out = new_list(0)
 	start = 0
@@ -100,7 +100,7 @@ text_chars(t: text): list := {
 	out
 }
 # `xs.reverse`: a list's items or a text's characters the other way round
-reversed(n: any): any := {
+reversed(n: Node): Node := {
 	if kind_code(n) == Kind.Codepoint { return char_text(unboxed_char(n)) }
 	if kind_code(n) == Kind.Text {
 		t = unboxed_text(n)

@@ -1,13 +1,13 @@
 # What kind a value known only at run time is: ø, errors, texts, `x is type`, `x is Name`
 # `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
-is_nothing(n: any): bool := if is_null(n) then yes else kind_code(n) == Kind.List and #unboxed_list(n) == 0
+is_nothing(n: Node): bool := if is_null(n) then yes else kind_code(n) == Kind.List and #unboxed_list(n) == 0
 # `is_error(x)`: x is an Error value
-node_is_error(n: any): bool := not is_null(n) and kind_code(n) == Kind.Error
+node_is_error(n: Node): bool := not is_null(n) and kind_code(n) == Kind.Error
 # a boxed text or character
-textual_node(n: any): bool := not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Codepoint)
+textual_node(n: Node): bool := not is_null(n) and (kind_code(n) == Kind.Text or kind_code(n) == Kind.Codepoint)
 # `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
 # masks (src/lowering/types/type_tests.rs BUILTIN_TYPES): a bool has a mark of its own, ø is the empty list
-node_is_type(n: any, type: text): bool := {
+node_is_type(n: Node, type: text): bool := {
 	if is_null(n) { return type == "list" }
 	if names_a_type(n) { return names_one_of(unboxed_text(n), covered_type_words(type)) }
 	if marked_kind(n) == Marked.Bool { return type == "bool" }
@@ -25,7 +25,7 @@ node_is_type(n: any, type: text): bool := {
 	no
 }
 # a type value `int`: a symbol marked TYPE_VALUE_MARK above its kind
-names_a_type(n: any): bool := not is_null(n) and marked_kind(n) == Marked.TypeValue
+names_a_type(n: Node): bool := not is_null(n) and marked_kind(n) == Marked.TypeValue
 # a type value tests as the type it names: the words of the types a core type covers (type_tests.rs type_matches)
 covered_type_words(type: text): list := {
 	ints = ["int", "integer", "long", "i64", "i32"]
@@ -46,7 +46,7 @@ names_one_of(name: text, words: list): bool := {
 	no
 }
 # `x is Name` of a class: an instance is an entry keyed by its class's name
-instance_of(n: any, name: text): bool := {
+instance_of(n: Node, name: text): bool := {
 	if is_null(n) or kind_code(n) != Kind.Key { return no }
 	text_order(key_name(n), name) == 0
 }

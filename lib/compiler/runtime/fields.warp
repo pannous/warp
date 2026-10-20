@@ -1,7 +1,7 @@
 # What `m.name` reads beyond a map's entries: positions, entries, list parts, swizzles
 # whether `m.name` reads a field: m a map or an instance with an entry so named, an entry's key, value or name, a
 # symbol's name
-has_field(m: any, name: text): bool := {
+has_field(m: Node, name: text): bool := {
 	if is_null(m) { return no }
 	if is_position_part(m, name) { return is_meta(m) }
 	if is_list_part(m, name) { return yes }
@@ -13,31 +13,31 @@ has_field(m: any, name: text): bool := {
 }
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
 # node_api.rs POSITIONED); any other node without a field of that name has no field line
-positioned_node(n: any, line: int, column: int): any := meta_node(n, line, column)
+positioned_node(n: Node, line: int, column: int): Node := meta_node(n, line, column)
 # `e.message` of an Error e
-is_error_message(m: any, name: text): bool := node_is_error(m) and text_order(name, "message") == 0
-is_position_part(m: any, name: text): bool := {
+is_error_message(m: Node, name: text): bool := node_is_error(m) and text_order(name, "message") == 0
+is_position_part(m: Node, name: text): bool := {
 	if text_order(name, "line") != 0 and text_order(name, "column") != 0 { return no }
 	not ((marked_kind(m) == Marked.Map or marked_kind(m) == Marked.Instance) and map_index(m, name) > 0)
 }
-position_part(m: any, name: text): int := if text_order(name, "line") == 0 then meta_line(m) else meta_column(m)
+position_part(m: Node, name: text): int := if text_order(name, "line") == 0 then meta_line(m) else meta_column(m)
 # a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
-is_entry(n: any): bool := kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
+is_entry(n: Node): bool := kind_code(n) == Kind.Key and marked_kind(n) != Marked.Instance
 # `n.bracket`, `n.separator` of any node: a list's own, ø of any other node (Rust's node_api.rs); a map's entry or a
 # key's name of that name wins
-is_list_part(m: any, name: text): bool := {
+is_list_part(m: Node, name: text): bool := {
 	if text_order(name, "bracket") != 0 and text_order(name, "separator") != 0 { return no }
 	if is_entry(m) and text_order(key_name(m), name) == 0 { return no }
 	not ((marked_kind(m) == Marked.Map or marked_kind(m) == Marked.Instance) and map_index(m, name) > 0)
 }
-list_part(m: any, name: text): any := {
+list_part(m: Node, name: text): Node := {
 	if not is_plain_list(m) { return ø }
 	if text_order(name, "bracket") == 0 then list_bracket(m) else list_separator(m)
 }
 # a list that is no map
-is_plain_list(n: any): bool := kind_code(n) == Kind.List and marked_kind(n) != Marked.Map
+is_plain_list(n: Node): bool := kind_code(n) == Kind.List and marked_kind(n) != Marked.Map
 # a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
-swizzle_fits(p: any, letters: text): bool := {
+swizzle_fits(p: Node, letters: text): bool := {
 	if is_null(p) or kind_code(p) != Kind.List or marked_kind(p) == Marked.Map { return no }
 	items = unboxed_list(p)
 	if #items < 2 or #items > 4 { return no }
@@ -47,8 +47,8 @@ swizzle_fits(p: any, letters: text): bool := {
 }
 # the place, counted from 1, of the component a letter picks: x 1, y 2, z 3, w 4
 letter_component(b: int): int := if b == 119 then 4 else b - 119
-swizzled_one(p: any, letter: text): any := unboxed_list(p)#letter_component(byte_at(letter, 0))
-swizzled(p: any, letters: text): list := {
+swizzled_one(p: Node, letter: text): Node := unboxed_list(p)#letter_component(byte_at(letter, 0))
+swizzled(p: Node, letters: text): list := {
 	items = unboxed_list(p)
 	out = new_list(0)
 	for i in 0..byte_count(letters) { out += [items#letter_component(byte_at(letters, i))] }

@@ -5,23 +5,23 @@ divide_by_zero(): int := {
 	0
 }
 # `error("boom")`: the Error of the message, a value, not raised (Rust's text_builtins.rs error)
-error_node(message: any): any := error_of(node_text(message))
+error_node(message: Node): Node := error_of(node_text(message))
 # `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
 # emit_data_item); `q.k = e`, `{k: e}`: a field holds none
-held_list_item(item: any): any := {
+held_list_item(item: Node): Node := {
 	if node_is_error(item) { a_list_item_holds_no_error(item) }
 	item
 }
-held_field(item: any): any := {
+held_field(item: Node): Node := {
 	if node_is_error(item) { a_field_holds_no_error(item) }
 	item
 }
-a_list_item_holds_no_error(error: any): int := {
+a_list_item_holds_no_error(error: Node): int := {
 	global trap_detail = error
 	fail()
 	0
 }
-a_field_holds_no_error(error: any): int := {
+a_field_holds_no_error(error: Node): int := {
 	global trap_detail = error
 	fail()
 	0
@@ -75,13 +75,13 @@ returned_error(): int := {
 	fail()
 	0
 }
-raised(value: any): int := {
+raised(value: Node): int := {
 	global trap_detail = value
 	returned_error()
 }
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
 # it, whose message emitter.warp's throw kept in failed_in: a raise's is the raised value, a missing field's names it
-caught_error(finished: bool, value: any): any := {
+caught_error(finished: bool, value: Node): Node := {
 	if finished { return value }
 	global failed_in
 	global trap_detail
@@ -90,7 +90,7 @@ caught_error(finished: bool, value: any): any := {
 	error_of(failed_in)
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
-index_of_node(n: any): int := {
+index_of_node(n: Node): int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { index_must_be_an_integer() }
 	unboxed_int(n)
 }
