@@ -1,0 +1,10 @@
+copied(m: any): any := {
+	c = {}
+	for name in m.keys { c[name] = m[name] }
+	c
+}
+a = {x: [1]}
+b = copied(a)
+b["y"] = [2]
+print a
+print b

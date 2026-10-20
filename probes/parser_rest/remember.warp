@@ -1,0 +1,9 @@
+remember(scope: any, pairs: list): any := {
+	for pair in pairs {
+		name = pair#1
+		if not scope.has(name) { scope[name] = [] }
+		scope[name] = scope[name] + [pair#2]
+	}
+	scope
+}
+print remember({}, [["a", 1], ["a", 2], ["b", 3]])
