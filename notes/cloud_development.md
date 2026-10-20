@@ -84,8 +84,9 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   the VM's empty registry cache and all 22 executable tests failed (card cloud-stub-offline).
 - Disk: a warm VM's target/ grows with every job (branches, features, --full's opt-level 2) and a build once ran out
   of space; a warm VM had 12 GB free after a few jobs. Below 15 GB free (MIN_FREE_GB) the incremental caches go, then
-  if need be all of target/, and a build that still runs out of space is retried once on an empty target/. The result
-  names it ("disk:").
+  if need be all of target/, and a build that still runs out of space is retried once on an empty target/. If the
+  retry also runs out, the result is environmental rather than red and that full VM leaves the pool. The result
+  names the disk state ("disk:").
 - Build reuse: build.rs embeds the commit (WARP_COMMIT) and, asked from git, reruns on every reflog change, which
   recompiled warp-lang (180–600 s) in every job of a warm VM, even of the same tree. cloud-test.sh exports
   WARP_COMMIT=<tip>, which build.rs takes without git or the reflog; self-hosted-suite.sh runs all parts and stages
