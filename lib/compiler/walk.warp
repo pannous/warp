@@ -18,6 +18,14 @@ is_group(n: any): bool := bracket_of(n) != ø
 # walks into
 attribute_word = "view·attribute"
 
+# the view of `{}`, `[]`, `()`: no items
+is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
+# an empty map `{}` as plain_node keeps it, behind the opaque word
+is_empty_map(n: any): bool := match n {
+	Key(left, op, right): left == symbol(opaque_word) and is_empty_group(right) and right#2 == "{"
+	_: no
+}
+
 # the view as a node gives it back: no literal and attribute layers (`01234`, `@name(v) x`), an empty group as ø
 # (decision empty-group-node), an opaque type or error whole; Rust twin: compiler/node_views.rs plain
 plain(view: any): any := without_layers(view, no)
@@ -36,12 +44,12 @@ without_layers(view: any, attributes: bool): any := {
 	view
 }
 
-# the node parser.warp builds as plain gives its view: no attribute layers, an empty group as ø, a character as a
-# text, an opaque type or error whole
+# the node parser.warp builds as plain gives its view: no attribute layers, an empty group as ø but the empty map `{}`
+# (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque type or error whole
 plain_node(n: any): any := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) { return plain_node(right#3) }
-		if left == symbol(opaque_word) { return if kind_of(right) == "list" and #right == 3 then ø else n }
+		if left == symbol(opaque_word) { return if is_empty_group(right) and right#2 != "{" then ø else n }
 		Key(plain_node(left), op, plain_node(right))
 	}
 	List(items, bracket, separator): List(items.map(plain_node), bracket, separator)

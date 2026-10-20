@@ -156,9 +156,9 @@ fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	}
 }
 
-/// A path as the program wrote it, `~` the home folder: `~/notes.txt`, `"~/notes.txt"`
+/// A path as the program wrote it, `~` the home folder, a relative path in its working folder: `~/notes.txt`, `"~/notes.txt"`
 fn path_of(node: &Node) -> Result<String, String> {
-	text_of(node).map(|path| crate::util::home_expanded(&path))
+	text_of(node).map(|path| crate::modules::in_working_folder(&path))
 }
 
 /// The names of a folder's entries, sorted
@@ -374,7 +374,10 @@ fn executed(command: &[String]) -> Result<String, String> {
 }
 
 fn working_folder() -> Result<Node, String> {
-	std::env::current_dir().map(|folder| Node::Text(folder.to_string_lossy().into_owned())).map_err(said)
+	crate::modules::working_folder()
+		.map_or_else(std::env::current_dir, Ok)
+		.map(|folder| Node::Text(folder.to_string_lossy().into_owned()))
+		.map_err(said)
 }
 
 /// A line typed on standard input without its line end, ø at the input's end; a prompt is shown first

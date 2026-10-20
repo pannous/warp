@@ -1,0 +1,2 @@
+enum Meaning { Function, Variable }
+first_meaning = Meaning.Function

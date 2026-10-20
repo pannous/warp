@@ -391,7 +391,8 @@ pub(crate) fn shadowed_apart(definitions: Vec<Node>, words: &ProgramWords) -> Ve
 				.into_iter()
 				.filter(|name| words.contains(name) && !declared.contains(name))
 				.collect();
-			renamed_apart(vec![definition], &locals).remove(0)
+			let definition = renamed_apart(vec![definition], &locals).remove(0);
+			crate::type_tests::module_type_words_kept(definition, &|word| words.contains(word))
 		})
 		.zip(left_to_program)
 		.flat_map(|(definition, left)| {

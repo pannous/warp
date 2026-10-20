@@ -1,0 +1,29 @@
+# What kind a value known only at run time is: ø, errors, texts, `x is type`, `x is Name`
+# 1 for a boxed text or character, else 0
+# `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
+is_nothing(n: any): bool := if is_null(n) == 1 then yes else kind_code(n) == 8 and #unboxed_list(n) == 0
+# `is_error(x)`: x is an Error value (kind code 11)
+node_is_error(n: any): bool := is_null(n) == 0 and kind_code(n) == 11
+textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
+# `x is type` of a value known only at run time, type a name of emitter.warp's covered_kinds: Rust's run-time kind
+# masks (src/lowering/types/type_tests.rs BUILTIN_TYPES): a bool has a mark of its own, ø is the empty list
+node_is_type(n: any, type: text): bool := {
+	if is_null(n) == 1 { return type == "list" }
+	if marked_kind(n) == 257 { return type == "bool" }
+	kind = kind_code(n)
+	if type == "int" { return kind == 1 and is_ratio(n) == 0 }
+	if type == "rational" or type == "number" { return kind == 1 or kind == 2 }
+	if type == "float" { return kind == 2 }
+	if type == "text" { return kind == 3 or kind == 4 }
+	if type == "char" { return kind == 4 }
+	if type == "list" { return (kind == 8 and marked_kind(n) != 8) or kind == 7 }
+	if type == "map" { return marked_kind(n) == 8 }
+	if type == "key" { return kind == 6 }
+	if type == "symbol" { return kind == 5 }
+	no
+}
+# `x is Name` of a class: an instance is an entry keyed by its class's name
+instance_of(n: any, name: text): bool := {
+	if is_null(n) == 1 or kind_code(n) != 6 { return no }
+	text_order(key_name(n), name) == 0
+}
