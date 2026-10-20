@@ -430,4 +430,5 @@ fn parser_words_run_pure() {
 	runs_pure("float_bits", &chain("float_bits"), "4609434218613702656\n-4625196817309499392");
 	runs_pure("char_as_text", &chain("char_as_text"), "?\none\nab");
 	runs_pure("colon_named_arguments", &chain("colon_named_arguments"), "3\ny\n72");
+	runs_pure("arrow_match_arms", &chain("arrow_arms"), "two\nbig\nfew");
 }

@@ -1,0 +1,11 @@
+// match arms written pattern => result, value alternatives "b" | "c", and a match as a call argument
+f(x: text): text := match x {
+	"a" => "one"
+	"b" | "c" => "two"
+	_ => "other"
+}
+print(f("c"))
+enum Coin { Penny, Nickel, Dime }
+c = Dime
+print(match c { Penny | Nickel => "small"; _ => "big" })
+print(match 2 { 1: "one"; 2 | 3: "few"; _: "many" })

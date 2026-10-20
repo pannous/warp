@@ -55,19 +55,23 @@ case_pattern(pattern: Node): any := match pattern {
 default_arms = [other_arm, "other", "default", "else"]
 is_other_arm(pattern: Node): bool := is_name(pattern) and default_arms contains name_of(pattern)
 
+# an arm `pattern: result` or `pattern => result` (read as `->`)
 arm_pattern(arm: Node): Node := match arm {
 	Key(pattern, Op.Colon, result): pattern
+	Key(pattern, Op.Arrow, result): pattern
 	_: arm
 }
 
 arm_result(arm: Node): Node := match arm {
 	Key(pattern, Op.Colon, result): result
+	Key(pattern, Op.Arrow, result): result
 	_: arm
 }
 
 # `1`, "a", 'c', an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
-# (`Red` of `enum Color { Red, Green }`): an arm the subject equals
+# (`Red` of `enum Color { Red, Green }`): an arm the subject equals; `"b" | "c"` (read as `or`): one it equals one of
 is_value_pattern(pattern: Node, variants: any): bool := match pattern {
+	Key(left, Op.Or, right): is_value_pattern(left, variants) and is_value_pattern(right, variants)
 	Symbol(name): name in variants
 	Number(value): yes
 	Text(value): yes
@@ -135,9 +139,15 @@ arm_chain(arms: list, subject: Node, variants: any): Node := {
 	if #arms == 0 { return applied("switch_no_case", subject) }
 	pattern = arm_pattern(arms#1)
 	if is_other_arm(pattern) { return arm_result(arms#1) }
-	if is_value_pattern(pattern, variants) { return chosen(Key(subject, Op.Eq, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
+	if is_value_pattern(pattern, variants) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
 	case_parts = case_pattern(pattern)
 	chosen(arm_test(case_parts, subject), arm_value(case_parts, subject, arm_result(arms#1)), arm_chain(arms[1..], subject, variants))
+}
+
+# the subject equals the value, or one of the values `"b" | "c"`
+value_test(subject: Node, pattern: Node): Node := match pattern {
+	Key(left, Op.Or, right): Key(value_test(subject, left), Op.Or, value_test(subject, right))
+	_: Key(subject, Op.Eq, pattern)
 }
 
 chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
@@ -164,13 +174,30 @@ match_of(rest: Node, n: Node, variants: any): Node := match rest {
 	_: n
 }
 
+# `match x {…}` among a list's parts, as in the call `print(match x {…})` read as `(print match x {…})`
+parts_matched(parts: list, variants: any): list := {
+	if #parts < 3 { return parts }
+	if parts#1 == symbol("match") {
+		lowered = match_block(parts#2, parts#3, ø, variants)
+		if lowered != ø { return [lowered] + parts_matched(parts[3..], variants) }
+	}
+	[parts#1] + parts_matched(parts[1..], variants)
+}
+
+list_match(n: Node, parts: list, bracket: Node, separator: Node, variants: any): Node := {
+	if not parts.any(part => part == symbol("match")) { return n }
+	List(parts_matched(parts, variants), bracket, separator)
+}
+
 node_match(n: Node, variants: any): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
 		if #parts == 2 and is_match_head(parts#1) { return match_block(parts#1#2, parts#2, n, variants) }
-		if #parts == 0 or parts#1 != symbol("match") { return n }
 		# `match n {…}` as a statement, `match (n {…})` as a value
-		if #parts == 3 then match_block(parts#2, parts#3, n, variants) else if #parts == 2 then match_of(parts#2, n, variants) else n
+		if #parts == 3 and parts#1 == symbol("match") { return match_block(parts#2, parts#3, n, variants) }
+		if #parts == 2 and parts#1 == symbol("match") { return match_of(parts#2, n, variants) }
+		list_match(n, parts, Bracket.None, Separator.Space, variants)
 	}
+	List(parts, bracket, separator): list_match(n, parts, bracket, separator, variants)
 	Key(type_name, Op.Dot, case_name): spelled_case(type_name, case_name, n)
 	_: n
 }
