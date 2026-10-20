@@ -100,6 +100,11 @@ After a context swap, this file and your role file win over anything a handover 
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
   suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
   prompts; kill by PID).
+- One local build (user 2026-10-20: "We create just one cargo build now, and every other one uses that one warp
+  build for their tests"): only main's build runs on the Mac (/Users/me/dev/bin/warp, /Users/me/dev/bin/warp-debug,
+  refreshed after each pushed batch). Workers run no cargo build, check or own-warp.sh locally: .warp changes are
+  checked with that binary, Rust changes are built and tested by the cloud lane. Until card shared-warp-build lands,
+  the shared binary reads main's lib/, not your worktree's.
 - Close what you start (user 2026-10-20): after every test, probe or build, kill your own leftover processes by PID
   (warp, scratch/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
   <your worktree>` before reporting.
