@@ -221,10 +221,17 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
 fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
-	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}]", json_text(code)))?;
+	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
 	let kinds: String =
 		serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
 	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
+}
+
+/// The folder the program's `use`s name files of, as an absolute path: its file's, else the working directory
+fn program_folder() -> String {
+	let file = crate::modules::program_file();
+	let folder = file.as_deref().map(crate::modules::folder_of).unwrap_or_else(|| PathBuf::from("."));
+	folder.canonicalize().unwrap_or(folder).display().to_string()
 }
 
 /// The refusal's lines (one, or one per refused function under SURVEY_SETTING) in the file REFUSALS_FILE names, when

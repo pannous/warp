@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+# method calls x.f(a) as the calls f(x, a) in the pure lane (WARP_SELF_HOSTED=pure, lib/compiler/list_methods.warp),
+# all inside the core: ab, AB, [1 2 3], b, 1, a-b, a!, cba
+s = "AB"
+print s.lower()
+print " ab ".trim().upper()
+print [3, 1, 2].sort()
+print "abc".slice(1, 2)
+print "abc".starts_with("a")
+print "a b".split(" ").join("-")
+shout(t) := t + "!"
+print "a".shout()
+print "abc".reverse()

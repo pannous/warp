@@ -13,6 +13,15 @@ is_keyword(n: Node): bool := match n {
 
 defined(n: Node): Node := match n {
 	List(parts, Bracket.Round, Separator.None): { if #parts == 2 then Key(parts#1, Op.Define, parts#2) else n }
+	# `def f(x): T { body }`, as the parser keeps it `f(x): (T {body})`: the result held as a T (result_held)
+	Key(head, Op.Colon, typed_body): typed_block(head, typed_body, n)
+	_: n
+}
+typed_block(head: Node, typed_body: Node, n: Node): Node := match typed_body {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 2 and bracket_of(parts#2) == "{" { return result_held(Key(head, Op.Colon, parts#1), parts#2, n) }
+		n
+	}
 	_: n
 }
 
