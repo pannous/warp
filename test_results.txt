@@ -188,6 +188,9 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_classes::a_declared_error_class_raises_and_catches
+  ✓ control::test_error_classes::an_undeclared_error_class_is_named
+  ✓ control::test_error_classes::except_catches_its_class_and_lets_others_pass
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_not_in_data::test_a_list_of_values_and_a_handled_error_stay
   ✓ control::test_error_not_in_data::test_a_parameter_declared_a_list_of_a_union_takes_index_writes
@@ -1033,9 +1036,7 @@ PASSED:
   ✓ ffi::test_builtin_lines::a_builtin_line_declares_and_imports_nothing
   ✓ ffi::test_builtin_lines::a_builtin_words_signature_is_its_line
   ✓ ffi::test_builtin_lines::a_programs_builtin_line_must_be_warps
-  ✓ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
   ✓ ffi::test_cargo_crates::test_cargo_crate_free_functions
-  ✓ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
   ✓ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource
   ✓ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes
   ✓ ffi::test_cargo_crates::test_cargo_crate_trap_names_rust_functions
@@ -2424,7 +2425,6 @@ PASSED:
   ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
   ✓ modules::test_agent_types::without_an_expected_type_the_agent_answers_text
   ✓ modules::test_agent::agent_answers_a_prompt_when_a_key_is_set
-  ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
   ✓ modules::test_agent::agent_without_a_key_says_where_to_set_it
   ✓ modules::test_case_table_module::case_words_in_warp
@@ -2517,7 +2517,6 @@ PASSED:
   ✓ modules::test_package_reexport::a_modules_own_use_reaches_its_users
   ✓ modules::test_package_registry::a_bare_name_or_version_is_the_default_registrys_folder
   ✓ modules::test_package_registry::a_folder_package_is_fetched_by_name
-  ✓ modules::test_package_registry::a_folder_package_version_is_its_tag
   ✓ modules::test_package_registry::a_proxy_is_the_repository_it_names
   ✓ modules::test_package_registry::a_repository_takes_its_version_after_an_at
   ✓ modules::test_package_registry::fetch_without_names_fetches_every_package
@@ -2716,9 +2715,7 @@ PASSED:
   ✓ modules::test_used_module_bare_words::without_the_use_or_with_an_own_parse_the_word_keeps_its_meaning
   ✓ modules::test_versions::a_package_used_twice_is_loaded_once
   ✓ modules::test_versions::an_empty_symbol_is_no_version
-  ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
   ✓ modules::test_versions::tagged_version_literals
-  ✓ modules::test_versions::use_requires_a_version_of_a_package
   ✓ modules::test_versions::version_is_a_soft_keyword
   ✓ modules::test_versions::version_literals_have_two_dots_or_more
   ✓ modules::test_versions::versions_compare_part_by_part
@@ -3737,7 +3734,6 @@ PASSED:
   ✓ parser::test_rust_paths::standard_paths_are_the_word
   ✓ parser::test_rust_paths::to_string_is_string
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
-  ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
@@ -3755,6 +3751,7 @@ PASSED:
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
   ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
+  ✓ parser::test_self_pure::recursive_results_run_pure
   ✓ parser::test_self_pure::the_core_runs_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
@@ -6317,7 +6314,14 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
+  ✗ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
+  ✗ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
+  ✗ modules::test_package_registry::a_folder_package_version_is_its_tag
+  ✗ modules::test_versions::an_older_version_comes_from_its_git_tag
+  ✗ modules::test_versions::use_requires_a_version_of_a_package
+  ✗ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6314 passed, 1 failed, 6315 total tested
+11 ignored, 6311 passed, 8 failed, 6319 total tested

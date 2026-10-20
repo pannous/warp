@@ -138,7 +138,8 @@ run_tests_here() {
 			fi
 		done
 	fi
-	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never
+	# WARP_COMMIT: the build's name without its reflog (build.rs), so the next job on a commit of the same tree reuses it
+	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never WARP_COMMIT=${tip:0:9}
 	local build_start=$SECONDS disk
 	disk=$(make_room)
 	cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1

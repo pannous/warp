@@ -105,13 +105,10 @@ fn in_parallel<T: Send>(paths: Vec<PathBuf>, case: impl Fn(&Path) -> Option<T> +
 /// `emitter_kinds` of lib/compiler/analyzer.warp as a node, which must give its kinds without failing; its kinds are
 /// judged by the programs emitter.warp runs with them, never compared with src/analyzer
 pub fn analyzer_runs(paths: &[PathBuf]) {
-	let cases: Vec<(String, String)> = paths
-		.iter()
-		.filter_map(|path| {
-			let program = lowered(&std::fs::read_to_string(path).ok()?)?;
-			Some((path.display().to_string(), view_json(&analysis_view(&program))))
-		})
-		.collect();
+	let cases = in_parallel(paths.to_vec(), |path| {
+		let program = lowered(&std::fs::read_to_string(path).ok()?)?;
+		Some((path.display().to_string(), view_json(&analysis_view(&program))))
+	});
 	let twin = TwinProgram::new("analyzer", "{ emitter_kinds(node_of(json(argument))); \"ran\" }");
 	let mut failing = vec![];
 	for cases in cases.chunks(SOURCES_PER_PROGRAM) {

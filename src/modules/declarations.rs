@@ -272,8 +272,10 @@ pub(crate) fn mentioned_names(statements: &[Node]) -> Vec<String> {
 				.iter()
 				.chain([inner.as_ref()])
 				.for_each(|part| collect(part, names)),
+			// `class ParseError extends Error`: the parent too, lib/prelude.warp's Error
 			Node::Type { name, body } => {
 				collect(name, names);
+				name.attribute(crate::warp_parser::EXTENDS_KEYWORD).iter().for_each(|parent| collect(parent, names));
 				collect(body, names);
 			}
 			_ => {}

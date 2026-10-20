@@ -8,6 +8,15 @@ const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
 const FINALLY_KEYWORD: &str = "finally";
 /// The hidden name `try X finally Z` binds X's Error to, to hand it on as the value
 const UNCAUGHT_ERROR: &str = "uncaught·error";
+/// The hidden name `except ParseError:` binds the Error to, to test its class
+const CAUGHT_ERROR: &str = "caught·error";
+
+/// What a fallback catches: the name the Error is bound to and the class it must be (decision error-classes)
+#[derive(Default)]
+pub(crate) struct Caught {
+	name: Option<String>,
+	class: Option<String>,
+}
 /// `check C` is `assert C` (user, card check-assert)
 const GUARD_MARKERS: [(&str, &str); 3] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER), ("check", ASSERT_MARKER)];
 
@@ -39,33 +48,37 @@ impl WarpParser {
 		let guarded = self.within(guard, Self::parse_guarded_phrase);
 		let written: String = self.chars[start..self.pos].iter().collect();
 		self.skip_spaces();
-		let mut caught = None;
-		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
-			self.advance_by(ahead + word.len());
-			self.skip_spaces();
-			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
-			self.skip_python_colon();
-			// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
-			self.parse_guarded_phrase()
-		} else if marker == TRY_MARKER {
+		if self.fallback_word_ahead().is_some() {
+			let mut guard = guarded;
+			// `except A: a except B: b`: an Error A does not catch passes on to the next one; an `else` after the
+			// fallback is an enclosing `if`'s
+			let mut first = true;
+			while let Some((word, ahead)) =
+				self.fallback_word_ahead().filter(|(word, _)| first || *word != ELSE_KEYWORD)
+			{
+				first = false;
+				self.advance_by(ahead + word.len());
+				self.skip_spaces();
+				let caught = if word == ELSE_KEYWORD { Caught::default() } else { self.parse_caught(word) };
+				self.skip_python_colon();
+				// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
+				let fallback = self.parse_guarded_phrase();
+				guard = guarded_by(marker, guard, fallback, caught);
+				self.skip_spaces();
+			}
+			return self.with_finally(guard);
+		}
+		let (fallback, caught) = if marker == TRY_MARKER {
 			// `r = try X` (user, card failed-raised) and `try X finally Z` are `try X catch e { e }`: a failure of X,
 			// trap included, stays the value, which `r failed` tests
-			caught = Some(UNCAUGHT_ERROR.to_string());
-			Symbol(UNCAUGHT_ERROR.to_string())
+			(Symbol(UNCAUGHT_ERROR.to_string()), Caught { name: Some(UNCAUGHT_ERROR.to_string()), class: None })
 		} else if marker == ASSERT_MARKER {
 			// the error names the condition as written, before lowering rewrote it
-			Node::Text(format!("{ASSERTION_FAILED}: {}", written.trim()))
+			(Node::Text(format!("{ASSERTION_FAILED}: {}", written.trim())), Caught::default())
 		} else {
-			Empty
+			(Empty, Caught::default())
 		};
-		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
-		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
-		let guard = Node::List(
-			[vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(),
-			Bracket::Round,
-			Separator::None,
-		);
-		self.with_finally(guard)
+		self.with_finally(guarded_by(marker, guarded, fallback, caught))
 	}
 
 	/// `… finally {Z}` after a guard: `(finally·N = guard; Z; finally·N)`, Z runs and the guard's value stays
@@ -95,23 +108,27 @@ impl WarpParser {
 		FALLBACK_WORDS.iter().find(|word| self.word_at(ahead) == **word).map(|word| (*word, ahead))
 	}
 
-	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to
-	pub(crate) fn parse_caught_name(&mut self, word: &str) -> Option<String> {
+	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the Error is bound to, the class it
+	/// must be
+	pub(crate) fn parse_caught(&mut self, word: &str) -> Caught {
 		if !self.is_identifier_start(0) {
-			return None;
+			return Caught::default();
 		}
-		let mut name = self.word_at(0);
-		self.advance_by(name.chars().count());
+		let first = self.word_at(0);
+		self.advance_by(first.chars().count());
 		self.skip_spaces();
 		if self.matches_keyword("as") {
 			self.advance_by(2);
 			self.skip_spaces();
-			name = self.word_at(0);
+			let name = self.word_at(0);
 			self.advance_by(name.chars().count());
 			self.skip_spaces();
-			return Some(name);
+			return Caught { name: Some(name), class: Some(first) };
 		}
-		(word == "catch").then_some(name) // `except ZeroDivisionError` names a type, `catch e` a binding
+		match word == "catch" {
+			true => Caught { name: Some(first), class: None },
+			false => Caught { name: None, class: Some(first) },
+		}
 	}
 
 	/// Either part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else print 3`)
@@ -138,4 +155,22 @@ impl WarpParser {
 		}
 		Node::single_or_list(items, Bracket::None, Separator::Space)
 	}
+}
+
+/// The marker call `marker(X, Y)`, with the name Y reads the caught Error by as a fourth item (`catch e { … }`, P67);
+/// `except ParseError as e` binds `e: ParseError`, which lowering tests before Y runs
+fn guarded_by(marker: &str, guarded: Node, fallback: Node, caught: Caught) -> Node {
+	let binding = match caught {
+		Caught { name, class: Some(class) } => Some(Node::Key(
+			Box::new(Symbol(name.unwrap_or_else(|| CAUGHT_ERROR.to_string()))),
+			Op::Colon,
+			Box::new(Symbol(class)),
+		)),
+		Caught { name, class: None } => name.filter(|name| mentions(&fallback, name)).map(Symbol),
+	};
+	Node::List(
+		[vec![Symbol(marker.to_string()), guarded, fallback], binding.into_iter().collect()].concat(),
+		Bracket::Round,
+		Separator::None,
+	)
 }

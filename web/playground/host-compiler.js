@@ -133,9 +133,15 @@ addHostPart({
 			const module = program();
 			const request = { block: readNode(module, block), names: readNode(module, names), values: readNode(module, values), definitions: readNode(module, definitions) };
 			const report = evalBlock(hooks, JSON.stringify(request));
+			// a block that fails is the program's error, which its `try` catches (a `warp test` line), as natively
 			if (report.error !== undefined) {
-				holder.blockError = report.error;
-				throw new Error(report.error);
+				const failure = new HostWordFailure(report.error);
+				try {
+					raisedInProgram(module, failure);
+				} catch (thrown) {
+					if (thrown === failure) holder.blockError = report.error;
+					throw thrown;
+				}
 			}
 			return buildValue(module, report.result);
 		},
