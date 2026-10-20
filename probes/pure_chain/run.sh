@@ -28,6 +28,7 @@ fi
 cd "$run" || exit 1
 cp "$program" program.warp
 $warp "$cache/view.wasm" > view.json || { cat view.json; fail "the pure-compiled parser and passes"; }
-$warp "$here/emit.warp" "$run/view.json" "$cache/runtime.json" "$run/program.wasm" 2>&1 | grep -v "^warning\|^  assumed\|^ *[0-9]* |\|^ *|"
+# from a folder that stays the same: the working directory is part of the compiled program's cache key (program_cache.rs)
+(cd "$here" && $warp emit.warp "$run/view.json" "$cache/runtime.json" "$run/program.wasm") 2>&1 | grep -v "^warning\|^  assumed\|^ *[0-9]* |\|^ *|"
 [ -s program.wasm ] || fail "emitter.warp"
 $warp program.wasm
