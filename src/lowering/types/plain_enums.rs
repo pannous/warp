@@ -50,10 +50,25 @@ impl Enums {
 			&& node_cases::spelled_enum(enum_name).is_some_and(|(_, cases)| self.cases.get(enum_name) == Some(&cases))
 	}
 
-	/// The enum of a value: a case by name, or a name declared of the enum
+	/// The enum of a value: a case by name, or a name declared of the enum or assigned its cases
 	fn type_of(&self, value: &Node) -> Option<&str> {
 		let name = value.symbol_name()?;
 		self.owner(name).or_else(|| self.subjects.get(name)?.as_deref())
+	}
+
+	/// The enum of a case written qualified (`Coin.Dime`, `Coin::Dime`) or bare, or of a name holding one
+	fn enum_of(&self, value: &Node) -> Option<String> {
+		match value.drop_meta() {
+			Node::Key(owner, Op::Dot | Op::Scope, case) if self.is_case_of(owner, case) => {
+				Some(owner.drop_meta().name())
+			}
+			other => self.type_of(other).map(String::from),
+		}
+	}
+
+	/// The spelled enum of a value (`Op.Add`, `x = Op.Add; x`), whose spelling it is a synonym of
+	fn spelled_enum_of(&self, value: &Node) -> Option<String> {
+		self.enum_of(value).filter(|enum_name| self.is_spelled(enum_name))
 	}
 }
 
@@ -83,8 +98,33 @@ fn with_cases(program: Node, cases: HashMap<String, Vec<String>>) -> Node {
 	if cases.is_empty() {
 		return program;
 	}
-	let subjects = typed_subjects(&program, |type_name| cases.contains_key(type_name));
-	rewritten(program, &Enums { cases, subjects })
+	let typed = typed_subjects(&program, |type_name| cases.contains_key(type_name));
+	let mut enums = Enums { cases, subjects: HashMap::new() };
+	let assigned = assigned_cases(&program, &enums);
+	enums.subjects = assigned.into_iter().chain(typed).collect();
+	rewritten(program, &enums)
+}
+
+/// The names assigned cases of one enum, `c = Coin.Dime`, with that enum; a name also assigned anything else has none
+fn assigned_cases(program: &Node, enums: &Enums) -> HashMap<String, Option<String>> {
+	let mut assigned: HashMap<String, Option<String>> = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Key(name, Op::Assign, value) = node {
+			if let Some(name) = name.drop_meta().symbol_name() {
+				let enum_name = enums.enum_of(value);
+				let held = assigned.entry(name.to_string()).or_insert(enum_name.clone());
+				if *held != enum_name {
+					*held = None;
+				}
+			}
+		}
+	});
+	assigned
+}
+
+/// `Op·text(value)`: the spelling of a case of a spelled enum, a text as it is (node_cases.rs spelling_functions)
+fn spelled_text(enum_name: &str, value: Node) -> Node {
+	call(&format!("{enum_name}·text"), vec![value])
 }
 
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
@@ -117,6 +157,13 @@ fn rewritten(node: Node, enums: &Enums) -> Node {
 	if let Node::List(items, _, _) = node.drop_meta() {
 		if let Some((name, cases)) = enum_cases(items) {
 			return sum_type(name, cases.into_iter().map(Node::Symbol).collect(), vec![]);
+		}
+	}
+	// a case of Op, Bracket or Separator and its spelling are synonyms (decision enum-case): `Op.Add == "+"`
+	if let Node::Key(left, operator @ (Op::Eq | Op::Ne), right) = node.drop_meta() {
+		if let Some(enum_name) = enums.spelled_enum_of(left).or_else(|| enums.spelled_enum_of(right)) {
+			let spelled = |side: &Node| spelled_text(&enum_name, rewritten(side.clone(), enums));
+			return key(spelled(left), operator.clone(), spelled(right));
 		}
 	}
 	match node.map_children(|child| rewritten(child, enums)) {
@@ -155,7 +202,7 @@ fn converted(value: Node, target: Node, enums: &Enums) -> Node {
 		.type_of(&value)
 		.filter(|name| enums.is_spelled(name) && node_cases::TEXT_TYPES.contains(&target_name.as_str()))
 	{
-		return call(&format!("{enum_name}·text"), vec![value]);
+		return spelled_text(enum_name, value);
 	}
 	let count_type = COUNT_TYPES.iter().find(|(count_type, _)| *count_type == target_name);
 	match enums.type_of(&value).zip(count_type) {

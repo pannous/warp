@@ -67,3 +67,17 @@ fn a_patterns_op_is_spelled_as_text() {
 	is!("n = parse(\"a+1\"); match n { Key(l, op, r): op as text, _: 0 }", "+");
 	is!("n = parse(\"(a)\"); match n { List(items, bracket, s): bracket as text, _: 0 }", "(");
 }
+
+// decision enum-case (user 2026-10-20): an operator case and its spelling are synonyms; printed, a case shows its name
+#[test]
+fn an_operator_case_and_its_spelling_are_synonyms() {
+	is!("Op.Add == \"+\"", true);
+	is!("\"+\" != Op.Add", false);
+	is!("op_of(key(1, \"+\", 2)) == Op.Add", true);
+	is!("x = Op.Add; x == \"+\"", true);
+	is!("x = Op.Add; x as text", "+");
+	is!("x = Separator.Comma; x as text", ",");
+	is!("bracket_of(bracketed([1], \"(\")) == Bracket.Round", true);
+	is!("Op.Add == Op.Sub", false);
+	is!("Op.Add", symbol("Add"));
+}
