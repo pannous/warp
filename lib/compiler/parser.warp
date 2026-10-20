@@ -535,6 +535,14 @@ def continued(p, left, min_power) {
 			left = listed("(", "", [symbol("reverse"), Key(expression(p, powers#2), Op.To, left)])
 		} else {
 			op = operator_at(p)
+			if op.length == 0 and free_infix_at(p, left) {
+				if OPERATOR_LEVELS["infix"] < min_power { break }
+				glyph = "" + c
+				p.at = p.at + 1
+				skip_blanks(p)
+				left = operator_call(glyph, [left, expression(p, OPERATOR_LEVELS["infix"] + 1)])
+				continue
+			}
 			if op.length == 0 {
 				if not applies(p, left, min_power) { break }
 				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power))])
@@ -1569,11 +1577,37 @@ def atom(p) {
 		if c == 'ø' { p.at = p.at + 1 }
 		return ø
 	}
-	raise "Unexpected character '" + c + "'"
+	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)
+	if "\"'".contains(code_points("" + c)#1) { return quoted(p) }
+	// every other character is a symbol of its own, `x = ↯`, `⌘` (card unicode-glyphs)
+	// Rust twin: atoms.rs parse_atom (is_free_symbol; the Rust lane still errors outside the free blocks)
+	p.at = p.at + 1
+	symbol("" + c)
 }
 
 // The degree sign of temperatures and angles (Rust twin: numbers/units.rs DEGREE)
 DEGREE = '°'
+
+// The Unicode blocks of symbols a program may use before anything defines them (decision unicode-symbols): arrows,
+// math operators, technical and geometric symbols, dingbat arrows, the supplemental math and arrow blocks
+// Rust twin: operators.rs FREE_SYMBOL_BLOCKS
+FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '⟿'], ['⤀', '⫿'], ['⬀', '⯿'], ['￩', '￬']]
+// A symbol character no built-in operator, prefix operator or alias spells: a free operator or symbol name
+// Rust twin: operators.rs is_free_symbol
+def is_free_symbol(p, c) {
+	glyph = "" + c
+	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) { return false }
+	in_block = false
+	for block in FREE_SYMBOL_BLOCKS { if c >= block#1 and c <= block#2 { in_block = true } }
+	if not in_block { return false }
+	for op in SYMBOL_OPERATORS { if op#1 == glyph { return false } }
+	for alias in p.aliases { if alias#1 == glyph { return false } }
+	true
+}
+// `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;
+// `[↯ ↯]` and `print ↯` read the glyph as a value
+// Rust twin: operators.rs try_parse_free_infix, free_symbol_follows
+def free_infix_at(p, left) := left != ø and is_free_symbol(p, p.code[p.at]) and operand_follows(p, 1) and not is_free_symbol(p, code_after(p, p.at + 1))
 
 // The URL after its scheme word, up to a blank, a separator, a closer or a quote
 // Rust twin: literals/paths.rs parse_url, is_url_terminator
@@ -2582,9 +2616,12 @@ def digits_read(p) {
 // A text in quotes, its backslash escapes read; one character is a codepoint
 // Rust twin: literals.rs read_text
 def quoted(p) {
-	quote = p.code[p.at]
+	opening = code_points("" + p.code[p.at])
+	quote = opening#1
+	marks = ""
+	for mark in opening[1 .. opening.length] { marks = marks + mark }
 	end = text_end(p.code, p.at + 1, quote, p.n)
-	written = p.code[p.at + 1 .. end - 1]
+	written = marks + p.code[p.at + 1 .. end - 1]
 	p.at = end
 	holed = if quote == '"' then template(written) else ø
 	if holed != ø { return template_node(holed) }
