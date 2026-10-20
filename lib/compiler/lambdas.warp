@@ -139,7 +139,7 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 ## the program's functions and values
 
 # `f(a, b) := body`: [name, parameters as written, body] of a definition, else ø
-definition_parts(n: any): any := match n {
+definition_of(n: any): any := match n {
 	Key(signature, Op.Define, body): defined_head(signature, body)
 	_: ø
 }
@@ -156,7 +156,7 @@ top_statements(program: any): list := if is_sequence_of_statements(program) then
 # the names a body assigns, binds in a `for` or declares `x: T = v`, each once
 names_bound(n: any, found: list): list := {
 	found = newly_bound(n, found)
-	if is_lambda(n) or definition_parts(n) != ø { return found }
+	if is_lambda(n) or definition_of(n) != ø { return found }
 	for part in walked_parts(n) { found = names_bound(part, found) }
 	found
 }
@@ -269,7 +269,7 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 
 # a definition with its body lowered, its parameters and variables the locals
 lowered_statement(statement: any, top_locals: list, lowering: Lowering): any := {
-	parts = definition_parts(statement)
+	parts = definition_of(statement)
 	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
 	locals = parts#2.map(parameter_word) + names_bound(parts#3, [])
 	match statement {
@@ -282,13 +282,13 @@ lambdas(program: any): any := {
 	written = top_statements(program)
 	arities = {}
 	for statement in written {
-		parts = definition_parts(statement)
+		parts = definition_of(statement)
 		if parts != ø { arities[parts#1] = #(parts#2) }
 	}
 	lowering = Lowering{arities: arities, lifted: []}
 	top_locals = []
 	for statement in written {
-		if definition_parts(statement) == ø { top_locals = names_bound(statement, top_locals) }
+		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
 	}
 	lowered = written.map(statement => lowered_statement(statement, top_locals, lowering))
 	if is_sequence_of_statements(program) { return group_like(program, lowering.lifted + lowered) }
