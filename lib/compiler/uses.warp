@@ -8,10 +8,15 @@ import_keywords = ["use", "require", "import", "include"]
 # src/modules/declarations.rs DECLARATION_KEYWORDS and CONSTANT_KEYWORDS
 declaration_keywords = ["let", "var", "global", "stored", "const", "constant", "final", "val"]
 module_extension = ".warp"
+# the word a module reads as the folder of its own file (Rust twin: src/modules/loader.rs MODULE_DIRECTORY)
+module_directory_word = "module_directory"
 
 # the program with the declarations of the files its uses name, read from `folder`, in front of it, and each
 # `module_source("prelude")` the text of that standard module
-with_uses(program: any, folder: text): any := bottom_up(used_in(program, folder), module_text)
+with_uses(program: any, folder: text): any := bottom_up(used_in(with_module_directory(program, folder), folder), module_text)
+# `read(module_directory + "/data/x")`: module_directory is the folder of the file it is written in (Rust's
+# loader.rs with_module_directory)
+with_module_directory(n: any, folder: text): any := bottom_up(n, x => if x == symbol(module_directory_word) then folder else x)
 used_in(program: any, folder: text): any := {
 	statements = statements_in(program)
 	brought = declarations_used(statements, folder, [])
@@ -35,7 +40,7 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 		file = file_used(statement, folder)
 		if file != ø and not (file in seen) {
 			seen += [file]
-			used = statements_in(plain_node(parsed(file_text(file))))
+			used = statements_in(with_module_directory(plain_node(parsed(file_text(file))), folder_of(file)))
 			inner = declarations_used(used, folder_of(file), seen)
 			seen = inner#2
 			declarations += inner#1 + used.filter(s => is_declaration(s) and file_used(s, folder_of(file)) == ø)

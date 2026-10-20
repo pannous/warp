@@ -330,4 +330,5 @@ fn parser_words_run_pure() {
 	let chain = |name: &str| format!("{}/probes/pure_chains/{name}.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("library_word_mapped", &chain("slice_named"), "['b']\n[2 1]");
 	runs_pure("chained_iterations", &chain("sorted_then_mapped"), "[\"use a\" \"use b\"]\n[4 6]");
+	runs_pure("module_directory", &chain("home_folder/own_folder"), "home_folder\nhelpers");
 }
