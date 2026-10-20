@@ -39,6 +39,7 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
+const EMPTY_LIST_LITERAL: &str = "[]";
 
 /// The key of the Meta layer holding a comment (with_comment)
 pub const COMMENT_KEY: &str = "comment";
@@ -387,6 +388,16 @@ impl Node {
 	/// Keep the source text of a literal whose value would print differently (`01234`, `1.10`)
 	pub fn with_source_literal(self, literal: &str) -> Self {
 		Meta { node: Box::new(self), data: Box::new(Node::key(SOURCE_LITERAL, Node::text(literal))) }
+	}
+
+	/// `[]`: ø written as the empty list, so `t = []; t += "a"` appends where `t = ø` fails (decisions empty-plus-text,
+	/// list-append-plus)
+	pub fn empty_list() -> Self {
+		Empty.with_source_literal(EMPTY_LIST_LITERAL)
+	}
+
+	pub fn is_empty_list_literal(&self) -> bool {
+		self.source_literal() == Some(EMPTY_LIST_LITERAL)
 	}
 
 	pub fn source_literal(&self) -> Option<&str> {

@@ -245,6 +245,28 @@ impl WasmGcEmitter {
 						]);
 						s.call(f, "list_concat");
 						Self::emit_list(f, &[I::Return, I::End]);
+						let kind_is = |f: &mut Function, operand: u32, kind: Kind| {
+							s.emit_field(f, operand, 0);
+							Self::emit_kind_test(f, kind as i64, I::I64Eq);
+						};
+						// ø + text fails as ø + 1 does (decision empty-plus-text)
+						kind_is(f, 0, Kind::Empty);
+						kind_is(f, 1, Kind::Text);
+						kind_is(f, 1, Kind::Codepoint);
+						Self::emit_list(f, &[I::I32Or, I::I32And]);
+						s.emit_fail_if(f, EMPTY_PLUS_TEXT);
+						// a list + an item that is no list: the item appended, `xs + [item]` (decision list-append-plus)
+						kind_is(f, 0, Kind::List);
+						kind_is(f, 0, Kind::Block);
+						let node_type = s.type_manager.node_type;
+						#[rustfmt::skip]
+						Self::emit_list(f, &[
+							I::I32Or, I::If(BlockType::Empty),
+								I::LocalGet(0), I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(1),
+								I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+						]);
+						s.call(f, "list_concat");
+						Self::emit_list(f, &[I::Return, I::End]);
 						// two texts (or characters): their concatenation, `await a + await b` of two text tasks
 						let is_text = |f: &mut Function, operand: u32| {
 							s.emit_field(f, operand, 0);
@@ -605,8 +627,9 @@ impl WasmGcEmitter {
 				true
 			}
 			Kind::List => {
+				let item_list = self.appended_item_list(left, right);
 				self.emit_node_instructions(func, left);
-				self.emit_node_instructions(func, right);
+				self.emit_node_instructions(func, item_list.as_ref().unwrap_or(right));
 				self.emit_call(func, "list_concat");
 				true
 			}

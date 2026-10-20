@@ -117,41 +117,33 @@ pub(crate) fn is_list_literal(side: &Node) -> bool {
 	matches!(side.drop_meta(), Node::List(_, Bracket::Square, _))
 }
 
-/// `[1 2 3]+4` and `4+[1 2 3]` with a list literal and a number: append (prepend) or add to each element?
-/// Unanswered it is an error naming `[1 2 3] + [4]` and `[1 2 3] .+ 4`
+/// `4+[1 2 3]`, a number and then a list literal: prepend or add to each element? Unanswered it is an error naming
+/// `[4] + [1 2 3]` and `[1 2 3] .+ 4`. A list first appends (decision list-append-plus): the emitter's `xs + [item]`
 pub(crate) fn list_plus(sum: &Node, positioned: &Node) -> Option<Node> {
-	let Node::Key(left, Op::Add, right) = sum.drop_meta() else {
+	let Node::Key(number, Op::Add, list) = sum.drop_meta() else {
 		return None;
 	};
-	let is_number = |side: &Node| matches!(side.drop_meta(), Node::Number(_));
-	let (list, number, list_first) = match (is_list_literal(left), is_list_literal(right)) {
-		(true, false) if is_number(right) => (left.as_ref(), right.as_ref(), true),
-		(false, true) if is_number(left) => (right.as_ref(), left.as_ref(), false),
-		_ => return None,
-	};
+	if !matches!(number.drop_meta(), Node::Number(_)) || !is_list_literal(list) {
+		return None;
+	}
 	let written = sum.drop_meta().serialize();
 	let (list_text, number_text) = (crate::normalize::operand_text(list), crate::normalize::operand_text(number));
-	let (joining, joined) = match list_first {
-		true => ("append", format!("{list_text} + [{number_text}]")),
-		false => ("prepend", format!("[{number_text}] + {list_text}")),
-	};
 	let readings = vec![
-		crate::errors::diagnostic::reading(joining, &joined),
+		crate::errors::diagnostic::reading("prepend", &format!("[{number_text}] + {list_text}")),
 		crate::errors::diagnostic::reading("add to each element", &format!("{list_text} .+ {number_text}")),
 	];
 	let question = crate::errors::diagnostic::Ask::new(
 		LIST_PLUS_TOPIC,
-		format!("type error: list + number: does `{written}` {joining} {number_text} or add it to each element?"),
+		format!("type error: list + number: does `{written}` prepend {number_text} or add it to each element?"),
 		readings,
 		crate::errors::diagnostic::Fallback::Error,
 	)
 	.written(&written)
 	.at_node(positioned);
-	let singleton = Node::List(vec![number.clone()], Bracket::Square, Separator::Space);
+	let singleton = Node::List(vec![number.as_ref().clone()], Bracket::Square, Separator::Space);
 	Some(match crate::errors::diagnostic::ask(&question) {
-		Ok(0) if list_first => key(list.clone(), Op::Add, singleton),
-		Ok(0) => key(singleton, Op::Add, list.clone()),
-		Ok(_) => element_wise(list.clone(), Op::Add, number.clone()),
+		Ok(0) => key(singleton, Op::Add, list.as_ref().clone()),
+		Ok(_) => element_wise(list.as_ref().clone(), Op::Add, number.as_ref().clone()),
 		Err(error) => error,
 	})
 }

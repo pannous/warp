@@ -29,6 +29,11 @@ pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str>
 	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
 		return Some(crate::wasm_emitter::lists::list_ops::NODE_ADD);
 	}
+	// a text added to a value of run-time kind: ø + text fails (decision empty-plus-text), a list appends it, anything
+	// else joins it (node_add)
+	if *op == Op::Add && is_run_time_kind(&left) && matches!(right, Kind::Text | Kind::Codepoint) {
+		return Some(crate::wasm_emitter::lists::list_ops::NODE_ADD);
+	}
 	if ![left, right].iter().any(is_run_time_kind) || ![left, right].iter().all(numeric) {
 		return None;
 	}
@@ -61,11 +66,26 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	}
 }
 
+/// `xs + item` and `xs += item` of an item that is no list append it (decision list-append-plus): to a list, or to ø
+/// given as `[]` (`t = []; t += "a"`; ø's own `+= "a"` fails, decision empty-plus-text). An item of run-time kind is
+/// decided at run time (list_extend, node_add)
+pub fn appends_item(left: Kind, left_is_empty_list: bool, right: Kind) -> bool {
+	(left == Kind::List || (left_is_empty_list && is_run_time_kind(&left)))
+		&& !matches!(right, Kind::List | Kind::Empty | Kind::Data | Kind::Error | Kind::Block)
+}
+
+/// The appended item as the one-item list it is added as, `xs += 3` as `xs += [3]` (appends_item); `fs += (x => x)`
+/// adds the function, not the group holding it
+pub fn one_item_list(item: &Node) -> Node {
+	Node::List(vec![item.ungrouped().clone()], Bracket::Square, crate::node::Separator::Space)
+}
+
 /// `a + b` joining lists or texts: lists (an empty one too) are a list; a text with anything but a function, a value held
 /// as a Node too (a map value, a number of run-time kind), is a text
 fn concatenation_kind(left: Kind, right: Kind) -> Option<Kind> {
-	if [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List)
-	{
+	let lists = [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty))
+		&& [left, right].contains(&Kind::List);
+	if lists || appends_item(left, false, right) {
 		Some(Kind::List)
 	} else {
 		crate::wasm_emitter::text::text_builtins::concatenates(left, right).then_some(Kind::Text)

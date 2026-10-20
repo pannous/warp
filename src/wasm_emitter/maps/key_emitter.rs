@@ -373,6 +373,9 @@ impl WasmGcEmitter {
 		let Node::Symbol(name) = left.drop_meta() else {
 			return self.emit_member_list_extend(func, left, right);
 		};
+		// `xs += 3` appends 3 as `xs += [3]` does (decision list-append-plus)
+		let item_list = self.appended_item_list(left, right);
+		let right = item_list.as_ref().unwrap_or(right);
 		if let Node::List(items, Bracket::Square, _) = right.drop_meta() {
 			if self.emit_typed_list_extend(func, name, items) {
 				func.instruction(&I::Drop);
@@ -381,10 +384,11 @@ impl WasmGcEmitter {
 			}
 		}
 		// items of unknown kind too (`out += part` of a part of an `any` list): list_extend adds a list's cells and
-		// concatenates anything else, as node_add does; copying the whole list at each step was quadratic
+		// appends anything else; copying the whole list at each step was quadratic. A list grows, and ø given as `[]`
+		let grows = self.get_type(left) == crate::Kind::List || self.holds_empty_list(name);
 		let is_list = match self.get_type(right) {
-			crate::Kind::List => matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty),
-			crate::Kind::Empty => self.get_type(left) == crate::Kind::List,
+			crate::Kind::List => grows || self.get_type(left) == crate::Kind::Empty,
+			crate::Kind::Empty | crate::Kind::Data => grows,
 			_ => false,
 		};
 		// a declared global grows in place too (`global out; out += [i]` in a function): its concat copy was quadratic
@@ -394,11 +398,10 @@ impl WasmGcEmitter {
 		// kinds known only at run time (`out = []`, ø until it grows, by a part of an `any` list): decided then
 		let run_time_sum = crate::analyzer::node_arithmetic(self.get_type(left), &Op::Add, self.get_type(right))
 			== Some(super::super::lists::list_ops::NODE_ADD);
-		// node_add_assign is emitted after main when called (an unforeseen call), as node_add is
+		// list_extend and node_add_assign are emitted after main when unforeseen (`t = []; for p in ps { t += p }`: the
+		// analysis requires list_extend only for `+= [v]`), as node_add is
 		let function = match (is_list, run_time_sum) {
-			(true, _) if self.should_emit_function(super::super::lists::list_ops::LIST_EXTEND) => {
-				super::super::lists::list_ops::LIST_EXTEND
-			}
+			(true, _) => super::super::lists::list_ops::LIST_EXTEND,
 			(false, true) => super::super::lists::list_ops::NODE_ADD_ASSIGN,
 			_ => return false,
 		};
@@ -410,6 +413,18 @@ impl WasmGcEmitter {
 			func.instruction(&I::RefAsNonNull); // a global is nullable, list_extend's list is not
 		}
 		true
+	}
+
+	/// `xs += item`, `xs + item` of an item that is no list: the one-item list `[item]` it adds (appends_item)
+	pub(in crate::wasm_emitter) fn appended_item_list(&self, left: &Node, right: &Node) -> Option<Node> {
+		let empty_list = left.symbol_name().is_some_and(|name| self.holds_empty_list(name));
+		crate::analyzer::appends_item(self.get_type(left), empty_list, self.get_type(right))
+			.then(|| crate::analyzer::one_item_list(right))
+	}
+
+	/// A local given `[]` that holds ø still: `+= item` appends to it (Local::empty_list)
+	fn holds_empty_list(&self, name: &str) -> bool {
+		self.scope.lookup(name).is_some_and(|local| local.empty_list && crate::analyzer::is_run_time_kind(&local.kind))
 	}
 
 	/// `p.items += [v]` (lowered `p#(items+1) += [v]`), `m#2 += [v]`: the list a field or item holds grows in place too

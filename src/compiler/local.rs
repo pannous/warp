@@ -13,6 +13,7 @@ pub struct Local {
 	pub data_pointer: u32,             // Linear memory offset for reference data
 	pub data_length: u32,              // Length of data in memory (for strings)
 	pub may_be_ratio: bool,            // an exact number given a value that may be a fraction (`l = -0.45`, `y = n/12`)
+	pub empty_list: bool,              // given `[]`: ø that `+= item` appends to, where ø's `+= "a"` fails (card start)
 }
 
 impl Local {
@@ -27,6 +28,7 @@ impl Local {
 			data_pointer: 0,
 			data_length: 0,
 			may_be_ratio: false,
+			empty_list: false,
 		}
 	}
 }
