@@ -169,11 +169,13 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # errors: the indices of the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
-# for an untyped field); variants its enums' bare cases
+# for an untyped field); class_defaults the values of the fields an instance may leave out, [view] each by name (an
+# optional field's is ø); member_classes the classes declaring methods or operators in their body; variants its enums'
+# bare cases
 # counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {} }
 
 module = Module({}, [])
 
@@ -460,15 +462,24 @@ def instance_value(body: Body, class_name: text, fields: any): list {
 # `Point(2, 3)`: the instance whose fields, in the order the class declares them, are the arguments
 def positional_instance(body: Body, class_name: text, arguments: any): list {
 	field_names = if class_name in module.classes then module.classes[class_name].keys else []
-	instance_of_fields(body, class_name, field_names, arguments)
+	if #arguments > #field_names { return refuse("an instance of " + class_name + " given more values than fields") }
+	instance_of_fields(body, class_name, field_names[0..<#arguments], arguments)
 }
 # the instance of the class whose fields of these names hold these values
 def instance_of_fields(body: Body, class_name: text, field_names: any, field_values: any): list {
 	if not (class_name in module.classes) { return refuse("an instance of " + class_name + ", a class not declared here") }
 	# methods (`S·init`, `C·put`) change their instance in place in Rust's: not yet compiled alike here
-	if module.functions.keys.any(name => name.starts_with(class_name + "·")) { return refuse("an instance of " + class_name + ", a class with methods") }
+	if class_name in module.member_classes or module.functions.keys.any(name => name.starts_with(class_name + "·")) { return refuse("an instance of " + class_name + ", a class with methods") }
 	declared = module.classes[class_name]
-	if #field_values != #declared.keys { return refuse("an instance of " + class_name + " not giving each field") }
+	# the fields left out take their defaults, as Rust's type_constructor.rs with_defaults
+	defaults = module.class_defaults[class_name]
+	for name in declared.keys {
+		if not (name in field_names) {
+			if not (name in defaults) { return refuse("an instance of " + class_name + " not giving each field") }
+			field_names += [name]
+			field_values += [node_of(defaults[name]#1)]
+		}
+	}
 	codes = []
 	for i in 0..<#field_names {
 		if not (field_names[i] in declared) { return refuse("a field " + class_name + " does not declare") }
@@ -765,7 +776,11 @@ collect_types(n: any): any := {
 	if is_group(n) { for x in n { collect_types(x) } }
 }
 record_type(name: any, body: any): any := {
-	if kind_of(name) == "symbol" { return module.classes[name#2] = field_types(body) }
+	if kind_of(name) == "symbol" {
+		module.class_defaults[name#2] = field_defaults(body)
+		if declared_members(body).any(member => member == ø) { module.member_classes[name#2] = yes }
+		return module.classes[name#2] = field_types(body)
+	}
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
 	if name#2 == "variants" { for variant in name#3[3..] { module.variants[variant#2] = yes } }
 	record_type(name#4, body)
@@ -782,18 +797,39 @@ def field_admits(name: text, kind: text): bool {
 	}
 	yes
 }
+# the members a class body declares, a field as [name, type name (ø: untyped), default ([view], ø: none)]: `x`,
+# `left?` (untyped, ø by default), `x: int`, `x: int = 0`, `n = 0`; any other member (a method `sq() := …`, an
+# operator) as ø
+declared_members(body: any): list := if kind_of(body) == "list" then body[3..].map(declared_field) else []
+declared_fields(body: any): list := declared_members(body).filter(field => field != ø)
+# a field's name as the view holds it: `x`, `"my field"`, `pi` (a constant's word)
+field_name_kinds = ["symbol", "text", "number"]
+declared_field(field: any): any := {
+	kind = kind_of(field)
+	if kind in field_name_kinds and field#2.ends_with("?") { return [field#2[0..<(#field#2 - 1)], ø, [ø]] }
+	if kind in field_name_kinds { return [field#2, ø, ø] }
+	if kind != "key" { return ø }
+	if field#2 == ":" and kind_of(field#3) in field_name_kinds { return [field#3#2, type_name_of(field#4), ø] }
+	if field#2 != "=" { return ø }
+	named = declared_field(field#3)
+	if named == ø { return ø }
+	[named#1, named#2, [field#4]]
+}
+# a field's declared type as a name: `int` read as a type or as a symbol, else "?"
+type_name_of(type: any): text := {
+	if kind_of(type) == "symbol" { return type#2 }
+	if kind_of(type) == "type" and kind_of(type#2) == "symbol" { return type#2#2 }
+	"?"
+}
 field_types(body: any): any := {
 	types = {}
-	if kind_of(body) != "list" { return types }
-	for field in body[3..] {
-		# an optional field `left?` is untyped
-		if kind_of(field) == "symbol" { types[if field#2.ends_with("?") then field#2[0..<(#field#2 - 1)] else field#2] = ø }
-		if kind_of(field) == "key" {
-			type = field#4
-			types[field#3#2] = if kind_of(type) == "type" and kind_of(type#2) == "symbol" then type#2#2 else "?"
-		}
-	}
+	for field in declared_fields(body) { types[field#1] = field#2 }
 	types
+}
+field_defaults(body: any): any := {
+	defaults = {}
+	for field in declared_fields(body) { if field#3 != ø { defaults[field#1] = field#3 } }
+	defaults
 }
 
 # a runtime word sees only the globals runtime.warp declares, never those of the program
@@ -1564,6 +1600,8 @@ def key_expression(body: Body, n: any): list {
 	# a class declaration, held as an opaque view (walk.warp): its instances are maps (instance_value)
 	if left == symbol(opaque_word) and kind_of(right) == "type" { return [no_kind, []] }
 	# the key of `Point{x: 1}` has no operator as parser.warp reads it, `:` as Rust's analysis view shows it
+	# `P{}`: every field its default (an empty group reads as ø, or as the opaque `{}`)
+	if operator == "" and left is symbol and name_of(left) in module.classes and (right == ø or is_empty_map(right)) { return instance_value(body, name_of(left), []) }
 	if (operator == ":" or operator == "") and left is symbol and is_group(right) and bracket_of(right) == "{" and right.all(is_entry) {
 		# `div{ a: 1 }` of no class is Rust's `div:a:1`: a block of one entry is that entry
 		if #right == 1 and not (name_of(left) in module.classes) {
