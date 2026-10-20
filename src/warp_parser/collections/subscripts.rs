@@ -201,7 +201,7 @@ impl WarpParser {
 		if slice_bounds(&indices[0]).is_none() && !names_a_type && !self.names_a_key(&indices[0]) {
 			crate::normalize::set_position_of(lhs);
 			norm::index_operator(
-				&crate::normalize::operand_text(&super::sugar::sugared(lhs.clone())),
+				&crate::normalize::operand_text(&super::sugar::sugared(lhs.clone(), &Default::default())),
 				&crate::normalize::operand_text(&indices[0]),
 				true,
 			);

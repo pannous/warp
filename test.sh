@@ -21,8 +21,8 @@ unset CARGO_TARGET_DIR
 
 echo "Compiling tests..."
 COMPILE_START=$SECONDS
-# Match RustRover's runner injection exactly
-RUNNER="target.aarch64-apple-darwin.runner=['/Applications/RustRover.app/Contents/bin/native-helper/intellij-rust-native-helper']"
+# the test executables run through a plain pass-through (RustRover's intellij-rust-native-helper until 2026-10-20)
+RUNNER_PROGRAM="$PWD/tests/runner.sh"
 FEATURES="--all-features" # native + ffi: the default build plus the FFI tests
 # the compiler at opt-level 2 for the full suite: the tests' time is mostly warp lowering programs and their std modules;
 # the tests binary ran 2x faster (summed test time 14424 → 7059 s), the build takes ~130 s longer (notes/test_speed.md).
@@ -33,7 +33,7 @@ OPTIMIZED_COMPILER="profile.test.package.warp-lang.opt-level=2"
 # changes most of warp anyway
 export CARGO_INCREMENTAL=0
 TEST_EXECUTABLES=$(mktemp)
-cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --config "$OPTIMIZED_COMPILER" --no-run --message-format=json-render-diagnostics |
+cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$OPTIMIZED_COMPILER" --no-run --message-format=json-render-diagnostics |
 	jq -r 'select(.reason == "compiler-artifact" and .profile.test and .executable != null) | "\(.target.src_path)\t\(.executable)"' > "$TEST_EXECUTABLES"
 [ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
 # the runtime stubs the executable tests copy (tests/common runtime_stub): built here, so no test runs cargo, whose lock
@@ -47,7 +47,6 @@ COMPILE_SECONDS=$((SECONDS - COMPILE_START))
 echo "Running all tests..."
 TEST_THREADS=16
 RUN_START=$SECONDS
-RUNNER_PROGRAM=$(echo "$RUNNER" | sed -E "s/.*\['([^']*)'\].*/\1/")
 # the [env] of .cargo/config.toml as cargo gives it to the programs it runs: a value relative to the config's folder
 # becomes absolute, a variable already set is kept unless the entry says force
 cargo_config_env() {

@@ -1195,8 +1195,7 @@ impl WasmGcEmitter {
 			Fallback::Warning,
 		)
 		.written(word);
-		let position = self.source_position.clone().unwrap_or_default();
-		let question = question.at(position.line_nr, position.column);
+		let question = question.at_place(&self.source_position.clone().unwrap_or_default());
 		ask(&question).map(|_| ())
 	}
 

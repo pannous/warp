@@ -1827,7 +1827,10 @@ def enum_body_at(p) {
 
 // `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
 // follows: `map function square on xs`); `function add(x) {…}` defines it
+// `function f`, `func f`: the function f as a value, marked as Rust's parser marks it (closures.rs
+// FUNCTION_REFERENCE_MARK), so the closure pass makes it a closure, a nested one too
 // Rust twin: definitions/functions.rs function_reference_after
+FUNCTION_REFERENCE_MARK = "function_reference"
 def function_reference(p) {
 	at = blank_end(p, p.at)
 	if at == p.at or at >= p.n or not is_alpha(p.code[at]) { return ø }
@@ -1836,7 +1839,7 @@ def function_reference(p) {
 	next_word = p.code[rest .. name_end(p.code, rest, p.n)]
 	if not (rest >= p.n or ";,)]}\n".contains(p.code[rest]) or next_word == "on" or next_word == "is") { return ø }
 	p.at = end
-	symbol(p.code[at .. end])
+	attributed(FUNCTION_REFERENCE_MARK, true, symbol(p.code[at .. end]))
 }
 
 // The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter

@@ -485,7 +485,8 @@ impl WasmGcEmitter {
 					f,
 					&[I::I64Const(KEY_KIND), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End],
 				);
-				// an instance carries its own op code (D4, type_constructor.rs): its fields, no type name compared
+				// an instance carries its own op code (D4, type_constructor.rs): its fields, no type name compared; a map of
+				// one entry named after a class, `{Op: {}}`, stays that map (T:{…} is data, D4)
 				field(f, 0, 0);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -494,7 +495,6 @@ impl WasmGcEmitter {
 				]);
 				field(f, 0, 2);
 				Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
-				fields_when_named(f, 0);
 				f.instruction(&I::LocalGet(0));
 			});
 		}

@@ -2491,7 +2491,6 @@ PASSED:
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_node_json::json_of_code_keeps_its_operations
   ✓ modules::test_node_json::json_writes_numbers_exactly_or_says_so
-  ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
   ✓ modules::test_package_forms::a_bare_name_is_a_folder_of_the_default_registry
   ✓ modules::test_package_forms::a_full_url_stays_as_written
   ✓ modules::test_package_forms::an_owner_and_repository_are_on_github
@@ -2700,6 +2699,7 @@ PASSED:
   ✓ modules::test_use_several::a_use_with_a_version_stays_one_module
   ✓ modules::test_use_several::a_use_with_commas_uses_each_module
   ✓ modules::test_use_several::a_use_with_spaces_uses_each_module
+  ✓ modules::test_used_enums::an_enum_of_a_file_a_used_file_uses
   ✓ modules::test_used_module_bare_words::a_used_modules_word_is_called_bare
   ✓ modules::test_used_module_bare_words::without_the_use_or_with_an_own_parse_the_word_keeps_its_meaning
   ✓ modules::test_versions::a_package_used_twice_is_loaded_once
@@ -2742,11 +2742,13 @@ PASSED:
   ✓ node::test_node_api::a_list_shows_its_bracket
   ✓ node::test_node_api::nodes_are_built_from_parts
   ✓ node::test_node_api::rebuilt_lists_equal_the_written_ones
+  ✓ node::test_node_cases::a_called_subject_is_taken_apart
   ✓ node::test_node_cases::a_case_builds_the_node
   ✓ node::test_node_cases::a_pattern_takes_the_node_apart
   ✓ node::test_node_cases::a_patterns_op_is_spelled_as_text
   ✓ node::test_node_cases::a_programs_own_names_win
   ✓ node::test_node_cases::an_enum_case_in_a_pattern_compares
+  ✓ node::test_node_cases::an_operator_case_and_its_spelling_are_synonyms
   ✓ node::test_node_cases::an_operator_case_is_spelled_as_the_node_carries_it
   ✓ node::test_node_cases::node_is_the_type_of_any_node
   ✓ node::test_normalization::a_mask_beside_and_or_hints_the_bit_word
@@ -3730,7 +3732,6 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -3753,7 +3754,10 @@ PASSED:
   ✓ parser::test_self_pure::defaults_run_pure
   ✓ parser::test_self_pure::durations_read_self_hosted
   ✓ parser::test_self_pure::enum_cases_run_pure
+  ✓ parser::test_self_pure::enum_conversions_and_default_arms_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
+  ✓ parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
+  ✓ parser::test_self_pure::lambdas_run_pure
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::number_keys_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
@@ -3762,6 +3766,7 @@ PASSED:
   ✓ parser::test_self_pure::recursive_results_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
+  ✓ parser::test_self_pure::type_words_named_by_fields_run_pure
   ✓ parser::test_self_pure::used_files_run_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
@@ -4348,7 +4353,6 @@ PASSED:
   ✓ text::test_library_unicode::sort_orders_texts
   ✓ text::test_library_unicode::sort_still_orders_ints
   ✓ text::test_library_unicode::upper_and_lower_cover_unicode_scripts
-  ✓ text::test_map_text::a_map_has_a_text
   ✓ text::test_map_text::a_map_prints
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
@@ -4745,6 +4749,8 @@ PASSED:
   ✓ types::test_declared_list_marks::a_write_of_another_type_through_a_hidden_alias_fails_at_run_time
   ✓ types::test_declared_list_marks::an_empty_declared_list_checks_its_items
   ✓ types::test_declared_list_marks::an_inferred_element_type_marks_nothing
+  ✓ types::test_declared_type_compared::equals_with_a_declared_class_does_not_type_test
+  ✓ types::test_declared_type_compared::equals_with_a_declared_enum_does_not_type_test
   ✓ types::test_dispatch::a_call_with_more_arguments_is_the_same_call_either_way
   ✓ types::test_dispatch::a_method_for_a_class_keeps_the_library_function
   ✓ types::test_dispatch::a_method_in_a_class_body_is_a_method_of_the_generic_function
@@ -4985,6 +4991,9 @@ PASSED:
   ✓ types::test_plain_enum::a_case_has_its_position
   ✓ types::test_plain_enum::a_case_is_its_own_value
   ✓ types::test_plain_enum::a_case_is_of_its_enum_type
+  ✓ types::test_plain_enum::a_case_named_like_a_type_is_the_case
+  ✓ types::test_plain_enum::a_held_case_converts_as_the_case
+  ✓ types::test_plain_enum::an_entry_named_after_a_type_stays_a_map_entry
   ✓ types::test_plain_enum::an_int_becomes_a_case_explicitly
   ✓ types::test_plain_enum::case_statement_then_type_test
   ✓ types::test_plain_enum::other_languages_enums_are_plain_enums_too
@@ -6194,6 +6203,7 @@ PASSED:
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
   ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
+  ✓ welcoming::test_used_file_positions::a_warning_in_a_used_file_names_the_file
   ✓ welcoming::test_variable_applied::a_local_holding_a_plain_value_applied_to_a_value_is_an_error
   ✓ welcoming::test_variable_applied::locals_holding_functions_and_data_lists_stay
   ✓ welcoming::test_warning_levels::capture_hints_still_returns_the_hints
@@ -6306,6 +6316,8 @@ PASSED:
 
 FAILED:
   ✗ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
+  ✗ modules::test_node_json::the_browser_spells_each_operator_code_alike
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6302 passed, 1 failed, 6303 total tested
+11 ignored, 6312 passed, 3 failed, 6315 total tested

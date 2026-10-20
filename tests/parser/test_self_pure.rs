@@ -87,6 +87,25 @@ fn enum_cases_run_pure() {
 	);
 }
 
+/// plain_enums.warp converts a case to its index and back, node_matches.warp takes `other:` as the default arm and a
+/// case named like a type word (`Int` of node.warp's Kind) as the case (card enum-leftovers)
+#[test]
+fn enum_conversions_and_default_arms_run_pure() {
+	let coin = "enum Coin { Penny, Nickel, Dime }";
+	runs_pure("case_as_int", &format!("{coin}\nCoin.Dime as int"), "2");
+	runs_pure("case_as_position", &format!("{coin}\nCoin.Dime as position"), "3");
+	runs_pure("int_as_case", &format!("{coin}\n2 as Coin"), "Dime");
+	runs_pure("case_call", &format!("{coin}\nCoin(1)"), "Nickel");
+	let cost = "cost(c) := match c { Penny: 1; other: 3 }";
+	runs_pure("other_arm", &format!("{coin}\n{cost}\ncost(Coin.Dime) * 10 + cost(Coin.Penny)"), "31");
+	let name = "name(k) := match k { Int: \"int\"; Float: \"float\"; _: \"node\" }";
+	runs_pure(
+		"type_named_cases",
+		&format!("enum Kind {{ Empty, Int, Float }}\n{name}\nname(Kind.Int) + name(Kind.Empty)"),
+		"intnode",
+	);
+}
+
 /// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
 /// read, as parser.warp's expression, atom and continued do
 #[test]
