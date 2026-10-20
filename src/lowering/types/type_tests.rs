@@ -509,6 +509,24 @@ fn is_type_call(subject: Node, spec: String, names: &Names) -> Node {
 	call(IS_TYPE, vec![function_itself(tested, names), Node::Text(spec)])
 }
 
+/// `xs is list of note`: a list each of whose items is a note, an empty list a list of any type. A list held as a Node
+/// keeps no item type, so the items are tested where they are, by the run time (card list-class)
+fn items_tested(subject: Node, spec: String, names: &Names) -> Node {
+	let Some(element) = spec.strip_prefix(crate::analyzer::LIST_OF_PREFIX) else {
+		return is_type_call(subject, spec, names);
+	};
+	let mut bindings = vec![];
+	let list = match subject.drop_meta() {
+		Node::Symbol(_) => subject,
+		_ => super::nodes::bound_once("tested", subject, &mut bindings),
+	};
+	let item = Node::Symbol(format!("item{}{}", crate::analyzer::TEMPORARY_SEPARATOR, super::nodes::fresh_number()));
+	let item_test = key(item.clone(), Op::Arrow, items_tested(item, element.to_string(), names));
+	let every = key(list.clone(), Op::Dot, parens(vec![Node::Symbol(crate::words::ALL_WORD.to_string()), item_test]));
+	let is_list = is_type_call(list, LIST_WORD.to_string(), names);
+	super::nodes::after_bindings(bindings, key(is_list, Op::And, every))
+}
+
 /// `floor` of `floor is function`: a bare name of a function that needs arguments, tested against a type, is the
 /// function itself (card bare-fn-type)
 fn function_itself(operand: Node, names: &Names) -> Node {
@@ -573,7 +591,7 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			warn_shadowed_type_word(&subject, &right, shadowed);
 			match phrase_words(&right).and_then(|words| type_spec(&words, shadowed)) {
 				// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
-				Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec, shadowed),
+				Some(spec) if !is_equality_operand(&right) => items_tested(expand(*subject, shadowed), spec, shadowed),
 				_ => match union_test(&subject, &right, shadowed).or_else(|| is_pattern(&subject, &right, shadowed)) {
 					Some(test) => expand(test, shadowed),
 					None => comparison(*subject, Op::Eq, *right, shadowed),
@@ -685,5 +703,5 @@ fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let word = right.symbol_name()?;
 	let mut words = vec![word];
 	words.extend(symbol_words(tail)?);
-	Some(is_type_call(subject.as_ref().clone(), type_spec(&words, shadowed)?, shadowed))
+	Some(items_tested(subject.as_ref().clone(), type_spec(&words, shadowed)?, shadowed))
 }
