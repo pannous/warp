@@ -1730,6 +1730,7 @@ PASSED:
   ✓ functions::test_nested_it::test_named_lambda_parameter_leaves_the_outer_it
   ✓ functions::test_nested_it::test_trailing_block_of_a_lambda_body_method
   ✓ functions::test_nested_it::test_trailing_block_of_an_assigned_method_call
+  ✓ functions::test_nested_iterations::nested_iteration_words_keep_their_own_results
   ✓ functions::test_nested_library_calls::a_broadcast_result_is_a_list_variable
   ✓ functions::test_nested_library_calls::a_library_word_nests_inside_another
   ✓ functions::test_nested_library_calls::round_with_places_stays_round_to
@@ -2065,6 +2066,7 @@ PASSED:
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
+  ✓ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
@@ -3768,9 +3770,11 @@ PASSED:
   ✓ parser::test_self_pure::field_defaults_run_pure
   ✓ parser::test_self_pure::for_each_loops_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
+  ✓ parser::test_self_pure::global_type_words_read_self_hosted
   ✓ parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
   ✓ parser::test_self_pure::kind_changes_fail_pure
   ✓ parser::test_self_pure::lambdas_run_pure
+  ✓ parser::test_self_pure::lib_forms_read_self_hosted
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::named_arguments_run_pure
   ✓ parser::test_self_pure::number_keys_run_pure
@@ -3782,6 +3786,7 @@ PASSED:
   ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
   ✓ parser::test_self_pure::type_words_named_by_fields_run_pure
+  ✓ parser::test_self_pure::unicode_glyphs_read_self_hosted
   ✓ parser::test_self_pure::used_files_run_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
@@ -6342,8 +6347,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ control::test_if_empty_branch::an_element_of_a_list_from_an_if_keeps_its_type
-  ✗ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
 
 SUMMARY:
-11 ignored, 6339 passed, 2 failed, 6341 total tested
+11 ignored, 6344 passed, 0 failed, 6344 total tested
