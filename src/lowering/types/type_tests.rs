@@ -587,6 +587,35 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 	}
 }
 
+/// `an int`, `a pair`
+fn article_of(word: &str) -> &'static str {
+	if word.starts_with(['a', 'e', 'i', 'o', 'u']) {
+		ARTICLES[1]
+	} else {
+		ARTICLES[0]
+	}
+}
+
+/// A used module's `x is pair` tests the type though the program has a variable `pair`: the module cannot see the
+/// program's variables, so its type words become `x is a pair`, which no variable shadows
+pub(crate) fn module_type_words_kept(node: Node, is_program_word: &impl Fn(&str) -> bool) -> Node {
+	match node {
+		Node::Key(subject, Op::Eq, right)
+			if !is_equality_operand(&right)
+				&& right.symbol_name().is_some_and(|word| is_program_word(word) && is_builtin_type_word(word)) =>
+		{
+			let word = right.drop_meta().name();
+			let phrase = Node::List(
+				vec![Node::Symbol(article_of(&word).to_string()), Node::Symbol(word)],
+				Bracket::None,
+				Separator::Space,
+			);
+			key(module_type_words_kept(*subject, is_program_word), Op::Eq, phrase)
+		}
+		other => other.map_children(|child| module_type_words_kept(child, is_program_word)),
+	}
+}
+
 /// `n is key` with a variable named key compares with its value: warn, never silently (card local-named-like-2)
 fn warn_shadowed_type_word(subject: &Node, right: &Node, shadowed: &Names) {
 	let Node::Symbol(word) = right.drop_meta() else {
@@ -599,7 +628,7 @@ fn warn_shadowed_type_word(subject: &Node, right: &Node, shadowed: &Names) {
 		return;
 	}
 	let tested = crate::normalize::operand_text(subject);
-	let article = if word.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+	let article = article_of(word);
 	let readings = vec![
 		crate::errors::diagnostic::reading("the variable's value", &format!("{tested} == {word}")),
 		crate::errors::diagnostic::reading("the type", &format!("{tested} is {article} {word}")),

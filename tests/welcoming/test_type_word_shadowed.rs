@@ -16,3 +16,10 @@ fn an_article_keeps_the_type_word_a_type() {
 	is!("f(n: any) := { key = 5; n is a key }; f(Key(1, \":\", 2))", true);
 	is!("int = 5; 3 is an int", true);
 }
+
+/// A used module's type words stay types beside a program variable of that name (lib/markup.warp's `value is pair`
+/// under a program's `pair = …`), with no warning about code the program does not hold
+#[test]
+fn a_program_variable_leaves_a_modules_type_words() {
+	is!("pair = 1\nuse markup\ne = {div: 1}\nhtml_is_element(e)", true);
+}
