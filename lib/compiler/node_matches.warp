@@ -63,12 +63,13 @@ arm_result(arm: Node): Node := match arm {
 	_: arm
 }
 
-# `1`, "a", 'c', an enum case `Color.Red` (`Op.Colon` is ":" by then): an arm the subject equals
+# `1`, "a", 'c', an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then): an arm the subject equals
 is_value_pattern(pattern: Node): bool := match pattern {
 	Number(value): yes
 	Text(value): yes
 	Char(value): yes
 	Key(type_name, Op.Dot, case_name): is_name(type_name) and is_name(case_name)
+	Key(type_name, Op.Scope, case_name): is_name(type_name) and is_name(case_name)
 	_: no
 }
 

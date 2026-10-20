@@ -60,6 +60,14 @@ fn match_values_run_pure() {
 	runs_pure("match_text", "g(w) := match w { \"hi\": 1; \"hello\": 2; _: 0 }; g(\"hello\")", "2");
 }
 
+/// plain_enums.warp: an enum declares its cases, `Color.Red` and `Color::Red` are the case (card pure-enums)
+#[test]
+fn enum_cases_run_pure() {
+	let color = "enum Color { Red, Green, Blue }";
+	let warmth = "warmth(c) := match c { Color.Red: \"warm\"; Color::Blue: \"cold\"; _: \"mild\" }";
+	runs_pure("enum_arms", &format!("{color}\n{warmth}\nwarmth(Color.Red) + warmth(Color.Green)"), "warmmild");
+}
+
 /// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
 /// read, as parser.warp's expression, atom and continued do
 #[test]

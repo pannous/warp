@@ -1,0 +1,3 @@
+enum Color { Red, Green, Blue }
+warmth(c) := match c { Color.Red: "warm"; Color::Blue: "cold"; _: "mild" }
+warmth(Color.Red) + warmth(Color.Green) + warmth(Color::Blue)

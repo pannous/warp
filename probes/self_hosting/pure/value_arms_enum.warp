@@ -1,4 +1,5 @@
-// match arms of enum cases (card pure-runs): runs pure once enum declarations lower (notes/parser_compiles.md)
+// match arms of enum cases (cards pure-runs, pure-enums): plain_enums.warp lowers the declaration and Color.Red
+// out: warm mild
 enum Color { Red, Green, Blue }
 def warmth(c) := match c {
 	Color.Red: "warm"
