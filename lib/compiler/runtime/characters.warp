@@ -67,8 +67,9 @@ character_between(t: text, at: int, end: int): any := {
 	if end - at == code_point_width(byte_at(t, at)) { return char_of(code_point_at(t, at)) }
 	bytes_between(t, at, end)
 }
-# the index-th character of t, counted from 1
+# the index-th character of t, counted from 1; an index outside 1…count fails as Rust's "index out of range"
 text_char(t: text, index: int): any := {
+	if index < 1 { index_out_of_range() }
 	if walk_reaches(t, index) == 0 { swap_walks() }
 	if walk_reaches(t, index) == 0 {
 		walked_text = t
@@ -83,10 +84,12 @@ text_char(t: text, index: int): any := {
 		walked_before = -1
 	}
 	while walked_index < index {
+		if walked_at >= byte_count(t) { index_out_of_range() }
 		walked_before = walked_at
 		walked_at = character_end(t, walked_at)
 		walked_index += 1
 	}
+	if walked_at >= byte_count(t) { index_out_of_range() }
 	character_between(t, walked_at, character_end(t, walked_at))
 }
 # 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one

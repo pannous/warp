@@ -11,7 +11,7 @@ grouped_name(n: Node): any := match n {
 }
 
 # a name the program binds to a value, never to a function
-is_variable(scope: any, name: text): bool := (binds_as(scope, name, "variable") or binds_as(scope, name, "loop")) and not binds_as(scope, name, "function")
+is_variable(scope: any, name: text): bool := (binds_as(scope, name, Meaning.Variable) or binds_as(scope, name, Meaning.Loop)) and not binds_as(scope, name, Meaning.Function)
 
 # `(p).a` as `p.a` when p is a variable
 ungrouped(n: Node, scope: any): Node := match n {

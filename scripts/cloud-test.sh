@@ -80,6 +80,20 @@ make_room() {
 	echo "$free GB free, $(free_gb) GB after dropping target/"
 }
 
+detect_build_environment() {
+	local status=$1 log=$2
+	[ "$status" -ne 0 ] && grep -q 'No space left on device' "$log" && echo "disk exhausted after a clean rebuild"
+}
+
+write_summary() {
+	local log=$1 environmental=$2 known=$3 environment=$4
+	if [ -n "$environment" ]; then
+		printf 'verdict: environmental\nenvironment: %s\npassed: 0, failed: 0 (build did not reach tests), ignored: 0\n' "$environment"
+	else
+		summarize "$log" "$environmental" "$known"
+	fi
+}
+
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
 run_tests_here() {
 	CLOUD_REPO=$PWD
@@ -92,7 +106,7 @@ run_tests_here() {
 		esac
 	done
 	local branch=$1 tip=$2; shift 2
-	local name started build_seconds test_seconds checkout lock_matches=""
+	local name started build_seconds test_seconds checkout lock_matches="" build_environment=""
 	name=$(run_name "$branch" "$tip")
 	started=$SECONDS
 	local branch_ref
@@ -150,6 +164,7 @@ run_tests_here() {
 		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
 		build_status=$?
 	fi
+	build_environment=$(detect_build_environment "$build_status" "$HERE_WORK/log.txt")
 	build_seconds=$((SECONDS - build_start))
 	# the runtime stub the executable tests copy, built with the run's crate source as test.sh does: a test's own
 	# `cargo build --offline` found no miniz_oxide in the VM's registry cache (card cloud-stub-offline); the page stub is
@@ -174,7 +189,7 @@ run_tests_here() {
 		env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
 	[ -n "$refusals" ] && [ -f "$refusals" ] && cat "$refusals" >> "$HERE_WORK/log.txt"
-	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" > "$HERE_WORK/summary.txt"
+	write_summary "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" "$build_environment" > "$HERE_WORK/summary.txt"
 	{
 		echo "run: $name"
 		echo "branch: $branch"
@@ -182,7 +197,7 @@ run_tests_here() {
 		echo "tests: ${*:-all}"
 		[ ${#settings[@]} -gt 0 ] && echo "env: ${settings[*]}"
 		echo "verdict: $(sed -n 's/^verdict: //p' "$HERE_WORK/summary.txt")"
-		[ $build_status -ne 0 ] && echo "build: FAILED (log.txt.gz)"
+		[ $build_status -ne 0 ] && echo "build: $([ -n "$build_environment" ] && echo ENVIRONMENTAL || echo FAILED) (log.txt.gz)"
 		grep -v '^verdict: ' "$HERE_WORK/summary.txt"
 		echo "wall: build ${build_seconds} s, tests ${test_seconds} s, total $((SECONDS - started)) s"
 		echo "machine: $(nproc 2>/dev/null) cores, $(free -g 2>/dev/null | awk '/^Mem:/ { print $2 " GB" }'), $(rustc --version)"
@@ -456,6 +471,21 @@ release_session() {
 	unlock_pool
 }
 
+finish_session() {
+	local job=$1 result=$2 reason file
+	reason=$(sed -n 's/^environment: //p' "$result")
+	if [ -z "$reason" ]; then
+		release_session "$job"
+		return
+	fi
+	lock_pool
+	for file in "$POOL"/session_*; do
+		[ -e "$file" ] || continue
+		[ "$(pool_field "$file" job 2>/dev/null)" = "$job" ] && drop_session "$file" "$reason"
+	done
+	unlock_pool
+}
+
 collect() {
 	local branch=$1 tip=$2 card=$3
 	local name folder ref deadline
@@ -475,7 +505,7 @@ collect() {
 	grep -h '^session:\|^credit used before' "$folder/launch.txt" >> "$folder/result.md" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" push -q origin --delete "$RESULTS_PREFIX/$name" "$JOBS_PREFIX/$(pool_field "$folder/launch.txt" job)" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" update-ref -d "refs/remotes/origin/$RESULTS_PREFIX/$name"
-	release_session "$(pool_field "$folder/launch.txt" job)"
+	finish_session "$(pool_field "$folder/launch.txt" job)" "$folder/result.md"
 	cat "$folder/result.md"
 	echo "(log: $folder/log.txt.gz)"
 	[ -n "$card" ] && todo note "$card" "cloud test $(sed -n 's/^verdict: //p' "$folder/result.md"): $(sed -n 's/^tests: //p' "$folder/result.md") at ${tip:0:8}, $(sed -n 's/^passed: //p' "$folder/result.md"); $(sed -n 's/^wall: //p' "$folder/result.md")$(sed -n '/^failures:/,/^[a-z]/{/^  /p;}' "$folder/result.md" | head -10 | tr '\n' ';')" > /dev/null

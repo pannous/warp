@@ -1,0 +1,11 @@
+// out: ab
+// out: B
+// a slice of a field, p.code[a .. b], holds a text; an instance passed to a function is a node (parser.warp's p)
+class P { code: text; at: int; n: int }
+word_at(p) := {
+	word = p.code[p.at .. p.n]
+	if word == "x" { return "" }
+	word
+}
+print word_at(P{code: "abc", at: 0, n: 2})
+print upper(P{code: "abc", at: 1, n: 2}.code[1 .. 2])

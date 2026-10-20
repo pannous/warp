@@ -229,6 +229,13 @@ is a method of the generic function `sum` (card dispatch, notes/dispatch.md; for
 Also: Ruby (`attr_accessor`, `initialize`, `@x`, `end`, `Point.new`, endless
 `def twice = @x * 2`), Go (`type P struct {…}`, `func (p P) M()`), operators (`__add__`, `operator +`, class_operators.md),
 a method named `norm` (tests/functions/test_operator_word_methods.rs).
+Self-hosted twin (cards pure-class-forms, pure-static-members): lib/compiler/foreign_forms.warp reads what
+foreign.rs reads (static/public/private… → @static, data/open/abstract/sealed class, enum class, `new P(…)`,
+constant, Ruby attr_*, mixin), hooked into parser.warp prefixed(). Check: probes/class_forms/compare.sh (Rust vs
+front lane, per line of forms.md). Not yet in parser.warp: primary constructors `class P(val x: Int)` (card
+self-primary-constructor) and operator heads (card self-operator-heads); Rust itself misreads `attr_accessor :a, :b`
+(card takes-fields). The pure lane's remaining refusals of the ported class tests are emitter.warp's (methods,
+defaults, extends, statics).
 
 Smart scopes (classes-22, wiki/inventions.md, declarations.rs smart_scope): `Number { Square = it*it }` defines
 `Square(self:Number) := self*self` for a builtin type word, `it` the value the method is called on: `3.Square`.

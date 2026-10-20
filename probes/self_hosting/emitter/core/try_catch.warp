@@ -1,0 +1,13 @@
+# emitter core: `try x catch e { y }` binds e to the Error a runtime error or a raise threw inside x
+xs = [1, 2]
+print try xs#5 catch e { e.message }
+print try xs#1 catch e { 0 }
+print try { raise "too big" } catch e { e.message }
+print try { raise "too big" } catch e { e }
+item = try {
+	at = xs#2
+	xs#(at + 1)
+} catch failure {
+	failure.message
+}
+print item

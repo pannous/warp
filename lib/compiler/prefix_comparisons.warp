@@ -8,11 +8,11 @@ truth_types = ["bool"]
 
 # `f(x: int) := …`: f, when its first parameter is typed as a value
 value_first_function(n: any): any := {
-	if not (type(n) is key and op_of(n) == ":=") { return ø }
+	if not is_key(n, Op.Define) { return ø }
 	head = key_of(n)
 	if not (is_group(head) and bracket_of(head) == "(" and #head >= 2 and head#1 is symbol) { return ø }
 	parameter = head#2
-	typed = type(parameter) is key and op_of(parameter) == ":" and value_of(parameter) is symbol
+	typed = is_key(parameter, Op.Colon) and value_of(parameter) is symbol
 	if typed and not (name_of(value_of(parameter)) in truth_types) then name_of(head#1) else ø
 }
 

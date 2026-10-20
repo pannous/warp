@@ -1,0 +1,4 @@
+// out: a+b
+// a labelled parameter, `with new`: the prelude's replace(t, old, with new) has one
+swap(t: text, old: text, with new: text) := join(split(t, old), new)
+print swap("a-b", "-", "+")

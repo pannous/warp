@@ -6,3 +6,13 @@ Color.GREEN is Color' true
 
 # only_a_case_is_of_its_enum_type
 is! 'enum Coin { Penny, Dime }; coins = [Penny, Dime]; coins.all(c => c is Coin)' true
+
+# a_case_named_like_a_type_is_the_case
+is! 'enum Kind { Empty, Int, Float, Text }; k = Kind.Float; k == Kind.Float' true
+is! 'enum Kind { Empty, Int, Float, Text }; f(k: Kind) := k == Float; f(Kind.Float)' true
+is! 'enum Kind { Empty, Int, Float, Text }; name(k: Kind) := match k { Kind.Int: 1; Float: 2; _: 3 }; name(Float)' 2
+is! 'enum Meaning { Function, Variable }; m = Meaning.Function; m == Meaning.Function' true
+
+# an_entry_named_after_a_type_stays_a_map_entry
+is! 'enum Op { Colon, Add }; empty(): any := { t = {}; t }; m = empty(); m["Op"] = empty(); m["Bracket"] = 1; #m' 2
+is! 'class Point { x: int }; empty(): any := { t = {}; t }; m = empty(); m["Point"] = empty(); m["y"] = 2; #m' 2
