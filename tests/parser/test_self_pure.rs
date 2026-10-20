@@ -332,13 +332,15 @@ fn global_type_words_read_self_hosted() {
 	}
 }
 
-/// A next line starting with `else` or a method call continues the expression (lib/compiler/scope.warp's `if … then`)
+/// A next line starting with `else` or a method call continues the expression (lib/compiler/scope.warp's `if … then`); a
+/// prefix `if` takes its own `then` and `else` in a match arm
 #[test]
 fn line_continuations_read_self_hosted() {
 	for lane in ["front", "pure"] {
 		for (name, code, value) in [
 			("else_line", "f(n: int): int := {\n\tif n == 1 then 10\n\telse if n == 2 then 20\n\telse 0\n}\nf(2)", "20"),
 			("method_line", "xs = [1, 2]\nys = xs\n\t.map(x => x * 2)\nys", "[2 4]"),
+			("arm_inline_if", "f(x: any): any := match x {\n\t1: if x > 0 then 1 else 2\n\t_: 0\n}\nf(1)", "1"),
 		] {
 			let (output, _) = lane_run(lane, name, code);
 			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");

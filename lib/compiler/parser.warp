@@ -450,6 +450,8 @@ def header_expression(p, min_power) {
 // `left` and the operators after it binding at least `min_power`
 // Rust twin: expressions.rs continue_expr
 def continued(p, left, min_power) {
+	// a prefix `if` inside a tighter operand took its own `then` (owns_branches), so its `else` too
+	took_own_then = false
 	while true {
 		if tab_separates(p) { break }
 		skip_spaces(p)
@@ -551,7 +553,9 @@ def continued(p, left, min_power) {
 			powers = binding_powers(op#2)
 			// one arrow, but `=>` binds as written: its body takes an assignment (Rust twin: Op::spelled_binding_power)
 			if op#1 == "=>" { powers = binding_powers("=>") }
-			if powers#1 < min_power { break }
+			owned = owns_branches(left, op#2, took_own_then)
+			if powers#1 < min_power and not owned { break }
+			took_own_then = owned and powers#1 < min_power and op#2 == "then"
 			p.at = p.at + op#1.length
 			// `f(n):` ending its line: the block indented below is its value
 			block = if op#1 == ":" and ends_line(p, p.at) then indented_block(p) else ø
@@ -580,6 +584,16 @@ def continues_on_next_line(p) {
 	at = p.resumes[p.at]
 	method = is_at(p.code, at, '.', p.n) and is_name_start(peek(p.code, at + 1, p.n))
 	at < p.n and (method or keyword_at_position(p, "else", at))
+}
+
+// A prefix `if` takes its own `then` and `else` wherever it stands: `pattern: if c then a else b` is the arm giving the
+// whole if, though `:` binds tighter than `then` (cards match-arm, arm-inline-if). Only an `else` after a `then` the
+// if took this way: `if a then if b then c else d` keeps its else for the outer if
+// Rust twin: expressions.rs owns_branches
+def owns_branches(left, op, took_own_then) := if op == "then" then is_bare_if(left) else op == "else" and took_own_then
+def is_bare_if(node: any): bool := match node {
+	Key(head, Op.If, condition): head is ø
+	_: no
 }
 
 // `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`
