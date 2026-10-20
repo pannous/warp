@@ -7,7 +7,7 @@ compared = 0
 for path in args {
 	source = read(path)
 	by_view = try view_of(lowered_node(node_of(plain(tree(source))))) else "failed"
-	by_node = try lowered(source) else "failed"
+	by_node = try view_of(lowered_node(plain_node(parsed(source)))) else "failed"
 	compared = compared + 1
 	if by_view != by_node {
 		differing = differing + 1

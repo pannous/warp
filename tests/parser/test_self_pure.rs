@@ -53,6 +53,27 @@ fn for_loops_run_pure() {
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
 
+/// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
+/// read, as parser.warp's expression, atom and continued do
+#[test]
+fn recursive_results_run_pure() {
+	let passed_on =
+		"def expression(p, depth) { if depth > 2 { return p }; continued(p, expression(p, depth + 1), depth) }";
+	runs_pure(
+		"passed_on",
+		&format!("{passed_on}; def continued(p, left, depth) := left + p * depth; expression(3, 0)"),
+		"12",
+	);
+	let mutual =
+		"def expression(p, depth) { if depth > 2 { return p }; left = atom(p, depth); continued(p, left, depth) }";
+	let atom = "def atom(p, depth) := if depth > 1 then p else expression(p, depth + 1)";
+	runs_pure(
+		"mutual",
+		&format!("{mutual}; {atom}; def continued(p, left, depth) := left + p * depth; expression(3, 0)"),
+		"12",
+	);
+}
+
 /// parser.warp reads a name glued to `!` as one word when the source defines it, and a tab between items of a line
 /// as a column separator (card parser-reads-2)
 #[test]
@@ -63,4 +84,29 @@ fn bang_words_and_tab_columns_run_pure() {
 		"[yes no yes yes]",
 	);
 	runs_pure("tab_columns", "row = ['0-1'\t-1]; count(row)", "2");
+}
+
+// card parser-reads-string: parser.warp reads `\x41` and `\u{1b}` as their characters
+#[test]
+fn text_escapes_read_pure() {
+	runs_pure("hex_escape", "\"\\x41\\x42\"", "AB");
+	runs_pure("unicode_escape", "\"\\e[H\" == \"\\u{1b}[H\"", "yes");
+}
+
+/// parser.warp reads the optional field `left?` as Rust does (samples/objects/binary_tree.warp), and emitter.warp
+/// builds an instance whose float field gets an int (probes/samples/r.warp's Vec3): both through the self-hosted
+/// emitter, nothing refused (card emitter-twin-fails)
+#[test]
+fn optional_and_float_fields_run_self_hosted() {
+	let runs_emitted = |name: &str, code: &str, value: &str| {
+		let (output, refusals) = lane_run("1", name, code);
+		assert!(output.contains(value), "{code}: {output}");
+		assert_eq!(refusals, "", "{code}");
+	};
+	runs_emitted(
+		"optional_field",
+		"type T { value: int; left? }\nt = T { value: 2 }\nt.left = T { value: 1 }\nt.left.value",
+		"1",
+	);
+	runs_emitted("float_field", "type V { x: float; y: float }\nv = V { x: 1, y: 2.5 }\nv.x + v.y", "3.5");
 }

@@ -1,5 +1,8 @@
 //! `try X else Y`, `try X catch e { Y }` and `assert C else X` as templates
 use super::*;
+use crate::lowering::error_classes::ROOT_ERROR_CLASS;
+use crate::wasm_emitter::text::text_builtins::{ERROR_CLASS, RAISE_ON, TEXT_FORM};
+use crate::words::INSTANCE_OF;
 
 /// The placeholders of the `try`/`assert` templates
 const TRY_VALUE_PLACEHOLDER: &str = "try_placeholder_value";
@@ -48,12 +51,38 @@ impl Lowering {
 
 	/// `try X catch e { Y }`: Y runs with e the caught Error: the Error X gave back, else the runtime error it raised
 	/// (caught_error, try_guard.rs)
+	/// `except C as e { Y }` binds `e: C`: Y runs for an Error of the class C, any other Error is raised on with its class
+	/// (decision error-classes); `except Error` catches every one
 	pub(super) fn lower_try_binding(&self, guarded: Node, fallback: Node, binding: &Node) -> Node {
 		let (value, fallback_placeholder) = (TRY_VALUE_PLACEHOLDER, TRY_FALLBACK_PLACEHOLDER);
+		let (name, class) = match binding.drop_meta() {
+			Node::Key(name, Op::Colon, class) => (name.as_ref().clone(), Some(class.drop_meta().name())),
+			_ => (binding.clone(), None),
+		};
+		let handled = match class.filter(|class| class != ROOT_ERROR_CLASS) {
+			Some(class) if !self.error_classes.is_error_class(&class) => {
+				return crate::node::error(&format!(
+					"except {class}: {class} is no error class: declare it with `class {class}: Error`"
+				));
+			}
+			Some(class) => {
+				let caught = self.error_classes.caught_by(&class);
+				let tests: Vec<String> = caught
+					.iter()
+					.map(|class| format!("{INSTANCE_OF}({CAUGHT_BINDING_PLACEHOLDER}, \"{class}\")"))
+					.collect();
+				format!(
+					"if {} {{{fallback_placeholder}}} else \
+					{{{RAISE_ON}({TEXT_FORM}({CAUGHT_BINDING_PLACEHOLDER}), {ERROR_CLASS}({CAUGHT_BINDING_PLACEHOLDER}))}}",
+					tests.join(" or ")
+				)
+			}
+			None => fallback_placeholder.to_string(),
+		};
 		self.instantiate_template(
 			&format!("(try_tmp_finished={RAN_WITHOUT_ERROR}({{try_tmp_value={value}}}); if try_tmp_finished and not is_error(try_tmp_value) {{try_tmp_value}} else {{\
-				{CAUGHT_BINDING_PLACEHOLDER} = {CAUGHT_ERROR}(try_tmp_finished, try_tmp_value); {fallback_placeholder}}})"),
-			&[(value, &guarded), (fallback_placeholder, &fallback), (CAUGHT_BINDING_PLACEHOLDER, binding)],
+				{CAUGHT_BINDING_PLACEHOLDER} = {CAUGHT_ERROR}(try_tmp_finished, try_tmp_value); {handled}}})"),
+			&[(value, &guarded), (fallback_placeholder, &fallback), (CAUGHT_BINDING_PLACEHOLDER, &name)],
 		)
 	}
 

@@ -62,6 +62,7 @@ mod test_empty_block_binding;
 mod test_empty_bodies;
 mod test_empty_reset_in_if;
 mod test_error_branch_kind;
+mod test_error_classes;
 mod test_error_fields; // card error-field
 mod test_error_not_in_data;
 mod test_error_value_return;

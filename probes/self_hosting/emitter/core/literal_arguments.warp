@@ -1,0 +1,16 @@
+// an unannotated parameter takes the kinds of every literal its calls pass, not only its first call's: "=" is a
+// character, "to" a text, so op is a text, which the node op#2 converts to (parser.warp's binding_powers in continued)
+def powers(op) {
+	if op == "=" { return 1 }
+	if op == "to" { return 2 }
+	3
+}
+def pick(n) {
+	if n > 9 { return [] }
+	["<=", "to"]
+}
+def total(n) {
+	op = pick(n)
+	powers("=") + powers("to") * 10 + powers(op#2) * 100
+}
+total(1)

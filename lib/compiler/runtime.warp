@@ -1,6 +1,8 @@
 # The runtime words of lib/compiler/emitter.warp: warp over the emitter's intrinsics (`intrinsic` there: new_text,
 # byte_at, set_byte … each one or two instructions, callable only here). This file is lowered by the same pipeline as
 # any program; the emitter compiles a word on its first call, so a module carries only the words it uses.
+# The case tables of upper and lower (src/compiler/self_hosted.rs puts a used module's words after these)
+use case_tables
 
 # the words that are one wasm instruction each (decision wasm-instruction-body)
 int_quotient(a: int, b: int): int := wasm i64.div_s
@@ -52,19 +54,68 @@ text_count(t: text): int := {
 	counted = count
 	count
 }
-# `t.lower()`, `t.upper()`: t with its ASCII letters first…last moved by shift; a text beyond ASCII fails loudly
-# (non_ascii_text): Rust's case table (src/wasm_emitter/text/text_unicode.rs) is not ported yet (card unicode-case)
+# `t.lower()`, `t.upper()`: an ASCII text with its letters first…last moved by shift, any other mapped code point by
+# code point through the case table (lib/case_tables.warp, the twin of src/wasm_emitter/text/text_unicode.rs)
+text_lower(t: text): text := if is_ascii(t) then ascii_case(t, 65, 90, 32) else table_case(t, lower_case_text())
+text_upper(t: text): text := if is_ascii(t) then ascii_case(t, 97, 122, 0 - 32) else table_case(t, upper_case_text())
+is_ascii(t: text): bool := {
+	for i in 0..byte_count(t) { if byte_at(t, i) >= 128 { return no } }
+	yes
+}
 ascii_case(t: text, first: int, last: int, shift: int): text := {
 	out = new_text(byte_count(t))
 	for i in 0..byte_count(t) {
 		b = byte_at(t, i)
-		if b >= 128 { non_ascii_text() }
 		set_byte(out, i, if b >= first and b <= last then b + shift else b)
 	}
 	out
 }
-text_lower(t: text): text := ascii_case(t, 65, 90, 32)
-text_upper(t: text): text := ascii_case(t, 97, 122, 0 - 32)
+# each code point of t as the table's ranges map it: six ints a range (start, last, stride, delta, second, third)
+table_case(t: text, table: text): text := {
+	ranges = table_ints(table)
+	out = ""
+	at = 0
+	while at < byte_count(t) {
+		out += case_mapped(ranges, code_point_at(t, at))
+		at += code_point_width(byte_at(t, at))
+	}
+	out
+}
+# the ints of a text of them, a space apart
+table_ints(t: text): list := {
+	ints = []
+	at = 0
+	while at < byte_count(t) {
+		end = at
+		while end < byte_count(t) and byte_at(t, end) != 32 { end += 1 }
+		ints += [text_as_int(bytes_between(t, at, end))]
+		at = end + 1
+	}
+	ints
+}
+range_field(ranges: list, at: int, index: int): int := ranges#(at * 6 + index + 1)
+# the code point's text: itself unless a range covers it, else itself moved by the range's delta, then its second and
+# third code points (`ß` is `SS`)
+case_mapped(ranges: list, code: int): text := {
+	at = range_before(ranges, code)
+	if at < 0 or code > range_field(ranges, at, 1) or int_remainder(code - range_field(ranges, at, 0), range_field(ranges, at, 2)) != 0 {
+		return char_text(char_of(code))
+	}
+	out = char_text(char_of(code + range_field(ranges, at, 3)))
+	if range_field(ranges, at, 4) != 0 { out += char_text(char_of(range_field(ranges, at, 4))) }
+	if range_field(ranges, at, 5) != 0 { out += char_text(char_of(range_field(ranges, at, 5))) }
+	out
+}
+# the last range starting at or before code, by halving; -1 when none does
+range_before(ranges: list, code: int): int := {
+	low = 0
+	high = int_quotient(#ranges, 6)
+	while low < high {
+		middle = int_quotient(low + high, 2)
+		if range_field(ranges, middle, 0) <= code { low = middle + 1 } else { high = middle }
+	}
+	low - 1
+}
 # the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
 code_point_count(t: text): int := {
 	count = 0
@@ -93,11 +144,11 @@ print_line(t: text): int := {
 text_order(a: text, b: text): int := {
 	i = 0
 	while i < byte_count(a) and i < byte_count(b) {
-		if byte_at(a, i) < byte_at(b, i) { return - 1 }
+		if byte_at(a, i) < byte_at(b, i) { return -1 }
 		if byte_at(a, i) > byte_at(b, i) { return 1 }
 		i += 1
 	}
-	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then - 1 else 1
+	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then -1 else 1
 }
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
 node_text(n: any): text := match n {
@@ -112,12 +163,12 @@ node_text(n: any): text := match n {
 	_: collection_text(n)
 }
 number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
-# a map in braces, a list as list_text shows it, one without brackets (`y 1+1`) its items alone
+# a list between its brackets (a map in braces), a time as time_text shows it
 collection_text(n: any): text := {
-	if marked_kind(n) == 8 { return "{" + items_text(unboxed_list(n)) + "}" }
-	if kind_code(n) == 8 and bracket_info(n) == 5 { return items_text(unboxed_list(n)) }
-	if kind_code(n) == 8 { return list_text(unboxed_list(n)) }
+	if kind_code(n) == 8 { return list_shown(n) }
 	if kind_code(n) == 18 { return time_text(n) }
+	# a closure: its lambda as written (emitter.warp closure_text_code)
+	if kind_code(n) == 16 { return closure_text(n) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
@@ -151,10 +202,11 @@ quoted_text(t: text): text := {
 escaped_byte(b: int): int := if b == 34 or b == 92 then 1 else 0
 list_text(xs: list): text := "[" + items_text(xs) + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
-items_text(xs: list): text := {
+items_text(xs: list): text := joined_items(xs, " ")
+joined_items(xs: list, joiner: text): text := {
 	inner = ""
 	for x in xs {
-		if #inner > 0 { inner += " " }
+		if #inner > 0 { inner += joiner }
 		inner += node_code(x)
 	}
 	inner
@@ -163,8 +215,13 @@ items_text(xs: list): text := {
 key_text(entry: any): text := {
 	value = key_value(entry)
 	if marked_kind(entry) == 6 { return key_name(entry) + node_text(value) }
-	key_name(entry) + ":" + node_code(value)
+	operator = key_operator(entry)
+	if text_order(operator, ":") == 0 { return key_name(entry) + ":" + node_code(value) }
+	# `y+z`, `y and z`: a word operator between spaces
+	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
+	node_code(entry_key(entry)) + spaced + node_code(value)
 }
+is_letter_byte(b: int): bool := b >= 97 and b <= 122
 # `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any): any := {
 	# ø, also `[]` in the lowered program, beside a list is that list, beside a text "ø"; beside a number Rust fails
@@ -216,6 +273,9 @@ node_equal(a: any, b: any): bool := {
 	if textual_node(a) == 1 or textual_node(b) == 1 { return textual_node(a) == textual_node(b) and text_order(node_text(a), node_text(b)) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_order(a, b) == 0 }
 	if kind_code(a) == 1 and kind_code(b) == 1 { return unboxed_int(a) == unboxed_int(b) }
+	# times: the same form at the same position; any other value besides a number is none of the numbers
+	if kind_code(a) == 18 and kind_code(b) == 18 { return marked_kind(a) == marked_kind(b) and unboxed_int(a) == unboxed_int(b) }
+	if numeric_node(a) + numeric_node(b) < 2 { return no }
 	float_of_node(a) == float_of_node(b)
 }
 list_equal(a: list, b: list): bool := {
@@ -224,15 +284,21 @@ list_equal(a: list, b: list): bool := {
 	yes
 }
 # a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
-# its class name and the map of its fields
-fields_of(m: any): any := if marked_kind(m) == 6 then key_value(m) else m
+# its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's keys(n:20) is [n]
+fields_of(m: any): any := {
+	if marked_kind(m) != 6 { return m }
+	fields = key_value(m)
+	if is_null(fields) == 0 and kind_code(fields) == 8 then fields else map_of([m])
+}
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: any, name: text): int := {
 	entries = unboxed_list(fields_of(m))
 	for i in 1 to #entries { if text_order(key_name(entries#i), name) == 0 { return i } }
 	0
 }
-# `m.name`: the value of m's entry `name`; none traps, where Rust's says "no field name"
+# 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
+has_fields(m: any): int := if is_null(m) == 0 and is_null(fields_of(m)) == 0 and kind_code(fields_of(m)) == 8 then 1 else 0
+# `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: any, name: text): any := {
 	if is_position_part(m, name) { return position_part(m, name) }
 	if kind_code(m) == 5 { return node_text(m) }
@@ -242,8 +308,8 @@ map_get(m: any, name: text): any := {
 	if is_entry(m) and text_order(name, "op") == 0 { return key_operator(m) }
 	if is_plain_list(m) and text_order(name, "bracket") == 0 { return list_bracket(m) }
 	if is_plain_list(m) and text_order(name, "separator") == 0 { return list_separator(m) }
-	at = map_index(m, name)
-	if at == 0 { fail() }
+	at = if has_fields(m) == 1 then map_index(m, name) else 0
+	if at == 0 { missing_field(name) }
 	key_value(unboxed_list(fields_of(m))#at)
 }
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
@@ -287,6 +353,15 @@ node_get(n: any, key: any): any := {
 	if kind_code(key) == 1 and marked_kind(n) != 8 { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, node_text(key))
 }
+# `n[key] = value` of a value known only at run time: an int key sets the item key+1, any other key the entry named
+# by its text (field_with); n, or the map made of ø
+node_put(n: any, key: any, value: any): any := {
+	if kind_code(key) == 1 {
+		node_set_at(n, unboxed_int(key) + 1, value)
+		return n
+	}
+	field_with(n, node_text(key), value)
+}
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry
 field_with(m: any, name: text, value: any): any := {
@@ -299,6 +374,8 @@ field_with(m: any, name: text, value: any): any := {
 # 1 for a boxed text or character, else 0
 # `x == ø`: ø, and a list or map without items, as Rust's equality and print take them
 is_nothing(n: any): bool := if is_null(n) == 1 then yes else kind_code(n) == 8 and #unboxed_list(n) == 0
+# `is_error(x)`: x is an Error value (kind code 11)
+node_is_error(n: any): bool := is_null(n) == 0 and kind_code(n) == 11
 textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 4) then 1 else 0
 # the bytes of the code point whose UTF-8 starts with the byte lead
 code_point_width(lead: int): int := if lead < 128 then 1 else if lead < 224 then 2 else if lead < 240 then 3 else 4
@@ -435,11 +512,15 @@ list_append(a: list, b: list): list := {
 	set_count(a, start + added)
 	a
 }
-# `n#i` of a value known only at run time, counted from 1: a list's item, a text's character
+# `n#i` of a value known only at run time, counted from 1: a list's item, a text's character; ø has none ("1 not in
+# an empty list"), any other value fails as Rust's "not a list"
 node_at(n: any, index: int): any := {
+	if is_null(n) == 1 { index_out_of_range_of(index, 0) }
 	if kind_code(n) == 8 { return unboxed_list(n)#index }
 	if kind_code(n) == 3 { return text_char(unboxed_text(n), index) }
-	fail()
+	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
+	if kind_code(n) == 4 and index == 1 { return n }
+	not_a_list()
 }
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: any): int := {
@@ -503,8 +584,8 @@ text_trim(t: text): text := {
 # `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
 # or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
 node_slice(x: any, start: any, to: any): any := {
-	from = if is_null(start) == 1 then 0 else unboxed_int(start)
-	stop = if is_null(to) == 1 then node_length(x) else unboxed_int(to)
+	from = if is_null(start) == 1 then 0 else index_of_node(start)
+	stop = if is_null(to) == 1 then node_length(x) else index_of_node(to)
 	if from < 0 or stop < 0 { index_out_of_range() }
 	if kind_code(x) == 3 { return character_slice(unboxed_text(x), from, stop) }
 	if kind_code(x) == 8 { return items_slice(unboxed_list(x), from, stop) }
@@ -705,7 +786,7 @@ float_digits(x: float): list := {
 	shift = 16 - exponent
 	scaled = float_scaled(x, float(0), shift)
 	while has_17_digits(scaled, 1e17) or not has_17_digits(scaled, 1e16) {
-		shift += if has_17_digits(scaled, 1e17) then - 1 else 1
+		shift += if has_17_digits(scaled, 1e17) then -1 else 1
 		scaled = float_scaled(x, float(0), shift)
 	}
 	hi = unboxed_float(scaled#1)
@@ -768,7 +849,7 @@ float_scaled(x: float, gap: float, shift: int): list := {
 	lo = scaled_gap / 2
 	left = shift
 	while left != 0 {
-		step = if left > 22 then 22 else if left < -22 then - 22 else left
+		step = if left > 22 then 22 else if left < -22 then -22 else left
 		power = float(1)
 		count = step
 		if step < 0 { count = -step }
@@ -809,12 +890,20 @@ float_of_node(n: any): float := {
 	if kind_code(n) != 1 { return unboxed_float(n) }
 	float(exact_numerator(n)) / float(exact_denominator(n))
 }
+# `x.bytecount`: the bytes of a text's or character's UTF-8, 8 an item of a list or map; an error has none
+node_bytes(n: any): int := {
+	if is_null(n) == 0 and kind_code(n) == 11 { fail() }
+	if textual_node(n) == 1 { return byte_count(text_of_node(n)) }
+	node_length(n) * 8
+}
+# `n as float` of a value known only at run time: a text or character spells the number
+float_cast(n: any): float := if textual_node(n) == 1 then text_as_float(text_of_node(n)) else float_of_node(n)
 # a % b of floats as in mathematics, as the floats of Rust: the truncated remainder, plus |b| when below 0
 float_mod(a: float, b: float): float := {
 	if b == 0 { divide_by_zero() }
 	q = a / b
 	rest = a - b * (if q < 0 then float_ceil(q) else float_floor(q))
-	if rest < 0 { return rest + (if b < 0 then - b else b) }
+	if rest < 0 { return rest + (if b < 0 then -b else b) }
 	rest
 }
 # a boxed number added to a number variable (`s += x`); a text or any other value traps, as Rust fails on it
@@ -838,8 +927,22 @@ list_admitted(n: any): any := {
 	if is_null(n) == 0 and (kind_code(n) != 8 or marked_kind(n) == 8) { not_a_list() }
 	n
 }
+# … given to a typed field: kept when the type admits it, else "not a text", as Rust's
+# (src/wasm_emitter/declared_values.rs): a text or character for text, yes/no (or 0 and 1) for bool, a number for float
+text_checked(n: any): any := {
+	if is_null(n) == 1 or (kind_code(n) != 3 and kind_code(n) != 4) { returned_error("not a text") }
+	n
+}
+bool_checked(n: any): any := {
+	if is_null(n) == 1 or not (marked_kind(n) == 257 or (kind_code(n) == 1 and is_ratio(n) == 0 and unboxed_int(n) >= 0 and unboxed_int(n) <= 1)) { returned_error("not a bool") }
+	n
+}
+float_checked(n: any): any := {
+	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { returned_error("not a float") }
+	n
+}
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the
-# empty one) where a list is needed; any other value traps, as Rust fails on it
+# empty one) where a list is needed, a boxed character where one is needed; any other value traps, as Rust fails on it
 text_of_node(n: any): text := {
 	if is_null(n) == 0 and (kind_code(n) == 3 or kind_code(n) == 5) { return unboxed_text(n) }
 	if is_null(n) == 0 and kind_code(n) == 4 { return char_text(unboxed_char(n)) }
@@ -849,6 +952,10 @@ text_of_node(n: any): text := {
 bool_of_node(n: any): bool := {
 	if is_null(n) == 1 or marked_kind(n) != 257 { fail() }
 	unboxed_int(n) != 0
+}
+char_of_node(n: any): char := {
+	if is_null(n) == 1 or kind_code(n) != 4 { not_a_character() }
+	unboxed_char(n)
 }
 list_of_node(n: any): list := {
 	if is_null(n) == 1 { return new_list(0) }
@@ -886,8 +993,9 @@ node_truthy(n: any): bool := {
 	if kind == 3 or kind == 5 { return byte_count(unboxed_text(n)) > 0 }
 	yes
 }
-# `n as int` of a boxed int, exact rational or float, truncated toward 0
+# `n as int` of a boxed int, exact rational or float, truncated toward 0; a text or character spells the number
 truncated_int(n: any): int := {
+	if textual_node(n) == 1 { return text_as_int(text_of_node(n)) }
 	if is_null(n) == 0 and kind_code(n) == 2 { return truncated(unboxed_float(n)) }
 	if is_null(n) == 1 or kind_code(n) != 1 { fail() }
 	int_quotient(exact_numerator(n), exact_denominator(n))
@@ -912,9 +1020,10 @@ int_text(n: int): text := {
 	}
 	out
 }
-# a character's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
-char_text(c: char): text := {
-	n = code_of(c)
+char_text(c: char): text := code_point_text(code_of(c))
+# a code point's UTF-8 bytes: 6 bits in each continuation byte 10xxxxxx, the rest in the lead byte
+code_point_text(code: int): text := {
+	n = code
 	count = if n < 128 then 1 else if n < 2048 then 2 else if n < 65536 then 3 else 4
 	out = new_text(count)
 	for i in count - 1 down to 1 {
@@ -959,7 +1068,7 @@ exact_div(a: any, b: any): any := exact_ratio(exact_numerator(a) * exact_denomin
 exact_order(a: any, b: any): int := {
 	left = exact_numerator(a) * exact_denominator(b)
 	right = exact_numerator(b) * exact_denominator(a)
-	if left < right then - 1 else if left > right then 1 else 0
+	if left < right then -1 else if left > right then 1 else 0
 }
 # an exact rational as Rust shows it: a terminating one (its denominator 2^a·5^b) as decimal digits, 7/2 as 3.5,
 # any other as n/d
@@ -973,7 +1082,7 @@ exact_text(n: any): text := {
 	digits = max_int(twos, fives)
 	# numerator · 10^digits / denominator without the product beyond 64 bits: the denominator's missing twos and fives
 	scaled = numerator * power(2, digits - twos) * power(5, digits - fives)
-	magnitude = int_text(if scaled < 0 then - scaled else scaled)
+	magnitude = int_text(if scaled < 0 then -scaled else scaled)
 	padded = zeros(digits + 1 - byte_count(magnitude)) + magnitude
 	whole = byte_count(padded) - digits
 	out = new_text(byte_count(padded) + 1)
@@ -1004,7 +1113,7 @@ float_as_exact(x: float): any := {
 	# x - x is 0 for every finite x, NaN for ∞ and NaN
 	if x - x != 0 { not_a_finite_number() }
 	if x == 0 { return exact_ratio(0, 1) }
-	sign = if x < 0 then - 1 else 1
+	sign = if x < 0 then -1 else 1
 	# `then -x else` reads as a subtraction from then
 	magnitude = if x < 0 then 0 - x else x
 	found = float_digits(magnitude)
@@ -1087,7 +1196,7 @@ least_int(): int := -9223372036854775807 - 1
 # -1 for -∞, 1 for ∞, 0 for a finite x and for NaN
 exact_infinity_rank(x: any): int := if exact_denominator(x) == 0 then exact_numerator(x) else 0
 exact_is_nan(x: any): bool := exact_numerator(x) == 0 and exact_denominator(x) == 0
-int_order(a: int, b: int): int := if a < b then - 1 else if a > b then 1 else 0
+int_order(a: int, b: int): int := if a < b then -1 else if a > b then 1 else 0
 # -1, 0 or 1 as a is below, equal to or above b; 2 (unequal) when exactly one of them is NaN
 exact_cmp(a: any, b: any): int := {
 	if exact_is_nan(a) or exact_is_nan(b) { return if exact_is_nan(a) and exact_is_nan(b) then 0 else 2 }
@@ -1155,11 +1264,11 @@ not_a_text(): int := {
 	fail()
 	0
 }
-non_ascii_text(): int := {
+not_an_int(): int := {
 	fail()
 	0
 }
-not_an_int(): int := {
+not_a_character(): int := {
 	fail()
 	0
 }
@@ -1171,10 +1280,25 @@ an_int_must_be_a_whole_number(): int := {
 	fail()
 	0
 }
+# the run's error is the message (Rust's returned_error with its trap detail)
+returned_error(message: text): int := {
+	global trap_detail = held(message)
+	fail()
+	0
+}
 index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
 	fail()
 	0
+}
+# `raise X`: the run fails with X as its message (Rust's returned_error, src/wasm_emitter/control/traps.rs)
+returned_error(): int := {
+	fail()
+	0
+}
+raised(value: any): int := {
+	global trap_detail = value
+	returned_error()
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: any): int := {
@@ -1187,6 +1311,12 @@ int_overflow() := {
 	0
 }
 index_must_be_an_integer(): int := {
+	fail()
+	0
+}
+# `m.name` of a value without the field `name` known only at run time: "no field name"
+missing_field(name: text): int := {
+	global trap_detail = held(name)
 	fail()
 	0
 }
@@ -1235,6 +1365,16 @@ bracket_unit(): int := 256
 separator_unit(): int := 281474976710656
 bracket_info(n: any): int := int_remainder(int_quotient(marked_kind(n), bracket_unit()), 256)
 separator_info(n: any): int := int_remainder(int_quotient(marked_kind(n), separator_unit()), 8)
+# how a list shows its brackets and joins its items by its separator (Other's brackets as square ones)
+bracket_openings(): list := ["{", "[", "(", "<", "[", ""]
+bracket_closings(): list := ["}", "]", ")", ">", "]", ""]
+separator_joiners(): list := [" ", " ", ", ", "; ", "\n", "\t"]
+# `(1; 2)`, `'x', 2`: a list between its brackets, its items joined as its separator joins them
+list_shown(n: any): text := {
+	at = bracket_info(n) + 1
+	joiner = node_text(separator_joiners()#(separator_info(n) + 1))
+	node_text(bracket_openings()#at) + joined_items(unboxed_list(n), joiner) + node_text(bracket_closings()#at)
+}
 # `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too
 list_bracket(n: any): any := {
 	if is_null(n) == 1 or kind_code(n) != 8 or bracket_info(n) == 4 { return ø }
@@ -1379,7 +1519,7 @@ duration_parts_text(months: int, days: int, nanos: int): text := {
 	if nanos == 0 and byte_count(shown) > 0 { return shown }
 	spaced(shown, seconds_text(nanos) + " seconds")
 }
-sign_of(n: int): int := if n > 0 then 1 else if n < 0 then - 1 else 0
+sign_of(n: int): int := if n > 0 then 1 else if n < 0 then -1 else 0
 duration_text(n: any): text := duration_parts_text(duration_months(n), duration_days(n), duration_nanos(n))
 # -1, 0 or 1 as the difference of two durations is shorter, none or longer on every date (calendar.rs
 # Duration::compares); an order that depends on the date fails
@@ -1392,7 +1532,7 @@ duration_parts_order(months: int, days: int, nanos: int): int := {
 	# daylight saving moves an exact part against the calendar part by at most an hour; calendar parts alone keep the hour
 	shift = if nanos != 0 then hour_nanos() else 0
 	if fewest_days * day_nanos() + nanos - shift > 0 { return 1 }
-	if most_days * day_nanos() + nanos + shift < 0 { return - 1 }
+	if most_days * day_nanos() + nanos + shift < 0 { return -1 }
 	durations_compare_differently_on_different_dates()
 }
 duration_order(a: any, b: any): int := duration_parts_order(duration_months(a) - duration_months(b), duration_days(a) - duration_days(b), duration_nanos(a) - duration_nanos(b))
@@ -1433,7 +1573,8 @@ time_form(n: any): int := int_remainder(int_quotient(marked_kind(n), 256), 8)
 # local time no Z. A duration (card duration-warp) and a zoned time (its zone names) are still Rust's: they trap
 time_text(n: any): text := {
 	form = time_form(n)
-	if form == duration_form() or form == zoned_form() { time_form_not_in_warp() }
+	if form == duration_form() { return duration_text(n) }
+	if form == zoned_form() { time_form_not_in_warp() }
 	position = unboxed_int(n)
 	if form == date_form() { return date_text(position) }
 	days = floor_quotient(position, day_nanos())
@@ -1476,7 +1617,7 @@ fraction_text(fraction: int): text := {
 }
 # n with leading zeros to count digits
 padded(n: int, count: int): text := zeros(count - byte_count(int_text(n))) + int_text(n)
-# a duration or a zoned time in time_text: "time form not in warp"
+# a zoned time in time_text: "time form not in warp" (its zone names are Rust's alone)
 time_form_not_in_warp() := {
 	fail()
 	0
@@ -1493,7 +1634,7 @@ node_order(a: any, b: any): int := {
 # 1 for a boxed int, exact rational or float, else 0
 numeric_node(n: any): int := if kind_code(n) == 1 or kind_code(n) == 2 then 1 else 0
 # -1, 0 or 1 as x is below, equal to or above y; NaN equals everything, as f64.gt - f64.lt gives
-float_order(x: float, y: float): int := if x < y then - 1 else if x > y then 1 else 0
+float_order(x: float, y: float): int := if x < y then -1 else if x > y then 1 else 0
 # `sort xs`, `sorted "hello"`: a new list of xs's items (a new text of its characters) in ascending order
 sorted_node(xs: any): any := {
 	if is_null(xs) == 1 { return xs }
@@ -1569,7 +1710,7 @@ run_order(ranks: list): int := {
 		if node_order(ranks#i, ranks#(i - 1)) < 0 { ascending = 0 } else { descending = 0 }
 		if ascending == 0 and descending == 0 { return 0 }
 	}
-	if ascending == 1 then 1 else - 1
+	if ascending == 1 then 1 else -1
 }
 # the runs low..<middle and middle..<high of cells and ranks, counted from 1, merged into the same places of cells_to
 # and ranks_to
@@ -1606,7 +1747,7 @@ sign_length(t: text): int := if byte_count(t) > 0 and (byte_at(t, 0) == 45 or by
 # t starts with -
 is_negative_text(t: text): bool := byte_count(t) > 0 and byte_at(t, 0) == 45
 # the digit a byte spells, -1 for any other byte
-digit_of(b: int): int := if b >= 48 and b <= 57 then b - 48 else - 1
+digit_of(b: int): int := if b >= 48 and b <= 57 then b - 48 else -1
 # how many digits stand in t from byte offset start on
 digit_run(t: text, start: int): int := {
 	at = start
@@ -1620,7 +1761,7 @@ text_as_int(t: text): int := {
 	if count == 0 or start + count != byte_count(t) { invalid_number() }
 	value = 0
 	for i in start..byte_count(t) { value = value * 10 + digit_of(byte_at(t, i)) }
-	if is_negative_text(t) then - value else value
+	if is_negative_text(t) then -value else value
 }
 # `t as float`: a sign, digits with an optional point among them, an optional exponent (e or E, a sign, digits): the
 # nearest float, correctly rounded also beyond 10^±22, where Rust's multiplies ten by ten
@@ -1643,7 +1784,7 @@ text_as_float(t: text): float := {
 	if at != byte_count(t) { invalid_number() }
 	found = decimal_digits(t, start, stop)
 	magnitude = decimal_float(unboxed_int(found#1), unboxed_int(found#2) + exponent - fraction)
-	if is_negative_text(t) then - magnitude else magnitude
+	if is_negative_text(t) then -magnitude else magnitude
 }
 # [digits, dropped] of the digits between the byte offsets start and stop (a point among them skipped): the first 18
 # significant ones as an int (below 10^18, so below 2^63), the count of those dropped after them
@@ -1673,7 +1814,7 @@ decimal_float(digits: int, shift: int): float := {
 	if magnitude < -325 { return float(0) }
 	hi = float(digits)
 	gap = float(digits - truncated(hi)) * 2
-	back = if magnitude > 290 then 20 else if magnitude < -290 then - 20 else 0
+	back = if magnitude > 290 then 20 else if magnitude < -290 then -20 else 0
 	scaled = unboxed_float(float_scaled(hi, gap, shift - back)#1)
 	if back > 0 { return scaled * power_of_ten(back) }
 	if back < 0 { return scaled / power_of_ten(-back) }
@@ -1696,6 +1837,6 @@ text_as_number(t: text): any := {
 	x = text_as_float(t)
 	# 2^63 (its bits 0x43E0000000000000)
 	limit = float_of_bits(4890909195324358656)
-	if float_floor(x) == x and x < limit and - x < limit { return truncated(x) }
+	if float_floor(x) == x and x < limit and -x < limit { return truncated(x) }
 	x
 }

@@ -1,0 +1,6 @@
+// emitter.warp shows a closure as its lambda as written, as Rust's does (expect [x => x*2 (a, b) => a+b] printed and
+// the closures' names read back, WARP_SELF_HOSTED=1 with an empty WARP_EMIT_REFUSALS file)
+k = 3
+g = [x => x * 2, (a, b) => a + b, y => y + k]
+print g
+g

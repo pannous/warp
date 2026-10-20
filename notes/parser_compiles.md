@@ -49,19 +49,24 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | root | owner |
 |---|---|
 | prelude defs on demand (is_digit) | warp-self-emitter |
-| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | done on pure-lane 2c0201b4e9: `f(x): T := e` as `f(x) := {the result: T = e; the result}`, as Rust lowers it (warp-self-analyzer) |
+| "unknown name any/list" in peek, group_parts, spans, numbers, texts, atoms: return annotations of one-liners `def f(…): list := …` (definitions pass), not type tests | pure lane done on pure-lane 2c0201b4e9 (`f(x): T := e` as `f(x) := {the result: T = e; the result}`). Rust's parse of `def f(…): T := e` is right on main (d717c74deb; card def-int-list closed: the survey over lexer.warp has no any/list line, 2026-10-20). Over parser.warp the emit lane now fails with "key not found" before surveying (card emitter-fails), and the pure lane does not follow `use` yet (pure refusal of parser.warp: `tree: group ( view_of`) (warp-self-analyzer) |
 | enum lowering (`enum Op {…}`; Op.Colon wrong result) | warp-cache: `Op.Colon` gives Colon on main (87062eb624); the stage's 'not an object' once a stage program has Op (a one-entry map named like a class read as an instance): enum-decls 24a46fd732, Ready (card class-named-entry); a used module's Op/Bracket/Separator declaration and classes (Colon unknown, 71 → 44 refusals): warp-list-result-type parser-compiles 3eefd08fcd; `use "lib/compiler/node.warp"` itself: card node-op-field-type, Later |
 | try (Rust lowers it to ran_without_error/is_error: needs those builtins) | `try x else y` done on pure-lane 2c0201b4e9 (lib/compiler/tries.warp, builtins merged from pure-builtins); `try {…} catch e {…}` lowers too but waits on caught_error in emitter.warp (warp-self-emitter) (warp-self-analyzer) |
 | an instance inside a map (gaps) | gone on main 57469d5a52: warp-cache's survey has no refusal naming gaps or an instance (68 refusals, data/self_hosting/parser_gap_map_instances.txt) |
-| print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | warp-runtime |
-| user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing |
-| two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing |
+| print of a list with its own bracket and separator (`(1 2)`, `[1; 2]`) and of an error, in runtime.warp node_text, on emit-enum-match's bracket_info | lists and keys (`y+z`) done on runtime-declared 10a97fec6e, 52296900ae; an error's print still open (warp-runtime) |
+| user-named error types, `raise SyntaxError(…)` / `except SyntaxError as e` (card error-types) | warp-parsing: error-classes babdef0d22, Ready (decision error-classes: `class X: Error`, except tests the class and its subclasses; notes/error_classes.md) |
+| two used files defining one top-level name: a compile error naming both (card two-used-files) | warp-parsing: two-used-files 02aa783f73, in the Integrator's batch (3 clashes in lib/compiler renamed) |
 | "a parameter of kind ?" and "a node where a ? is needed" (7 refusals), lines_below/braced_items (gives ?) (data/self_hosting/parser_gap_map_instances.txt) | warp-cache: pending-kinds 3998b7a62d, Ready (emitter.warp settles recursive results): all 9 gone; 4 now show their case name (typed_default Assign, superscript_power Sub, conditioned Do, global_declaration Colon) and continued shows `the unknown name continue`; 65 refusals left (data/self_hosting/parser_gap_pending3.txt) |
-| a field named `header` read as the host word response_header (`p.header` → "header needs 2 arguments", Rust lane too; cards field-named, front-lane-header), the text of a closure (key_node: done on emit-enum-match 12702665ba) | warp-list-result-type (branch parser-roots) |
+| the text of a closure (emitter.warp refused any program with closures that shows values): closure-text 2675fb1978, Ready (card emitter-shows); `header` field: done, main 3dd502e178 (card field-named) | warp-list-result-type |
 | survey on pending-kinds 3998b7a62d (main merged): 16 refusals left, the case names are gone (data/self_hosting/parser_gap_pending4.txt) | warp-cache |
-| continued: "a text where a char is needed" (the `continue` refusal is gone) | warp-cache |
-| blank_end giving a mixed | warp-cache |
-| dedented: `min(written.map(indent_width))` (empty_extremum unknown) | warp-cache |
-| plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache |
-| gaps: "a block or map holding an instance" is back on main | warp-cache |
+| continued: "a text where a char is needed" (the `continue` refusal is gone) | warp-cache: cache-roots b401fc5bb (Ready): an unannotated parameter is typed from the literals every call passes (binding_powers("=") a char, ("to") a text: a text) |
+| blank_end giving a mixed | warp-cache: cache-roots b401fc5bb (Ready): `while true` without a break gives no kind, the returns decide |
+| dedented: `min(written.map(indent_width))` (empty_extremum unknown) | warp-cache: cache-roots b401fc5bb (Ready): empty_extremum(min) ends the run in min_of_an_empty_list |
+| plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache: cache-roots b401fc5bb (Ready): runtime.warp raised (trap_detail, returned_error), message as Rust's |
+| gaps: "a block or map holding an instance" is back on main | warp-cache: cache-roots b401fc5bb (Ready): a { } group with a statement beside the instance is a block |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
+| the pure lane follows `use` (parser.warp's lexer, shapes, words, sugar; refusal `tree: group ( view_of`), card pure-follows-use: lib/compiler/uses.warp splices used files' declarations | warp-self-analyzer (was warp-runtime), pure-follows-use on pure-lane |
+| key_meanings: "a int where a list is needed" (survey 2026-10-20 on cache-roots + emitter-twin-fails: 6 refusals) | warp-cache |
+| hex_value: `group ( collection_position` | warp-cache |
+| code_escape: "the unknown name codepoint" | warp-cache |
+| line_of / column_of "a variable declared int?", parsed: `group ( caught_error` | warp-self-emitter |

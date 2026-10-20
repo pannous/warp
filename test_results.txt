@@ -188,6 +188,11 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_classes::a_class_extends_a_runtime_error_class
+  ✓ control::test_error_classes::a_declared_error_class_raises_and_catches
+  ✓ control::test_error_classes::an_error_passed_on_keeps_its_position
+  ✓ control::test_error_classes::an_undeclared_error_class_is_named
+  ✓ control::test_error_classes::except_catches_its_class_and_lets_others_pass
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_not_in_data::test_a_list_of_values_and_a_handled_error_stay
   ✓ control::test_error_not_in_data::test_a_parameter_declared_a_list_of_a_union_takes_index_writes
@@ -2693,6 +2698,8 @@ PASSED:
   ✓ modules::test_std_words::json_of_an_instance_given_its_classes
   ✓ modules::test_std_words::math_inverse_and_hyperbolic_words
   ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
+  ✓ modules::test_two_used_files::overloads_from_two_files_stay_apart
+  ✓ modules::test_two_used_files::two_files_declaring_one_function_name_both
   ✓ modules::test_use_modules::a_module_is_used_as_an_alias
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::a_programs_global_is_not_a_module_functions_local
@@ -3739,21 +3746,25 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
+  ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
+  ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
   ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
+  ✓ parser::test_self_pure::recursive_results_run_pure
+  ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
@@ -5090,6 +5101,7 @@ PASSED:
   ✓ types::test_struct_types::test_magic_object_roundtrip
   ✓ types::test_struct_types::test_symbol
   ✓ types::test_struct_types::test_text
+  ✓ types::test_subclass_is::an_instance_is_of_its_parent_classes
   ✓ types::test_sum_types::generic_type_parameters_in_square_brackets
   ✓ types::test_sum_types::variant_with_payload_constructs_and_matches
   ✓ types::test_sum_types::variants_are_the_sum_type
@@ -6316,6 +6328,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6313 passed, 0 failed, 6313 total tested
+11 ignored, 6325 passed, 1 failed, 6326 total tested
