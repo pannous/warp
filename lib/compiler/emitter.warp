@@ -886,10 +886,9 @@ def assignment(body: Body, target: any, value: any): list {
 	[kind, converted(value, kind) + [op.local_tee] + index]
 }
 
-# `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (int_admitted,
-# list_admitted), any other value Rust would check at run time (a fraction, a byte's range) is refused
-declared_kinds = {int: "int", float: "float", text: "text", list: "list"}
-admitting_words = {int: "int_admitted", list: "list_admitted"}
+# `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_checks: int_admitted,
+# bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
+declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
 def declaration(body: Body, name: text, type_name: text, value: any): list {
 	# `x: any = v` admits every value: the plain assignment
 	if type_name == "any" { return assignment(body, symbol(name), value) }
@@ -902,7 +901,7 @@ def declaration(body: Body, name: text, type_name: text, value: any): list {
 def admitted(value: any, kind: text): list {
 	if value#1 == kind or value#1 == pending { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
-	if value#1 == "node" and kind in admitting_words { return runtime_call(admitting_words[kind], [value]) }
+	if value#1 == "node" and kind in field_checks { return runtime_call(field_checks[kind], [value]) }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
 def whole(value: any): list { admitted(value, "int") }
