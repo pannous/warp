@@ -52,7 +52,6 @@ runtime_error_fixes = {index_must_be_an_integer: whole_number_fix, count_must_be
 # SHOWN_LIST_ITEM; lib/compiler/data_items.warp), and the runtime word that fails where it holds an Error
 data_item_checks = {"data·item": "held_list_item", "data·field": "held_field"}
 # `data e`: e as written (src/lowering/control/blocks.rs DATA_WORD)
-data_word = "data"
 catch_clause_byte = 0
 mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
@@ -1544,9 +1543,18 @@ def expression_code(body: Body, n: any): list {
 }
 
 # `data e`: e as written, a node (Rust's blocks.rs as_data); `parse("a + 1")` is `as_code(data a + 1)`
-is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(data_word)
-# `print data (a + 1)`: the quote is the last item
-ends_in_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n > 2 and n#(#n - 1) == symbol(data_word)
+is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(quote_word)
+# `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
+# its place, else 0
+inline_quote_at(n: any): int := {
+	if not ((bracket_of(n) == "" and separator_of(n) == " ") or (bracket_of(n) == "(" and separator_of(n) == "")) { return 0 }
+	for i in 2..<#n { if n#i == symbol(quote_word) { return i } }
+	0
+}
+quote_folded(n: any, at: int): any := {
+	quote = separated(bracketed([n#at, n#(at + 1)], ""), " ")
+	separated(bracketed(items_of(n)[..(at - 1)] + [quote] + items_of(n)[(at + 1)..], bracket_of(n)), separator_of(n))
+}
 # `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
 position_fields = ["line", "column", "comment"]
 reads_position(n: any): bool := {
@@ -1582,7 +1590,7 @@ is_spaced_call(body: Body, n: any): bool := {
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
 def group_expression(body: Body, n: any): list {
 	if is_quote(n) { return ["node", quoted_code(body, n#2)] }
-	if ends_in_quote(n) { return group_expression(body, separated(bracketed(n[..(#n - 2)].map(x => x) + [separated(bracketed([n#(#n - 1), n#(#n)], ""), " ")], ""), " ")) }
+	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, n[2..].map(x => x)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
 		return closure_call(body, int(name_of(n#1)[(#closure_call_prefix)..]), n[1..].map(x => x))
