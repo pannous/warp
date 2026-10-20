@@ -20,7 +20,11 @@ pub fn beside_program(path: &str) -> String {
 /// (`play "song.mp3"`, card play-beside-program; host-files.js besideProgram in the browser)
 pub fn beside_program_if_there(path: &str) -> String {
 	let beside = beside_program(path);
-	if Path::new(&beside).exists() { beside } else { path.to_string() }
+	if Path::new(&beside).exists() {
+		beside
+	} else {
+		path.to_string()
+	}
 }
 
 /// The WebAssembly file `use name` finds when no warp module and no standard module has that name: `use rust_demo` →
