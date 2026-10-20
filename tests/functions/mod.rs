@@ -83,6 +83,7 @@ mod test_foreign_modifiers;
 mod test_foreign_spellings;
 mod test_free_var_if_arms;
 mod test_function_aliases;
+mod test_function_binders; // card loop-variable-global
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
