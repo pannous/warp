@@ -16,6 +16,7 @@ use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::words::IMPLICIT_PARAMETER;
 use crate::words::{FOR_WORD, IN_WORD};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 pub const CLOSURE_NEW: &str = "closure_new";
@@ -329,6 +330,8 @@ fn settled_function_values(program: &Node, context: &Context) -> FunctionValues 
 		lists: HashSet::new(),
 		passing_through,
 		class_fields: crate::class_methods::class_fields(program),
+		bound: bound_names(context),
+		enclosing: RefCell::new(vec![]),
 	};
 	values.settle(context, program);
 	values
@@ -337,7 +340,56 @@ fn settled_function_values(program: &Node, context: &Context) -> FunctionValues 
 /// The fields the program gives a function value: `h.d` of `h = Holder(x => x + 1)` (card untyped-field)
 pub(crate) fn function_holding_fields(program: &Node) -> HashSet<String> {
 	let context = crate::analyzer::function_context(program);
-	settled_function_values(program, &context).variables.into_iter().filter(|path| path.contains('.')).collect()
+	let variables = settled_function_values(program, &context).variables.into_iter();
+	variables.map(|path| unscoped(&path).to_string()).filter(|path| path.contains('.')).collect()
+}
+
+/// The names each function binds inside, by its full name: its parameters, the variables its body assigns, its loop
+/// variables
+type BoundNames = HashMap<String, HashSet<String>>;
+
+fn bound_names(context: &Context) -> BoundNames {
+	let bound = |function: &UserFunctionDef| {
+		let parameters = function.params.iter().map(|param| param.name.clone()).collect();
+		crate::program_names::bound_in_body(parameters, &function.body)
+	};
+	context.user_functions.values().map(|function| (function.name.clone(), bound(function))).collect()
+}
+
+/// Between the function binding a variable and the variable's path: `r¦found`
+const SCOPE_MARK: char = '¦';
+
+/// The path `found` as the code inside `enclosing` (innermost last) means it: the variable of the innermost function
+/// binding it, `r¦found`, apart from another function's `found`; a top-level variable as it is
+fn scoped_path(bound: &BoundNames, enclosing: &[String], path: &str) -> String {
+	let root = path.split('.').next().unwrap_or(path);
+	let binding =
+		enclosing.iter().rev().find(|function| bound.get(*function).is_some_and(|names| names.contains(root)));
+	match binding {
+		Some(function) => format!("{function}{SCOPE_MARK}{path}"),
+		None => path.to_string(),
+	}
+}
+
+fn unscoped(path: &str) -> &str {
+	path.split_once(SCOPE_MARK).map_or(path, |(_, path)| path)
+}
+
+/// A function name as written inside `enclosing`: the nested `outer·inner` before a top-level `inner`
+fn function_named(functions: &HashSet<String>, enclosing: &[String], name: &str) -> Option<String> {
+	let nested = enclosing.iter().rev().map(|outer| crate::analyzer::qualify_nested_name(Some(outer), name));
+	nested.chain(std::iter::once(name.to_string())).find(|candidate| functions.contains(candidate))
+}
+
+/// The full name of the function `node` defines inside `enclosing`, with its parameters
+fn defined_function(node: &Node, functions: &HashSet<String>, enclosing: &[String]) -> Option<(String, Vec<String>)> {
+	let params = definition_parameters(node, functions)?;
+	let Node::Key(head, _, _) = node.drop_meta() else { return None };
+	let name = match head.drop_meta() {
+		Node::List(items, _, _) => items.first().map(|name| name.drop_meta().name()).unwrap_or_default(),
+		other => other.name(),
+	};
+	Some((function_named(functions, enclosing, &name).unwrap_or(name), params))
 }
 
 fn lift_closures(program: Node) -> Node {
@@ -351,6 +403,7 @@ fn lift_closures(program: Node) -> Node {
 		variables: function_variables,
 		lists: function_lists,
 		passing_through,
+		bound,
 		..
 	} = values;
 	let mut lifting = Lifting {
@@ -361,6 +414,7 @@ fn lift_closures(program: Node) -> Node {
 		returns_function,
 		passing_through,
 		callable_fields,
+		bound,
 		lifted: vec![],
 		enclosing: vec![],
 		locals: vec![crate::lowering::for_loop::loop_variables(&program).into_iter().collect()],
@@ -510,14 +564,50 @@ struct FunctionValues {
 	passing_through: HashMap<String, usize>,
 	/// Each class's fields in order: `Holder(x => x + 1)` fills the field d of `class Holder {d}`
 	class_fields: crate::class_methods::ClassFields,
+	bound: BoundNames,
+	/// The functions whose bodies the walk is in, innermost last: a variable is keyed by the one binding it (scoped_path)
+	enclosing: RefCell<Vec<String>>,
 }
 
 impl FunctionValues {
+	fn scoped(&self, path: &str) -> String {
+		scoped_path(&self.bound, &self.enclosing.borrow(), path)
+	}
+
+	fn holds_function(&self, path: &str) -> bool {
+		self.variables.contains(&self.scoped(path))
+	}
+
+	/// `action` on `node` and every descendant, each seen from the function it stands in
+	fn visit_scoped<'a>(&self, node: &'a Node, action: &mut dyn FnMut(&'a Node)) {
+		let node = node.drop_meta();
+		action(node);
+		let entered = defined_function(node, &self.functions, &self.enclosing.borrow()).map(|(name, _)| name);
+		if let Some(function) = &entered {
+			self.enclosing.borrow_mut().push(function.clone());
+		}
+		node.visited_children().into_iter().for_each(|child| self.visit_scoped(child, action));
+		if entered.is_some() {
+			self.enclosing.borrow_mut().pop();
+		}
+	}
+
+	/// The function's end judged from inside it and the functions enclosing it (`outer·inner` inside outer)
+	fn inside<T>(&self, function: &str, judge: impl FnOnce() -> T) -> T {
+		let separator = crate::analyzer::NESTED_DEF_SEPARATOR;
+		let prefixes = function.match_indices(separator).map(|(end, _)| function[..end].to_string());
+		let enclosing = prefixes.chain(std::iter::once(function.to_string())).collect();
+		let outside = self.enclosing.replace(enclosing);
+		let judged = judge();
+		self.enclosing.replace(outside);
+		judged
+	}
+
 	/// A lambda, a function name, a variable holding a function, a call returning one (a called closure may), or a choice between them
 	fn is_function_value(&self, node: &Node) -> bool {
 		match node.drop_meta() {
-			field if is_field(field) => holder_path(field).is_some_and(|path| self.variables.contains(&path)),
-			Node::Symbol(name) => self.functions.contains(name) || self.variables.contains(name),
+			field if is_field(field) => holder_path(field).is_some_and(|path| self.holds_function(&path)),
+			Node::Symbol(name) => self.functions.contains(name) || self.holds_function(name),
 			Node::Key(choice, Op::Else, otherwise) => {
 				self.is_function_value(otherwise) || self.is_function_value(choice)
 			}
@@ -527,7 +617,7 @@ impl FunctionValues {
 				if items
 					.first()
 					.and_then(Node::symbol_name)
-					.is_some_and(|name| self.returning.contains(name) || self.variables.contains(name)) =>
+					.is_some_and(|name| self.returning.contains(name) || self.holds_function(name)) =>
 			{
 				true
 			}
@@ -561,27 +651,22 @@ impl FunctionValues {
 
 	/// Does `function` end in a function value: a name it binds itself (`condition = cs#1; condition` beside a function
 	/// condition) is one only when assigned one
-	fn returns_function_value(&self, function: &crate::compiler::context::UserFunctionDef) -> bool {
+	fn returns_function_value(&self, function: &UserFunctionDef) -> bool {
 		let last = tail(&function.body);
-		match last.drop_meta() {
-			Node::Symbol(name) => {
-				let parameters = function.params.iter().map(|param| param.name.clone()).collect();
-				match crate::program_names::bound_in_body(parameters, &function.body).contains(name) {
-					true => self.variables.contains(name),
-					false => self.is_function_value(last),
-				}
-			}
+		let binds = |name: &String| self.bound.get(&function.name).is_some_and(|bound| bound.contains(name));
+		self.inside(&function.name, || match last.drop_meta() {
+			Node::Symbol(name) if binds(name) => self.holds_function(name),
 			_ => self.is_function_value(last),
-		}
+		})
 	}
 
 	/// A list of function values: a literal holding one, another such list, one with more appended (`out + [f]`, what
 	/// `xs.map(n => (x => x + n))` builds), a signal's listeners, or a block that ends in one
 	fn is_function_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
-			field if is_field(field) => holder_path(field).is_some_and(|path| self.lists.contains(&path)),
+			field if is_field(field) => holder_path(field).is_some_and(|path| self.lists.contains(&self.scoped(&path))),
 			Node::List(items, Bracket::Square, _) => items.iter().any(|item| self.is_function_value(item)),
-			Node::Symbol(name) => self.lists.contains(name),
+			Node::Symbol(name) => self.lists.contains(&self.scoped(name)),
 			Node::Key(left, Op::Add, right) => self.is_function_list(left) || self.is_function_list(right),
 			// a signal's listeners (`listeners of x`, lowering/signals/signal_values.rs)
 			Node::List(items, Bracket::Round, _)
@@ -610,9 +695,9 @@ impl FunctionValues {
 				.map(|function| function.name.clone())
 				.collect();
 			let (mut variables, mut lists) = (HashSet::new(), HashSet::new());
-			program.visit(&mut |node| {
+			self.visit_scoped(program, &mut |node| {
 				if let Some(variable) = self.loop_variable_over_functions(node) {
-					variables.insert(variable.to_string());
+					variables.insert(self.scoped(variable));
 				}
 				// `out.add(f)`, what `xs.map(n => (x => x + n))` builds: out holds functions
 				if let Node::Key(list, Op::Dot, call) = node {
@@ -621,7 +706,7 @@ impl FunctionValues {
 							if crate::list_mutations::appends(&method.drop_meta().name(), 1)
 								&& self.is_function_value(value)
 							{
-								lists.insert(name.clone());
+								lists.insert(self.scoped(name));
 							}
 						}
 					}
@@ -634,10 +719,11 @@ impl FunctionValues {
 				if self.functions.contains(&name) {
 					return;
 				}
+				let path = self.scoped(&name);
 				if *op != Op::AddAssign {
-					self.record_holder(&name, value, &mut variables, &mut lists);
+					self.record_holder(&path, value, &mut variables, &mut lists);
 				} else if self.is_function_list(value) {
-					lists.insert(name);
+					lists.insert(path);
 				}
 			});
 			if returning == self.returning && variables == self.variables && lists == self.lists {
@@ -678,7 +764,7 @@ impl FunctionValues {
 			self.is_function_value(value) || value.symbol_name().is_some_and(|name| parameters.contains(name))
 		};
 		let mut fields = HashSet::new();
-		program.visit(&mut |node| {
+		self.visit_scoped(program, &mut |node| {
 			let entries = match node {
 				Node::Key(key, Op::Colon, value) => {
 					key.symbol_name().map(|name| vec![(name.to_string(), *value.clone())])
@@ -702,7 +788,7 @@ impl FunctionValues {
 			param.annotation.as_ref().is_some_and(crate::lowering::typed_block_arguments::is_function_type)
 		});
 		let mut parameters: HashSet<String> = declared.map(|param| param.name.clone()).collect();
-		program.visit(&mut |node| {
+		self.visit_scoped(program, &mut |node| {
 			let Node::List(items, Bracket::Round, Separator::None) = node else { return };
 			let Some((head, arguments)) = items.split_first() else { return };
 			let Some(function) = head.symbol_name().and_then(|name| context.user_functions.get(name)) else { return };
@@ -764,16 +850,17 @@ fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec
 struct Lifting {
 	functions: HashSet<String>,
 	variables: HashSet<String>,
-	/// Variables assigned a function value: `f(x)` calls the closure they hold
+	/// Variables assigned a function value, scoped (scoped_path): `f(x)` calls the closure they hold
 	function_variables: HashSet<String>,
 	/// Functions whose body ends in a function value: `make_adder(2)(5)` calls their result
 	returns_function: HashSet<String>,
-	/// Variables assigned a list of function values: `(fs#2)(5)` and `fs#2(5)` call an item
+	/// Variables assigned a list of function values, scoped: `(fs#2)(5)` and `fs#2(5)` call an item
 	function_lists: HashSet<String>,
 	/// Functions returning one of their parameters, by its position: given a function value there, the call is one
 	passing_through: HashMap<String, usize>,
 	/// Fields the program gives a function value, named unlike any function or method: `x.d(5)` calls the value of d
 	callable_fields: HashSet<String>,
+	bound: BoundNames,
 	lifted: Vec<Node>,
 	/// The functions whose bodies the walk is in, innermost last, by their full names (`outer·inner`)
 	enclosing: Vec<String>,
@@ -782,16 +869,18 @@ struct Lifting {
 }
 
 impl Lifting {
-	/// A function name as written in the current body: the nested `outer·inner` before a top-level `inner`
 	fn function_named(&self, name: &str) -> Option<String> {
-		let nested = self.enclosing.iter().rev().map(|outer| crate::analyzer::qualify_nested_name(Some(outer), name));
-		nested.chain(std::iter::once(name.to_string())).find(|candidate| self.functions.contains(candidate))
+		function_named(&self.functions, &self.enclosing, name)
+	}
+
+	fn holds_function(&self, path: &str) -> bool {
+		self.function_variables.contains(&scoped_path(&self.bound, &self.enclosing, path))
 	}
 
 	/// A local of an enclosing body holding a plain value: `angle = 0.5; cos(angle)` beside math's angle(x, y) reads
 	/// the local, never the function
 	fn is_local_value(&self, name: &str) -> bool {
-		!self.function_variables.contains(name) && self.locals.iter().any(|locals| locals.contains(name))
+		!self.holds_function(name) && self.locals.iter().any(|locals| locals.contains(name))
 	}
 
 	fn is_variable(&self, name: &str, bound: &HashSet<String>) -> bool {
@@ -801,7 +890,7 @@ impl Lifting {
 	/// A parameter, or a variable assigned a function value; a function nested in an enclosing body is none
 	/// (`part = i => …; part(0)` beside another body's `for part in …` over function values)
 	fn may_hold_function(&self, name: &str, bound: &HashSet<String>) -> bool {
-		bound.contains(name) || (self.function_variables.contains(name) && self.function_named(name).is_none())
+		bound.contains(name) || (self.holds_function(name) && self.function_named(name).is_none())
 	}
 
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
@@ -809,15 +898,10 @@ impl Lifting {
 		if referenced_function(&node).is_some() {
 			return self.function_value(node, bound);
 		}
-		if let Some(params) = definition_parameters(&node, &self.functions) {
+		if let Some((full_name, params)) = defined_function(&node, &self.functions, &self.enclosing) {
 			let Node::Key(head, op, body) = node.drop_meta().clone() else { unreachable!("a definition") };
 			let has_parameters = !params.is_empty();
 			let inner: HashSet<String> = bound.iter().cloned().chain(params).collect();
-			let name = match head.drop_meta() {
-				Node::List(items, _, _) => items.first().map(|name| name.drop_meta().name()).unwrap_or_default(),
-				other => other.name(),
-			};
-			let full_name = self.function_named(&name).unwrap_or(name);
 			self.enclosing.push(full_name);
 			self.locals.push(assigned_variables(&body));
 			// `g(a, b) := { $0 - $1 }`: with parameters the block is the body, its `$0` the first parameter, no closure
@@ -979,7 +1063,7 @@ impl Lifting {
 	/// `h.d`, `h#("d"+1)` of a field assigned a function value, or `closure_new(h·d)`: a function value itself
 	fn is_function_held(&self, node: &Node) -> bool {
 		as_closure_new(node).is_some()
-			|| (is_field(node) && holder_path(node).is_some_and(|path| self.function_variables.contains(&path)))
+			|| (is_field(node) && holder_path(node).is_some_and(|path| self.holds_function(&path)))
 	}
 
 	/// `h.d(5)`: the field `d` and the arguments, when h.d holds a function value: a path assigned one, or a callable
@@ -990,13 +1074,13 @@ impl Lifting {
 		};
 		let (field, arguments) = items.split_first()?;
 		let name = field.symbol_name()?;
-		let is_assigned_one =
-			holder_path(receiver).is_some_and(|path| self.function_variables.contains(&format!("{path}.{name}")));
+		let is_assigned_one = holder_path(receiver).is_some_and(|path| self.holds_function(&format!("{path}.{name}")));
 		(is_assigned_one || self.callable_fields.contains(name)).then(|| (field.clone(), arguments.to_vec()))
 	}
 
 	fn is_function_list(&self, list: &Node) -> bool {
-		holder_path(list).is_some_and(|path| self.function_lists.contains(&path))
+		holder_path(list)
+			.is_some_and(|path| self.function_lists.contains(&scoped_path(&self.bound, &self.enclosing, &path)))
 	}
 
 	/// `fs#2(5)` parses as `fs#(2*(5))`: of a list of function values it is the call of item 2 with (5)
