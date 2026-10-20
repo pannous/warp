@@ -140,8 +140,9 @@ kind_of_list(n: any, scope: any): text := {
 	if name == "data" and #n == 2 and bracket_of(n) == "" { return written_kind(n#2) }
 	if name == "as_code" and #n == 2 { return kind_of(n#2, scope) }
 	if (name == "slice" or name == "reverse") and #n >= 2 {
+		# of a value of no known sequence kind (`p.code`, a field: kind_of's "int" names no kind there), any value
 		element = kind_of(n#2, scope)
-		return if element == "text" or element == "codepoint" then "text" else if element == "empty" then "empty" else "list"
+		return if element == "text" or element == "codepoint" then "text" else if element == "list" then "list" else "empty"
 	}
 	if name != "" and name in call_kinds and (#n >= 2 or bracket_of(n) == "(") and binding(scope, name) == ø { return call_kinds[name] }
 	typed = typed_call_kind(n, scope)
@@ -193,6 +194,8 @@ kind_of_key(n: any, scope: any): text := {
 	if op == "then" and is_key(key_of(n), "if") { return branches_kind(branch_kind(value_of(n), scope), "int") }
 	if op == "#" and not is_empty(key_of(n)) { return subscript_kind(key_of(n), value_of(n), scope) }
 	if op == "do" and is_key(key_of(n), "while") { return loop_kind(value_of(n), scope) }
+	# `Point{x: 1}` as the pure lane leaves it, the class name before its fields: an instance, a node
+	if op == "" and key_of(n) is symbol and bracket_of(value_of(n)) == "{" { return "data" }
 	"int"
 }
 
