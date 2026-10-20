@@ -214,7 +214,7 @@ pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 				first_mention = Some(!mentions(value, name))
 			}
 			Node::List(items, _, _) => {
-				if let Some((names, values)) =
+				if let Some((_, values)) =
 					list_binder(items).filter(|(names, _)| names.iter().any(|n| n.is_symbol(name)))
 				{
 					first_mention = Some(!values.iter().any(|value| mentions(value, name)));
