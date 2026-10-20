@@ -1031,8 +1031,6 @@ def typed_declaration(body: Body, name: text, type_name: text, value: any): list
 	if value#1 != "node" and value#1 != pending { return refuse("a " + value#1 + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
-# `a Shape`, `an Animal`, as Rust's error messages name a type
-with_article(name: text): text := (if "AEIOUaeiou".contains(name#1) then "an " else "a ") + name
 # `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
