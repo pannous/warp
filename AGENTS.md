@@ -225,6 +225,9 @@ is!("def fib:=it<1 ? 1 : fib(it-1) + fib it-2; fib(10)",55);
 # Important
 Don't cargo clean unless absolutely necessary!
 
+NEVER modify a README without the user's review and explicit confirmation: propose the diff (workers via
+warp-interviewer), wait for the user's yes.
+
 The /probes/ folder is NOT a place to doublicate worktrees!
 Small or non-conflicting changes may go straight onto main without a worktree (notes/agents/common.md
 "Where to work"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
