@@ -205,13 +205,17 @@ fn program_value(name: &str) -> Option<Node> {
 	crate::compiler::compile_context::read(|context| context.program_values.get(name).cloned())
 }
 
-/// `x + 1` of a program with a class defining plus (`use sound`: Note) reads `if x is Note then x.plus(1) else x + 1`
-/// (class_methods.rs): on the GPU no value is an instance, so only the built-in operator remains
+/// `x + 1` of a program with a class defining plus (`use sound`: Note) reads
+/// `if instance_of(x, "Note") then x.plus(1) else x + 1` (class_methods.rs): on the GPU no value is an instance, so
+/// only the built-in operator remains
 fn without_instance_dispatch(node: Node, classes: &HashSet<String>) -> Node {
 	let otherwise = crate::lowering::nodes::branches(&node).and_then(|(condition, then, otherwise)| {
-		let Node::Key(subject, Op::Eq, class) = condition.drop_meta() else { return None };
+		let (crate::words::INSTANCE_OF, [subject, class]) = crate::lowering::nodes::round_call(condition)? else {
+			return None;
+		};
 		let Node::Key(receiver, Op::Dot, _) = then.drop_meta() else { return None };
-		let is_dispatch = class.symbol_name().is_some_and(|class| classes.contains(class)) && receiver == subject;
+		let is_class = matches!(class.drop_meta(), Node::Text(class) if classes.contains(class));
+		let is_dispatch = is_class && receiver.drop_meta() == subject.drop_meta();
 		is_dispatch.then(|| otherwise.clone())
 	});
 	match otherwise {

@@ -421,7 +421,7 @@ impl WasmGcEmitter {
 		if let [word, instance, type_name] = items {
 			if let (Node::Symbol(name), Node::Text(type_name)) = (word.drop_meta(), type_name.drop_meta()) {
 				if name == crate::words::INSTANCE_OF {
-					self.emit_instance_of(func, instance, type_name);
+					self.emit_instance_of(func, instance, std::slice::from_ref(type_name));
 					self.emit_call(func, "new_int");
 					return;
 				}
@@ -761,17 +761,10 @@ impl WasmGcEmitter {
 				}
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
+			// `d is Animal` of a Dog extending Animal holds too
 			None if declared_type => {
-				let instance_test = Node::List(
-					vec![
-						Node::Symbol(crate::words::INSTANCE_OF.to_string()),
-						subject.clone(),
-						Node::Text(spec.clone()),
-					],
-					Bracket::Round,
-					Separator::None,
-				);
-				self.emit_numeric_value(func, &instance_test);
+				let classes = self.ctx.type_registry.with_descendants(spec);
+				self.emit_instance_of(func, subject, &classes);
 			}
 			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s
 			// name, as `f is builtin` of a function value
@@ -931,20 +924,31 @@ impl WasmGcEmitter {
 		self.emit_truncating_cast(func);
 	}
 
-	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T, or an Error of
-	/// the class T (its value, decision error-classes)
-	pub(in crate::wasm_emitter) fn emit_instance_of(&mut self, func: &mut Function, instance: &Node, type_name: &str) {
+	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is one of the
+	/// classes, or an Error of one of them (its value, decision error-classes). The exact class alone for a dispatch,
+	/// with the classes extending it for `x is T`
+	pub(in crate::wasm_emitter) fn emit_instance_of(
+		&mut self,
+		func: &mut Function,
+		instance: &Node,
+		classes: &[String],
+	) {
 		let node_type = self.type_manager.node_type;
 		self.emit_node_instructions(func, instance);
 		let instance_local = self.node_scratch();
 		func.instruction(&I::LocalSet(instance_local));
 		let named = |emitter: &mut Self, func: &mut Function, field: u32| {
-			emitter.emit_field(func, instance_local, field);
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-			let (pointer, length) = emitter.memory_string(type_name);
-			Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-			emitter.emit_call(func, "new_symbol");
-			emitter.emit_call(func, super::super::VALUES_EQUAL);
+			for (index, class) in classes.iter().enumerate() {
+				emitter.emit_field(func, instance_local, field);
+				func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+				let (pointer, length) = emitter.memory_string(class);
+				Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+				emitter.emit_call(func, "new_symbol");
+				emitter.emit_call(func, super::super::VALUES_EQUAL);
+				if index > 0 {
+					func.instruction(&I::I32Or);
+				}
+			}
 			func.instruction(&I::I64ExtendI32U);
 		};
 		self.emit_field(func, instance_local, 0);
