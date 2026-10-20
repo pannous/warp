@@ -27,7 +27,7 @@ meaning(count: any, operand: any): any := {
 	call_of("times·text", [count, operand])
 }
 
-phrase(n: Node): Node := match n {
+times_phrase(n: Node): Node := match n {
 	List(parts, Bracket.None, Separator.Space): { if #parts == 3 and parts#2 == symbol(times_word) then meaning(parts#1, parts#3) else n }
 	_: n
 }
@@ -35,5 +35,5 @@ phrase(n: Node): Node := match n {
 times_phrases(program: any): any := {
 	global loops
 	loops = 0
-	bottom_up(program, phrase)
+	bottom_up(program, times_phrase)
 }

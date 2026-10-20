@@ -154,7 +154,7 @@ case_test(value: Node, cases: list): Node := {
 }
 
 # is_type(value, "Coin") of a declared enum: the test of its cases, else as it is
-type_test(items: list, n: Node, enums: any): Node := {
+enum_type_test(items: list, n: Node, enums: any): Node := {
 	if #items != 3 or items#1 != symbol("is_type") { return n }
 	enum_name = "" + items#3
 	if enum_name in enums then case_test(items#2, enums[enum_name]) else n
@@ -169,7 +169,7 @@ enum_node(n: Node, enums: any, subjects: any): Node := match n {
 	Key(value, Op.As, target): case_conversion(value, target, n, enums, subjects)
 	List(items, Bracket.Round, separator): {
 		if #items == 2 and is_name(items#1) and name_of(items#1) in enums then case_at(items#2, name_of(items#1), enums)
-		else type_test(items, n, enums)
+		else enum_type_test(items, n, enums)
 	}
 	_: {
 		declared = declared_enum(n)

@@ -36,13 +36,13 @@ kind_changes(program: any): any := {
 }
 
 is_operator(n: any, op: text): bool := type(n) is key and op_of(n) == op
-is_definition(n: any): bool := is_operator(n, ":=")
+is_define_statement(n: any): bool := is_operator(n, ":=")
 # `(f x) := …`: the name it defines, else ""
-defined_name(n: any): text := {
+define_statement_name(n: any): text := {
 	head = key_of(n)
 	if is_group(head) and #head > 0 and head#1 is symbol then name_of(head#1) else ""
 }
-definition_bodies(program: any): list := nodes_in(program).filter(is_definition).map(value_of)
+definition_bodies(program: any): list := nodes_in(program).filter(is_define_statement).map(value_of)
 
 # the variables declared `global: y`
 global_variables(program: any): any := {
@@ -116,8 +116,8 @@ mixed_kind(was: text, now: text): text := {
 # `f(x: int) := x + 1` gives an Int
 evident_results(program: any): any := {
 	results = {}
-	for written in nodes_in(program).filter(is_definition) {
-		name = defined_name(written)
+	for written in nodes_in(program).filter(is_define_statement) {
+		name = define_statement_name(written)
 		if name != "" {
 			parameters = {}
 			for parameter in items_of(key_of(written))[1..] {
@@ -141,8 +141,8 @@ last_expression(body: any): any := {
 # the first kind change of the assignments in program order, not into function definitions (their own scopes):
 # `kinds` holds variable variable's evident kind, "" once it was given a value of no evident kind
 first_kind_change(n: any, kinds: any, results: any, global_names: any): any := {
-	if is_definition(n) {
-		name = defined_name(n)
+	if is_define_statement(n) {
+		name = define_statement_name(n)
 		if name == "" { return ø }
 		change = given_kind(name, function_kind, value_of(n), kinds)
 		if change != ø { return change }

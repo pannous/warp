@@ -734,7 +734,7 @@ core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "in
 	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: []}
-def type_test(body: Body, subject: any, spec: text): list {
+def type_test_code(body: Body, subject: any, spec: text): list {
 	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
 	if spec not in core_type_words { return refuse("a test of the type " + spec) }
@@ -899,7 +899,7 @@ def local_value(body: Body, n: any): list {
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
 }
 
-def operation(body: Body, symbol: text, a: any, b: any): list {
+def operation_code(body: Body, symbol: text, a: any, b: any): list {
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
 	if a#1 == pending and b#1 != pending { a = [b#1, a#2] }
 	if b#1 == pending and a#1 != pending { b = [a#1, b#2] }
@@ -915,9 +915,9 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	# `"ab" * 2.5`: Rust says how a text repeats, a trap could not
 	if textual and (a#1 == "node" or b#1 == "node") and symbol not in comparisons { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if a#1 == "node" or b#1 == "node" { return node_operation(body, symbol, boxed(a), boxed(b)) }
-	if symbol in comparisons and a#1 == "char" and b#1 == "char" { return operation(body, symbol, code_point(a), code_point(b)) }
+	if symbol in comparisons and a#1 == "char" and b#1 == "char" { return operation_code(body, symbol, code_point(a), code_point(b)) }
 	if symbol in comparisons and textual and a#1 in characters and b#1 in characters {
-		return operation(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
+		return operation_code(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
 	}
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
@@ -941,15 +941,15 @@ def node_operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol == "+" { return runtime_call("node_add", [["node", a], ["node", b]]) }
 	left = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	right = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
-	ints = operation(body, symbol, ["int", unboxed(left#2, gc.int_box)], ["int", unboxed(right#2, gc.int_box)])
-	floats = operation(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
+	ints = operation_code(body, symbol, ["int", unboxed(left#2, gc.int_box)], ["int", unboxed(right#2, gc.int_box)])
+	floats = operation_code(body, symbol, runtime_call("float_of_node", [left]), runtime_call("float_of_node", [right]))
 	kind = if ints#1 == "bool" then "bool" else "node"
 	exact = exact_operation(body, symbol, left, right, floats)
 	integers = ratio_test(left#2) + ratio_test(right#2) + [op.i32_or] + if_else_code(kind, exact, ints)
 	numbers = both_of_kind(left#2, right#2, node_kind_codes.int) + if_else_code(kind, [kind, integers], floats)
 	code = a + [op.local_set] + left#2[1..] + b + [op.local_set] + right#2[1..]
 	if symbol not in comparisons { return [kind, code + numbers] }
-	texts = operation(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
+	texts = operation_code(body, symbol, runtime_call("node_text", [left]), runtime_call("node_text", [right]))
 	textual = x => condition(runtime_call("textual_node", [x]))
 	[kind, code + textual(left) + textual(right) + [op.i32_and] + if_else_code(kind, texts, [kind, numbers])]
 }
@@ -970,7 +970,7 @@ def equality(body: Body, symbol: text, a: any, b: any): list {
 exact_words = {"-": "exact_sub", "*": "exact_mul", "/": "exact_div", "%": "exact_mod"}
 def exact_operation(body: Body, symbol: text, left: any, right: any, floats: any): list {
 	if symbol in exact_words { return runtime_call(exact_words[symbol], [left, right]) }
-	if symbol in comparisons { return operation(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
+	if symbol in comparisons { return operation_code(body, symbol, runtime_call("exact_order", [left, right]), number_value(0)) }
 	floats
 }
 # `floor x`: an int itself, a float's floor as an int, a boxed number by the runtime word floored_node (exact for a
@@ -1236,9 +1236,9 @@ def call_values(f: Function, values: any): list {
 # hold, `f(xs#1)` inside `f(n)` first called with a list: the parameter takes their joint kind from f's next reading on
 widen_parameter(f: Function, i: int, kind: text) := {
 	held = f.kinds[i]
-	if f.result != pending or parameter_key(f, i) not in module.unannotated or kind == pending or held_as(kind, held) { return }
+	if f.result != pending or parameter_slot(f, i) not in module.unannotated or kind == pending or held_as(kind, held) { return }
 	joint = joint_kind(held, kind)
-	if joint in type_bytes or joint in references { f.widened[parameter_key(f, i)] = joint }
+	if joint in type_bytes or joint in references { f.widened[parameter_slot(f, i)] = joint }
 }
 
 ## closures (Rust's lowering: src/lowering/definitions/closures.rs)
@@ -1643,7 +1643,7 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.runtime and body.intrinsics {
 		return call(body, module.runtime[name_of(n#1)], items_of(n)[1..])
 	}
-	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test(body, n#2, n#3) }
+	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test_code(body, n#2, n#3) }
 	# a match no case takes: `switch_no_case("label": value)` ends the run in no_case_<label>, which Rust's run reports
 	# as "no case for label"
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") {
@@ -1670,7 +1670,7 @@ def group_expression(body: Body, n: any): list {
 		# floor_quotient takes ints only
 		if word == "floor_quotient" and #n == 3 {
 			values = n[1..].map(x => expression_code(body, x))
-			if values.any(value => value#1 != "int") { return floored(operation(body, "/", values#1, values#2)) }
+			if values.any(value => value#1 != "int") { return floored(operation_code(body, "/", values#1, values#2)) }
 		}
 		return call(body, module.runtime[word], items_of(n)[1..])
 	}
@@ -1766,7 +1766,7 @@ def key_expression(body: Body, n: any): list {
 		sum = left is symbol and (numeric or name_of(left) in body.function.sums)
 		if sum and added#1 == "node" {
 			body.function.sums[name_of(left)] = yes
-			return assignment(body, left, operation(body, "+", target, runtime_call("number_node", [added])))
+			return assignment(body, left, operation_code(body, "+", target, runtime_call("number_node", [added])))
 		}
 		grown = appended(body, left, right)
 		if grown != ø { return grown }
@@ -1774,8 +1774,8 @@ def key_expression(body: Body, n: any): list {
 	if operator == "/=" and left is symbol and name_of(left) in body.declared and body.declared[name_of(left)] == "int" {
 		return assignment(body, left, runtime_call("floor_quotient", [expression_code(body, left), whole(expression_code(body, right))]))
 	}
-	if operator in compiled_compound_ops { return assignment(body, left, operation(body, compiled_compound_ops[operator], expression_code(body, left), expression_code(body, right))) }
-	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression_code(body, left), number_value(1))) }
+	if operator in compiled_compound_ops { return assignment(body, left, operation_code(body, compiled_compound_ops[operator], expression_code(body, left), expression_code(body, right))) }
+	if operator in steps and right == ø { return assignment(body, left, operation_code(body, steps[operator], expression_code(body, left), number_value(1))) }
 	if operator == "-" and left == ø { return negation(body, expression_code(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator == "#" and left == ø { return length_code(expression_code(body, right)) }
@@ -1812,11 +1812,11 @@ def key_expression(body: Body, n: any): list {
 		return refuse("the operator " + operator)
 	}
 	if operator == "#" and left is symbol { return analyzed_element(body, left, right) }
-	operation(body, operator, expression_code(body, left), expression_code(body, right))
+	operation_code(body, operator, expression_code(body, left), expression_code(body, right))
 }
 # `xs#i` of a list whose elements analyzer.warp knows: the element as that kind, else as a node
 def analyzed_element(body: Body, list: any, index: any): list {
-	value = operation(body, "#", expression_code(body, list), expression_code(body, index))
+	value = operation_code(body, "#", expression_code(body, list), expression_code(body, index))
 	kind = analyzed_element_kind(body.function, name_of(list))
 	if kind == ø or value#1 != "node" { return value }
 	[kind, converted(value, kind)]
@@ -1831,7 +1831,7 @@ def as_rational(value: any): list {
 # -value; a value known only at run time as 0 - value
 def negation(body: Body, value: any): list {
 	if value#1 == "float" { return ["float", value#2 + [op.f64_neg]] }
-	if value#1 == "node" { return operation(body, "-", number_value(0), value) }
+	if value#1 == "node" { return operation_code(body, "-", number_value(0), value) }
 	if value#1 != "int" { refuse("the negation of a " + value#1) }
 	["int", [op.i64_const, 0] + value#2 + [op.i64_sub]]
 }
@@ -1864,7 +1864,7 @@ def logical(body: Body, symbol: text, left: any, right: any): list {
 ## functions
 # the locals of f's body, its parameters first
 # (a function whose first parameter is a class sees that class's fields bare: its locals are named apart)
-new_scope(f: Function): Body := {
+new_body(f: Function): Body := {
 	scope = Body({}, [], [], 0, f.is_runtime, f, [], {}, 0, [], [], [])
 	for i in 0..<#f.parameters { local_index(scope, name_of(f.parameters[i]), f.kinds[i]) }
 	scope
@@ -1875,7 +1875,7 @@ analyzed_program(): bool := module.kinds != ø and "value" in module.kinds
 # the kinds analyzer.warp finds that the emitter holds as found; a node stays the emitter's own reading of the value
 # not int: analyzer.warp's int is warp's unbounded one, a node holding a big number would trap as an i64
 held_kinds = {float: 1, char: 1, text: 1, list: 1}
-held_kind(kind: any): any := if kind in held_kinds then kind else ø
+kept_kind(kind: any): any := if kind in held_kinds then kind else ø
 # whether a value of the emitter's kind `from` is held as the analyzed kind `to` without loss: a character as a text, an
 # int as a float; a node the emitter boxed (`if c then "a" else 2`, analyzer.warp's text) stays one
 held_as(from: text, to: text): bool := from == to or (from == "char" and to == "text") or (from == "int" and to == "float")
@@ -1891,7 +1891,7 @@ analyzed_function(f: Function): any := {
 analyzed_parameter_kind(f: Function, i: int): any := {
 	found = analyzed_function(f)
 	if found == ø or i >= #found["params"] { return ø }
-	held_kind(found["params"][i])
+	kept_kind(found["params"][i])
 }
 # the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
 # `… as text`
@@ -1907,13 +1907,13 @@ cast_kind(n: any): any := {
 analyzed_result_kind(f: Function): any := {
 	found = analyzed_function(f)
 	if found == ø { return ø }
-	held_kind(found["result"])
+	kept_kind(found["result"])
 }
 # (an empty map of locals comes as null: card lib-json)
 analyzed_local_kind(f: Function, name: text): any := {
 	found = analyzed_function(f)
 	if found == ø or found["locals"] == ø or name not in found["locals"] { return ø }
-	held_kind(found["locals"][name])
+	kept_kind(found["locals"][name])
 }
 # the kind of the elements analyzer.warp found for f's list `name`, if the emitter unboxes it from a node
 unboxed_element_kinds = {float: 1, text: 1, list: 1}
@@ -1938,7 +1938,7 @@ compile_function(f: Function, argument_kinds: any): any := {
 }
 # an unannotated parameter takes the kind of its first call's argument joined with those of every literal any call
 # passes it: `binding_powers("=")` (a char) and `binding_powers("to")` make a text parameter, which a node converts to
-parameter_key(f: Function, i: int): text := f.name + "·" + i
+parameter_slot(f: Function, i: int): text := f.name + "·" + i
 parameter_joint(a: text, b: text): text := if (a == "char" and b == "text") or (a == "text" and b == "char") then "text" else joint_kind(a, b)
 literal_kind(n: any): any := {
 	if n is bool { return "bool" }
@@ -1950,7 +1950,7 @@ def collect_literal_arguments(n: any) {
 	if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and name_of(n#1) in module.functions {
 		for i in 1..<#n {
 			kind = literal_kind(n#(i + 1))
-			slot = parameter_key(module.functions[name_of(n#1)], i - 1)
+			slot = parameter_slot(module.functions[name_of(n#1)], i - 1)
 			if kind != ø { module.literal_arguments[slot] = (if slot in module.literal_arguments then module.literal_arguments[slot] else []) + [kind] }
 		}
 	}
@@ -1969,10 +1969,10 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		if annotation == ø { annotation = analyzed_parameter_kind(f, i) }
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
-		if parameter_key(f, i) in module.literal_arguments {
-			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
+		if parameter_slot(f, i) in module.literal_arguments {
+			for kind in module.literal_arguments[parameter_slot(f, i)] { given = parameter_joint(given, kind) }
 		}
-		if annotation == ø { module.unannotated[parameter_key(f, i)] = yes }
+		if annotation == ø { module.unannotated[parameter_slot(f, i)] = yes }
 		parameter_kinds += [if annotation == ø then given else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
@@ -1982,9 +1982,9 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	widened = -1
 	while widened != #f.widened.keys {
 		widened = #f.widened.keys
-		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f, i) in f.widened then f.widened[parameter_key(f, i)] else parameter_kinds[i])
+		f.kinds = range_list(#parameter_kinds).map(i => if parameter_slot(f, i) in f.widened then f.widened[parameter_slot(f, i)] else parameter_kinds[i])
 		f.result = pending
-		first = new_scope(f)
+		first = new_body(f)
 		result = expression_code(first, f.body)#1
 		for kind in first.returned { result = joint_kind(result, kind) }
 	}
@@ -2001,7 +2001,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 # the last reading of f, every call's result known but those of functions still compiling; a function that called
 # one of those is read again once every function is compiled (module.rereads)
 body_code(f: Function) := {
-	scope = new_scope(f)
+	scope = new_body(f)
 	value = expression_code(scope, f.body)
 	f.code = if f.gives_nothing then value#2 + [ref_null, gc.node] else converted(value, f.result)
 	f.locals = scope.kinds[(#f.parameters)..]

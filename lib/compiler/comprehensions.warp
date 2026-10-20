@@ -46,7 +46,7 @@ qualifiers(clause: Node, rest: list): any := match clause {
 }
 
 # the clauses nested in order around `inner`
-looped(clauses: list, inner: Node): Node := {
+looped_clauses(clauses: list, inner: Node): Node := {
 	body = inner
 	for i in #clauses down to 1 {
 		clause = clauses#i
@@ -65,7 +65,7 @@ comprehension(items: list): any := {
 	if clauses == ø { return ø }
 	made = fresh_name(made_word, fresh_number())
 	appended = Key(made, Op.AddAssign, List([words_phrase(items[0 .. at - 1])], Bracket.Square, Separator.Space))
-	List([Key(made, Op.Assign, ø), looped(clauses, appended), made], Bracket.Round, Separator.Semicolon)
+	List([Key(made, Op.Assign, ø), looped_clauses(clauses, appended), made], Bracket.Round, Separator.Semicolon)
 }
 
 # `sum(x * x for x in xs)` as `sum([x * x for x in xs])`, else n
