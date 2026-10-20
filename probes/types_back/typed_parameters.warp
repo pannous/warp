@@ -1,0 +1,16 @@
+# parameter types the compiler's own sources use (card types-back): plural type words, maps and type aliases reach
+# emitter.warp's core: WARP_SELF_HOSTED=1 WARP_EMIT_REFUSALS=/dev/stderr warp typed_parameters.warp refuses nothing
+type Name = text
+type LocalIndex = int
+count_bytes(code: ints): int := #code
+first_name(names: texts): Name := names#1
+lookup(table: map, key: Name): int := table[key]
+apply_to(f: function, x: LocalIndex): LocalIndex := f(x)
+both(a: bool, b: bool): bool := a and b
+items_of(xs: list): int := #xs
+print count_bytes([1, 2, 3])
+print first_name(["a", "b"])
+print lookup({a: 7}, "a")
+print apply_to(x => x * 2, 4)
+print both(yes, no)
+print items_of([1, "a"])

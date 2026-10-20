@@ -190,10 +190,11 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # bare cases; sum_types the classes with bare cases or subclasses, which `x is T` tests outside the core (card
 # pure-lane-shape)
 # counts_fuel: the program said `use fuel`
+# aliases: the type each type alias names, `type Name = text`, by its name
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; aliases: any = {}; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
 
 module = Module({}, [])
 
@@ -807,8 +808,11 @@ def runtime_call(name: text, values: any): list { call_values(module.runtime[nam
 base_class_layers = ["extends", "inherited_from"]
 collect_types(n: any): any := {
 	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2, value_of(n)#3) }
+	if is_type_alias(n) { return module.aliases[value_of(key_of(n))#2#2] = name_of(value_of(n)) }
 	if is_group(n) { for x in n { collect_types(x) } }
 }
+# `type Name = text`: a declaration of no body naming another type
+is_type_alias(n: any): bool := type(n) is key and op_of(n) == "=" and type(key_of(n)) is key and key_of(key_of(n)) == symbol(opaque_word) and kind_of(value_of(key_of(n))) == "type" and value_of(key_of(n))#3 == ø and value_of(n) is symbol
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" {
 		module.class_defaults[name#2] = field_defaults(body)
@@ -1733,6 +1737,8 @@ def key_expression(body: Body, n: any): list {
 		grown = appended(body, left, value_of(right))
 		if grown != ø { return grown }
 	}
+	# a type alias names its type for the annotations, which collect_types read
+	if is_type_alias(n) { return [no_kind, []] }
 	if operator in assignment_operators { return assignment(body, left, expression_code(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration_code(body, right) }
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
@@ -1898,8 +1904,8 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 declared_result(f: Function): any := cast_kind(f.body)
 cast_kind(n: any): any := {
 	if type(n) is key and op_of(n) == "as" and value_of(n) is symbol {
-		word = name_of(value_of(n))
-		return if word in type_bytes or word in references then word else "node"
+		kind = annotated_kind(name_of(value_of(n)))
+		return if kind in type_bytes or kind in references then kind else "node"
 	}
 	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
 	cast_kind(n#(#n))
@@ -1960,8 +1966,17 @@ def collect_literal_arguments(n: any) {
 	}
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
-# the annotations of a parameter held as a node: any value, a function, a type value `int`
-node_annotations = ["any", "function", "type"]
+# the annotations of a parameter held as a node: any value, a function, a type value `int`, a map
+node_annotations = ["any", "function", "type", "map"]
+# the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
+# plural (`ints`, `texts`, `Points`)
+annotated_kind(word: text): text := {
+	while word in module.aliases { word = module.aliases[word] }
+	if word in node_annotations or word in module.classes { return "node" }
+	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
+	word
+}
+names_a_type(word: text): bool := word in type_bytes or word in references or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: any): any := {
 	placed(f)
 	parameter_kinds = []
@@ -1974,7 +1989,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
 		}
 		if annotation == ø { module.unannotated[parameter_key(f, i)] = yes }
-		parameter_kinds += [if annotation == ø then given else if annotation in node_annotations or annotation in module.classes then "node" else annotation]
+		parameter_kinds += [if annotation == ø then given else annotated_kind(annotation)]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds
