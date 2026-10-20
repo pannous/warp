@@ -171,7 +171,9 @@ impl fmt::Display for Diagnostic {
 		write!(f, "{}", self.message)?;
 		// 0:0 is no position: a diagnostic of something written nowhere in the source
 		if self.line > 0 {
-			write!(f, " at {}", crate::compiler::meta::place_text(self.file.as_deref(), self.line, self.column))?;
+			// a position outside the program names its file: one recorded while a used file is parsed is in that file
+			let file = self.file.clone().or_else(|| compile_context::read(|context| context.parsed_file.clone()));
+			write!(f, " at {}", crate::compiler::meta::place_text(file.as_deref(), self.line, self.column))?;
 		}
 		if let Some(fix) = &self.fix {
 			write!(f, "; fix: {}", fix)?;

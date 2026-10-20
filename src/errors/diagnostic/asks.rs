@@ -49,6 +49,8 @@ pub struct Ask {
 	pub fallback: Fallback,
 	pub line: usize,
 	pub column: usize,
+	/// The used file the position is in; None in the program
+	pub file: Option<String>,
 }
 
 impl Ask {
@@ -62,6 +64,7 @@ impl Ask {
 			fallback,
 			line: 0,
 			column: 0,
+			file: None,
 		}
 	}
 
@@ -73,9 +76,13 @@ impl Ask {
 		Ask { line, column, ..self }
 	}
 
+	/// At a recorded position, with the used file it is in
+	pub fn at_place(self, place: &crate::compiler::meta::LineInfo) -> Self {
+		Ask { line: place.line_nr, column: place.column, file: place.file.clone(), ..self }
+	}
+
 	pub fn at_node(self, node: &Node) -> Self {
-		let (line, column) = position(node).unwrap_or_default();
-		self.at(line, column)
+		self.at_place(&line_info(node).unwrap_or_default())
 	}
 
 	/// The diagnostic: the question, the default taken (or none), and how to say it explicitly
@@ -95,9 +102,15 @@ impl Ask {
 			}
 		};
 		// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
-		let diagnostic =
-			Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), ..Default::default() }
-				.about(&self.topic, &self.question);
+		let diagnostic = Diagnostic {
+			message,
+			line: self.line,
+			column: self.column,
+			file: self.file.clone(),
+			fix: Some(fix),
+			..Default::default()
+		}
+		.about(&self.topic, &self.question);
 		let fixes = self.readings.iter().map(|reading| {
 			reading
 				.fix
