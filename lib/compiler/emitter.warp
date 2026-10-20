@@ -1188,7 +1188,7 @@ placed_arguments(names: any, arguments: any): any := {
 	for argument in arguments {
 		if is_named_argument(argument, names) {
 			name = name_of(key_of(argument))
-			at = range_list(#names).filter(i => names[i] == name)#1
+			at = names.index_of(name) - 1
 			while #slots <= at { slots += [ø] }
 			if slots[at] != ø { return ø }
 			slots[at] = [value_of(argument)]
