@@ -124,16 +124,16 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 	result = fresh_name(word, number)
 	if word == "fold" { return statements([set_to(result, extras#1), for_each(item, list, [set_to(result, apply([result, item]))]), result]) }
 	called = apply([item])
-	if word == "map" { return statements([set_to(result, List([], Bracket.Square, Separator.Comma)), for_each(item, list, [grown(result, called)]), result]) }
-	if word == "filter" { return statements([set_to(result, List([], Bracket.Square, Separator.Comma)), for_each(item, list, [if_block(called, [grown(result, item)])]), result]) }
-	if word == "find" {
-		searching = fresh_name("searching", number)
-		found = [set_to(result, item), set_to(searching, no)]
-		return statements([set_to(result, ø), set_to(searching, yes), for_each(item, list, [if_block(Key(searching, Op.And, called), found)]), result])
+	gathered = List([], Bracket.Square, Separator.Comma)
+	searching = fresh_name("searching", number)
+	match word {
+		"map": statements([set_to(result, gathered), for_each(item, list, [grown(result, called)]), result])
+		"filter": statements([set_to(result, gathered), for_each(item, list, [if_block(called, [grown(result, item)])]), result])
+		"find": statements([set_to(result, ø), set_to(searching, yes), for_each(item, list, [if_block(Key(searching, Op.And, called), [set_to(result, item), set_to(searching, no)])]), result])
+		"any": statements([set_to(result, no), for_each(item, list, [if_block(called, [set_to(result, yes)])]), result])
+		"all": statements([set_to(result, yes), for_each(item, list, [if_block(Key(ø, Op.Not, called), [set_to(result, no)])]), result])
+		_: statements([set_to(result, ø), for_each(item, list, [set_to(result, called)]), result])
 	}
-	if word == "any" { return statements([set_to(result, no), for_each(item, list, [if_block(called, [set_to(result, yes)])]), result]) }
-	if word == "all" { return statements([set_to(result, yes), for_each(item, list, [if_block(Key(ø, Op.Not, called), [set_to(result, no)])]), result]) }
-	statements([set_to(result, ø), for_each(item, list, [set_to(result, called)]), result])
 }
 
 ## the program's functions and values
