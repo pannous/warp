@@ -101,7 +101,7 @@ enum_type(name: text, cases: list): any := {
 
 # `Color.Red` of a case Color declares: Red
 case_of(owner: Node, case: Node, n: Node, enums: any): Node := {
-	if not is_name(owner) or not is_name(case) or not (name_of(owner) in enums) { return n }
+	if not is_name(owner) or not is_name(case) or name_of(owner) not in enums { return n }
 	if name_of(case) in enums[name_of(owner)] then case else n
 }
 
@@ -142,7 +142,7 @@ case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): 
 	if target_name in spelled_enums { return n }
 	if target_name in enums { return case_at(value, target_name, enums) }
 	enum_name = type_of(value, enums, subjects)
-	if enum_name == ø or enum_name in spelled_enums or not (target_name in count_types) { return n }
+	if enum_name == ø or enum_name in spelled_enums or target_name not in count_types { return n }
 	case_number(value, enums[enum_name], count_types[target_name], enums)
 }
 

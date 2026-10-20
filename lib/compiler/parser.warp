@@ -1950,7 +1950,7 @@ def time_unit_at(p, at: int) {
 	end = at
 	while end < p.n and (is_alphanumeric(p.code[end]) or p.code[end] == '_') { end = end + 1 }
 	word = p.code[at .. end]
-	if not (word in TIME_UNITS) { return ø }
+	if word not in TIME_UNITS { return ø }
 	after = end
 	while is_at(p.code, after, ' ', p.n) { after = after + 1 }
 	starts_entry = is_at(p.code, after, ':', p.n) or (is_at(p.code, after, '=', p.n) and not is_at(p.code, after + 1, '=', p.n))

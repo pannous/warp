@@ -34,7 +34,7 @@ declarations_used(statements: any, folder: text, seen: any): list := {
 	declarations = []
 	for statement in statements {
 		file = file_used(statement, folder)
-		if file != ø and not (file in seen) {
+		if file != ø and file not in seen {
 			seen += [file]
 			used = statements_in(plain_node(parsed(file_text(file))))
 			inner = declarations_used(used, folder_of(file), seen)

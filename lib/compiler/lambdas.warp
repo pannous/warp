@@ -162,7 +162,7 @@ bound_target(target: Node, found: list): list := match target {
 # every name the node mentions, each once, in order
 mentioned_names(n: any, found: list): list := {
 	if n is symbol {
-		if not (name_of(n) in found) { found += [name_of(n)] }
+		if name_of(n) not in found { found += [name_of(n)] }
 		return found
 	}
 	for part in parts_of(n) { found = mentioned_names(part, found) }
@@ -197,7 +197,7 @@ lowered_lambdas(n: any, locals: list, lowering: Lowering): any := {
 
 # a function of the program with parameters, named where a value goes: its closure; one without stays its bare call
 function_value(name: text, n: Node, locals: list, lowering: Lowering): Node := {
-	if name in locals or not (name in lowering.arities) or lowering.arities[name] == 0 { return n }
+	if name in locals or name not in lowering.arities or lowering.arities[name] == 0 { return n }
 	call_node(symbol("closure_new"), [n])
 }
 
@@ -243,7 +243,7 @@ lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
 	parameters = written_parameters(arrow_parameters(arrow))
 	names = parameters.map(parameter_word)
 	body = arrow_result(arrow)
-	captured = mentioned_names(body, []).filter(name => name in locals and not (name in names)).map(name => symbol(name))
+	captured = mentioned_names(body, []).filter(name => name in locals and name not in names).map(name => symbol(name))
 	name = lifted_prefix + fresh_number()
 	inner = captured.map(c => name_of(c)) + names + names_bound(body, [])
 	lowering.arities[name] = #captured + #names

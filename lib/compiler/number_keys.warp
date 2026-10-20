@@ -80,7 +80,7 @@ names_assigned(n: Node): list := {
 # the maps a function body sees: those around it it neither takes nor assigns, and its own
 seen_in(parts: list, maps: list): list := {
 	own = parts#1 + names_assigned(parts#2)
-	maps.filter(name => not (name in own)) + map_variables(parts#2)
+	maps.filter(name => name not in own) + map_variables(parts#2)
 }
 
 is_map(n: Node, maps: list): bool := match n {

@@ -77,7 +77,7 @@ with_reached(program: any, module: text, in_front: bool): any := {
 	program = bottom_up(program, n => aliased_call(n, aliases, own_names))
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), any other definition replaces the module's
-	slices = definition_slices(module).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
+	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program)
@@ -85,7 +85,7 @@ with_reached(program: any, module: text, in_front: bool): any := {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
-			if slice#1 == word and not (slice#2 in reached) {
+			if slice#1 == word and slice#2 not in reached {
 				slice_node = plain_node(parsed(slice#2))
 				reached[slice#2] = statements_in(slice_node)
 				wanted += symbol_words(slice_node)
@@ -118,7 +118,7 @@ module_aliases(source: text): any := {
 aliased_call(n: any, aliases: any, own_names: any): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
-	if not (called in aliases) or called in own_names { return n }
+	if called not in aliases or called in own_names { return n }
 	group_like(n, [symbol(aliases[called])] + items_of(n)[1 ..])
 }
 
@@ -133,7 +133,7 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 	sources = []
 	for statement in statements {
 		module = use_target(statement)
-		if module is symbol and file_used(statement, folder) == ø and not (name_of(module) in seen) {
+		if module is symbol and file_used(statement, folder) == ø and name_of(module) not in seen {
 			seen += [name_of(module)]
 			source = file_text(std_module_path(name_of(module)))
 			if source != ø {
