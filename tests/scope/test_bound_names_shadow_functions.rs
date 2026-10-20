@@ -46,3 +46,10 @@ fn a_lambda_captures_a_local_named_like_a_function() {
 fn a_loop_variable_named_like_a_function_is_indexed() {
 	is!("call(n: int): int := n\nnamed(name: text): text := name\nf(xs: list): text := { out = \"\"; for call in xs { out = named(call#1) }; out }\nf([[\"a\", 1]])", "a");
 }
+
+/// A lambda kept in a local of one function is that function's, whatever another body's same-named variable holds
+/// (card standalone: emitter.warp's `part = i => …; part(0)` beside `for part in parts` over function values elsewhere)
+#[test]
+fn a_local_lambda_is_called_beside_a_same_named_function_holder() {
+	is!("twice(x) := x * 2\nall_parts(fs: list): int := { total = 0; for part in fs { total += part(1) }; total }\nboth(k: int): int := { part = i => i + k; part(0) + part(1) }\nall_parts([twice]) + both(10)", 23);
+}

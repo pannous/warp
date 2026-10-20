@@ -795,12 +795,13 @@ impl Lifting {
 	}
 
 	fn is_variable(&self, name: &str, bound: &HashSet<String>) -> bool {
-		bound.contains(name) || (self.variables.contains(name) && !self.functions.contains(name))
+		bound.contains(name) || (self.variables.contains(name) && self.function_named(name).is_none())
 	}
 
-	/// A parameter, or a variable assigned a function value
+	/// A parameter, or a variable assigned a function value; a function nested in an enclosing body is none
+	/// (`part = i => …; part(0)` beside another body's `for part in …` over function values)
 	fn may_hold_function(&self, name: &str, bound: &HashSet<String>) -> bool {
-		bound.contains(name) || (self.function_variables.contains(name) && !self.functions.contains(name))
+		bound.contains(name) || (self.function_variables.contains(name) && self.function_named(name).is_none())
 	}
 
 	fn walk(&mut self, node: Node, bound: &HashSet<String>) -> Node {
@@ -889,7 +890,7 @@ impl Lifting {
 			&& items.len() > 1
 			&& head_name
 				.as_ref()
-				.is_some_and(|name| self.function_variables.contains(name) && !self.functions.contains(name));
+				.is_some_and(|name| self.may_hold_function(name, &HashSet::new()));
 		let is_call = (bracket == Bracket::Round && separator == Separator::None) || braceless_call;
 		// `sqrt(angle)` parses as `√ (angle)`: the group of a local is its value
 		if let (true, [_], Some(name)) = (bracket == Bracket::Round, items.as_slice(), &head_name) {
