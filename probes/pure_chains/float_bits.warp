@@ -1,0 +1,4 @@
+// float_bits(x): the IEEE bits of a float, an int
+print(float_bits(1.5))
+x = -0.25
+print(float_bits(x))

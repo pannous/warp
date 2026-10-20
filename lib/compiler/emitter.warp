@@ -711,7 +711,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte"}
+	trim: "node_trim", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error", ord: "first_code_point", bytes: "text_byte_list", byte_size: "node_bytes", byte_at: "text_byte", float_bits: "bits_of_float"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their

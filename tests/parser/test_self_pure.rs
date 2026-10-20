@@ -427,4 +427,5 @@ fn parser_words_run_pure() {
 	runs_pure("ord", &chain("ord"), "97\n252\n122\n98");
 	runs_pure("std_module_of_a_used_file", &chain("std_in_used/main"), "6");
 	runs_pure("text_bytes", &chain("text_bytes"), "[97 195 188]\n[121]\n2\n2\n16\n97\n98");
+	runs_pure("float_bits", &chain("float_bits"), "4609434218613702656\n-4625196817309499392");
 }
