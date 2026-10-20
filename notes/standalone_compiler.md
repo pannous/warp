@@ -83,7 +83,8 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
    ("the module's own code keeps calling its own play"), file and file alike: a used file's own code calls its own
    word; the error only when a file that sees both calls the word itself. No renames (card file-own-words).
 2. Runtime words lowered by warp: runtime.warp through `lowered_program` (folder lib/, so uses.warp splices its
-   `use case_tables`) runs (cold 2 min), with warnings that `Round`, `Add`, `Define` name nothing (enum variants
+   `use case_tables`; since card runtime-split its parts are `use "runtime/<part>.warp"` beside it, so the folder is
+   lib/compiler and uses.warp must also find a std module name in lib/: card uses-std-modules) runs (cold 2 min), with warnings that `Round`, `Add`, `Define` name nothing (enum variants
    written bare in runtime.warp: warp-compiler-enums). Whether emitter.warp emits the same from it as from Rust's
    lowering is the next probe. Cost: lowered once per compiler run; if that is slow, the general fix is lowering
    only the runtime words a program reaches (as the prelude words are, card prelude-for-pure), never a cached JSON.

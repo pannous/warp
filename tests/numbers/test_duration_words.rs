@@ -4,7 +4,7 @@
 use warp::time::calendar::Duration;
 use warp::*;
 
-const RUNTIME_WORDS: &str = "lib/compiler/runtime.warp";
+const RUNTIME_WORDS: &str = "lib/compiler/runtime/durations.warp";
 const DURATIONS_SECTION: &str = "## durations";
 /// The section ends where the next starts, after an empty line: its own header goes on over several `##` lines
 const NEXT_SECTION: &str = "\n\n## ";
@@ -35,7 +35,7 @@ unboxed_int(n: any): int := 0
 
 fn duration_words() -> String {
 	let source = std::fs::read_to_string(RUNTIME_WORDS).unwrap();
-	let section = source.split_once(DURATIONS_SECTION).expect("runtime.warp has a durations section").1;
+	let section = source.split_once(DURATIONS_SECTION).expect("runtime/durations.warp has a durations section").1;
 	let section = section.split_once(NEXT_SECTION).map_or(section, |(words, _)| words);
 	format!("{STAND_INS}\n# {}", section.replace("fail()", "0"))
 }
