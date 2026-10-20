@@ -1,0 +1,152 @@
+# Number keys of a map (card integer-key, user decision P34; Rust twin: src/lowering/collections/number_keys.rs): a
+# variable that starts as the empty map `{}`, or as a literal with number keys `{1: 5}`, is keyed by texts: `d[1] = "a"`
+# sets the entry "1", `d[1]` reads it, `d[k]` of a k known only at run time is `d[string(k)]`, and so is the key of
+# `k in d`, `d.remove(k)` and the other key words. On any other value `d[1]` stays a position. A function definition
+# is its own scope: its parameters and the names it assigns are its own, its `out = {}` makes its own map.
+# parser.warp keeps no WrittenIndex: a number index on such a map, `d#2`, reads as the subscript `d[1]` it lowers to.
+use "walk.warp"
+use "scope.warp"
+
+# the word that makes a key of a value known only at run time
+key_text_word = "string"
+# the words `word(map, key, …)` that find an entry by its key
+key_words = ["collection_contains", "collection_position", "map_get_or", "map_without", "removed_value"]
+# the declared types a map variable may carry, `m: map = {}`
+map_type_words = ["map", "dict"]
+
+is_entry_key(item: Node): bool := match item {
+	Key(written, Op.Colon, value): yes
+	_: no
+}
+is_number_entry(item: Node): bool := match item {
+	Key(written, Op.Colon, value): written is number
+	_: no
+}
+
+# `{}` (behind the opaque word, walk.warp is_empty_map) or `{1: 5, 2: 6}`: entries only, at least one keyed by a
+# number
+is_number_keyed(value: Node): bool := if is_empty_map(value) then yes else match value {
+	List(items, Bracket.Curly, separator): items.all(is_entry_key) and items.any(is_number_entry)
+	_: no
+}
+
+# `m` of `m = …` and of `m: map = …`, else ø
+assigned_name(target: Node): any := match target {
+	Symbol(name): name
+	Key(name, Op.Colon, declared): { if head_word(declared) in map_type_words then binding_name(name) else ø }
+	_: ø
+}
+
+# the name a map literal with number keys is assigned to, else ø
+map_assigned(n: Node): any := match n {
+	Key(target, Op.Assign, value): { if is_number_keyed(value) then assigned_name(target) else ø }
+	_: ø
+}
+
+# `f(x) := body`, `f(x): T := body`: the head's parameters and the body
+definition_parts(n: Node): any := match n {
+	Key(head, Op.Define, body): [parameters_of(called_head(head)), body]
+	_: ø
+}
+called_head(head: Node): Node := match head {
+	Key(called, Op.Colon, result): called
+	_: head
+}
+
+# the map variables of one scope, not those of the functions it defines
+map_variables(n: Node): list := {
+	if definition_parts(n) != ø { return [] }
+	found = []
+	name = map_assigned(n)
+	if name != ø { found += [name] }
+	for part in parts_of(n) { found += map_variables(part) }
+	found
+}
+
+# the names a body assigns
+names_assigned(n: Node): list := {
+	found = []
+	match n {
+		Key(target, Op.Assign, value): {
+			name = assigned_name(target)
+			if name != ø { found += [name] }
+		}
+		_: ø
+	}
+	for part in parts_of(n) { found += names_assigned(part) }
+	found
+}
+
+# the maps a function body sees: those around it it neither takes nor assigns, and its own
+seen_in(parts: list, maps: list): list := {
+	own = parts#1 + names_assigned(parts#2)
+	maps.filter(name => not (name in own)) + map_variables(parts#2)
+}
+
+is_map(n: Node, maps: list): bool := match n {
+	Symbol(name): name in maps
+	_: no
+}
+
+# the key a value names: a written text or character as it is, a number its digits, anything else its text
+key_text_of(written: Node): Node := {
+	if written is text or written is codepoint { return written }
+	if written is number { return "" + written }
+	call_of(key_text_word, [written])
+}
+
+# `d#2`, `d#(k+1)` of a map d: the entry keyed by the subscript's text
+keyed_index(subscript: Node, maps: list): Node := match subscript {
+	Key(written, Op.Add, one): { if one == 1 then Key(key_text_of(number_keyed(written, maps)), Op.Add, 1) else number_keyed(subscript, maps) }
+	_: { if subscript is number then Key(key_text_of(subscript - 1), Op.Add, 1) else number_keyed(subscript, maps) }
+}
+
+# `d.remove(k)` of a map d removes the entry keyed by k's text
+keyed_method(called: Node, maps: list): Node := match called {
+	List(items, bracket, separator): {
+		if #items == 2 and items#1 == symbol("remove") then List([items#1, key_text_of(number_keyed(items#2, maps))], bracket, separator) else number_keyed(called, maps)
+	}
+	_: number_keyed(called, maps)
+}
+
+# `m = {1: 5}` → `m = {"1": 5}`
+text_keyed(literal: Node): Node := match literal {
+	List(items, bracket, separator): List(items.map(text_keyed_entry), bracket, separator)
+	_: literal
+}
+text_keyed_entry(item: Node): Node := match item {
+	Key(written, Op.Colon, value): Key(key_text_of(written), Op.Colon, value)
+	_: item
+}
+
+# `word(d, k, …)` of a key word: the key k's text
+keyed_word_call(items: list, maps: list): bool := #items >= 3 and items#1 is symbol and name_of(items#1) in key_words and is_map(items#2, maps)
+word_call_keyed(items: list, maps: list): list := {
+	keyed_items = items.map(x => number_keyed(x, maps))
+	keyed_items#3 = key_text_of(keyed_items#3)
+	keyed_items
+}
+
+number_keyed(n: Node, maps: list): Node := {
+	parts = definition_parts(n)
+	if parts != ø {
+		return match n {
+			Key(head, op, body): Key(head, op, number_keyed(body, seen_in(parts, maps)))
+			_: n
+		}
+	}
+	match n {
+		Key(target, Op.Hash, subscript): { if is_map(target, maps) then Key(target, Op.Hash, keyed_index(subscript, maps)) else children(n, x => number_keyed(x, maps)) }
+		Key(target, Op.Dot, called): { if is_map(target, maps) then Key(target, Op.Dot, keyed_method(called, maps)) else children(n, x => number_keyed(x, maps)) }
+		Key(target, Op.Assign, value): {
+			name = assigned_name(target)
+			if name != ø and name in maps and is_number_keyed(value) then Key(target, Op.Assign, text_keyed(value)) else children(n, x => number_keyed(x, maps))
+		}
+		List(items, Bracket.Round, separator): {
+			if keyed_word_call(items, maps) then List(word_call_keyed(items, maps), Bracket.Round, separator) else children(n, x => number_keyed(x, maps))
+		}
+		_: children(n, x => number_keyed(x, maps))
+	}
+}
+
+number_keys(program: any): any := number_keyed(program, map_variables(program))

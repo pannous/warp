@@ -638,23 +638,19 @@ impl Node {
 	pub fn visit<'a>(&'a self, action: &mut dyn FnMut(&'a Node)) {
 		let node = self.drop_meta();
 		action(node);
-		match node {
-			Key(left, _, right) => {
-				left.visit(action);
-				right.visit(action);
-			}
-			List(items, _, _) => items.iter().for_each(|item| item.visit(action)),
+		node.visited_children().into_iter().for_each(|child| child.visit(action));
+	}
+
+	/// The children `visit` descends into (Meta dropped): both sides of a key, a list's items, a class's code
+	pub fn visited_children(&self) -> Vec<&Node> {
+		match self.drop_meta() {
+			Key(left, _, right) => vec![left, right],
+			List(items, _, _) => items.iter().collect(),
 			Type { body, .. } => match body.drop_meta() {
-				List(items, _, _) => {
-					items.iter().filter(|item| is_class_code(item)).for_each(|item| item.visit(action))
-				}
-				single => {
-					if is_class_code(single) {
-						single.visit(action)
-					}
-				}
+				List(items, _, _) => items.iter().filter(|item| is_class_code(item)).collect(),
+				single => [single].into_iter().filter(|item| is_class_code(item)).collect(),
 			},
-			_ => {}
+			_ => vec![],
 		}
 	}
 

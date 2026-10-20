@@ -18,7 +18,10 @@ Fix the top refusal (or any wrong output first), repeat; suite counts only at mi
 Counts: 21 ran / 17 right (morning) → 31 / 30 (afternoon). The pure lane's passes come first in lib/compiler/passes.warp
 `pure_passes`, around the twinned `passes` Rust drives by index: definitions (def/fun), clauses (pattern clauses),
 multiple_assignments, then phrase_blocks ({print x}), for_loops (for → while), ranges (range values), list_methods
-(xs.push). Not core, skipped: `on` handlers, `stored` tables, shaders, canvas.
+(xs.push), number_keys (`m = {}; m[1] = 2` keys m by the text "1", P34; plain_node keeps the empty `{}` behind
+the opaque word for it, every other empty group stays ø). A call leaving out trailing parameters takes their
+defaults in emitter.warp (`f(x, y = 2)`, runtime words alike: `slice(xs, 1)`); a default reading another parameter
+is refused. Not core, skipped: `on` handlers, `stored` tables, shaders, canvas.
 `use` (card pure-follows-use): the stage request is ["pure", source, folder] (self_hosted.rs program_folder: the
 program file's folder, else the working directory); lib/compiler/uses.warp parses each used file of that folder on
 its own and splices its declarations (src/modules/declarations.rs is_declaration's forms, not its main-level
@@ -30,7 +33,9 @@ Traps writing passes in warp (cards match-silently and others):
 - a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
   function: pick names no lib/compiler file defines. emitter.warp words using `values` (a parameter),
   `field` (a loop variable) and `instance_of` (runtime.warp's word too) even overflowed the stack, with no message;
-  renaming the three cured it (which one did it is untested; `values` is the likeliest).
+  renaming the three cured it (which one did it is untested; `values` is the likeliest). A parameter `index` in a
+  match subject was even called: `undefined: match in (closure_call_1 index …)` (card parameter-named).
+- a pass word ending in `{ … }` needs `def` (`def f(…): list { … }`): without it the word is undefined.
 - a pass's top-level word named like another file's (for_loops.warp's `named`, `statements_of`, `repeated` were
   parser.warp's) replaces it in every program that uses both, silently: passes.warp's `use` lines broke the front lane
   (card suite-front-c993b941). Before adding a pass, check its words against the other lib/compiler files.
@@ -327,7 +332,8 @@ Readers of the layout (each place a module's result or a value crossing the boun
   before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
   a chunk at a time (iovec at 0, written count at 8, bytes from 16). That is the one edge helper; nothing else
   touches memory. Done (card emitter-prints); the emitter twin compares stdout too (host::with_captured_stdout).
-Runtime words are warp: lib/compiler/runtime.warp, written in idiomatic warp (for loops and all sugar) and lowered by
+Runtime words are warp: lib/compiler/runtime.warp (an index of `use "runtime/<part>.warp"` lines, one idea per part
+in lib/compiler/runtime/, joined by self_hosted.rs runtime_source), written in idiomatic warp (for loops and all sugar) and lowered by
 the same pipeline as any program before emitter.warp sees them (`wasm_module(program, runtime)`; the twin harness
 lowers it with pipeline::lower). emitter.warp handles only lowered forms, never hand-lowered source. The words use a
 handful of intrinsics, one or two instructions each and callable only from runtime words: texts (new_text, copy_text,

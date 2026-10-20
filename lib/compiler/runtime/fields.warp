@@ -1,0 +1,45 @@
+# What `m.name` reads beyond a map's entries: positions, entries, list parts, swizzles
+# whether `m.name` reads a field: m a map or an instance with an entry so named, an entry's key, value or name, a
+# symbol's name
+has_field(m: any, name: text): bool := {
+	if is_null(m) == 1 { return no }
+	if is_position_part(m, name) { return is_meta(m) == 1 }
+	if kind_code(m) == 5 { return text_order(name, "name") == 0 }
+	if node_is_error(m) { return is_error_message(m, name) }
+	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 or text_order(name, "op") == 0 }
+	if is_plain_list(m) { return text_order(name, "bracket") == 0 or text_order(name, "separator") == 0 }
+	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
+	map_index(m, name) > 0
+}
+# `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
+# node_api.rs POSITIONED); any other node without a field of that name has no field line
+positioned_node(n: any, line: int, column: int): any := meta_node(n, line, column)
+# `e.message` of an Error e
+is_error_message(m: any, name: text): bool := node_is_error(m) and text_order(name, "message") == 0
+is_position_part(m: any, name: text): bool := {
+	if text_order(name, "line") != 0 and text_order(name, "column") != 0 { return no }
+	not ((marked_kind(m) == 8 or marked_kind(m) == 6) and map_index(m, name) > 0)
+}
+position_part(m: any, name: text): int := if text_order(name, "line") == 0 then meta_line(m) else meta_column(m)
+# a key that is no instance: `x#2` of a map `{a: 1, b: 2}`
+is_entry(n: any): bool := kind_code(n) == 6 and marked_kind(n) != 6
+# a list that is no map: its fields are the node's parts, `n.bracket` and `n.separator`
+is_plain_list(n: any): bool := kind_code(n) == 8 and marked_kind(n) != 8
+# a swizzle `p.zy` (decision S1): p a list of 2 to 4 numbers holding every component the letters x y z w pick
+swizzle_fits(p: any, letters: text): bool := {
+	if is_null(p) == 1 or kind_code(p) != 8 or marked_kind(p) == 8 { return no }
+	items = unboxed_list(p)
+	if #items < 2 or #items > 4 { return no }
+	for x in items { if is_null(x) == 1 or marked_kind(x) == 257 or (kind_code(x) != 1 and kind_code(x) != 2) { return no } }
+	for i in 0..byte_count(letters) { if letter_component(byte_at(letters, i)) > #items { return no } }
+	yes
+}
+# the place, counted from 1, of the component a letter picks: x 1, y 2, z 3, w 4
+letter_component(b: int): int := if b == 119 then 4 else b - 119
+swizzled_one(p: any, letter: text): any := unboxed_list(p)#letter_component(byte_at(letter, 0))
+swizzled(p: any, letters: text): list := {
+	items = unboxed_list(p)
+	out = new_list(0)
+	for i in 0..byte_count(letters) { out += [items#letter_component(byte_at(letters, i))] }
+	out
+}

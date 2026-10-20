@@ -51,6 +51,8 @@ const EMIT_PROGRAM: &str = concat!(
 );
 /// The runtime words emitter.warp compiles into a module, lowered like a program
 const RUNTIME_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/runtime.warp");
+/// The folder of the compiler's warp files, where runtime.warp's parts are named from
+const COMPILER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler");
 /// The module the host words are imported from
 const HOST_MODULE: &str = "host";
 /// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
@@ -201,7 +203,11 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			None
 		}
 		Err(failure) => Some(Err(crate::node::error(&format!("the self-hosted emitter failed: {failure}")))),
-		Ok(bytes) => {
+		Ok(mut bytes) => {
+			// the Rust front took the program's `use fuel`, so emitter.warp never saw it
+			if let Some(mark) = crate::host::fuel_mark() {
+				wasm_encoder::Section::append_to(&mark, &mut bytes);
+			}
 			let needs_host = imports_from(&bytes, HOST_MODULE);
 			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
 		}
@@ -333,20 +339,29 @@ fn runtime_words() -> Result<String, Node> {
 		})
 }
 
-/// runtime.warp with the modules its `use <name>` lines name in its place, after it: their words become runtime words,
-/// compiled into a module only when called
-fn runtime_source() -> std::io::Result<String> {
+/// runtime.warp with the files its `use` lines name in their place, after it: a module of lib (`use case_tables`) or
+/// one of its parts (`use "runtime/text.warp"`, relative to lib/compiler). Their words become runtime words, compiled
+/// into a module only when called
+pub fn runtime_source() -> std::io::Result<String> {
 	let source = std::fs::read_to_string(RUNTIME_WORDS)?;
 	let mut joined = String::new();
 	let mut used = String::new();
 	for line in source.lines() {
-		match line.strip_prefix("use ") {
-			Some(name) => used += &std::fs::read_to_string(format!("{LIBRARY}/{}.warp", name.trim()))?,
+		match line.strip_prefix("use ").map(str::trim) {
+			Some(name) => used += &std::fs::read_to_string(used_file(name))?,
 			None => joined += line,
 		}
 		joined.push('\n');
 	}
 	Ok(joined + &used)
+}
+
+/// The file of a `use` line of runtime.warp: a quoted path beside runtime.warp, else a module of lib
+fn used_file(name: &str) -> String {
+	match name.strip_prefix('"').and_then(|quoted| quoted.strip_suffix('"')) {
+		Some(path) => format!("{COMPILER}/{path}"),
+		None => format!("{LIBRARY}/{name}.warp"),
+	}
 }
 
 /// The node of the view the stage gives, its data handles the nodes in `handles`; a warp failure is an error node, so the program fails as it should

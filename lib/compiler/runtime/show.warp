@@ -1,0 +1,74 @@
+# Values as they print: the text of any value known only at run time
+# the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
+node_text(n: any): text := match n {
+	ø: char_text("ø")
+	Number(_): number_text(n)
+	Char(_): char_text(unboxed_char(n))
+	Text(_): unboxed_text(n)
+	Symbol(_): unboxed_text(n)
+	Key(_, _, _): key_text(n)
+	True: "yes"
+	False: "no"
+	_: collection_text(n)
+}
+number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
+# a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
+collection_text(n: any): text := {
+	if kind_code(n) == 8 { return list_shown(n) }
+	if node_is_error(n) { return unboxed_text(n) }
+	if kind_code(n) == 18 { return time_text(n) }
+	# a closure: its lambda as written (emitter.warp closure_text_code)
+	if kind_code(n) == 16 { return closure_text(n) }
+	fail()
+}
+# a value as a list shows its items: a text in double quotes, a character in single quotes
+node_code(n: any): text := match n {
+	Char(_): "'" + node_text(n) + "'"
+	Text(_): text_code(unboxed_text(n))
+	_: node_text(n)
+}
+# a one-character text reads as the character it is (src/node/serialization.rs)
+text_code(t: text): text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
+# a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
+quoted_text(t: text): text := {
+	escapes = 0
+	for i in 0..byte_count(t) { escapes += escaped_byte(byte_at(t, i)) }
+	out = new_text(byte_count(t) + escapes + 2)
+	set_byte(out, 0, 34)
+	at = 1
+	for i in 0..byte_count(t) {
+		b = byte_at(t, i)
+		if escaped_byte(b) == 1 {
+			set_byte(out, at, 92)
+			at += 1
+		}
+		set_byte(out, at, b)
+		at += 1
+	}
+	set_byte(out, at, 34)
+	out
+}
+# 1 for the bytes of `"` and `\`, which a quoted text escapes
+escaped_byte(b: int): int := if b == 34 or b == 92 then 1 else 0
+list_text(xs: list): text := "[" + items_text(xs) + "]"
+# the items of a list as a list shows them, a space between: `print a 3` writes its values so
+items_text(xs: list): text := joined_items(xs, " ")
+joined_items(xs: list, joiner: text): text := {
+	inner = ""
+	for x in xs {
+		if #inner > 0 { inner += joiner }
+		inner += node_code(x)
+	}
+	inner
+}
+# `a:1`; a class instance `Point{x:1 y:2}`, its fields a map
+key_text(entry: any): text := {
+	value = key_value(entry)
+	if marked_kind(entry) == 6 { return key_name(entry) + node_text(value) }
+	operator = key_operator(entry)
+	if text_order(operator, ":") == 0 { return key_name(entry) + ":" + node_code(value) }
+	# `y+z`, `y and z`: a word operator between spaces
+	spaced = if is_letter_byte(byte_at(operator, 0)) then " " + operator + " " else operator
+	node_code(entry_key(entry)) + spaced + node_code(value)
+}
+is_letter_byte(b: int): bool := b >= 97 and b <= 122

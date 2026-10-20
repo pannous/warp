@@ -70,7 +70,11 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache: cache-roots b401fc5bb (Ready): runtime.warp raised (trap_detail, returned_error), message as Rust's |
 | gaps: "a block or map holding an instance" is back on main | warp-cache: cache-roots b401fc5bb (Ready): a { } group with a statement beside the instance is a block |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
-| key_meanings: "a int where a list is needed" (survey 2026-10-20 on cache-roots + emitter-twin-fails: 6 refusals) | warp-cache |
-| hex_value: `group ( collection_position` | warp-cache |
-| code_escape: "the unknown name codepoint" | warp-cache |
-| parsed: `group ( caught_error` | warp-self-emitter |
+| pure-only over the used files (prelude-for-pure 2026-10-20, with pure-lane-use): words.warp runs pure; positions.warp, lexer.warp: list comprehension `[count(code_points(line)) for line in split(source, "\n")]` (positions.warp line_widths) has no pure pass (Rust comprehensions.rs) | warp-parsing |
+| shapes.warp, sugar.warp: lambdas, `map(xs, x => …)` / `xs.map(f)`: the pure lane refuses every closure (`group ( map`; Rust lambdas.rs → closure_new) | warp-pure-lambdas |
+| parser.warp pure-only with the prelude: stack overflow in the analysis or emit stage (the passes finish: 368 statements) | warp-self-analyzer, prelude-for-pure |
+| prelude aliases (`values`, `keys`, `is_alnum`: `alias x = y`) not followed in the pure lane (probes/values_keys/class_map.warp) | warp-self-analyzer, prelude-for-pure |
+| key_meanings: "a int where a list is needed" (survey 2026-10-20 on cache-roots + emitter-twin-fails: 6 refusals) | warp-cache: done on parser-roots 2e5233dd70 (Ready), `x as codepoint/integer/string`; survey on it: 3 refusals left, all warp-self-emitter's (caught_error, line_of, column_of) |
+| hex_value: `group ( collection_position` | warp-cache: done on parser-roots 2e5233dd70 (Ready) (runtime.warp collection_position, xs.index_of(x)) |
+| code_escape: "the unknown name codepoint" | warp-cache: done on parser-roots 2e5233dd70 (Ready) (int as codepoint is a char) |
+| parsed: `group ( caught_error` | warp-self-emitter: done on pure-type-tests f07ac4e56c, lands with prelude-for-pure (warp-self-analyzer): emitter.warp's throw keeps the error's message, runtime.warp caught_error/error_of make the Error, `e.message` reads it; a one-statement `try { x } catch …` guards x (tries.warp). parsed's shape runs pure (probes/self_hosting/emitter/core/try_catch.warp). Left: a braceless `raise "…"` statement on the pure lane (card pure-lane-statement), wasm-native traps under try (card self-hosted-try-2) |

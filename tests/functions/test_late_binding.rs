@@ -134,3 +134,11 @@ fn nonlocal_needs_a_variable_of_an_enclosing_def() {
 		"only a function defined with `def inner(){…}`",
 	);
 }
+
+#[test]
+fn field_names_and_entry_keys_are_not_reads_of_a_variable() {
+	is!("class P { n: int }\ndef make(s) := P{n: s}\nn = 1\nfor i in 1 to 2 { n = make(3).n + n }\nn", 7);
+	is!("n = 1; def f(m) := {n: m}; n = 2; f(5).n + n", 7);
+	is!("class P { n: int }; n = 1; def g(p) := p.n; n = 2; g(P{n: 3}) + n", 5);
+	common::fails_with("n=1; def f(c) := c ? n : 0; n=2; f(1)", "f reads n");
+}

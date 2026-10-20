@@ -1,0 +1,5 @@
+// A main variable n beside parser.warp, whose Parser{n: …} field is no read of it (card program-global): want 3
+use "../../lib/compiler/parser.warp"
+n = 1
+for i in 1 to 2 { n = n + written_tree("3").count }
+n

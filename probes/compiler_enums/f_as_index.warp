@@ -1,0 +1,2 @@
+enum Wasm { StructGet, StructNew, RefCast }
+print Wasm.RefCast as index

@@ -1,0 +1,16 @@
+widen(a: type, b: type): type := if a == float or b == float then float else int
+print widen(int, float)
+k = text
+print k == text
+print [int, float, codepoint] contains k
+name(t: type): text := match t {
+	int: "whole"
+	float: "real"
+	_: "other"
+}
+print name(float)
+print "${list}"
+held = {int: 1, float: 2}
+print held[float]
+print i32 == f32
+print rational

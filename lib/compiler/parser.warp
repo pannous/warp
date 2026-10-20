@@ -1223,18 +1223,24 @@ def atom(p) {
 			p.at = p.at + 2
 			return radix_value(p, 2)
 		}
+		number_start = p.at
 		written = decimal_number(p)
 		// two returns and `amount: any`: an `if` of float(…) and int(…), a parameter float elsewhere, make an int beyond
 		// i64 a float (card int-beyond)
 		if written.contains(".") or written.contains("e-") or written.contains("E-") { return with_glued_factor(p, float(written)) }
+		literal = p.code[number_start .. p.at]
+		if not (literal.contains("e") or literal.contains("E")) {
+			duration = with_time_unit(p, int(written))
+			if duration != ø { return duration }
+		}
 		return with_glued_factor(p, int(written))
 	}
 	if c == '"' or c == '\'' { return quoted(p) }
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
 	if is_name_start(c) { return named(p) }
-	// `$a`, a pattern's name hole: `data($a + 0)`
-	if c == '$' and is_name_start(peek(p.code, p.at + 1, p.n)) {
+	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
+	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
 		end = symbol_end(p.code, p.at + 1, p.n)
 		hole = symbol(p.code[p.at .. end])
 		p.at = end
@@ -1474,6 +1480,61 @@ def trailing_attribute(p, marked) {
 	}
 	attributed(name, value, marked)
 }
+
+// The calendar length of each time unit word: [months, days, seconds]
+// Rust twin: time/calendar.rs unit_named
+TIME_UNITS = {"year": [12, 0, 0], "years": [12, 0, 0], "month": [1, 0, 0], "months": [1, 0, 0], "week": [0, 7, 0],
+	"weeks": [0, 7, 0], "day": [0, 1, 0], "days": [0, 1, 0], "hour": [0, 0, 3600], "hours": [0, 0, 3600],
+	"minute": [0, 0, 60], "minutes": [0, 0, 60], "second": [0, 0, 1], "seconds": [0, 0, 1]}
+
+// `1 month`, `24 hours`, `1day`, `1 month 2 days`: an integer followed by a time unit word is a calendar duration, the
+// data view Rust's parser gives it, ["data", "1 month 2 days"] as the duration prints; else ø, nothing read
+// Rust twin: literals/units.rs with_time_unit, following_duration
+def with_time_unit(p, count: int) {
+	unit = time_unit_at(p, p.at)
+	if unit == ø { return ø }
+	length = unit#1.map(part => part * count)
+	p.at = unit#2
+	while true {
+		spaces = p.at
+		while is_at(p.code, spaces, ' ', p.n) { spaces = spaces + 1 }
+		digits = spaces
+		while digits < p.n and is_digit(p.code[digits]) { digits = digits + 1 }
+		following = if spaces > p.at and digits > spaces then time_unit_at(p, digits) else ø
+		if following == ø { break }
+		amount = int(p.code[spaces .. digits])
+		length = (1 to 3).map(i => length#i + following#1#i * amount)
+		p.at = following#2
+	}
+	opaque(["data", duration_text(length)])
+}
+
+// The time unit word at `at` after any spaces: [its length, where it ends], else ø; `{year:1970 month:1}`: a word that
+// starts the next entry or assignment is no unit
+// Rust twin: literals/units.rs time_unit_at, time/calendar.rs unit_after
+def time_unit_at(p, at: int) {
+	while is_at(p.code, at, ' ', p.n) { at = at + 1 }
+	end = at
+	while end < p.n and (is_alphanumeric(p.code[end]) or p.code[end] == '_') { end = end + 1 }
+	word = p.code[at .. end]
+	if not (word in TIME_UNITS) { return ø }
+	after = end
+	while is_at(p.code, after, ' ', p.n) { after = after + 1 }
+	starts_entry = is_at(p.code, after, ':', p.n) or (is_at(p.code, after, '=', p.n) and not is_at(p.code, after + 1, '=', p.n))
+	if starts_entry then ø else [TIME_UNITS[word], end]
+}
+
+// `1 month 2 days`, `3 hours`: a duration's months, days and seconds as Rust's Duration prints them
+// Rust twin: time/calendar.rs Display for Duration
+def duration_text(length) {
+	seconds = length#3
+	amounts = [[length#1, "month"], [length#2, "day"], [seconds /! 3600, "hour"], [seconds % 3600 /! 60, "minute"], [seconds % 60, "second"]]
+	parts = amounts.filter(amount => amount#1 != 0).map(amount => counted_unit(amount#1, amount#2))
+	if parts.length == 0 { return "0 seconds" }
+	parts.join(" ")
+}
+
+def counted_unit(amount: int, unit: text) := if amount == 1 then "1 " + unit else "" + amount + " " + unit + "s"
 
 // `2x` is 2*x, `500ms` is 500*ms, `3(4)` is 3*(4): a name or `(` glued to a number multiplies it; ordinals `1st` do not
 // Rust twin: literals.rs with_juxtaposed_factor
@@ -1853,7 +1914,7 @@ TYPE_BODY_STARTS = "{=:<"
 // `class V { x: int }`, `struct P {…}`, `type Point {…}` as ["type", name, body], else ø with nothing read
 // Rust twin: mod.rs TYPE_DECLARATION_WORDS, types/declarations.rs declares_type
 def type_declaration(p, word) {
-	if p.at > 0 and p.code[p.at - 1] == '.' or not declares_type(p, word) { return ø }
+	if (p.at > 0 and p.code[p.at - 1] == '.') or not declares_type(p, word) { return ø }
 	outer = p.type_body
 	p.type_body = true
 	declaration = declared_type(p, word)

@@ -114,7 +114,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let functions = functions_and_lambdas(&node);
 	// `h(x) := g(x)` of a bool function g: the signatures need the bool functions known (card signature-int)
-	crate::analyzer::note_bool_functions(functions.values());
+	crate::analyzer::note_bool_functions(functions.values(), &[]);
 	as_reflection_words(node.clone(), &functions, &defined)
 }
 
