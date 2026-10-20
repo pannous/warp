@@ -552,7 +552,11 @@ fn range_list(node: &Node, lower: impl Fn(Node) -> Node, ranges: &Cell<usize>) -
 
 /// The name the nth range without a variable collects its list under
 fn range_value_name(nth: usize) -> String {
-	if nth == 1 { RANGE_VALUE.to_string() } else { format!("{RANGE_VALUE}_{nth}") }
+	if nth == 1 {
+		RANGE_VALUE.to_string()
+	} else {
+		format!("{RANGE_VALUE}_{nth}")
+	}
 }
 
 /// The phrases that read as another form: `print each …`, counting phrases, `x of type`, postfix list declarations and
