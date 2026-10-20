@@ -643,11 +643,32 @@ def shown_text(value: any): list {
 	if kind != "bool" { return refuse("the text of a " + kind) }
 	["text", value#2 + [op.if] + references.text + text_value("yes")#2 + [op.else] + text_value("no")#2 + [op.end]]
 }
-# what `print` writes: `print a 3` each value as a list shows it, a space between
+# what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
+# first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: any): list {
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression(body, n) }
+	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, n.map(x => x), "") }
+	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
+	if n.all(is_spaced_value) and not n[1..].map(x => x).any(is_negative_literal) { return texts_joined(body, n.map(x => x), " ") }
 	runtime_call("items_text", [list_value(body, n.map(x => x))])
 }
+# the texts of the values, the separator between
+def texts_joined(body: Body, values: any, separator: text): list {
+	printed_text = shown_text(expression(body, values#1))
+	for x in values[1..] {
+		if separator != "" { printed_text = runtime_call("text_join", [printed_text, ["text", text_bytes(separator)]]) }
+		printed_text = runtime_call("text_join", [printed_text, shown_text(expression(body, x))])
+	}
+	printed_text
+}
+spaced_arithmetic = ["+", "-", "*", "/", "%", "^"]
+is_spaced_value(n: any): bool := {
+	if n is number or n is text { return yes }
+	if not (type(n) is key and op_of(n) in spaced_arithmetic) { return no }
+	(key_of(n) == ø or is_spaced_value(key_of(n))) and (value_of(n) == ø or is_spaced_value(value_of(n)))
+}
+# `5 -2`: a glued sign, a value of its own
+is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == "-" and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]] }
 # whether the symbol `name` occurs in n
