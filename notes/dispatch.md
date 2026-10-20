@@ -120,3 +120,11 @@ as the name is renamed `method·double`; methods(P) lists every function whose f
 ancestor. Moving outside definitions into the class body was tried and changed dispatch errors, traits and compiled
 modules' exports, so the outside form stays where it is.
 Open: a trait's functions (`f(s:Shape)` is untyped before reflection reads it), `.declared_in` metadata.
+
+## Declared types pick overloads (static-dispatch)
+Overloads by parameter type (overloads.rs lower_parameter_overloads), also across the program's own files: an argument
+whose parameter or variable is declared (`n: Node`, `leaf: Node = "abc"`, `m: text`) takes the variant written with
+that type at compile time, so a text held as a Node goes to `f(n: Node)`; an untyped value is tested at run time
+(the dispatch chain is one parenthesized value, `f(x) == 2` compares the chosen variant's result). Equal signatures in
+two files stay a compile error (loader claim_signatures). A class named like a built-in type (`Function`) is the
+class there and dispatches through traits.
