@@ -58,7 +58,7 @@ is_float_value(n: any): bool := {
 arithmetic_conversion(n: any): any := {
 	if not is_operator(n, "as") { return ø }
 	whole = key_of(n)
-	if not (whole is key) or op_of(whole) not in arithmetic_operators { return ø }
+	if whole is not key or op_of(whole) not in arithmetic_operators { return ø }
 	last = value_of(whole)
 	target = as_written(value_of(n))
 	tight = if last is number then as_written(last) + ":" + target else "(" + as_written(last) + " as " + target + ")"

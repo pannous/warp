@@ -8,7 +8,7 @@ use "sugar.warp"
 use "kind_changes.warp"
 use "diagnostics.warp"
 use "list_methods.warp"
-use "parser.warp"
+use "words.warp"
 
 counting_operators = ["++", "--"]
 # the operators a changed target is reached through: `xs#i`, `p.x`, the declared `k: int`
@@ -64,9 +64,9 @@ changed_names(n: any): list := {
 	found
 }
 changed_variable(n: any): any := {
-	if not (n is key) { return ø }
+	if n is not key { return ø }
 	op = op_of(n)
-	if op in BRANCH_ASSIGNING or op in counting_operators { return changed_root(key_of(n)) }
+	if op in assigning_operators or op in counting_operators { return changed_root(key_of(n)) }
 	if op == "." and key_of(n) is symbol and is_group(value_of(n)) and #value_of(n) > 0 and value_of(n)#1 is symbol and name_of(value_of(n)#1) in in_place_methods { return name_of(key_of(n)) }
 	ø
 }
