@@ -948,6 +948,10 @@ fn lowered_source(path: &Path, module: Node, classes_early: bool) -> Result<Node
 		|| format!("module source passes of {}", shown.display()),
 		|| crate::pipeline::lower_module_source(module),
 	);
+	// `Meaning.Function` of an enum another used file declares, in front of the program already (modules.rs)
+	let early = crate::compiler::compile_context::read(|context| context.early_file_classes.clone());
+	let module = crate::lowering::sum_variants::with_types_of(module, &early);
+	let module = crate::lowering::plain_enums::with_cases_of(module, &early);
 	// a pass that refuses the module (a keyword defined) gives its error in place of the module's statements
 	match module.drop_meta() {
 		Node::Error(_) => Err(crate::errors::diagnostic::located_in_file(&module, &shown)),

@@ -195,6 +195,15 @@ fn as_constructions(node: Node, classes: &HashSet<String>) -> Node {
 	}
 }
 
+/// A module a used file uses, found beside that file (`use "kinds.warp"` in lib/compiler/scope.warp), else as named
+fn beside(module_file: &Path, used: String) -> String {
+	let neighbour = module_file.parent().map(|folder| folder.join(&used));
+	match neighbour {
+		Some(neighbour) if !Path::new(&used).is_absolute() && neighbour.is_file() => neighbour.display().to_string(),
+		_ => used,
+	}
+}
+
 pub fn insert_module_classes(program: Node) -> Node {
 	let mut program = with_type_module_uses(program);
 	let loader = program_loader();
@@ -243,6 +252,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
 		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
 		for used in reexported {
+			let used = beside(&path, used);
 			if !modules.contains(&used) {
 				modules.push(used);
 			}

@@ -1,0 +1,2 @@
+# an enum one used file declares for another (test_used_enums.rs)
+enum Meaning { Function, Variable }
