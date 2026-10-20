@@ -74,13 +74,8 @@ subjects_in(n: any, enums: any, subjects: any): any := {
 	if declared != ø {
 		subjects[declared#1] = if declared#1 in subjects and subjects[declared#1] != declared#2 then "" else declared#2
 	}
-	if is_group(n) or n is key { for part in children_of(n) { subjects_in(part, enums, subjects) } }
+	if is_group(n) or n is key { for part in parts_of(n) { subjects_in(part, enums, subjects) } }
 	subjects
-}
-
-children_of(n: any): list := match n {
-	Key(left, op, right): { if left == symbol(opaque_word) then [] else [left, right] }
-	_: items_of(n)
 }
 
 # the enum having a case of that name, when only one has it, else ø

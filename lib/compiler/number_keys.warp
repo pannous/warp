@@ -59,7 +59,7 @@ map_variables(n: Node): list := {
 	found = []
 	name = map_assigned(n)
 	if name != ø { found += [name] }
-	for part in parts_of(n) { found += map_variables(part) }
+	for part in parts_within(n) { found += map_variables(part) }
 	found
 }
 
@@ -73,7 +73,7 @@ names_assigned(n: Node): list := {
 		}
 		_: ø
 	}
-	for part in parts_of(n) { found += names_assigned(part) }
+	for part in parts_within(n) { found += names_assigned(part) }
 	found
 }
 

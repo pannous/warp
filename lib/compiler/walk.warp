@@ -135,6 +135,19 @@ children(n: Node, f: function): Node := match n {
 	_: n
 }
 
+# the parts of a node, as `children` walks them: a key's two sides, a group's items; none of an opaque view
+parts_of(n: any): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then [] else [left, right] }
+	List(items, bracket, separator): items
+	_: []
+}
+# the parts of a node, an opaque view's too: a type's name and body as nodes
+parts_within(n: any): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then opaque_parts(right) else [left, right] }
+	_: parts_of(n)
+}
+opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
+
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
 bottom_up(n: any, f: function): any := f(children(n, x => bottom_up(x, f)))
 

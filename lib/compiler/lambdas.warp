@@ -145,7 +145,7 @@ defined_head(signature: Node, body: Node): any := match signature {
 names_bound(n: any, found: list): list := {
 	found = newly_bound(n, found)
 	if is_lambda(n) or definition_of(n) != ø { return found }
-	for part in walked_parts(n) { found = names_bound(part, found) }
+	for part in parts_of(n) { found = names_bound(part, found) }
 	found
 }
 newly_bound(n: any, found: list): list := match n {
@@ -159,20 +159,13 @@ bound_target(target: Node, found: list): list := match target {
 	_: found
 }
 
-# the parts of a node a walk goes into
-walked_parts(n: any): list := match n {
-	Key(left, op, right): [left, right]
-	List(items, bracket, separator): items_of(n)
-	_: []
-}
-
 # every name the node mentions, each once, in order
 mentioned_names(n: any, found: list): list := {
 	if n is symbol {
 		if not (name_of(n) in found) { found += [name_of(n)] }
 		return found
 	}
-	for part in walked_parts(n) { found = mentioned_names(part, found) }
+	for part in parts_of(n) { found = mentioned_names(part, found) }
 	found
 }
 
