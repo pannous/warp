@@ -392,9 +392,9 @@ def boxed(value: any): list {
 	if kind != "int" and kind != pending { refuse("a " + kind + " as a value") }
 	node(node_kind_codes.int, code + gc_code("struct_new", [gc.int_box]))
 }
-# `{1, 2}` and `{3 4}` as a value are a curly list of their values, as Rust builds the list structure; `{print 3}` is
-# a call, `{a; b}` statements, and a body or branch runs its block
-is_curly_list(n: any): bool := bracket_of(n) == "{" and (separator_of(n) == "," or (separator_of(n) == " " and #n > 1 and not (n#1 is symbol)))
+# `{1, 2}` as a value is a curly list of its values, as Rust builds the list structure; `{a; b}` and the spaced `{3 4}`
+# run as statements (user 2026-10-20: `hi := {3 4}; hi()` giving 4 is reasonable), and a body or branch runs its block
+is_curly_list(n: any): bool := bracket_of(n) == "{" and separator_of(n) == ","
 def curly_list_value(body: Body, items: any): list { ["node", node(node_kind_codes.curly_list, vector_code(items.map(item => boxed(expression(body, item)))))] }
 # a body or branch `{a, b}` runs its statements, as Rust unwraps a block there
 block_of(n: any): any := if is_group(n) and bracket_of(n) == "{" and separator_of(n) == "," then separated(n, ";") else n

@@ -141,9 +141,19 @@ fn curly_lists_are_values_self_hosted() {
 			assert!(output.contains(value), "lane {lane}, {code}: {output}");
 		};
 		gives("comma_list", "xs = {1, 2}; xs", "{1 2}");
-		gives("spaced_list", "hi := {3 4}; hi()", "{3 4}");
 		gives("argument_list", "g(x) := x; g({1, 2})", "{1 2}");
 		gives("body_block", "f() := {1, 2}; f()", "» 2");
 		gives("branch_block", "if yes {1, 2} else {5}", "» 2");
+	}
+}
+
+/// The spaced `{3 4}` gives 4 in the self-hosted lanes, its words run as statements, {3 4} in Rust's: the user finds
+/// 4 reasonable, kept as is for now (2026-10-20)
+#[test]
+#[ignore = "emitter-runs: user 2026-10-20: hi := {3 4}; hi() giving 4 is reasonable, keep as is for now"]
+fn spaced_curly_list_is_a_value_self_hosted() {
+	for lane in ["1", "pure"] {
+		let (output, _) = lane_run(lane, "spaced_list", "hi := {3 4}; hi()");
+		assert!(output.contains("{3 4}"), "lane {lane}: {output}");
 	}
 }
