@@ -97,7 +97,7 @@ pub(super) fn educate_block_assignment(assignment: &Node, name: &str, block: &st
 }
 
 pub(super) const LOCAL_OR_GLOBAL: &str = "local-or-global";
-pub(super) const MAIN_LEVEL_READING: usize = 1;
+pub(crate) const MAIN_LEVEL_READING: usize = 1;
 
 /// The main-level statement that first assigns `name`: `n=0` of `n=0; def f(x){n=5;x}`
 pub(super) fn main_assignment<'a>(program: &'a Node, name: &str) -> Option<&'a Node> {
@@ -112,7 +112,7 @@ pub(super) fn main_assignment<'a>(program: &'a Node, name: &str) -> Option<&'a N
 
 /// `n = …` inside f where main has an n: a new local of f (the default, as in Python) or main's n? The fix of main's n
 /// declares it where main assigns it: `global n=0`
-pub(super) fn ask_local_or_global(
+pub(crate) fn ask_local_or_global(
 	assignment: &Node,
 	name: &str,
 	function: &str,
@@ -143,7 +143,7 @@ fn global_at_main(meaning: &str, name: &str, main_assignment: Option<&Node>) -> 
 }
 
 /// `let n = …`, `var n = …`, `const n = …` in `body`: n is explicitly the function's own
-pub(super) fn declares_local(body: &Node, name: &str) -> bool {
+pub(crate) fn declares_local(body: &Node, name: &str) -> bool {
 	let mut declared = false;
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {

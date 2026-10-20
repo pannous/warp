@@ -15,7 +15,7 @@ const TYPE_ANNOTATIONS: [&str; 2] = [crate::type_tests::TYPE_WORD, "Type"];
 
 pub fn lower(node: Node) -> Node {
 	let typed = type_parameter_positions(&node);
-	if typed.is_empty() {
+	if typed.is_empty() && !declares_type_variable(&node) {
 		return node;
 	}
 	match misplaced_argument(&node, &typed) {
@@ -89,10 +89,31 @@ fn is_literal_value(argument: &Node) -> bool {
 	matches!(argument.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_))
 }
 
-/// `t: type` in a function head is `t: any`: the type value passes as the node it is
+/// `t: type = int`: a variable declared of type Type (a positioned one is met again as its inner node)
+fn declared_type_variable(node: &Node) -> Option<(&Node, &Node)> {
+	match node {
+		Node::Key(target, Op::Assign, value) => match target.drop_meta() {
+			Node::Key(name, Op::Colon, annotation) if is_type_annotation(annotation) => Some((name, value)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn declares_type_variable(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= declared_type_variable(part).is_some());
+	found
+}
+
+/// `t: type` in a function head and `t: type = v` are `t: any`: the type value passes as the node it is
 fn held_as_any(node: Node) -> Node {
 	if let Some((head, body, rebuild)) = definition_parts(&node) {
 		return rebuild(annotated_any(head, &is_type_annotation), held_as_any(body));
+	}
+	if let Some((name, value)) = declared_type_variable(&node) {
+		let any = Node::Symbol(crate::words::ANY_TYPE.to_string());
+		return key(key(name.clone(), Op::Colon, any), Op::Assign, held_as_any(value.clone()));
 	}
 	children_rewritten(node, held_as_any)
 }
