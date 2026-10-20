@@ -1552,7 +1552,7 @@ def group_expression(body: Body, n: any): list {
 # an item as written into a list or field: an Error there fails as "a list item holds no error" (Rust's emit_data_item);
 # a value of any other kind than node holds none
 def data_item(body: Body, mark: text, item: any): list {
-	value = expression(body, item)
+	value = expression_code(body, item)
 	if value#1 != "node" { return value }
 	runtime_call(data_item_checks[mark], [value])
 }
