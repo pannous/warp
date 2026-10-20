@@ -117,10 +117,10 @@ names_a_key(index: any): bool := {
 # `add(e)` of `xs.add(e)`, `insert(1, e)`: the items it writes marked as list items, not the named `at: i`
 with_written_items_marked(call: any): any := {
 	if not is_group(call) { return call }
-	items = items_of(call)
-	if #items < 2 or not (items#1 is symbol) or not (name_of(items#1) in item_writing_methods) { return call }
-	arguments = items[1..]
-	group_like(call, [items#1] + arguments.map(item => if is_key(item, ":") then item else shown_written(item, list_item_mark)))
+	parts = items_of(call)
+	if #parts < 2 or not (parts#1 is symbol) or not (name_of(parts#1) in item_writing_methods) { return call }
+	written = parts[1..]
+	group_like(call, [parts#1] + written.map(item => if is_key(item, ":") then item else shown_written(item, list_item_mark)))
 }
 
 # the item shown as written into the place `mark` names, unless it is a literal or already shown
