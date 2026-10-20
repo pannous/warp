@@ -483,6 +483,13 @@ fn digit_casts_run_pure() {
 	runs_pure("invalid_code_point", "x = 55296; try (x as codepoint) else \"fallback\"", "fallback");
 }
 
+/// parser.warp reads a float literal through float(text): more digits than a double holds give the nearest float (card
+/// pure-lane-prints)
+#[test]
+fn long_float_literals_read_pure() {
+	runs_pure("long_float_literal", "x = 8.33333333332248946124e+03; x - 8333", "0.33333332248912484");
+}
+
 /// card text-cache-lru: the pure runtime keeps the count and walks of a lexer's source while it compares short words
 /// with it (`starts_at`); the words took them by turns, so each `source.length` recounted the source (minutes)
 #[test]
