@@ -174,11 +174,6 @@ pub(crate) fn same_definitions(first: &[Node], second: &[Node]) -> bool {
 	first.len() == second.len() && first.iter().zip(second).all(|(a, b)| a.serialize() == b.serialize())
 }
 
-/// The methods called in statements: `f` of `x.f(…)` and of `x.f`
-pub(crate) fn method_names(statements: &[Node]) -> Vec<String> {
-	method_names_beyond(statements, &HashSet::new())
-}
-
 /// The fields the classes of the statements declare (`header` of parser.warp's Parser), also a used file's
 pub(crate) fn declared_fields(statements: &[Node]) -> HashSet<String> {
 	statements
@@ -188,7 +183,7 @@ pub(crate) fn declared_fields(statements: &[Node]) -> HashSet<String> {
 		.collect()
 }
 
-/// method_names without the reads `x.f` of the `fields`
+/// The methods called in statements: `f` of `x.f(…)` and of `x.f`, but no read `x.f` of the `fields`
 pub(crate) fn method_names_beyond(statements: &[Node], fields: &HashSet<String>) -> Vec<String> {
 	let mut names = Vec::new();
 	for statement in statements {
