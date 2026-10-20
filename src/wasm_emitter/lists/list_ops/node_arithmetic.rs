@@ -626,6 +626,10 @@ impl WasmGcEmitter {
 				}
 				true
 			}
+			// a list plus a value of run-time kind is node_add's, decided at run time
+			Kind::List if crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).is_some() => {
+				false
+			}
 			Kind::List => {
 				let item_list = self.appended_item_list(left, right);
 				self.emit_node_instructions(func, left);
@@ -748,7 +752,13 @@ impl WasmGcEmitter {
 		op: &crate::operators::Op,
 		right: &Node,
 	) -> Kind {
-		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right, &self.scope)
+		crate::analyzer::arithmetic_kind_of_operands(
+			self.get_type(left),
+			op,
+			self.get_type(right),
+			(left, right),
+			&self.scope,
+		)
 	}
 
 	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float
