@@ -149,7 +149,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); variants its enums' bare cases
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = [] }
+# literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; literal_arguments: any = {} }
 
 module = Module({}, [])
 
@@ -1436,6 +1437,30 @@ compile_function(f: Function, argument_kinds: any): any := {
 	}
 	module.saw_pending = outer
 }
+# an unannotated parameter takes the kind of its first call's argument joined with those of every literal any call
+# passes it: `binding_powers("=")` (a char) and `binding_powers("to")` make a text parameter, which a node converts to
+parameter_key(f: Function, i: int): text := f.name + "·" + i
+parameter_joint(a: text, b: text): text := if (a == "char" and b == "text") or (a == "text" and b == "char") then "text" else joint_kind(a, b)
+literal_kind(n: any): any := {
+	if n is bool { return "bool" }
+	if n is text { return if #n == 1 then "char" else "text" }
+	if n is int { return "int" }
+	ø
+}
+def collect_literal_arguments(n: any) {
+	if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol and name_of(n#1) in module.functions {
+		for i in 1..<#n {
+			kind = literal_kind(n#(i + 1))
+			slot = parameter_key(module.functions[name_of(n#1)], i - 1)
+			if kind != ø { module.literal_arguments[slot] = (if slot in module.literal_arguments then module.literal_arguments[slot] else []) + [kind] }
+		}
+	}
+	if type(n) is key {
+		collect_literal_arguments(key_of(n))
+		collect_literal_arguments(value_of(n))
+	}
+	if is_group(n) { for x in n { collect_literal_arguments(x) } }
+}
 function_compiled(f: Function, argument_kinds: any): any := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
@@ -1445,6 +1470,9 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		if annotation == ø { annotation = analyzed_parameter_kind(f, i) }
 		# an argument of a call still compiling (a cycle of functions) is not known yet: the parameter takes a node
 		given = if argument_kinds[i] == pending then "node" else argument_kinds[i]
+		if parameter_key(f, i) in module.literal_arguments {
+			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
+		}
 		parameter_kinds += [if annotation == ø then given else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
@@ -1626,6 +1654,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.shows_values = no
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
+	module.literal_arguments = {}
 	module.saw_pending = no
 	module.rereads = []
 	collect_types(program)
@@ -1642,6 +1671,8 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	main = Function("main", [], [], ø)
 	try {
 		main.body = separated(bracketed(collect_functions(program, module.functions), ""), ";")
+		collect_literal_arguments(main.body)
+		for name in module.functions.keys { collect_literal_arguments(module.functions[name].body) }
 		module.shared = shared_names(statements_of(main.body))
 		compile_function(main, [])
 		# a function of the program never called is compiled too, its parameters of any kind: Rust's compiles each, so
