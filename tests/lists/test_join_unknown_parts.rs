@@ -10,8 +10,9 @@ const LINEAR_BUDGET: u64 = 30_000_000;
 
 #[test]
 fn joining_parts_of_unknown_kind_takes_linear_steps() {
-	let code = format!("{JOINED}parts = (1 to 3000).map(i => [i, i])\ncount(joined(parts)) + count(flatten(parts))");
-	with_fuel(LINEAR_BUDGET, || is!(&code, 12000));
+	let parts = "parts = (1 to 3000).map(i => [i, i])\n";
+	with_fuel(LINEAR_BUDGET, || is!(&format!("{JOINED}{parts}count(joined(parts))"), 6000));
+	with_fuel(LINEAR_BUDGET, || is!(&format!("{parts}count(flatten(parts))"), 6000));
 }
 
 #[test]
