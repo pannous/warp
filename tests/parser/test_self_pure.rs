@@ -159,3 +159,10 @@ fn a_member_named_like_a_prefix_word_reads_pure() {
 	let (output, _) = pure_run("member_sqrt", "use math\nprint math.sqrt(16)\nprint math.abs(-7)");
 	assert!(output.contains("4\n7"), "{output}");
 }
+
+/// `name := {…}` holds what the block computes, not the block (card analyzer-reads): `hi()` is 7, an int
+#[test]
+fn block_definitions_hold_their_value_pure() {
+	runs_pure("block_value", "hi := { 3 + 4 }; hi()", "7");
+	runs_pure("block_value_added", "hi := { 3 + 4 }; hi() + 1", "8");
+}
