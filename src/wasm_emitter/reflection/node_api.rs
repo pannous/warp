@@ -84,6 +84,17 @@ fn built_operator_code(op: &Node) -> i64 {
 	op.text_value().and_then(written).unwrap_or(OP_CODES.len() - 1) as i64
 }
 
+/// The highest op code the program's `key(left, op, right)` calls build, foreseen so the emission needs no rerun
+pub fn foreseen_key_operator(program: &Node) -> Option<i64> {
+	let mut highest = None;
+	program.visit(&mut |node| {
+		if let Some((KEY, [_, op, _])) = node.call_parts() {
+			highest = highest.max(Some(built_operator_code(op)));
+		}
+	});
+	highest
+}
+
 /// The part a field name reads when the node has no field of that name
 pub fn node_part(field: &str) -> Option<i32> {
 	NODE_PARTS.iter().position(|part| *part == field).map(|part| part as i32)
