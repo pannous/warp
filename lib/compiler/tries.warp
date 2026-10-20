@@ -14,7 +14,8 @@ use "phrase_blocks.warp"
 tries_made = {count: 0}
 
 applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
-braced(n: Node): Node := List([n], Bracket.Curly, Separator.Semicolon)
+# `{n}`, a block of one item, as Rust writes it
+braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
 try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semicolon)
 try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
 chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, yes_branch), Op.Else, no_branch)
@@ -27,8 +28,8 @@ guarded(value: Node, fallback: Node, binding: any, number: int): Node := {
 	result = try_name("value", number)
 	ran = try_assigned(finished, applied_to("ran_without_error", [braced(try_assigned(result, value))]))
 	succeeded = Key(finished, Op.And, Key(ø, Op.Not, applied_to("is_error", [result])))
-	caught = if binding == ø then [] else [try_assigned(binding, applied_to("caught_error", [finished, result]))]
-	try_statements([ran, chosen_branch(succeeded, braced(result), try_statements(caught + [fallback]))])
+	otherwise = if binding == ø then braced(fallback) else List([try_assigned(binding, applied_to("caught_error", [finished, result])), fallback], Bracket.Curly, Separator.Semicolon)
+	try_statements([ran, chosen_branch(succeeded, braced(result), otherwise)])
 }
 
 divided(dividend: Node, op: any, divisor: Node, fallback: Node, number: int): Node := {
