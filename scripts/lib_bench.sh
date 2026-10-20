@@ -20,6 +20,8 @@ RAN_PURE="pure: ran" # the line the pure lane writes for a program it compiled (
 rm -rf "$work" && mkdir -p "$work/pure" "$(dirname "$report")"
 export WARP=$warp WORK=$work ROOT=$root TIMEOUT_SECONDS RAN_PURE
 export WARP_NO_WINDOW=1 WARP_HINTS=0 WARP_CRASH_CARDS=0 WARP_LIB=$root/lib
+# a parse batch is one turn of the helper: warp's 60 s compute limit would kill it mid-batch ("crashed")
+export WARP_TIME_LIMIT=$((TIMEOUT_SECONDS * FILES_PER_PARSE))
 
 files=$(cd "$root" && find lib -name "*.warp" | grep -E -- "$filter" | sort)
 total=$(echo "$files" | grep -c .)

@@ -2209,6 +2209,7 @@ PASSED:
   ✓ lists::test_list_held_last::a_list_held_last_keeps_its_items
   ✓ lists::test_list_identity::a_list_is_identical_to_itself_in_every_name
   ✓ lists::test_list_item_conversions::a_loop_variable_read_in_an_inner_loop_keeps_its_values
+  ✓ lists::test_list_item_conversions::a_loop_variable_read_once_a_round_stays_a_node_list
   ✓ lists::test_list_literal_sign::a_glued_sign_starts_the_next_item_after_anything
   ✓ lists::test_list_literal_sign::spaced_and_glued_operators_still_subtract
   ✓ lists::test_list_methods::a_list_module_word_is_a_method_without_use
@@ -2493,6 +2494,7 @@ PASSED:
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_node_json::json_of_code_keeps_its_operations
   ✓ modules::test_node_json::json_writes_numbers_exactly_or_says_so
+  ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
   ✓ modules::test_package_forms::a_bare_name_is_a_folder_of_the_default_registry
   ✓ modules::test_package_forms::a_full_url_stays_as_written
   ✓ modules::test_package_forms::an_owner_and_repository_are_on_github
@@ -3734,14 +3736,12 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
-  ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
-  ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
+  ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
@@ -6302,13 +6302,13 @@ PASSED:
 FAILED:
   ✗ ffi::test_run_wasm_library::run_wasm_of_no_module_fails_loudly
   ✗ ffi::test_run_wasm_library::run_wasm_runs_a_module_given_as_bytes
-  ✗ modules::test_node_json::the_browser_spells_each_operator_code_alike
+  ✗ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
   ✗ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
-  ✗ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✗ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✗ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
   ✗ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✗ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
+  ✗ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✗ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
   ✗ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✗ parser::test_self_pure::block_definitions_hold_their_value_pure
@@ -6319,6 +6319,7 @@ FAILED:
   ✗ parser::test_self_pure::enum_conversions_and_default_arms_run_pure
   ✗ parser::test_self_pure::for_loops_run_pure
   ✗ parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
+  ✗ parser::test_self_pure::kind_changes_fail_pure
   ✗ parser::test_self_pure::lambdas_run_pure
   ✗ parser::test_self_pure::match_values_run_pure
   ✗ parser::test_self_pure::number_keys_run_pure
@@ -6326,6 +6327,7 @@ FAILED:
   ✗ parser::test_self_pure::program_names_run_pure
   ✗ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
   ✗ parser::test_self_pure::recursive_results_run_pure
+  ✗ parser::test_self_pure::std_modules_run_pure
   ✗ parser::test_self_pure::text_escapes_read_pure
   ✗ parser::test_self_pure::the_core_runs_pure
   ✗ parser::test_self_pure::type_words_named_by_fields_run_pure
@@ -6333,4 +6335,4 @@ FAILED:
   ✗ programs::test_warp_command::debug_build_names_its_commit
 
 SUMMARY:
-11 ignored, 6297 passed, 31 failed, 6328 total tested
+11 ignored, 6297 passed, 33 failed, 6330 total tested
