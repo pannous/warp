@@ -237,10 +237,13 @@ def items(p, closer, bracket) {
 
 // `match f(x) {…}`: the subject after a clause word ends before the block, no call `f(x) {…}` takes it
 // Rust twin: conditions.rs ends_with_clause_word
-def follows_clause_word(found) {
-	if found.length == 0 { return false }
-	previous = found#(found.length)#1
-	previous is symbol and keyword_form(name_of(previous)) == "clause"
+def follows_clause_word(found) := found.length > 0 and ends_with_clause_word(found#(found.length)#1)
+
+// `where`, `match`, alone or the last word of `for i in xs where`: a word whose condition or subject follows
+def ends_with_clause_word(node) := match node {
+	Symbol(word): keyword_form(word) == "clause"
+	List(parts, Bracket.None, separator): parts.length > 0 and ends_with_clause_word(parts#(parts.length))
+	_: false
 }
 
 // `line:column` of the character at `at`, both from 1
@@ -574,15 +577,15 @@ def continued(p, left, min_power) {
 			}
 			if op.length == 0 {
 				if not applies(p, left, min_power) { break }
-				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power))])
+				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power) or ends_with_clause_word(left))])
 				continue
 			}
 			powers = binding_powers(op#2)
 			// one arrow, but `=>` binds as written: its body takes an assignment (Rust twin: Op::spelled_binding_power)
 			if op#1 == "=>" { powers = binding_powers("=>") }
-			owned = owns_branches(left, op#2, took_own_then)
-			if powers#1 < min_power and not owned { break }
-			took_own_then = owned and powers#1 < min_power and op#2 == "then"
+			owns = owns_branches(left, op#2, took_own_then)
+			if powers#1 < min_power and not owns { break }
+			took_own_then = owns and powers#1 < min_power and op#2 == "then"
 			p.at = p.at + op#1.length
 			// `f(n):` ending its line: the block indented below is its value
 			block = if op#1 == ":" and ends_line(p, p.at) then indented_block(p) else ø
@@ -604,13 +607,13 @@ def continued(p, left, min_power) {
 }
 
 // A prefix `if` takes its own `then` and `else` wherever it stands: `pattern: if c then a else b` is the arm giving the
-// whole if, though `:` binds tighter than `then` (cards match-arm, arm-inline-if). Only an `else` after a `then` the
-// if took this way: `if a then if b then c else d` keeps its else for the outer if
+// whole if, though `:` binds tighter than `then`. Only an `else` after a `then` the if took this way: `if a then if b
+// then c else d` keeps its else for the outer if.
 // Rust twin: expressions.rs owns_branches
-def owns_branches(left, op, took_own_then) := if op == "then" then is_bare_if(left) else op == "else" and took_own_then
-def is_bare_if(node: any): bool := match node {
-	Key(head, Op.If, condition): head is ø
-	_: no
+def owns_branches(left, op, took_own_then) := match left {
+	Key(condition, Op.If, test): op == "then" and condition == ø
+	Key(branches, Op.Then, value): op == "else" and took_own_then
+	_: false
 }
 
 // `n times {…}` binds below assignment, `n times [x]` to the count before it, `it times it` like `*`

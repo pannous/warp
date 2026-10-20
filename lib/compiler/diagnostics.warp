@@ -4,6 +4,7 @@
 # whose `$name` parts take any node (`data(…)` quotes it), the message a text whose `{name}` holes give that part and
 # `{a name}` it with its article. The stage hands `diagnosed` to Rust, which says the warnings and fails on an error.
 use "parser.warp"
+use "words.warp"
 
 # the message files in the order a fact is looked up, each with the level of its messages
 message_files = [["errors.data", "error"], ["warnings.data", "warning"], ["hints.data", "hint"]]
@@ -73,5 +74,3 @@ filled(message: text, bound: any): text := {
 	result
 }
 shown(part: any): text := if part is symbol then name_of(part) else if part is text then part else "${part}"
-# `a List`, `an Int`
-with_article(word: text): text := (if "AEIOUaeiou".contains(word[0]) then "an " else "a ") + word

@@ -1,7 +1,7 @@
+use crate::profile::Profile;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use crate::profile::Profile;
 use wasmtime::{Config, Engine, Module, Store};
 
 /// The GC heap a run starts with: reserved, committed lazily by the OS; a heap starting empty collects (walking every

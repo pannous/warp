@@ -1,0 +1,14 @@
+twice(n: int): int := n * 2
+twice(a: int, b: int): int := (a + b) * 2
+scaled(x: int, factor: int = 3): int := x * factor
+scaled(): int := 1
+print(twice(3))
+print(twice(1, 2))
+print(3.twice(4))
+print(scaled(2))
+print(scaled(2, 5))
+print(scaled())
+applied(f: function, x: int): int := f(x)
+handed(f: function, x: int): int := applied(f, x)
+print(applied(twice, 5))
+print(handed(twice, 6))
