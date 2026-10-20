@@ -102,6 +102,39 @@ fn a_declared_type_picks_its_variant() {
 	is!(&format!("{variants}h(v) := filled(v); h(\"abc\") * 10 + h(Key(1, Op.Add, 2))"), 12);
 }
 
+// card polymorphism-lists (user): `play(notes) == play(list<note>) != play(list<file>)`, the item type of a list
+// argument picks the variant; the plural of a declared type is a list of it
+#[test]
+fn the_item_type_of_a_list_picks_its_variant() {
+	let builtin = "play(xs: list of int) := 1; play(xs: list of text) := 2; ";
+	is!(&format!("{builtin}play([1, 2]) * 10 + play([\"a\"])"), 12);
+	is!(&format!("{builtin}ys = [\"a\", \"b\"]; play(ys)"), 2);
+	is!("play(xs: ints) := 1; play(xs: texts) := 2; play([\"a\"]) * 10 + play([3])", 21);
+	is!("play(xs: [int]) := 1; play(xs: [float]) := 2; play([1.5]) * 10 + play([3])", 21);
+	let classes = "class note{pitch:int}; class file{name:text}; ";
+	let list_of = format!("{classes}play(xs: list of note) := 1; play(xs: list of file) := 2; ");
+	is!(&format!("{list_of}play([note(60), note(62)]) * 10 + play([file(\"a\")])"), 12);
+	is!(&format!("{list_of}notes = [note(60)]; play(notes)"), 1);
+	is!(
+		&format!("{classes}play(xs: notes) := 1; play(xs: files) := 2; play([file(\"a\")]) * 10 + play([note(60)])"),
+		21
+	);
+	// a plain list takes the lists no other variant names
+	is!("play(xs: list of int) := 1; play(xs: list) := 2; play([1]) * 10 + play([\"a\"])", 12);
+}
+
+// decision list-variant-dispatch: a list whose items only the run time knows goes by its items' type; an empty list fits
+// every variant and takes the first (a literal `[]` with a got-it warning naming `[] as files`)
+#[test]
+fn a_list_of_items_known_at_run_time_goes_by_their_type() {
+	let classes = "class note{pitch:int}; class file{name:text}; ";
+	let list_of = format!("{classes}play(xs: list of note) := 1; play(xs: list of file) := 2; h(v) := play(v); ");
+	is!(&format!("{list_of}h([file(\"a\")]) * 10 + h([note(60)])"), 21);
+	is!(&format!("{list_of}h([]) * 10 + play([])"), 11);
+	is!(&format!("{list_of}play([] as files) * 10 + play([] as notes)"), 21);
+	is!("play(xs: ints) := 1; play(xs: texts) := 2; h(v) := play(v); h([\"a\"]) * 10 + h([3])", 21);
+}
+
 // card class-named-like-type: a class named like a built-in type (emitter.warp's Function) is the class in an overload,
 // and a call dispatched at run time stays one value inside `x in m`
 #[test]

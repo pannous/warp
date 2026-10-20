@@ -7,6 +7,7 @@ replacement). Open and parked questions: notes/open_decisions.md. New answers go
 Numbering: P = interview questions, D = wiki-survey questions, #n = the first question lists.
 
 ## Process
+- quality-before-gap (user, at 49/116 lib files pure-compiled): raise the warp compiler's code quality before closing the final gap: the beautify cards (magic-numbers, function-signature, typed-compiler front and back) go first; gap cards (runtime-word-calls and the like) continue only where they don't touch the same lines, preferably on the cleaned-up code.
 - reviewer-role: warp-reviewer reviews each merge request's diff in parallel with the gate, polishes small things in a follow-up commit, vetoes unsound changes before the push, sends structural findings to the Refactorer as cards.
 - ready-queue: the board's Ready column is the merge queue (`todo ready <card>`, refuses only a branch that doesn't merge cleanly into origin/main); batches of ≤ ~8 cards, wide refactors and carrier branches alone and first; the Integrator resolves only trivial conflicts, others go back to the owner (card to Now + note with the hunk); a reviewer veto moves the card back to Now.
 - urgent-direct: warp-urgent pushes and merges each of its cards to main itself, in any area, without the merge queue; the Integrator's next full run is the check (notes/roles.md "Urgent").
@@ -251,6 +252,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - module-global-assign: a top-level `tempo = 90` sets the standard module's global.
 - global-plain-write: a variable declared `global x` at the top level is written by a plain `x = …` in any function; no `global x` inside the function needed (library code relies on it: walk.warp's `said = []`).
 - Mutating a main-level list in a function needs `global names`. P106 tasks share a variable only when declared `shared`. P44 `shared xs = int[n]` arrays with atomic `xs#i += v` (`atomic` synonym).
+- count-words-library (user): once/twice/thrice leave both compilers and become prelude words over a block parameter, the basic demonstration of giving a block to a function (`def twice(a:block){a();a()}`), defined through `times` so `twice "ab"` stays "abab" and `thrice [0]` three items.
 - range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.
 - #6 data as scope, warning when kebab parts are also variables; P81 that warning offers three fixes.
