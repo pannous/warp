@@ -21,6 +21,8 @@ key_node(left: any, operator: any, right: any): any := {
 }
 # `as_code(data e)`: e marked as code, of the type code (src/type_kinds.rs CODE_MARK, Rust's emit_as_code)
 code_mark(): int := 72057594037927936
+# a type value `int`: a symbol marked 1<<54 above its kind (src/type_kinds.rs TYPE_VALUE_KIND)
+type_value_kind(): int := 18014398509481989
 # the kind field without the code mark: `parse("a+1") == data (a+1)`
 is_code_marked(n: any): int := int_remainder(int_quotient(marked_kind(n), code_mark()), 2)
 code_free_kind(n: any): int := marked_kind(n) - is_code_marked(n) * code_mark()
