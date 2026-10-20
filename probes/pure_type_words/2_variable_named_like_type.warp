@@ -1,0 +1,4 @@
+# a variable named like a type word is the variable, also in the pure lane: `x is text` compares with it
+text = "a"
+print "a" is text
+print "b" is text
