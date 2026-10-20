@@ -56,6 +56,16 @@ fn for_loops_run_pure() {
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
 
+/// lib/compiler/parser.warp reads `for each x in xs` and `each x in xs` as `for x in xs`; a loop variable named `each`
+/// stays one (card pure-error-undefined)
+#[test]
+fn for_each_loops_run_pure() {
+	let basket = "basket = [{price: 2} {price: 3}]; t = 0;";
+	runs_pure("for_each", &format!("{basket} for each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("each_in", &format!("{basket} each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("variable_each", "t = 0; for each in [10, 20] { t = t + each }; t", "30");
+}
+
 /// node_matches.warp: an arm of a number, text or character tests the subject equals it
 #[test]
 fn match_values_run_pure() {
