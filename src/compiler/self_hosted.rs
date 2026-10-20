@@ -8,7 +8,7 @@
 use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
 use std::path::PathBuf;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
 
 const SWITCH: &str = "WARP_SELF_HOSTED";
@@ -27,8 +27,8 @@ const PURE_STAGE: &str = "\"pure\"";
 /// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too and emitter.warp
 /// reads its kinds (a suite count of + analyzer)
 const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
-/// passes.warp `stage` of the request in the worker's input file
-const PASSES_PROGRAM: &str = "use \"{lib}/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)))";
+/// passes.warp `stage` of the request in the worker's input file, with the prelude's text in its setup file
+const PASSES_PROGRAM: &str = "use \"{lib}/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)), read(args#2))";
 /// analyzer.warp `emitter_kinds` of the view in the worker's input file, as JSON (shape: notes/self_hosting.md): a
 /// program of its own, as analyzer.warp's names clash with parser.warp's (its local `digits`, its field `.separator`)
 const ANALYSIS_PROGRAM: &str =
@@ -65,8 +65,14 @@ const PARSE_STAGE: usize = 0;
 const SETUP_EXTENSION: &str = "json";
 /// The input files of the stage programs, one per worker
 const INPUT_FOLDER: &str = "warp-self-hosted";
-/// Stack of a worker: the stage program's compile recurses as deeply as a test thread's
+/// Stack of a worker's own frames: the stage program's compile recurses as deeply as a test thread's; the wasm stack
+/// the engines get comes on top (worker_stack)
 const WORKER_STACK: usize = 64 << 20;
+
+/// Computing time of one stage request: a compiler stage lowering a large program (parser.warp parses and lowers
+/// itself and the files it uses in about 70 s of CPU) is no runaway, so it gets more than a program's 60 s;
+/// WARP_TIME_LIMIT still decides when set
+const STAGE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
 
 type Pass = fn(Node) -> Node;
 /// Each Rust pass with a warp twin and the twin's index in passes.warp `passes` (counted from 1, as warp's `#`)
@@ -99,7 +105,7 @@ struct Stage {
 	workers: Mutex<Vec<Sender<Request>>>,
 }
 
-static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
+static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: &[prelude_text], workers: Mutex::new(Vec::new()) };
 static ANALYSIS: Stage = Stage { program: ANALYSIS_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
 static EMIT: Stage =
 	Stage { program: EMIT_PROGRAM, setup: &[runtime_words, host_words], workers: Mutex::new(Vec::new()) };
@@ -190,6 +196,10 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 	if !emits() {
 		return None;
 	}
+	if wraps_ints() {
+		record_refusal(&format!("{OUTSIDE_THE_CORE}fast arithmetic"));
+		return None;
+	}
 	let kinds = kinds.map_or_else(|| "{}".to_string(), serde_json::Value::to_string);
 	let request = format!("[{}, {kinds}]", view_json(&analysis_view(node)));
 	let module = answer(&EMIT, request).and_then(|answer| module_of(&answer));
@@ -211,6 +221,12 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 	}
 }
 
+/// Whether the program has fast functions (card fast-scope), whose Ints wrap as i64: emitter.warp's never do
+fn wraps_ints() -> bool {
+	crate::compiler::compile_mode::is_fast_program()
+		|| crate::compiler::compile_context::read(|context| !context.fast_functions.is_empty())
+}
+
 /// The module the pure lane compiles the source to; None when the lane is off or refuses the program, the refusal then
 /// recorded (REFUSALS_FILE) and logged, and the program compiled the usual way; under PURE_ONLY the refusal is the error
 pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
@@ -221,6 +237,7 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 	match pure_bytes(code) {
 		Ok(bytes) => {
 			record_lines(&format!("{RAN_PURE}\n"));
+			crate::wasm_emitter::write_debug_module(&bytes);
 			let needs_host = imports_from(&bytes, HOST_MODULE);
 			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
 		}
@@ -238,8 +255,10 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
 fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
 	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
+	serde_json::from_str::<serde_json::Value>(&view).map_err(|_| format!("the passes stage failed: {view}"))?;
+	let analysis = answer(&ANALYSIS, view.clone())?;
 	let kinds: String =
-		serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
+		serde_json::from_str(&analysis).map_err(|_| format!("the analysis stage failed: {analysis}"))?;
 	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
 }
 
@@ -310,6 +329,11 @@ fn host_words() -> Result<String, Node> {
 	Ok(serde_json::Value::Object(words.collect()).to_string())
 }
 
+/// The prelude's source, whose definitions a pure program reaches (lib/compiler/prelude_words.warp)
+fn prelude_text() -> Result<String, Node> {
+	Ok(crate::modules::std_module(crate::modules::PRELUDE_MODULE).unwrap_or_default().to_string())
+}
+
 /// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
 /// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
 fn runtime_words() -> Result<String, Node> {
@@ -369,6 +393,18 @@ fn answer(stage: &'static Stage, request: String) -> Result<String, String> {
 	Ok(answer)
 }
 
+/// A worker's stack: its own frames and the whole wasm stack its engines may use (warp's main thread gives wasm
+/// 496 MB, warp_runtime::engine::give_main_stack_to_wasm): a deep stage run then traps in wasm instead of overflowing
+/// the thread (parser.warp's compile aborted the process); only the pages used are committed
+#[cfg(feature = "native")]
+fn worker_stack() -> usize {
+	WORKER_STACK + warp_runtime::engine::wasm_stack_bytes()
+}
+#[cfg(not(feature = "native"))]
+fn worker_stack() -> usize {
+	WORKER_STACK
+}
+
 fn spawn_worker(stage: &'static Stage) -> Sender<Request> {
 	static WORKERS_SPAWNED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 	let number = WORKERS_SPAWNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -379,11 +415,12 @@ fn spawn_worker(stage: &'static Stage) -> Sender<Request> {
 		IN_WORKER.with(|inside| inside.set(true));
 		let _ = std::fs::create_dir_all(&folder);
 		let stages = StageProgram::new(stage, input);
+		let limit = warp_runtime::fuel::time_limit_from_environment().unwrap_or(STAGE_TIME_LIMIT);
 		for (request, reply_to) in incoming {
-			let _ = reply_to.send(stages.run(&request));
+			let _ = reply_to.send(crate::util::with_time_limit(limit, || stages.run(&request)));
 		}
 	};
-	std::thread::Builder::new().stack_size(WORKER_STACK).spawn(work).expect("a self-hosted stage worker");
+	std::thread::Builder::new().stack_size(worker_stack()).spawn(work).expect("a self-hosted stage worker");
 	requests
 }
 
