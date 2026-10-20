@@ -1,0 +1,10 @@
+enum Meaning { Function, Variable, Parameter, Loop, Field }
+scope = {}
+scope["f"] = [Function]
+scope["x"] = [Variable, Loop]
+binds_as(scope: any, name: text, meaning: Meaning): bool := name in scope and scope[name] contains meaning
+print binds_as(scope, "f", Meaning.Function)
+print binds_as(scope, "x", Meaning.Function)
+print binds_as(scope, "x", Meaning.Loop)
+pair = ["y", Meaning.Parameter]
+print pair#2 == Parameter
