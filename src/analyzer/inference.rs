@@ -595,6 +595,10 @@ fn choice_kind(then_expr: &Node, else_expr: &Node, scope: &Scope) -> Kind {
 	match (raises_error(then_expr), raises_error(else_expr)) {
 		(true, false) => error_or(branch_kind(else_expr, scope)),
 		(false, true) => error_or(branch_kind(then_expr, scope)),
+		// `if c then 2 else true`: a bool beside a number is a Node of run-time kind, keeping its mark (card rust-lane-if)
+		_ if is_boolean(then_expr, scope) != is_boolean(else_expr, scope) => {
+			error_or(branches_kind(branch_kind(then_expr, scope), branch_kind(else_expr, scope)))
+		}
 		_ => branches_kind(branch_kind(then_expr, scope), branch_kind(else_expr, scope)),
 	}
 }
