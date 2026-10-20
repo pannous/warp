@@ -65,3 +65,4 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache |
 | gaps: "a block or map holding an instance" is back on main | warp-cache |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
+| the pure lane follows `use` (parser.warp's lexer, shapes, words, sugar; refusal `tree: group ( view_of`), card pure-follows-use: lib/compiler/uses.warp splices used files' declarations | warp-self-analyzer (was warp-runtime), pure-follows-use on pure-lane |
