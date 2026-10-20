@@ -464,6 +464,15 @@ fn parser_words_run_pure() {
 	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
 }
 
+/// `n as char` (decision digit-as-char): a digit 0…9 is its digit character, another number the character of its code
+/// point, one no character has an error (card pure-lane-x02)
+#[test]
+fn digit_casts_run_pure() {
+	runs_pure("digit_cast", "x = 7; x as char", "'7'");
+	runs_pure("code_point_cast", "x = 65; x as codepoint", "'A'");
+	runs_pure("invalid_code_point", "x = 55296; try (x as codepoint) else \"fallback\"", "fallback");
+}
+
 /// card text-cache-lru: the pure runtime keeps the count and walks of a lexer's source while it compares short words
 /// with it (`starts_at`); the words took them by turns, so each `source.length` recounted the source (minutes)
 #[test]

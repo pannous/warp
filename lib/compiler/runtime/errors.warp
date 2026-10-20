@@ -48,6 +48,10 @@ not_a_character(): int := {
 	fail()
 	0
 }
+invalid_code_point(): int := {
+	fail()
+	0
+}
 invalid_number(): int := {
 	fail()
 	0
