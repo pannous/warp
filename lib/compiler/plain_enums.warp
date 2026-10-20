@@ -67,19 +67,17 @@ enums_in(n: any, enums: any): any := {
 # the names declared of an enum type, `c: Coin`, with that enum; "" for a name declared of several types
 # Rust twin: match_exhaustive.rs typed_subjects
 subjects_in(n: any, enums: any, subjects: any): any := {
-	if is_typed_subject(n, enums) {
-		name = name_of(key_of(n))
-		enum_name = name_of(value_of(n))
-		subjects[name] = if name in subjects and subjects[name] != enum_name then "" else enum_name
+	declared = match n {
+		Key(name, Op.Colon, type_name): if is_name(name) and is_name(type_name) and name_of(type_name) in enums then [name_of(name), name_of(type_name)] else ø
+		_: ø
+	}
+	if declared != ø {
+		subject = declared#1
+		enum_name = declared#2
+		subjects[subject] = if subject in subjects and subjects[subject] != enum_name then "" else enum_name
 	}
 	if is_group(n) or n is key { for part in children_of(n) { subjects_in(part, enums, subjects) } }
 	subjects
-}
-
-# `c: Coin` of an enum the program declares
-is_typed_subject(n: any, enums: any): bool := match n {
-	Key(name, Op.Colon, type_name): is_name(name) and is_name(type_name) and name_of(type_name) in enums
-	_: no
 }
 
 children_of(n: any): list := match n {
