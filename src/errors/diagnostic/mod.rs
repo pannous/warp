@@ -506,10 +506,12 @@ pub fn is_strict() -> bool {
 	matches!(warning_mode(), WarningMode::Strict(_)) || compile_context::read(|context| context.says_strict)
 }
 
-/// A source line saying `use <word>` (or `use <word> mode`)
+/// A source line saying `use <word>` (or `use <word> mode`), alone or as one of its statements (`use strict; 7 % -2`)
 fn says_pragma(line: &str, word: &str) -> bool {
-	let words: Vec<&str> = line.split_whitespace().collect();
-	words == [PRAGMA_WORD, word] || words == [PRAGMA_WORD, word, PRAGMA_SUFFIX]
+	line.split(';').any(|statement| {
+		let words: Vec<&str> = statement.split_whitespace().collect();
+		words == [PRAGMA_WORD, word] || words == [PRAGMA_WORD, word, PRAGMA_SUFFIX]
+	})
 }
 
 /// The program without its top-level `use <word>` statements, and whether it had one
