@@ -169,11 +169,12 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # errors: the indices of the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
-# for an untyped field); variants its enums' bare cases
+# for an untyped field); variants its enums' bare cases; sum_types the classes with bare cases or subclasses, which
+# `x is T` tests outside the core (card pure-lane-shape)
 # counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
 
 module = Module({}, [])
 
@@ -679,6 +680,7 @@ core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "in
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
 	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: []}
 def type_test(body: Body, subject: any, spec: text): list {
+	if spec in module.sum_types { return refuse("a test of the type " + spec + ", which has cases or subclasses") }
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
 	if not (spec in core_type_words) { return refuse("a test of the type " + spec) }
 	type = core_type_words[spec]
@@ -760,6 +762,8 @@ mentions_name(n: any, name: text): bool := {
 def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }
 # the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
 # ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
+# the attribute layers naming a base class: parser.warp's `extends`, Rust's inherited_from
+base_class_layers = ["extends", "inherited_from"]
 collect_types(n: any): any := {
 	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "type" { return record_type(value_of(n)#2, value_of(n)#3) }
 	if is_group(n) { for x in n { collect_types(x) } }
@@ -767,7 +771,11 @@ collect_types(n: any): any := {
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" { return module.classes[name#2] = field_types(body) }
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
-	if name#2 == "variants" { for variant in name#3[3..] { module.variants[variant#2] = yes } }
+	if name#2 == "variants" {
+		for variant in name#3[3..] { module.variants[variant#2] = yes }
+		if #name#3 > 3 { module.sum_types[declared_type_name(name)] = yes }
+	}
+	if name#2 in base_class_layers and kind_of(name#3) == "symbol" { module.sum_types[name#3#2] = yes }
 	record_type(name#4, body)
 }
 # a character given to a field typed text is that text (`"r"` is a character here)
@@ -1980,6 +1988,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	for name in host.keys { if not (name in defined) { module.host[name] = host[name] } }
 	module.classes = {}
 	module.variants = {}
+	module.sum_types = {}
 	module.errors = {}
 	module.closures = []
 	module.dispatchers = []
