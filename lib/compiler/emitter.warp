@@ -1967,8 +1967,8 @@ def collect_literal_arguments(n: any) {
 	}
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
-# the annotations of a parameter held as a node: any value, a function, a type value `int`, a map
-node_annotations = ["any", "function", "type", "map"]
+# the annotations of a parameter held as a node: any value, a node, a function, a type value `int`, a map
+node_annotations = ["any", "Node", "function", "type", "map"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
 annotated_kind(word: text): text := {
