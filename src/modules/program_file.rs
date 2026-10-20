@@ -60,6 +60,26 @@ pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
 	crate::compiler::compile_context::scoped(|context| &mut context.program_file, Some(file.to_path_buf()), body)
 }
 
+/// `path` as written in the program, for the words that read and write files: `~` the home folder, a relative path in
+/// the program's working folder
+pub fn in_working_folder(path: &str) -> String {
+	let path = crate::util::home_expanded(path);
+	match working_folder() {
+		Some(folder) if Path::new(&path).is_relative() => folder.join(path).to_string_lossy().into_owned(),
+		_ => path,
+	}
+}
+
+/// The folder the program's relative paths are in, None for the process's working directory
+pub fn working_folder() -> Option<PathBuf> {
+	crate::compiler::compile_context::read(|context| context.working_folder.clone())
+}
+
+/// Run `body` with `folder` as its working folder, the process's own working directory left as it is
+pub fn with_working_folder<R>(folder: &Path, body: impl FnOnce() -> R) -> R {
+	crate::compiler::compile_context::scoped(|context| &mut context.working_folder, Some(folder.to_path_buf()), body)
+}
+
 pub(crate) fn folder_of(file: &Path) -> PathBuf {
 	match file.parent() {
 		Some(folder) if !folder.as_os_str().is_empty() => folder.to_path_buf(),
