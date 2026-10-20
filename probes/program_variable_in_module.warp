@@ -1,0 +1,5 @@
+# a program variable named like a local of a used module's function: parser.warp items' `c = p.code[p.at]` reads
+# the program's c (prints `wasm trap: cast failure`; with `c = "c"` it prints x=1) (card program-var-leaks)
+use "../lib/compiler/parser.warp"
+c = 3
+print parsed("x = 1")
