@@ -5,10 +5,9 @@
 //! `use`s look (modules::SEARCH_DIRECTORIES below the program's folder and the working directory: names, sizes, times
 //! of the module files there, so a file the program writes beside it, `save "x.png"`, leaves the key as it was).
 //! A module file looked for elsewhere (`use "../lib/x.warp"`, a subfolder's) is kept with its stamp: the program compiles
-//! again once it changes, appears or goes. A compile that reads beyond them (packages, `use project`, a C library) or
-//! asks (an assumption) is not kept; the hints and warnings a kept compile said are said again by each run from its
-//! module. Kept next to the compiled machine code (module_cache.rs), `WARP_MODULE_CACHE=off` turns both off.
-use crate::errors::diagnostic::{recording_said, say, Diagnostic};
+//! again once it changes, appears or goes. A compile that reads beyond them (packages, `use project`, a C library) is
+//! not kept; the hints, warnings and assumptions of a kept compile are said again by each run from its module. Kept next to the compiled machine code (module_cache.rs), `WARP_MODULE_CACHE=off` turns both off.
+use crate::errors::diagnostic::{recording_said, say_again, Said};
 use crate::pipeline::CompiledModule;
 use sha2::{Digest, Sha256};
 use std::cell::{Cell, RefCell};
@@ -51,7 +50,7 @@ pub(crate) type Stamp = (u64, std::time::SystemTime);
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 struct Compiled {
 	looked_for: Vec<(PathBuf, Option<Stamp>)>,
-	said: Vec<Diagnostic>,
+	said: Vec<Said>,
 }
 
 impl Compiled {
@@ -96,9 +95,7 @@ pub fn kept_under(key: &str) -> Option<CompiledModule> {
 	if !compiled.is_current() {
 		return None;
 	}
-	for diagnostic in compiled.said {
-		say(diagnostic);
-	}
+	say_again(compiled.said);
 	Some(CompiledModule {
 		bytes: module.to_vec(),
 		needs_host: needs & NEEDS_HOST != 0,
@@ -107,16 +104,16 @@ pub fn kept_under(key: &str) -> Option<CompiledModule> {
 	})
 }
 
-/// The compile of `code` by `compile`, kept when it read nothing beyond the key and the files it looked for, and said
-/// nothing but what say() says again
+/// The compile of `code` by `compile`, kept when it read nothing beyond the key and the files it looked for, with what
+/// it said and assumed
 pub fn keeping<E>(code: &str, compile: impl FnOnce() -> Result<CompiledModule, E>) -> Result<CompiledModule, E> {
 	NOT_KEPT.with(|reason| reason.set(None));
 	LOOKED_FOR.with(|files| files.replace(Some(BTreeMap::new())));
 	let key = key(code); // before the compile: what it read is keyed as it was then
-	let (compiled, said, only_said) = recording_said(compile);
+	let (compiled, said) = recording_said(compile);
 	let looked_for = LOOKED_FOR.with(|files| files.take()).unwrap_or_default().into_iter().collect();
 	let module = compiled?;
-	if let Some(key) = key.filter(|_| only_said && NOT_KEPT.with(Cell::get).is_none()) {
+	if let Some(key) = key.filter(|_| NOT_KEPT.with(Cell::get).is_none()) {
 		keep_with(&key, &module, &Compiled { looked_for, said });
 	}
 	Ok(module)

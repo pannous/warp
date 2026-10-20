@@ -298,10 +298,10 @@ struct Diagnostics {
 	/// How many capture_hints scopes are open: hints are recorded only for them (nobody else reads them)
 	hint_captures: usize,
 	captured_hints: Vec<Diagnostic>,
-	/// How many recording_said scopes are open, and what say() said in them, in order: a kept program says it again
+	/// How many recording_said scopes are open, and what they said and assumed, in order: a kept program says it again
 	/// when it runs from its kept module (program_cache.rs)
 	spoken_recordings: usize,
-	spoken: Vec<Diagnostic>,
+	spoken: Vec<Said>,
 	/// Under HintMode::Once, the hints shown already
 	shown_hints: std::collections::HashSet<String>,
 }
@@ -346,12 +346,18 @@ pub(crate) fn note_said() {
 	diagnostics(|diagnostics| diagnostics.said += 1);
 }
 
-/// Run `body`, also giving what say() said meanwhile and whether that was all it said (no assumption or error with fixes
-/// counted beside it)
-pub fn recording_said<R>(body: impl FnOnce() -> R) -> (R, Vec<Diagnostic>, bool) {
-	let (start, said_before) = diagnostics(|diagnostics| {
+/// A diagnostic said (say) or a default taken (ask), as a compile's run from its kept module repeats it
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub enum Said {
+	Spoken(Diagnostic),
+	Assumed(Diagnostic),
+}
+
+/// Run `body`, also giving what it said and assumed meanwhile
+pub fn recording_said<R>(body: impl FnOnce() -> R) -> (R, Vec<Said>) {
+	let start = diagnostics(|diagnostics| {
 		diagnostics.spoken_recordings += 1;
-		(diagnostics.spoken.len(), diagnostics.said)
+		diagnostics.spoken.len()
 	});
 	let result = body();
 	diagnostics(|diagnostics| {
@@ -360,9 +366,29 @@ pub fn recording_said<R>(body: impl FnOnce() -> R) -> (R, Vec<Diagnostic>, bool)
 		if diagnostics.spoken_recordings > 0 {
 			diagnostics.spoken.extend(spoken.iter().cloned());
 		}
-		let only_spoken = diagnostics.said - said_before == spoken.len() as u64;
-		(result, spoken, only_spoken)
+		(result, spoken)
 	})
+}
+
+/// Say again what a compile said, and take its defaults again (a later runtime error names them)
+pub fn say_again(said: Vec<Said>) {
+	for said in said {
+		match said {
+			Said::Spoken(diagnostic) => {
+				say(diagnostic);
+			}
+			Said::Assumed(diagnostic) => diagnostics(|diagnostics| diagnostics.assumptions.push(diagnostic)),
+		}
+	}
+}
+
+/// Keep `said` for the open recording_said scopes
+fn record(said: impl FnOnce() -> Said) {
+	diagnostics(|diagnostics| {
+		if diagnostics.spoken_recordings > 0 {
+			diagnostics.spoken.push(said());
+		}
+	});
 }
 
 /// Compile-time diagnostics: the first one the warning mode fails at is the error; otherwise each is said (say), but
@@ -391,11 +417,7 @@ pub fn say(diagnostic: Diagnostic) -> bool {
 		return false;
 	}
 	note_said();
-	diagnostics(|diagnostics| {
-		if diagnostics.spoken_recordings > 0 {
-			diagnostics.spoken.push(diagnostic.clone());
-		}
-	});
+	record(|| Said::Spoken(diagnostic.clone()));
 	let printed = is_shown(diagnostic.level);
 	if printed {
 		print(&diagnostic);
