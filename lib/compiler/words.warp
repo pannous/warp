@@ -8,6 +8,8 @@ type_words = ["int", "integer", "long", "i64", "i32", "rational", "real", "exact
 	"function", "closure", "builtin", "byte", "int8", "int16", "int32", "int64", "uint8", "u8", "uint16", "uint32",
 	"uint64"]
 any_word = "any"
+# the words that raise their argument as an error: `raise "boom"`, also throw, fail, panic (Rust twin: errors/run_time.rs RAISE_WORDS)
+raise_words = {raise: 1, throw: 1, fail: 1, panic: 1}
 # a collection type's head words, before `of` (`list of int`; Rust twin: type_tests.rs COLLECTION_WORDS) and the
 # foreign spellings of list (warp_parser/mod.rs FOREIGN_LIST_HEADS)
 collection_words = ["list", "map"]
