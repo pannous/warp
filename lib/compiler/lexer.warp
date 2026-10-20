@@ -44,7 +44,7 @@ def span_end(source: any, at: int, n: int): int {
 
 // After the quote closing a text from `from` on: an escaped quote `\"` leaves it open
 // Rust twin: warp_parser quoted_end
-def quoted_end(source: any, from: int, quote: any, n: int): int {
+def quoted_end(source: any, from: int, quote: char, n: int): int {
 	at = from
 	while at < n and source[at] != quote {
 		if source[at] == '\\' { at = at + 1 }
@@ -114,7 +114,7 @@ def positions(source: any, kind: text): list {
 }
 
 // A raised letter continues a name as in Rust (`xⁿ`), a raised digit ends it (`x²` squares x)
-def is_name_char(c: any): bool := is_alphanumeric(c) or is_letter_beyond_ascii(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
+def is_name_char(c: char): bool := is_alphanumeric(c) or is_letter_beyond_ascii(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
 
 // The superscript digits in digit order, the raised letters in the order of the letters they raise (no raised q)
 // Rust twin: warp_parser/mod.rs SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS
@@ -122,7 +122,7 @@ SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
 SUPERSCRIPT_LETTERS = "ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ"
 RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
 
-def is_blank(c: any): bool := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+def is_blank(c: char): bool := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 
 // Only blanks stand before `at` on its line
 // Rust twin: declaration_scan.rs at_line_start
@@ -161,7 +161,7 @@ def comment_end(source: any, at: int, n: int): int {
 // After the block comment `/* … */` (`/# … #/` with the mark #) opening at `at`; comments nest:
 // `/* outer /* inner */ still outer */`
 // Rust twin: comments.rs consume_block_comment
-def block_comment_end(source: any, at: int, mark: any, n: int): int {
+def block_comment_end(source: any, at: int, mark: char, n: int): int {
 	depth = 1
 	i = at + 2
 	while i < n {
@@ -257,11 +257,11 @@ def css_color_end(source: any, at: int, n: int): int {
 	if [3, 4, 6, 8].contains(digits) and not glued then end else at
 }
 
-def is_hex_digit(c: any): bool := is_digit(c) or "abcdefABCDEF".contains(c)
+def is_hex_digit(c: char): bool := is_digit(c) or "abcdefABCDEF".contains(c)
 
 // After the text from `from` on that `closing` ends, a backslash escaping the character after it
 // Rust twin: warp_parser/literals.rs parse_string
-def text_end(source: any, from: int, closing: any, n: int): int {
+def text_end(source: any, from: int, closing: char, n: int): int {
 	interpolates = closing == '"' or closing == '`'
 	at = from
 	while at < n and source[at] != closing {
@@ -279,7 +279,7 @@ def text_end(source: any, from: int, closing: any, n: int): int {
 
 // After the `close` of an interpolation hole from `from` on, nested brackets and quoted text inside
 // Rust twin: warp_parser/literals.rs text_until_closing
-def hole_end(source: any, from: int, open: any, close: any, n: int): int {
+def hole_end(source: any, from: int, open: char, close: char, n: int): int {
 	depth = 1
 	quote = ' '
 	at = from
@@ -306,11 +306,11 @@ def possessive(source: any, at: int, n: int): bool {
 }
 
 // `ø` is the empty value, never a name's start (Rust's atom reads it before names)
-def is_name_start(c: any): bool := is_alpha(c) or (is_letter_beyond_ascii(c) and c != 'ø') or c == '_'
+def is_name_start(c: char): bool := is_alpha(c) or (is_letter_beyond_ascii(c) and c != 'ø') or c == '_'
 
 // `π`, `σ`, `é`, `名`: a letter beyond ASCII names as a Latin one does (Rust's is_alphabetic), a cased one or one of
 // the CJK, kana and Hangul blocks
-def is_letter_beyond_ascii(c: any): bool {
+def is_letter_beyond_ascii(c: char): bool {
 	if c <= '~' { return false }
 	upper(c) != lower(c) or (c >= '\u{3040}' and c <= '\u{30ff}') or (c >= '\u{4e00}' and c <= '\u{9fff}') or (c >= '\u{ac00}' and c <= '\u{d7af}')
 }
@@ -434,13 +434,13 @@ def digits(source: any, at: int, count: int, n: int): bool {
 	i == count
 }
 
-def is_at(source: any, at: int, c: any, n: int): bool := at < n and source[at] == c
+def is_at(source: any, at: int, c: char, n: int): bool := at < n and source[at] == c
 
 // The character at `at`, a newline past the end
-def peek(source: any, at: int, n: int): any := if at < n then source[at] else '\n'
+def peek(source: any, at: int, n: int): char := if at < n then source[at] else '\n'
 
 // The bracket or quote closing `open`, a quote closing itself
-def closing_of(open: any): any {
+def closing_of(open: char): char {
 	if open == '(' { return ')' }
 	if open == '[' { return ']' }
 	if open == '{' { return '}' }
