@@ -152,7 +152,7 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	static RUNTIME_FILES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 	let number = RUNTIME_FILES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 	let runtime = Path::new(INPUT_FOLDER).join(format!("emitter-runtime-{}-{number}.json", std::process::id()));
-	let runtime_source = std::fs::read_to_string(Path::new(COMPILER_FOLDER).join(RUNTIME_WORDS)).unwrap();
+	let runtime_source = warp::compiler::self_hosted::runtime_source().unwrap();
 	let lowered_runtime = warp::pipeline::lower(&runtime_source).expect("lib/compiler/runtime.warp lowers");
 	std::fs::create_dir_all(INPUT_FOLDER).unwrap();
 	std::fs::write(&runtime, view_json(&plain_view(&lowered_runtime))).unwrap();
@@ -193,8 +193,6 @@ pub fn emitter_differential(paths: &[PathBuf], least: usize) -> Vec<String> {
 	inside
 }
 
-/// The runtime words emitter.warp compiles into a module, lowered like a program, in COMPILER_FOLDER
-const RUNTIME_WORDS: &str = "runtime.warp";
 /// What lib/compiler/emitter.warp says of a program it leaves to the Rust emitter
 const OUTSIDE_THE_CORE: &str = "outside the core";
 /// Set, the emitter twin lists why the sources outside the core are outside, the most frequent first

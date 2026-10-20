@@ -1,0 +1,10 @@
+# The words that are one wasm instruction each
+# the words that are one wasm instruction each (decision wasm-instruction-body)
+int_quotient(a: int, b: int): int := wasm i64.div_s
+int_remainder(a: int, b: int): int := wasm i64.rem_s
+bits_of_float(x: float): int := wasm i64.reinterpret_f64
+float_of_bits(bits: int): float := wasm f64.reinterpret_i64
+float_floor(x: float): float := wasm f64.floor
+float_ceil(x: float): float := wasm f64.ceil
+float_nearest(x: float): float := wasm f64.nearest
+truncated(x: float): int := wasm i64.trunc_f64_s
