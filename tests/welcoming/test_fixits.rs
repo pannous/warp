@@ -64,8 +64,8 @@ fn local_or_global_fixes() {
 fn list_operator_fixes() {
 	assert_fix("[2]*3", "repeat", "[2 2 2]");
 	assert_fix("[2]*3", "multiply", "[6]");
-	assert_fix("[1 2 3]+4", "append", "[1 2 3 4]");
-	assert_fix("[1 2 3]+4", "add to each", "[5 6 7]");
+	assert_fix("4+[1 2 3]", "prepend", "[4 1 2 3]"); // `[1 2 3]+4` appends (decision list-append-plus)
+	assert_fix("4+[1 2 3]", "add to each", "[5 6 7]");
 	assert_fix("xs=[1 2]; xs.insert(0, 4); xs", "position first", "[4 1 2]");
 	assert_fix("xs=[1 2]; xs.insert(0, 4); xs", "value first", "[1 2 0]");
 }
