@@ -78,3 +78,22 @@ fn a_held_case_converts_as_the_case() {
 	is!(&with_coin("c = Coin.Dime; c as int"), 2);
 	is!(&with_coin("c = Dime; c as position"), 3);
 }
+
+// card rust-lane (r1-enum-case-names): a case named like a built-in type is the case wherever the enum declares it
+#[test]
+fn a_case_named_like_a_type_is_the_case() {
+	let kind = "enum Kind { Empty, Int, Float, Text }";
+	is!(&format!("{kind}; k = Kind.Float; k == Kind.Float"), true);
+	is!(&format!("{kind}; f(k: Kind) := k == Float; f(Kind.Float)"), true);
+	is!(&format!("{kind}; name(k: Kind) := match k {{ Kind.Int: 1; Float: 2; _: 3 }}; name(Float)"), 2);
+	is!("enum Meaning { Function, Variable }; m = Meaning.Function; m == Meaning.Function", true);
+}
+
+// card rust-lane: a map of one entry named after an enum or class, `{Op: {}}`, stays a map (T:{…} is data, D4): a
+// second entry joins the map, not the fields of an instance of Op
+#[test]
+fn an_entry_named_after_a_type_stays_a_map_entry() {
+	let empty = "empty(): any := { t = {}; t }; m = empty()";
+	is!(&format!("enum Op {{ Colon, Add }}; {empty}; m[\"Op\"] = empty(); m[\"Bracket\"] = 1; #m"), 2);
+	is!(&format!("class Point {{ x: int }}; {empty}; m[\"Point\"] = empty(); m[\"y\"] = 2; #m"), 2);
+}

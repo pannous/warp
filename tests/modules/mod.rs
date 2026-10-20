@@ -85,6 +85,8 @@ mod test_std_words; // card std-word
 mod test_two_used_files;
 mod test_use_modules;
 mod test_use_several; // card std-use
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_used_enums; // card rust-lane
 mod test_used_module_bare_words; // card one-dispatch
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
