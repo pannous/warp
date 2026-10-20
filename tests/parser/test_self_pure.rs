@@ -419,6 +419,17 @@ fn negated_operators_run_pure() {
 	runs_pure("negated", code, "yes\nno\nyes\nno\nyes\nyes\nno");
 }
 
+/// lib/compiler/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
+/// the constructors the module exports for the host, as Rust's do (card emitter-imports)
+#[test]
+fn host_words_on_nodes_run_pure() {
+	runs_pure("parse_at_run_time", "t = \"1 + 2\"; parse(t)", "1+2");
+	runs_pure("parsed_operator", "t = \"a * b\"; parse(t).op", "*");
+	runs_pure("parse_failure_caught", "t = \"((\"; try { parse(t) } catch e { \"bad\" }", "bad");
+	runs_pure("std_pure_json", "use json; parse_json(\"[1, 2, 3]\")", "[1 2 3]");
+	runs_pure("std_pure_hash", "use hash; crc32(\"abc\")", "891568578");
+}
+
 /// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
 /// another function, `else` on the next line, a prelude alias beside a function of other arity, min and max, a member
 /// naming a library word, `/!` of a value known only at run time, the keys of `{}`

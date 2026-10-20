@@ -56,6 +56,7 @@ runtime_error_fixes = {index_must_be_an_integer: whole_number_fix, count_must_be
 # `[e 2]`, `q.k = e`: an item written into a list or field, shown `data·item: e`, `data·field: e` (src/compiler/node_views.rs
 # SHOWN_LIST_ITEM; lib/compiler/data_items.warp), and the runtime word that fails where it holds an Error
 data_item_checks = {"data·item": "held_list_item", "data·field": "held_field"}
+# `data e`: e as written (src/lowering/control/blocks.rs DATA_WORD)
 catch_clause_byte = 0
 mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
@@ -192,7 +193,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
 
 module = Module({}, [])
 
@@ -249,7 +250,7 @@ is_import(n: any): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(
 # `use fuel`: the program's runs count fuel steps (decision fuel-metering); the module carries the custom section
 # fuel_section for its host (Rust twin: module_finish.rs FUEL_SECTION)
 fuel_section = "warp.fuel"
-uses_fuel(program: any): bool := block_statements(program).any(n => is_import(n) and #n == 2 and n#2 == symbol("fuel"))
+uses_fuel(program: any): bool := program_statements(program).any(n => is_import(n) and #n == 2 and n#2 == symbol("fuel"))
 
 def block_statements(n: any): list {
 	# `[1;2;3]` is a list of three items, not three statements
@@ -257,10 +258,15 @@ def block_statements(n: any): list {
 	[n]
 }
 
+# a program of one line, `data [1 2]`, is that one statement: only lines and `;` separate a program's statements
+def program_statements(program: any): list {
+	if is_group(program) and bracket_of(program) == "" and separator_of(program) == " " { return [program] }
+	block_statements(program)
+}
 # the definitions of a program into `functions`, the statements left
 def collect_functions(program: any, functions: any): list {
 	kept = []
-	for n in block_statements(program).map(unkeyworded) {
+	for n in program_statements(program).map(unkeyworded) {
 		head = function_head(n)
 		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
 			parameters = head[1..].map(parameter_symbol)
@@ -299,7 +305,7 @@ assigns(n: any, name: text) := {
 # the names of the functions the program defines
 def defined_names(program: any): list {
 	names = []
-	for n in block_statements(program).map(unkeyworded) {
+	for n in program_statements(program).map(unkeyworded) {
 		head = function_head(n)
 		if head != ø { names += [name_of(head#1)] }
 	}
@@ -647,6 +653,12 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		"item_room": ["int", values#1#2 + gc_code(gc_ops.struct_get, [gc.list, 1]) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]]
 		"set_count": [no_kind, values#1#2 + index_code(values#2) + gc_code(gc_ops.struct_set, [gc.list, 0])]
 		# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
+		# with_kind(n, kind): n's data and value in a $Node of that whole kind field
+		"with_kind": {
+			held = [op.local_get] + uleb(fresh_local(body, "node"))
+			part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc.node, i])
+			["node", values#1#2 + [op.local_set] + held[1..] + converted(values#2, "int") + part(1) + part(2) + gc_code(gc_ops.struct_new, [gc.node])]
+		}
 		"keyed": ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code(gc_ops.struct_new, [gc.node])]
 		"entry_key": ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [gc.node])]
 		"symbol_of": ["node", node(node_kind_codes.symbol, values#1#2)]
@@ -698,7 +710,7 @@ def intrinsic(body: Body, name: text, arguments: any): list {
 		_: [no_kind, values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5) + gc_code(gc_ops.array_copy, [gc.text, gc.text])]
 	}
 }
-intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
+intrinsics = {with_kind: 2, new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, host_read: 1, answered_length: 0, memory_byte: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
 	marked_kind: 1, unboxed_text: 1, unboxed_char: 1, unboxed_list: 1, fail: 0, is_null: 1,
 	char_of: 1, new_list: 1, copy_items: 5, adopt_items: 2, item_room: 1, set_count: 2, is_ratio: 1, ratio_of: 2, ratio_numerator: 1, ratio_denominator: 1,
@@ -711,7 +723,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error"}
+	trim: "node_trim", as_code: "code_node", read: "read_file", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
@@ -770,7 +782,7 @@ def shown_text(value: any): list {
 # what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: any): list {
-	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
+	if is_quote(n) or not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
 	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, items_of(n), "") }
 	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
 	if n.all(is_spaced_value) and not items_of(n)[1..].any(is_negative_literal) { return texts_joined(body, items_of(n), " ") }
@@ -1553,6 +1565,44 @@ def expression_code(body: Body, n: any): list {
 	group_expression(body, n)
 }
 
+# `data e`: e as written, a node (Rust's blocks.rs as_data); `parse("a + 1")` is `as_code(data a + 1)`
+is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(quote_word)
+# `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
+# its place, else 0
+inline_quote_at(n: any): int := {
+	if not ((bracket_of(n) == "" and separator_of(n) == " ") or (bracket_of(n) == "(" and separator_of(n) == "")) { return 0 }
+	for i in 2..<#n { if n#i == symbol(quote_word) { return i } }
+	0
+}
+quote_folded(n: any, at: int): any := {
+	quote = separated(bracketed([n#at, n#(at + 1)], ""), " ")
+	separated(bracketed(items_of(n)[..(at - 1)] + [quote] + items_of(n)[(at + 1)..], bracket_of(n)), separator_of(n))
+}
+# `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
+position_fields = ["line", "column", "comment"]
+reads_position(n: any): bool := {
+	if type(n) is key and op_of(n) == "." and value_of(n) is symbol and name_of(value_of(n)) in position_fields { return yes }
+	if type(n) is key and op_of(n) == "#" and type(value_of(n)) is key and key_of(value_of(n)) is text and key_of(value_of(n)) in position_fields { return yes }
+	if type(n) is key { return reads_position(key_of(n)) or reads_position(value_of(n)) }
+	is_group(n) and n.any(reads_position)
+}
+def quoted_code(body: Body, e: any): list {
+	if module.reads_positions { return refuse("quoted code whose position or comment is read") }
+	if e is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(e))) }
+	# `data (a + 1)`: parentheses around one item only group it
+	if is_group(e) and bracket_of(e) == "(" and #e == 1 { return quoted_code(body, e#1) }
+	if type(e) is key {
+		parts = [["node", quoted_code(body, key_of(e))], text_value(op_of(e)), ["node", quoted_code(body, value_of(e))]]
+		return runtime_call("key_node", parts)#2
+	}
+	if is_group(e) {
+		if #e == 0 { return [ref_null, gc.node] }
+		items = ["node", node(node_kind_codes.list, vector_code(e.map(item => quoted_code(body, item))))]
+		bracketed = ["node", runtime_call("bracketed_node", [items, text_value(bracket_of(e))])#2]
+		return runtime_call("separated_node", [bracketed, text_value(separator_of(e))])#2
+	}
+	boxed(expression_code(body, e))
+}
 # `f 3 4`: a program function's name before as many spaced arguments as it takes calls it, as `f(3, 4)`
 is_spaced_call(body: Body, n: any): bool := {
 	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
@@ -1562,6 +1612,8 @@ is_spaced_call(body: Body, n: any): bool := {
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
 def group_expression(body: Body, n: any): list {
+	if is_quote(n) { return ["node", quoted_code(body, n#2)] }
+	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, items_of(n)[2..]) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
 		return closure_call(body, int(name_of(n#1)[(#closure_call_prefix)..]), items_of(n)[1..])
@@ -1630,6 +1682,7 @@ def group_expression(body: Body, n: any): list {
 		return length_code(expression_code(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression_code(body, n#2)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("unwrap") { return unwrapped(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_readers { return cast(expression_code(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
@@ -1967,7 +2020,7 @@ def zero_of(kind: text): list {
 	[op.i32_const, 0]
 }
 def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end] }
-def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + [1] + value_type(f.result) }
+def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
 def function_body(f: Function): list {
 	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
 	uleb(#content) + content
@@ -2012,6 +2065,10 @@ def module_bytes(functions: any): list {
 	}
 	# the program's functions under the names left free, as Rust's export_names: a module imported compiled calls them
 	taken = ["main", "memory"] + exported_globals
+	for f in module.builders {
+		exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
+		taken += [f.name]
+	}
 	for f in functions[1..] {
 		if not f.is_runtime and f.name not in taken {
 			exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
@@ -2044,10 +2101,10 @@ def host_import(name: text): list {
 def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else value_type(kind) }
 
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
-# giving a node builds and reads nodes through functions the module exports for it (new_int…), which this one lacks
+# giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: any): list {
 	signature = module.host[name]
-	if "node" in signature#1 or "node" in signature#2 { return refuse("the host word " + name + " on nodes") }
+	if "node" in signature#1 or "node" in signature#2 { exported_builders() }
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []
 	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }
@@ -2057,11 +2114,50 @@ def host_call(body: Body, name: text, arguments: any): list {
 	if result == "i32" { return ["int", code + [op.i64_extend_i32_s]] }
 	[result, code]
 }
+# the constructors a host word builds nodes with, as Rust's module exports them (src/host/tasks/values.rs
+# CONSTRUCTORS): [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
+host_builders = [["new_empty", [], "built_empty"], ["new_int", ["int"], "built_int"], ["new_bool", ["int"], "built_bool"],
+	["new_float", ["float"], "built_float"], ["new_codepoint", ["char"], "built_codepoint"], ["new_text", ["char", "char"], "built_text"],
+	["new_symbol", ["char", "char"], "built_symbol"], ["new_key", ["node", "node", "int"], "built_key"],
+	["new_list", ["node", "node", "int"], "built_list"], ["error_of", ["node"], "built_error"]]
+# made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
+# the trap detail the host left (src/host/native.rs raised)
+def exported_builders(): any {
+	if #module.builders > 0 { return ø }
+	for builder in host_builders {
+		parameters = builder#2
+		values = range_list(#parameters).map(i => if parameters[i] == "char" then ["int", [op.local_get] + uleb(i) + [op.i64_extend_i32_u]] else [parameters[i], [op.local_get] + uleb(i)])
+		f = exported_function(builder#1, parameters, "node")
+		f.code = runtime_call(builder#3, values)#2
+	}
+	f = exported_function("returned_error", [], no_kind)
+	f.code = error_throw("returned_error") + [op.unreachable]
+}
+# a function the host calls by its name, its code written by the caller
+exported_function(name: text, kinds: list, result: text): any := {
+	f = Function(name, [], [], ø)
+	f.index = #module.imports + #module.order
+	module.order += [f]
+	f.kinds = kinds
+	f.result = result
+	f.locals = []
+	f.local_names = range_list(#kinds).map(i => "argument" + (i + 1))
+	f.is_runtime = yes
+	module.builders += [f]
+	f
+}
 def host_argument(value: any, kind: text): list {
 	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
 	if kind == "int" { return host_int(value) }
 	converted(value, kind)
 }
+# `x!`, Rust's unwrap: a number or text is itself; a node may be data Rust runs as code (blocks.rs), which the core
+# can't yet
+def unwrapped(value: list): list {
+	if value#1 == "node" { return refuse("running a node as code (`x!`)") }
+	value
+}
+
 # a number a host word takes as an int: a fraction or a float rounded to the nearest, as Rust passes `sleep(1/60*1000)`
 def host_int(value: any): list {
 	if value#1 == "node" or value#1 == "float" { return runtime_call("rounded", [["float", converted(value, "float")]])#2 }
@@ -2112,11 +2208,13 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.closures = []
 	module.dispatchers = []
 	module.counts_fuel = uses_fuel(program)
+	module.reads_positions = reads_position(program)
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
 	module.literal_arguments = {}
 	module.saw_pending = no
 	module.rereads = []
+	module.builders = []
 	collect_types(program)
 	module.imports = if mentions_name(program, "print") then [fd_write] else []
 	if mentions_name(program, "read") { module.imports += [host_read] }
