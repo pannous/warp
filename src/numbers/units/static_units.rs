@@ -330,7 +330,7 @@ pub(crate) fn with_result_units(bytes: Vec<u8>) -> Vec<u8> {
 }
 
 /// The `units` entry of the last lowered program's result, when it has units
-pub(crate) fn result_units_entry() -> Option<(&'static str, Node)> {
+pub fn result_units_entry() -> Option<(&'static str, Node)> {
 	let text = match take_result_units()? {
 		ResultUnits::Whole(factors) => factors_text(&factors),
 		ResultUnits::Fields(fields) => fields
