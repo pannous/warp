@@ -1,0 +1,11 @@
+// Is `text.length` constant time? The milliseconds of asking a text's length once per codepoint, as starts_at in
+// lib/compiler/lexer.warp does, of the file args#1 names (card profile-stage-programs)
+use os
+def asked(source: any): int {
+	started = clock()
+	at = 0
+	while at < source.length { at = at + 1 }
+	clock() - started
+}
+source = read(args#1)
+print("length " + source.length + ": " + asked(source) + " ms")

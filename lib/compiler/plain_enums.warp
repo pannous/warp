@@ -15,8 +15,8 @@ raise_word = "raise"
 # the types a case converts to, each with the number its first case counts as: `Coin.Dime as int` and `as index` its
 # index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts)
 count_types = {int: 0, index: 0, position: 1}
-# node.warp's enums whose cases convert by their spelling, `op as text` (Rust: node_cases.rs), not by their index
-spelled_enums = ["Op", "Bracket", "Separator"]
+# spelled_enums, node.warp's enums whose cases convert by their spelling (`op as text`), not by their index
+use "node_cases.warp"
 
 # the cases of an enum body, a line of several cases `Penny, Nickel` among lines of cases each a case
 # Rust twin: sum_variants.rs case_rows

@@ -1,0 +1,20 @@
+// Is `text[i]` constant time? The milliseconds of reading each codepoint of the file args#1 names, once plain and once
+// with a non-ASCII codepoint in front (card profile-stage-programs)
+use os
+def walk(source: any): int {
+	count = 0
+	at = 0
+	n = source.length
+	while at < n {
+		if source[at] == 'e' { count = count + 1 }
+		at = at + 1
+	}
+	count
+}
+def timed(source: text): int {
+	started = clock()
+	walk(source)
+	clock() - started
+}
+source = read(args#1)
+print("ascii " + timed(source) + " ms, with « " + timed("«" + source) + " ms, length " + source.length)

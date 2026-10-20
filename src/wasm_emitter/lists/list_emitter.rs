@@ -117,14 +117,26 @@ pub(in crate::wasm_emitter) const QUOTE_WORDS: [&str; 3] = ["data", "code", "blo
 const NEAR_MISS_TOPIC: &str = "near-miss";
 
 impl WasmGcEmitter {
-	/// The word a list calls; a parameter named like a function or global is the parameter (`g(f, b) := [f, b]`)
+	/// The word a list calls, unless a variable takes its name there (takes_list_head)
 	pub(in crate::wasm_emitter) fn called_function<'a>(
 		&self,
 		items: &'a [Node],
 		bracket: &Bracket,
 		separator: &Separator,
 	) -> Option<&'a str> {
-		called_word(items, bracket, separator).filter(|name| !self.scope.is_parameter(name))
+		called_word(items, bracket, separator).filter(|name| !self.takes_list_head(name, bracket))
+	}
+
+	/// The user function a list's head names, unless a variable takes its name there (takes_list_head)
+	pub(in crate::wasm_emitter) fn user_function_head<'a>(&self, head: &'a Node, bracket: &Bracket) -> Option<&'a str> {
+		let name = head.drop_meta().symbol_name()?;
+		(self.ctx.user_functions.contains_key(name) && !self.takes_list_head(name, bracket)).then_some(name)
+	}
+
+	/// Is the name heading a list a variable's: a parameter always (`g(f, b) := [f, b]`), any other variable in a
+	/// square list (`held = x; [held, 1]` beside a function held); a call `unit(q)` beside a local unit calls unit
+	fn takes_list_head(&self, name: &str, bracket: &Bracket) -> bool {
+		self.scope.is_parameter(name) || (*bracket == Bracket::Square && self.is_variable(name))
 	}
 
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
