@@ -27,3 +27,17 @@ fn an_undeclared_error_class_is_named() {
 	fails_with("try raise \"boom\" except FooError: 1", "declare it with `class FooError: Error`");
 	fails_with("raise FooError(\"x\")", "declare it with `class FooError: Error`");
 }
+
+// card myindexerror-extends: a class may extend a runtime error's class
+#[test]
+fn a_class_extends_a_runtime_error_class() {
+	let class = "class MyIndexError extends IndexError {}\n";
+	is!(&format!("{class}try raise MyIndexError(\"mine\") except LookupError as e: e.message"), "mine");
+	is!(&format!("{class}try (try raise MyIndexError(\"mine\") except KeyError: 1) except IndexError: 2"), 2);
+}
+
+// card error-passed: an error an `except` of another class passes on reports where it was raised
+#[test]
+fn an_error_passed_on_keeps_its_position() {
+	fails_with("x = 0\ntry:\n  y = 3\n  1/x\nexcept IndexError:\n  2", "divide by zero at 4:3");
+}

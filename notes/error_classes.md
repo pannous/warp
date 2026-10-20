@@ -29,10 +29,16 @@ try 1/0 except IndexError: 1             // the division error passes on
   inherit stays idempotent); error_classes.rs reads both.
 - parser.warp twins: guarded / guarded_by / caught_parts, and `class X: Parent` in declared_type.
 
+- `x is Animal` holds for a Dog extending Animal at any depth: the type registry keeps each class's parent
+  (EXTENDS or INHERITED_FROM), emit_instance_of compares the class and its descendants.
+- A class may extend a runtime error's class (`class MyIndexError extends IndexError {}`): inheritance.rs takes in
+  `class IndexError extends LookupError {}` from error_classes.rs runtime_class_declaration, as it takes in the
+  prelude's Error.
+- An error a non-matching `except` passes on keeps its position: the catch keeps trap_position
+  (trap·caught·position), `raise_on` puts it back before raising. The position is the statement's, as for any
+  runtime error.
+
 Open:
-- `x is Animal` of a Dog is still `no`: is_type compares only the exact class (instance_of). The INHERITED_FROM mark
-  would let it expand to the class and its descendants as `except` does.
-- `class MyIndexError extends IndexError` fails: the runtime classes are known to lowering only, not declared in the
-  prelude.
-- An error raised on by a non-matching `except` reports the position of the re-raise, not the original.
 - A raised instance keeps only its message: other fields of an error class do not survive the raise.
+- `e is LookupError` of a runtime IndexError reads the type registry, which knows only declared classes: `except`
+  sees the runtime class tree, `is` does not yet.

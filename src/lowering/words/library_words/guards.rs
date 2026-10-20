@@ -1,7 +1,7 @@
 //! `try X else Y`, `try X catch e { Y }` and `assert C else X` as templates
 use super::*;
 use crate::lowering::error_classes::ROOT_ERROR_CLASS;
-use crate::wasm_emitter::text::text_builtins::{ERROR_CLASS, RAISE_AS, TEXT_FORM};
+use crate::wasm_emitter::text::text_builtins::{ERROR_CLASS, RAISE_ON, TEXT_FORM};
 use crate::words::INSTANCE_OF;
 
 /// The placeholders of the `try`/`assert` templates
@@ -73,7 +73,7 @@ impl Lowering {
 					.collect();
 				format!(
 					"if {} {{{fallback_placeholder}}} else \
-					{{{RAISE_AS}({TEXT_FORM}({CAUGHT_BINDING_PLACEHOLDER}), {ERROR_CLASS}({CAUGHT_BINDING_PLACEHOLDER}))}}",
+					{{{RAISE_ON}({TEXT_FORM}({CAUGHT_BINDING_PLACEHOLDER}), {ERROR_CLASS}({CAUGHT_BINDING_PLACEHOLDER}))}}",
 					tests.join(" or ")
 				)
 			}
