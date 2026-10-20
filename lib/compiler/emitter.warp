@@ -183,7 +183,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
-# errors: the indices of the functions that only trap, by name (error_function)
+# errors: the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); class_defaults the values of the fields an instance may leave out, [view] each by name (an
 # optional field's is ø); member_classes the classes declaring methods or operators in their body; variants its enums'
@@ -543,17 +543,10 @@ def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c
 def ended_in(kind: text, error: text): list { [kind, [op.call] + uleb(error_function(error)) + [op.drop, op.unreachable]] }
 # the index of a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
 def error_function(name: text): int {
-	if name in module.errors { return module.errors[name] }
-	f = Function(name, [], [], ø)
-	f.index = #module.imports + #module.order
-	module.order += [f]
-	f.kinds = []
-	f.result = "int"
+	if name in module.errors { return module.errors[name].index }
+	f = added_function(name, [], "int", [])
 	f.code = error_throw(name) + [op.unreachable]
-	f.locals = []
-	f.local_names = []
-	# the index, not the Function: a Function read back from the map fails with "key not found" (card error-index)
-	module.errors[name] = f.index
+	module.errors[name] = f
 	f.index
 }
 def field_of(body: Body, value: any, name: text): list { if value#1 == "node" then field_read(body, value, name) else refuse("the field " + name + " of a " + value#1) }
@@ -1275,13 +1268,7 @@ dispatcher(arity: int): any := {
 made_late(name: text, result: text, parameters: list): any := {
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
-	f = Function(name, [], [], ø)
-	f.index = #module.imports + #module.order
-	module.order += [f]
-	f.kinds = parameters.map(p => "node")
-	f.result = result
-	f.locals = []
-	f.local_names = parameters
+	f = added_function(name, parameters.map(p => "node"), result, parameters)
 	f.code = [op.unreachable]
 	module.dispatchers += [f]
 	f
@@ -1953,8 +1940,7 @@ def collect_literal_arguments(n: any) {
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
 function_compiled(f: Function, argument_kinds: any): any := {
-	f.index = #module.imports + #module.order
-	module.order += [f]
+	placed(f)
 	parameter_kinds = []
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
@@ -2125,15 +2111,24 @@ def exported_builders(): any {
 	f = exported_function("returned_error", [], no_kind)
 	f.code = error_throw("returned_error") + [op.unreachable]
 }
-# a function the host calls by its name, its code written by the caller
-exported_function(name: text, kinds: list, result: text): any := {
-	f = Function(name, [], [], ø)
+# f at the module's next function index (results `any`: a declared Function result fails, card class-result-type)
+placed(f: Function): any := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
+	f
+}
+# a function made by the emitter (no source), at the next index, its code written by the caller
+added_function(name: text, kinds: list, result: text, local_names: list): any := {
+	f = placed(Function(name, [], [], ø))
 	f.kinds = kinds
 	f.result = result
 	f.locals = []
-	f.local_names = range_list(#kinds).map(i => "argument" + (i + 1))
+	f.local_names = local_names
+	f
+}
+# a function the host calls by its name, its code written by the caller
+exported_function(name: text, kinds: list, result: text): any := {
+	f = added_function(name, kinds, result, range_list(#kinds).map(i => "argument" + (i + 1)))
 	f.is_runtime = yes
 	module.builders += [f]
 	f
