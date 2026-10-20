@@ -30,3 +30,9 @@ fn a_type_variable_of_a_generic_signature_takes_any_value() {
 	crate::is!("class T { a: int }; f(x: T): int := x.a; f(T(a: 3))", 3);
 	crate::common::fails_with("f(x: Foo) := 1; f(2)", "unknown type Foo");
 }
+
+#[test] // card rust-lane-int: a variable declared type holds the type value as any does
+fn a_variable_declared_type_holds_a_type() {
+	is!("t: type = int; t == int", true);
+	is!("t: Type = text; t == float", false);
+}

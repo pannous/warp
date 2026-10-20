@@ -15,3 +15,7 @@
 'first_of(xs: [T]): T := xs#1; first_of(["a"]) + "b"'	'ab'
 'pick(m: map of K, k: K): any := m[k]; pick({a: 1}, "a")'	1
 'class T { a: int }; f(x: T): int := x.a; f(T(a: 3))'	3
+
+# a_variable_declared_type_holds_a_type
+'t: type = int; t == int'	true
+'t: Type = text; t == float'	false
