@@ -1,0 +1,15 @@
+## files, read through the host (Rust twin: src/wasm_emitter/text/text_builtins.rs read_text)
+
+# `read(path)`: the file's text, or the Error of the host's reason. The path's bytes go to the output area, the host
+# writes its answer past the memory's end and gives its place and length, a negative length for a failure's reason
+read_file(path: any): any := {
+	t = text_of_textual(path)
+	count = byte_count(t)
+	for i in 0..<count { output_byte(i, byte_at(t, i)) }
+	start = host_read(count)
+	length = answered_length()
+	size = if length < 0 then 0 - length else length
+	answer = new_text(size)
+	for i in 0..<size { set_byte(answer, i, memory_byte(start + i)) }
+	if length < 0 then error_of(answer) else answer
+}
