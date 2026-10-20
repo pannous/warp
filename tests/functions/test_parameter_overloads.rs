@@ -134,3 +134,19 @@ fn a_list_of_items_known_at_run_time_goes_by_their_type() {
 	is!(&format!("{list_of}play([] as files) * 10 + play([] as notes)"), 21);
 	is!("play(xs: ints) := 1; play(xs: texts) := 2; h(v) := play(v); h([\"a\"]) * 10 + h([3])", 21);
 }
+
+// card class-named-like-type: a class named like a built-in type (emitter.warp's Function) is the class in an overload,
+// and a call dispatched at run time stays one value inside `x in m`
+#[test]
+fn a_class_named_like_a_type_takes_its_variant() {
+	let variants = "class Function { name: text }; slot(function: text, i: int): text := function + i; slot(f: Function, i: int): text := f.name + i; ";
+	is!(
+		&format!(
+			"{variants}seen = {{a1: 1}}; hit(f: Function, i: int) := slot(f, i) in seen; hit(Function(name: \"a\"), 1)"
+		),
+		true
+	);
+	is!(&format!("{variants}slot(\"b\", 1)"), "b1");
+	is!("f(c: text) := 1; f(b: list) := 2; g(x) := f(x) in [2]; g([1])", true);
+	is!("f(c: text) := 1; f(b: list) := 2; g(x) := f(x) == 2; g([1])", true);
+}

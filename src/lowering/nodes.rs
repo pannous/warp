@@ -191,12 +191,10 @@ pub(crate) fn bound_once(name: &str, value: Node, bindings: &mut Vec<Node>) -> N
 	temporary
 }
 
-/// `(binding; …; value)`, value alone without bindings
+/// `(binding; …; value)`, `(value)` without bindings: one value wherever the call stood, `f(x) in m` tests the
+/// chosen variant's result
 pub(crate) fn after_bindings(bindings: Vec<Node>, value: Node) -> Node {
-	match bindings.is_empty() {
-		true => value,
-		false => Node::List([bindings, vec![value]].concat(), Bracket::Round, Separator::Semicolon),
-	}
+	Node::List([bindings, vec![value]].concat(), Bracket::Round, Separator::Semicolon)
 }
 
 /// `if c then a else b` and `c ? a : b`: the condition and both branches
