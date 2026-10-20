@@ -25,7 +25,7 @@ def parsed(source) {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source) + PRELUDE_BANG_WORDS, type_body: false}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false}
 	items(p, ' ', "")
 }
 
@@ -47,13 +47,20 @@ def blank_end_of(line, from) {
 	while at < line.length and (line[at] == ' ' or line[at] == '\t') { at = at + 1 }
 	at
 }
-PRELUDE_BANG_WORDS = bang_words(module_source("prelude"))
+// the prelude's bang words, scanned the first time a `name!` needs them: scanning the prelude on every parse made the
+// front stage 5× slower (card front-stage-5x-slower)
+global prelude_bangs = ø
+def prelude_bang_words() {
+	if prelude_bangs == ø { prelude_bangs = bang_words(module_source("prelude")) }
+	prelude_bangs
+}
 
 // The width of the bang word at the parser's position (`is!`), else 0
 def bang_word_at(p) {
 	end = name_end(p.code, p.at, p.n)
 	if end == p.at or not is_at(p.code, end, '!', p.n) or is_at(p.code, end + 1, '=', p.n) { return 0 }
-	if p.bangs contains (p.code[p.at .. end] + "!") then end + 1 - p.at else 0
+	word = p.code[p.at .. end] + "!"
+	if p.bangs contains word or prelude_bang_words() contains word then end + 1 - p.at else 0
 }
 
 // The words a type's name follows where it is declared
