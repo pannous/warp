@@ -2314,8 +2314,6 @@ def typed_parameter(argument) {
 	argument
 }
 
-def is_capitalized(name) := name[0].upper() == name[0] and name[0].lower() != name[0]
-
 // `vararg xs`, `params int[] xs: list` as the rest parameter *xs
 def rest_parameter(last, argument) := match last {
 	Symbol(name): symbol("*" + name)

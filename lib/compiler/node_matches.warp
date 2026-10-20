@@ -8,7 +8,7 @@
 # guard) stays as written: refused downstream.
 use "walk.warp"
 use "phrase_blocks.warp"
-use "plain_enums.warp"
+use "enum_declarations.warp"
 use "words.warp"
 
 # node_cases.rs spelling, as `warp lower` shows Rust's Op·text, Bracket·text and Separator·text
@@ -184,13 +184,6 @@ node_match(n: Node, variants: any): Node := match n {
 	}
 	Key(type_name, Op.Dot, case_name): spelled_case(type_name, case_name, n)
 	_: n
-}
-
-# the cases of the enums the program declares (plain_enums.warp lowers them after this pass), by name
-case_names_of(enums: any): any := {
-	variants = {}
-	for name in enums.keys { for case in enums[name] { variants[case] = yes } }
-	variants
 }
 
 node_matches(program: any): any := {

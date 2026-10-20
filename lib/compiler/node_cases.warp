@@ -5,6 +5,7 @@
 # carries by then (`Op.Add` is "+"), so `"+" as Op` is the text itself.
 use "walk.warp"
 use "scope.warp"
+use "enum_declarations.warp"
 
 node_type = "Node"
 spelled_enums = ["Op", "Bracket", "Separator"]

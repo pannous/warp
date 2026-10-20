@@ -2,6 +2,7 @@
 // `private x = 4`, `static k = 3` (P78), and the forms `new Point(1, 2)`, `constant x`, Ruby's `attr_accessor :x`,
 // Kotlin's `enum class` and `data class`, `mixin Name {…}`, read as the warp form they mean
 // Rust twin: src/warp_parser/definitions/foreign.rs
+// A part of parser.warp, which uses it: it reads with the parser's expression and atom, so it compiles only with it
 
 // Modifiers of other languages with no meaning in warp: skipped (user decision P78); `static` marks the statement
 // Rust twin: foreign.rs FOREIGN_MODIFIERS

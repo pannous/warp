@@ -1,0 +1,63 @@
+# The enums a program declares (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red,
+# Green }`, Swift's `{ case north, south }`, read as [name, case names], for the passes that lower them
+# (plain_enums.warp), match over their cases (node_matches.warp, node_cases.warp) and bring them from a used file
+# (uses.warp)
+use "walk.warp"
+use "words.warp"
+use "phrase_blocks.warp"
+
+case_word = "case"
+
+# the cases of an enum body, a line of several cases `Penny, Nickel` among lines of cases each a case
+# Rust twin: sum_variants.rs case_rows
+enum_rows(cases: list): list := {
+	rows = []
+	for case in cases {
+		rows += match case {
+			List(row, Bracket.None, Separator.Comma): row
+			_: [case]
+		}
+	}
+	rows
+}
+
+# a case of an enum, `north` of Swift's `case north`, else ø
+enum_case_name(case: Node): any := match case {
+	Symbol(name): name
+	List(words, Bracket.None, Separator.Space): if #words == 2 and words#1 == symbol(case_word) and is_name(words#2) then name_of(words#2) else ø
+	_: ø
+}
+
+# `{Red, Green}`: the names of the cases, else ø
+case_names(block: Node): any := match block {
+	List(cases, Bracket.Curly, separator): {
+		names = enum_rows(cases).map(enum_case_name)
+		if names.all(name => name != ø) then names else ø
+	}
+	_: ø
+}
+
+# `enum Color {Red, Green}`: [the enum's name, its case names], else ø
+declared_enum(n: Node): any := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts != 3 or parts#1 != symbol(enum_word) or not is_name(parts#2) { return ø }
+		cases = case_names(parts#3)
+		if cases == ø then ø else [name_of(parts#2), cases]
+	}
+	_: ø
+}
+
+# the case names of every enum the program declares, by enum name
+enums_in(n: any, enums: any): any := {
+	declared = declared_enum(n)
+	if declared != ø { enums[declared#1] = declared#2 }
+	if is_group(n) { for part in n { enums_in(part, enums) } }
+	enums
+}
+
+# the cases of those enums, each name once
+case_names_of(enums: any): any := {
+	variants = {}
+	for name in enums.keys { for case in enums[name] { variants[case] = yes } }
+	variants
+}
