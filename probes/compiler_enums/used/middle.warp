@@ -1,0 +1,3 @@
+use "meanings.warp"
+is_function(m: Meaning): bool := m == Meaning.Function
+variable_meaning = Meaning.Variable
