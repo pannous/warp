@@ -98,22 +98,35 @@ type Request = (String, Sender<String>);
 /// The JSON text a stage program reads as one of its setup files, or why it could not be made
 type Setup = fn() -> Result<String, Node>;
 
-/// A stage program, the JSON texts a worker writes once for it to read as `args#2`, `args#3`…, and its idle workers
+/// A stage program, named by its file in lib/compiler, the JSON texts a worker writes once for it to read as `args#2`,
+/// `args#3`…, and its idle workers
 struct Stage {
+	file: &'static str,
 	program: &'static str,
 	setup: &'static [Setup],
 	workers: Mutex<Vec<Sender<Request>>>,
 }
 
-static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: &[prelude_text], workers: Mutex::new(Vec::new()) };
-static ANALYSIS: Stage = Stage { program: ANALYSIS_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
-static EMIT: Stage =
-	Stage { program: EMIT_PROGRAM, setup: &[runtime_words, host_words], workers: Mutex::new(Vec::new()) };
+static PASSES: Stage =
+	Stage { file: "passes.warp", program: PASSES_PROGRAM, setup: &[prelude_text], workers: Mutex::new(Vec::new()) };
+static ANALYSIS: Stage =
+	Stage { file: "analyzer.warp", program: ANALYSIS_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
+static EMIT: Stage = Stage {
+	file: "emitter.warp",
+	program: EMIT_PROGRAM,
+	setup: &[runtime_words, host_words],
+	workers: Mutex::new(Vec::new()),
+};
 
 impl Stage {
 	/// The stage program, naming the files of library()
 	fn text(&self) -> String {
 		self.program.replace(LIBRARY_MARK, &library().display().to_string())
+	}
+
+	/// The failure of a run of the stage, naming its file, so a bare warp error says where it came from
+	fn failed(&self, failure: &str) -> String {
+		format!("the self-hosted stage {} failed: {failure}", compiler_folder().join(self.file).display())
 	}
 }
 
@@ -184,7 +197,7 @@ pub fn program_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> 
 /// The kinds analyzer.warp finds in the program `view` shows, self-hosted or not
 pub fn kinds_of(view: &Node) -> Result<serde_json::Value, String> {
 	let kinds = answer(&ANALYSIS, view_json(view))?;
-	let failed = || format!("the self-hosted analysis failed: {kinds}");
+	let failed = || ANALYSIS.failed(&kinds);
 	let kinds: String = serde_json::from_str(&kinds).map_err(|_| failed())?;
 	serde_json::from_str(&kinds).map_err(|_| failed())
 }
@@ -209,7 +222,7 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			record_refusal(&refusal);
 			None
 		}
-		Err(failure) => Some(Err(crate::node::error(&format!("the self-hosted emitter failed: {failure}")))),
+		Err(failure) => Some(Err(crate::node::error(&failure))),
 		Ok(mut bytes) => {
 			// the Rust front took the program's `use fuel`, so emitter.warp never saw it
 			if let Some(mark) = crate::host::fuel_mark() {
@@ -243,10 +256,13 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 		}
 		Err(refusal) => {
 			log::info!("pure lane refused: {refusal}");
-			let refused = refusal.starts_with(OUTSIDE_THE_CORE);
-			let refusal = format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE));
-			record_refusal(&refusal);
-			let failure = if refused { refusal } else { format!("the pure lane failed: {refusal}") };
+			let recorded = format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE));
+			record_refusal(&recorded);
+			let failure = if refusal.starts_with(OUTSIDE_THE_CORE) {
+				recorded
+			} else {
+				format!("the pure lane failed: {refusal}")
+			};
 			strict.then(|| Err(crate::node::error(&failure)))
 		}
 	}
@@ -255,10 +271,9 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
 fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
 	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
-	serde_json::from_str::<serde_json::Value>(&view).map_err(|_| format!("the passes stage failed: {view}"))?;
+	serde_json::from_str::<serde_json::Value>(&view).map_err(|_| PASSES.failed(&view))?;
 	let analysis = answer(&ANALYSIS, view.clone())?;
-	let kinds: String =
-		serde_json::from_str(&analysis).map_err(|_| format!("the analysis stage failed: {analysis}"))?;
+	let kinds: String = serde_json::from_str(&analysis).map_err(|_| ANALYSIS.failed(&analysis))?;
 	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
 }
 
@@ -299,16 +314,18 @@ fn imports_from(bytes: &[u8], module: &str) -> bool {
 	})
 }
 
-/// The bytes of the module emitter.warp answers as a list of byte numbers, else its answer as the failure
+/// The bytes of the module emitter.warp answers as a list of byte numbers, its refusal (OUTSIDE_THE_CORE) as is, else
+/// its answer as the stage's failure
 fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 	match serde_json::from_str(answer) {
 		Ok(serde_json::Value::Array(items)) => {
 			let bytes: Option<Vec<u8>> =
 				items.iter().map(|item| item.as_u64().and_then(|byte| u8::try_from(byte).ok())).collect();
-			bytes.ok_or_else(|| format!("a module byte beyond 0..255: {answer}"))
+			bytes.ok_or_else(|| EMIT.failed(&format!("a module byte beyond 0..255: {answer}")))
 		}
-		Ok(serde_json::Value::String(refusal)) => Err(refusal),
-		_ => Err(answer.to_string()),
+		Ok(serde_json::Value::String(refusal)) if refusal.starts_with(OUTSIDE_THE_CORE) => Err(refusal),
+		Ok(serde_json::Value::String(failure)) => Err(EMIT.failed(&failure)),
+		_ => Err(EMIT.failed(answer)),
 	}
 }
 
@@ -379,7 +396,7 @@ fn stage(index: usize, argument: &str, handles: &[Node]) -> Node {
 	};
 	match serde_json::from_str(&answer) {
 		Ok(view) => node_of_handled_view(&view_of_json(view), handles),
-		Err(_) => crate::node::error(&format!("self-hosted stage {index} failed: {answer}")),
+		Err(_) => crate::node::error(&PASSES.failed(&format!("pass {index}: {answer}"))),
 	}
 }
 
@@ -388,7 +405,7 @@ fn answer(stage: &'static Stage, request: String) -> Result<String, String> {
 	let worker = stage.workers.lock().unwrap().pop().unwrap_or_else(|| spawn_worker(stage));
 	let (reply_to, reply) = channel();
 	let answer = worker.send((request, reply_to)).ok().and_then(|_| reply.recv().ok());
-	let answer = answer.ok_or("the self-hosted stage's worker died")?;
+	let answer = answer.ok_or_else(|| stage.failed("its worker died"))?;
 	stage.workers.lock().unwrap().push(worker);
 	Ok(answer)
 }
