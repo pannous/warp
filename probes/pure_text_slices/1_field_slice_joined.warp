@@ -1,0 +1,5 @@
+# a slice of a text field, held in a variable and joined: el!, also in the pure lane (it trapped: analyzer.warp took the slice for a list)
+class P { code: text; at: int }
+p = P{code: "hello", at: 1}
+w = p.code[1 .. 3]
+print w + "!"

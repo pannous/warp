@@ -15,7 +15,7 @@ definition_slices(source: text): list := {
 	name = ""
 	written = ""
 	for line in source.split("\n") {
-		started = defined_name(line)
+		started = name_defined_in(line)
 		if started != "" {
 			if name != "" { slices += [[name, written]] }
 			name = started
@@ -34,7 +34,7 @@ definition_slices(source: text): list := {
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
 # `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
 # `infix operator ↑(x: number, n: number) := …`, else ""
-defined_name(line: text): text := {
+name_defined_in(line: text): text := {
 	declared = operator_declared(blank_words(line))
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1 }
 	leading = leading_name(line)
@@ -77,7 +77,7 @@ with_reached(program: any, module: text, in_front: bool): any := {
 	program = aliased(program, aliases, own_heads(program))
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), any other definition replaces the module's
-	slices = definition_slices(module).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
+	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program)
@@ -85,7 +85,7 @@ with_reached(program: any, module: text, in_front: bool): any := {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
-			if slice#1 == word and not (slice#2 in reached) {
+			if slice#1 == word and slice#2 not in reached {
 				slice_node = plain_node(parsed(slice#2))
 				reached[slice#2] = statements_in(slice_node)
 				wanted += symbol_words(slice_node)
@@ -125,14 +125,14 @@ aliased(n: any, aliases: any, own: any): any := match n {
 aliased_call(n: any, aliases: any, own: any, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
-	if not (called in aliases) or shadows(own, called, #n - 1 + receivers) { return n }
+	if called not in aliases or shadows(own, called, #n - 1 + receivers) { return n }
 	group_like(n, [symbol(aliases[called])] + items_of(n)[1 ..])
 }
 
 # whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
 # function when it takes them (a parameter `b = 1` may be left out)
 shadows(own: any, name: text, count: int): bool := {
-	if not (name in own) { return no }
+	if name not in own { return no }
 	head = own[name]
 	if not is_group(head) { return yes }
 	parameters = items_of(head)[1 ..]
@@ -156,6 +156,57 @@ definition_head_of(statement: any): any := {
 	if is_group(n) and bracket_of(n) == "(" and #n > 0 then n else ø
 }
 
+# the standard modules named after a builtin type word (Rust's type_modules: lib/<word>.warp for a word of
+# BUILTIN_TYPES in src/lowering/types/type_tests.rs)
+type_modules = ["list", "map", "text", "time"]
+
+# `xs.flatten()`, `unique(xs)`: a program calling a word of exactly one type module, a word it defines nowhere and no
+# library word, uses that module, a `use` in front of it (Rust twin: src/modules/implicit_modules.rs
+# with_type_module_uses; a word of two such modules needs its `use`)
+with_type_module_uses(program: any): any := {
+	own = own_heads(program)
+	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
+	providers = type_module_providers()
+	wanted = {}
+	for word in called_words(program) {
+		if word in providers and word not in own and word not in call_kinds { wanted[providers[word]] = yes }
+	}
+	# in the order of type_modules, Rust's sorted one
+	modules = type_modules.filter(module => module in wanted and module not in used)
+	if #modules == 0 { return program }
+	use_statements = modules.map(module => plain_node(parsed("use " + module)))
+	separated(bracketed(use_statements + statements_in(program), ""), ";")
+}
+# word → the type module defining it, "" for a word two of them define
+type_module_providers(): any := {
+	providers = {}
+	for module in type_modules {
+		source = file_text(std_module_path(module))
+		if source != ø {
+			for slice in definition_slices(source) {
+				word = slice#1
+				providers[word] = if word in providers and providers[word] != module then "" else module
+			}
+		}
+	}
+	providers
+}
+# the words the program calls, `f(x)` and `x.f(y)`, each once
+called_words(n: any): list := {
+	found = {}
+	waiting = [n]
+	at = 1
+	while at <= #waiting {
+		part = waiting#at
+		at += 1
+		if type(part) is key { waiting += [key_of(part), value_of(part)] } else if is_group(part) {
+			if bracket_of(part) == "(" and #part > 0 and part#1 is symbol { found[name_of(part#1)] = yes }
+			for item in part { waiting += [item] }
+		}
+	}
+	found.keys
+}
+
 # the program with the definitions it reaches of the standard modules it uses, those they use in turn included: `use
 # case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
 with_used_modules(program: any, folder: text): any := {
@@ -167,7 +218,7 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 	sources = []
 	for statement in statements {
 		module = use_target(statement)
-		if module is symbol and file_used(statement, folder) == ø and not (name_of(module) in seen) {
+		if module is symbol and file_used(statement, folder) == ø and name_of(module) not in seen {
 			seen += [name_of(module)]
 			source = file_text(std_module_path(name_of(module)))
 			if source != ø {

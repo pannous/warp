@@ -131,19 +131,11 @@ nodes_kept(top: Node, kept: function): list := {
 		unvisited = unvisited[0 ..< #unvisited - 1]
 		if kept(n) {
 			found += [n]
-			unvisited += parts_of(n)
+			unvisited += parts_within(n)
 		}
 	}
 	found
 }
-
-parts_of(n: Node): list := match n {
-	Key(left, op, right): { if left == symbol(opaque_word) then opaque_parts(right) else [left, right] }
-	List(items, bracket, separator): items
-	_: []
-}
-
-opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
 
 # the scope with each [name, meaning] pair added
 remember(scope: any, pairs: list): any := {

@@ -9,6 +9,14 @@ code_point_at(t: text, at: int): int := {
 	n
 }
 within(c: int, low: int, high: int): bool := c >= low and c <= high
+# `n as char`, `n as codepoint` (Rust's casts.rs emit_code_point, decision digit-as-char): a digit 0…9 is its digit
+# character, as '5' as int is 5; another number the character of that code point, one no character has (beyond
+# U+10FFFF, a surrogate) the error invalid_code_point
+cast_code_point(n: int): int := {
+	if within(n, 0, 9) { return n + 48 }
+	if n < 0 or n > 1114111 or within(n, 55296, 57343) { invalid_code_point() }
+	n
+}
 # a code point that continues the character before it: combining marks, variation selectors, skin tones, ZWJ …
 # (src/extensions/strings.rs GRAPHEME_EXTEND, the same table)
 extends_character(c: int): bool := {
@@ -76,8 +84,10 @@ text_char(t: text, index: int): any := {
 }
 # the byte offset of t's index-th character, counted from 1; past the last, the byte count. It walks on from a walk
 # over t at or before index, else back from one past it (walk_back), else from the start: a scan with look backs
-# (`src[start..i]`) takes linear time, as Rust's text_grapheme_offset
+# (`src[start..i]`) takes linear time, as Rust's text_grapheme_offset. A short text walks from its start and leaves
+# the walks to the long ones (card text-cache-lru)
 character_start(t: text, index: int): int := {
+	if byte_count(t) < short_text() { return character_from_start(t, index) }
 	if walk_reaches(t, index) == 0 { swap_walks() }
 	if walk_reaches(t, index) == 0 { walk_back(t, index) }
 	if index < walked_index {
@@ -92,6 +102,17 @@ character_start(t: text, index: int): int := {
 	}
 	walked_at
 }
+character_from_start(t: text, index: int): int := {
+	at = 0
+	walked = 1
+	while walked < index and at < byte_count(t) {
+		at = character_end(t, at)
+		walked += 1
+	}
+	at
+}
+# Texts below this many bytes stay out of the count kept and the walks (Rust's SHORT_TEXT)
+short_text(): int := 64
 # How far (bytes) walk_back looks back from a walk; further back, an index walks from the start (Rust's BACK_REACH)
 back_reach(): int := 256
 # the walk over t moved back to a character at or before index by the ASCII bytes before it (each but \n starts a

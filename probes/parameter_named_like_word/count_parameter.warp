@@ -1,0 +1,2 @@
+used(count: function, x: int): int := count(x, 1)
+print(used((a, b) => a + b, 41))

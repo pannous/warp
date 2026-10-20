@@ -1,0 +1,162 @@
+# Definitions of one name with different parameter counts (card pure-lane-merges; Rust: src/lowering/definitions/
+# overloads.rs lower_arity_overloads): `twice(n) := …` and `twice(a, b) := …` are the functions twice·1 and twice·2,
+# and every call names the one its argument count fits, `x.twice(y)` counting its receiver; passed as a value,
+# `bottom_up(n, twice)`, it is the one the called function calls that parameter with. Definitions of one count stay
+# one function, whose clauses clauses.warp merges.
+use "walk.warp"
+use "phrase_blocks.warp"
+use "scope.warp"
+
+# the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
+target_call(target: Node): any := match target {
+	Key(head, op, result): { if op == Op.Colon or op == Op.As then target_call(head) else ø }
+	List(call, Bracket.Round, Separator.None): { if #call > 0 and is_name(call#1) then target else ø }
+	_: ø
+}
+
+# the call a definition `f(a, b) := body` names, ø for anything else
+definition_call(n: Node): any := match n {
+	Key(target, op, body): { if op == Op.Define then target_call(target) else ø }
+	_: ø
+}
+
+# [how many arguments a call must pass, how many it may]: `b = 1` may be left out
+arity_of(call: Node): list := {
+	parameters = items_of(call)[1 ..]
+	[#parameters.filter(parameter => not is_key(parameter, Op.Assign)), #parameters]
+}
+
+# name → its arities, for each name defined with several parameter counts, no two of them the same
+overloaded_arities(program: Node): any := {
+	arities = {}
+	for n in nodes_in(program) {
+		call = definition_call(n)
+		if call != ø {
+			name = name_of(call#1)
+			arity = arity_of(call)
+			if name not in arities { arities[name] = [] }
+			if not (arity in arities[name]) { arities[name] = arities[name] + [arity] }
+		}
+	}
+	overloaded = {}
+	for name in arities.keys {
+		if #arities[name] > 1 and distinct_totals(arities[name]) { overloaded[name] = arities[name] }
+	}
+	overloaded
+}
+
+distinct_totals(variants: list): bool := {
+	totals = []
+	for arity in variants {
+		if arity#2 in totals { return no }
+		totals += [arity#2]
+	}
+	yes
+}
+
+variant_name(name: text, total: int): text := name + "·" + total
+
+# the definition's target naming its variant: `twice(a, b): int` as `twice·2(a, b): int`
+renamed_target(target: Node, name: text): Node := match target {
+	Key(head, op, result): Key(renamed_target(head, name), op, result)
+	_: group_like(target, [symbol(name)] + items_of(target)[1 ..])
+}
+
+# the call naming the variant that takes its arguments, `receivers` of them before the dot; the call itself when its
+# name is not overloaded or no single variant takes them
+variant_call(n: any, overloaded: any, receivers: int): any := {
+	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 is symbol) { return n }
+	name = name_of(n#1)
+	if name not in overloaded { return n }
+	count = #n - 1 + receivers
+	fitting = overloaded[name].filter(arity => arity#1 <= count and count <= arity#2)
+	if #fitting != 1 { return n }
+	group_like(n, [symbol(variant_name(name, fitting#1#2))] + items_of(n)[1 ..])
+}
+
+# a function's parameter, as the key of called_parameters: `bottom_up·2`
+parameter_key(function: text, index: int): text := function + "·" + index
+
+# how many arguments `body` calls `parameter` with: 1 of `f(x)`; ø when its calls differ or there are none
+called_count(body: Node, parameter: text): any := {
+	counts = []
+	for n in nodes_in(body) {
+		if is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 == symbol(parameter) and not (#n - 1 in counts) { counts += [#n - 1] }
+	}
+	if #counts == 1 then counts#1 else ø
+}
+
+# how many arguments a function passed on is called with: 1 of `apply(f, x)` when apply calls f(x)
+passed_on_count(body: Node, parameter: text, called: any): any := {
+	for n in nodes_in(body) {
+		if is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol {
+			for at in 2 to #n {
+				if n#at == symbol(parameter) and parameter_key(name_of(n#1), at - 1) in called { return called[parameter_key(name_of(n#1), at - 1)] }
+			}
+		}
+	}
+	ø
+}
+
+# function·index → how many arguments the function calls that parameter with, also by passing it on (Rust:
+# overloads.rs called_parameters)
+called_parameters(program: Node): any := {
+	definitions = nodes_in(program).filter(n => definition_call(n) != ø)
+	called = {}
+	for n in definitions { called = remember_calls(n, called, (body, name) => called_count(body, name)) }
+	known = -1
+	while #called != known {
+		known = #called
+		for n in definitions { called = remember_calls(n, called, (body, name) => passed_on_count(body, name, called)) }
+	}
+	called
+}
+
+# `called` with the counts `counted_in(body, name)` gives the definition's parameters that have none yet
+remember_calls(n: Node, called: any, counted_in: function): any := {
+	call = definition_call(n)
+	parameters = items_of(call)[1 ..]
+	for index in 1 to #parameters {
+		name = binding_name(parameters#index)
+		key = parameter_key(name_of(call#1), index)
+		if name != ø and key not in called {
+			found = counted_in(value_of(n), name)
+			if found != ø { called[key] = found }
+		}
+	}
+	called
+}
+
+# `bottom_up(n, phrase)` of phrase overloaded by arity: the argument is the variant taking as many arguments as the
+# called function calls that parameter with
+passed_variants(n: any, overloaded: any, called: any): any := {
+	if not (is_group(n) and bracket_of(n) == "(" and #n > 1 and n#1 is symbol) { return n }
+	callee = name_of(n#1)
+	arguments = items_of(n)[1 ..]
+	passed = (1 to #arguments).map(index => passed_variant(arguments#index, parameter_key(callee, index), overloaded, called))
+	group_like(n, [n#1] + passed)
+}
+
+passed_variant(argument: any, key: text, overloaded: any, called: any): any := {
+	if not (argument is symbol and name_of(argument) in overloaded and key in called) { return argument }
+	count = called[key]
+	fitting = overloaded[name_of(argument)].filter(arity => arity#1 <= count and count <= arity#2)
+	if #fitting == 1 then symbol(variant_name(name_of(argument), fitting#1#2)) else argument
+}
+
+# top-down, so a definition is renamed by its own parameters and a method call counts its receiver
+resolved(n: any, overloaded: any, called: any): any := {
+	call = definition_call(n)
+	if call != ø and name_of(call#1) in overloaded {
+		return Key(renamed_target(key_of(n), variant_name(name_of(call#1), arity_of(call)#2)), Op.Define, resolved(value_of(n), overloaded, called))
+	}
+	match n {
+		Key(receiver, Op.Dot, method): Key(resolved(receiver, overloaded, called), Op.Dot, variant_call(children(method, x => resolved(x, overloaded, called)), overloaded, 1))
+		_: children(variant_call(passed_variants(n, overloaded, called), overloaded, 0), x => resolved(x, overloaded, called))
+	}
+}
+
+arity_overloads(program: any): any := {
+	overloaded = overloaded_arities(program)
+	if #overloaded == 0 then program else resolved(program, overloaded, called_parameters(program))
+}

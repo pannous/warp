@@ -33,10 +33,10 @@
 'use math; round_to(1.23456, 2)'	1.23
 'use math; factorial(5)'	120
 'use math; lerp(0, 10, 0.25)'	2.5
-'use text; [is_blank("  "), is_blank(" a")]'	[1, 0]
+'use text; [is_blank("  "), is_blank(" a")]'	[yes, no]
 
 # use_math_parity_digits_choose_mod_pow
-'use math; [is_even(4), is_odd(4), is_odd(-3)]'	[1, 0, 1]
+'use math; [is_even(4), is_odd(4), is_odd(-3)]'	[yes, no, yes]
 'use math; digits(1234)'	[1, 2, 3, 4]
 'use math; [choose(5, 2), choose(10, 3), choose(3, 5)]'	[10, 120, 0]
 'use math; mod_pow(2, 10, 1000)'	24
