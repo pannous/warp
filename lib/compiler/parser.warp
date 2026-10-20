@@ -35,7 +35,9 @@ def written_tree(source) {
 // Rust twin: declaration_scan.rs defined_name, lookahead.rs defines_bang_word
 def bang_words(source) {
 	found = []
+	# only a line with `!(` can define one: the prelude's scan, at every start of a stage program, took 60 ms
 	for line in source.split("\n") {
+		if not line.contains("!(") { continue }
 		at = blank_end_of(line, 0)
 		if starts_at(line, "def ", at) { at = blank_end_of(line, at + 4) }
 		end = name_end(line, at, line.length)
