@@ -1200,8 +1200,8 @@ def atom(p) {
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
 	if is_name_start(c) { return named(p) }
-	// `$a`, a pattern's name hole: `data($a + 0)`
-	if c == '$' and is_name_start(peek(p.code, p.at + 1, p.n)) {
+	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
+	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
 		end = symbol_end(p.code, p.at + 1, p.n)
 		hole = symbol(p.code[p.at .. end])
 		p.at = end
