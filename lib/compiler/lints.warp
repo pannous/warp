@@ -50,7 +50,7 @@ float_equality(n: any): any := {
 # a value written as a float: decimals are exact, `0.1 as float`, `0.1:float` and arithmetic of them are floats
 is_float_value(n: any): bool := {
 	if is_operator(n, "as") or is_operator(n, ":") { return type_kind(value_of(n)) == "Float" }
-	if type(n) is key and op_of(n) in arithmetic_operators { return is_float_value(key_of(n)) or is_float_value(value_of(n)) }
+	if n is key and op_of(n) in arithmetic_operators { return is_float_value(key_of(n)) or is_float_value(value_of(n)) }
 	is_group(n) and #n == 1 and is_float_value(n#1)
 }
 
@@ -58,7 +58,7 @@ is_float_value(n: any): bool := {
 arithmetic_conversion(n: any): any := {
 	if not is_operator(n, "as") { return ø }
 	whole = key_of(n)
-	if not (type(whole) is key) or not (op_of(whole) in arithmetic_operators) { return ø }
+	if not (whole is key) or op_of(whole) not in arithmetic_operators { return ø }
 	last = value_of(whole)
 	target = as_written(value_of(n))
 	tight = if last is number then as_written(last) + ":" + target else "(" + as_written(last) + " as " + target + ")"

@@ -7,13 +7,10 @@ use "uses.warp"
 use "sugar.warp"
 use "kind_changes.warp"
 use "diagnostics.warp"
+use "list_methods.warp"
+use "parser.warp"
 
-# the words of the methods that change their list (Rust is_list_mutating_method)
-list_changing_methods = ["add", "append", "push", "insert", "pop", "remove", "delete", "clear"]
-# the declarations that make a name the function's own: `let n = 5` (Rust is_declaration_word)
-local_words = ["let", "var", "const", "constant", "final", "val"]
 counting_operators = ["++", "--"]
-compound_assignments = ["+=", "-=", "*=", "/=", "%=", "^="]
 # the operators a changed target is reached through: `xs#i`, `p.x`, the declared `k: int`
 target_operators = ["#", ".", ":"]
 
@@ -29,7 +26,7 @@ main_globals(program: any, own_names: list): any := {
 			own = parameter_names(key_of(function_definition))
 			decided = {}
 			for name in changed_names(body) {
-				if name in main_names and not (name in global_names) and not (name in own) and not (name in decided) and not declares_local(body, name) {
+				if name in main_names and name not in global_names and name not in own and name not in decided and not declares_local(body, name) {
 					decided[name] = yes
 					if first_mention(body, name) != fresh_mention { return diagnose(call_of("main_variable_change", [name])) }
 					diagnose(call_of("local_or_global", [name, defined_function]))
@@ -67,20 +64,20 @@ changed_names(n: any): list := {
 	found
 }
 changed_variable(n: any): any := {
-	if not (type(n) is key) { return ø }
+	if not (n is key) { return ø }
 	op = op_of(n)
-	if op == "=" or op in counting_operators or op in compound_assignments { return changed_root(key_of(n)) }
-	if op == "." and key_of(n) is symbol and is_group(value_of(n)) and #value_of(n) > 0 and value_of(n)#1 is symbol and name_of(value_of(n)#1) in list_changing_methods { return name_of(key_of(n)) }
+	if op in BRANCH_ASSIGNING or op in counting_operators { return changed_root(key_of(n)) }
+	if op == "." and key_of(n) is symbol and is_group(value_of(n)) and #value_of(n) > 0 and value_of(n)#1 is symbol and name_of(value_of(n)#1) in in_place_methods { return name_of(key_of(n)) }
 	ø
 }
 changed_root(target: any): any := {
 	if target is symbol { return name_of(target) }
-	if type(target) is key and op_of(target) in target_operators { return changed_root(key_of(target)) }
+	if target is key and op_of(target) in target_operators { return changed_root(key_of(target)) }
 	ø
 }
 
 # `let n = 5` in the body: n is explicitly the function's own
-declares_local(body: any, name: text): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_words and leftmost_name(n#2) == name)
+declares_local(body: any, name: text): bool := nodes_in(body).any(n => is_group(n) and #n == 2 and n#1 is symbol and name_of(n#1) in local_declaration_keywords and leftmost_name(n#2) == name)
 
 # how the body first mentions the name: binding it fresh (`primes = []`, the function's own local, as in Python),
 # reading or updating it (main's variable), or not at all ("")

@@ -77,7 +77,7 @@ evident_kind(value: any, known: any): text := {
 	if value is text { return "Text" }
 	if is_group(value) and bracket_of(value) == "[" { return "List" }
 	if is_operator(value, "as") { return type_kind(value_of(value)) }
-	if type(value) is key and op_of(value) in arithmetic_operators {
+	if value is key and op_of(value) in arithmetic_operators {
 		left = evident_kind(key_of(value), known)
 		right = evident_kind(value_of(value), known)
 		if left == "Int" and right == "Int" { return "Int" }
@@ -97,7 +97,7 @@ entry(map: any, key: text): text := if key in map then map[key] else ""
 # the evident kind for kind changes, bools and functions apart (card bool-assign)
 given_kind_of(value: any, results: any): text := {
 	if value is bool { return bool_kind }
-	if type(value) is key and op_of(value) in bool_operators { return bool_kind }
+	if value is key and op_of(value) in bool_operators { return bool_kind }
 	if is_operator(value, "as") and value_of(value) is symbol and name_of(value_of(value)).lower() in bool_types { return bool_kind }
 	if is_group(value) and bracket_of(value) == "(" and #value > 0 and value#1 == symbol(closure_word) { return function_kind }
 	evident_kind(value, results)

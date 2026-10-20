@@ -19,7 +19,7 @@ global diagnosed = []
 global message_rows = ø
 
 # the node a check looks at: a key of the operator
-is_operator(n: any, op: text): bool := type(n) is key and op_of(n) == op
+is_operator(n: any, op: text): bool := n is key and op_of(n) == op
 
 diagnose(fact: any): any := {
 	diagnosed += [said_fact(fact)]
@@ -58,8 +58,8 @@ matches(pattern: any, n: any, bound: any): bool := {
 		bound[name_of(pattern)[1..]] = n
 		return yes
 	}
-	if type(pattern) is key {
-		return type(n) is key and op_of(n) == op_of(pattern) and matches(key_of(pattern), key_of(n), bound) and matches(value_of(pattern), value_of(n), bound)
+	if pattern is key {
+		return n is key and op_of(n) == op_of(pattern) and matches(key_of(pattern), key_of(n), bound) and matches(value_of(pattern), value_of(n), bound)
 	}
 	if is_group(pattern) {
 		if not is_group(n) or bracket_of(n) != bracket_of(pattern) or #n != #pattern { return no }
