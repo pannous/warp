@@ -1,0 +1,4 @@
+# The compile errors of the warp compiler (lib/compiler/diagnostics.warp): pattern TAB message, the first match wins
+
+# P45: a variable given values of two kinds that do not mix (kind_changes.warp)
+kind_change($name, $was, $now)	"{name} was {a was}, is given {a now}: use another name"

@@ -9,13 +9,15 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::words::LIST_WORD;
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
 	let variables: HashSet<String> = node.written_names();
-	let mut names = Names { values: names_used_as_values(&node), variables, texts: text_variables(&node) };
+	let mut names =
+		Names { values: names_used_as_values(&node), variables, texts: text_variables(&node), ranges: Cell::new(0) };
 	names.values.extend(names.variables.iter().cloned());
 	lower_declarations_among(node, &names)
 }
@@ -411,6 +413,10 @@ pub(crate) struct Names {
 	values: HashSet<String>,
 	/// Variables only ever given a text: `add "c" to x` appends to the text
 	texts: HashSet<String>,
+	/// The ranges collected as lists where no variable is assigned so far: each collects under a name of its own
+	/// (`range_value`, `range_value_2` …), or `[0..n as list, 0..n as list]` filled one shared list by turns, as Nodes
+	/// and a copy per item (card room-conversions)
+	ranges: Cell<usize>,
 }
 
 /// Variables whose every assigned value is a text literal or an update of the variable itself (`x = x + "c"`)
@@ -488,7 +494,7 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Key(name, Op::Colon, type_node) if let Some(list_type) = bracketed_list_type(&type_node) => {
 			Node::Key(name, Op::Colon, Box::new(list_type))
 		}
-		range if let Some(list) = range_list(&range, lower) => list,
+		range if let Some(list) = range_list(&range, lower, &names.ranges) => list,
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if let Some((type_name, name)) = number_type_prefix(&target) => {
@@ -528,7 +534,7 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 /// A range as the list it stands for. `r=1…3` stores the list [1 2 3]; the range itself only lives in a `for` header;
 /// `xs = a..b` of computed bounds: the list a loop over the range collects. A range anywhere else a value is wanted
 /// (`print 1..5`, `str(a..b)`, `(1..5)`) is the same list: the ranges of `for` headers are loops by now (for_loop)
-fn range_list(node: &Node, lower: impl Fn(Node) -> Node) -> Option<Node> {
+fn range_list(node: &Node, lower: impl Fn(Node) -> Node, ranges: &Cell<usize>) -> Option<Node> {
 	match node {
 		Node::Key(target, Op::Assign, value) if let Some(elements) = range_elements(value) => {
 			Some(Node::Key(target.clone(), Op::Assign, Box::new(elements)))
@@ -536,9 +542,20 @@ fn range_list(node: &Node, lower: impl Fn(Node) -> Node) -> Option<Node> {
 		Node::Key(target, Op::Assign, value) if let Some(collected) = computed_range(target, value) => {
 			Some(lower(Node::Key(target.clone(), Op::Assign, Box::new(collected))))
 		}
-		range => {
-			range_elements(range).or_else(|| computed_range(&Node::Symbol(RANGE_VALUE.to_string()), range).map(lower))
-		}
+		range => range_elements(range).or_else(|| {
+			let collected = computed_range(&Node::Symbol(range_value_name(ranges.get() + 1)), range)?;
+			ranges.set(ranges.get() + 1);
+			Some(lower(collected))
+		}),
+	}
+}
+
+/// The name the nth range without a variable collects its list under
+fn range_value_name(nth: usize) -> String {
+	if nth == 1 {
+		RANGE_VALUE.to_string()
+	} else {
+		format!("{RANGE_VALUE}_{nth}")
 	}
 }
 

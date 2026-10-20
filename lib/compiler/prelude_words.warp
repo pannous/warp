@@ -1,7 +1,8 @@
-# The prelude's definitions a program reaches (Rust twin: src/modules/prelude_slices.rs): a call of a prelude word the
-# program defines nowhere brings that word's definition, and those it calls in turn, as Rust's resolve loads them. The
-# prelude is cut into slices, one per top-level `name(…) := …`; the reached ones are parsed after the program's own
-# statements, so its positions stay as written. It runs on the parsed program after uses.warp: the source is parsed
+# The definitions of a module's text a program reaches (Rust twin: src/modules/prelude_slices.rs), for the prelude and
+# each standard module the program uses (`use case_tables`): a call of a word the program defines nowhere brings that
+# word's definition, and those it calls in turn, as Rust's resolve loads them. The text is cut into slices, one per
+# top-level `name(…) := …` or `name = …`; the reached ones are parsed after the program's own statements, so its
+# positions stay as written. It runs on the parsed program after uses.warp: the source is parsed
 # once (twice put parser.warp's lowering past the stage's 60 s).
 use "parser.warp"
 use "walk.warp"
@@ -29,16 +30,26 @@ definition_slices(source: text): list := {
 	if name != "" { slices += [[name, written]] }
 	slices
 }
-# `f` of `f(x) := …` or `def f(x)`, operator_↑ of `infix operator ↑(x: number, n: number) := …`, else ""
+# the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
+defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
+# `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
+# `infix operator ↑(x: number, n: number) := …`, else ""
 defined_name(line: text): text := {
 	declared = operator_declared(blank_words(line))
 	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1 }
-	start = if line.starts_with("def ") then 4 else 0
-	stop = start
+	leading = leading_name(line)
+	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
+	if leading == "" { return "" }
+	following = line[#leading ..].trim()
+	is_function = following.starts_with("(") and line.contains(":=")
+	is_value = following.starts_with(":=") or (following.starts_with("=") and not following.starts_with("=="))
+	if is_function or is_value then leading else ""
+}
+# the name a line starts with, "" when it starts with another character
+leading_name(line: text): text := {
+	stop = 0
 	while stop < #line and is_name_part(line#(stop + 1)) { stop += 1 }
-	if stop == start or stop >= #line or line#(stop + 1) != '(' { return "" }
-	if start == 0 and not line.contains(":=") { return "" }
-	line[start ..< stop]
+	line[0 ..< stop]
 }
 is_name_part(c: char): bool := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_'
 # a line inside the definition above it: indented, or the brace closing it
@@ -57,39 +68,42 @@ symbol_words(n: any): list := {
 	found.keys
 }
 
-# the program with the prelude definitions it reaches after its own statements (its positions stay as written), the
-# program itself when it reaches none; each reached slice parsed once
-with_prelude(program: any, prelude: text): any := {
+# the program with the definitions of `module` (a module's text) it reaches, in the module's order, each slice parsed
+# once and on its own (the program's positions stay as written); the program itself when it reaches none. As Rust's
+# loader places them: a used module's in front of the program, the prelude's after it
+with_reached(program: any, module: text, in_front: bool): any := {
 	own_names = statements_in(program).map(declared_name)
-	aliases = prelude_aliases(prelude)
+	aliases = module_aliases(module)
 	program = bottom_up(program, n => aliased_call(n, aliases, own_names))
-	program_parts = statements_in(program)
-	# a program's operator declaration overloads the prelude's beside it (`infix operator ↑(v: V, n: int)` beside the
-	# numbers' ↑), any other definition replaces the prelude's
-	slices = definition_slices(prelude).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
-	reached = []
-	brought = []
+	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
+	# numbers' ↑), any other definition replaces the module's
+	slices = definition_slices(module).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
+	# the statements of each reached slice, by its text
+	reached = {}
 	wanted = symbol_words(program)
 	while #wanted > 0 {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
-			if slice#1 == word and not (slice in reached) {
-				reached += [slice]
+			if slice#1 == word and not (slice#2 in reached) {
 				slice_node = plain_node(parsed(slice#2))
-				brought += statements_in(slice_node)
+				reached[slice#2] = statements_in(slice_node)
 				wanted += symbol_words(slice_node)
 			}
 		}
 	}
-	if #brought == 0 { return program }
-	for definition_node in brought { program_parts += [definition_node] }
-	separated(bracketed(program_parts, ""), ";")
+	if #reached == 0 { return program }
+	brought = []
+	for slice in slices { if slice#2 in reached { brought += reached[slice#2] } }
+	parts = if in_front then [] else statements_in(program)
+	for reached_statement in brought { parts += [reached_statement] }
+	if in_front { for own_statement in statements_in(program) { parts += [own_statement] } }
+	separated(bracketed(parts, ""), ";")
 }
 
-# `alias keys = map_keys` of the prelude: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
+# `alias keys = map_keys` of a module: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
 # nothing, its calls call the word)
-prelude_aliases(source: text): any := {
+module_aliases(source: text): any := {
 	aliases = {}
 	for line in source.split("\n") {
 		if line.starts_with("alias ") {
@@ -106,4 +120,28 @@ aliased_call(n: any, aliases: any, own_names: any): any := {
 	called = name_of(n#1)
 	if not (called in aliases) or called in own_names { return n }
 	group_like(n, [symbol(aliases[called])] + items_of(n)[1 ..])
+}
+
+# the program with the definitions it reaches of the standard modules it uses, those they use in turn included: `use
+# case_tables` names lib/case_tables.warp when the program's folder has no case_tables.warp (uses.warp brings that)
+with_used_modules(program: any, folder: text): any := {
+	sources = used_module_sources(statements_in(program), folder, [])
+	if #sources#1 == 0 then program else with_reached(program, sources#1.join("\n"), yes)
+}
+# [the sources of the standard modules the statements use, each after those it uses, the module names seen]
+used_module_sources(statements: any, folder: text, seen: any): list := {
+	sources = []
+	for statement in statements {
+		module = use_target(statement)
+		if module is symbol and file_used(statement, folder) == ø and not (name_of(module) in seen) {
+			seen += [name_of(module)]
+			source = file_text(std_module_path(name_of(module)))
+			if source != ø {
+				inner = used_module_sources(statements_in(plain_node(parsed(source))), folder, seen)
+				sources += inner#1 + [source]
+				seen = inner#2
+			}
+		}
+	}
+	[sources, seen]
 }

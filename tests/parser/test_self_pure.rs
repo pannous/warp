@@ -318,6 +318,24 @@ fn unicode_glyphs_read_self_hosted() {
 	}
 }
 
+/// lib/compiler/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
+/// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
+#[test]
+fn kind_changes_fail_pure() {
+	let (output, _) = lane_run("pure-only", "kind_change", "x = 5; x = [1]; x");
+	assert!(output.contains("x was an Int, is given a List: use another name"), "{output}");
+	let (output, _) = lane_run("pure-only", "body_kind_change", "f() := (x = 1; x = \"a\"; x); f()");
+	assert!(output.contains("x was an Int, is given a Text"), "{output}");
+	runs_pure("kinds_that_mix", "x = 1; x = 2.5; x", "2.5");
+}
+
+/// card uses-std-modules: a standard module a program uses by name (`use case_tables`, lib/case_tables.warp) brings
+/// the definitions the program reaches, its values included, in front of the program
+#[test]
+fn std_modules_run_pure() {
+	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
+}
+
 /// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter
 /// of kind Op, Bracket or Separator holds the text a node carries, and a type variable `T` any value
 #[test]
