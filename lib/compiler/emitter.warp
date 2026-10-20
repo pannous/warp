@@ -1089,6 +1089,8 @@ def call_values(f: Function, values: any): list {
 # target f's number names; `<target>·captured·<i>(f)`: f's i-th captured value
 closure_call_prefix = "closure_call_"
 captured_marker = "·captured·"
+# what joins the parts of a lifted name: a method's witness `len·Point`, a nested `outer·inner`
+name_joiner = "·"
 # `closure_text(f)`: the text of a closure, its lambda as written (`x => x*2`) or its target's name, a function made
 # once, its code written last (closure_text_code), as Rust's function_text table
 closure_text_name = "closure_text"
@@ -1144,10 +1146,18 @@ closure_text_code(f: Function): any := {
 }
 # a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
 closure_shown(name: text, captured: int): text := {
-	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return name }
+	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return function_name(name) }
 	f = module.functions[name]
 	names = f.parameters[captured..].map(p => name_of(p))
 	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
+}
+# the name a function value shows, as Rust's (closures.rs function_name): `len` of a class's method that became the
+# witness `len·Point`, the last part of a nested `outer·inner`
+function_name(target: text): text := {
+	parts = target.split(name_joiner)
+	if #parts == 1 { return target }
+	last = parts#(#parts)
+	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
 }
 # a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
 # its own, the target's call on the captured values and the arguments; a closure of another arity fails in
