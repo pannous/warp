@@ -69,25 +69,56 @@ character_between(t: text, at: int, end: int): any := {
 }
 # the index-th character of t, counted from 1
 text_char(t: text, index: int): any := {
+	at = character_start(t, index)
+	character_between(t, at, character_end(t, at))
+}
+# the byte offset of t's index-th character, counted from 1; past the last, the byte count. It walks on from a walk
+# over t at or before index, else back from one past it (walk_back), else from the start: a scan with look backs
+# (`src[start..i]`) takes linear time, as Rust's text_grapheme_offset
+character_start(t: text, index: int): int := {
 	if walk_reaches(t, index) == 0 { swap_walks() }
-	if walk_reaches(t, index) == 0 {
-		walked_text = t
-		walked_bytes = byte_count(t)
-		walked_index = 1
-		walked_at = 0
-		walked_before = -1
-	}
+	if walk_reaches(t, index) == 0 { walk_back(t, index) }
 	if index < walked_index {
 		walked_index -= 1
 		walked_at = walked_before
 		walked_before = -1
 	}
-	while walked_index < index {
+	while walked_index < index and walked_at < byte_count(t) {
 		walked_before = walked_at
 		walked_at = character_end(t, walked_at)
 		walked_index += 1
 	}
-	character_between(t, walked_at, character_end(t, walked_at))
+	walked_at
+}
+# How far (bytes) walk_back looks back from a walk; further back, an index walks from the start (Rust's BACK_REACH)
+back_reach(): int := 256
+# the walk over t moved back to a character at or before index by the ASCII bytes before it (each but \n starts a
+# character: nothing joins an ASCII character to what precedes it, \r\n aside) and the characters counted from there
+# (Rust's text_grapheme_back); a walk over another text, or none within back_reach, starts over at t's start
+walk_back(t: text, index: int): int := {
+	if same_text(t, walked_text) == 0 and same_text(t, other_text) == 1 { swap_walks() }
+	if same_text(t, walked_text) == 0 or byte_count(t) < walked_bytes { return walk_from_start(t) }
+	while walked_index > index {
+		back = walked_at - 1
+		while back >= 0 and back + back_reach() > walked_at and (byte_at(t, back) >= 128 or byte_at(t, back) == 10) { back -= 1 }
+		if back < 0 or back + back_reach() <= walked_at { return walk_from_start(t) }
+		at = back
+		while at < walked_at {
+			at = character_end(t, at)
+			walked_index -= 1
+		}
+		walked_at = back
+	}
+	walked_before = -1
+	0
+}
+walk_from_start(t: text): int := {
+	walked_text = t
+	walked_bytes = byte_count(t)
+	walked_index = 1
+	walked_at = 0
+	walked_before = -1
+	0
 }
 # 1 when the current walk is over t, or over the start of t that t grew from, and stands at index, before it or one
 # past it
