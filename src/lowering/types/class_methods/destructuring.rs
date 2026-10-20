@@ -143,7 +143,7 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf, 
 			let target = Node::List(names, Bracket::Round, Separator::Comma);
 			recurse(Node::Key(Box::new(target), Op::Assign, value))
 		}
-		Node::List(items, bracket, separator) if is_match(&items) => {
+		Node::List(items, bracket, separator) if crate::welcome_forms::is_match_phrase(&items) => {
 			let items = crate::welcome_forms::with_match_cases(items, |arms| class_arms(arms, fields, cases));
 			Node::List(items, bracket, separator).map_children(recurse)
 		}
@@ -151,9 +151,6 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf, 
 	}
 }
 
-fn is_match(items: &[Node]) -> bool {
-	items.first().is_some_and(|word| crate::words::SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
-}
 
 /// The class arms of a match's cases, `Point{x, y: 0}: body` and `Circle(r): body`, as the guard
 /// `if parts·from is Point and parts·from.y == 0 then parts·from` and the body with the fields bound
