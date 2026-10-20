@@ -89,7 +89,7 @@ op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if:
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
 # phrases whose meaning moves out of the compiler into warp library words (card phrases-out-of-core): refused by name
 # until the word exists, never compiled as an unknown name
-pending_library_words = {times: "`n times`"}
+pending_library_words = {times: "`n times`", once: "`once …`", twice: "`twice …`", thrice: "`thrice …`"}
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
 	"i64.div_s": 127, "i64.div_u": 128, "i64.rem_s": 129, "i64.rem_u": 130, "i64.and": 131, "i64.or": 132, "i64.xor": 133,

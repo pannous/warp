@@ -235,7 +235,9 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   passes in warp. `n times` is refused by name ("`n times` (library word pending)", emitter.warp
   pending_library_words) until it is a library word; `sleep(seconds)` is the prelude word, calling the host word
   sleep_ms (decision sleep-seconds), so a bare number needs no pass; `sleep 20ms` waits for unit values (Rust's pass
-  folds it into sleep_ms meanwhile). The Rust lane keeps its own times pass.
+  folds it into sleep_ms meanwhile). The Rust lane keeps its own times pass. The count words `once`, `twice`, `thrice` are no
+  sugar of parser.warp either (user: "basic demonstrations of how to give a block to a function"): refused by name
+  likewise until both lanes have the prelude words (card once-twice).
 - Positions and reports (card carries-line): where the Rust pass hints, warns or makes an error, pass_differential
   gives the twin the positioned view, ["at", line, column, view] around each positioned node (twins.rs
   positioned_view); walk.warp node_of makes it `positioned(node, line, column)`, read back by `line_of(n)` /

@@ -528,6 +528,9 @@ fn a_lexer_over_short_words_takes_linear_time_pure() {
 fn phrases_out_of_the_core() {
 	let (output, _) = lane_run("pure-only", "times_pending", "a = 0; 3 times { a += 1 }; a");
 	assert!(output.contains("outside the core: pure: `n times` (library word pending)"), "{output}");
+	let (output, _) = lane_run("pure-only", "twice_pending", "n = 0; twice { n += 1 }; n");
+	assert!(output.contains("outside the core: pure: `twice …` (library word pending)"), "{output}");
+	runs_pure("own_twice", "twice(x) := x * 2; twice(4)", "8");
 	let sleep = format!("{}/probes/pure_chains/sleep_seconds.warp", env!("CARGO_MANIFEST_DIR"));
 	runs_pure("sleep_seconds", &sleep, "yes\nwoke");
 }
