@@ -153,8 +153,6 @@ scope_of(program: Node): any := {
 }
 
 binds(scope: any, name: text): bool := scope.has(name)
-# bound as anything but a field: `{symbol: "symbol"}` leaves the word symbol free (Rust type_tests.rs bound_otherwise)
-binds_besides_fields(scope: any, name: text): bool := scope.has(name) and scope[name].any(meaning => meaning != "field")
 binds_as(scope: any, name: text, meaning: text): bool := scope.has(name) and scope[name] contains meaning
 # the meanings that make a name a value where it stands: a variable, a parameter, a loop variable (a field or a function
 # of that name is no value there)
