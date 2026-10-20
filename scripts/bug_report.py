@@ -5,7 +5,7 @@ The browser can't hold a GitHub secret, so the report goes through pannous.com:
   serve     on pannous.com (unit warp-bug-report behind Ferron's /warp-bug-report): checks the shared token, keeps
             the report as a JSON file in the state directory and makes its card at once with the GitHub token
             /etc/warp/github-token: an issue of pannous/warp on the board, in Next (express: Now, as urgent as a card
-            the user drops there); done reports move to done/. The Mac's cron gives the card its key (todo keys).
+            the user drops there; a comment saying "later": Later); done reports move to done/. The Mac's cron gives the card its key (todo keys).
   pull      on the Mac (cron), the fallback for reports whose card GitHub refused: adds each with `todo add` (into
             Next; express: --urgent, into Now), then acknowledges it
   list, ack <id>…   what pull runs on the server
@@ -16,6 +16,7 @@ Notes: notes/bug_report.md.
 import hmac
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -54,6 +55,8 @@ LIMITS = {"comment": 4000, "code": 12000, "output": 4000, "version": 200, "page"
 TITLE_LENGTH = 50  # todo TITLE_MAX
 TITLE_MARK = "🐞 "
 COLUMNS = {False: "Next", True: "Now"}  # by express
+LATER_COLUMN = "Later"  # a comment saying the word "later" (card if-such): not now, nor next
+LATER_WORD = re.compile(r"\blater\b", re.IGNORECASE)
 BOARD_QUERY = """query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { id }
   user(login: $owner) { projectV2(number: $number) { id field(name: "Status") {
@@ -109,7 +112,7 @@ def graphql(query, **variables):
 
 
 def make_card(report):
-    """the report's card on the board: an issue in Next, or Now for express; the issue's and the card's urls"""
+    """the report's card on the board: an issue in its column_of; the issue's and the card's urls"""
     title, body = card_of(report)
     board = graphql(BOARD_QUERY, owner=OWNER, name=REPOSITORY_NAME, number=BOARD_NUMBER)
     project, status = board["user"]["projectV2"]["id"], board["user"]["projectV2"]["field"]
@@ -117,7 +120,7 @@ def make_card(report):
     item = graphql(ADD_ITEM, project=project, content=issue["id"])["addProjectV2ItemById"]["item"]
     board_card = BOARD_CARD_URL % item["databaseId"]
     graphql(UPDATE_BODY, issue=issue["id"], body=f"{body}\n\nBoard card: {board_card}")
-    option = next(option["id"] for option in status["options"] if option["name"] == COLUMNS[report["express"]])
+    option = next(option["id"] for option in status["options"] if option["name"] == column_of(report))
     graphql(SET_COLUMN, project=project, item=item["id"], field=status["id"], option=option)
     return {"card": issue["url"], "board": board_card}
 
@@ -248,6 +251,13 @@ def shortened(text, length):
     return text if len(text) <= length else text[:length].rsplit(" ", 1)[0] + "…"
 
 
+def column_of(report):
+    """Now for express, Later when the comment says "later", else Next"""
+    if not report["express"] and LATER_WORD.search(report["comment"]):
+        return LATER_COLUMN
+    return COLUMNS[report["express"]]
+
+
 def card_of(report):
     comment = report["comment"].strip()
     title = TITLE_MARK + shortened(comment.splitlines()[0], TITLE_LENGTH - len(TITLE_MARK))
@@ -263,7 +273,7 @@ def pull():
     reports = json.loads(remote(f"python3 {REMOTE_SCRIPT} list"))
     for report_id, report in reports.items():
         title, body = card_of(report)
-        column = ["--urgent"] if report["express"] else ["Next"]  # the user's card, not an agent's (Soon)
+        column = ["--urgent"] if report["express"] else [column_of(report)]  # the user's card, not an agent's (Soon)
         subprocess.run(["todo", "add", title, *column, "-b", body], cwd=REPOSITORY, check=True)
         remote(f"python3 {REMOTE_SCRIPT} ack {report_id}")
         print(f"{time.strftime('%F %T')} {report_id} → card: {title}")

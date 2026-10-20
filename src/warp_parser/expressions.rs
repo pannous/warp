@@ -114,6 +114,8 @@ impl WarpParser {
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
 		let mut previous_comparand: Option<Node> = None;
 		let heads_definition = std::mem::take(&mut self.continues_definition_head);
+		// a prefix `if` inside a tighter operand took its own `then` (owns_branches), so its `else` too
+		let mut took_own_then = false;
 		loop {
 			if self.at_tab_separator() {
 				break;
@@ -201,10 +203,13 @@ impl WarpParser {
 				&& (self.context.in_command || (min_bp == 0 && is_command(&lhs)))
 				&& !joins_conditions
 				&& self.and_starts_statement();
+			let owns_branch = owns_branches(&lhs, op, took_own_then);
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.context.stops_at_else) {
+			let weaker = l_bp < min_bp && !owns_branch;
+			if ends_command || membership_word || weaker || (op == Op::Else && self.context.stops_at_else) {
 				break;
 			}
+			took_own_then = owns_branch && l_bp < min_bp && op == Op::Then;
 			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
 			// operator word (a variable `to`), starts the condition
 			let starts_operand = (matches!(op, Op::Hash | Op::Sub) && !self.peek_char(chars).is_whitespace())
@@ -465,6 +470,17 @@ impl WarpParser {
 }
 
 impl WarpParser {}
+
+/// A prefix `if` takes its own `then` and `else` wherever it stands: `pattern: if c then a else b` is the arm giving the
+/// whole if, though `:` binds tighter than `then` (cards match-arm, arm-inline-if). Only an `else` after a `then` the
+/// if took this way: `if a then if b then c else d` keeps its else for the outer if.
+fn owns_branches(lhs: &Node, op: Op, took_own_then: bool) -> bool {
+	match (op, lhs.drop_meta()) {
+		(Op::Then, Node::Key(empty, Op::If, _)) => matches!(empty.drop_meta(), Node::Empty),
+		(Op::Else, Node::Key(_, Op::Then, _)) => took_own_then,
+		_ => false,
+	}
+}
 
 /// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
 pub(crate) fn joins_operands(word: &str) -> bool {

@@ -1,0 +1,13 @@
+// out: [1 2 3]
+// out: 5
+// out: 3 2
+// out: 2
+print [1; 2; 3]
+n = 0
+f() := { global n = 5 }
+f()
+print n
+y = 3
+print "\(y 1+1)"
+xs = y 1 + 1
+print count(xs)

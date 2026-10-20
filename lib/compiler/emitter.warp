@@ -52,7 +52,7 @@ gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [80, 0, 95, 
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
-node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, map: 8, entry: 262, instance: 6, function: 16}
+node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, bool: 257, list: 264, unbracketed_list: 1288, map: 8, entry: 262, instance: 6, function: 16}
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 # a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
@@ -159,9 +159,10 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # errors: the indices of the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); variants its enums' bare cases
+# counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; literal_arguments: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
 
 module = Module({}, [])
 
@@ -207,9 +208,14 @@ unkeyworded(n: any): any := if bracket_of(n) == "" and #n == 2 and n#1 is symbol
 # `use math`, `import f from lib`: the Rust pipeline brought the module in already, so the statement has no code
 import_words = ["use", "require", "import", "include"]
 is_import(n: any): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in import_words
+# `use fuel`: the program's runs count fuel steps (decision fuel-metering); the module carries the custom section
+# fuel_section for its host (Rust twin: module_finish.rs FUEL_SECTION)
+fuel_section = "warp.fuel"
+uses_fuel(program: any): bool := statements_of(program).any(n => is_import(n) and #n == 2 and n#2 == symbol("fuel"))
 
 def statements_of(n: any): list {
-	if is_group(n) and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
+	# `[1;2;3]` is a list of three items, not three statements
+	if is_group(n) and bracket_of(n) != "[" and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
 	[n]
 }
 
@@ -409,7 +415,8 @@ def name_node(name: any): list {
 	if #name == 1 { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code("ref_i31", [])) }
 	node(node_kind_codes.text, text_bytes(name))
 }
-is_entry(n: any): bool := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text)
+# (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry)
+is_entry(n: any): bool := type(n) is key and op_of(n) == ":" and (key_of(n) is symbol or key_of(n) is text) and key_of(n) != symbol("global")
 # `{a: 1, b: "x"}`: a map
 def map_value(body: Body, entries: any): list { ["node", entries_code(body, entries.map(e => key_of(e)), entries.map(e => value_of(e)))] }
 # the map of the names to the values
@@ -683,11 +690,32 @@ def shown_text(value: any): list {
 	if kind != "bool" { return refuse("the text of a " + kind) }
 	["text", value#2 + [op.if] + references.text + text_value("yes")#2 + [op.else] + text_value("no")#2 + [op.end]]
 }
-# what `print` writes: `print a 3` each value as a list shows it, a space between
+# what `print` writes: `print a 3` each value as a list shows it, a space between; `print "x is " x "!"`, a text
+# first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: any): list {
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression(body, n) }
+	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, n.map(x => x), "") }
+	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
+	if n.all(is_spaced_value) and not n[1..].map(x => x).any(is_negative_literal) { return texts_joined(body, n.map(x => x), " ") }
 	runtime_call("items_text", [list_value(body, n.map(x => x))])
 }
+# the texts of the values, the separator between
+def texts_joined(body: Body, values: any, separator: text): list {
+	printed_text = shown_text(expression(body, values#1))
+	for x in values[1..] {
+		if separator != "" { printed_text = runtime_call("text_join", [printed_text, ["text", text_bytes(separator)]]) }
+		printed_text = runtime_call("text_join", [printed_text, shown_text(expression(body, x))])
+	}
+	printed_text
+}
+spaced_arithmetic = ["+", "-", "*", "/", "%", "^"]
+is_spaced_value(n: any): bool := {
+	if n is number or n is text { return yes }
+	if not (type(n) is key and op_of(n) in spaced_arithmetic) { return no }
+	(key_of(n) == ø or is_spaced_value(key_of(n))) and (value_of(n) == ø or is_spaced_value(value_of(n)))
+}
+# `5 -2`: a glued sign, a value of its own
+is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == "-" and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]] }
 # whether the symbol `name` occurs in n
@@ -894,23 +922,31 @@ def assignment(body: Body, target: any, value: any): list {
 	[kind, converted(value, kind) + [op.local_tee] + index]
 }
 
-# `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (int_admitted,
-# list_admitted), any other value Rust would check at run time (a fraction, a byte's range) is refused
-declared_kinds = {int: "int", float: "float", text: "text", list: "list"}
-admitting_words = {int: "int_admitted", list: "list_admitted"}
+# `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_checks: int_admitted,
+# bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
+declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
 def declaration(body: Body, name: text, type_name: text, value: any): list {
 	# `x: any = v` admits every value: the plain assignment
 	if type_name == "any" { return assignment(body, symbol(name), value) }
+	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
 	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[type_name]
 	assignment(body, symbol(name), value)
+}
+# `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
+# only at run time is not checked yet (Rust's is), a value of another kind is refused
+def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
+	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name + "?") }
+	kind = value#1
+	if kind != "node" and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind + " given to a variable declared " + type_name + "?") }
+	assignment(body, symbol(name), ["node", boxed(value)])
 }
 # a value as the declared kind takes it: an int widened to a float, a value known only at run time checked (a list
 # one stays a node, as Rust keeps ø), else of that kind
 def admitted(value: any, kind: text): list {
 	if value#1 == kind or value#1 == pending { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
-	if value#1 == "node" and kind in admitting_words { return runtime_call(admitting_words[kind], [value]) }
+	if value#1 == "node" and kind in field_checks { return runtime_call(field_checks[kind], [value]) }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
 def whole(value: any): list { admitted(value, "int") }
@@ -942,10 +978,16 @@ def keyed_assignment(body: Body, target: any, object: any, key: any, value: any)
 	set = put_back(body, target, object, put)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
-# the code of a put into the map node a variable target holds, which takes its result (ø becomes a map), else the
-# put with its result dropped (a local named map reads as the word map: card local-named)
+# the code of a put into the map node a place target holds (a variable, or a field or element of one: `p.b.c = 4`),
+# which takes its result (ø becomes a map), else the put with its result dropped (a local named map reads as the word
+# map: card local-named)
 def put_back(body: Body, target: any, object: any, put: any): list {
-	if target is symbol and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)
+	if is_place(target) and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)
+}
+# a variable, or a field or element of one: what an assignment can write
+def is_place(target: any): bool {
+	if target is symbol { return yes }
+	type(target) is key and (op_of(target) == "." or op_of(target) == "#") and is_place(key_of(target))
 }
 # Rust checks a field write against the field's type only on a local it holds as an instance of the class
 # (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
@@ -1398,6 +1440,9 @@ def group_expression(body: Body, n: any): list {
 	# `y = 2 x`: Rust's "`x` after `y=2` does nothing"
 	assigns = x => type(x) is key and op_of(x) in assignment_operators
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
+	# `y 1+1`: values side by side are a list without brackets, as Rust's emitter holds a spaced group (only `;` and
+	# lines are statements); its text is the items with a space between
+	if separator_of(n) == " " and #n > 1 { return ["node", node(node_kind_codes.unbracketed_list, list_value(body, n.map(x => x))#2)] }
 	sequence(body, n.map(x => x))
 }
 
@@ -1744,7 +1789,8 @@ def module_bytes(functions: any): list {
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#gc_types + #module.imports + #functions)])) }
 	parts = [types, imported, declared, memory, tags, globals, exported, segments, codes, texts]
-	wasm_header + joined(parts) + names_section(functions)
+	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
+	wasm_header + joined(parts) + names_section(functions) + marks
 }
 def import_entry(i: int): list {
 	entry = module.imports#(i + 1)
@@ -1823,6 +1869,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.errors = {}
 	module.closures = []
 	module.dispatchers = []
+	module.counts_fuel = uses_fuel(program)
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
 	module.literal_arguments = {}
