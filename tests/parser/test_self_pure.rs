@@ -291,3 +291,14 @@ fn kind_changes_fail_pure() {
 fn std_modules_run_pure() {
 	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
 }
+
+/// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter
+/// of kind Op, Bracket or Separator holds the text a node carries, and a type variable `T` any value
+#[test]
+fn enums_of_used_files_and_type_variables_run_pure() {
+	let probe = |name: &str| format!("{}/probes/compiler_enums/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("used_enum", &probe("f_used_enum2"), "Function\nyes\nyes");
+	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
+	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
+	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
+}

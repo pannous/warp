@@ -58,9 +58,18 @@ const RAN_PURE: &str = "pure: ran";
 /// Set: emitter.warp refuses with every refused function's first form, a line each (its survey_setting)
 #[cfg(feature = "native")]
 const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
-/// The WARP_ settings that change no stage program's compile, so not its kept module either
+/// The WARP_ settings that change no stage program's compile, so not its kept module either: where lib/ lies is keyed
+/// by its contents, hints and windows only change what a run shows
 #[cfg(feature = "native")]
-const SETTINGS_BESIDE_STAGES: [&str; 4] = [SWITCH, ANALYSIS_SWITCH, REFUSALS_FILE, SURVEY_SETTING];
+const SETTINGS_BESIDE_STAGES: [&str; 7] = [
+	SWITCH,
+	ANALYSIS_SWITCH,
+	REFUSALS_FILE,
+	SURVEY_SETTING,
+	crate::modules::LIBRARY_SETTING,
+	crate::errors::diagnostic::HINTS_VARIABLE,
+	crate::graphics::paint::NO_WINDOW_VARIABLE,
+];
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
 /// The extension of a stage's setup JSON in the module cache
@@ -559,14 +568,17 @@ pub fn compiler_key() -> Option<&'static str> {
 	enabled().then(|| KEY.get_or_init(|| stage_key("the self-hosted compiler")).as_deref()).flatten()
 }
 
-/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/; none
-/// when the binary has no path
+/// The cache key of a stage program: the running binary, the program, the WARP_ settings and every file of lib/ with its
+/// path inside lib/, so an identical lib/ elsewhere (another worktree) reuses the kept modules; none when the binary has
+/// no path
 #[cfg(feature = "native")]
 fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	// canonical: macOS gives the path the binary was started by, `../../scratch/warp` keyed every folder apart
 	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;
 	let mut hasher = Sha256::new();
+	let library = library();
+	let program = program.replace(&library.display().to_string(), LIBRARY_MARK);
 	let mut settings = crate::run::program_cache::warp_settings();
 	settings.retain(|(name, _)| !SETTINGS_BESIDE_STAGES.contains(&name.as_str()));
 	hasher.update(format!(
@@ -574,10 +586,10 @@ fn stage_key(program: &str) -> Option<String> {
 		binary.display(),
 		crate::run::program_cache::stamp(&binary)
 	));
-	let mut files: Vec<PathBuf> = files_below(library().to_path_buf());
+	let mut files: Vec<PathBuf> = files_below(library.to_path_buf());
 	files.sort();
 	for file in files {
-		hasher.update(format!("{}\n", file.display()));
+		hasher.update(format!("{}\n", file.strip_prefix(library).unwrap_or(&file).display()));
 		hasher.update(std::fs::read(&file).unwrap_or_default());
 	}
 	Some(crate::extensions::hex_text(&hasher.finalize()))

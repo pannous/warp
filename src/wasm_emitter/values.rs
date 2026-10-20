@@ -108,12 +108,13 @@ impl WasmGcEmitter {
 				func.instruction(&I::End);
 			}
 			Node::Key(left, Op::Or, right) => {
-				// Truthy or: if left is non-0, return left; else return right
-				self.emit_numeric_value(func, left);
-				Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Result(ValType::I64))]);
+				// Truthy or: if left is non-0, return left (held: evaluated once, or a chain `a or b or c` ran a
+				// 2^n times); else return right
+				self.emit_held_left_is_falsy(func, left, false);
+				func.instruction(&I::If(BlockType::Result(ValType::I64)));
 				self.emit_numeric_value(func, right);
 				func.instruction(&I::Else);
-				self.emit_numeric_value(func, left);
+				self.emit_held_left(func, false);
 				func.instruction(&I::End);
 			}
 			Node::Key(left, op, right) if self.compares_structurally(op, left, right) => {

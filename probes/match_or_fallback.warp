@@ -1,0 +1,8 @@
+// a match whose fallback arm is an `or` of type tests, in a recursive bool function over Node values: expected yes, no
+use "../lib/compiler/walk.warp"
+named(index: any): bool := match index {
+	Key(key, Op.Add, _): named(key)
+	_: index is text or index is char
+}
+print named(Key("k", Op.Add, 1))
+print named(3)

@@ -226,6 +226,9 @@ static SHOWN_FROM: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::ne
 /// Whether this process printed a hint: the CLI then ends with how to hide them
 static ANY_HINT_PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// WARP_HINTS=0 hides hints and notes as `--no-hints` does (card hints-toggle)
+pub const HINTS_VARIABLE: &str = "WARP_HINTS";
+
 /// Print the diagnostics of `level` and above (`--warnings=<level>`; `--no-hints` is Weak)
 pub fn show_from(level: Level) {
 	SHOWN_FROM.store(level as u8, std::sync::atomic::Ordering::Relaxed);
