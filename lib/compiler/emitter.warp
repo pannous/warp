@@ -63,7 +63,7 @@ no_value = 64
 # opcodes (WebAssembly core spec, section 5.4)
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_store: 54, i32_store8: 58,
-	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_ge_u: 90, i32_sub: 107, i32_and: 113, i32_or: 114,
+	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
 	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
@@ -327,7 +327,7 @@ def cast(value: any, to: text): list {
 def condition(value: any): list {
 	kind = value#1
 	if kind == "int" { return value#2 + [op.i64_eqz, op.i32_eqz] }
-	if kind == "float" { return value#2 + [op.f64_const] + le64(0) + [float_ops["!="]] }
+	if kind == "float" { return value#2 + [op.f64_const] + le64(0) + [op.f64_ne] }
 	if kind == "node" or kind == "list" or kind in characters { return runtime_call("node_truthy", [["node", boxed(value)]])#2 }
 	# (a recursive call not yet known is taken as yes/no: wasm validation fails the module if it is not)
 	if kind != "bool" and kind != pending { refuse("a " + kind + " as a condition") }
@@ -361,8 +361,8 @@ exact_decimal(n: float): any := {
 	divisor = gcd(numerator, denominator)
 	if divisor < 0 { divisor = -divisor }
 	if divisor == denominator { return number_value(numerator / divisor) }
-	box = x => [op.i64_const] + sleb(x) + gc_code("struct_new", [gc.int_box])
-	["node", node(node_kind_codes.int, box(numerator / divisor) + box(denominator / divisor) + gc_code("struct_new", [gc.ratio]))]
+	box = x => [op.i64_const] + sleb(x) + gc_code(gc_ops.struct_new, [gc.int_box])
+	["node", node(node_kind_codes.int, box(numerator / divisor) + box(denominator / divisor) + gc_code(gc_ops.struct_new, [gc.ratio]))]
 }
 
 # the offset of a text's bytes in the data segment, each text stored once
@@ -374,17 +374,17 @@ text_offset(t: text): int := {
 	module.texts[t]
 }
 # a GC instruction with its immediates
-def gc_code(name: text, immediates: any): list { [gc_prefix] + uleb(gc_ops[name]) + joined(immediates.map(uleb)) }
+def gc_code(code: int, immediates: any): list { [gc_prefix] + uleb(code) + joined(immediates.map(uleb)) }
 # a boxed value: a $Node of the kind code, its data from `payload`, no second value
 def node(kind_code: int, payload: any): list { node_code([op.i64_const] + sleb(kind_code), payload) }
 # a $Node of the kind field the code gives
-def node_code(kind: any, payload: any): list { kind + payload + [ref_null, gc.node] + gc_code("struct_new", [gc.node]) }
+def node_code(kind: any, payload: any): list { kind + payload + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.node]) }
 # a text as its bytes; one character as its codepoint, as warp holds a literal "a"
 def text_value(t: text): list {
 	if #t == 1 { return ["char", [op.i32_const] + sleb(ord(t))] }
 	["text", text_bytes(t)]
 }
-def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code("array_new_data", [gc.text, 0]) }
+def text_bytes(t: text): list { [op.i32_const] + sleb(text_offset(t)) + [op.i32_const] + sleb(#t.bytes) + gc_code(gc_ops.array_new_data, [gc.text, 0]) }
 # a value boxed as a $Node: a number or yes/no in its box, a character as an i31
 def boxed(value: any): list {
 	kind = value#1
@@ -392,27 +392,27 @@ def boxed(value: any): list {
 	if kind == "node" or kind == "time" { return code }
 	if kind == "text" { return node(node_kind_codes.text, code) }
 	if kind == "list" { return node(node_kind_codes.list, code) }
-	if kind == "char" { return node(node_kind_codes.codepoint, code + gc_code("ref_i31", [])) }
-	if kind == "float" { return node(node_kind_codes.float, code + gc_code("struct_new", [gc.float_box])) }
-	if kind == "bool" { return node(node_kind_codes.bool, code + [op.i64_extend_i32_u] + gc_code("struct_new", [gc.int_box])) }
+	if kind == "char" { return node(node_kind_codes.codepoint, code + gc_code(gc_ops.ref_i31, [])) }
+	if kind == "float" { return node(node_kind_codes.float, code + gc_code(gc_ops.struct_new, [gc.float_box])) }
+	if kind == "bool" { return node(node_kind_codes.bool, code + [op.i64_extend_i32_u] + gc_code(gc_ops.struct_new, [gc.int_box])) }
 	if kind != "int" and kind != pending { refuse("a " + kind + " as a value") }
-	node(node_kind_codes.int, code + gc_code("struct_new", [gc.int_box]))
+	node(node_kind_codes.int, code + gc_code(gc_ops.struct_new, [gc.int_box]))
 }
 # `[a, b, c]`: a vector of its items, boxed, read in order
 def list_value(body: Body, items: any): list { ["list", vector_code(items.map(item => boxed(expression(body, item))))] }
 def vector_code(item_codes: any): list {
 	code = [op.i32_const] + sleb(#item_codes) + joined(item_codes)
-	code + gc_code("array_new_fixed", [gc.items, #item_codes]) + gc_code("struct_new", [gc.list])
+	code + gc_code(gc_ops.array_new_fixed, [gc.items, #item_codes]) + gc_code(gc_ops.struct_new, [gc.list])
 }
 ## maps and class instances, as Rust's (runtime.warp "a map is a curly list")
 # `name: value` as a map entry: its name a symbol, its value boxed
 def entry_code(name_code: any, value_code: any): list { keyed_code(node(node_kind_codes.symbol, name_code), value_code) }
 def keyed_code(name_node: any, value_code: any): list { key_code(node_kind_codes.entry, name_node, value_code) }
-def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code("struct_new", [gc.node]) }
+def key_code(kind: int, name_node: any, value_code: any): list { [op.i64_const] + sleb(kind) + name_node + as_node(value_code) + gc_code(gc_ops.struct_new, [gc.node]) }
 # an entry's name as Rust's holds it: `a` a symbol, a quoted "ab" a text, a quoted "+" a character
 def name_node(name: any): list {
 	if name is symbol { return node(node_kind_codes.symbol, text_bytes(name_of(name))) }
-	if #name == 1 { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code("ref_i31", [])) }
+	if #name == 1 { return node(node_kind_codes.codepoint, [op.i32_const] + sleb(ord(name)) + gc_code(gc_ops.ref_i31, [])) }
 	node(node_kind_codes.text, text_bytes(name))
 }
 # (`global: n = 5`, `{ global n = 5 }` once parsed, declares n as Rust's analyzer reads it, no map entry)
@@ -506,7 +506,7 @@ def index_code(value: any): list { converted(value, "int") + [op.i32_wrap_i64] }
 # `#x`: the characters of a text, the items of a list or map, either known only at run time
 def length(value: any): list {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
-	if value#1 == "list" { return ["int", value#2 + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]] }
+	if value#1 == "list" { return ["int", value#2 + gc_code(gc_ops.struct_get, [gc.list, 0]) + [op.i64_extend_i32_u]] }
 	if value#1 == "node" { return runtime_call("node_length", [value]) }
 	refuse("the length of a " + value#1)
 }
@@ -516,24 +516,24 @@ def element_assignment(body: Body, list: any, index: any, value: any): list {
 	if list#1 != "list" { return refuse("an assignment to an element of a " + list#1) }
 	held = uleb(fresh_local(body, value#1))
 	code = value#2 + [op.local_set] + held + checked_item(body, list, index) + boxed([value#1, [op.local_get] + held])
-	[value#1, code + gc_code("array_set", [gc.items]) + [op.local_get] + held]
+	[value#1, code + gc_code(gc_ops.array_set, [gc.items]) + [op.local_get] + held]
 }
 # `xs#i`: the i-th item, counted from 1
 def element(body: Body, list: any, index: any): list {
 	if list#1 == "node" { return runtime_call("node_at", [list, index]) }
 	if list#1 != "list" { return refuse("an element of a " + list#1) }
-	["node", checked_item(body, list, index) + gc_code("array_get", [gc.items])]
+	["node", checked_item(body, list, index) + gc_code(gc_ops.array_get, [gc.items])]
 }
 # a list's items and the 0-based place of its index-th item; an index outside 1…count fails in index_out_of_range_of
 def checked_item(body: Body, list: any, index: any): list {
 	held = uleb(fresh_local(body, "list"))
 	at = [op.local_get] + uleb(fresh_local(body, "int"))
-	count = ["int", [op.local_get] + held + gc_code("struct_get", [gc.list, 0]) + [op.i64_extend_i32_u]]
+	count = ["int", [op.local_get] + held + gc_code(gc_ops.struct_get, [gc.list, 0]) + [op.i64_extend_i32_u]]
 	whole = if index#1 == "node" then runtime_call("index_of_node", [index])#2 else converted(index, "int")
 	code = list#2 + [op.local_set] + held + whole + [op.local_set] + at[1..]
-	outside = at + [op.i64_const, 1, int_ops["-"]] + count#2 + [op.i64_ge_u]
+	outside = at + [op.i64_const, 1, op.i64_sub] + count#2 + [op.i64_ge_u]
 	code += outside + [op.if, no_value] + dropped(runtime_call("index_out_of_range_of", [["int", at], count])) + [op.end]
-	code + [op.local_get] + held + gc_code("struct_get", [gc.list, 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
+	code + [op.local_get] + held + gc_code(gc_ops.struct_get, [gc.list, 1]) + at + [op.i32_wrap_i64, op.i32_const, 1, op.i32_sub]
 }
 # `name(a: float): float := wasm f64.floor`: the parameters in order, then the instruction, which leaves the result
 def wasm_instruction(body: Body, name: text): list {
@@ -550,77 +550,77 @@ def is_runtime_word(body: Body, name: text): bool {
 # the words the runtime is written in, each one or two instructions
 def intrinsic(body: Body, name: text, arguments: any): list {
 	values = arguments.map(a => expression(body, a))
-	if name == "new_text" { return ["text", index_code(values#1) + gc_code("array_new_default", [gc.text])] }
-	if name == "byte_count" { return ["int", values#1#2 + gc_code("array_len", []) + [op.i64_extend_i32_u]] }
-	if name == "byte_at" { return ["int", values#1#2 + index_code(values#2) + gc_code("array_get_u", [gc.text]) + [op.i64_extend_i32_u]] }
+	if name == "new_text" { return ["text", index_code(values#1) + gc_code(gc_ops.array_new_default, [gc.text])] }
+	if name == "byte_count" { return ["int", values#1#2 + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]] }
+	if name == "byte_at" { return ["int", values#1#2 + index_code(values#2) + gc_code(gc_ops.array_get_u, [gc.text]) + [op.i64_extend_i32_u]] }
 	if name == "kind_code" { return ["int", kind_code_of(values#1#2)] }
 	if name == "unboxed_int" { return ["int", unboxed(values#1#2, gc.int_box)] }
-	if name == "marked_kind" { return ["int", as_node(values#1#2) + gc_code("struct_get", [gc.node, 0])] }
+	if name == "marked_kind" { return ["int", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 0])] }
 	if name == "unboxed_list" { return ["list", payload(values#1#2, gc.list)] }
 	if name == "unboxed_text" { return ["text", payload(values#1#2, gc.text)] }
-	if name == "unboxed_char" { return ["char", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [i31_type]) + gc_code("i31_get_u", [])] }
+	if name == "unboxed_char" { return ["char", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [i31_type]) + gc_code(gc_ops.i31_get_u, [])] }
 	if name == "char_of" { return ["char", index_code(values#1)] }
 	if name == "new_list" {
 		count = [op.local_get] + uleb(fresh_local(body, "int"))
 		code = converted(values#1, "int") + [op.local_set] + count[1..] + count + [op.i32_wrap_i64] + count + [op.i32_wrap_i64]
-		return ["list", code + gc_code("array_new_default", [gc.items]) + gc_code("struct_new", [gc.list])]
+		return ["list", code + gc_code(gc_ops.array_new_default, [gc.items]) + gc_code(gc_ops.struct_new, [gc.list])]
 	}
 	if name == "copy_items" {
-		items = x => x + gc_code("struct_get", [gc.list, 1])
+		items = x => x + gc_code(gc_ops.struct_get, [gc.list, 1])
 		code = items(values#1#2) + index_code(values#2) + items(values#3#2) + index_code(values#4) + index_code(values#5)
-		return [no_kind, code + gc_code("array_copy", [gc.items, gc.items])]
+		return [no_kind, code + gc_code(gc_ops.array_copy, [gc.items, gc.items])]
 	}
 	# adopt_items(to, from): to takes from's length and items
 	if name == "adopt_items" {
 		to = [op.local_get] + uleb(fresh_local(body, "list"))
 		from = [op.local_get] + uleb(fresh_local(body, "list"))
 		code = values#1#2 + [op.local_set] + to[1..] + values#2#2 + [op.local_set] + from[1..]
-		taken = field => to + from + gc_code("struct_get", [gc.list, field]) + gc_code("struct_set", [gc.list, field])
+		taken = field => to + from + gc_code(gc_ops.struct_get, [gc.list, field]) + gc_code(gc_ops.struct_set, [gc.list, field])
 		return [no_kind, code + taken(0) + taken(1)]
 	}
 	# an entry's name, a symbol, text or character (name_node), as a text
-	if name == "key_name" { return ["text", runtime_call("node_text", [["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1])]])#2] }
-	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 2])] }
+	if name == "key_name" { return ["text", runtime_call("node_text", [["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1])]])#2] }
+	if name == "key_value" { return ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 2])] }
 	if name == "map_of" { return ["node", node(node_kind_codes.map, values#1#2)] }
 	if name == "new_key" { return ["node", entry_code(values#1#2, values#2#2)] }
 	# item_room(list): the items its array holds, its length and the spare room after it; set_count(list, n)
-	if name == "item_room" { return ["int", values#1#2 + gc_code("struct_get", [gc.list, 1]) + gc_code("array_len", []) + [op.i64_extend_i32_u]] }
-	if name == "set_count" { return [no_kind, values#1#2 + index_code(values#2) + gc_code("struct_set", [gc.list, 0])] }
+	if name == "item_room" { return ["int", values#1#2 + gc_code(gc_ops.struct_get, [gc.list, 1]) + gc_code(gc_ops.array_len, []) + [op.i64_extend_i32_u]] }
+	if name == "set_count" { return [no_kind, values#1#2 + index_code(values#2) + gc_code(gc_ops.struct_set, [gc.list, 0])] }
 	# keyed(kind, left, right): a $Node of the kind with the two nodes; entry_key(n) a key's left node
-	if name == "keyed" { return ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code("struct_new", [gc.node])] }
-	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [gc.node])] }
+	if name == "keyed" { return ["node", values#1#2 + values#2#2 + as_node(values#3#2) + gc_code(gc_ops.struct_new, [gc.node])] }
+	if name == "entry_key" { return ["node", as_node(values#1#2) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [gc.node])] }
 	if name == "symbol_of" { return ["node", node(node_kind_codes.symbol, values#1#2)] }
 	# list_node(kind, list): a list's $Node of that whole kind field, its bracket and separator in it
 	if name == "list_node" { return ["node", node_code(converted(values#1, "int"), values#2#2)] }
 	# meta_node(n, line, column): n's kind, data and value in a $MetaNode at that position, no comment
 	if name == "meta_node" {
 		held = [op.local_get] + uleb(fresh_local(body, "node"))
-		part = i => as_node(held) + gc_code("struct_get", [gc.node, i])
+		part = i => as_node(held) + gc_code(gc_ops.struct_get, [gc.node, i])
 		code = values#1#2 + [op.local_set] + held[1..] + part(0) + part(1) + part(2) + converted(values#2, "int") + converted(values#3, "int")
-		return ["node", code + [ref_null, gc.node] + gc_code("struct_new", [gc.meta_node])]
+		return ["node", code + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.meta_node])]
 	}
-	if name == "is_meta" { return ["int", values#1#2 + gc_code("ref_test", [gc.meta_node]) + [op.i64_extend_i32_u]] }
-	if name == "meta_line" { return ["int", values#1#2 + gc_code("ref_cast_null", [gc.meta_node]) + gc_code("struct_get", [gc.meta_node, 3])] }
-	if name == "meta_column" { return ["int", values#1#2 + gc_code("ref_cast_null", [gc.meta_node]) + gc_code("struct_get", [gc.meta_node, 4])] }
+	if name == "is_meta" { return ["int", values#1#2 + gc_code(gc_ops.ref_test, [gc.meta_node]) + [op.i64_extend_i32_u]] }
+	if name == "meta_line" { return ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 3])] }
+	if name == "meta_column" { return ["int", values#1#2 + gc_code(gc_ops.ref_cast_null, [gc.meta_node]) + gc_code(gc_ops.struct_get, [gc.meta_node, 4])] }
 	if name == "closure_text" { return call_values(made_late(closure_text_name, "text", ["closure"]), values) }
 	if name == "is_null" { return ["int", values#1#2 + [op.ref_is_null, op.i64_extend_i32_u]] }
 	if name == "same_text" { return ["int", values#1#2 + values#2#2 + [op.ref_eq, op.i64_extend_i32_u]] }
 	if name == "fail" { return [pending, error_throw() + [op.unreachable]] }
 	if name == "is_ratio" { return ["int", ratio_test(values#1#2) + [op.i64_extend_i32_u]] }
 	if name == "ratio_of" {
-		box = v => converted(v, "int") + gc_code("struct_new", [gc.int_box])
-		return ["node", node(node_kind_codes.int, box(values#1) + box(values#2) + gc_code("struct_new", [gc.ratio]))]
+		box = v => converted(v, "int") + gc_code(gc_ops.struct_new, [gc.int_box])
+		return ["node", node(node_kind_codes.int, box(values#1) + box(values#2) + gc_code(gc_ops.struct_new, [gc.ratio]))]
 	}
 	if name == "ratio_numerator" { return ["int", ratio_part(values#1#2, 0)] }
 	if name == "ratio_denominator" { return ["int", ratio_part(values#1#2, 1)] }
 	if name == "unboxed_float" { return ["float", unboxed(values#1#2, gc.float_box)] }
 	if name == "code_of" { return ["int", values#1#2 + [op.i64_extend_i32_u]] }
-	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code("array_set", [gc.text])] }
+	if name == "set_byte" { return [no_kind, values#1#2 + index_code(values#2) + index_code(values#3) + gc_code(gc_ops.array_set, [gc.text])] }
 	if name == "output_byte" { return [no_kind, index_code(values#1) + index_code(values#2) + [op.i32_store8, 0] + uleb(output_address)] }
 	if name == "write_output" { return ["int", write_output(index_code(values#1))] }
 	# copy_text(to, at, from, start, count)
 	code = values#1#2 + index_code(values#2) + values#3#2 + index_code(values#4) + index_code(values#5)
-	[no_kind, code + gc_code("array_copy", [gc.text, gc.text])]
+	[no_kind, code + gc_code(gc_ops.array_copy, [gc.text, gc.text])]
 }
 intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, set_byte: 3,
 	output_byte: 2, write_output: 1, kind_code: 1, unboxed_int: 1, unboxed_float: 1,
@@ -655,13 +655,13 @@ def type_test(body: Body, subject: any, spec: text): list {
 	["bool", [op.i32_const, if value#1 in covered_kinds[type] then 1 else 0]]
 }
 # a boxed value's code as a $Node; its Kind without the marks above it; its payload: the value in a box, or a text
-def as_node(code: any): list { code + gc_code("ref_cast_null", [gc.node]) }
-def kind_code_of(code: any): list { as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and] }
-def payload(code: any, held: int): list { as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_cast_null", [held]) }
-def unboxed(code: any, box: int): list { payload(code, box) + gc_code("struct_get", [box, 0]) }
+def as_node(code: any): list { code + gc_code(gc_ops.ref_cast_null, [gc.node]) }
+def kind_code_of(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(255) + [op.i64_and] }
+def payload(code: any, held: int): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_cast_null, [held]) }
+def unboxed(code: any, box: int): list { payload(code, box) + gc_code(gc_ops.struct_get, [box, 0]) }
 # whether an Int $Node holds a $Ratio (an i32); the numerator (0) or denominator (1) of one
-def ratio_test(code: any): list { as_node(code) + gc_code("struct_get", [gc.node, 1]) + gc_code("ref_test", [gc.ratio]) }
-def ratio_part(code: any, field: int): list { payload(code, gc.ratio) + gc_code("struct_get", [gc.ratio, field]) + gc_code("ref_cast_null", [gc.int_box]) + gc_code("struct_get", [gc.int_box, 0]) }
+def ratio_test(code: any): list { as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 1]) + gc_code(gc_ops.ref_test, [gc.ratio]) }
+def ratio_part(code: any, field: int): list { payload(code, gc.ratio) + gc_code(gc_ops.struct_get, [gc.ratio, field]) + gc_code(gc_ops.ref_cast_null, [gc.int_box]) + gc_code(gc_ops.struct_get, [gc.int_box, 0]) }
 # fd_write of the first `count` output bytes, its error code as an int
 def write_output(count: any): list {
 	word = [op.i32_store, 2, 0]
@@ -859,7 +859,7 @@ def floored(value: any): list {
 # `if` on the condition just computed: yes gives a, no gives b, both as kind
 def chosen(kind: text, a: any, b: any): list { [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end] }
 def both_of_kind(a: any, b: any, code: int): list {
-	test = x => kind_code_of(x) + [op.i64_const] + sleb(code) + [int_ops["=="]]
+	test = x => kind_code_of(x) + [op.i64_const] + sleb(code) + [op.i64_eq]
 	test(a) + test(b) + [op.i32_and]
 }
 
@@ -870,9 +870,9 @@ def euclidean_remainder(body: Body, a: any, b: any): list {
 	get_divisor = [op.local_get] + divisor
 	get_rest = [op.local_get] + rest
 	zero = [op.i64_const, 0]
-	absolute = zero + get_divisor + [int_ops["-"]] + get_divisor + get_divisor + zero + [int_ops["<"], op.select]
-	code = a#2 + b#2 + [op.local_tee] + divisor + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [int_ops["<"]]
-	["int", code + [op.if, type_bytes.int] + get_rest + absolute + [int_ops["+"], op.else] + get_rest + [op.end]]
+	absolute = zero + get_divisor + [op.i64_sub] + get_divisor + get_divisor + zero + [op.i64_lt_s, op.select]
+	code = a#2 + b#2 + [op.local_tee] + divisor + [op.i64_rem_s, op.local_set] + rest + get_rest + zero + [op.i64_lt_s]
+	["int", code + [op.if, type_bytes.int] + get_rest + absolute + [op.i64_add, op.else] + get_rest + [op.end]]
 }
 
 def assignment(body: Body, target: any, value: any): list {
@@ -1086,7 +1086,7 @@ closure_number(name: text, captured: int): int := {
 	#module.closures - 1
 }
 # the item i of a closure's list: 0 its number, then its captured values
-def closure_item(closure: any, i: int): list { ["node", payload(closure, gc.list) + gc_code("struct_get", [gc.list, 1]) + [op.i32_const] + sleb(i) + gc_code("array_get", [gc.items])] }
+def closure_item(closure: any, i: int): list { ["node", payload(closure, gc.list) + gc_code(gc_ops.struct_get, [gc.list, 1]) + [op.i32_const] + sleb(i) + gc_code(gc_ops.array_get, [gc.items])] }
 captured_index(name: text): int := int(name.split(captured_marker)#2) + 1
 def closure_call(body: Body, arity: int, arguments: any): list {
 	if #arguments != arity + 1 { return refuse("a closure call of " + #arguments + " values") }
@@ -1116,7 +1116,7 @@ closure_text_code(f: Function): any := {
 	f.code = text_bytes("function")
 	for k in 0..<#module.closures {
 		shown = text_bytes(closure_shown(module.closures[k]#1, module.closures[k]#2))
-		f.code = number + [op.i64_const] + sleb(k) + [int_ops["=="], op.if, no_value] + shown + [op.return, op.end] + f.code
+		f.code = number + [op.i64_const] + sleb(k) + [op.i64_eq, op.if, no_value] + shown + [op.return, op.end] + f.code
 	}
 }
 # a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
@@ -1135,14 +1135,14 @@ dispatcher_code(f: Function): any := {
 	number = unboxed(closure_item(closure, 0)#2, gc.int_box)
 	not_a_function = dropped(runtime_call("not_a_function", [])) + [op.unreachable]
 	code = closure + [op.ref_is_null, op.if, no_value] + not_a_function + [op.end]
-	code += kind_code_of(closure) + [op.i64_const] + sleb(node_kind_codes.function) + [int_ops["!="], op.if, no_value] + not_a_function + [op.end]
+	code += kind_code_of(closure) + [op.i64_const] + sleb(node_kind_codes.function) + [op.i64_ne, op.if, no_value] + not_a_function + [op.end]
 	for k in 0..<#module.closures {
 		target = module.functions[module.closures[k]#1]
 		captured = module.closures[k]#2
 		if #target.parameters - captured == arity {
 			values = range_list(captured).map(i => closure_item(closure, i + 1)) + range_list(arity).map(j => ["node", [op.local_get] + uleb(j + 1)])
 			called = boxed(call_values(target, values))
-			code += number + [op.i64_const] + sleb(k) + [int_ops["=="], op.if, no_value] + called + [op.return, op.end]
+			code += number + [op.i64_const] + sleb(k) + [op.i64_eq, op.if, no_value] + called + [op.return, op.end]
 		}
 	}
 	f.code = code + dropped(runtime_call("wrong_number_of_arguments", [])) + [op.unreachable]
@@ -1547,7 +1547,7 @@ def negation(body: Body, value: any): list {
 	if value#1 == "float" { return ["float", value#2 + [op.f64_neg]] }
 	if value#1 == "node" { return operation(body, "-", number_value(0), value) }
 	if value#1 != "int" { refuse("the negation of a " + value#1) }
-	["int", [op.i64_const, 0] + value#2 + [int_ops["-"]]]
+	["int", [op.i64_const, 0] + value#2 + [op.i64_sub]]
 }
 # `a and b`, `a or b` on yes/no values: b is read only when a leaves the answer open
 # on other values they give one of them, as Rust does: `a and b` is b when a holds, else a; `a or b` a when a holds,
@@ -1958,11 +1958,11 @@ def time_call(body: Body, name: text, arguments: any): list {
 }
 def time_node(info: any, position: any): list {
 	kind = info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(time_kind_code) + [shift_ops.i64_or]
-	kind + position + gc_code("struct_new", [gc.int_box]) + [ref_null, gc.node] + gc_code("struct_new", [gc.node])
+	kind + position + gc_code(gc_ops.struct_new, [gc.int_box]) + [ref_null, gc.node] + gc_code(gc_ops.struct_new, [gc.node])
 }
 # the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical
 def kind_word_shifted(code: any, shift: int, signed: bool): list {
-	shifted = as_node(code) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(shift)
+	shifted = as_node(code) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(shift)
 	shift_op = if signed then shift_ops.i64_shr_s else shift_ops.i64_shr_u
 	shifted + [shift_op]
 }
@@ -1975,7 +1975,7 @@ def time_intrinsic(body: Body, name: text, arguments: any): list {
 	# the 32 days bits, sign-extended: shifted to the top of the word, then down again
 	if name == "duration_days" {
 		top = 64 - kind_bits - months_shift
-		days = as_node(t) + gc_code("struct_get", [gc.node, 0]) + [op.i64_const] + sleb(top) + [shift_ops.i64_shl]
+		days = as_node(t) + gc_code(gc_ops.struct_get, [gc.node, 0]) + [op.i64_const] + sleb(top) + [shift_ops.i64_shl]
 		return ["int", days + [op.i64_const] + sleb(32) + [shift_ops.i64_shr_s]]
 	}
 	if name == "zone_index" { return ["int", masked(kind_word_shifted(t, kind_bits + form_bits, no), zone_mask)] }
