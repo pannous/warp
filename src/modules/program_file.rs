@@ -2,7 +2,7 @@
 use super::*;
 
 /// The setting naming the lib/ folder warp reads, whichever checkout built it
-const LIBRARY_SETTING: &str = "WARP_LIB";
+pub(crate) const LIBRARY_SETTING: &str = "WARP_LIB";
 /// The folder of lib/ that marks a warp checkout's library: the warp-written compiler
 pub const COMPILER_FOLDER: &str = "compiler";
 
