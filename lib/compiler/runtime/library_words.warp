@@ -1,0 +1,128 @@
+# The library words on values known only at run time: slices, join, repeat, split, reverse
+# the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
+# `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
+# or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
+node_slice(x: any, start: any, to: any): any := {
+	from = if is_null(start) == 1 then 0 else index_of_node(start)
+	stop = if is_null(to) == 1 then node_length(x) else index_of_node(to)
+	if from < 0 or stop < 0 { index_out_of_range() }
+	if kind_code(x) == 3 { return character_slice(unboxed_text(x), from, stop) }
+	if kind_code(x) == 8 { return items_slice(unboxed_list(x), from, stop) }
+	not_a_list()
+}
+character_slice(t: text, from: int, to: int): text := {
+	start = character_offset_of(t, from)
+	stop = character_offset_of(t, to)
+	if stop <= start { return "" }
+	bytes_between(t, start, stop)
+}
+# the byte offset after t's first count characters (grapheme clusters); past the last, the byte count
+character_offset_of(t: text, count: int): int := {
+	at = 0
+	for i in 0..<count { if at < byte_count(t) { at = character_end(t, at) } }
+	at
+}
+items_slice(items: list, from: int, to: int): list := {
+	count = min_int(to, #items) - from
+	if count < 0 { count = 0 }
+	out = new_list(count)
+	copy_items(out, 0, items, from, count)
+	out
+}
+# `starts_with(t, part)`, `ends_with(t, part)`: 1 when part's bytes begin or end t, else 0, as Rust's give an int
+node_starts_with(t: any, part: any): int := if text_starts_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
+node_ends_with(t: any, part: any): int := if text_ends_with(text_of_textual(t), text_of_textual(part)) then 1 else 0
+node_trim(t: any): text := text_trim(text_of_textual(t))
+# a text or a character as its text; anything else fails
+text_of_textual(n: any): text := {
+	if textual_node(n) == 0 { not_a_text() }
+	node_text(n)
+}
+# a space, a tab, a line feed or a carriage return
+is_space_byte(b: int): bool := b == 32 or b == 9 or b == 10 or b == 13
+# the bytes start..<stop of t
+bytes_between(t: text, start: int, stop: int): text := {
+	out = new_text(stop - start)
+	copy_text(out, 0, t, start, stop - start)
+	out
+}
+# `xs.join(separator)`: the texts of xs's items with separator between them; texts and numbers only, as Rust joins
+joined(xs: list, separator: any): text := {
+	between = node_text(separator)
+	out = ""
+	count = 0
+	for x in xs {
+		if kind_code(x) == 8 { fail() }
+		if count > 0 { out += between }
+		out += node_text(x)
+		count += 1
+	}
+	out
+}
+# `n times "ab"`: t n times over
+repeated_text(n: int, t: any): text := {
+	piece = node_text(t)
+	out = new_text(n * byte_count(piece))
+	for i in 0..<n { copy_text(out, i * byte_count(piece), piece, 0, byte_count(piece)) }
+	out
+}
+# `t.split(separator)`: the texts between separator's places in t
+split_text(t: text, separator: any): list := {
+	between = node_text(separator)
+	out = new_list(0)
+	start = 0
+	at = 0
+	while at + byte_count(between) <= byte_count(t) {
+		if byte_count(between) > 0 and bytes_match_at(t, between, at) {
+			out += [bytes_between(t, start, at)]
+			at += byte_count(between)
+			start = at
+		} else {
+			at += 1
+		}
+	}
+	out += [bytes_between(t, start, byte_count(t))]
+	out
+}
+# `t.chars`: t's characters (grapheme clusters)
+text_graphemes(t: text): list := {
+	out = new_list(text_count(t))
+	at = 0
+	for i in 1 to #out {
+		end = character_end(t, at)
+		out#i = character_between(t, at, end)
+		at = end
+	}
+	out
+}
+# `for each codepoint in t`: t's code points
+text_chars(t: text): list := {
+	out = new_list(code_point_count(t))
+	at = 0
+	for i in 1 to #out {
+		out#i = char_of(code_point_at(t, at))
+		at += code_point_width(byte_at(t, at))
+	}
+	out
+}
+# `xs.reverse`: a list's items or a text's characters the other way round
+reversed(n: any): any := {
+	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
+	if kind_code(n) == 3 {
+		t = unboxed_text(n)
+		backwards = ""
+		at = 0
+		while at < byte_count(t) {
+			end = character_end(t, at)
+			backwards = bytes_between(t, at, end) + backwards
+			at = end
+		}
+		return backwards
+	}
+	reversed_items(unboxed_list(n))
+}
+reversed_items(items: list): list := {
+	turned = new_list(#items)
+	for i in 1 to #items { turned#i = items#(#items + 1 - i) }
+	turned
+}
