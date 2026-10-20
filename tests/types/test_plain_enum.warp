@@ -3,3 +3,6 @@
 # other_languages_enums_are_plain_enums_too
 is! 'enum class Color { RED, GREEN }
 Color.GREEN is Color' true
+
+# only_a_case_is_of_its_enum_type
+is! 'enum Coin { Penny, Dime }; coins = [Penny, Dime]; coins.all(c => c is Coin)' true
