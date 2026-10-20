@@ -1,0 +1,8 @@
+// x is Animal holds for a Dog, which extends it (card animal-dog)
+class Animal { name: text }
+class Dog extends Animal { }
+class Puppy extends Dog { }
+d = Dog("rex")
+p = Puppy("bit")
+a = Animal("any")
+print (d is Animal) (p is Animal) (p is Dog) (a is Dog) (d is Puppy)

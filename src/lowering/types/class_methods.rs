@@ -88,7 +88,8 @@ const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];
 /// P212: a class defining the method of only one of these operators has it serve the other too
 const INTERCHANGEABLE_OPERATORS: [(Op, Op); 2] = [(Op::Similar, Op::Rough), (Op::Rough, Op::Similar)];
 /// The run-time choice of an interval-field method by the receiver's class (dispatched_by_class)
-const DISPATCH_TEMPLATE: &str = "if SELF_WORD is CLASS then METHOD else OTHERWISE";
+/// The exact class: `x is CLASS` also holds for a class extending it, whose own method comes first
+const DISPATCH_TEMPLATE: &str = "if instance_of(SELF_WORD, CLASS) then METHOD else OTHERWISE";
 /// Ruby's `include Walker` in a class body takes in a mixin
 const INCLUDE_WORD: &str = "include";
 /// The prefix of a method named like an interval's field: `method·low` (a prefix: a name `low·T` reads as a witness)
@@ -367,7 +368,7 @@ fn dispatched_by_class(receiver: &Node, member: Node, methods: &MethodNames, ren
 pub(crate) fn by_class(receiver: &Node, class: &str, method: Node, otherwise: Node) -> Node {
 	let bindings = [
 		("SELF_WORD", receiver.clone()),
-		("CLASS", Node::Symbol(class.to_string())),
+		("CLASS", Node::Text(class.to_string())),
 		("METHOD", method),
 		("OTHERWISE", otherwise),
 	];
