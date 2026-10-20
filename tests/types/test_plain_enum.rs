@@ -81,3 +81,12 @@ fn a_case_named_like_a_type_is_the_case() {
 	is!(&format!("{kind}; name(k: Kind) := match k {{ Kind.Int: 1; Float: 2; _: 3 }}; name(Float)"), 2);
 	is!("enum Meaning { Function, Variable }; m = Meaning.Function; m == Meaning.Function", true);
 }
+
+// card rust-lane: a map of one entry named after an enum or class, `{Op: {}}`, stays a map (T:{…} is data, D4): a
+// second entry joins the map, not the fields of an instance of Op
+#[test]
+fn an_entry_named_after_a_type_stays_a_map_entry() {
+	let empty = "empty(): any := { t = {}; t }; m = empty()";
+	is!(&format!("enum Op {{ Colon, Add }}; {empty}; m[\"Op\"] = empty(); m[\"Bracket\"] = 1; #m"), 2);
+	is!(&format!("class Point {{ x: int }}; {empty}; m[\"Point\"] = empty(); m[\"y\"] = 2; #m"), 2);
+}

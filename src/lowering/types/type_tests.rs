@@ -27,6 +27,7 @@ pub const NODE_IS_MAP: &str = "node_is_map";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
+const SHADOWED_TYPE_WORD_TOPIC: &str = "shadowed-type-word";
 /// `String(x)`, `x as String`: the class spelling of text, a cast word only, so `String` stays free as a type value
 const TEXT_CLASS_WORD: &str = "String";
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
@@ -346,12 +347,13 @@ fn is_type_union(union: &Node) -> bool {
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
 fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
-	let words = match words {
-		[article, rest @ ..] if ARTICLES.contains(article) && !rest.is_empty() => rest,
-		all => all,
+	// `x is a key` tests the type even where a variable is named key
+	let (words, has_article) = match words {
+		[article, rest @ ..] if ARTICLES.contains(article) && !rest.is_empty() => (rest, true),
+		all => (all, false),
 	};
 	let (first, rest) = words.split_first()?;
-	if shadowed.contains(first) {
+	if !has_article && shadowed.contains(first) {
 		return None;
 	}
 	let phrase = words.join(" ");
@@ -568,6 +570,7 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
 		}
 		Node::Key(subject, Op::Eq, right) => {
+			warn_shadowed_type_word(&subject, &right, shadowed);
 			match phrase_words(&right).and_then(|words| type_spec(&words, shadowed)) {
 				// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
 				Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec, shadowed),
@@ -584,6 +587,64 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		}
 		other => children_rewritten(other, |child| expand(child, shadowed)),
 	}
+}
+
+/// `an int`, `a pair`
+fn article_of(word: &str) -> &'static str {
+	if word.starts_with(['a', 'e', 'i', 'o', 'u']) {
+		ARTICLES[1]
+	} else {
+		ARTICLES[0]
+	}
+}
+
+/// A used module's `x is pair` tests the type though the program has a variable `pair`: the module cannot see the
+/// program's variables, so its type words become `x is a pair`, which no variable shadows
+pub(crate) fn module_type_words_kept(node: Node, is_program_word: &impl Fn(&str) -> bool) -> Node {
+	match node {
+		Node::Key(subject, Op::Eq, right)
+			if !is_equality_operand(&right)
+				&& right.symbol_name().is_some_and(|word| is_program_word(word) && is_builtin_type_word(word)) =>
+		{
+			let word = right.drop_meta().name();
+			let phrase = Node::List(
+				vec![Node::Symbol(article_of(&word).to_string()), Node::Symbol(word)],
+				Bracket::None,
+				Separator::Space,
+			);
+			key(module_type_words_kept(*subject, is_program_word), Op::Eq, phrase)
+		}
+		other => other.map_children(|child| module_type_words_kept(child, is_program_word)),
+	}
+}
+
+/// `n is key` with a variable named key compares with its value: warn, never silently (card local-named-like-2)
+fn warn_shadowed_type_word(subject: &Node, right: &Node, shadowed: &Names) {
+	let Node::Symbol(word) = right.drop_meta() else {
+		return;
+	};
+	if is_equality_operand(right)
+		|| !shadowed.contains(word)
+		|| type_spec(&[word.as_str()], &Names::default()).is_none()
+	{
+		return;
+	}
+	let tested = crate::normalize::operand_text(subject);
+	let article = article_of(word);
+	let readings = vec![
+		crate::errors::diagnostic::reading("the variable's value", &format!("{tested} == {word}")),
+		crate::errors::diagnostic::reading("the type", &format!("{tested} is {article} {word}")),
+	];
+	let question = crate::errors::diagnostic::Ask::new(
+		SHADOWED_TYPE_WORD_TOPIC,
+		format!("`{word}` is a variable here, so `{tested} is {word}` compares with its value, not the type {word}: rename the variable, or write `{tested} is {article} {word}` for the type"),
+		readings,
+		crate::errors::diagnostic::Fallback::Warning,
+	)
+	.written(&format!("{tested} is {word}"))
+	.at_node(subject);
+	// a warning only: the default reading (the variable) is what the program gets
+	let _ = crate::errors::diagnostic::ask(&question);
 }
 
 /// `v is int or text` parses as `(v is int) or text`: after `is` the union is the type, `or` spells a union in every

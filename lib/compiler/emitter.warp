@@ -1089,6 +1089,8 @@ def call_values(f: Function, values: any): list {
 # target f's number names; `<target>·captured·<i>(f)`: f's i-th captured value
 closure_call_prefix = "closure_call_"
 captured_marker = "·captured·"
+# what joins the parts of a lifted name: a method's witness `len·Point`, a nested `outer·inner`
+name_joiner = "·"
 # `closure_text(f)`: the text of a closure, its lambda as written (`x => x*2`) or its target's name, a function made
 # once, its code written last (closure_text_code), as Rust's function_text table
 closure_text_name = "closure_text"
@@ -1144,10 +1146,18 @@ closure_text_code(f: Function): any := {
 }
 # a lifted lambda as written, its parameters but the captured ones (`x => x*2`); another target by its name
 closure_shown(name: text, captured: int): text := {
-	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return name }
+	if not lambda_prefixes.any(prefix => name.starts_with(prefix)) { return function_name(name) }
 	f = module.functions[name]
 	names = f.parameters[captured..].map(p => name_of(p))
 	(if #names == 1 then names#1 else "(" + names.join(", ") + ")") + " => " + str(f.body)
+}
+# the name a function value shows, as Rust's (closures.rs function_name): `len` of a class's method that became the
+# witness `len·Point`, the last part of a nested `outer·inner`
+function_name(target: text): text := {
+	parts = target.split(name_joiner)
+	if #parts == 1 { return target }
+	last = parts#(#parts)
+	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
 }
 # a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
 # its own, the target's call on the captured values and the arguments; a closure of another arity fails in
@@ -1382,6 +1392,8 @@ is_spaced_call(body: Body, n: any): bool := {
 	name = name_of(n#1)
 	name in module.functions and not (name in body.names) and #module.functions[name].parameters == #n - 1
 }
+# `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
+is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
 def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, n[2..].map(x => x)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
@@ -1419,9 +1431,13 @@ def group_expression(body: Body, n: any): list {
 		label = if type(n#2) is key and key_of(n#2) is text then key_of(n#2) else "value"
 		return ended_in(pending, "no_case_" + label)
 	}
-	# `raise X` (also throw, fail, panic): the run fails with X as its message, a value of no kind
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("raise") {
-		return [never, runtime_call("raised", [expression(body, n#2)])#2 + [op.drop, op.unreachable]]
+	# `raise X` (also throw, fail, panic), called or a line of its own: the run fails with X as its message, a value of
+	# no kind; a program's own function of that name is its function
+	if is_call_or_line(n) and #n == 2 and n#1 is symbol and name_of(n#1) in raise_words and not (name_of(n#1) in module.functions) {
+		raised_value = expression(body, n#2)
+		# a one-letter text, held as a character, raises its text: `raise "x"` is Error("x"), not Error("'x'")
+		if raised_value#1 == "char" { raised_value = ["text", converted(raised_value, "text")] }
+		return [never, runtime_call("raised", [raised_value])#2 + [op.drop, op.unreachable]]
 	}
 	# the min, max or reduce of an empty list (Rust's lowering: min_max.rs): `empty_extremum(min)` ends the run in
 	# min_of_an_empty_list
@@ -1436,7 +1452,7 @@ def group_expression(body: Body, n: any): list {
 		return call(body, module.runtime[word], n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ran_without_error") { return ran_without_error(body, n#2) }
-	if (bracket_of(n) == "(" or bracket_of(n) == "") and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
+	if is_call_or_line(n) and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
 		# `count = 0; count(users)`: Rust's "`count` is a variable here"
 		if name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
