@@ -215,10 +215,12 @@ cloud_run() {
 		branches+=("$branch") commits+=("$commit")
 	done
 	for number in "${!branches[@]}"; do
-		branch=${branches[$number]} commit=${commits[$number]}
-		scripts/cloud-test.sh --result "$branch" "$commit" > /dev/null
+		branch=${branches[$number]} commit=${commits[$number]} group=${groups[$number]}
+		# Repeat the launch identity so --result selects this settings/filter combination.
+		# shellcheck disable=SC2086 # the group is a list of filters
+		scripts/cloud-test.sh --result "${settings[@]}" "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
 		git push -q origin --delete "$branch"
-		logs+=("$CLOUD_RESULTS/$(folder_name "$branch")-${commit:0:8}/log.txt.gz")
+		logs+=("$(find "$CLOUD_RESULTS" -maxdepth 2 -path "$CLOUD_RESULTS/$(folder_name "$branch")-${commit:0:8}-*/log.txt.gz" -print -quit)")
 	done
 	mkdir -p "$REPORTS"
 	local report=$REPORTS/$run.txt previous
