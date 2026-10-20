@@ -1,0 +1,8 @@
+// list comprehensions, each line its value: card pure-comprehensions
+xs = [1, 2, 3, 4]
+print([x * 2 for x in xs])
+print([x for x in xs if x > 2])
+print([count(line) for line in split("ab\ncde", "\n")])
+print([a + b for a in [1, 2] for b in [10, 20]])
+print(sum(x * x for x in xs))
+print([[y for y in 1 to x] for x in 1 to 3])

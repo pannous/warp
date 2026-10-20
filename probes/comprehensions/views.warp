@@ -1,0 +1,4 @@
+use "../../lib/compiler/parser.warp"
+for code in ["[x * 2 for x in xs]", "[x for x in xs if x > 1]", "[count(line) for line in split(s, \"\\n\")]", "[a + b for a in xs for b in ys]", "[a for a in xs if a > 1 for b in ys]", "sum(x * x for x in xs)", "[upper w for w in words]"] {
+	print str(plain(tree(code)))
+}
