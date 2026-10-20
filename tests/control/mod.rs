@@ -128,6 +128,7 @@ mod test_many_tasks;
 mod test_map_loop_words; // card key-print
 mod test_match_alternatives;
 mod test_match_alternatives_hint;
+mod test_match_arm_if; // cards match-arm, arm-inline-if
 mod test_match_binding_arm;
 mod test_match_deep_conditions; // card deep-conditions
 mod test_match_else_line;
