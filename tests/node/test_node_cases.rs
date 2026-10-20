@@ -22,6 +22,15 @@ fn a_pattern_takes_the_node_apart() {
 	is!(&format!("{ADDS}\nadds(parse(\"a + b * (c + d)\"))"), 2);
 }
 
+/// `match f(x) {…}`, a call as the subject, takes the node apart as a name does
+#[test]
+fn a_called_subject_is_taken_apart() {
+	is!(
+		"id(n: Node): Node := n; right(m: Node): Node := match id(m) { Key(a, op, b): b, _: m }; right(parse(\"x+2\"))",
+		2
+	);
+}
+
 #[test]
 fn a_case_builds_the_node() {
 	is!("Key(symbol(\"a\"), Op.Add, 1)", parse("a+1"));

@@ -1,0 +1,7 @@
+apply(f, x) := f(x)
+n = 5
+print(apply(x => x + n, 1))
+twice(f, x) := f(f(x))
+print(twice(x => x * 3, 2))
+square(x) := x * x
+print(apply(square, 7))

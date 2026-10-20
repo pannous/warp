@@ -120,10 +120,12 @@ impl Viewer {
 }
 
 /// The marks the bridge hands on as attribute layers, which the Rust passes after a warp stage read: `x!`'s,
-/// `function f`'s (closures.rs function_reference) and a function body's doc and place (doc_strings.rs), which
-/// reflection.rs and doc_strings.rs make before number_words' twin runs
-const BRIDGED_MARKS: [&str; 4] = [
+/// `function f`'s (closures.rs function_reference), a function body's doc and place (doc_strings.rs), which
+/// reflection.rs and doc_strings.rs make before number_words' twin runs, and the type word compared with == (only `is`
+/// tests a type)
+const BRIDGED_MARKS: [&str; 5] = [
 	crate::mutation::MUTATED_MARK,
+	crate::type_tests::EQUALITY_OPERAND,
 	crate::closures::FUNCTION_REFERENCE_MARK,
 	crate::lowering::doc_strings::DOC_KEY,
 	crate::lowering::doc_strings::WRITTEN_AT_KEY,
