@@ -89,6 +89,7 @@ mod test_number_keys;
 mod test_number_list_elements; // card winamp-like
 mod test_numbered_fields;
 mod test_object_list_walk; // orm identity map: index walks of object lists
+mod test_join_unknown_parts; // card warp-profile: `out += part` of an `any` part grows in place
 mod test_one_entry_map_parts; // card age-name
 mod test_one_entry_map_text;
 mod test_pair_values;

@@ -67,6 +67,7 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Counted]));
 					f.instruction(&I::End);
 				}
+				s.emit_non_list_concat(f, list, items, kind);
 				s.emit_item_check(f, super::super::super::declared_values::LIST_ITEMS_CHECK, list, items);
 				s.emit_empty_as_null(f, items);
 				s.emit_collect_cells(f, items, None, &copy);
@@ -284,6 +285,24 @@ impl WasmGcEmitter {
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let cells = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_array_type) });
 		vec![node_ref_nullable, cells, ValType::I32, node_ref_nullable, node_ref_nullable]
+	}
+
+	/// list_extend's items when they are no list (`out += part` of a part of unknown kind, a number or a text): the
+	/// list_concat of the list and them, returned, as node_add gives
+	fn emit_non_list_concat(&self, f: &mut Function, list: u32, items: u32, kind: u32) {
+		Self::emit_list(f, &[I::LocalGet(items), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+		self.emit_field(f, items, 0);
+		self.emit_unmarked(f);
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind),
+			I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne,
+			I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Ne,
+			I::I32And, I::If(BlockType::Empty),
+				I::LocalGet(list), I::LocalGet(items),
+		]);
+		self.call(f, "list_concat");
+		Self::emit_list(f, &[I::Return, I::End, I::End]);
 	}
 
 	/// The first cells of `list` (all, or as many as the i64 local `limit` says; a negative limit is all) into an array,

@@ -380,8 +380,13 @@ impl WasmGcEmitter {
 				return true;
 			}
 		}
-		let is_list = matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty)
-			&& self.get_type(right) == crate::Kind::List;
+		// items of unknown kind too (`out += part` of a part of an `any` list): list_extend adds a list's cells and
+		// concatenates anything else, as node_add does; copying the whole list at each step was quadratic
+		let is_list = match self.get_type(right) {
+			crate::Kind::List => matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty),
+			crate::Kind::Empty => self.get_type(left) == crate::Kind::List,
+			_ => false,
+		};
 		// a declared global grows in place too (`global out; out += [i]` in a function): its concat copy was quadratic
 		let Some(slot) = self.node_variable_slot(name) else {
 			return false;
