@@ -30,7 +30,6 @@ fn core_programs_run_as_rust_runs_them() {
 }
 
 #[test]
-#[ignore = "emitter-twin-traps: probes/self_hosting/emitter/cycle_argument_kinds.warp traps in emitter.warp's module (wasm unreachable) where Rust gives 1"]
 fn every_source_inside_the_core_runs_as_rust_runs_it() {
 	crate::requires!(crate::common::RUST_PIPELINE);
 	emitter_differential(&twin_sources(&DROPPED), LEAST_SOURCES_INSIDE);
