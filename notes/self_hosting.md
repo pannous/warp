@@ -22,7 +22,9 @@ multiple_assignments, then phrase_blocks ({print x}), for_loops (for → while),
 Traps writing passes in warp (cards match-silently and others):
 - `match xs#i { Key(…): … }` takes no case: pass the element through a Node parameter. `Empty:` does not take ø: `n is ø`.
 - a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
-  function: pick names no lib/compiler file defines.
+  function: pick names no lib/compiler file defines. emitter.warp words using `values` (a parameter),
+  `field` (a loop variable) and `instance_of` (runtime.warp's word too) even overflowed the stack, with no message;
+  renaming the three cured it (which one did it is untested; `values` is the likeliest).
 - a pass's top-level word named like another file's (for_loops.warp's `named`, `statements_of`, `repeated` were
   parser.warp's) replaces it in every program that uses both, silently: passes.warp's `use` lines broke the front lane
   (card suite-front-c993b941). Before adding a pass, check its words against the other lib/compiler files.
@@ -185,6 +187,8 @@ Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the g
 emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it). Before sending a tip that touches
 emitter.warp or runtime.warp, run the touched area's suite tests with WARP_SELF_HOSTED=1 (scripts/self-hosted-suite.sh
 --local <filters>, + emitter switch) and compare with the same filters on main: no new failures.
+WARP_SELF_HOSTED=emit runs Rust's front end and lowering, then emitter.warp: an emitter form whose source the warp front
+end cannot read yet (`try … else …`) is checked there before parser.warp reads it.
 | owner | part |
 |---|---|
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |

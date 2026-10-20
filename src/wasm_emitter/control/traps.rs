@@ -149,6 +149,10 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		let name: String = rest[mark.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
 		format!("{}{mark}{name}", lists::list_ops::NO_FIELD_MESSAGE)
 	});
+	let missing_field = missing_field.or_else(|| {
+		let name = trace.contains(lists::list_ops::MISSING_FIELD).then(|| trap_detail(trace)).flatten()?;
+		Some(format!("{}{}", lists::list_ops::NO_FIELD_MESSAGE, unquoted(&name)))
+	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
 		match trap_detail(trace) {
