@@ -100,3 +100,16 @@ fn element_wise_operators_pair_two_linear_arrays() {
 	fails_with("linear xs = float[3]; linear ys = float[2]; zs = xs .* ys; zs#1", "differ in length");
 	fails_with("linear xs = float[3]; linear ys = float[2]; sum(xs .* ys)", "differ in length");
 }
+
+// card library-function: a linear array passed for a parameter declared a list of its items (`floats`, `[float]`,
+// `list of float`, `list`) is that array, written in place, wherever it was declared
+#[test]
+fn a_linear_array_passed_for_a_typed_parameter_is_written_in_place() {
+	let fill = "fill(block: floats) := { for i in 1 to #block { block#i = i * 0.5 }; 0 }; ";
+	is!(&format!("linear b = float[4]; {fill}fill(b); b#4"), 2.0);
+	is!("linear b = float[2]; f(block: [float]) := { block#2 = 1.5; 0 }; f(b); b#2", 1.5);
+	is!("linear b = int[3]; f(xs: list of int) := { xs#3 = 7; #xs }; f(b) + b#3", 10);
+	is!("linear b = float[3]; f(xs: list) := #xs; f(b)", 3);
+	is!(&format!("{fill}g() := {{ linear c = float[2]; fill(c); c#2 }}; g()"), 1.0);
+	is!(&format!("linear a = float[1]; linear b = float[3]; {fill}fill(a); fill(b); a#1 + b#3"), 2.0);
+}
