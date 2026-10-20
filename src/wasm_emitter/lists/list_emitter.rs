@@ -117,14 +117,15 @@ pub(in crate::wasm_emitter) const QUOTE_WORDS: [&str; 3] = ["data", "code", "blo
 const NEAR_MISS_TOPIC: &str = "near-miss";
 
 impl WasmGcEmitter {
-	/// The word a list calls; a parameter named like a function or global is the parameter (`g(f, b) := [f, b]`)
+	/// The word a list calls; a variable named like a function or global is the variable (program_names.rs, the one
+	/// scope rule): a parameter (`g(f, b) := [f, b]`), a local (`held = x; [held, 1]` beside a function held)
 	pub(in crate::wasm_emitter) fn called_function<'a>(
 		&self,
 		items: &'a [Node],
 		bracket: &Bracket,
 		separator: &Separator,
 	) -> Option<&'a str> {
-		called_word(items, bracket, separator).filter(|name| !self.scope.is_parameter(name))
+		called_word(items, bracket, separator).filter(|name| !self.is_variable(name))
 	}
 
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
