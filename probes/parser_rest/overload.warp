@@ -1,0 +1,3 @@
+def index_of(source: any, part: text, from: int, n: int): int := 42
+print "0123456789abcdef".index_of("f")
+print index_of("abc", "c", 0, 3)
