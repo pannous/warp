@@ -84,7 +84,11 @@ Closure calls cost what definition calls cost (6 ns per call, mostly fuel); loop
   a slice per step), text_bytes_equal + values_equal ~9%.
 - Tried, no gain: Binaryen wasm-opt -O2/-O3/-Oz (Cranelift does that work); only -O3 with aggressive inlining runs
   12-19% faster, at 2.4x size and +1.2 s wasmtime compile (card wasm-opt-inline, probes/perf/wasm_opt_bench.sh).
-  wasmtime's own inlining measured slower.
+  wasmtime's own inlining measured slower. Interning text literals (one text per literal, kept in a global array)
+  ran 4% slower: text_literal's profile share is its call count, not its work.
+- Reading a guest profile: samples fall on function entries and loop headers (epoch ticks, notes/profiling.md), so a
+  tiny function called very often (text_literal, closure_entry_*) shows a large self share without costing much;
+  look for the callers that call it so often (profile_self_time.py <file> <rows> <function>).
 
 ## Timing the self-hosted stages
 - Time against a frozen copy of lib/ (`cp -R lib scratch/speed/lib_frozen`, `WARP_LIB=` it, run in its compiler/):
