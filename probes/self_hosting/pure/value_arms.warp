@@ -1,0 +1,19 @@
+// match arms of values (card pure-runs, notes/parser_compiles.md): numbers, texts, characters (enum cases: value_arms_enum.warp)
+def number_name(x) := match x {
+	1: "one"
+	2: "two"
+	_: "many"
+}
+def vowel(c) := match c {
+	'a': yes
+	'e': yes
+	_: no
+}
+def greeting(word) := match word {
+	"hi": 1
+	"hello": 2
+	_: 0
+}
+print number_name(1) + " " + number_name(2) + " " + number_name(7)
+print vowel('a') and not vowel('x')
+print greeting("hello") + greeting("hey")

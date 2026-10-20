@@ -12,7 +12,8 @@ fn pure_run(name: &str, code: &str) -> (String, String) {
 /// The program's output in the lane WARP_SELF_HOSTED names, and what the lane recorded for it
 fn lane_run(lane: &str, name: &str, code: &str) -> (String, String) {
 	let scratch = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-	let record = scratch.join(format!("pure_{name}.txt"));
+	// the target dir and its tmp are shared by every checkout: a run of another at the same time must not write here
+	let record = scratch.join(format!("pure_{name}_{}.txt", std::process::id()));
 	let _ = std::fs::remove_file(&record);
 	let run = crate::common::warp_command()
 		.env("WARP_SELF_HOSTED", lane)
@@ -21,7 +22,9 @@ fn lane_run(lane: &str, name: &str, code: &str) -> (String, String) {
 		.arg(code)
 		.output()
 		.expect("warp runs");
-	(String::from_utf8_lossy(&run.stdout).into_owned(), std::fs::read_to_string(&record).unwrap_or_default())
+	let recorded = std::fs::read_to_string(&record).unwrap_or_default();
+	let _ = std::fs::remove_file(&record);
+	(String::from_utf8_lossy(&run.stdout).into_owned(), recorded)
 }
 
 fn runs_pure(name: &str, code: &str, value: &str) {
@@ -51,6 +54,13 @@ fn for_loops_run_pure() {
 	runs_pure("for_to", "n = 3; t = 0; for i in 1 to n { t += i }; t", "6");
 	runs_pure("for_list", "xs = [4, 5, 6]; t = 0; for x in xs { t += x }; t", "15");
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
+}
+
+/// node_matches.warp: an arm of a number, text or character tests the subject equals it
+#[test]
+fn match_values_run_pure() {
+	runs_pure("match_number", "f(x) := match x { 1: 10; 2: 20; _: 0 }; f(2) + f(5)", "20");
+	runs_pure("match_text", "g(w) := match w { \"hi\": 1; \"hello\": 2; _: 0 }; g(\"hello\")", "2");
 }
 
 /// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
@@ -109,6 +119,16 @@ fn optional_and_float_fields_run_self_hosted() {
 		"1",
 	);
 	runs_emitted("float_field", "type V { x: float; y: float }\nv = V { x: 1, y: 2.5 }\nv.x + v.y", "3.5");
+}
+
+/// The names a program defines itself (card pure-program-names): `square := it * it` is a function of `it`, a spaced
+/// `f 3 4` calls a function of as many parameters, `x := 5` defines a value as Rust's defined_function reads them
+#[test]
+fn program_names_run_pure() {
+	runs_pure("implicit_it", "square := it * it; square 3", "9");
+	runs_pure("spaced_call", "f(a, b) := a + b; f 3 4", "7");
+	runs_pure("statement_block", "add := { it + 1 }; add 2", "3");
+	runs_pure("value_definition", "limit := 3; f(a) := a > limit; f 4", "yes");
 }
 
 /// card pure-follows-use: a used file's declarations, and those of the files it uses, reach the pure lane

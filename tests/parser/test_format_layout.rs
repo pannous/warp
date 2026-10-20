@@ -96,3 +96,12 @@ fn test_ternary_spaced() {
 	let kept = "m = {a: 1}\n";
 	assert_eq!(formatted(kept), kept);
 }
+
+// card format-turns: a minus after a keyword or a word operator is a sign and stays glued (`return -1`, `then -1`,
+// `in -1 to 1`, `and -x`); after an operand it is spaced as a subtraction
+#[test]
+fn test_a_sign_after_a_keyword_stays() {
+	let signs = "f(x) := {\n\tif x > 0 { return -1 }\n\ty = if x then -1 else -2\n\tfor d in -1 to 1 { print d }\n\tx and -x < 3\n}\n";
+	assert_eq!(formatted(signs), signs);
+	assert_eq!(formatted("y = n*2-1\n"), "y = n * 2 - 1\n");
+}
