@@ -377,6 +377,7 @@ impl Lowering {
 fn lower_parameter_overloads(node: Node) -> Node {
 	let mut signatures: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
 	collect_signatures(&node, &mut signatures);
+	let classes = crate::modules::needed_definitions::class_names(&node);
 	let overloaded: HashMap<String, Vec<Vec<String>>> = signatures
 		.into_iter()
 		.filter(|(_, variants)| variants.len() > 1)
@@ -387,8 +388,10 @@ fn lower_parameter_overloads(node: Node) -> Node {
 				.collect();
 			let typed = variants.iter().flatten().any(|type_name| type_name != ANY_TYPE);
 			let distinct = variants.iter().enumerate().all(|(index, types)| !variants[..index].contains(types));
-			// parameters of declared types dispatch through traits (traits.rs)
-			let builtin = variants.iter().flatten().all(|type_name| is_overload_type(type_name));
+			// parameters of declared types dispatch through traits (traits.rs), a class named like a built-in type too
+			// (`Function`)
+			let builtin =
+				variants.iter().flatten().all(|type_name| is_overload_type(type_name) && !classes.contains(type_name));
 			(distinct && builtin && typed).then_some((name, variants))
 		})
 		.collect();
@@ -963,11 +966,12 @@ impl ParameterOverloads {
 		let [head, arguments @ ..] = items.as_slice() else {
 			return None;
 		};
-		let variants = self.overloaded.get(&head.drop_meta().name())?.clone();
+		// `f(x) in xs` read as words: its head is the call `f(x)`, no name of a variant
+		let name = head.symbol_name()?.to_string();
+		let variants = self.overloaded.get(&name)?.clone();
 		if arguments.is_empty() || !is_call(items, bracket, separator) {
 			return None;
 		}
-		let name = head.drop_meta().name();
 		let variants: Vec<Vec<String>> = variants.into_iter().filter(|types| types.len() == arguments.len()).collect();
 		let declared: Vec<Option<String>> = arguments
 			.iter()
@@ -1076,9 +1080,7 @@ impl ParameterOverloads {
 				None => variant,
 			}
 		});
-		match bindings.is_empty() {
-			true => chain,
-			false => Node::List([bindings, vec![chain]].concat(), Bracket::Round, Separator::Semicolon),
-		}
+		// one value wherever the call stood: `f(x) in m` tests the chosen variant's result
+		Node::List([bindings, vec![chain]].concat(), Bracket::Round, Separator::Semicolon)
 	}
 }
