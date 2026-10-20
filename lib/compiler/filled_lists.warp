@@ -4,11 +4,13 @@
 use "walk.warp"
 use "scope.warp"
 
-zeroed_types = ["int", "float", "text"]
-# the zero of an element type word (filled_lists.rs zero_element); `0 as float`, as a stage view holds no exact 0.0
-zero_of(word: text): Node := {
-	if word == "float" { return Key(0, Op.As, symbol("float")) }
-	if word == "text" then "" else 0
+# the zero of an element type word (filled_lists.rs zero_element), ø for words without one; `0 as float`, as a stage
+# view holds no exact 0.0; each in a one-item list, as `"" == ø` would lose the text's zero
+zero_of(word: text): any := match word {
+	"int": [0]
+	"float": [Key(0, Op.As, symbol("float"))]
+	"text": [""]
+	_: ø
 }
 
 # the count of a one-based subscript `#(n + 1)`: 3 of `4`, n of `n + 1`, else ø
@@ -17,17 +19,17 @@ zero_based(one_based: Node): any := match one_based {
 	_: if one_based is int then one_based - 1 else ø
 }
 
-zero_filled(n: Node, zeros: any): Node := match n {
+zero_filled(n: Node, scope: any): Node := match n {
 	Key(element, Op.Hash, one_based): {
-		if not (element is symbol) or not (name_of(element) in zeros) { return n }
+		if not (element is symbol) or binds_value(scope, name_of(element)) { return n }
+		zero = zero_of(name_of(element))
 		count = zero_based(one_based)
-		if count == ø then n else call_of("zero_fill", [count, zero_of(name_of(element))])
+		if zero == ø or count == ø then n else call_of("zero_fill", [count, zero#1])
 	}
 	_: n
 }
 
 filled_lists(program: any): any := {
 	scope = scope_of(program)
-	zeros = zeroed_types.filter(word => not binds_value(scope, word))
-	bottom_up(program, n => zero_filled(n, zeros))
+	bottom_up(program, n => zero_filled(n, scope))
 }

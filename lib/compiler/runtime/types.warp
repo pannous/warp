@@ -9,6 +9,7 @@ textual_node(n: any): int := if is_null(n) == 0 and (kind_code(n) == 3 or kind_c
 # masks (src/lowering/types/type_tests.rs BUILTIN_TYPES): a bool has a mark of its own, ø is the empty list
 node_is_type(n: any, type: text): bool := {
 	if is_null(n) == 1 { return type == "list" }
+	if names_a_type(n) { return names_one_of(unboxed_text(n), covered_type_words(type)) }
 	if marked_kind(n) == 257 { return type == "bool" }
 	kind = kind_code(n)
 	if type == "int" { return kind == 1 and is_ratio(n) == 0 }
@@ -20,6 +21,28 @@ node_is_type(n: any, type: text): bool := {
 	if type == "map" { return marked_kind(n) == 8 }
 	if type == "key" { return kind == 6 }
 	if type == "symbol" { return kind == 5 }
+	no
+}
+# a type value `int`: a symbol marked 1<<54 above its kind (src/type_kinds.rs TYPE_VALUE_KIND)
+type_value_kind(): int := 18014398509481989
+names_a_type(n: any): bool := is_null(n) == 0 and marked_kind(n) == type_value_kind()
+# a type value tests as the type it names: the words of the types a core type covers (type_tests.rs type_matches)
+covered_type_words(type: text): list := {
+	ints = ["int", "integer", "long", "i64", "i32"]
+	rationals = ints + ["rational", "real", "exact"]
+	floats = ["float", "double", "f64", "f32", "float32", "float64", "fast"]
+	chars = ["codepoint", "char", "character"]
+	if type == "int" { return ints }
+	if type == "rational" { return rationals }
+	if type == "float" { return floats }
+	if type == "number" { return rationals + floats + ["number"] }
+	if type == "text" { return ["text", "str", "string"] + chars }
+	if type == "char" { return chars }
+	if type == "bool" { return ["bool", "boolean"] }
+	[type]
+}
+names_one_of(name: text, words: list): bool := {
+	for word in words { if text_order(node_text(word), name) == 0 { return yes } }
 	no
 }
 # `x is Name` of a class: an instance is an entry keyed by its class's name
