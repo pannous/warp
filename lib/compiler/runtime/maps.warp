@@ -1,6 +1,7 @@
 # Maps and class instances: their entries, fields, lookups and updates
-# a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry, as Rust's); a class instance `Point{x:1}` is the key of
-# its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's keys(n:20) is [n]
+# a map is a curly list of `name:value` keys (Marked.Map and Marked.Entry, as Rust's); a class instance `Point{x:1}`
+# is the key of its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's
+# keys(n:20) is [n]
 fields_of(m: any): any := {
 	if marked_kind(m) != Marked.Instance { return m }
 	fields = key_value(m)
