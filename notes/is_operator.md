@@ -14,7 +14,7 @@ Only `is` tests a type (user decision #30): `3 is int` is yes, `3 == int` compar
   "type", so `x is Coin` is is_type(x, "Coin") too; plain_enums.warp turns it into `x == Penny or x == Dime …`.
   emitter.warp answers is_type of a class by instance_of (the instance's own class only), so a type with cases or
   subclasses (`enum Shape { Circle(r), Dot }`, `type Result = Ok(T) | Err(E)`, `class dog extends animal`) is refused
-  until card sum-type-test, not answered no.
+  until card pure-lane-shape, not answered no.
 - `x is not 4`, `x isn't 4` are `not (x is 4)` in both parsers.
 - Leftover (card operator-leftover): Rust marks only built-in type words, so `p == P` of a declared class or enum is
   still read as a type test.

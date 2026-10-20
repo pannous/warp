@@ -159,7 +159,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # errors: the indices of the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); variants its enums' bare cases; sum_types the classes with bare cases or subclasses, which
-# `x is T` tests outside the core (card sum-type-test)
+# `x is T` tests outside the core (card pure-lane-shape)
 # counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
