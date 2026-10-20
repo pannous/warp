@@ -198,3 +198,15 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_runtime", "d = {}; k = 4; d[k] = 7; d[k]", "7");
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
+
+/// A type's name is a value, `k = int` prints `class int` (decision type-text); a parameter, a result or a variable
+/// declared `type` holds one, a map entry named by it is found, and a match arm of a type word tests the subject's type
+/// (card pure-lane-reads)
+#[test]
+fn type_values_run_pure() {
+	runs_pure("type_value", "k = int; k", "class int");
+	runs_pure("type_value_member", "k = text; [int, text] contains k", "yes");
+	runs_pure("type_value_parameter", "wider(a: type, b: type): type := if [a, b] contains float then float else int; wider(int, float)", "class float");
+	runs_pure("type_value_key", "held = {int: 1, float: 2}; held[float]", "2");
+	runs_pure("type_arm", "name(t: any): text := match t { int: \"whole\"; _: \"other\" }; name(3)", "whole");
+}

@@ -5,7 +5,8 @@ node_text(n: any): text := match n {
 	Number(_): number_text(n)
 	Char(_): char_text(unboxed_char(n))
 	Text(_): unboxed_text(n)
-	Symbol(_): unboxed_text(n)
+	# a type value `int`, a symbol marked 1<<54 above its kind, prints `class int` (src/type_kinds.rs TYPE_VALUE_KIND)
+	Symbol(_): if marked_kind(n) == 18014398509481989 then "class " + unboxed_text(n) else unboxed_text(n)
 	Key(_, _, _): key_text(n)
 	True: "yes"
 	False: "no"
