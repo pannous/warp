@@ -5,6 +5,13 @@ claim a line here (commit straight to main) BEFORE you start, mark it done with 
 Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-structures, 2026-10-19 evening:
 28 functions refused, down from 124).
 
+Lib bench (`scripts/lib_bench.sh` → data/lib_bench/<commit>.txt, user 2026-10-20): every lib/**/*.warp read by
+parser.warp without an error view, and compiled whole in pure-only.
+- main f20852e6c4, 2026-10-20: **parsed 100/106, pure-compiled 5/106** (case_tables, R, compiler/node, compiler/words,
+  compiler/runtime/instructions). Parse errors: `Unexpected character` ':' 2 (emitter, math), '·' host_words, '∪' list,
+  '=' prelude, '°' units. Pure, first refusal: unknown name Meaning 14 and a parameter of kind Op 13 (the compiler's
+  own enums, used files), view·opaque 7, is_null 6, passes stage "not an int" 5, compiler.warp timed out (120 s)
+
 ## Done
 - field write on a parameter (`p.at = p.at + 1`): emit-enum-match d717c74deb, also pure-lane 4696852d1
 - `def f(x): T := e` registers as a definition: emit-enum-match d717c74deb, runtime-declared ae7663fc80
