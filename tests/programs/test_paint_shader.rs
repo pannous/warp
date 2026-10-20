@@ -68,7 +68,8 @@ fn paint_of_a_shader_without_a_size_takes_the_canvas_size() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 	let given = painted_rows(&format!("{SHADER}paint(shader, 2, 1, {{blue: 1.0}})"), "paint-canvas-given");
-	let sized = painted_rows(&format!("use draw\ncanvas(2, 1)\n{SHADER}paint(shader, {{blue: 1.0}})"), "paint-canvas-sized");
+	let sized =
+		painted_rows(&format!("use draw\ncanvas(2, 1)\n{SHADER}paint(shader, {{blue: 1.0}})"), "paint-canvas-sized");
 	assert_eq!(sized, given);
 	let properties = "canvas.width = 2\ncanvas.height = 1\n";
 	assert_eq!(painted_rows(&format!("{properties}{SHADER}paint(shader, {{blue: 1.0}})"), "paint-canvas-sides"), given);
