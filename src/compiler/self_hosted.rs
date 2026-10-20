@@ -75,7 +75,8 @@ const PARSE_STAGE: usize = 0;
 const SETUP_EXTENSION: &str = "json";
 /// The input files of the stage programs, one per worker
 const INPUT_FOLDER: &str = "warp-self-hosted";
-/// Stack of a worker: the stage program's compile recurses as deeply as a test thread's
+/// Stack of a worker's own frames: the stage program's compile recurses as deeply as a test thread's; the wasm stack
+/// the engines get comes on top (worker_stack)
 const WORKER_STACK: usize = 64 << 20;
 
 type Pass = fn(Node) -> Node;
@@ -363,6 +364,18 @@ fn answer(stage: &'static Stage, request: String) -> Result<String, String> {
 	Ok(answer)
 }
 
+/// A worker's stack: its own frames and the whole wasm stack its engines may use (warp's main thread gives wasm
+/// 496 MB, warp_runtime::engine::give_main_stack_to_wasm): a deep stage run then traps in wasm instead of overflowing
+/// the thread (parser.warp's compile aborted the process); only the pages used are committed
+#[cfg(feature = "native")]
+fn worker_stack() -> usize {
+	WORKER_STACK + warp_runtime::engine::wasm_stack_bytes()
+}
+#[cfg(not(feature = "native"))]
+fn worker_stack() -> usize {
+	WORKER_STACK
+}
+
 fn spawn_worker(stage: &'static Stage) -> Sender<Request> {
 	static WORKERS_SPAWNED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 	let number = WORKERS_SPAWNED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -377,7 +390,7 @@ fn spawn_worker(stage: &'static Stage) -> Sender<Request> {
 			let _ = reply_to.send(stages.run(&request));
 		}
 	};
-	std::thread::Builder::new().stack_size(WORKER_STACK).spawn(work).expect("a self-hosted stage worker");
+	std::thread::Builder::new().stack_size(worker_stack()).spawn(work).expect("a self-hosted stage worker");
 	requests
 }
 
