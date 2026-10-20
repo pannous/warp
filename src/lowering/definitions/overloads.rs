@@ -24,6 +24,8 @@ const TOPIC: &str = "return-type";
 const COMPANION_SUFFIX: &str = "_as";
 /// How well a value fits `any`: worse than every typed fit, so the untyped variant is the fallback
 const ANY_FIT: u32 = 100;
+/// How well a list of known elements fits a plain `list`: worse than a list of its elements, even widened
+const LIST_FIT: u32 = 2;
 
 /// The function f whose companion f_as is `name`
 pub fn companion_of(name: &str) -> Option<&str> {
@@ -397,9 +399,70 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	}
 	let variables =
 		crate::analyzer::agreeing_kinds(&node, HashMap::new(), |_, value| Some(argument_kind(value, &HashMap::new())));
-	let mut renaming =
-		ParameterOverloads { overloaded, variables, seen: HashMap::new(), declared: vec![HashMap::new()] };
+	let mut registry = TypeRegistry::new();
+	collect_all_types(&mut registry, &node);
+	let classes: HashSet<String> = registry.types().iter().map(|type_def| type_def.name.clone()).collect();
+	let list_elements = list_element_variables(&node, &classes, &variables);
+	let mut renaming = ParameterOverloads {
+		overloaded,
+		variables,
+		classes,
+		list_elements,
+		seen: HashMap::new(),
+		declared: vec![HashMap::new()],
+	};
 	renaming.rewrite(node)
+}
+
+/// Variables assigned lists of one element type, `notes = [note{…}, note{…}]`: that type, None where the assignments
+/// disagree or the items do
+fn list_element_variables(
+	node: &Node,
+	classes: &HashSet<String>,
+	variables: &HashMap<String, Option<Kind>>,
+) -> HashMap<String, Option<String>> {
+	let mut elements: HashMap<String, Option<String>> = HashMap::new();
+	node.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = node
+			&& let Node::Symbol(name) = target.drop_meta()
+		{
+			let element = literal_element_type(value, classes, variables);
+			elements
+				.entry(name.clone())
+				.and_modify(|known| {
+					if *known != element {
+						*known = None
+					}
+				})
+				.or_insert(element);
+		}
+	});
+	elements
+}
+
+/// The element type of a list written with its items: `int` of `[1, 2]`, `note` of `[note{…}]`; None for an empty or
+/// mixed list
+fn literal_element_type(
+	value: &Node,
+	classes: &HashSet<String>,
+	variables: &HashMap<String, Option<Kind>>,
+) -> Option<String> {
+	let Node::List(items, Bracket::Square, _) = value.ungrouped() else {
+		return None;
+	};
+	let mut types = items.iter().map(|item| item_type(item, classes, variables));
+	let first = types.next()??;
+	types.all(|item_type| item_type.as_ref() == Some(&first)).then_some(first)
+}
+
+/// `note` of an instance `note{…}` of a declared type, `int` of `1`
+fn item_type(item: &Node, classes: &HashSet<String>, variables: &HashMap<String, Option<Kind>>) -> Option<String> {
+	match item.ungrouped() {
+		Node::Key(class, Op::Colon, fields) if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			class.symbol_name().filter(|name| classes.contains(*name)).map(str::to_string)
+		}
+		other => argument_kind(other, variables).map(|kind| kind.to_string()),
+	}
 }
 
 /// The argument counts a definition accepts: its parameters without a default are required
@@ -889,6 +952,24 @@ fn fit(kind: Kind, type_name: &str) -> Option<u32> {
 	}
 }
 
+/// How well a list of `element`s fits a parameter of the list type `type_name`: its element as fit() takes a value,
+/// a plain `list` worse than every list of a fitting element; an element only the run time knows fits every list
+fn element_fit(element: Option<&str>, type_name: &str) -> Option<u32> {
+	let Some(wanted) = crate::analyzer::list_element_type(type_name) else {
+		return match type_name {
+			ANY_TYPE => Some(ANY_FIT),
+			_ if overload_kind(type_name) == Some(Kind::List) => Some(if element.is_some() { LIST_FIT } else { 0 }),
+			_ => None,
+		};
+	};
+	let Some(element) = element else { return Some(0) };
+	match type_word_kind(element) {
+		_ if crate::type_tests::canonical_spec_word(element) == crate::type_tests::canonical_spec_word(wanted) => Some(0),
+		Some(kind) => fit(kind, wanted),
+		None => None,
+	}
+}
+
 /// `float` and `number` take any number, as fit() widens an Int: at run time an exact `1.5` is an Int node too
 fn takes_widened(type_name: &str) -> bool {
 	type_name == crate::words::FLOAT_WORD || type_name == crate::words::NUMBER_WORD
@@ -897,6 +978,10 @@ fn takes_widened(type_name: &str) -> bool {
 struct ParameterOverloads {
 	overloaded: HashMap<String, Vec<Vec<String>>>,
 	variables: HashMap<String, Option<Kind>>,
+	/// The declared types, whose instances a list may hold
+	classes: HashSet<String>,
+	/// The element type of each variable assigned lists of one (list_element_variables)
+	list_elements: HashMap<String, Option<String>>,
 	/// Definitions of each overloaded name renamed so far, in declaration order
 	seen: HashMap<String, usize>,
 	/// The parameters and declared variables in scope with their declared type (`n: any`, `leaf: any = "abc"`; none
@@ -950,6 +1035,18 @@ impl ParameterOverloads {
 		(type_name != ANY_TYPE || any_variant).then(|| type_name.clone())
 	}
 
+	/// The element type of a list argument as far as the compile knows it: of its declared list type, of its items
+	/// written, of the lists assigned to the variable it names
+	fn element_type(&self, argument: &Node, declared: Option<&str>) -> Option<String> {
+		if let Some(element) = declared.and_then(crate::analyzer::list_element_type) {
+			return Some(element.to_string());
+		}
+		match argument.ungrouped() {
+			Node::Symbol(name) => self.list_elements.get(name).cloned().flatten(),
+			list => literal_element_type(list, &self.classes, &self.variables),
+		}
+	}
+
 	fn variant_name(name: &str, types: &[String]) -> String {
 		// `f·list_of_int`: one word
 		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, &type_name.replace(' ', "_")))
@@ -984,14 +1081,34 @@ impl ParameterOverloads {
 				_ => argument_kind(argument, &self.variables),
 			})
 			.collect();
+		let elements: Vec<Option<String>> = arguments
+			.iter()
+			.zip(&declared)
+			.zip(&kinds)
+			.map(|((argument, declared), kind)| match kind {
+				Some(Kind::List) => self.element_type(argument, declared.as_deref()),
+				_ => None,
+			})
+			.collect();
+		// a list whose element type only the run time knows, where the variants take lists of different elements
+		let elements_untold = |position: usize| {
+			kinds[position] == Some(Kind::List) && elements[position].is_none() && {
+				let mut taken = variants.iter().map(|types| crate::analyzer::list_element_type(&types[position]));
+				let first = taken.next().flatten();
+				taken.any(|element| element != first)
+			}
+		};
 		// an argument declared `any` (a Node) fits only an `any` variant; an argument of a kind unknown at compile time
 		// fits every type for now: the run time tests it
 		let fits_argument = |position: usize, type_name: &str| match (declared[position].as_deref(), kinds[position]) {
 			(Some(ANY_TYPE), _) => (type_name == ANY_TYPE).then_some(0),
+			(_, Some(Kind::List)) => element_fit(elements[position].as_deref(), type_name),
 			(_, Some(kind)) => fit(kind, type_name),
 			(_, None) => Some(0),
 		};
-		let is_known = |position: usize| kinds[position].is_some() || declared[position].as_deref() == Some(ANY_TYPE);
+		let is_known = |position: usize| {
+			(kinds[position].is_some() && !elements_untold(position)) || declared[position].as_deref() == Some(ANY_TYPE)
+		};
 		let scores: Vec<(u32, &Vec<String>)> = variants
 			.iter()
 			.filter_map(|types| {
@@ -1007,7 +1124,11 @@ impl ParameterOverloads {
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
 		if !(0..arguments.len()).all(is_known) && scores.len() > 1 {
 			let candidates: Vec<&Vec<String>> = scores.iter().map(|(_, types)| *types).collect();
-			return Some(Self::dispatched(&name, &candidates, &kinds, arguments, &no_variant));
+			// a list of untold elements is tested at run time, as an argument of unknown kind
+			let tested_kinds: Vec<Option<Kind>> = (0..arguments.len())
+				.map(|position| kinds[position].filter(|_| !elements_untold(position)))
+				.collect();
+			return Some(Self::dispatched(&name, &candidates, &tested_kinds, arguments, &no_variant));
 		}
 		let best = scores.iter().map(|(score, _)| *score).min();
 		let chosen: Vec<&Vec<String>> =

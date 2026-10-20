@@ -648,7 +648,13 @@ fn followed(declared: Node, rest: &[Node], bracket: &Bracket, separator: &Separa
 
 /// `xs:float list = [0.5]` (parsed as the items `xs:float`, `list = [0.5]`) is `xs:"list of float" = [0.5]`
 fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-	let [declaration, list, rest @ ..] = items else {
+	let (declared, taken) = postfix_listed(items)?;
+	Some(followed(declared, &items[taken..], bracket, separator))
+}
+
+/// The declaration `xs:"list of float"` of the first items `xs:float`, `list` (or `list = [0.5]`), and how many it took
+fn postfix_listed(items: &[Node]) -> Option<(Node, usize)> {
+	let [declaration, list, ..] = items else {
 		return None;
 	};
 	let Node::Key(name, Op::Colon, element) = declaration.drop_meta() else {
@@ -663,7 +669,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 		}
 		_ => return None,
 	};
-	Some(followed(declared, rest, bracket, separator))
+	Some((declared, 2))
 }
 
 /// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
@@ -672,6 +678,12 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 	if let Some(declaration) = maybe_type_declaration(items, bracket, separator) {
 		return Some(declaration);
 	}
+	let (declared, taken) = of_typed(items)?;
+	Some(followed(declared, &items[taken..], bracket, separator))
+}
+
+/// The declaration `x:"list of int"` of the first items `x:list`, `of`, `int` (or `int=[1 2]`), and how many it took
+fn of_typed(items: &[Node]) -> Option<(Node, usize)> {
 	let [declaration, of, ..] = items else { return None };
 	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else {
 		return None;
@@ -706,7 +718,87 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 		Some((op, value)) => Node::Key(Box::new(typed_name), op, value),
 		None => typed_name,
 	};
-	Some(followed(declared, &items[next..], bracket, separator))
+	Some((declared, next))
+}
+
+/// `play(xs: list of int)` and `play(xs: int list)`, parsed as the parameters `xs:list`, `of`, `int` and `xs:int`,
+/// `list`: the one parameter `xs:"list of int"` every later pass reads (overloads, arity, the analyzer). The plural of
+/// a declared type is a list of it as `ints` is of int: `play(xs: notes)`, `xs: notes = […]` take a `list of note`
+pub fn lower_list_parameters(node: Node) -> Node {
+	let mut registry = crate::type_kinds::TypeRegistry::new();
+	collect_all_types(&mut registry, &node);
+	let classes: Vec<&str> = registry.types().iter().map(|type_def| type_def.name.as_str()).collect();
+	with_list_parameters(node, &classes)
+}
+
+fn with_list_parameters(node: Node, classes: &[&str]) -> Node {
+	if let Some((head, body, rebuild)) = crate::lowering::memoization::definition_parts(&node) {
+		return rebuild(folded_head(head, classes), with_list_parameters(body, classes));
+	}
+	match node {
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) if plural_typed(&target, classes).is_some() => {
+			let typed = plural_typed(&target, classes).expect("guarded");
+			Node::Key(Box::new(typed), op, Box::new(with_list_parameters(*value, classes)))
+		}
+		other => children_rewritten(other, |child| with_list_parameters(child, classes)),
+	}
+}
+
+fn folded_head(head: Node, classes: &[&str]) -> Node {
+	match head {
+		Node::List(items, bracket, separator) if !items.is_empty() => {
+			Node::List([vec![items[0].clone()], folded_parameters(&items[1..], classes)].concat(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(folded_head(*node, classes)), data },
+		other => plural_typed(&other, classes).unwrap_or(other),
+	}
+}
+
+fn folded_parameters(items: &[Node], classes: &[&str]) -> Vec<Node> {
+	let mut folded = vec![];
+	let mut rest = items;
+	while let [first, after @ ..] = rest {
+		match of_typed(rest).or_else(|| postfix_listed(rest)) {
+			Some((declared, taken)) => {
+				folded.push(declared);
+				rest = &rest[taken..];
+			}
+			None => {
+				folded.push(folded_group(first, classes));
+				rest = after;
+			}
+		}
+	}
+	folded
+}
+
+/// A parameter written with spaces among others, `xs: list of int` of `play(xs: list of int, n: int)`, a group of
+/// them, or one typed by a plural
+fn folded_group(parameter: &Node, classes: &[&str]) -> Node {
+	match parameter.drop_meta() {
+		Node::List(items, bracket, separator)
+			if matches!(items.first().map(Node::drop_meta), Some(Node::Key(_, Op::Colon, _))) =>
+		{
+			match folded_parameters(items, classes).as_slice() {
+				[only] if *bracket == Bracket::None => only.clone(),
+				folded => Node::List(folded.to_vec(), bracket.clone(), separator.clone()),
+			}
+		}
+		Node::Key(declaration, op @ (Op::Assign | Op::Define), default) if plural_typed(declaration, classes).is_some() => {
+			Node::Key(Box::new(plural_typed(declaration, classes).expect("guarded")), *op, default.clone())
+		}
+		_ => plural_typed(parameter, classes).unwrap_or_else(|| parameter.clone()),
+	}
+}
+
+/// `xs:notes` of a declared type note: `xs:"list of note"`
+fn plural_typed(declaration: &Node, classes: &[&str]) -> Option<Node> {
+	let Node::Key(name, Op::Colon, type_node) = declaration.drop_meta() else {
+		return None;
+	};
+	let word = type_node.symbol_name().filter(|word| !classes.contains(word))?;
+	let class = crate::extensions::strings::named_or_plural(classes, word)?;
+	Some(key(name.as_ref().clone(), Op::Colon, Node::Symbol(format!("{LIST_OF_PREFIX}{class}"))))
 }
 
 /// `x: maybe int = 1`, `x: maybe int`: the optional type `int?`
