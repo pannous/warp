@@ -55,15 +55,18 @@ fn a_changed_file_of_the_folder_compiles_again() {
 	assert_eq!(printed(&folder), "11");
 }
 
+// card program-cache-paths: a module looked for beyond the keyed folders is kept with its stamp
 #[test]
-fn a_module_looking_beyond_the_keyed_folders_is_not_kept() {
+fn a_module_looking_beyond_the_keyed_folders_is_kept_until_it_changes() {
 	let folder = folder("program_cache_nested");
 	std::fs::create_dir_all(folder.join("lib/include")).unwrap();
 	std::fs::write(folder.join("program.warp"), "use outer\nprint bump(1)").unwrap();
 	std::fs::write(folder.join("lib/outer.warp"), "use inner\nbump(x) := twice(x) + 1").unwrap();
 	std::fs::write(folder.join("lib/include/inner.warp"), "twice(x) := 2 * x").unwrap();
 	assert_eq!(printed(&folder), "3");
-	assert_eq!(cached_programs(&folder), 0);
+	assert_eq!(cached_programs(&folder), 1);
+	std::fs::write(folder.join("lib/include/inner.warp"), "twice(x) := 20 * x").unwrap();
+	assert_eq!(printed(&folder), "21");
 }
 
 // card program-cache-own-output: the key lists the folder's module files only, so a program's own output beside it
