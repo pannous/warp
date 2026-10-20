@@ -888,11 +888,15 @@ def local_value(body: Body, n: any): list {
 }
 
 def operation(body: Body, symbol: text, a: any, b: any): list {
+	# an element of a recursive call's result the first reading does not know yet: its index says nothing of its kind
+	if symbol == "#" and a#1 == pending { return element(body, ["node", a#2], b) }
 	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
 	if a#1 == pending and b#1 != pending { a = [b#1, a#2] }
 	if b#1 == pending and a#1 != pending { b = [a#1, b#2] }
 	kind = joint_kind(a#1, b#1)
-	if kind == pending { kind = "int" }
+	# two results not known yet: computed as ints, but of a kind still pending, so `f(x) + g(x) + [y]` reads again
+	unknown = kind == pending
+	if unknown { kind = "int" }
 	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }
 	if symbol == "#" and a#1 == "text" { return runtime_call("text_char", [a, whole_index(b)]) }
 	if symbol == "+" and a#1 == "list" and b#1 == "list" { return runtime_call("list_join", [a, b]) }
@@ -916,9 +920,10 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	ops = if kind == "float" then float_ops else int_ops
 	if not (symbol in ops) { return refuse("the operator " + symbol + " on " + kind) }
 	if kind == "int" and symbol in checked_words and not body.intrinsics {
-		return runtime_call(checked_words[symbol], [["int", converted(a, kind)], ["int", converted(b, kind)]])
+		checked = runtime_call(checked_words[symbol], [["int", converted(a, kind)], ["int", converted(b, kind)]])
+		return [if unknown then pending else checked#1, checked#2]
 	}
-	result = if symbol in comparisons then "bool" else kind
+	result = if symbol in comparisons then "bool" else if unknown then pending else kind
 	[result, converted(a, kind) + converted(b, kind) + [ops[symbol]]]
 }
 

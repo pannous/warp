@@ -420,4 +420,6 @@ fn parser_words_run_pure() {
 	runs_pure("loop_variable_scope", &chain("slice_loops"), "['b' 'c']");
 	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
 	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
+	runs_pure("pending_results", &chain("pending_results"), "[\"int\" 4]\n[5 5 0 5 5 0 0]");
+	runs_pure("map_get_default", &chain("map_get_default"), "ø\n1\n7");
 }

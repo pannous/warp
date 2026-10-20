@@ -1,0 +1,9 @@
+// a recursive call's result read before the first reading knows it: its element, and two such results joined
+def code_of(n: any): list {
+	if n is list { return [code_of(n#1)#1, size_of(n)] }
+	["int", n]
+}
+def size_of(n: any): int := if n is list then size_of(n#1) + size_of(n#1) else 1
+def doubled(n: any): list := if n is list then doubled(n#1) + doubled(n#1) + [0] else [n]
+print(code_of([[4]]))
+print(doubled([[5]]))
