@@ -301,3 +301,12 @@ fn kind_changes_fail_pure() {
 fn std_modules_run_pure() {
 	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
 }
+
+/// lib/compiler/emitter.warp: an instance leaving out fields gives them their declared defaults, an optional field ø
+/// (card pure-field-defaults)
+#[test]
+fn field_defaults_run_pure() {
+	runs_pure("call_defaults", "class point{x:int=0; y:int=3}; point(5)", "point{x:5 y:3}");
+	runs_pure("brace_defaults", "class counter{n=0; step:int=1}; c = counter{}; c.n + c.step", "1");
+	runs_pure("optional_field", "class opt { a: int; b? }; opt(4).a", "4");
+}
