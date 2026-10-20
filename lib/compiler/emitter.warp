@@ -1997,7 +1997,7 @@ body_code(f: Function) := {
 ## the module
 def value_type(kind: text): list { if kind in references then references[kind] else [type_bytes[kind]] }
 # a global's first value, before its declaration sets it
-def zero_of(kind: text): list {
+def zero_code_of(kind: text): list {
 	if kind == "int" { return [op.i64_const, 0] }
 	if kind == "float" { return [op.f64_const] + le64(0) }
 	# a node global holds 0 until assigned, as Rust's `global x; x` gives (struct.new is a constant expression)
@@ -2005,7 +2005,7 @@ def zero_of(kind: text): list {
 	if kind in references { return [ref_null] + (if kind == "time" then [110] else uleb(references[kind]#2)) }
 	[op.i32_const, 0]
 }
-def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end] }
+def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_code_of(module.globals[name]#2) + [op.end] }
 def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
 def function_body(f: Function): list {
 	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
