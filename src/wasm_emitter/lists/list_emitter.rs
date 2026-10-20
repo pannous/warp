@@ -752,6 +752,17 @@ impl WasmGcEmitter {
 		}
 		match kind_mask {
 			Some(mask) => {
+				// `f(float)` of `f(t: type) := t is number`: a type value known only at run time names a type spec covers
+				let held_type_value = subject.drop_meta().symbol_name().is_some() && !code;
+				if held_type_value {
+					self.emit_node_instructions(func, subject);
+					let held = self.node_scratch();
+					Self::emit_list(func, &[I::RefAsNonNull, I::LocalSet(held)]);
+					self.emit_is_type_value(func, held);
+					func.instruction(&I::If(BlockType::Result(ValType::I64)));
+					self.emit_numeric_value(func, &names_covered_type(subject, spec));
+					func.instruction(&I::Else);
+				}
 				self.emit_node_instructions(func, subject);
 				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
@@ -770,6 +781,9 @@ impl WasmGcEmitter {
 					self.emit_node_instructions(func, subject);
 					self.emit_is_map(func);
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64And]);
+				}
+				if held_type_value {
+					func.instruction(&I::End);
 				}
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
