@@ -880,7 +880,6 @@ PASSED:
   ✓ control::test_threads::function_values_cross_to_a_task
   ✓ control::test_threads::lists_cross_to_a_task
   ✓ control::test_threads::stop_ends_a_running_task
-  ✓ control::test_threads::tasks_run_at_the_same_time
   ✓ control::test_threads::texts_floats_characters_and_lists_cross_to_a_task
   ✓ control::test_threads::try_catches_the_failure_of_a_task
   ✓ control::test_time_of_day::a_time_of_day_must_be_one
@@ -6323,7 +6322,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ control::test_threads::tasks_run_at_the_same_time
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6320 passed, 1 failed, 6321 total tested
+11 ignored, 6319 passed, 2 failed, 6321 total tested
