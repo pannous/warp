@@ -142,3 +142,11 @@ fn field_names_and_entry_keys_are_not_reads_of_a_variable() {
 	is!("class P { n: int }; n = 1; def g(p) := p.n; n = 2; g(P{n: 3}) + n", 5);
 	common::fails_with("n=1; def f(c) := c ? n : 0; n=2; f(1)", "f reads n");
 }
+
+#[test]
+fn a_function_assigning_a_global_it_does_not_declare_makes_its_own_local() {
+	// op is global only as use_op reads it before op is bound: f's fresh `op = …` stays f's own (card pure-chain)
+	is!("use_op() := op.call\nop = {call: 16}\nf(n) := { op = n; op }\nf(5) + use_op()", 21);
+	is!("global op = {call: 16}\nf(n) := { let op = n; op }\nf(5) + op.call", 21);
+	is!("use_k() := k\nk = 1\ndef set_k(){ global k; k = 5 }\nset_k()\nuse_k()", 5);
+}
