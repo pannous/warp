@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+# positioned(n, line, column) gives n where it was written: n.line and n.column read it, the node itself stays n; a
+# node a pass made has no field line (walk.warp line_of: `try n.line else ø`). Through emitter.warp:
+# WARP_SELF_HOSTED=1. Gives [12 7 yes 4 (a b)], as the Rust pipeline does
+word = positioned(symbol("x"), 12, 7)
+group = positioned(bracketed([symbol("a"), symbol("b")], "("), 3, 1)
+[word.line, word.column, word == symbol("x"), group.line + group.column, group]

@@ -187,6 +187,8 @@ Emitter rule (2026-10-19, after emitter-structures cost 57 + emitter tests the g
 emitter.warp's core only when it compiles right; unsure → refuse (Rust takes it). Before sending a tip that touches
 emitter.warp or runtime.warp, run the touched area's suite tests with WARP_SELF_HOSTED=1 (scripts/self-hosted-suite.sh
 --local <filters>, + emitter switch) and compare with the same filters on main: no new failures.
+WARP_SELF_HOSTED=emit runs Rust's front end and lowering, then emitter.warp: an emitter form whose source the warp front
+end cannot read yet (`try … else …`) is checked there before parser.warp reads it.
 | owner | part |
 |---|---|
 | warp-self-analyzer | analyzer.warp `kinds(program)` complete; the switch hands the analysis to it instead of src/analyzer |

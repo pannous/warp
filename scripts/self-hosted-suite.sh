@@ -4,7 +4,7 @@
 # replace their Rust passes, the rest stays Rust; =1 adds emitter.warp), the twin tests (parser::test_self_*) left out. Prints
 # "self-hosted: N passed / M" and the failures grouped by cause, the most frequent first.
 #   scripts/self-hosted-suite.sh [<tip>]               on the cloud lane: the pushed tip (default HEAD) plus a throwaway
-#                                                      commit switching self-hosting on (.cargo/config.toml [env]), one
+#                                                      commit with SPEED_PROFILE (the stage switches are --env settings), one
 #                                                      job per TEST_GROUPS entry at once, each on its own branch
 #                                                      SCRATCH_PREFIX/<tip>-<group>, deleted after the run
 #   scripts/self-hosted-suite.sh --stage <name>=<VAR>[=<value>]… [<tip>]   the same with a later stage's switch set too
@@ -21,7 +21,7 @@
 #   scripts/self-hosted-suite.sh --tests <regex> <log[.gz]>…   each failed test whose cause matches, with its cause
 set -uo pipefail
 SWITCH=WARP_SELF_HOSTED
-SWITCHES=("$SWITCH=front"        # VAR=value lines of .cargo/config.toml [env]: the front end alone, unless --stage adds
+SWITCHES=("$SWITCH=front"        # VAR=value settings of the test run (cloud-test.sh --env): the front end alone, unless --stage adds
 	"WARP_EMIT_REFUSALS=/tmp/warp-emit-refusals.txt") # each refusal of a warp stage (and pure's "pure: ran") as a
 	                                 # line of the VM's file, which cloud-test.sh appends to the log; ranked from there
 	                                 # (on stderr, the lines reached the output the CLI tests check)
@@ -173,15 +173,16 @@ newly_failed() {
 	LC_ALL=C comm -13 <(failed_tests "${previous_logs[@]}") <(failed_tests "$@")
 }
 
-# The tip with the switch on: a commit of its own per group, so each job has its own run name
+# The tip with the speed profile, one commit for every part and stage of a tip (the tip's dates make it the same
+# commit each run): the build embeds its commit (WARP_COMMIT), so a warm VM builds a tip once
 switched_on() {
-	local tip=$1 group=$2 index blob commit
+	local tip=$1 index blob commit
 	index=$(mktemp "${TMPDIR:-/tmp}/self-hosted-index.XXXXXX")
 	GIT_INDEX_FILE=$index git read-tree "$tip"
-	blob=$({ git show "$tip:$CONFIG"; printf '%s\n' "${SWITCHES[@]}" | sed 's/^\([^=]*\)=\(.*\)$/\1 = "\2"/'; echo "$SPEED_PROFILE"; } |
-		git hash-object -w --stdin)
+	blob=$({ git show "$tip:$CONFIG"; echo "$SPEED_PROFILE"; } | git hash-object -w --stdin)
 	GIT_INDEX_FILE=$index git update-index --cacheinfo "100644,$blob,$CONFIG"
-	commit=$(git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip: $group")
+	commit=$(GIT_AUTHOR_DATE=$(git log -1 --format=%aD "$tip") GIT_COMMITTER_DATE=$(git log -1 --format=%cD "$tip") \
+		git commit-tree "$(GIT_INDEX_FILE=$index git write-tree)" -p "$tip" -m "self-hosted suite run of $tip")
 	rm -f "$index"
 	echo "$commit"
 }
@@ -200,17 +201,17 @@ cloud_run() {
 	tip=$(git rev-parse "${1:-HEAD}") || fail "no tip ${1:-HEAD}"
 	run=${tip:0:8}${STAGE:++$STAGE}
 	git branch -r --contains "$tip" | grep -q . || fail "tip $tip is not pushed"
-	[ "$(git show "$tip:$CONFIG" | grep '^\[' | tail -1)" = "[env]" ] || fail "$CONFIG of $tip does not end with its [env] table"
-	local groups=("${TEST_GROUPS[@]}")
+	local groups=("${TEST_GROUPS[@]}") settings=() switch
+	for switch in "${SWITCHES[@]}"; do settings+=(--env "$switch"); done
 	[[ " ${SWITCHES[*]} " == *" $SWITCH=pure "* ]] && groups=("${PURE_TEST_GROUPS[@]}")
+	commit=$(switched_on "$tip")
 	for number in "${!groups[@]}"; do
 		group=${groups[$number]}
 		branch=$SCRATCH_PREFIX/$run-$number
-		commit=$(switched_on "$tip" "$group")
 		# GitHub now and then answers "remote rejected (failed)" (9741669b, e5d5a6b7): tried again before giving up
 		push_branch "$commit" "$branch" || fail "push of $branch failed"
 		# shellcheck disable=SC2086 # the group is a list of filters
-		scripts/cloud-test.sh --no-wait "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
+		scripts/cloud-test.sh --no-wait "${settings[@]}" "$branch" "$commit" --all-features -- $group --skip "$SKIPPED" > /dev/null
 		branches+=("$branch") commits+=("$commit")
 	done
 	for number in "${!branches[@]}"; do
