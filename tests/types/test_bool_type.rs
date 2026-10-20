@@ -100,3 +100,12 @@ fn a_function_returning_a_bool_local_gives_a_bool() {
 	is!("has_any(xs) := any(xs); has_any([false, true]) == yes and type(has_any([false])) == bool", true);
 	is!("f() := { n = no; n += 1; n }; f()", 1);
 }
+
+/// card rust-lane-if: an if choosing between a number and a bool keeps the bool's type
+#[test]
+fn an_if_between_a_number_and_a_bool_keeps_the_bool() {
+	assert_eq!(text_of("fully = no; if fully then 2 else true"), "yes");
+	assert_eq!(text_of("fully = no; x = if fully then 2 else 3 > 2; x"), "yes");
+	assert_eq!(text_of("fully = yes; if fully then 2 else true"), "2");
+	is!("fully = no; (if fully then 2 else true) + 1", 2);
+}
