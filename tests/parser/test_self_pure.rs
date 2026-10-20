@@ -12,7 +12,8 @@ fn pure_run(name: &str, code: &str) -> (String, String) {
 /// The program's output in the lane WARP_SELF_HOSTED names, and what the lane recorded for it
 fn lane_run(lane: &str, name: &str, code: &str) -> (String, String) {
 	let scratch = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-	let record = scratch.join(format!("pure_{name}.txt"));
+	// the target dir and its tmp are shared by every checkout: a run of another at the same time must not write here
+	let record = scratch.join(format!("pure_{name}_{}.txt", std::process::id()));
 	let _ = std::fs::remove_file(&record);
 	let run = crate::common::warp_command()
 		.env("WARP_SELF_HOSTED", lane)
@@ -21,7 +22,9 @@ fn lane_run(lane: &str, name: &str, code: &str) -> (String, String) {
 		.arg(code)
 		.output()
 		.expect("warp runs");
-	(String::from_utf8_lossy(&run.stdout).into_owned(), std::fs::read_to_string(&record).unwrap_or_default())
+	let recorded = std::fs::read_to_string(&record).unwrap_or_default();
+	let _ = std::fs::remove_file(&record);
+	(String::from_utf8_lossy(&run.stdout).into_owned(), recorded)
 }
 
 fn runs_pure(name: &str, code: &str, value: &str) {
@@ -91,4 +94,14 @@ fn bang_words_and_tab_columns_run_pure() {
 fn text_escapes_read_pure() {
 	runs_pure("hex_escape", "\"\\x41\\x42\"", "AB");
 	runs_pure("unicode_escape", "\"\\e[H\" == \"\\u{1b}[H\"", "yes");
+}
+
+/// The names a program defines itself (card pure-program-names): `square := it * it` is a function of `it`, a spaced
+/// `f 3 4` calls a function of as many parameters, `x := 5` defines a value as Rust's defined_function reads them
+#[test]
+fn program_names_run_pure() {
+	runs_pure("implicit_it", "square := it * it; square 3", "9");
+	runs_pure("spaced_call", "f(a, b) := a + b; f 3 4", "7");
+	runs_pure("statement_block", "add := { it + 1 }; add 2", "3");
+	runs_pure("value_definition", "limit := 3; f(a) := a > limit; f 4", "yes");
 }
