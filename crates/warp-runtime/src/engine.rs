@@ -27,12 +27,18 @@ pub fn deterministic_config() -> Config {
 	#[cfg(feature = "compiler")]
 	config.wasm_component_model(false);
 	config.concurrency_support(false);
-	let wasm_stack = WASM_STACK_BYTES.load(std::sync::atomic::Ordering::Relaxed);
+	let wasm_stack = wasm_stack_bytes();
 	if wasm_stack > 0 {
 		// wasmtime wants an async stack at least as large; warp makes no async calls, so none is allocated
 		config.async_stack_size(wasm_stack).max_wasm_stack(wasm_stack);
 	}
 	config
+}
+
+/// The wasm call stack engines get, 0 for wasmtime's default: a thread running wasm of such an engine needs a stack
+/// this large besides its own frames (the self-hosted stage workers, src/compiler/self_hosted.rs)
+pub fn wasm_stack_bytes() -> usize {
+	WASM_STACK_BYTES.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Called on the main thread before any engine is made: wasm runs on the main thread and may use its stack but

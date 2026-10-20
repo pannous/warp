@@ -82,3 +82,21 @@ is_declaration(statement: any): bool := {
 }
 # `def f(x) …`, `global x = 0`: a group a function or declaration keyword starts
 is_keyword_group(n: any): bool := is_group(n) and #n >= 2 and n#1 is symbol and (name_of(n#1) in function_keywords or name_of(n#1) in declaration_keywords)
+
+# the name a declaration defines, as src/modules/declarations.rs name_declared_by: `f(x) := …`, `x = …`,
+# `def f(x) …`, `def f(x): T {…}`, `global x = 0`; ø for another statement
+declared_name(statement: any): any := {
+	if is_keyword_group(statement) { return leftmost_name(statement#2) }
+	if not (type(statement) is key) { return ø }
+	operator = op_of(statement)
+	if operator == "=" or operator == ":=" { return leftmost_name(key_of(statement)) }
+	if operator == ":" and is_keyword_group(key_of(statement)) { return leftmost_name(key_of(statement)#2) }
+	if operator == ":" and key_of(statement) is symbol and name_of(key_of(statement)) in declaration_keywords { return declared_name(value_of(statement)) }
+	ø
+}
+leftmost_name(n: any): any := {
+	if n is symbol { return name_of(n) }
+	if type(n) is key { return leftmost_name(key_of(n)) }
+	if is_group(n) and #n > 0 { return leftmost_name(n#1) }
+	ø
+}

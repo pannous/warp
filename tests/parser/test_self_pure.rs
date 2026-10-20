@@ -199,6 +199,15 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
 
+/// List comprehensions lower to the loop that builds the list (card pure-comprehensions), a second `for` nesting in the
+/// first clause as Rust's parser reads it
+#[test]
+fn comprehensions_run_pure() {
+	runs_pure("comprehension", "xs = [1, 2, 3, 4]; [x * 2 for x in xs]", "[2 4 6 8]");
+	runs_pure("filtered_comprehension", "xs = [1, 2, 3, 4]; [x for x in xs if x > 2]", "[3 4]");
+	runs_pure("nested_for_comprehension", "[a + b for a in [1, 2] for b in [10, 20]]", "[11 21 12 22]");
+}
+
 /// Only `is` tests a type (card is-operator): parser.warp reads `is` as its own operator, so `3 == int` compares 3
 /// with the type int, as Rust's parser reads it; `x is not 4` and `x isn't 4` are `not (x is 4)`
 #[test]

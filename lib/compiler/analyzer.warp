@@ -475,7 +475,12 @@ declared_kind(type_node: any): any := {
 # --- functions ---
 
 # symbol first: `type(symbol("key")) is key` (card type-symbol)
-parameter_name(parameter: any): text := if parameter is symbol then name_of(parameter) else parameter_name(key_of(parameter))
+# `x`, `x: T`, `x = 1`, `with new` (a label word before the name; Rust parameter_head)
+parameter_name(parameter: any): text := {
+	if parameter is symbol { return name_of(parameter) }
+	if parameter is key { return parameter_name(key_of(parameter)) }
+	parameter_name(parameter#(#parameter))
+}
 parameters_of(name: text): any := defined_parameters(definitions[name])
 
 # the kind a parameter is pinned to: as declared, else its default's; "" when its calls decide
