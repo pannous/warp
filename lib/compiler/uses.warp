@@ -8,6 +8,10 @@ import_keywords = ["use", "require", "import", "include"]
 # (function_keywords: words.warp's)
 # src/modules/declarations.rs DECLARATION_KEYWORDS and CONSTANT_KEYWORDS
 declaration_keywords = ["let", "var", "global", "stored", "const", "constant", "final", "val"]
+# the declarations that keep a name main's: `global n = 0`; the others make it the function's own, `let n = 5` (Rust
+# is_declaration_word)
+global_declaration_keywords = ["global", "stored"]
+local_declaration_keywords = declaration_keywords.filter(word => word not in global_declaration_keywords)
 module_extension = ".warp"
 # the word a module reads as the folder of its own file (Rust twin: src/modules/loader.rs MODULE_DIRECTORY)
 module_directory_word = "module_directory"

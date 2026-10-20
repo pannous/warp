@@ -32,13 +32,13 @@ source_checks(program: any, prelude: text): any := {
 
 # an error the parser leaves in the tree (a negative index), the program's value
 located_error(n: any): any := {
-	if type(n) is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2])) }
+	if n is key and key_of(n) == symbol(opaque_word) and kind_of(value_of(n)) == "error" { diagnose(call_of("parse_error", [value_of(n)#2#2])) }
 	ø
 }
 
 # an attribute layer `x!` as parser.warp writes it, and the node it marks
-has_mutation_mark(n: any): bool := type(n) is key and key_of(n) == symbol(attribute_word) and "${value_of(n)#1}" == mutated_mark
-without_mark(n: any): any := if type(n) is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n
+has_mutation_mark(n: any): bool := n is key and key_of(n) == symbol(attribute_word) and "${value_of(n)#1}" == mutated_mark
+without_mark(n: any): any := if n is key and key_of(n) == symbol(attribute_word) then without_mark(value_of(n)#3) else n
 
 # --- `"3" + 3` joins the texts (card print-oldest; "a" + 3 does not warn) ---
 
