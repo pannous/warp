@@ -167,15 +167,14 @@ with_type_module_uses(program: any): any := {
 	own = own_heads(program)
 	used = statements_in(program).map(use_target).filter(target => target is symbol).map(name_of)
 	providers = type_module_providers()
-	modules = []
+	wanted = {}
 	for word in called_words(program) {
-		if word in providers and not (word in own) and not (word in call_kinds) {
-			module = providers[word]
-			if module != "" and not (module in used) and not (module in modules) { modules += [module] }
-		}
+		if word in providers and not (word in own) and not (word in call_kinds) { wanted[providers[word]] = yes }
 	}
+	# in the order of type_modules, Rust's sorted one
+	modules = type_modules.filter(module => module in wanted and not (module in used))
 	if #modules == 0 { return program }
-	use_statements = modules.sort().map(module => plain_node(parsed("use " + module)))
+	use_statements = modules.map(module => plain_node(parsed("use " + module)))
 	separated(bracketed(use_statements + statements_in(program), ""), ";")
 }
 # word → the type module defining it, "" for a word two of them define

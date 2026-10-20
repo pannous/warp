@@ -417,4 +417,7 @@ fn parser_words_run_pure() {
 	runs_pure("chained_iterations", &chain("sorted_then_mapped"), "[\"use a\" \"use b\"]\n[4 6]");
 	runs_pure("module_directory", &chain("home_folder/own_folder"), "home_folder\nhelpers");
 	runs_pure("read_files", &chain("files/read_file"), "zweite Zeile ü\n26\nnone");
+	runs_pure("loop_variable_scope", &chain("slice_loops"), "['b' 'c']");
+	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
+	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
 }

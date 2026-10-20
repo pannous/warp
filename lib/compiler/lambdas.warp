@@ -153,7 +153,8 @@ defined_head(signature: Node, body: Node): any := match signature {
 is_sequence_of_statements(program: any): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
 top_statements(program: any): list := if is_sequence_of_statements(program) then items_of(program) else [program]
 
-# the names a body assigns, binds in a `for` or declares `x: T = v`, each once; `x := v` defines, it binds no variable
+# the names a body assigns or declares `x: T = v`, each once; `x := v` defines, it binds no variable. A `for` binds its
+# variable inside its loop only (loop_variables): `for slice in slices {…}` leaves a `slice(xs, 1)` before it the library word
 names_bound(n: any, found: list): list := {
 	found = newly_bound(n, found)
 	if is_lambda(n) or definition_of(n) != ø { return found }
@@ -162,8 +163,12 @@ names_bound(n: any, found: list): list := {
 }
 newly_bound(n: any, found: list): list := match n {
 	Key(target, Op.Assign, value): bound_target(target, found)
-	List(parts, Bracket.None, Separator.Space): { if #parts >= 4 and parts#1 == symbol("for") and parts#3 == symbol("in") then bound_target(parts#2, found) else found }
 	_: found
+}
+# [x] of `for x in xs {…}`, else none
+loop_variables(n: any): list := match n {
+	List(parts, Bracket.None, Separator.Space): { if #parts >= 4 and parts#1 == symbol("for") and parts#3 == symbol("in") then bound_target(parts#2, []) else [] }
+	_: []
 }
 bound_target(target: Node, found: list): list := match target {
 	Symbol(name): { if name in found then found else found + [name] }
@@ -208,7 +213,7 @@ lowered_lambdas(n: any, locals: list, lowering: Lowering): any := {
 		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
 		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
-		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals, lowering)
+		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals + loop_variables(n), lowering)
 		List(items, bracket, separator): List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
 		_: n
 	}
