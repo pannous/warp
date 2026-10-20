@@ -31,7 +31,36 @@ word to its Kind (`{int: Kind.Int, integer: Kind.Int, …}`), the only place a k
 analyzer's printed result (`f(int) -> float`, what test_self_analyzer reads) is a message: one `spelled(k: Kind)` in
 the shared file writes a case lowercase (`Kind.Codepoint` → codepoint), no table.
 
-## Declarations
+## Kind and Node: the kinds are warp's types, no Kind enum (decided 2026-10-20)
+
+User's question: "enum Kind: how does that relate to Node?" A Kind enum would re-list Node's shapes (Empty, Text,
+Symbol, Key, List, Error, …) beside type-only cases (Int, Float, Rational, I32, F32, Function), two enums for one
+idea. Neither shape works. "Kind is Node's cases plus refinements" makes Int/Float/Rational refinements of Number
+and needs enum composition the language does not have. "Kind holds only what Node doesn't say" splits text + text →
+text across two enums. The analyzer's kind is what the compiler knows about a value before it runs: a type.
+Warp already has those values, the built-in types `int`, `float`, `rational`, `number`, `codepoint`, `text`,
+`symbol`, `list`, `error`, `function`, `i32`, `f32`, `any`, and a Node case names the type of its values (`Text(v)`
+is a text). So the kinds are written as the types themselves:
+
+```warp
+widen(a: type, b: type): type := if a == float or b == float then float else int
+primitive_types = [int, float, codepoint, i32, f32]
+```
+
+Mapping of today's words: "int" int, "float" float, "rational" rational, "codepoint"/"char" codepoint, "text" text,
+"symbol" symbol, "list" list, "error" error, "function" function, "i32"/"f32" i32/f32, "pointer" pointer, "data" (a
+number of run-time kind) number, "empty"/"node" (any node) any, "bool" bool, "" (unknown) ø. "list of int" is
+`list of int` once types carry their element type, until then `[list, int]`. The emitter's held kinds are the same
+types (one vocabulary: Held goes too). The printed analysis (`f(int) -> float`) is "${t}". No new enum, nothing
+duplicated, and no case name collides with a type (R1 no longer blocks this plan, still worth fixing).
+
+Needs, probes/compiler_enums/f_type_values.warp (2026-10-20):
+- T1 pure lane: a built-in type as a value, `k = int`: "the unknown name int".
+- T2 Rust lane: `[int, float, codepoint] contains text`-style membership gives no; a match on a value declared
+  `type` with arms naming types (`match t { int: …; float: … }`) takes `_` (the arms test t's own type); "${list}"
+  prints "class list" where "list" is meant.
+
+## Declarations (superseded for Kind and Held by the section above)
 
 lib/compiler/kinds.warp, used by every stage that names a kind (words, signatures, analyzer, emitter, serializer):
 
@@ -77,6 +106,6 @@ its own EXPRESS branch.
 2. internal stage tags (scope, signatures, tries, for_loops, parser's Form) — small files first.
 3. node view tags → Node constructors (walk, serializer, plain_enums, node_matches), and Op/Bracket/Separator
    comparisons once op_of gives the case.
-4. Kind (kinds.warp, words, signatures, analyzer) after R1 and P1/P4.
-5. Held (emitter) after R1.
+4. kinds as types (words, signatures, analyzer) after T1/T2.
+5. held kinds as types (emitter) after T1/T2.
 analyzer.warp, parser.warp and emitter.warp are announced to warp-supervisor before each step touches them.
