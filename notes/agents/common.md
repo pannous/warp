@@ -57,6 +57,10 @@ After a context swap, this file and your role file win over anything a handover 
 - Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
   another way, `96px/inch` vs `96dpi`), SendMessage warp-interviewer before carding or fixing it. A confirmed
   non-issue gets no work: its card, if any, goes to Later with the verdict as a `todo note`.
+- Wrong results go to the Interviewer whenever a reinterpretation is possible (user 2026-10-20): a "wrong" value
+  (survey, test pair, twin) that a different reading of the code or the expectation could make right (`p.first()` of
+  a map, `"" is empty`, named arguments, setters) is sent to warp-interviewer with the code, the value and the
+  expected one before anyone fixes code or test; only an unambiguous bug is carded and fixed directly.
 - Never message warp-integrator with FYIs or swap notices: only requests it must act on; the card is the merge
   request. A wanted gate step (integrator_tools/gate.sh) is a request to warp-integrator, never an edit of its files.
 - Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (codex_worker.sh); Claude spawns
