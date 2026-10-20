@@ -332,7 +332,8 @@ Readers of the layout (each place a module's result or a value crossing the boun
   before compiling): one page of memory, exported as "memory", where the runtime word print_line copies a text's bytes
   a chunk at a time (iovec at 0, written count at 8, bytes from 16). That is the one edge helper; nothing else
   touches memory. Done (card emitter-prints); the emitter twin compares stdout too (host::with_captured_stdout).
-Runtime words are warp: lib/compiler/runtime.warp, written in idiomatic warp (for loops and all sugar) and lowered by
+Runtime words are warp: lib/compiler/runtime.warp (an index of `use "runtime/<part>.warp"` lines, one idea per part
+in lib/compiler/runtime/, joined by self_hosted.rs runtime_source), written in idiomatic warp (for loops and all sugar) and lowered by
 the same pipeline as any program before emitter.warp sees them (`wasm_module(program, runtime)`; the twin harness
 lowers it with pipeline::lower). emitter.warp handles only lowered forms, never hand-lowered source. The words use a
 handful of intrinsics, one or two instructions each and callable only from runtime words: texts (new_text, copy_text,
