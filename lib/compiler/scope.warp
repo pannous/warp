@@ -15,12 +15,15 @@ binding_name(n: Node): any := match n {
 
 # `x => …`, `(x => …)`: a lambda
 is_lambda(n: Node): bool := match n {
-	Key(left, op, right): (op as text) == "=>" or (op as text) == "->"
-	List(items, bracket, separator): (bracket as text) == "(" and #items == 1 and is_lambda(items#1)
+	Key(left, op, right): op == Op.Arrow
+	List(items, bracket, separator): bracket == Bracket.Round and #items == 1 and is_lambda(items#1)
 	_: no
 }
 
-is_round(n: Node): bool := bracket_of(n) == "("
+is_round(n: Node): bool := match n {
+	List(_, Bracket.Round, _): yes
+	_: no
+}
 
 # the name of a head `f`, `f(a)`, `f: int`
 head_word(n: Node): text := match n {
@@ -62,9 +65,9 @@ function_meanings(head: Node): list := {
 }
 
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
-assignment_meanings(op: text, target: Node, value: Node): list := {
+assignment_meanings(op: Op, target: Node, value: Node): list := {
 	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
-	[[binding_name(target), if op == ":=" or is_lambda(value) then "function" else "variable"]]
+	[[binding_name(target), if op == Op.Define or is_lambda(value) then "function" else "variable"]]
 }
 
 # the meanings a word gives the item after it in a phrase: `for x`, `def f(a)`
@@ -86,14 +89,14 @@ phrase_meanings(items: list): list := {
 
 # the meanings a node gives, [name, meaning] each
 meanings_of(n: Node): list := match n {
-	Key(target, op, value): key_meanings(target, op as text, value)
+	Key(target, op, value): key_meanings(target, op, value)
 	List(items, bracket, separator): phrase_meanings(items)
 	_: []
 }
 
-key_meanings(target: Node, op: text, value: Node): list := {
-	if op == "=" or op == ":=" { return assignment_meanings(op, target, value) }
-	if op == "=>" or op == "->" { return as_parameters(parameters_of(target)) }
+key_meanings(target: Node, op: Op, value: Node): list := {
+	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
+	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
 	[]
 }
 
@@ -106,7 +109,7 @@ fields_of(n: Node): list := {
 }
 
 field_meanings(item: Node): list := match item {
-	Key(name, op, value): { if (op as text) == ":" then [[binding_name(name), "field"]] else [] }
+	Key(name, Op.Colon, value): [[binding_name(name), "field"]]
 	_: []
 }
 
