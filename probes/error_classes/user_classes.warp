@@ -1,0 +1,8 @@
+// a declared error class raises and catches by its class and its parents (decision error-classes)
+class ParseError extends Error {}
+class TokenError extends ParseError {}
+a = try raise ParseError("bad token") except ParseError as e: e
+b = try raise TokenError("bad char") except ParseError as e: e
+c = try (try raise ParseError("x") except TokenError: 1) except Error: 2
+d = try (try raise ParseError("x") except IndexError: 1) except ParseError: 3
+print a b c d

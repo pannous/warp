@@ -1,0 +1,10 @@
+// node.warp enum cases inside functions through emitter.warp (goal parser-compiles): want yes, ":", yes
+use "../../lib/compiler/node.warp"
+is_colon(o: Op): bool := o == Op.Colon
+print(is_colon(Op.Colon))
+print(Op.Colon as text)
+is_pair(entry: any): bool := match entry {
+	Key(name, Op.Colon, value): yes
+	_: no
+}
+print(is_pair(Key(symbol("a"), Op.Colon, symbol("b"))))

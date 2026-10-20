@@ -86,6 +86,13 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
   of space; a warm VM had 12 GB free after a few jobs. Below 15 GB free (MIN_FREE_GB) the incremental caches go, then
   if need be all of target/, and a build that still runs out of space is retried once on an empty target/. The result
   names it ("disk:").
+- Build reuse: build.rs embeds the commit (WARP_COMMIT) and, asked from git, reruns on every reflog change, which
+  recompiled warp-lang (180–600 s) in every job of a warm VM, even of the same tree. cloud-test.sh exports
+  WARP_COMMIT=<tip>, which build.rs takes without git or the reflog; self-hosted-suite.sh runs all parts and stages
+  of a tip on one deterministic commit, and passes stage switches as --env (test phase only), so the tree stays one.
+- `cargo package` poisons the shared target: its verify build gives warp-lang's build script the same fingerprint
+  dir, whose dep-info then names target/package/warp-lang-*/build.rs, so edits of build.rs were never compiled
+  (found 2026-10-20, fixed by deleting that fingerprint dir and target/package).
 - Failures listed in notes/known_failures.md (read in the tested checkout, as the gate reads it at the tested tip) are
   listed apart as "known" and don't make a run red, like the environmental ones.
 - Cost: ~$0.30 per targeted run, ~$0.50 per full run (tokens, not VM time). A targeted run takes 5–6 min, mostly the

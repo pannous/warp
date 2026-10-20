@@ -7,6 +7,7 @@ use super::*;
 pub mod class_methods;
 pub mod class_references;
 pub mod conversions;
+pub mod error_classes;
 pub mod function_types;
 pub mod inline_unions;
 pub mod named_patterns;

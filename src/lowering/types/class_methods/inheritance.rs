@@ -4,6 +4,10 @@ use super::*;
 use crate::lowering::nodes::word_headed;
 use crate::words::SELF_WORD;
 
+/// The mark of a class that took in its parent's items: the parent, which `except Error` of a ParseError reads
+/// (error_classes.rs)
+pub(crate) const INHERITED_FROM: &str = "inherited_from";
+
 /// Every class with the items of the mixins it takes in (`class Duck with Walker {…}`, `include Walker` in its body)
 /// after its own, but those it defines itself; the mixin declarations themselves are no classes and go
 pub(super) fn with_mixins(node: Node) -> Result<Node, Node> {
@@ -86,17 +90,28 @@ pub(super) fn included_mixin(item: &Node) -> Option<String> {
 		.then(|| mixin.drop_meta().name())
 }
 
+/// A class declaration's name, parent and items
+fn declared_class(part: &Node) -> Option<(String, Option<String>, Vec<Node>)> {
+	let Node::Type { name, body } = part else { return None };
+	let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+	Some((name.drop_meta().name(), parent, class_items(body)))
+}
+
 /// The classes with the fields and methods of the class they extend, and the likeness `dog like animal` of each
 pub(super) fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 	let mut classes: Vec<(String, Option<String>, Vec<Node>)> = vec![];
-	node.visit(&mut |part| {
-		if let Node::Type { name, body } = part {
-			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
-			classes.push((name.drop_meta().name(), parent, class_items(body)));
-		}
-	});
+	node.visit(&mut |part| classes.extend(declared_class(part)));
 	if classes.iter().all(|(_, parent, _)| parent.is_none()) {
 		return Ok((node, vec![]));
+	}
+	// a parent the program does not declare may be the prelude's (`extends Error`)
+	let prelude_parent = |classes: &[(String, Option<String>, Vec<Node>)]| {
+		let declared = |parent: &String| classes.iter().any(|(class, _, _)| class == parent);
+		let parents = classes.iter().filter_map(|(_, parent, _)| parent.as_ref());
+		parents.filter(|parent| !declared(parent)).find_map(|parent| crate::modules::prelude_class(parent))
+	};
+	while let Some(prelude_class) = prelude_parent(&classes) {
+		prelude_class.visit(&mut |part| classes.extend(declared_class(part)));
 	}
 	let mut likenesses = vec![];
 	for (class, parent, _) in &classes {
@@ -198,16 +213,17 @@ pub(super) fn item_name(item: &Node) -> Option<String> {
 	method_parts(item).map(|(name, _, _)| name).or_else(|| declared_field_name(item))
 }
 
-/// Every class that extends another with all its items, its name without the parent
+/// Every class that extends another with all its items, its name without the parent to inherit from, marked
+/// INHERITED_FROM it
 pub(super) fn with_inherited(node: Node, classes: &[(String, Option<String>, Vec<Node>)]) -> Result<Node, Node> {
 	match node {
-		Node::Type { name, body: _ } if name.attribute(crate::warp_parser::EXTENDS_KEYWORD).is_some() => {
+		Node::Type { name, body: _ }
+			if let Some(parent) = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).cloned() =>
+		{
 			let class = name.drop_meta().name();
 			let items = inherited_items(&class, classes, &mut vec![])?;
-			Ok(Node::Type {
-				name: Box::new(Node::Symbol(class)),
-				body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)),
-			})
+			let name = Node::Symbol(class).with_attribute(INHERITED_FROM, parent);
+			Ok(Node::Type { name: Box::new(name), body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)) })
 		}
 		Node::List(items, bracket, separator) => Ok(Node::List(
 			items.into_iter().map(|item| with_inherited(item, classes)).collect::<Result<_, _>>()?,

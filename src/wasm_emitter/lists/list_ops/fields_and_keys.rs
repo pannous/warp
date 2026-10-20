@@ -417,8 +417,9 @@ impl WasmGcEmitter {
 			let type_names: Vec<String> =
 				self.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
 			let type_symbols: Vec<(u32, u32)> = type_names.iter().map(|name| self.memory_string(name)).collect();
-			self.runtime_function(STRUCT_BODY, vec![node_ref], vec![node_ref], vec![nullable_node_ref], |s, f| {
-				let entry = 1;
+			let locals = vec![nullable_node_ref, nullable_node_ref];
+			self.runtime_function(STRUCT_BODY, vec![node_ref], vec![node_ref], locals, |s, f| {
+				let (entry, body) = (1, 2);
 				let field = |f: &mut Function, local: u32, index: u32| {
 					Self::emit_list(
 						f,
@@ -428,6 +429,19 @@ impl WasmGcEmitter {
 				let kind_of = |f: &mut Function, local: u32| {
 					field(f, local, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And]);
+				};
+				// whether `body` holds fields, an entry, a list of them or none: `Box: yes` is a map's one entry, no instance
+				let holds_fields = |f: &mut Function| {
+					Self::emit_list(f, &[I::LocalGet(body), I::RefIsNull, I::If(BlockType::Result(ValType::I32))]);
+					Self::emit_list(f, &[I::I32Const(0), I::Else]);
+					for (index, kind) in [Kind::List, Kind::Key, Kind::Empty].into_iter().enumerate() {
+						kind_of(f, body);
+						Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
+						if index > 0 {
+							f.instruction(&I::I32Or);
+						}
+					}
+					f.instruction(&I::End);
 				};
 				// the fields of the key in `local` when it is named after a class
 				let fields_when_named = |f: &mut Function, local: u32| {
@@ -445,7 +459,10 @@ impl WasmGcEmitter {
 						s.call(f, VALUES_EQUAL);
 						f.instruction(&I::If(BlockType::Empty));
 						field(f, local, 2);
-						Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
+						f.instruction(&I::LocalSet(body));
+						holds_fields(f);
+						Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(body), I::RefAsNonNull, I::Return]);
+						Self::emit_list(f, &[I::End, I::End]);
 					}
 				};
 				// `{"Todo": {…}}`, an instance as a server sends it (web_server.rs) and JSON decodes it: its one entry
