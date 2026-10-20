@@ -481,11 +481,19 @@ fn parser_words_run_pure() {
 fn type_values_run_pure() {
 	runs_pure("type_value", "k = int; k", "class int");
 	runs_pure("type_value_member", "k = text; [int, text] contains k", "yes");
-	runs_pure("type_value_parameter", "wider(a: type, b: type): type := if [a, b] contains float then float else int; wider(int, float)", "class float");
+	runs_pure(
+		"type_value_parameter",
+		"wider(a: type, b: type): type := if [a, b] contains float then float else int; wider(int, float)",
+		"class float",
+	);
 	runs_pure("type_value_key", "held = {int: 1, float: 2}; held[float]", "2");
 	runs_pure("type_arm", "name(t: any): text := match t { int: \"whole\"; _: \"other\" }; name(3)", "whole");
 	runs_pure("typed_array", "ys = float[2]; ys", "[0 0]");
-	runs_pure("type_value_arm", "name(t: type): text := match t { int: \"whole\"; float: \"real\"; _: \"other\" }; name(float)", "real");
+	runs_pure(
+		"type_value_arm",
+		"name(t: type): text := match t { int: \"whole\"; float: \"real\"; _: \"other\" }; name(float)",
+		"real",
+	);
 	runs_pure("type_value_covered", "f(t: type) := t is number; f(int)", "yes");
 }
 

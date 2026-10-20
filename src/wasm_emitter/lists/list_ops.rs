@@ -900,9 +900,7 @@ impl WasmGcEmitter {
 
 	/// The number of items (i64) of the list node on the stack, as list_items finds them
 	pub(in crate::wasm_emitter) fn emit_items_length(&self, func: &mut Function) {
-		self.call(func, super::list_dispatch::LIST_ITEMS);
-		let length = I::StructGet { struct_type_index: self.type_manager.node_list_type, field_index: 0 };
-		Self::emit_list(func, &[length, I::I64ExtendI32U]);
+		self.call(func, super::list_dispatch::LIST_ITEM_COUNT);
 	}
 
 	/// The locals of an item walk, in the order of ItemWalk::at
