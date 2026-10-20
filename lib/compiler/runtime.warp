@@ -167,6 +167,8 @@ number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_
 collection_text(n: any): text := {
 	if kind_code(n) == 8 { return list_shown(n) }
 	if kind_code(n) == 18 { return time_text(n) }
+	# a closure: its lambda as written (emitter.warp closure_text_code)
+	if kind_code(n) == 16 { return closure_text(n) }
 	fail()
 }
 # a value as a list shows its items: a text in double quotes, a character in single quotes
