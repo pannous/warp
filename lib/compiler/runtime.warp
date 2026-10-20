@@ -1311,6 +1311,16 @@ returned_error(): int := {
 	fail()
 	0
 }
+# `x: T = v` of a value known only at run time: v when it carries one of `names` (an instance of the class T or of a
+# class under it, a case of the enum T), else the run fails with "not a T", as Rust's
+type_checked(value: any, type_name: text, names: list): any := {
+	if is_null(value) == 0 and (kind_code(value) == 5 or marked_kind(value) == 6) {
+		carried = if kind_code(value) == 5 then node_text(value) else key_name(value)
+		for name in names { if text_order(node_text(name), carried) == 0 { return value } }
+	}
+	returned_error(text_join("not a ", type_name))
+	value
+}
 raised(value: any): int := {
 	global trap_detail = value
 	returned_error()
