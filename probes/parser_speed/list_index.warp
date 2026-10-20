@@ -1,0 +1,18 @@
+// Are list reads and writes constant time? The milliseconds of `gaps`-like backwards fills of n items, as gaps() in
+// lib/compiler/lexer.warp does them (card profile-stage-programs)
+def filled(n: int): int {
+	started = clock()
+	marks = (n + 1) times [n]
+	at = n - 1
+	while at >= 0 {
+		marks[at] = marks[at + 1]
+		at = at - 1
+	}
+	clock() - started
+}
+def made(n: int): int {
+	started = clock()
+	marks = (n + 1) times [n]
+	clock() - started
+}
+for n in [8000, 16000, 32000] { print("n " + n + ": made " + made(n) + " ms, filled " + filled(n) + " ms") }

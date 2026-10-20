@@ -72,6 +72,33 @@ pub(super) fn indexed_lists(program: &Node) -> HashSet<String> {
 	indexed
 }
 
+/// `while c do body`, what every loop lowers to
+fn is_while_loop(node: &Node) -> bool {
+	matches!(node, Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)))
+}
+
+/// Whether the places holding a list are its last use: no loop runs around one, and no mention of `members` runs after
+/// the first (`gaps = Gaps{resumes: resumes}` after the loop filling resumes), so the list converted there changes no more
+pub(super) fn held_last(program: &Node, members: &[String], places: &[&Node]) -> bool {
+	fn mentions<'n>(node: &'n Node, members: &[String], loops: usize, found: &mut Vec<(&'n Node, usize)>) {
+		let node = node.drop_meta();
+		match node {
+			Node::Symbol(name) if members.contains(name) => found.push((node, loops)),
+			_ => {
+				let inner = loops + usize::from(is_while_loop(node));
+				node.visited_children().into_iter().for_each(|child| mentions(child, members, inner, found));
+			}
+		}
+	}
+	let mut found = Vec::new();
+	mentions(program, members, 0, &mut found);
+	let is_place = |mention: &Node| places.iter().any(|place| std::ptr::eq(*place, mention));
+	let Some(first) = found.iter().position(|(mention, _)| is_place(mention)) else {
+		return false;
+	};
+	found[first..].iter().all(|(mention, loops)| *loops == 0 && is_place(mention))
+}
+
 /// The items of `xs += [a b]`
 pub(super) fn extended_items(value: &Node) -> Option<&[Node]> {
 	match value.drop_meta() {
@@ -235,7 +262,7 @@ impl WasmGcEmitter {
 	/// after its value), each with the loops around it
 	pub(super) fn list_events(&self, node: &Node, name: &str, holds: &[&Node], walk: &mut EventWalk) {
 		let node = node.drop_meta();
-		let is_loop = matches!(node, Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)));
+		let is_loop = is_while_loop(node);
 		if is_loop {
 			walk.loops.push(walk.count);
 			walk.count += 1;
@@ -482,14 +509,15 @@ impl WasmGcEmitter {
 					.flatten()
 					.or_else(|| self.typed_globals.get(name).map(|(_, list)| list.element))
 			};
-			// a list an item or a field holds once it is complete (`o = {r = 1..n}`, `[xs, 5]`) is converted there, never
-			// changed after: its Node copy and the array stay equal
+			// a list an item or a field holds once it is complete (`o = {r = 1..n}`, `[xs, 5]`), or as its last use, is
+			// converted there, never changed after: its Node copy and the array stay equal
 			let held_complete = |name: &String| {
 				let places: Vec<&Node> =
 					groups[name].iter().filter_map(|member| held.places.get(member)).flatten().copied().collect();
+				let last = held_last(program, &groups[name], &places);
 				!writes_shared_lists
 					&& groups[name].iter().all(|member| {
-						!written.contains(member) && !self.appends_while_aliased(program, member, &places)
+						(last || !written.contains(member)) && !self.appends_while_aliased(program, member, &places)
 					})
 			};
 			let held_as_nodes =
