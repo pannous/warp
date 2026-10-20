@@ -8,7 +8,6 @@ use "phrase_blocks.warp"
 use "shapes.warp"
 use "node_matches.warp"
 
-enum_word = "enum"
 variants_word = "variants"
 case_word = "case"
 raise_word = "raise"
@@ -152,6 +151,20 @@ case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): 
 	case_number(value, enums[enum_name], count_types[target_name], enums)
 }
 
+# `c is Coin`, type_tests.warp's is_type(c, "Coin"): c is one of Coin's cases, as Rust's sum type test
+case_test(value: Node, cases: list): Node := {
+	tested = Key(value, Op.Eq, symbol(cases#1))
+	for case in cases[1..] { tested = Key(tested, Op.Or, Key(value, Op.Eq, symbol(case))) }
+	tested
+}
+
+# is_type(value, "Coin") of a declared enum: the test of its cases, else as it is
+type_test(items: list, n: Node, enums: any): Node := {
+	if #items != 3 or items#1 != symbol("is_type") { return n }
+	enum_name = "" + items#3
+	if enum_name in enums then case_test(items#2, enums[enum_name]) else n
+}
+
 enum_node(n: Node, enums: any, subjects: any): Node := match n {
 	Key(owner, Op.Dot, case): {
 		cased = case_of(owner, case, n, enums)
@@ -160,7 +173,8 @@ enum_node(n: Node, enums: any, subjects: any): Node := match n {
 	Key(owner, Op.Scope, case): case_of(owner, case, n, enums)
 	Key(value, Op.As, target): case_conversion(value, target, n, enums, subjects)
 	List(items, Bracket.Round, separator): {
-		if #items == 2 and is_name(items#1) and name_of(items#1) in enums then case_at(items#2, name_of(items#1), enums) else n
+		if #items == 2 and is_name(items#1) and name_of(items#1) in enums then case_at(items#2, name_of(items#1), enums)
+		else type_test(items, n, enums)
 	}
 	_: {
 		declared = declared_enum(n)

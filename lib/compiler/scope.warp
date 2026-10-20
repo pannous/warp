@@ -72,6 +72,7 @@ word_meanings(word: Node, next: Node): list := match word {
 	Symbol(name): {
 		if name == "for" then [[binding_name(next), "loop"]]
 		else if function_keywords contains name then function_meanings(definition_head(next))
+		else if name == enum_word then [[binding_name(next), "type"]]
 		else []
 	}
 	_: []
@@ -94,6 +95,7 @@ meanings_of(n: Node): list := match n {
 key_meanings(target: Node, op: text, value: Node): list := {
 	if op == "=" or op == ":=" { return assignment_meanings(op, target, value) }
 	if op == "=>" or op == "->" { return as_parameters(parameters_of(target)) }
+	if target == symbol(opaque_word) and value#1 == "type" { return [[declared_type_name(value#2), "type"]] }
 	[]
 }
 
