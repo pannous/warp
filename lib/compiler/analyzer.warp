@@ -43,7 +43,6 @@ node_parts(n: any): list := match n {
 	_: []
 }
 is_empty(n: any): bool := n == ø
-is_curly_group(n: any): bool := is_group(n) and bracket_of(n) == "{"
 head_name(n: any): text := if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
 # a local, else a global the scope sees
 binding(scope: any, name: text): any := if name in scope.kinds then scope.kinds[name] else scope.globals.get(name)

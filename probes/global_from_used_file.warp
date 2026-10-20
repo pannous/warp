@@ -1,2 +1,2 @@
-use "lib/compiler/sugar.warp"
+use "../lib/compiler/sugar.warp"
 print count_of("twice")
