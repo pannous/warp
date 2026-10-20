@@ -927,7 +927,12 @@ impl WasmGcEmitter {
 	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is one of the
 	/// classes, or an Error of one of them (its value, decision error-classes). The exact class alone for a dispatch,
 	/// with the classes extending it for `x is T`
-	pub(in crate::wasm_emitter) fn emit_instance_of(&mut self, func: &mut Function, instance: &Node, classes: &[String]) {
+	pub(in crate::wasm_emitter) fn emit_instance_of(
+		&mut self,
+		func: &mut Function,
+		instance: &Node,
+		classes: &[String],
+	) {
 		let node_type = self.type_manager.node_type;
 		self.emit_node_instructions(func, instance);
 		let instance_local = self.node_scratch();
