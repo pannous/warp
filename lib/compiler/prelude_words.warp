@@ -32,8 +32,11 @@ definition_slices(source: text): list := {
 }
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
-# `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), else ""
+# `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
+# `infix operator ↑(x: number, n: number) := …`, else ""
 defined_name(line: text): text := {
+	declared = operator_declared(blank_words(line))
+	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1 }
 	leading = leading_name(line)
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if leading == "" { return "" }
@@ -72,7 +75,9 @@ with_reached(program: any, module: text, in_front: bool): any := {
 	own_names = statements_in(program).map(declared_name)
 	aliases = module_aliases(module)
 	program = aliased(program, aliases, own_heads(program))
-	slices = definition_slices(module).filter(slice => not (slice#1 in own_names))
+	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
+	# numbers' ↑), any other definition replaces the module's
+	slices = definition_slices(module).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program)

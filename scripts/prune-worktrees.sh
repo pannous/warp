@@ -28,7 +28,7 @@ KEPT_BRANCHES=(main HEAD)
 STALE_HOURS=${STALE_HOURS:-12}
 SUPERVISOR_TMUX=warp-supervisor
 TODO=/Users/me/dev/bin/todo  # cron's PATH lacks ~/dev/bin
-RESULT_BRANCHES='^cloud-(jobs|results)/'  # test-lane results the steward reads, never merged
+RESULT_BRANCHES='^(cloud-(jobs|results)/|vendor$)'  # test-lane results and the cloud lane's vendored crates (scripts/cloud-test.sh), never merged
 GH_TOKEN=${GH_TOKEN:-$(cat ~/.config/gh/cron-token 2>/dev/null)}; export GH_TOKEN
 
 dry_run=$([[ $1 == --dry-run ]] && echo yes)

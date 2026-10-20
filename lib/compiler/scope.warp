@@ -8,7 +8,7 @@ use "walk.warp"
 use "words.warp"
 
 # how a binding form gives a name its meaning
-enum Meaning { Function, Variable, Parameter, Loop, Field }
+enum Meaning { Function, Variable, Parameter, Loop, Field, Type }
 
 # the name a binding form gives: `x`, `x: int`, `x: int = 1`; ø for anything else
 binding_name(n: Node): any := match n {
@@ -79,6 +79,7 @@ word_meanings(word: Node, next: Node): list := match word {
 	Symbol(name): {
 		if name == "for" then [[binding_name(next), Meaning.Loop]]
 		else if function_keywords contains name then function_meanings(definition_head(next))
+		else if name == enum_word then [[binding_name(next), Meaning.Type]]
 		else []
 	}
 	_: []
@@ -101,6 +102,7 @@ meanings_of(n: Node): list := match n {
 key_meanings(target: Node, op: Op, value: Node): list := {
 	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
 	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
+	if target == symbol(opaque_word) and value#1 == "type" { return [[declared_type_name(value#2), Meaning.Type]] }
 	[]
 }
 
