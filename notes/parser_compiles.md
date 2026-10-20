@@ -70,8 +70,8 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache: cache-roots b401fc5bb (Ready): runtime.warp raised (trap_detail, returned_error), message as Rust's |
 | gaps: "a block or map holding an instance" is back on main | warp-cache: cache-roots b401fc5bb (Ready): a { } group with a statement beside the instance is a block |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
-| pure-only over the used files (prelude-for-pure 2026-10-20, with pure-lane-use): words.warp runs pure; positions.warp, lexer.warp: list comprehension `[count(code_points(line)) for line in split(source, "\n")]` (positions.warp line_widths) has no pure pass (Rust comprehensions.rs) | open, no owner |
-| shapes.warp, sugar.warp: lambdas, `map(xs, x => …)` / `xs.map(f)`: the pure lane refuses every closure (`group ( map`; Rust lambdas.rs → closure_new) | open, no owner |
+| pure-only over the used files (prelude-for-pure 2026-10-20, with pure-lane-use): words.warp runs pure; positions.warp, lexer.warp: list comprehension `[count(code_points(line)) for line in split(source, "\n")]` (positions.warp line_widths) has no pure pass (Rust comprehensions.rs) | warp-parsing |
+| shapes.warp, sugar.warp: lambdas, `map(xs, x => …)` / `xs.map(f)`: the pure lane refuses every closure (`group ( map`; Rust lambdas.rs → closure_new) | warp-pure-lambdas |
 | parser.warp pure-only with the prelude: stack overflow in the analysis or emit stage (the passes finish: 368 statements) | warp-self-analyzer, prelude-for-pure |
 | prelude aliases (`values`, `keys`, `is_alnum`: `alias x = y`) not followed in the pure lane (probes/values_keys/class_map.warp) | warp-self-analyzer, prelude-for-pure |
 | key_meanings: "a int where a list is needed" (survey 2026-10-20 on cache-roots + emitter-twin-fails: 6 refusals) | warp-cache: done on parser-roots 2e5233dd70 (Ready), `x as codepoint/integer/string`; survey on it: 3 refusals left, all warp-self-emitter's (caught_error, line_of, column_of) |
