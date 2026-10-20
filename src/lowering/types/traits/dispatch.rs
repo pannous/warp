@@ -88,10 +88,8 @@ pub(super) fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[Dispat
 			.map(|(position, class)| call(INSTANCE_OF, vec![parameters[*position].clone(), Node::Text(class.clone())]))
 			.reduce(|all, test| key(all, Op::And, test))
 	};
-	let body = checked.iter().rev().fold(otherwise, |otherwise, (tests, variant)| match test(tests) {
-		Some(test) => if_then_else(test, method(variant), otherwise),
-		None => method(variant),
-	});
+	let cases = checked.iter().map(|(tests, variant)| (test(tests), method(variant))).collect();
+	let body = crate::lowering::nodes::tested_cases(cases, otherwise);
 	// a tested parameter is an instance of some type: held as a Node, like a parameter `s:square`; with a fallback any
 	// value, a text too (`sort "cba"` beside a class's sort method)
 	let tested: Vec<usize> = cases.iter().flat_map(|(tests, _)| tests.iter().map(|(position, _)| *position)).collect();

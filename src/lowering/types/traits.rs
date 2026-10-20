@@ -7,8 +7,7 @@
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
 use super::nodes::{
-	assign, block, call, called_name, children_rewritten, grouped_parameters, if_then, if_then_else, key,
-	statement_list, word_headed,
+	assign, block, call, called_name, children_rewritten, grouped_parameters, if_then, key, statement_list, word_headed,
 };
 use crate::analyzer::{call_name, collect_all_types};
 use crate::errors::diagnostic::Diagnostic;

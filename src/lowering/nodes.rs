@@ -175,6 +175,30 @@ pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node
 	key(if_then(condition, body), Op::Else, otherwise)
 }
 
+/// A run-time dispatch `if test₁ then case₁ else if test₂ then case₂ … else otherwise`, the cases tried in order; a
+/// case without a test is taken whatever comes after it
+pub(crate) fn tested_cases(cases: Vec<(Option<Node>, Node)>, otherwise: Node) -> Node {
+	cases.into_iter().rev().fold(otherwise, |otherwise, (test, case)| match test {
+		Some(test) => if_then_else(test, case, otherwise),
+		None => case,
+	})
+}
+
+/// A value a dispatch reads more than once, evaluated once: `name·1 = value` joins the bindings, `name·1` stands for it
+pub(crate) fn bound_once(name: &str, value: Node, bindings: &mut Vec<Node>) -> Node {
+	let temporary = Node::Symbol(format!("{name}·{}", fresh_number()));
+	bindings.push(assign(temporary.clone(), value));
+	temporary
+}
+
+/// `(binding; …; value)`, value alone without bindings
+pub(crate) fn after_bindings(bindings: Vec<Node>, value: Node) -> Node {
+	match bindings.is_empty() {
+		true => value,
+		false => Node::List([bindings, vec![value]].concat(), Bracket::Round, Separator::Semicolon),
+	}
+}
+
 /// `if c then a else b` and `c ? a : b`: the condition and both branches
 pub(crate) fn branches(node: &Node) -> Option<(&Node, &Node, &Node)> {
 	match node.drop_meta() {
