@@ -16,6 +16,6 @@ fn joining_parts_of_unknown_kind_takes_linear_steps() {
 
 #[test]
 fn joining_parts_of_unknown_kind_keeps_their_items() {
-	is!(&format!("{JOINED}joined([[1, 2], [], [3]])"), [1, 2, 3]);
+	is!(&format!("{JOINED}joined([[1, 2], [], [3]])"), warp::ints(vec![1, 2, 3]));
 	is!(&format!("{JOINED}joined([[\"a\"], [\"b\", \"c\"]]).join(\"\")"), "abc");
 }
