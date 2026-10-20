@@ -431,4 +431,5 @@ fn parser_words_run_pure() {
 	runs_pure("char_as_text", &chain("char_as_text"), "?\none\nab");
 	runs_pure("colon_named_arguments", &chain("colon_named_arguments"), "3\ny\n72");
 	runs_pure("arrow_match_arms", &chain("arrow_arms"), "two\nbig\nfew");
+	runs_pure("absolute_value", &chain("absolute_value"), "7\n2.5\n43\n1.5");
 }

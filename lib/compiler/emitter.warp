@@ -83,7 +83,7 @@ no_value = 64
 op = {unreachable: 0, block: 2, loop: 3, if: 4, else: 5, end: 11, br: 12, br_if: 13, return: 15, call: 16, drop: 26, select: 27,
 	local_get: 32, local_set: 33, local_tee: 34, global_get: 35, global_set: 36, i32_load: 40, i32_load8_u: 45, i32_store: 54, i32_store8: 58,
 	i32_const: 65, i64_const: 66, f64_const: 68, i32_eqz: 69, i64_eqz: 80, i64_eq: 81, i64_ne: 82, i64_lt_s: 83, i64_ge_u: 90, f64_ne: 98, i32_sub: 107, i32_and: 113, i32_or: 114,
-	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
+	i64_div_s: 127, i64_rem_s: 129, i64_and: 131, f64_ceil: 155, f64_floor: 156, f64_nearest: 158, f64_abs: 153, f64_neg: 154, i32_wrap_i64: 167, i64_trunc_f64_s: 176, i64_extend_i32_u: 173,
 	i64_extend_i32_s: 172, f64_convert_i64_s: 185, i64_reinterpret_f64: 189, f64_reinterpret_i64: 191, ref_is_null: 209, ref_eq: 211, throw: 8, try_table: 31, i64_add: 124, i64_sub: 125}
 # the instructions a function body may be (decision wasm-instruction-body), those on ints (i64) and floats (f64)
 wasm_instructions = {"i64.clz": 121, "i64.ctz": 122, "i64.popcnt": 123, "i64.add": 124, "i64.sub": 125, "i64.mul": 126,
@@ -982,6 +982,16 @@ def both_of_kind(a: any, b: any, code: int): list {
 	test(a) + test(b) + [op.i32_and]
 }
 
+# `‖x‖`, abs(x): -x when x < 0, else x
+def absolute_value(body: Body, value: any): list {
+	if value#1 == "float" { return ["float", value#2 + [op.f64_abs]] }
+	if value#1 != "int" and value#1 != "node" { return refuse("the absolute value of a " + value#1) }
+	local = uleb(fresh_local(body, value#1))
+	saved = [value#1, [op.local_get] + local]
+	below_zero = condition(operation(body, "<", saved, number_value(0)))
+	[value#1, value#2 + [op.local_set] + local + below_zero + [op.if] + value_type(value#1) + negation(body, saved)#2 + [op.else] + saved#2 + [op.end]]
+}
+
 # a % b as in mathematics: never below 0, r + |b| for a negative truncated remainder r
 def euclidean_remainder(body: Body, a: any, b: any): list {
 	divisor = uleb(fresh_local(body, "int"))
@@ -1735,6 +1745,7 @@ def key_expression(body: Body, n: any): list {
 	if operator in compiled_compound_ops { return assignment(body, left, operation(body, compiled_compound_ops[operator], expression_code(body, left), expression_code(body, right))) }
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression_code(body, left), number_value(1))) }
 	if operator == "-" and left == ø { return negation(body, expression_code(body, right)) }
+	if operator == "‖" and left == ø { return absolute_value(body, expression_code(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
 	if operator == "#" and left == ø { return length_code(expression_code(body, right)) }
 	if operator == "." and right is symbol and name_of(right) in counting_properties {

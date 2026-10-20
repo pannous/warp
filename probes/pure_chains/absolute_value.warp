@@ -1,0 +1,7 @@
+// abs(x) and ‖x‖ of ints, floats and exact decimals
+print(abs(-7))
+print(abs(-2.5))
+n = -42
+print(abs(n) + 1)
+x = 0.5 - 2.0
+print(abs(x))
