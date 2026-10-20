@@ -1,0 +1,9 @@
+# `function f` is the function f as a value, a nested one too: called later, or shown as its definition
+add(x: int) := x + 1
+f = function add
+print f(2)
+outer(k: int) := {
+	inner(x: int) := x + k
+	function inner
+}
+print outer(1)
