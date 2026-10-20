@@ -31,7 +31,9 @@ pub fn compiled(program: &Path) -> Result<CompiledModule, Node> {
 	let output = std::env::temp_dir().join(format!("warp-pure-{}.wasm", std::process::id()));
 	let _ = std::fs::remove_file(&output);
 	let arguments = [program.as_path(), output.as_path(), folder.as_path(), library()];
-	crate::modules::std_adapters::set_program_arguments(arguments.iter().map(|path| path.display().to_string()).collect());
+	crate::modules::std_adapters::set_program_arguments(
+		arguments.iter().map(|path| path.display().to_string()).collect(),
+	);
 	let compiler = compiler()?;
 	let said = crate::pipeline::run_module(compiler);
 	let bytes = std::fs::read(&output);
@@ -59,7 +61,10 @@ fn compiler() -> Result<CompiledModule, Node> {
 		Ok(module) => (module, pure_key),
 		Err(refusal) => {
 			eprintln!("{RUST_COMPILER}: the pure lane refuses it: {refusal}");
-			(on_big_stack(file, move || crate::pipeline::compile(&source))?, rust_key)
+			// a Node stays on its thread: the failure crosses as its text
+			let compiled =
+				on_big_stack(file, move || crate::pipeline::compile(&source).map_err(|failed| failed.serialize()));
+			(compiled.map_err(|failed| error(&failed))?, rust_key)
 		}
 	};
 	if let Some(key) = key {
@@ -81,5 +86,10 @@ fn pure_compiled(file: &Path, source: String) -> Result<CompiledModule, String> 
 /// `compile` as the program of `file`, in a thread with a stack deep enough for a compile of the compiler
 fn on_big_stack<T: Send + 'static>(file: PathBuf, compile: impl FnOnce() -> T + Send + 'static) -> T {
 	let work = move || crate::modules::with_program_file(&file, compile);
-	std::thread::Builder::new().stack_size(WORKER_STACK).spawn(work).expect("a compiler thread").join().expect("the compile")
+	std::thread::Builder::new()
+		.stack_size(WORKER_STACK)
+		.spawn(work)
+		.expect("a compiler thread")
+		.join()
+		.expect("the compile")
 }
