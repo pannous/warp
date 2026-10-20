@@ -59,10 +59,10 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | "a parameter of kind ?" and "a node where a ? is needed" (7 refusals), lines_below/braced_items (gives ?) (data/self_hosting/parser_gap_map_instances.txt) | warp-cache: pending-kinds 3998b7a62d, Ready (emitter.warp settles recursive results): all 9 gone; 4 now show their case name (typed_default Assign, superscript_power Sub, conditioned Do, global_declaration Colon) and continued shows `the unknown name continue`; 65 refusals left (data/self_hosting/parser_gap_pending3.txt) |
 | the text of a closure (emitter.warp refused any program with closures that shows values): closure-text 2675fb1978, Ready (card emitter-shows); `header` field: done, main 3dd502e178 (card field-named) | warp-list-result-type |
 | survey on pending-kinds 3998b7a62d (main merged): 16 refusals left, the case names are gone (data/self_hosting/parser_gap_pending4.txt) | warp-cache |
-| continued: "a text where a char is needed" (the `continue` refusal is gone) | warp-cache |
-| blank_end giving a mixed | warp-cache |
-| dedented: `min(written.map(indent_width))` (empty_extremum unknown) | warp-cache |
-| plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache |
-| gaps: "a block or map holding an instance" is back on main | warp-cache |
+| continued: "a text where a char is needed" (the `continue` refusal is gone) | warp-cache: cache-roots b401fc5bb (Ready): an unannotated parameter is typed from the literals every call passes (binding_powers("=") a char, ("to") a text: a text) |
+| blank_end giving a mixed | warp-cache: cache-roots b401fc5bb (Ready): `while true` without a break gives no kind, the returns decide |
+| dedented: `min(written.map(indent_width))` (empty_extremum unknown) | warp-cache: cache-roots b401fc5bb (Ready): empty_extremum(min) ends the run in min_of_an_empty_list |
+| plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache: cache-roots b401fc5bb (Ready): runtime.warp raised (trap_detail, returned_error), message as Rust's |
+| gaps: "a block or map holding an instance" is back on main | warp-cache: cache-roots b401fc5bb (Ready): a { } group with a statement beside the instance is a block |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
 | the pure lane follows `use` (parser.warp's lexer, shapes, words, sugar; refusal `tree: group ( view_of`), card pure-follows-use: lib/compiler/uses.warp splices used files' declarations | warp-self-analyzer (was warp-runtime), pure-follows-use on pure-lane |
