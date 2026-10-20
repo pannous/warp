@@ -12,8 +12,6 @@ use "walk.warp"
 use "phrase_blocks.warp"
 use "plain_enums.warp"
 
-tries_made = {count: 0}
-
 applied_to(word: text, arguments: list): Node := List([symbol(word)] + arguments, Bracket.Round, Separator.None)
 # `{n}`, a block of one item, as Rust writes it
 braced(n: Node): Node := List([n], Bracket.Curly, Separator.Space)
@@ -21,7 +19,7 @@ try_statements(parts: list): Node := List(parts, Bracket.Round, Separator.Semico
 try_assigned(name: Node, value: Node): Node := Key(name, Op.Assign, value)
 chosen_branch(test: Node, yes_branch: Node, no_branch: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, yes_branch), Op.Else, no_branch)
 
-try_name(role: text, number: int): Node := symbol("try·" + role + "·" + number)
+try_name(role: text, number: int): Node := fresh_name("try·" + role, number)
 
 # `try x else y`; with a catch binding (a name, else ø) the else branch binds it to the error before y
 guarded(value: Node, fallback: Node, binding: any, number: int): Node := {
@@ -56,8 +54,7 @@ is_division(op: any): bool := op == Op.Div or op == Op.Mod or op == Op.Rem
 
 # the value under try, its fallback, the catch binding or ø
 lowered_try(value: Node, fallback: Node, binding: any): Node := {
-	tries_made.count = tries_made.count + 1
-	number = tries_made.count
+	number = fresh_number()
 	match value {
 		Key(target, Op.Assign, assigned_value): { if is_name(target) and binding == ø then try_assigned(target, lowered_try(assigned_value, fallback, binding)) else guarded(value, fallback, binding, number) }
 		Key(left, op, right): {

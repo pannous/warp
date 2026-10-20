@@ -46,7 +46,7 @@ is_empty(n: any): bool := n == ø
 head_name(n: any): text := if is_group(n) and #n > 0 and n#1 is symbol then name_of(n#1) else ""
 # a local, else a global the scope sees
 binding(scope: any, name: text): any := if name in scope.kinds then scope.kinds[name] else scope.globals.get(name)
-is_ref(kind: text): bool := not (kind in primitive_kinds)
+is_ref(kind: text): bool := kind not in primitive_kinds
 all_of(xs: any, f: any): bool := #xs.filter(f) == #xs
 any_of(xs: any, f: any): bool := #xs.filter(f) > 0
 
@@ -128,7 +128,7 @@ error_or(kind: text): text := if kind == "int" or kind == "float" then "data" el
 kind_of_list(n: any, scope: any): text := {
 	name = head_name(n)
 	if name == "return" and #n == 2 { return kind_of(n#2, scope) }
-	if name != "" and name in results and not (name in scope.parameters) { return results[name] }
+	if name != "" and name in results and name not in scope.parameters { return results[name] }
 	# `data a and b` never runs: it is the node written, here a key
 	if name == "data" and #n == 2 and bracket_of(n) == "" { return written_kind(n#2) }
 	if name == "as_code" and #n == 2 { return kind_of(n#2, scope) }
@@ -172,6 +172,8 @@ kind_of_key(n: any, scope: any): text := {
 	op = op_of(n)
 	if op == ".." or op == "..<" or op == "to" or op == "…" { return "list" }
 	if op == "±" { return "data" }
+	# `p.code`: a field, whose kind the emitter knows from the class (a node at run time here); `xs.length` counts
+	if op == "." and value_of(n) is symbol { return if name_of(value_of(n)) in counting_words then "int" else "data" }
 	if op in arithmetic_ops and not is_empty(key_of(n)) { return arithmetic_kind(kind_of(key_of(n), scope), op, kind_of(value_of(n), scope)) }
 	if op == "=" or op == ":=" { return held_kind(assigned_value(n), scope) }
 	if op in compound_ops { return compound_kind(kind_of(key_of(n), scope), compound_ops[op], kind_of(value_of(n), scope)) }
@@ -509,7 +511,7 @@ usages(body: any): any := {
 	while grown {
 		grown = no
 		for alias in used.aliases {
-			if alias#1 in used.sequences and not (alias#2 in used.sequences) {
+			if alias#1 in used.sequences and alias#2 not in used.sequences {
 				used.sequences[alias#2] = yes
 				grown = yes
 			}
@@ -708,7 +710,7 @@ closure_arity(name: text): int := if name.starts_with("closure_call_") and is_di
 closure_targets_in(n: any, found: list): list := {
 	if head_name(n) == "closure_new" and #n >= 2 and n#2 is symbol {
 		made = [name_of(n#2), #n - 2]
-		if not (made in found) { found += [made] }
+		if made not in found { found += [made] }
 	}
 	for part in node_parts(n) { closure_targets_in(part, found) }
 	found
@@ -728,7 +730,7 @@ declare(name: text, type_node: any, context: text): any := {
 # the scope a variable of `context` lives in: its own, the main scope for a global or a main variable a body reads
 owner(context: text, name: text): any := {
 	scope = scopes[context]
-	if name in scope.kinds or context == "" or not (name in scopes[""].kinds) { scope } else { scopes[""] }
+	if name in scope.kinds or context == "" or name not in scopes[""].kinds { scope } else { scopes[""] }
 }
 
 # one flow joined into its slot; yes when the slot changed
@@ -873,7 +875,7 @@ register(flows: any): any := {
 		target = flow#3
 		if flow#1 == "variable" {
 			holder = owner(flow#2, target)
-			if not (target in holder.kinds) { holder.kinds[target] = "" }
+			if target not in holder.kinds { holder.kinds[target] = "" }
 		}
 	}
 }
@@ -927,7 +929,7 @@ kinds(program: any): any := {
 	}
 	main = scopes[""]
 	variables = {}
-	for name in main.kinds.keys() { if not (name in main.declared_globals) { variables[name] = main.kinds[name] } }
+	for name in main.kinds.keys() { if name not in main.declared_globals { variables[name] = main.kinds[name] } }
 	{functions: functions, variables: variables, value: kind_of(program, main)}
 }
 
@@ -938,7 +940,7 @@ emitter_kept_kinds = {int: 1, float: 1, text: 1, list: 1}
 # the variables of a scope but its parameters, each with its emitter kind
 emitter_locals(scope: any, parameters: list): any := {
 	locals = {}
-	for name in scope.kinds.keys() { if not (name in parameters) and not (name in scope.declared_globals) { locals[name] = emitter_kind(scope.kinds[name]) } }
+	for name in scope.kinds.keys() { if name not in parameters and name not in scope.declared_globals { locals[name] = emitter_kind(scope.kinds[name]) } }
 	locals
 }
 

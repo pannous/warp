@@ -19,7 +19,10 @@ data_items(program: any): any := shown_in(program, admitting_errors(program), va
 # given a map literal, whose `m[k] = e` writes an entry
 shown_in(n: any, admitting: list, maps: list): any := {
 	# an attribute layer `[name, value, node]` is no list as written: only its node is walked
-	if is_attribute(n) { return attributed(value_of(n)#1, value_of(n)#2, shown_in(value_of(n)#3, admitting, maps)) }
+	if is_attribute(n) {
+		name, value, node = value_of(n)
+		return attributed(name, value, shown_in(node, admitting, maps))
+	}
 	if is_key(n, Op.Define) {
 		inside = admitting + parameters_admitting_errors(key_of(n)) + admitting_errors(value_of(n))
 		return Key(key_of(n), Op.Define, shown_in(value_of(n), inside, maps))
@@ -27,14 +30,14 @@ shown_in(n: any, admitting: list, maps: list): any := {
 	written_shown(children(n, child => shown_in(child, admitting, maps)), admitting, maps)
 }
 
-written_shown(n: any, admitting: list, maps: list): any := {
-	if is_group(n) and bracket_of(n) == "[" { return group_like(n, items_of(n).map(item => shown_written(item, list_item_mark))) }
-	if is_key(n, Op.Assign) { return Key(with_declared_type_unmarked(key_of(n)), Op.Assign, written_value(key_of(n), value_of(n), admitting, maps)) }
+written_shown(n: any, admitting: list, maps: list): any := match n {
+	List(items, Bracket.Square, separator): List(items.map(item => shown_written(item, list_item_mark)), Bracket.Square, separator)
 	# `a, b = e, 2` parses as `a, (b = e), 2`: values bound to variables, no tuple stored
-	if is_group(n) and separator_of(n) == "," and items_of(n).any(item => is_key(item, Op.Assign)) { return group_like(n, items_of(n).map(item => with_assigned_value_unmarked(item))) }
-	if is_key(n, Op.As) and admits_errors_type(value_of(n)) { return Key(unmarked(key_of(n)), Op.As, value_of(n)) }
-	if is_key(n, Op.Dot) and not admits_errors(key_of(n), admitting) { return Key(key_of(n), Op.Dot, with_written_items_marked(value_of(n))) }
-	n
+	List(items, bracket, Separator.Comma): { if items.any(item => is_key(item, Op.Assign)) then List(items.map(with_assigned_value_unmarked), bracket, Separator.Comma) else n }
+	Key(target, Op.Assign, value): Key(with_declared_type_unmarked(target), Op.Assign, written_value(target, value, admitting, maps))
+	Key(value, Op.As, declared): { if admits_errors_type(declared) then Key(unmarked(value), Op.As, declared) else n }
+	Key(receiver, Op.Dot, call): { if admits_errors(receiver, admitting) then n else Key(receiver, Op.Dot, with_written_items_marked(call)) }
+	_: n
 }
 
 # the value of `target = value`, shown as what the target's place holds
@@ -61,32 +64,25 @@ admits_errors(target: any, admitting: list): bool := {
 admits_errors_type(declared: any): bool := view_has(view_of(declared), part => kind_of(part) == "symbol" and (part#2 == "error" or part#2.ends_with("?")))
 
 # the variables of one scope declared to admit an Error; a function inside has its own scope
-admitting_errors(n: any): list := {
-	if is_key(n, Op.Assign) { return declared_admitting(key_of(n)) + admitting_errors(value_of(n)) }
-	if is_key(n, Op.Define) { return [] }
-	if type(n) is key { return admitting_errors(key_of(n)) + admitting_errors(value_of(n)) }
-	if is_group(n) { return joined_results(items_of(n), item => admitting_errors(item)) }
-	[]
+admitting_errors(n: any): list := match n {
+	Key(target, Op.Assign, value): declared_admitting(target) + admitting_errors(value)
+	Key(_, Op.Define, _): []
+	Key(left, _, right): admitting_errors(left) + admitting_errors(right)
+	List(items, _, _): items.flat_map(admitting_errors)
+	_: []
 }
 declared_admitting(target: any): list := if is_key(target, Op.Colon) and key_of(target) is symbol and admits_errors_type(value_of(target)) then [name_of(key_of(target))] else []
 
 # the parameters of a definition head `f(xs: [int or error])` declared to admit an Error
-parameters_admitting_errors(head: any): list := if is_group(head) then joined_results(items_of(head), item => declared_admitting(item)) else []
+parameters_admitting_errors(head: any): list := if is_group(head) then items_of(head).flat_map(declared_admitting) else []
 
 # the variables given a map literal: `m = {a: 1}`
-variables_given_maps(n: any): list := {
-	if is_key(n, Op.Assign) and key_of(n) is symbol and is_curly_group(value_of(n)) { return [name_of(key_of(n))] + variables_given_maps(value_of(n)) }
-	if type(n) is key { return variables_given_maps(key_of(n)) + variables_given_maps(value_of(n)) }
-	if is_group(n) { return joined_results(items_of(n), item => variables_given_maps(item)) }
-	[]
+variables_given_maps(n: any): list := match n {
+	Key(target, op, value): given_map(target, op, value) + variables_given_maps(target) + variables_given_maps(value)
+	List(items, _, _): items.flat_map(variables_given_maps)
+	_: []
 }
-
-# what f gives for each item, joined into one list
-joined_results(items: list, f: function): list := {
-	all = []
-	for item in items { all += f(item) }
-	all
-}
+given_map(target: any, op: Op, value: any): list := if op == Op.Assign and target is symbol and is_curly_group(value) then [name_of(target)] else []
 
 with_assigned_value_unmarked(n: any): any := if is_key(n, Op.Assign) then Key(key_of(n), Op.Assign, unmarked(value_of(n))) else n
 
@@ -118,7 +114,7 @@ names_a_key(index: any): bool := {
 with_written_items_marked(call: any): any := {
 	if not is_group(call) { return call }
 	parts = items_of(call)
-	if #parts < 2 or not (parts#1 is symbol) or not (name_of(parts#1) in item_writing_methods) { return call }
+	if #parts < 2 or not (parts#1 is symbol) or name_of(parts#1) not in item_writing_methods { return call }
 	written = parts[1..]
 	group_like(call, [parts#1] + written.map(item => if is_key(item, Op.Colon) then item else shown_written(item, list_item_mark)))
 }
@@ -148,5 +144,5 @@ may_hold_an_error(item: any): bool := {
 	if is_group(item) and bracket_of(item) in ["[", "{"] { return no }
 	not (is_key(item, Op.Arrow) or is_key(item, Op.Define))
 }
-is_opaque(n: any): bool := type(n) is key and key_of(n) == symbol(opaque_word)
-is_attribute(n: any): bool := type(n) is key and key_of(n) == symbol(attribute_word)
+is_opaque(n: any): bool := n is key and key_of(n) == symbol(opaque_word)
+is_attribute(n: any): bool := n is key and key_of(n) == symbol(attribute_word)

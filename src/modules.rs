@@ -195,9 +195,11 @@ fn as_constructions(node: Node, classes: &HashSet<String>) -> Node {
 	}
 }
 
-/// A module a used file uses, found beside that file (`use "kinds.warp"` in lib/compiler/scope.warp), else as named
+/// A module a used file uses, found beside that file (`use "kinds.warp"` in lib/compiler/scope.warp), else as named.
+/// Its absolute path: joined to a folder reached through `..` (`use "../lib/compiler/walk.warp"`) the name is no plain
+/// relative path the loader finds
 fn beside(module_file: &Path, used: String) -> String {
-	let neighbour = module_file.parent().map(|folder| folder.join(&used));
+	let neighbour = module_file.parent().and_then(|folder| folder.join(&used).canonicalize().ok());
 	match neighbour {
 		Some(neighbour) if !Path::new(&used).is_absolute() && neighbour.is_file() => neighbour.display().to_string(),
 		_ => used,

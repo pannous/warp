@@ -34,7 +34,7 @@ overloaded_arities(program: Node): any := {
 		if call != ø {
 			name = name_of(call#1)
 			arity = arity_of(call)
-			if not (name in arities) { arities[name] = [] }
+			if name not in arities { arities[name] = [] }
 			if not (arity in arities[name]) { arities[name] = arities[name] + [arity] }
 		}
 	}
@@ -67,7 +67,7 @@ renamed_target(target: Node, name: text): Node := match target {
 variant_call(n: any, overloaded: any, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and separator_of(n) == "" and #n > 0 and n#1 is symbol) { return n }
 	name = name_of(n#1)
-	if not (name in overloaded) { return n }
+	if name not in overloaded { return n }
 	count = #n - 1 + receivers
 	fitting = overloaded[name].filter(arity => arity#1 <= count and count <= arity#2)
 	if #fitting != 1 { return n }
@@ -119,7 +119,7 @@ remember_calls(n: Node, called: any, counted_in: function): any := {
 	for index in 1 to #parameters {
 		name = binding_name(parameters#index)
 		key = parameter_key(name_of(call#1), index)
-		if name != ø and not (key in called) {
+		if name != ø and key not in called {
 			found = counted_in(value_of(n), name)
 			if found != ø { called[key] = found }
 		}

@@ -284,6 +284,29 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
 
+/// lib/compiler/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
+/// variable (card pure-field-slice)
+#[test]
+fn field_slices_run_pure() {
+	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
+}
+
+/// lib/compiler/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
+#[test]
+fn assigned_it_blocks_run_pure() {
+	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
+}
+
+/// lib/compiler/min_max.warp: min and max of arguments, of a list literal, of a list known at run time (card
+/// pure-library-words)
+#[test]
+fn extrema_run_pure() {
+	runs_pure("max_of_arguments", "max(3, 9, 4)", "9");
+	runs_pure("min_of_literal", "min([4, 1, 6])", "1");
+	runs_pure("max_of_computed", "xs = [5, 2, 7]; max(xs.map(x => x * 2))", "14");
+	runs_pure("min_of_variable", "xs = [5, 2, 7]; min(xs) + max(1.5, 1)", "3.5");
+}
+
 /// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
 /// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
 /// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)
@@ -342,6 +365,16 @@ fn global_type_words_read_self_hosted() {
 	}
 }
 
+/// A prefix `if` takes its own `then` and `else` in a match arm (card arm-inline-if)
+#[test]
+fn arm_inline_if_reads_self_hosted() {
+	for lane in ["front", "pure"] {
+		let code = "f(x: any): any := match x {\n\t1: if x > 0 then 1 else 2\n\t_: 0\n}\nf(1)";
+		let (output, _) = lane_run(lane, "arm_inline_if", code);
+		assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == "1"), "{lane} {code}: {output}");
+	}
+}
+
 /// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
 #[test]
 fn kind_changes_fail_pure() {
@@ -386,6 +419,25 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
 	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
+}
+
+/// lib/compiler/parser.warp reads every negated spelling as Rust's spellings.rs NEGATED_SPELLINGS: `x not in xs`,
+/// `x ∉ xs`, `a nand b`, `a ⊼ b`, `a ¬& b`, `x is not y`, `x isn't y` are the negated operation
+#[test]
+fn negated_operators_run_pure() {
+	let code = "print 5 not in [1 2 3]; print 2 ∉ [1 2 3]; print yes nand no; print yes ⊼ yes; print yes ¬& no; print 3 is not 4; print 3 isn't 3";
+	runs_pure("negated", code, "yes\nno\nyes\nno\nyes\nyes\nno");
+}
+
+/// lib/compiler/emitter.warp: a host word taking or giving nodes (parse_code, std_pure) builds the program's values with
+/// the constructors the module exports for the host, as Rust's do (card emitter-imports)
+#[test]
+fn host_words_on_nodes_run_pure() {
+	runs_pure("parse_at_run_time", "t = \"1 + 2\"; parse(t)", "1+2");
+	runs_pure("parsed_operator", "t = \"a * b\"; parse(t).op", "*");
+	runs_pure("parse_failure_caught", "t = \"((\"; try { parse(t) } catch e { \"bad\" }", "bad");
+	runs_pure("std_pure_json", "use json; parse_json(\"[1, 2, 3]\")", "[1 2 3]");
+	runs_pure("std_pure_hash", "use hash; crc32(\"abc\")", "891568578");
 }
 
 /// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
@@ -433,4 +485,29 @@ fn parser_words_run_pure() {
 	runs_pure("arrow_match_arms", &chain("arrow_arms"), "two\nbig\nfew");
 	runs_pure("absolute_value", &chain("absolute_value"), "7\n2.5\n43\n1.5");
 	runs_pure("type_names", &chain("type_names"), "int\nrational\ntext\nbool\nlist\nempty\nerror\nmap\na float");
+}
+
+/// `n as char` (decision digit-as-char): a digit 0…9 is its digit character, another number the character of its code
+/// point, one no character has an error (card pure-lane-x02)
+#[test]
+fn digit_casts_run_pure() {
+	runs_pure("digit_cast", "x = 7; x as char", "'7'");
+	runs_pure("code_point_cast", "x = 65; x as codepoint", "'A'");
+	runs_pure("invalid_code_point", "x = 55296; try (x as codepoint) else \"fallback\"", "fallback");
+}
+
+/// parser.warp reads a float literal through float(text): more digits than a double holds give the nearest float (card
+/// pure-lane-prints)
+#[test]
+fn long_float_literals_read_pure() {
+	runs_pure("long_float_literal", "x = 8.33333333332248946124e+03; x - 8333", "0.33333332248912484");
+}
+
+/// card text-cache-lru: the pure runtime keeps the count and walks of a lexer's source while it compares short words
+/// with it (`starts_at`); the words took them by turns, so each `source.length` recounted the source (minutes)
+#[test]
+fn a_lexer_over_short_words_takes_linear_time_pure() {
+	let starts_at = "def starts_at(source: any, part: text, at: int): bool { i = 0; while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }; i == part.length }";
+	let lexer = format!("{starts_at}; src = \"\"; for k in 0..2000 {{ src = src + \"abc def ghi \" }}; words = [\"de\", \"gh\", \"zz\", \"def\"]; hits = 0; t0 = clock(); for at in 0..src.length {{ for word in words {{ if starts_at(src, word, at) {{ hits += 1 }} }} }}; if clock() - t0 < 3000 then hits else -1");
+	runs_pure("lexer_short_words", &lexer, "6000");
 }
