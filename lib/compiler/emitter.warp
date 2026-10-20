@@ -161,14 +161,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # for an untyped field); variants its enums' bare cases
 # counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-<<<<<<< HEAD
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; counts_fuel: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {} }
-||||||| d37a99f68a
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {} }
-=======
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; literal_arguments: any = {} }
->>>>>>> origin/main
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
 
 module = Module({}, [])
 
@@ -956,26 +950,10 @@ def map_assignment(body: Body, target: any, name: text, value: any): list {
 def entry_assignment(body: Body, target: any, name: any, value: any): list {
 	if checks_fields(body, target) and name#1 != "text" and #module.classes.keys > 0 { return refuse("a field write by a name a typed field may refuse") }
 	held = [op.local_get] + uleb(fresh_local(body, value#1))
-<<<<<<< HEAD
-	updated = field_assignment(expression(body, target), name, [value#1, held])
-	# field_with gives the map with the entry set, a new one for ø (`m = {}; m.a = 1`): stored back into a place
-	set = dropped(if is_place(target) then assignment(body, target, updated) else updated)
-||||||| d37a99f68a
-	set = dropped(field_assignment(expression(body, target), name, [value#1, held]))
-=======
 	object = expression(body, target)
 	set = put_back(body, target, object, ["node", field_assignment(object, name, [value#1, held])#2])
->>>>>>> origin/main
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
-<<<<<<< HEAD
-# a variable, or a field or element of one: what an assignment can write
-def is_place(target: any): bool {
-	if target is symbol { return yes }
-	type(target) is key and (op_of(target) == "." or op_of(target) == "#") and is_place(key_of(target))
-}
-||||||| d37a99f68a
-=======
 # `m[k] = v` of a value known only at run time, as lowered `m#(k+1) = v`: an int k sets the item k+1, any other key
 # the entry named so (runtime.warp node_put); a variable m holds the result, a map made of ø; the assignment gives v
 def keyed_assignment(body: Body, target: any, object: any, key: any, value: any): list {
@@ -984,12 +962,17 @@ def keyed_assignment(body: Body, target: any, object: any, key: any, value: any)
 	set = put_back(body, target, object, put)
 	[value#1, value#2 + [op.local_set] + held[1..] + set + held]
 }
-# the code of a put into the map node a variable target holds, which takes its result (ø becomes a map), else the
-# put with its result dropped (a local named map reads as the word map: card local-named)
+# the code of a put into the map node a place target holds (a variable, or a field or element of one: `p.b.c = 4`),
+# which takes its result (ø becomes a map), else the put with its result dropped (a local named map reads as the word
+# map: card local-named)
 def put_back(body: Body, target: any, object: any, put: any): list {
-	if target is symbol and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)
+	if is_place(target) and object#1 == "node" then dropped(assignment(body, target, put)) else dropped(put)
 }
->>>>>>> origin/main
+# a variable, or a field or element of one: what an assignment can write
+def is_place(target: any): bool {
+	if target is symbol { return yes }
+	type(target) is key and (op_of(target) == "." or op_of(target) == "#") and is_place(key_of(target))
+}
 # Rust checks a field write against the field's type only on a local it holds as an instance of the class
 # (struct_backend.rs find_typed_structs), never on a parameter: `def ahead(p) { p.at = p.at + 1 }` writes as a map's
 def checks_fields(body: Body, target: any): bool {
@@ -1781,19 +1764,11 @@ def module_bytes(functions: any): list {
 	codes = section(section_ids.code, vector(functions.map(function_body)))
 	texts = section(section_ids.data, vector([[passive_segment] + uleb(#module.bytes) + module.bytes]))
 	globals = section(section_ids.globals, vector(module.global_order.map(global_entry)))
-<<<<<<< HEAD
-	parts = [types, imported, declared, memory, globals, exported, segments, codes, texts]
-	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
-	wasm_header + joined(parts) + names_section(functions) + marks
-||||||| d37a99f68a
-	parts = [types, imported, declared, memory, globals, exported, segments, codes, texts]
-	wasm_header + joined(parts) + names_section(functions)
-=======
 	tags = []
 	if module.catches_errors { tags = section(section_ids.tag, vector([[0] + uleb(#gc_types + #module.imports + #functions)])) }
 	parts = [types, imported, declared, memory, tags, globals, exported, segments, codes, texts]
-	wasm_header + joined(parts) + names_section(functions)
->>>>>>> origin/main
+	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
+	wasm_header + joined(parts) + names_section(functions) + marks
 }
 def import_entry(i: int): list {
 	entry = module.imports#(i + 1)
@@ -1872,13 +1847,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.errors = {}
 	module.closures = []
 	module.dispatchers = []
-<<<<<<< HEAD
-	module.shows_values = no
 	module.counts_fuel = uses_fuel(program)
-||||||| d37a99f68a
-	module.shows_values = no
-=======
->>>>>>> origin/main
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
 	module.literal_arguments = {}
