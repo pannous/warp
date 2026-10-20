@@ -46,6 +46,9 @@ const LIBRARY_MARK: &str = "{lib}";
 const RUNTIME_WORDS: &str = "runtime.warp";
 /// The module the host words are imported from
 const HOST_MODULE: &str = "host";
+/// The levels of lib/compiler/diagnostics.warp's message files beside a warning: errors.data, hints.data
+const ERROR_LEVEL: &str = "error";
+const HINT_LEVEL: &str = "hint";
 /// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
 const OUTSIDE_THE_CORE: &str = "outside the core: ";
 /// The file each refusal of emitter.warp goes to as a line, when set
@@ -244,7 +247,8 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 		return None;
 	}
 	match pure_bytes(code) {
-		Ok(bytes) => {
+		Ok(Err(diagnosed)) => Some(Err(diagnosed)),
+		Ok(Ok(bytes)) => {
 			record_lines(&format!("{RAN_PURE}\n"));
 			crate::wasm_emitter::write_debug_module(&bytes);
 			let needs_host = imports_from(&bytes, HOST_MODULE);
@@ -261,14 +265,38 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 	}
 }
 
-/// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
-fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
-	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
-	serde_json::from_str::<serde_json::Value>(&view).map_err(|_| format!("the passes stage failed: {view}"))?;
+/// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives;
+/// the program's compile error instead when the checks of the passes stage diagnose one
+fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
+	let checked = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
+	let failed = || format!("the passes stage failed: {checked}");
+	let parts: serde_json::Value = serde_json::from_str(&checked).map_err(|_| failed())?;
+	let [view, diagnostics] = parts.as_array().map(Vec::as_slice).ok_or_else(failed)? else { return Err(failed()) };
+	if let Err(diagnosed) = reported(diagnostics) {
+		return Ok(Err(diagnosed));
+	}
+	let view = view.to_string();
 	let analysis = answer(&ANALYSIS, view.clone())?;
 	let kinds: String =
 		serde_json::from_str(&analysis).map_err(|_| format!("the analysis stage failed: {analysis}"))?;
-	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
+	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?).map(Ok)
+}
+
+/// Says what the checks of the passes stage diagnosed, [level, message] each (lib/compiler/diagnostics.warp): an
+/// error is the program's value, a warning or hint is said as the Rust checks' are, failing under `use strict` alike
+fn reported(diagnostics: &serde_json::Value) -> Result<(), Node> {
+	use crate::errors::diagnostic::{Diagnostic, Level};
+	let mut said = Vec::new();
+	for diagnostic in diagnostics.as_array().into_iter().flatten() {
+		let text_at = |index: usize| diagnostic.get(index).and_then(serde_json::Value::as_str).unwrap_or_default();
+		let found = Diagnostic { message: text_at(1).to_string(), ..Default::default() };
+		match text_at(0) {
+			ERROR_LEVEL => return Err(found.into_error()),
+			HINT_LEVEL => said.push(found.level(Level::Hint)),
+			_ => said.push(found),
+		}
+	}
+	crate::errors::diagnostic::report(&said)
 }
 
 /// The folder the program's `use`s name files of, as an absolute path: its file's, else the working directory
