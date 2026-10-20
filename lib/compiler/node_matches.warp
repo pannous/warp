@@ -129,6 +129,12 @@ match_block(subject: Node, block: Node, n: Node, variants: any): Node := match b
 	_: n
 }
 
+# `match f(x)` of `match f(x) {…}` as a value, the subject a call ending before the block: `((match f(x)) {…})`
+is_match_head(n: Node): bool := match n {
+	List(parts, Bracket.None, Separator.Space): #parts == 2 and parts#1 == symbol("match")
+	_: no
+}
+
 match_of(rest: Node, n: Node, variants: any): Node := match rest {
 	List(parts, Bracket.None, Separator.Space): { if #parts == 2 then match_block(parts#1, parts#2, n, variants) else n }
 	_: n
@@ -136,6 +142,7 @@ match_of(rest: Node, n: Node, variants: any): Node := match rest {
 
 node_match(n: Node, variants: any): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 2 and is_match_head(parts#1) { return match_block(parts#1#2, parts#2, n, variants) }
 		if #parts == 0 or parts#1 != symbol("match") { return n }
 		# `match n {…}` as a statement, `match (n {…})` as a value
 		if #parts == 3 then match_block(parts#2, parts#3, n, variants) else if #parts == 2 then match_of(parts#2, n, variants) else n
