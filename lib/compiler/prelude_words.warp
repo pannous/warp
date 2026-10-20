@@ -29,8 +29,10 @@ definition_slices(source: text): list := {
 	if name != "" { slices += [[name, written]] }
 	slices
 }
-# `f` of `f(x) := …` or `def f(x)`, else ""
+# `f` of `f(x) := …` or `def f(x)`, operator_↑ of `infix operator ↑(x: number, n: number) := …`, else ""
 defined_name(line: text): text := {
+	declared = operator_declared(blank_words(line))
+	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1 }
 	start = if line.starts_with("def ") then 4 else 0
 	stop = start
 	while stop < #line and is_name_part(line#(stop + 1)) { stop += 1 }
@@ -62,7 +64,9 @@ with_prelude(program: any, prelude: text): any := {
 	aliases = prelude_aliases(prelude)
 	program = bottom_up(program, n => aliased_call(n, aliases, own_names))
 	program_parts = statements_in(program)
-	slices = definition_slices(prelude).filter(slice => not (slice#1 in own_names))
+	# a program's operator declaration overloads the prelude's beside it (`infix operator ↑(v: V, n: int)` beside the
+	# numbers' ↑), any other definition replaces the prelude's
+	slices = definition_slices(prelude).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	reached = []
 	brought = []
 	wanted = symbol_words(program)
