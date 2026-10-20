@@ -142,6 +142,11 @@ pub fn live_loop_names(program: &Node) -> std::collections::BTreeSet<String> {
 /// The custom section of a program saying `use fuel`: its runs count fuel steps instead of stopping at the time limit
 /// (decision fuel-metering)
 pub const FUEL_SECTION: &str = "warp.fuel";
+/// The FUEL_SECTION of a module whose program said `use fuel` (the compile context's counts_fuel), else None
+pub fn fuel_mark() -> Option<wasm_encoder::CustomSection<'static>> {
+	crate::compiler::compile_context::read(|context| context.counts_fuel)
+		.then(|| wasm_encoder::CustomSection { name: FUEL_SECTION.into(), data: [].as_slice().into() })
+}
 /// The std module whose words name files relative to the program (lib/sound.warp play)
 pub const FILE_NAMING_STD_MODULE: &str = "sound";
 /// The custom section naming the program's own functions (`def`, lib/*.warp), joined by the separator: exported for tasks

@@ -12,6 +12,12 @@ if [[ $suffix == restore ]]; then
 	for file in $manifests Cargo.lock; do git cat-file -e HEAD:$file 2>/dev/null && git show HEAD:$file > $file; done
 	exit 0
 fi
+# the main checkout builds the committed versions: its tweak would land in the next commit there
+if [[ $(git rev-parse --path-format=absolute --git-dir) == $(git rev-parse --path-format=absolute --git-common-dir) ]]; then
+	echo "version-tweak.sh: $(git rev-parse --show-toplevel) is the main checkout, not a worktree: tweak only a worktree," \
+		"made with 'cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main' (notes/agents/common.md \"Where to work\")" >&2
+	exit 1
+fi
 for file in $manifests; do
 	sed -i '' "/^\\[package\\]\$/,/^version = /{/-$suffix\"\$/!s/^version = \"\\([^\"]*\\)\"\$/version = \"\\1-$suffix\"/;}" $file
 done

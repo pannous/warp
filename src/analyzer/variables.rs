@@ -474,15 +474,34 @@ pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(Str
 		own.define(variable, None, Kind::Empty);
 	}
 	let mut captured: Vec<(String, Kind)> = vec![];
-	function.body.visit(&mut |node| {
-		if let Node::Symbol(name) = node {
-			let is_new = own.lookup(name).is_none() && !captured.iter().any(|(seen, _)| seen == name);
-			if let Some(local) = outer.lookup(name).filter(|_| is_new) {
-				captured.push((name.clone(), local.kind));
-			}
+	visit_read_words(&function.body, &mut |name| {
+		let is_new = own.lookup(name).is_none() && !captured.iter().any(|(seen, _)| seen == name);
+		if let Some(local) = outer.lookup(name).filter(|_| is_new) {
+			captured.push((name.to_string(), local.kind));
 		}
 	});
 	captured
+}
+
+/// The words `node` may read as variables: every Symbol except names that only label a value, the field after a dot
+/// (`p.n`) and the key of an entry in braces or a call (`P{n: s}`, `f(n: 3)`); `c ? n : 0` still reads n
+fn visit_read_words(node: &Node, read: &mut dyn FnMut(&str)) {
+	match node.drop_meta() {
+		Node::Symbol(name) => read(name),
+		Node::Key(left, Op::Dot, right) => {
+			visit_read_words(left, read);
+			if !matches!(right.drop_meta(), Node::Symbol(_)) {
+				visit_read_words(right, read);
+			}
+		}
+		Node::List(items, Bracket::Curly | Bracket::Round, _) => items.iter().for_each(|item| match item.drop_meta() {
+			Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => {
+				visit_read_words(value, read)
+			}
+			_ => visit_read_words(item, read),
+		}),
+		other => other.visited_children().into_iter().for_each(|child| visit_read_words(child, read)),
+	}
 }
 
 /// The return kinds of user functions, shared by every scope built from them (a Scope is cloned often)
