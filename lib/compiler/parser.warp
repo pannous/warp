@@ -1579,10 +1579,11 @@ def atom(p) {
 	}
 	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)
 	if "\"'".contains(code_points("" + c)#1) { return quoted(p) }
-	// every other character is a symbol of its own, `x = ↯`, `⌘` (card unicode-glyphs)
-	// Rust twin: atoms.rs parse_atom (is_free_symbol; the Rust lane still errors outside the free blocks)
+	// every other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
+	// (card unicode-glyphs)
+	// Rust twin: atoms.rs parse_atom (is_free_symbol, parse_emoji; the Rust lane still errors on other characters)
 	p.at = p.at + 1
-	symbol("" + c)
+	if is_free_symbol(p, c) then symbol("" + c) else c
 }
 
 // The degree sign of temperatures and angles (Rust twin: numbers/units.rs DEGREE)

@@ -295,3 +295,25 @@ fn lib_forms_read_self_hosted() {
 		}
 	}
 }
+
+/// parser.warp consumes every Unicode character by its class (card unicode-glyphs): arrow and declared glyph operators,
+/// operator aliases (lib/math.warp), free symbols as values, a quote carrying a combining mark
+#[test]
+fn unicode_glyphs_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("arrow_down", "8↓2", "3"),
+			("declared_glyph", "infix operator ⊕(a: int, b: int) := a * 10 + b; 4 ⊕ 2", "42"),
+			("alias_dot", "2 · 3", "6"),
+			("alias_and", "yes ∧ no", "no"),
+			("alias_element", "2 ∈ [1, 2]", "yes"),
+			("free_symbol_value", "x = ↯\nx", "↯"),
+			("free_symbols_listed", "[↯ ↯]", "[↯ ↯]"),
+			("technical_symbol_value", "x = ⌘\nx", "⌘"),
+			("quote_with_mark", "x = \"\u{305}\"\nx.length", "1"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
