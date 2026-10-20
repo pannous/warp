@@ -83,7 +83,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		(program, fast) => (program, fast),
 	};
 	let program = match fast_program || crate::pipeline::fast_math() {
-		true => float_division(program),
+		true => machine_numbers(program),
 		false => program,
 	};
 	crate::compiler::compile_context::change(|context| {
