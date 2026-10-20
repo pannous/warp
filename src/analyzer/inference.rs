@@ -74,9 +74,10 @@ pub fn appends_item(left: Kind, left_is_empty_list: bool, right: Kind) -> bool {
 		&& !matches!(right, Kind::List | Kind::Empty | Kind::Data | Kind::Error | Kind::Block)
 }
 
-/// The appended item as the one-item list it is added as, `xs += 3` as `xs += [3]` (appends_item)
+/// The appended item as the one-item list it is added as, `xs += 3` as `xs += [3]` (appends_item); `fs += (x => x)`
+/// adds the function, not the group holding it
 pub fn one_item_list(item: &Node) -> Node {
-	Node::List(vec![item.clone()], Bracket::Square, crate::node::Separator::Space)
+	Node::List(vec![item.ungrouped().clone()], Bracket::Square, crate::node::Separator::Space)
 }
 
 /// `a + b` joining lists or texts: lists (an empty one too) are a list; a text with anything but a function, a value held
