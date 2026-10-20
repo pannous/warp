@@ -1,0 +1,7 @@
+// named arguments written name: value, of a class's fields and of a function's parameters
+class P { name: text; size: int }
+p = P(name: "x", size: 3)
+print(p.size)
+print(P(size: 4, name: "y").name)
+f(a, b) := a * 10 + b
+print(f(b: 2, a: 7))

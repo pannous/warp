@@ -1186,8 +1186,9 @@ def call(body: Body, f: Function, arguments: any): list {
 	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression_code(body, slots[i]#1))
 	call_values(f, given + range_list(#f.parameters - #given).map(i => default_value(body, f, #given + i, #arguments)))
 }
-# `name = value` naming one of `names` (P37)
-is_named_argument(argument: any, names: any): bool := type(argument) is key and op_of(argument) == "=" and key_of(argument) is symbol and name_of(key_of(argument)) in names
+# `name = value` or `name: value` naming one of `names` (P37)
+named_argument_operators = ["=", ":"]
+is_named_argument(argument: any, names: any): bool := type(argument) is key and op_of(argument) in named_argument_operators and key_of(argument) is symbol and name_of(key_of(argument)) in names
 # the arguments in the places of `names`: the positional ones first, each named one (`f(b=2, a=7)`) in its name's place,
 # [argument] each, ø for a place left out; ø when a name is given twice. (The values are computed in the places'
 # order, not as written: P216 wants written order, which differs only for arguments with effects)
