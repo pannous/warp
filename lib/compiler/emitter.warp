@@ -964,10 +964,20 @@ def declaration(body: Body, name: text, type_name: text, value: any): list {
 	# `x: any = v` admits every value: the plain assignment
 	if type_name == "any" { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
+	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[type_name]
 	assignment(body, symbol(name), value)
 }
+# `x: T = v` of a class or enum T the program declares: x holds an object (an instance, also of a class that fits by
+# its fields, or a case of T), a node; a value known only at run time is checked then (runtime.warp object_checked
+# fails with "not a T", as Rust's), one of another kind refused
+def typed_declaration(body: Body, name: text, type_name: text, value: any): list {
+	if value#1 != "node" and value#1 != pending { return refuse("a " + value#1 + " given to a variable declared " + type_name) }
+	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
+}
+# `a Shape`, `an Animal`, as Rust's error messages name a type
+with_article(name: text): text := (if "AEIOUaeiou".contains(name#1) then "an " else "a ") + name
 # `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
