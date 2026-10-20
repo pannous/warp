@@ -114,7 +114,7 @@ static EMIT: Stage =
 /// The switch's value: None when off
 fn switch() -> Option<&'static str> {
 	static VALUE: OnceLock<Option<String>> = OnceLock::new();
-	let value = VALUE.get_or_init(|| std::env::var(SWITCH).ok()).as_deref();
+	let value = VALUE.get_or_init(|| crate::setting(SWITCH)).as_deref();
 	value.filter(|_| !IN_WORKER.with(|inside| inside.get()))
 }
 
@@ -157,7 +157,7 @@ pub fn analysis(view: &Node) -> Option<Result<serde_json::Value, String>> {
 /// kinds alone, never compared with src/analyzer's: decision ignore-rust); an error when the stage fails; None when off
 pub fn program_kinds(program: &Node) -> Result<Option<serde_json::Value>, Node> {
 	static ANALYZES: OnceLock<bool> = OnceLock::new();
-	if !enabled() || !*ANALYZES.get_or_init(|| std::env::var_os(ANALYSIS_SWITCH).is_some()) {
+	if !enabled() || !*ANALYZES.get_or_init(|| crate::setting(ANALYSIS_SWITCH).is_some()) {
 		return Ok(None);
 	}
 	kinds_of(&analysis_view(program)).map(Some).map_err(|failure| crate::node::error(&failure))
@@ -242,7 +242,7 @@ fn record_refusal(refusal: &str) {
 /// Appends the lines to the file REFUSALS_FILE names, when set
 fn record_lines(lines: &str) {
 	use std::io::Write;
-	let Some(file) = std::env::var_os(REFUSALS_FILE) else { return };
+	let Some(file) = crate::setting(REFUSALS_FILE) else { return };
 	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
 }

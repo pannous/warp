@@ -7,8 +7,7 @@ use std::time::{Duration, Instant};
 
 const SETTING: &str = "WARP_PHASE_TIMES";
 
-static ON: LazyLock<bool> =
-	LazyLock::new(|| std::env::var(SETTING).is_ok_and(|value| !value.is_empty() && value != "0"));
+static ON: LazyLock<bool> = LazyLock::new(|| crate::setting(SETTING).is_some());
 /// Per phase: its total time, its calls and how many are running now
 static PHASES: Mutex<BTreeMap<&'static str, (Duration, usize, usize)>> = Mutex::new(BTreeMap::new());
 static STARTED: LazyLock<Instant> = LazyLock::new(Instant::now);
