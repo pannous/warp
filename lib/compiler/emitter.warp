@@ -97,6 +97,9 @@ pending = "?"
 # what a refusal says first: the twin harness counts such a program as outside the core
 outside_the_core = "outside the core: "
 no_kind = "none"
+# the kind of code that never ends normally (an endless loop): it joins as a call still compiling does, taking the
+# other kind
+never = pending
 # the names of the helpers Rust's lowering adds to a program (prelude·round_to)
 prelude_prefix = "prelude·"
 # WARP_EMIT_SURVEY set: a refused function is recorded and taken as giving a node, the others compiled on, and the
@@ -427,7 +430,7 @@ is_shifted_index(index: any): bool := op_of(index) == "+" and value_of(index) ==
 def field_read(body: Body, target: any, name: text): list {
 	held = ["node", [op.local_get] + uleb(fresh_local(body, "node"))]
 	named = text_value_of(name)
-	missing = ["node", [op.call] + uleb(error_function("no_field_" + name)) + [op.drop, op.unreachable]]
+	missing = ended_in("node", "no_field_" + name)
 	if is_swizzle(name) {
 		word = if #name == 1 then "swizzled_one" else "swizzled"
 		fits = condition(runtime_call("swizzle_fits", [held, named]))
@@ -437,6 +440,8 @@ def field_read(body: Body, target: any, name: text): list {
 	["node", boxed(target) + [op.local_set] + held#2[1..] + found + chosen("node", runtime_call("map_get", [held, named]), missing)]
 }
 def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c in "xyzw") }
+# a value of the kind given that ends the run in the error function named
+def ended_in(kind: text, error: text): list { [kind, [op.call] + uleb(error_function(error)) + [op.drop, op.unreachable]] }
 # the index of a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
 def error_function(name: text): int {
 	if name in module.errors { return module.errors[name] }
@@ -1058,8 +1063,12 @@ def loop_of(body: Body, test: any, block: any): list {
 	body.depth -= 3
 	body.exits = body.exits[0..<(#body.exits - 1)]
 	body.continuable = body.continuable[0..<(#body.continuable - 1)]
-	[no_kind, [op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + dropped(looped) + [op.end] + again + [op.end, op.end]]
+	code = [op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + dropped(looped) + [op.end] + again + [op.end, op.end]
+	# `while true` without a break ends only by a return: no value, the function's result is its returns' alone
+	if is_endless(test, block) { return [never, code + [op.unreachable]] }
+	[no_kind, code]
 }
+is_endless(test: any, block: any): bool := test == yes and not mentions_name(block, "break")
 is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
 # whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
 # lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
@@ -1196,7 +1205,12 @@ def group_expression(body: Body, n: any): list {
 	# as "no case for label"
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("switch_no_case") {
 		label = if type(n#2) is key and key_of(n#2) is text then key_of(n#2) else "value"
-		return [pending, [op.call] + uleb(error_function("no_case_" + label)) + [op.drop, op.unreachable]]
+		return ended_in(pending, "no_case_" + label)
+	}
+	# the min, max or reduce of an empty list (Rust's lowering: min_max.rs): `empty_extremum(min)` ends the run in
+	# min_of_an_empty_list
+	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("empty_extremum") and n#2 is symbol {
+		return ended_in(pending, name_of(n#2) + "_of_an_empty_list")
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		word = library_words[name_of(n#1)]

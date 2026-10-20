@@ -1,0 +1,5 @@
+// min and max of a list (Rust lowers them to a fold whose empty case is `empty_extremum(min)`), as parser.warp's
+// dedented takes the smallest indent of its lines
+def smallest(xs) := min(xs)
+def widest(words) := max(words.map(w => #w))
+smallest([4, 2, 7]) + widest(["ab", "abcd"]) * 10
