@@ -101,6 +101,17 @@ module, input file, run it, read the wasm file. `pure_bytes` and its three stage
 4. self_hosted.rs: pure/pure-only run the compiler module; pure_bytes, JSON setups go; ladder counts ≥ before.
 5. build.rs: HOST_WORD_SIGNATURES from host_words.warp.
 
+## Progress (2026-10-20, branch standalone)
+- Step 2 done by renames (user: rename for now): 14 emitter/analyzer helpers, and emitter.warp `length` → `length_code`
+  (a text's `.length` in parser.warp called it). The general rule stays card file-own-words.
+- Composing the stages found six Rust scope bugs of one kind, all fixed with tests in
+  tests/scope/test_bound_names_shadow_functions.rs (card local-variable-named): a parameter, local or loop variable
+  named like a function elsewhere was taken for that function in list heads, type inference, a returned local
+  (closure analysis), lambda captures, prefix calls (`call#1`) and nested lambdas. Plus: a text's member looked up by
+  name (`line.length` beside a map with a key length) was typed a text.
+- Step 3 written: lib/compiler/compiler.warp and host_words.warp. Not yet through: the next probe needs the scope fixes
+  in the shared build. Probe: `cd scratch/sc && WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp ../../lib/compiler/compiler.warp app.warp app.wasm`.
+
 ## Coordination
 - warp-self-analyzer (pure lane, branch prelude-for-pure): compiler.warp only composes their stages; their passes,
   prelude words and emitter growth flow in unchanged. Step 4 touches self_hosted.rs `pure_module`, which they also
