@@ -1183,6 +1183,8 @@ PASSED:
   ✓ ffi::test_page_ids::jquery_gives_a_hint_naming_the_warp_forms
   ✓ ffi::test_page_ids::the_first_dollar_field_hints_at_bind
   ✓ ffi::test_page_ids::the_old_dollar_forms_work_with_a_hint
+  ✓ ffi::test_run_wasm_library::run_wasm_of_no_module_fails_loudly
+  ✓ ffi::test_run_wasm_library::run_wasm_runs_a_module_given_as_bytes
   ✓ ffi::test_wasi::test_fd_write
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
@@ -3759,6 +3761,7 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
+  ✓ parser::test_self_pure::a_lexer_over_short_words_takes_linear_time_pure
   ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
   ✓ parser::test_self_pure::assigned_it_blocks_run_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
@@ -4491,6 +4494,8 @@ PASSED:
   ✓ text::test_text_bytes::plus_equals_appends_to_a_text
   ✓ text::test_text_bytes::read_loads_a_file_as_bytes
   ✓ text::test_text_bytes::text_plus_number_stays_a_type_error
+  ✓ text::test_text_cache_lru::a_lexer_keeps_its_source_count_after_a_longer_text
+  ✓ text::test_text_cache_lru::two_long_texts_counted_by_turns_after_a_longer_one
   ✓ text::test_text_casts::a_double_quoted_text_as_float_is_loud
   ✓ text::test_text_casts::a_numeric_text_as_float_in_a_float_variable
   ✓ text::test_text_casts::a_single_quoted_codepoint_still_converts
@@ -6355,8 +6360,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ ffi::test_run_wasm_library::run_wasm_of_no_module_fails_loudly
-  ✗ ffi::test_run_wasm_library::run_wasm_runs_a_module_given_as_bytes
 
 SUMMARY:
-11 ignored, 6352 passed, 2 failed, 6354 total tested
+11 ignored, 6357 passed, 0 failed, 6357 total tested
