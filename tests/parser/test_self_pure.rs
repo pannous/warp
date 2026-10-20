@@ -85,3 +85,10 @@ fn bang_words_and_tab_columns_run_pure() {
 	);
 	runs_pure("tab_columns", "row = ['0-1'\t-1]; count(row)", "2");
 }
+
+// card parser-reads-string: parser.warp reads `\x41` and `\u{1b}` as their characters
+#[test]
+fn text_escapes_read_pure() {
+	runs_pure("hex_escape", "\"\\x41\\x42\"", "AB");
+	runs_pure("unicode_escape", "\"\\e[H\" == \"\\u{1b}[H\"", "yes");
+}

@@ -2183,6 +2183,10 @@ def template(written) {
 		} else if c == '\\' and at + 1 < n and next == ':' and at + 2 < n and is_alpha(written[at + 2]) {
 			read = read + c + next
 			at = at + 2
+		} else if c == '\\' and code_escape(written, at, n) != ø {
+			coded = code_escape(written, at, n)
+			read = read + coded#1
+			at = at + coded#2
 		} else if c == '\\' and at + 1 < n {
 			literal = escape_character(next)
 			holed = holed or literal == '$'
@@ -2215,12 +2219,38 @@ def unescaped(content, interpolates) {
 		} else if interpolates and escaped == ':' and at + 2 < content.length and is_alpha(content[at + 2]) {
 			read = read + c + escaped
 			at = at + 2
+		} else if code_escape(content, at, content.length) != ø {
+			coded = code_escape(content, at, content.length)
+			read = read + coded#1
+			at = at + coded#2
 		} else {
 			read = read + escape_character(escaped)
 			at = at + 2
 		}
 	}
 	read
+}
+
+// `\x41`, `\u{1b}` at the backslash `at`: [the character, the length read], else ø
+// Rust twin: literals/text.rs hex_byte_escape, unicode_escape
+def code_escape(written, at, n) {
+	kind = peek(written, at + 1, n)
+	if kind == 'x' and is_hex_digit(peek(written, at + 2, n)) and is_hex_digit(peek(written, at + 3, n)) {
+		return [hex_value(written[at + 2 .. at + 4]) as codepoint, 4]
+	}
+	if kind == 'u' and peek(written, at + 2, n) == '{' {
+		end = at + 3
+		while end < n and is_hex_digit(written[end]) { end = end + 1 }
+		if end > at + 3 and peek(written, end, n) == '}' { return [hex_value(written[at + 3 .. end]) as codepoint, end + 1 - at] }
+	}
+	ø
+}
+
+// The number the hex digits write
+def hex_value(digits) {
+	value = 0
+	for digit in digits { value = value * 16 + "0123456789abcdef".index_of(digit.lower()) - 1 }
+	value
 }
 
 def escape_character(c) {
