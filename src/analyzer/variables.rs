@@ -73,7 +73,9 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 /// function's own, never the enclosing program's (where locals of one name in many functions widened each other forever)
 pub(super) fn function_definition_body(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
-		Node::Key(left, Op::Assign | Op::Define, body) if super::user_functions::signature(left).is_some() => Some(body),
+		Node::Key(left, Op::Assign | Op::Define, body) if super::user_functions::signature(left).is_some() => {
+			Some(body)
+		}
 		Node::List(items, _, _) if items.len() >= 2 && items[0].symbol_name().is_some_and(is_function_keyword) => {
 			items.last()
 		}
