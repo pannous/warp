@@ -92,3 +92,11 @@ fn text_escapes_read_pure() {
 	runs_pure("hex_escape", "\"\\x41\\x42\"", "AB");
 	runs_pure("unicode_escape", "\"\\e[H\" == \"\\u{1b}[H\"", "yes");
 }
+
+/// A call leaving out trailing parameters takes their defaults, in the program's functions and runtime words alike
+#[test]
+fn defaults_run_pure() {
+	runs_pure("default_given", "add(x, y = 2) := x + y; add(1)", "3");
+	runs_pure("default_typed", "add(x: int, y: int = 2) := x + y; add(1, 5)", "6");
+	runs_pure("default_runtime_word", "xs = [1, 2, 3]; xs.slice(1)", "[2 3]");
+}
