@@ -1,0 +1,5 @@
+// m.get(k) without a fallback is ø (runtime map_get_or's fallback defaults to ø)
+m = {a: 1}
+print(m.get("b"))
+print(m.get("a"))
+print(map_get_or(m, "c", 7))
