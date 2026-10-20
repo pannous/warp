@@ -1,1 +1,2 @@
 - 2026-10-19 fixnow-builtin-function-add: a list given to a function value (closure_call_N) is held as Nodes, as the call may change it; main's typed-list pass had only kept it a Node list by seeing builtin·add's own `xs += [x]` (list_sharing.rs Holders)
+- 2026-10-20 canvas-height: paint(shader) without a size takes the canvas size when the program uses the canvas (canvas.height = 80, canvas(w, h)), before the view size (shader_holes.rs sizes)

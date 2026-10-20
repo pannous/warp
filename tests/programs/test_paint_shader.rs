@@ -59,3 +59,17 @@ fn paint_of_a_shader_without_a_size_takes_width_and_height() {
 		painted_rows(&format!("{plain}paint(shader, view_width, view_height)"), "paint-view-given")
 	);
 }
+
+// card canvas-height: a program that sizes the canvas (`canvas.height = 1`, `use draw` and `canvas(2, 1)`) paints its shaders at the
+// canvas's size
+#[test]
+fn paint_of_a_shader_without_a_size_takes_the_canvas_size() {
+	if !has_gpu() {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	let given = painted_rows(&format!("{SHADER}paint(shader, 2, 1, {{blue: 1.0}})"), "paint-canvas-given");
+	let sized = painted_rows(&format!("use draw\ncanvas(2, 1)\n{SHADER}paint(shader, {{blue: 1.0}})"), "paint-canvas-sized");
+	assert_eq!(sized, given);
+	let properties = "canvas.width = 2\ncanvas.height = 1\n";
+	assert_eq!(painted_rows(&format!("{properties}{SHADER}paint(shader, {{blue: 1.0}})"), "paint-canvas-sides"), given);
+}
