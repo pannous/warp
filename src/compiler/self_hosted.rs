@@ -59,9 +59,9 @@ const RAN_PURE: &str = "pure: ran";
 #[cfg(feature = "native")]
 const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
 /// The WARP_ settings that change no stage program's compile, so not its kept module either: where lib/ lies is keyed
-/// by its contents, hints and windows only change what a run shows
+/// by its contents, hints and windows only change what a run shows, a profile only watches it
 #[cfg(feature = "native")]
-const SETTINGS_BESIDE_STAGES: [&str; 7] = [
+const SETTINGS_BESIDE_STAGES: [&str; 8] = [
 	SWITCH,
 	ANALYSIS_SWITCH,
 	REFUSALS_FILE,
@@ -69,6 +69,7 @@ const SETTINGS_BESIDE_STAGES: [&str; 7] = [
 	crate::modules::LIBRARY_SETTING,
 	crate::errors::diagnostic::HINTS_VARIABLE,
 	crate::graphics::paint::NO_WINDOW_VARIABLE,
+	warp_runtime::profile::PROFILE_VARIABLE,
 ];
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
