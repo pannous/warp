@@ -30,7 +30,7 @@ node_types = {any: 1, map: 1}
 # --- kinds of expressions (Rust infer_type) ---
 
 # a decimal of at most 15 significant digits is exact, an int; a longer one a float
-number_kind(n: number): KindName := {
+number_kind(n: Node): KindName := {
 	if n is int { return "int" }
 	digits = "${n}".replace(".", "").replace("-", "")
 	while digits.starts_with("0") { digits = digits[1..] }
