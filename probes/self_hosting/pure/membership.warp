@@ -1,0 +1,13 @@
+// card pure-front: x in xs and xs contains x in the pure lane (list_methods.warp membership)
+// out: 1
+// out: 
+// out: yes
+// out: no
+K = {"a": 1}
+words = ["x", "y"]
+def kf(w) := if w in K then K[w] else ""
+def kw(w) := words contains w
+print kf("a")
+print kf("b")
+print kw("y")
+print kw("z")

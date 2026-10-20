@@ -187,13 +187,21 @@ annotation_of(p: any): any := {
 	ø
 }
 
-# `(name params…) := body` at the program's top level
+# `(name params…) := body` at the program's top level, its head; `name := body` reading `it` is a function of `it`, and
+# `name := { statements }` one of none (Rust's defined_function); `x := 5` is a value (assignment_operators)
+implicit_parameter = "it"
 definition(n: any): any := {
-	if type(n) is key and op_of(n) == ":=" and bracket_of(key_of(n)) == "(" and #key_of(n) > 0 and key_of(n)#1 is symbol {
-		return key_of(n)
-	}
+	if not (type(n) is key and op_of(n) == ":=") { return ø }
+	left = key_of(n)
+	if bracket_of(left) == "(" and #left > 0 and left#1 is symbol { return left }
+	if not (left is symbol) { return ø }
+	if mentions_name(value_of(n), implicit_parameter) { return [left, symbol(implicit_parameter)] }
+	if is_statement_block(value_of(n)) { return [left] }
 	ø
 }
+is_statement_block(n: any): bool := is_group(n) and bracket_of(n) == "{" and #n > 0 and not n.all(is_entry)
+# `x := 5`, the value definition left a statement, assigns as `x = 5` does
+assignment_operators = ["=", ":="]
 # a statement without the keyword `def f(x): T := e` keeps before its definition
 unkeyworded(n: any): any := if bracket_of(n) == "" and #n == 2 and n#1 is symbol and name_of(n#1) in function_keywords then n#2 else n
 
@@ -229,7 +237,7 @@ def collect_functions(program: any, functions: any): list {
 shared_names(statements: any) := {
 	shared = {}
 	for s in statements {
-		if type(s) is key and op_of(s) == "=" and key_of(s) is symbol {
+		if type(s) is key and op_of(s) in assignment_operators and key_of(s) is symbol {
 			name = name_of(key_of(s))
 			for f_name in module.functions.keys { if reads_free(module.functions[f_name], name) { shared[name] = yes } }
 		}
@@ -243,7 +251,7 @@ reads_free(f: Function, name: text) := {
 }
 # whether n assigns the symbol `name` anywhere
 assigns(n: any, name: text) := {
-	if type(n) is key and op_of(n) == "=" and key_of(n) is symbol and name_of(key_of(n)) == name { return yes }
+	if type(n) is key and op_of(n) in assignment_operators and key_of(n) is symbol and name_of(key_of(n)) == name { return yes }
 	if type(n) is key { return assigns(key_of(n), name) or assigns(value_of(n), name) }
 	if is_group(n) { for x in n { if assigns(x, name) { return yes } } }
 	no
@@ -1334,6 +1342,12 @@ def expression(body: Body, n: any): list {
 	group_expression(body, n)
 }
 
+# `f 3 4`: a program function's name before as many spaced arguments as it takes calls it, as `f(3, 4)`
+is_spaced_call(body: Body, n: any): bool := {
+	if not (bracket_of(n) == "" and separator_of(n) == " " and #n > 1 and n#1 is symbol) { return no }
+	name = name_of(n#1)
+	name in module.functions and not (name in body.names) and #module.functions[name].parameters == #n - 1
+}
 def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, n[2..].map(x => x)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
@@ -1342,7 +1356,7 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1).contains(captured_marker) {
 		return closure_item(expression(body, n#2)#2, captured_index(name_of(n#1)))
 	}
-	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions and not is_runtime_word(body, name_of(n#1)) {
+	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions and not is_runtime_word(body, name_of(n#1)) {
 		return call(body, module.functions[name_of(n#1)], n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.classes {
@@ -1416,7 +1430,7 @@ def group_expression(body: Body, n: any): list {
 	}
 	if not (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { refuse(form_of(n)) }
 	# `y = 2 x`: Rust's "`x` after `y=2` does nothing"
-	assigns = x => type(x) is key and (op_of(x) == "=" or op_of(x) == ":=")
+	assigns = x => type(x) is key and op_of(x) in assignment_operators
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
 	# `y 1+1`: values side by side are a list without brackets, as Rust's emitter holds a spaced group (only `;` and
 	# lines are statements); its text is the items with a space between
@@ -1437,7 +1451,7 @@ def key_expression(body: Body, n: any): list {
 		grown = appended(body, left, value_of(right))
 		if grown != ø { return grown }
 	}
-	if operator == "=" { return assignment(body, left, expression(body, right)) }
+	if operator in assignment_operators { return assignment(body, left, expression(body, right)) }
 	if operator == ":" and left == symbol("global") { return global_declaration(body, right) }
 	# the step a `for` lowering appends to its loop body, as the analysis view shows it: run after the body
 	if is_loop_step(n) { return expression(body, right) }

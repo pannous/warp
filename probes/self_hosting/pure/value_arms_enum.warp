@@ -1,0 +1,8 @@
+// match arms of enum cases (card pure-runs): runs pure once enum declarations lower (notes/parser_compiles.md)
+enum Color { Red, Green, Blue }
+def warmth(c) := match c {
+	Color.Red: "warm"
+	Color.Blue: "cold"
+	_: "mild"
+}
+print warmth(Color.Red) + " " + warmth(Color.Green)

@@ -57,6 +57,9 @@ fn the_warp_emitter_emits_inside_its_core() {
 	let (caught, phases) = self_hosted_run(&cache, "try { fail(\"no\") } catch e { 5 }");
 	assert!(caught.contains('5'), "{caught}");
 	assert!(!phases.contains("emit ("), "a try is inside the core: {phases}");
+	let (beyond, phases) = self_hosted_run(&cache, "go { 1 }; 2");
+	assert!(beyond.contains('2'), "{beyond}");
+	assert!(phases.contains("emit ("), "a task is beyond the core: {phases}");
 }
 
 /// The stage programs compile from warp's lib/ alone: a folder whose text.warp and list.warp would shadow the standard
