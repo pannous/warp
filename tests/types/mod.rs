@@ -59,6 +59,7 @@ mod test_declaration_without_value;
 mod test_declaration_zero_value;
 mod test_declared_int_of_float_expression;
 mod test_declared_list_marks;
+mod test_declared_type_compared; // card operator-leftover
 mod test_dispatch;
 mod test_duration_comparison; // cards day-day, day-hours
 mod test_duration_unit_variables; // card time-unit
