@@ -1848,7 +1848,7 @@ TYPE_BODY_STARTS = "{=:<"
 // `class V { x: int }`, `struct P {…}`, `type Point {…}` as ["type", name, body], else ø with nothing read
 // Rust twin: mod.rs TYPE_DECLARATION_WORDS, types/declarations.rs declares_type
 def type_declaration(p, word) {
-	if p.at > 0 and p.code[p.at - 1] == '.' or not declares_type(p, word) { return ø }
+	if (p.at > 0 and p.code[p.at - 1] == '.') or not declares_type(p, word) { return ø }
 	outer = p.type_body
 	p.type_body = true
 	declaration = declared_type(p, word)
