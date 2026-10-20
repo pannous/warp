@@ -273,3 +273,14 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
+
+/// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter
+/// of kind Op, Bracket or Separator holds the text a node carries, and a type variable `T` any value
+#[test]
+fn enums_of_used_files_and_type_variables_run_pure() {
+	let probe = |name: &str| format!("{}/probes/compiler_enums/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("used_enum", &probe("f_used_enum2"), "Function\nyes\nyes");
+	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
+	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
+	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
+}
