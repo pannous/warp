@@ -1,0 +1,6 @@
+use "texts.warp"
+use "nodes.warp"
+leaf: Node = "abc"
+print filled(leaf, 1)
+print filled("abc", 1)
+print [Key(1, Op.Add, 2), leaf].map(n => filled(n, 1))

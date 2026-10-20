@@ -1,0 +1,17 @@
+// starts_at over a long text with many short parts, as parser.warp's alias_at does: each `.length` of the long text
+// should hit the runtime's count cache, so this runs in linear time
+def starts_at(source: any, part: text, at: int): bool {
+	i = 0
+	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
+	i == part.length
+}
+code = ""
+for k in 1 .. 4000 { code = code + "abc def ghi " }
+parts = ["de", "gh", "zz", "a", "def", "->", "and"]
+found = 0
+at = 0
+while at < code.length {
+	for part in parts { if starts_at(code, part, at) { found = found + 1 } }
+	at = at + 1
+}
+found

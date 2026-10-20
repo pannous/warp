@@ -19,7 +19,7 @@ node_case(case_name: Node): Node := match case_name {
 
 # `Key(a, op, b)` → key(a, op, b); `List(xs, bracket, separator)` → separated(bracketed(xs, bracket), separator)
 construction(parts: list, n: Node, builds: any): Node := {
-	if #parts != 4 or not (parts#1 is symbol) or not (name_of(parts#1) in builds) { return n }
+	if #parts != 4 or not (parts#1 is symbol) or name_of(parts#1) not in builds { return n }
 	if name_of(parts#1) == "Key" { return call_of("key", [parts#2, parts#3, parts#4]) }
 	call_of("separated", [call_of("bracketed", [parts#2, parts#3]), parts#4])
 }
@@ -28,7 +28,7 @@ construction(parts: list, n: Node, builds: any): Node := {
 # whose cases are texts here; a type variable `T` of a generic signature (Rust twin: type_parameters.rs
 # lower_type_variables)
 holds_any(type: Node, declared: any): bool := match type {
-	Symbol(name): not (name in declared) and (name == node_type or name in spelled_enums or (#name == 1 and is_capitalized(name)))
+	Symbol(name): name not in declared and (name == node_type or name in spelled_enums or (#name == 1 and is_capitalized(name)))
 	_: no
 }
 

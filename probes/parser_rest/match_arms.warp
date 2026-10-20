@@ -1,0 +1,13 @@
+wrapped(n: Node): Node := n
+left_of(n: Node): Node := match wrapped(n) {
+	Key(left, op, right): left
+	_: n
+}
+named(n: Node): text := match n {
+	Symbol(name): if name == "a" then "first" else name
+	_: "other"
+}
+print(left_of(Key(symbol("x"), Op.Colon, 1)))
+print(named(symbol("a")))
+print(named(symbol("b")))
+print(named(3))

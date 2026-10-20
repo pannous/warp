@@ -1,0 +1,6 @@
+filled(n: Node, bound: int): text := "node"
+filled(message: text, bound: int): text := "text " + message
+leaf: Node = "abc"
+print filled(leaf, 1)
+print filled("abc", 1)
+print filled(Key(1, Op.Add, 2), 1)

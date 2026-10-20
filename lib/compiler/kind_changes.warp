@@ -164,7 +164,7 @@ first_kind_change(n: any, kinds: any, results: any, global_names: any): any := {
 		if not (target is symbol) { return ø }
 		return given_kind(name_of(target), given_kind_of(value_of(n), results), value_of(n), kinds)
 	}
-	for part in parts_of(n) {
+	for part in parts_within(n) {
 		change = first_kind_change(part, kinds, results, global_names)
 		if change != ø { return change }
 	}

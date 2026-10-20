@@ -108,12 +108,16 @@ const READ_CURSORS: u32 = 4;
 const TEXT_CURSORS: u32 = 2;
 /// How far (bytes) text_grapheme_back looks back from a cursor; further back, an index walks from the start of the text
 const BACK_REACH: i32 = 256;
-/// The globals of a text cursor: the text's bytes, a 1-based grapheme index in them and that grapheme's byte index
-const TEXT_CURSOR_PARTS: [&str; 3] = ["text", "index", "at"];
+/// The globals of a text cursor: the text's bytes, a 1-based grapheme index in them, that grapheme's byte index and
+/// when the cursor was used last (a stamp of text_cache_clock)
+const TEXT_CURSOR_PARTS: [&str; 4] = ["text", "index", "at", "used"];
 /// Texts whose grapheme counts are kept at once (text_grapheme_count), so a loop's `i < #text` counts once
 const TEXT_COUNTS: u32 = 2;
-/// The globals of a counted text: its bytes and its count
-const TEXT_COUNTED_PARTS: [&str; 2] = ["text", "count"];
+/// The globals of a counted text: its bytes, its count and when it was used last
+const TEXT_COUNTED_PARTS: [&str; 3] = ["text", "count", "used"];
+/// Texts below this many bytes stay out of the text cursors and counts: walking them is cheap, and a lexer's words
+/// (`starts_at(source, word, at)`) would take the slot of its long source by turns (card text-cache-lru)
+pub(super) const SHORT_TEXT: i32 = 64;
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(in crate::wasm_emitter) struct CopyCells {
@@ -222,34 +226,41 @@ impl WasmGcEmitter {
 			.flat_map(|slot| TEXT_CURSOR_PARTS.map(|part| (format!("text_cursor_{slot}_{part}"), global_of(part))));
 		let counted = (0..TEXT_COUNTS)
 			.flat_map(|slot| TEXT_COUNTED_PARTS.map(|part| (format!("text_counted_{slot}_{part}"), global_of(part))));
-		let globals: Vec<_> = cursors.chain(counted).collect();
+		let clock = std::iter::once(("text_cache_clock".to_string(), global_of("used")));
+		let globals: Vec<_> = cursors.chain(counted).chain(clock).collect();
 		self.text_cursor_global = Some(self.next_global_idx);
 		for (name, (val_type, initial)) in globals {
 			self.declare_named_global(val_type, initial, name);
 		}
 	}
 
-	/// The globals (text, count) of each counted text
-	fn texts_counted(&self) -> Vec<(u32, u32)> {
+	/// The globals (text, count, used) of each counted text
+	fn texts_counted(&self) -> Vec<(u32, u32, u32)> {
 		let Some(cursors) = self.text_cursor_global else {
 			return vec![];
 		};
 		let first = cursors + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32;
 		(0..TEXT_COUNTS)
 			.map(|slot| first + slot * TEXT_COUNTED_PARTS.len() as u32)
-			.map(|text| (text, text + 1))
+			.map(|text| (text, text + 1, text + 2))
 			.collect()
 	}
 
-	/// The globals (text, index, at) of each text cursor, newest first
-	fn text_cursors(&self) -> Vec<(u32, u32, u32)> {
+	/// The globals (text, index, at, used) of each text cursor
+	fn text_cursors(&self) -> Vec<(u32, u32, u32, u32)> {
 		let Some(first) = self.text_cursor_global else {
 			return vec![];
 		};
 		(0..TEXT_CURSORS)
 			.map(|slot| first + slot * TEXT_CURSOR_PARTS.len() as u32)
-			.map(|text| (text, text + 1, text + 2))
+			.map(|text| (text, text + 1, text + 2, text + 3))
 			.collect()
+	}
+
+	/// The global counting the uses of the text cursors and counts, after them
+	fn text_cache_clock(&self) -> Option<u32> {
+		let cursors = self.text_cursor_global?;
+		Some(cursors + TEXT_CURSORS * TEXT_CURSOR_PARTS.len() as u32 + TEXT_COUNTS * TEXT_COUNTED_PARTS.len() as u32)
 	}
 
 	/// The globals (list, cell, index) of read cursor `slot`: the first is the list cursor's own

@@ -1794,6 +1794,7 @@ PASSED:
   ✓ functions::test_parameter_map_patterns::a_map_without_the_field_is_an_error
   ✓ functions::test_parameter_map_patterns::pattern_names_are_no_main_level_variables
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
+  ✓ functions::test_parameter_overloads::a_declared_type_picks_its_variant
   ✓ functions::test_parameter_overloads::a_list_parameter_overloads_a_text_parameter
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
@@ -1966,6 +1967,7 @@ PASSED:
   ✓ functions::test_sort_labels::a_sort_label_before_an_operator_in_a_value_or_chain
   ✓ functions::test_sort_labels::a_word_named_like_a_label_elsewhere_stays
   ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
+  ✓ functions::test_specialised_variants::a_parameter_the_body_changes_keeps_its_argument
   ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
   ✓ functions::test_statement_blocks::a_block_of_one_sound_word_plays
   ✓ functions::test_statement_blocks::an_assigned_block_stays_data
@@ -2415,6 +2417,7 @@ PASSED:
   ✓ lists::test_where_filter::where_filters_by_it
   ✓ lists::test_where_filter::where_with_an_assignment_binds
   ✓ lists::test_word_slices::other_from_and_to_stay
+  ✓ lists::test_worklist_count::a_worklist_keeps_its_count_while_it_grows
   ✓ modules::foreign::tests::json_conversion_keeps_nested_values_and_node_layout
   ✓ modules::test_agent_types::a_companion_takes_the_expected_type_of_any_function
   ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
@@ -2476,6 +2479,7 @@ PASSED:
   ✓ modules::test_json5::json_parse_reads_json5
   ✓ modules::test_json5::strict_json_and_warp_literals_read_alike
   ✓ modules::test_lowered_modules::a_kept_lowered_module_compiles_to_the_same_module
+  ✓ modules::test_module_classes::a_class_reaches_through_a_file_used_by_a_dotted_path
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
   ✓ modules::test_module_classes::a_used_modules_instance_reads_a_field_named_like_a_word
   ✓ modules::test_module_classes::the_programs_own_class_wins
@@ -3220,6 +3224,7 @@ PASSED:
   ✓ numbers::test_temperature::temperatures_convert_with_their_zero
   ✓ numbers::test_temperature::temperatures_in_one_unit_add
   ✓ numbers::test_text_float_exact::a_text_of_a_tiny_float_is_no_zero
+  ✓ numbers::test_text_float_exact::a_text_of_many_digits_is_the_nearest_float
   ✓ numbers::test_text_float_exact::a_text_read_as_a_float_at_run_time_is_its_literal
   ✓ numbers::test_text_then_conversion::a_conversion_after_a_text_join_converts_the_last_operand
   ✓ numbers::test_text_then_conversion::a_grouped_conversion_still_works
@@ -3758,27 +3763,37 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
+  ✓ parser::test_self_pure::a_lexer_over_short_words_takes_linear_time_pure
   ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
+  ✓ parser::test_self_pure::arm_inline_if_reads_self_hosted
+  ✓ parser::test_self_pure::assigned_it_blocks_run_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
   ✓ parser::test_self_pure::comprehensions_run_pure
   ✓ parser::test_self_pure::defaults_run_pure
+  ✓ parser::test_self_pure::digit_casts_run_pure
   ✓ parser::test_self_pure::durations_read_self_hosted
   ✓ parser::test_self_pure::enum_cases_run_pure
   ✓ parser::test_self_pure::enum_conversions_and_default_arms_run_pure
   ✓ parser::test_self_pure::enums_of_used_files_and_type_variables_run_pure
+  ✓ parser::test_self_pure::extrema_run_pure
   ✓ parser::test_self_pure::field_defaults_run_pure
+  ✓ parser::test_self_pure::field_slices_run_pure
   ✓ parser::test_self_pure::for_each_loops_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
   ✓ parser::test_self_pure::global_type_words_read_self_hosted
+  ✓ parser::test_self_pure::host_words_on_nodes_run_pure
   ✓ parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
   ✓ parser::test_self_pure::kind_changes_fail_pure
   ✓ parser::test_self_pure::lambdas_run_pure
   ✓ parser::test_self_pure::lib_forms_read_self_hosted
+  ✓ parser::test_self_pure::long_float_literals_read_pure
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::named_arguments_run_pure
+  ✓ parser::test_self_pure::negated_operators_run_pure
   ✓ parser::test_self_pure::number_keys_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
+  ✓ parser::test_self_pure::parser_words_run_pure
   ✓ parser::test_self_pure::program_names_run_pure
   ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
   ✓ parser::test_self_pure::recursive_results_run_pure
@@ -4186,7 +4201,6 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
-  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -4200,6 +4214,7 @@ PASSED:
   ✓ programs::test_window_size::the_viewer_reads_a_resize
   ✓ programs::test_window_size::window_size_is_a_property
   ✓ scope::test_bound_names_shadow_functions::a_lambda_captures_a_local_named_like_a_function
+  ✓ scope::test_bound_names_shadow_functions::a_lambda_reads_an_enclosing_local_named_like_a_function
   ✓ scope::test_bound_names_shadow_functions::a_local_holding_a_calls_value_is_sliced_beside_a_def_of_its_name
   ✓ scope::test_bound_names_shadow_functions::a_local_lambda_is_called_beside_a_same_named_function_holder
   ✓ scope::test_bound_names_shadow_functions::a_local_named_like_a_function_heads_a_list_as_its_value
@@ -4484,6 +4499,8 @@ PASSED:
   ✓ text::test_text_bytes::plus_equals_appends_to_a_text
   ✓ text::test_text_bytes::read_loads_a_file_as_bytes
   ✓ text::test_text_bytes::text_plus_number_stays_a_type_error
+  ✓ text::test_text_cache_lru::a_lexer_keeps_its_source_count_after_a_longer_text
+  ✓ text::test_text_cache_lru::two_long_texts_counted_by_turns_after_a_longer_one
   ✓ text::test_text_casts::a_double_quoted_text_as_float_is_loud
   ✓ text::test_text_casts::a_numeric_text_as_float_in_a_float_variable
   ✓ text::test_text_casts::a_single_quoted_codepoint_still_converts
@@ -4578,6 +4595,7 @@ PASSED:
   ✓ types::test_bool_type::a_literal_bool_counts_in_arithmetic
   ✓ types::test_bool_type::a_parameter_given_bools_keeps_them
   ✓ types::test_bool_type::an_exact_comparison_prints_as_bool
+  ✓ types::test_bool_type::an_if_between_a_number_and_a_bool_keeps_the_bool
   ✓ types::test_bool_type::strict_equality_compares_the_full_type
   ✓ types::test_bool_type::test_bool_acts_as_one_or_zero
   ✓ types::test_bool_type::test_bool_is_a_type_of_its_own
@@ -5272,8 +5290,11 @@ PASSED:
   ✓ types::test_type_of::test_type_without_parentheses
   ✓ types::test_type_parameters::a_type_parameter_takes_a_bare_type_word
   ✓ types::test_type_parameters::a_type_parameter_takes_a_class
+  ✓ types::test_type_parameters::a_type_test_beside_a_function_named_like_a_type
+  ✓ types::test_type_parameters::a_type_value_parameter_tests_as_its_type
   ✓ types::test_type_parameters::a_type_variable_of_a_generic_signature_takes_any_value
   ✓ types::test_type_parameters::a_value_for_a_type_parameter_is_an_error
+  ✓ types::test_type_parameters::a_variable_declared_type_holds_a_type
   ✓ types::test_type_static::the_type_of_a_variable_is_its_value_type
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
@@ -5410,6 +5431,7 @@ PASSED:
   ✓ wasm::test_no_cwd_debris::eval_leaves_no_module_in_the_current_directory
   ✓ wasm::test_no_cwd_debris::the_last_module_is_kept_at_its_fixed_path
   ✓ wasm::test_own_runtime_stub::test_runtime_stub_is_this_checkouts
+  ✓ wasm::test_profile::a_profiled_run_names_its_busy_function
   ✓ wasm::test_read_bytes_plain_result::a_main_without_a_result_is_empty
   ✓ wasm::test_read_bytes_plain_result::a_null_result_is_empty
   ✓ wasm::test_read_bytes_plain_result::a_plain_f64_result_is_a_float
@@ -5938,6 +5960,7 @@ PASSED:
   ✓ welcoming::test_english_operator_words::a_function_of_an_operator_word_stays_callable
   ✓ welcoming::test_english_operator_words::membership_ranges_and_loops
   ✓ welcoming::test_english_operator_words::operator_words
+  ✓ welcoming::test_enum_case_words::enum_cases_near_library_words_warn_nothing
   ✓ welcoming::test_error_excerpt::a_message_names_its_position
   ✓ welcoming::test_error_excerpt::an_excerpt_marks_the_word_at_the_position
   ✓ welcoming::test_error_excerpt::the_cli_prints_the_line_of_an_error_and_a_warning
@@ -6349,4 +6372,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-11 ignored, 6344 passed, 0 failed, 6344 total tested
+11 ignored, 6367 passed, 0 failed, 6367 total tested

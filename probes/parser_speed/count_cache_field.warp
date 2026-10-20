@@ -1,0 +1,29 @@
+// count_cache.warp with the text in a class field, as parser.warp's Parser holds its code: p.code.length should hit
+// the runtime's count cache too, after a longer text was counted
+class Parser { code: text; at: int; aliases: list }
+def starts_at(source: any, part: text, at: int): bool {
+	i = 0
+	while i < part.length and at + i < source.length and source[at + i] == part[i] { i = i + 1 }
+	i == part.length
+}
+def alias_at(p) {
+	longest = []
+	for alias in p.aliases {
+		spelled = alias#1
+		if starts_at(p.code, spelled, p.at) and (longest.length == 0 or spelled.length > longest#1.length) { longest = alias }
+	}
+	longest
+}
+// a longer text counted before, as an earlier used file, holds one slot of the count cache
+earlier = ""
+for k in 1 .. 8000 { earlier = earlier + "abc def ghi " }
+print(earlier.length)
+code = ""
+for k in 1 .. 4000 { code = code + "abc def ghi " }
+p = Parser{code: code, at: 0, aliases: [["de", "x"], ["gh", "y"], ["zz", "z"], ["def", "w"], ["→", "->"]]}
+found = 0
+while p.at < p.code.length {
+	if alias_at(p).length > 0 { found = found + 1 }
+	p.at = p.at + 1
+}
+found

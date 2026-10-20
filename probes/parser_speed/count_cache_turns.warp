@@ -1,0 +1,9 @@
+// two long texts counted by turns after a longer one was counted once: each should be counted once, not at each turn
+earlier = "abcdefghij" * (3000 + round(random() * 0))
+counted = count(earlier)
+src = "abc def ghi " * (1000 + round(random() * 0))
+line = "x" * (100 + round(random() * 0))
+total = 0
+at = 0
+while at < count(src) { total += count(line); at += 1 }
+total

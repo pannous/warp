@@ -1,0 +1,6 @@
+fully = no
+print(if fully then 2 else true)
+x = if fully then 2 else true
+print x
+print((if fully then 2 else true) + 1)
+print(if yes then 2 else true)

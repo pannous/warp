@@ -87,23 +87,47 @@ kind_test(case_name: text, subject: Node): Node := {
 	Key(applied("bracket_of", subject), Op.Ne, ø)
 }
 
-# a part written as a name binds it (`_` binds nothing); any other part is a value the part equals
+# a part written as a name binds it (`_` binds nothing), a case `Key(…)` matches that part in turn; any other part is
+# a value the part equals
 is_binding(part: Node): bool := is_name(part)
 
 arm_test(pattern: list, subject: Node): Node := {
+	tests = part_tests(pattern, subject)
+	conjunction_of(tests#1, tests[1..])
+}
+
+# the kind test of a case, then the tests of its parts, those of a nested case's after the kind test it reads them by
+part_tests(pattern: list, subject: Node): list := {
 	readers = case_readers[name_of(pattern#1)]
-	compared = (1 to #readers).filter(i => not is_binding(pattern#(i + 1)))
-	equalities = compared.map(i => Key(part_of(subject, readers#i), Op.Eq, pattern#(i + 1)))
-	conjunction_of(kind_test(name_of(pattern#1), subject), equalities)
+	tests = [kind_test(name_of(pattern#1), subject)]
+	for i in 1 to #readers {
+		part = pattern#(i + 1)
+		read = part_of(subject, readers#i)
+		nested = case_pattern(part)
+		if nested != ø { tests += part_tests(nested, read) } else if not is_binding(part) { tests += [Key(read, Op.Eq, part)] }
+	}
+	tests
 }
 
 conjunction_of(test: Node, equalities: list): Node := if #equalities == 0 then test else conjunction_of(Key(test, Op.And, equalities#1), equalities[1..])
 
 arm_value(pattern: list, subject: Node, result: Node): Node := {
-	readers = case_readers[name_of(pattern#1)]
-	bound = (1 to #readers).filter(i => is_binding(pattern#(i + 1)) and pattern#(i + 1) != symbol(other_arm))
+	bound = part_bindings(pattern, subject)
 	if #bound == 0 { return result }
-	List(bound.map(i => Key(pattern#(i + 1), Op.Assign, part_of(subject, readers#i))) + [result], Bracket.Round, Separator.Semicolon)
+	List(bound + [result], Bracket.Round, Separator.Semicolon)
+}
+
+# `left = key_of(n)` for each part a case names, a nested case's too
+part_bindings(pattern: list, subject: Node): list := {
+	readers = case_readers[name_of(pattern#1)]
+	bindings = []
+	for i in 1 to #readers {
+		part = pattern#(i + 1)
+		read = part_of(subject, readers#i)
+		nested = case_pattern(part)
+		if nested != ø { bindings += part_bindings(nested, read) } else if is_binding(part) and part != symbol(other_arm) { bindings += [Key(part, Op.Assign, read)] }
+	}
+	bindings
 }
 
 # the arms from the last back: an arm's test chooses its value, else what the arms after it give
@@ -129,6 +153,12 @@ match_block(subject: Node, block: Node, n: Node, variants: any): Node := match b
 	_: n
 }
 
+# `match f(x)` of `match f(x) {…}` as a value, the subject a call ending before the block: `((match f(x)) {…})`
+is_match_head(n: Node): bool := match n {
+	List(parts, Bracket.None, Separator.Space): #parts == 2 and parts#1 == symbol("match")
+	_: no
+}
+
 match_of(rest: Node, n: Node, variants: any): Node := match rest {
 	List(parts, Bracket.None, Separator.Space): { if #parts == 2 then match_block(parts#1, parts#2, n, variants) else n }
 	_: n
@@ -136,6 +166,7 @@ match_of(rest: Node, n: Node, variants: any): Node := match rest {
 
 node_match(n: Node, variants: any): Node := match n {
 	List(parts, Bracket.None, Separator.Space): {
+		if #parts == 2 and is_match_head(parts#1) { return match_block(parts#1#2, parts#2, n, variants) }
 		if #parts == 0 or parts#1 != symbol("match") { return n }
 		# `match n {…}` as a statement, `match (n {…})` as a value
 		if #parts == 3 then match_block(parts#2, parts#3, n, variants) else if #parts == 2 then match_of(parts#2, n, variants) else n
