@@ -1,6 +1,6 @@
 # A match over a node's cases (card pure-runs; Rust twin: src/lowering/types/node_cases.rs and destructuring.rs):
 # each arm tests the subject's kind and spelled parts, binds its named parts, then gives its result; an arm of a value,
-# `1: e`, `Color.Red: e`, tests the subject equals it:
+# `1: e`, `Color.Red: e`, `Red: e` of a declared variant, tests the subject equals it:
 #   match n { Key(left, Op.Colon, right): e; _: d }
 #   → if is_type(n, "key") and op_of(n) == ":" then (left = key_of(n); right = value_of(n); e) else d
 # A subject other than a name is evaluated once, into match·subject. A case of Op, Bracket or Separator anywhere,
@@ -8,6 +8,7 @@
 # guard) stays as written: refused downstream.
 use "walk.warp"
 use "phrase_blocks.warp"
+use "plain_enums.warp"
 
 # node_cases.rs spelling, as `warp lower` shows Rust's Op·text, Bracket·text and Separator·text
 spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
@@ -63,8 +64,10 @@ arm_result(arm: Node): Node := match arm {
 	_: arm
 }
 
-# `1`, "a", 'c', an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then): an arm the subject equals
-is_value_pattern(pattern: Node): bool := match pattern {
+# `1`, "a", 'c', an enum case `Color.Red` or `Color::Red` (`Op.Colon` is ":" by then), a variant the program declares
+# (`Red` of `enum Color { Red, Green }`): an arm the subject equals
+is_value_pattern(pattern: Node, variants: any): bool := match pattern {
+	Symbol(name): name in variants
 	Number(value): yes
 	Text(value): yes
 	Char(value): yes
@@ -73,9 +76,9 @@ is_value_pattern(pattern: Node): bool := match pattern {
 	_: no
 }
 
-is_case_arm(arm: Node): bool := {
+is_case_arm(arm: Node, variants: any): bool := {
 	pattern = arm_pattern(arm)
-	is_other_arm(pattern) or is_value_pattern(pattern) or case_pattern(pattern) != ø
+	is_other_arm(pattern) or is_value_pattern(pattern, variants) or case_pattern(pattern) != ø
 }
 
 kind_test(case_name: text, subject: Node): Node := {
@@ -103,37 +106,47 @@ arm_value(pattern: list, subject: Node, result: Node): Node := {
 }
 
 # the arms from the last back: an arm's test chooses its value, else what the arms after it give
-arm_chain(arms: list, subject: Node): Node := {
+arm_chain(arms: list, subject: Node, variants: any): Node := {
 	if #arms == 0 { return applied("switch_no_case", subject) }
 	pattern = arm_pattern(arms#1)
 	if is_other_arm(pattern) { return arm_result(arms#1) }
-	if is_value_pattern(pattern) { return chosen(Key(subject, Op.Eq, pattern), arm_result(arms#1), arm_chain(arms[1..], subject)) }
+	if is_value_pattern(pattern, variants) { return chosen(Key(subject, Op.Eq, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
 	case_parts = case_pattern(pattern)
-	chosen(arm_test(case_parts, subject), arm_value(case_parts, subject, arm_result(arms#1)), arm_chain(arms[1..], subject))
+	chosen(arm_test(case_parts, subject), arm_value(case_parts, subject, arm_result(arms#1)), arm_chain(arms[1..], subject, variants))
 }
 
 chosen(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
 
-matched(subject: Node, arms: list, n: Node): Node := {
-	if #arms == 0 or not arms.all(is_case_arm) { return n }
-	if is_name(subject) { return arm_chain(arms, subject) }
-	List([Key(symbol(subject_name), Op.Assign, subject), arm_chain(arms, symbol(subject_name))], Bracket.Round, Separator.Semicolon)
+matched(subject: Node, arms: list, n: Node, variants: any): Node := {
+	if #arms == 0 or not arms.all(arm => is_case_arm(arm, variants)) { return n }
+	if is_name(subject) { return arm_chain(arms, subject, variants) }
+	List([Key(symbol(subject_name), Op.Assign, subject), arm_chain(arms, symbol(subject_name), variants)], Bracket.Round, Separator.Semicolon)
 }
 
-match_block(subject: Node, block: Node, n: Node): Node := match block {
-	List(arms, Bracket.Curly, separator): matched(subject, arms, n)
+match_block(subject: Node, block: Node, n: Node, variants: any): Node := match block {
+	List(arms, Bracket.Curly, separator): matched(subject, arms, n, variants)
 	_: n
 }
 
-match_of(rest: Node, n: Node): Node := match rest {
-	List(parts, Bracket.None, Separator.Space): { if #parts == 2 then match_block(parts#1, parts#2, n) else n }
+match_of(rest: Node, n: Node, variants: any): Node := match rest {
+	List(parts, Bracket.None, Separator.Space): { if #parts == 2 then match_block(parts#1, parts#2, n, variants) else n }
 	_: n
 }
 
-node_match(n: Node): Node := match n {
-	List(parts, Bracket.None, Separator.Space): { if #parts == 2 and parts#1 == symbol("match") then match_of(parts#2, n) else n }
+node_match(n: Node, variants: any): Node := match n {
+	List(parts, Bracket.None, Separator.Space): { if #parts == 2 and parts#1 == symbol("match") then match_of(parts#2, n, variants) else n }
 	Key(type_name, Op.Dot, case_name): spelled_case(type_name, case_name, n)
 	_: n
 }
 
-node_matches(program: any): any := bottom_up(program, node_match)
+# the cases of the enums the program declares (plain_enums.warp lowers them after this pass), by name
+case_names_of(enums: any): any := {
+	variants = {}
+	for name in enums.keys { for case in enums[name] { variants[case] = yes } }
+	variants
+}
+
+node_matches(program: any): any := {
+	variants = case_names_of(enums_in(program, {}))
+	bottom_up(program, n => node_match(n, variants))
+}

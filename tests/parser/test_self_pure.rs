@@ -69,6 +69,12 @@ fn enum_cases_run_pure() {
 	let color = "enum Color { Red, Green, Blue }";
 	let warmth = "warmth(c) := match c { Color.Red: \"warm\"; Color::Blue: \"cold\"; _: \"mild\" }";
 	runs_pure("enum_arms", &format!("{color}\n{warmth}\nwarmth(Color.Red) + warmth(Color.Green)"), "warmmild");
+	let cents = "cents(coin) := match coin { Penny: 1; Dime: 10; _: 0 }";
+	runs_pure(
+		"bare_case_arms",
+		&format!("enum Coin {{ Penny, Dime }}\n{cents}\ncents(Dime) + cents(Coin.Penny)"),
+		"11",
+	);
 }
 
 /// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
