@@ -48,7 +48,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "warp-runtime/webview", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph", "dep:objc2", "dep:cpal", "dep:midir"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "warp-runtime/webview", "warp-runtime/profiling", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph", "dep:objc2", "dep:cpal", "dep:midir"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
