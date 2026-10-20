@@ -1,5 +1,5 @@
 # `x is int`, `n is symbol` (card pure-type-tests): `x is T` of a type word T no variable, parameter or loop variable
-# of the program names (a field `{symbol: …}` does not), or of a type the program declares, is the type test
+# in reach names (a field `{symbol: …}` does not), or of a type the program declares, is the type test
 # is_type(x, "T"), as Rust's src/lowering/types/type_tests.rs lowers it (plain_enums.warp answers it for an enum);
 # every other `x is v` is `x == v`. Only `is` tests a type: `3 == int` compares 3 with the type (no)
 use "walk.warp"
@@ -23,7 +23,14 @@ type_test_node(n: Node, scope: any): Node := match n {
 	_: n
 }
 
-type_tests(program: any): any := {
-	scope = scope_of(program)
-	bottom_up(program, n => type_test_node(n, scope))
+# a function's body sees the program's names outside function bodies and its own parameters and locals, as Rust's
+# Names::within: `x is key` in one function stays a type test beside a local `key` of another
+scoped_type_tests(n: Node, outer: any): Node := {
+	if is_function_definition(n) {
+		inner = scope_with(outer, nodes_in(n))
+		return bottom_up(n, x => type_test_node(x, inner))
+	}
+	type_test_node(children(n, x => scoped_type_tests(x, outer)), outer)
 }
+
+type_tests(program: any): any := scoped_type_tests(program, scope_with({}, outer_nodes_in(program)))

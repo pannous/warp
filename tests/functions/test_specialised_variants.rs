@@ -29,3 +29,15 @@ fn an_unbounded_specialisation_keeps_the_call() {
 		eq!(warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs"), 101);
 	}
 }
+
+#[test]
+fn a_parameter_the_body_changes_keeps_its_argument() {
+	// `at` counts up from the constant 0: no variant with 0 in its place (`0 = 0 + 1`)
+	#[cfg(feature = "native")]
+	let code = "skip(text, at, n) := { while at < n and text[at] == ' ' { at = at + 1 }; at }; t = \"  x\"; skip(t, 0, t.length)";
+	#[cfg(feature = "native")]
+	{
+		let module = warp::pipeline::compile(code).expect("compiles");
+		eq!(warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs"), 2);
+	}
+}

@@ -1,0 +1,17 @@
+chain(name: text): list := {
+	if name == "for" then [1]
+	else []
+}
+gathered(name: text): list := {
+	found = []
+	found += chain(name)
+	found
+}
+both_empty(): list := {
+	xs = []
+	xs += []
+	xs
+}
+print(#gathered("print"))
+print(#gathered("for"))
+print(#both_empty())
