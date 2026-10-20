@@ -178,7 +178,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
+# unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {}; unannotated: any = {} }
 
 module = Module({}, [])
 
@@ -1119,8 +1120,19 @@ def call_values(f: Function, values: any): list {
 	result = if f.result == pending then declared_result(f) ?? pending else f.result
 	if result == pending { module.saw_pending = yes }
 	code = []
-	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
+	for i in 0..<#values {
+		widen_parameter(f, i, values[i]#1)
+		code += converted(values[i], f.kinds[i])
+	}
 	[result, code + [op.call] + uleb(f.index)]
+}
+# a call of a function still compiling (its own body, a cycle) passing an argument its unannotated parameter does not
+# hold, `f(xs#1)` inside `f(n)` first called with a list: the parameter takes their joint kind from f's next reading on
+widen_parameter(f: Function, i: int, kind: text) := {
+	held = f.kinds[i]
+	if f.result != pending or not (parameter_key(f, i) in module.unannotated) or kind == pending or held_as(kind, held) { return }
+	joint = joint_kind(held, kind)
+	if joint in type_bytes or joint in references { f.widened[parameter_key(f, i)] = joint }
 }
 
 ## closures (Rust's lowering: src/lowering/definitions/closures.rs)
@@ -1807,6 +1819,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		if parameter_key(f, i) in module.literal_arguments {
 			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
 		}
+		if annotation == ø { module.unannotated[parameter_key(f, i)] = yes }
 		parameter_kinds += [if annotation == ø then given else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
@@ -1816,6 +1829,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	widened = -1
 	while widened != #f.widened.keys {
 		widened = #f.widened.keys
+		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f, i) in f.widened then f.widened[parameter_key(f, i)] else parameter_kinds[i])
 		f.result = pending
 		first = new_scope(f)
 		result = expression_code(first, f.body)#1
