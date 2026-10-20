@@ -10,6 +10,7 @@
 # recursive call knows it.
 use "walk.warp"
 use "words.warp"
+use "signatures.warp"
 use math
 use os
 
@@ -97,7 +98,12 @@ float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
 # the map words read after a dot, `m.keys`, unless m has an entry of that name
-member_words = {keys: "map_keys", values: "map_values"}
+# `m.keys`, `t.chars`, `t.codepoints`: a member name naming a library word of one value, by itself or as a prelude alias,
+# is that word's call (a node's entry of that name first), as Rust's library_words.rs method_call; else ø
+member_word(name: text): any := {
+	word = library_words.get(unaliased(name)) ?? ""
+	if word in module.runtime and #module.runtime[word].parameters == 1 then word else ø
+}
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
 byte_count_words = {bytecount: yes, byte_size: yes}
 # the kinds `+` joins as texts
@@ -1604,9 +1610,9 @@ def key_expression(body: Body, n: any): list {
 	if operator == "." and right is symbol and name_of(right) in counting_properties {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
-	if operator == "." and right is symbol and name_of(right) in member_words {
-		word = member_words[name_of(right)]
-		return field_or_word(body, expression_code(body, left), name_of(right), value => runtime_call(word, [["node", boxed(value)]]))
+	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
+		word = member_word(name_of(right))
+		return field_or_word(body, expression_code(body, left), name_of(right), value => runtime_call(word, [value]))
 	}
 	if operator == "." and right is symbol and name_of(right) in byte_count_words { return runtime_call("node_bytes", [["node", boxed(expression_code(body, left))]]) }
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
