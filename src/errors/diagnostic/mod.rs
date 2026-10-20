@@ -11,7 +11,7 @@ pub use asks::*;
 mod positions;
 pub use positions::*;
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Diagnostic {
 	pub message: String,
 	pub line: usize,
@@ -36,7 +36,7 @@ pub struct Diagnostic {
 /// How much a diagnostic matters (user, 2026-10-13: hint < weak < normal < severe; errors are no level, they stop the
 /// program). A hint prefers another form, a weak warning notices how the program runs (`@gpu` maps on the CPU), a
 /// normal warning a likely mistake, a severe one code that can never do what it says (a handler nothing emits)
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Level {
 	Hint,
 	Weak,
@@ -298,6 +298,10 @@ struct Diagnostics {
 	/// How many capture_hints scopes are open: hints are recorded only for them (nobody else reads them)
 	hint_captures: usize,
 	captured_hints: Vec<Diagnostic>,
+	/// How many recording_said scopes are open, and what they said and assumed, in order: a kept program says it again
+	/// when it runs from its kept module (program_cache.rs)
+	spoken_recordings: usize,
+	spoken: Vec<Said>,
 	/// Under HintMode::Once, the hints shown already
 	shown_hints: std::collections::HashSet<String>,
 }
@@ -342,6 +346,51 @@ pub(crate) fn note_said() {
 	diagnostics(|diagnostics| diagnostics.said += 1);
 }
 
+/// A diagnostic said (say) or a default taken (ask), as a compile's run from its kept module repeats it
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub enum Said {
+	Spoken(Diagnostic),
+	Assumed(Diagnostic),
+}
+
+/// Run `body`, also giving what it said and assumed meanwhile
+pub fn recording_said<R>(body: impl FnOnce() -> R) -> (R, Vec<Said>) {
+	let start = diagnostics(|diagnostics| {
+		diagnostics.spoken_recordings += 1;
+		diagnostics.spoken.len()
+	});
+	let result = body();
+	diagnostics(|diagnostics| {
+		diagnostics.spoken_recordings -= 1;
+		let spoken = diagnostics.spoken.split_off(start);
+		if diagnostics.spoken_recordings > 0 {
+			diagnostics.spoken.extend(spoken.iter().cloned());
+		}
+		(result, spoken)
+	})
+}
+
+/// Say again what a compile said, and take its defaults again (a later runtime error names them)
+pub fn say_again(said: Vec<Said>) {
+	for said in said {
+		match said {
+			Said::Spoken(diagnostic) => {
+				say(diagnostic);
+			}
+			Said::Assumed(diagnostic) => diagnostics(|diagnostics| diagnostics.assumptions.push(diagnostic)),
+		}
+	}
+}
+
+/// Keep `said` for the open recording_said scopes
+fn record(said: impl FnOnce() -> Said) {
+	diagnostics(|diagnostics| {
+		if diagnostics.spoken_recordings > 0 {
+			diagnostics.spoken.push(said());
+		}
+	});
+}
+
 /// Compile-time diagnostics: the first one the warning mode fails at is the error; otherwise each is said (say), but
 /// those said "got it" to
 pub fn report(diagnostics: &[Diagnostic]) -> Result<(), Node> {
@@ -368,6 +417,7 @@ pub fn say(diagnostic: Diagnostic) -> bool {
 		return false;
 	}
 	note_said();
+	record(|| Said::Spoken(diagnostic.clone()));
 	let printed = is_shown(diagnostic.level);
 	if printed {
 		print(&diagnostic);
