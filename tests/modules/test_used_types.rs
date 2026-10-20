@@ -17,3 +17,8 @@ fn a_field_typed_map_holds_a_map() {
 fn an_optional_result_of_a_used_files_type() {
 	is!("use \"tests/modules/used_types.warp\"\nfirst(x: int): Name? := if x > 0 then \"a\" else ø\nfirst(1)", "a");
 }
+
+#[test]
+fn an_alias_reaches_the_functions_of_a_file_using_its_file() {
+	is!("use \"tests/modules/used_types_shout.warp\"; shout(\"a\")", "a!");
+}
