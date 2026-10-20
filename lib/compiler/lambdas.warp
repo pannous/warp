@@ -122,6 +122,7 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 	number = fresh_number()
 	item = fresh_name("item", number)
 	result = fresh_name(word, number)
+	if word == "fold" { return statements([set_to(result, extras#1), for_each(item, list, [set_to(result, apply([result, item]))]), result]) }
 	called = apply([item])
 	if word == "map" { return statements([set_to(result, List([], Bracket.Square, Separator.Comma)), for_each(item, list, [grown(result, called)]), result]) }
 	if word == "filter" { return statements([set_to(result, List([], Bracket.Square, Separator.Comma)), for_each(item, list, [if_block(called, [grown(result, item)])]), result]) }
@@ -132,7 +133,6 @@ iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
 	}
 	if word == "any" { return statements([set_to(result, no), for_each(item, list, [if_block(called, [set_to(result, yes)])]), result]) }
 	if word == "all" { return statements([set_to(result, yes), for_each(item, list, [if_block(Key(ø, Op.Not, called), [set_to(result, no)])]), result]) }
-	if word == "fold" { return statements([set_to(result, extras#1), for_each(item, list, [set_to(result, apply([result, item]))]), result]) }
 	statements([set_to(result, ø), for_each(item, list, [set_to(result, called)]), result])
 }
 

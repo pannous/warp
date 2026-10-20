@@ -130,3 +130,22 @@ fn program_names_run_pure() {
 	runs_pure("statement_block", "add := { it + 1 }; add 2", "3");
 	runs_pure("value_definition", "limit := 3; f(a) := a > limit; f 4", "yes");
 }
+
+/// lib/compiler/lambdas.warp: iteration words over a lambda or a function loop, other lambdas are closures capturing
+/// their variables, a function's name is a value and a variable holding one is called (card pure-lambdas)
+#[test]
+fn lambdas_run_pure() {
+	runs_pure("map_lambda", "xs = [1, 2, 3]; xs.map(x => x * 10)", "[10 20 30]");
+	runs_pure("filter_function", "big(x) := x > 1; filter([1, 2, 3], big)", "[2 3]");
+	runs_pure("any_lambda", "[1, 2, 3].any(x => x > 2)", "yes");
+	runs_pure("fold_lambda", "fold([1, 2, 3], 10, (a, b) => a + b)", "16");
+	runs_pure("nested_maps", "xs = [1, 2]; xs.map(x => xs.map(y => x * y))", "[[1 2] [2 4]]");
+	runs_pure("captured", "n = 5; apply(f, x) := f(x); apply(x => x + n, 1)", "6");
+	runs_pure("function_value", "square(x) := x * x; twice(f, x) := f(f(x)); twice(square, 3)", "81");
+	runs_pure("returned_closure", "adder(n) := x => x + n; add2 = adder(2); add2(40)", "42");
+	runs_pure(
+		"mapped_parameter",
+		"scaled(xs, k) := each_item(xs, x => x * k); each_item(xs, f) := xs.map(f); scaled([1, 2], 4)",
+		"[4 8]",
+	);
+}
