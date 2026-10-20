@@ -237,7 +237,9 @@ pub fn insert_module_classes(program: Node) -> Node {
 		if module.first_error().is_some() {
 			continue; // the loader reports it
 		}
-		let definitions = module_statements(module);
+		// node.warp's Op, Bracket and Separator a module names (node_cases.rs) are its enums too: their declarations
+		// join the program with the module's classes, as its spelling functions join with its functions
+		let definitions = module_statements(crate::lowering::node_cases::lower(module));
 		// a package's uses, not a standard module's own (draw's `use math` stays draw's)
 		let reexported = if is_std { vec![] } else { modules_used_by(&definitions) };
 		for used in reexported {
@@ -254,7 +256,14 @@ pub fn insert_module_classes(program: Node) -> Node {
 				}
 				std_definitions.extend(definitions)
 			}
-			false => file_classes.extend(definitions.into_iter().filter(is_class)),
+			// one declaration per name: each module naming Op brings node.warp's
+			false => {
+				let declared: HashSet<String> = file_classes.iter().filter_map(name_declared_by).collect();
+				let new_class = |definition: &Node| {
+					is_class(definition) && name_declared_by(definition).is_none_or(|name| !declared.contains(&name))
+				};
+				file_classes.extend(definitions.into_iter().filter(new_class))
+			}
 		}
 		early.insert(path.canonicalize().unwrap_or(path));
 	}

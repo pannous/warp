@@ -30,8 +30,10 @@ fn eval_source(code: &str) -> Node {
 		return outcome;
 	}
 	crate::errors::diagnostic::begin_program(); // only the guesses made for this program explain its errors
-	if let Some(module) = crate::compiler::self_hosted::pure_module(code) {
-		return checked_markup(run_module(module));
+	match crate::compiler::self_hosted::pure_module(code) {
+		Some(Ok(module)) => return checked_markup(run_module(module)),
+		Some(Err(refusal)) => return refusal,
+		None => {}
 	}
 	match lawful_program(code) {
 		Ok(program) => {
@@ -567,7 +569,7 @@ pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 /// `compile` again when code generation called prelude words the program never named, so resolve did not load them
 /// (`n times [x]` calls filled_list): the second time resolve loads them as if called (card lib-from-runtime). The
 /// first compile already hinted the program
-fn loading_compiler_words<T>(compile: impl Fn() -> Result<T, Node>) -> Result<T, Node> {
+pub(crate) fn loading_compiler_words<T>(compile: impl Fn() -> Result<T, Node>) -> Result<T, Node> {
 	use crate::compiler::compile_context::{change, scoped};
 	let compiled = compile();
 	let missing = change(|context| std::mem::take(&mut context.missing_compiler_words));

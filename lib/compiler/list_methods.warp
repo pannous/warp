@@ -1,5 +1,6 @@
 # A list's methods written as calls on it (card pure-runs): `xs.push(v)` appends to the list the name holds,
-# `xs += [v]`, which emitter.warp grows in place while the list is unshared.
+# `xs += [v]`, which emitter.warp grows in place while the list is unshared. `x in xs` (a list's item, a map's key, a
+# text's part) is the runtime word collection_contains(xs, x), as Rust lowers it.
 use "walk.warp"
 use "phrase_blocks.warp"
 

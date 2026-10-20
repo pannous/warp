@@ -175,6 +175,7 @@ mod test_ported_calls;
 mod test_precomputed;
 mod test_preposition_calls; // card prepositions-call
 mod test_print_closure; // card print-closure
+mod test_print_effects_walked; // card print-effects-walked
 mod test_print_function_value; // card print-function
 mod test_property_access;
 mod test_property_assign;
@@ -223,5 +224,6 @@ mod test_untyped_predicate_passed; // card untyped-passed
 mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
+mod test_wasm_instruction_bodies; // card wasm-body
 mod test_whole_float_to_int_parameter;
 mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow // card is-early-return

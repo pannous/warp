@@ -1,7 +1,8 @@
 #!/bin/bash
 # The cloud test lane (card cloud-test-lane, notes/cloud_development.md "Cloud test lane"): a branch's tests run in a
 # `claude --cloud` session, a Linux VM of its own paid by the Cloud session credit, instead of the Mac's tests/queue.sh.
-#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] <branch> <tip> [filters…|--full]
+#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] [--env VAR=value…] <branch> <tip> [filters…|--full]
+#       --env: a setting of the test run alone (not the build: every setting of a tip shares one build)
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
 #       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
@@ -82,8 +83,14 @@ make_room() {
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
 run_tests_here() {
 	CLOUD_REPO=$PWD
-	local base=""
-	[ "$1" = "--on" ] && base=$2 && shift 2
+	local base="" settings=()
+	while true; do
+		case "${1:-}" in
+			--on) base=$2; shift 2 ;;
+			--env) settings+=("$2"); shift 2 ;;
+			*) break ;;
+		esac
+	done
 	local branch=$1 tip=$2; shift 2
 	local name started build_seconds test_seconds checkout lock_matches=""
 	name=$(run_name "$branch" "$tip")
@@ -131,7 +138,8 @@ run_tests_here() {
 			fi
 		done
 	fi
-	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never
+	# WARP_COMMIT: the build's name without its reflog (build.rs), so the next job on a commit of the same tree reuses it
+	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never WARP_COMMIT=${tip:0:9}
 	local build_start=$SECONDS disk
 	disk=$(make_room)
 	cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast --no-run > "$HERE_WORK/log.txt" 2>&1
@@ -153,16 +161,26 @@ run_tests_here() {
 			echo "cloud-test: the runtime stub's build failed, the executable tests build it themselves" >> "$HERE_WORK/log.txt"
 		fi
 	fi
+	# the file the --env settings name in WARP_EMIT_REFUSALS (scripts/self-hosted-suite.sh): emptied before the tests,
+	# its lines appended to the log after them (sent to stderr they reached the output the CLI tests check)
+	local refusals="" setting
+	for setting in ${settings[@]+"${settings[@]}"}; do
+		[[ "$setting" == WARP_EMIT_REFUSALS=* ]] && refusals=${setting#*=}
+	done
+	[ -n "$refusals" ] && rm -f "$refusals"
 	local test_start=$SECONDS
+	# the settings reach the tests alone: the build stays the same for every setting, so a warm VM builds a tip once
 	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
-		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
+		env ${settings[@]+"${settings[@]}"} cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
+	[ -n "$refusals" ] && [ -f "$refusals" ] && cat "$refusals" >> "$HERE_WORK/log.txt"
 	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" "$KNOWN_FAILURES" > "$HERE_WORK/summary.txt"
 	{
 		echo "run: $name"
 		echo "branch: $branch"
 		echo "tip: $tested"
 		echo "tests: ${*:-all}"
+		[ ${#settings[@]} -gt 0 ] && echo "env: ${settings[*]}"
 		echo "verdict: $(sed -n 's/^verdict: //p' "$HERE_WORK/summary.txt")"
 		[ $build_status -ne 0 ] && echo "build: FAILED (log.txt.gz)"
 		grep -v '^verdict: ' "$HERE_WORK/summary.txt"
@@ -398,7 +416,7 @@ launch() {
 		echo "cloud-test: $name already runs in https://claude.ai/code/${session#starting-}: waiting for that result" >&2
 		return
 	fi
-	push_job "$job" ${base[@]+"${base[@]}"} "$branch" "$tip" "$@"
+	push_job "$job" ${base[@]+"${base[@]}"} ${settings[@]+"${settings[@]}"} "$branch" "$tip" "$@"
 	cloud_prompt "$job" > "$folder/prompt.txt"
 	while [ -z "$url" ]; do
 		lock_pool; session=$(claim_session "$job"); unlock_pool
@@ -474,7 +492,7 @@ main() {
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}" "${4:-}"; exit ;;
 	esac
-	card="" wait=1 result_only="" base=()
+	card="" wait=1 result_only="" base=() settings=()
 	while [[ "${1:-}" == --* ]]; do
 		case "$1" in
 			--card) card=$2; shift 2 ;;
@@ -482,10 +500,11 @@ main() {
 			--result) result_only=1; shift ;;
 			--on-main) base=(--on main); shift ;;
 			--on) base=(--on "$2"); shift 2 ;;
+			--env) settings+=(--env "$2"); shift 2 ;;
 			*) break ;;
 		esac
 	done
-	[ $# -ge 2 ] || { sed -n '2,16p' "$0"; exit 2; }
+	[ $# -ge 2 ] || { sed -n '2,17p' "$0"; exit 2; }
 	if [ -z "$result_only" ]; then launch "$@" || exit; fi
 	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
 }

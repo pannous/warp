@@ -649,6 +649,14 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		None => definition,
 	};
 	let (head, op, body) = definition_parts(definition)?;
+	// `def gaps(n): Gaps := …`, `def f(x) as bool := …`: the result type on the head of the definition
+	let head = match result_typed_head(&head).filter(|(untyped, _)| result_type.is_none() && is_call_head(untyped)) {
+		Some((untyped, written_type)) => {
+			result_type = Some(written_type);
+			untyped
+		}
+		None => head,
+	};
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
 		return None;
 	};

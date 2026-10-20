@@ -8,7 +8,9 @@ Flow, only for sessions inside tmux (started by claude-remote.sh); desktop sessi
    cache creation tokens). Below the limit it stays silent.
 2. Above: it blocks the stop and asks the agent to write `~/.claude/handovers/<project>-<role>-<time>.md` (role = the
    tmux name minus the project prefix, e.g. `integrator`), to finish short background jobs and to name the others in
-   the handover (command, output file, what to do with the result). Asked up to 3 times; then `SWAP STALLED` goes to
+   the handover (command, output file, what to do with the result). The handover names the role file as
+   "rules: reread your role file <path>" and restates no rules; the replacement's prompt says the role file wins over
+   the handover. Asked up to 3 times; then `SWAP STALLED` goes to
    the log and the session keeps running.
 3. Handover exists: the old tmux session is renamed `<name>-retiring`, `claude-remote.sh <role> <dir> <prompt>` starts
    the replacement under the same tmux name. A failed spawn renames the old one back. The old one is killed once its

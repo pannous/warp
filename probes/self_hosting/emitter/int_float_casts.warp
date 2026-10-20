@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+# int(x), float(x) and `as int` of texts, floats, ratios and ints, through emitter.warp (WARP_SELF_HOSTED=1): 22,
+# as the Rust pipeline gives; int("x1") fails with invalid number in both
+digits = "12"
+point = "1.5"
+negative = -2.7
+int(digits) + int(negative) + int(3) + int(float(point) * 4) + float(point) * 2 + ((7/2) as int) - ("3" as int)

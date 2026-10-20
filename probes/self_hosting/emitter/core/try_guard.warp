@@ -1,0 +1,11 @@
+# emitter core: `try x else y` takes y when a runtime error is thrown inside x (runtime.warp's fail throws while a try runs)
+print try 1/0 else 7
+xs = [1, 2]
+print try xs#5 else 8
+print try 4 else 9
+first(items: any): any := try items#1 else "none"
+print first([5])
+first([])
+line_of(n: any): any := try n.line else 0
+print line_of(3)
+print line_of({line: 4})

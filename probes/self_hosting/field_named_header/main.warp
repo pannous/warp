@@ -1,0 +1,4 @@
+// a used file's class field named like a router word (`p.header`) is a field read: lib/router.warp stays out (expect
+// 418, WARP_SELF_HOSTED=1 WARP_EMIT_SURVEY=1 with an empty WARP_EMIT_REFUSALS file)
+use "page.warp"
+shown(Page{header: true, status: 418})

@@ -6,11 +6,16 @@ const RAN_PURE: &str = "pure: ran";
 
 /// The program's output and what the lane recorded for it
 fn pure_run(name: &str, code: &str) -> (String, String) {
+	lane_run("pure", name, code)
+}
+
+/// The program's output in the lane WARP_SELF_HOSTED names, and what the lane recorded for it
+fn lane_run(lane: &str, name: &str, code: &str) -> (String, String) {
 	let scratch = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
 	let record = scratch.join(format!("pure_{name}.txt"));
 	let _ = std::fs::remove_file(&record);
 	let run = crate::common::warp_command()
-		.env("WARP_SELF_HOSTED", "pure")
+		.env("WARP_SELF_HOSTED", lane)
 		.env("WARP_EMIT_REFUSALS", &record)
 		.env("WARP_MODULE_CACHE", scratch.join("self_hosted_stage_cache"))
 		.arg(code)
@@ -23,6 +28,14 @@ fn runs_pure(name: &str, code: &str, value: &str) {
 	let (output, record) = pure_run(name, code);
 	assert!(output.contains(value), "{code}: {output}");
 	assert_eq!(record.trim(), RAN_PURE, "{code}");
+}
+
+/// WARP_SELF_HOSTED=pure-only: no usual compile behind the lane, a program outside the core fails with its refusal
+#[test]
+fn pure_only_refuses_without_the_rust_compile() {
+	assert!(lane_run("pure-only", "only_core", "1 + 2").0.contains('3'));
+	let (output, _) = lane_run("pure-only", "only_refused", "nosuchword 3");
+	assert!(output.contains("outside the core: pure: the unknown name nosuchword"), "{output}");
 }
 
 #[test]
@@ -45,4 +58,44 @@ fn for_loops_run_pure() {
 fn match_values_run_pure() {
 	runs_pure("match_number", "f(x) := match x { 1: 10; 2: 20; _: 0 }; f(2) + f(5)", "20");
 	runs_pure("match_text", "g(w) := match w { \"hi\": 1; \"hello\": 2; _: 0 }; g(\"hello\")", "2");
+}
+
+/// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
+/// read, as parser.warp's expression, atom and continued do
+#[test]
+fn recursive_results_run_pure() {
+	let passed_on =
+		"def expression(p, depth) { if depth > 2 { return p }; continued(p, expression(p, depth + 1), depth) }";
+	runs_pure(
+		"passed_on",
+		&format!("{passed_on}; def continued(p, left, depth) := left + p * depth; expression(3, 0)"),
+		"12",
+	);
+	let mutual =
+		"def expression(p, depth) { if depth > 2 { return p }; left = atom(p, depth); continued(p, left, depth) }";
+	let atom = "def atom(p, depth) := if depth > 1 then p else expression(p, depth + 1)";
+	runs_pure(
+		"mutual",
+		&format!("{mutual}; {atom}; def continued(p, left, depth) := left + p * depth; expression(3, 0)"),
+		"12",
+	);
+}
+
+/// parser.warp reads a name glued to `!` as one word when the source defines it, and a tab between items of a line
+/// as a column separator (card parser-reads-2)
+#[test]
+fn bang_words_and_tab_columns_run_pure() {
+	runs_pure(
+		"bang_words",
+		"def is!(a, b) := a == b\ndef check!(x) := x > 2\ny = 3\n[is!(3, 3), is!(2, 3), check!(5), y != 4]",
+		"[yes no yes yes]",
+	);
+	runs_pure("tab_columns", "row = ['0-1'\t-1]; count(row)", "2");
+}
+
+// card parser-reads-string: parser.warp reads `\x41` and `\u{1b}` as their characters
+#[test]
+fn text_escapes_read_pure() {
+	runs_pure("hex_escape", "\"\\x41\\x42\"", "AB");
+	runs_pure("unicode_escape", "\"\\e[H\" == \"\\u{1b}[H\"", "yes");
 }

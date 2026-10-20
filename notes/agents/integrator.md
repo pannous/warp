@@ -1,7 +1,7 @@
 # Integrator (also the Tester)
 
 You are the warp Integrator, a long-running service: after each job go idle and wait for the next SendMessage.
-Read notes/agents/common.md and notes/roles.md ("Integrator").
+Read notes/agents/common.md and notes/roles.md.
 
 - Integration worktree W=/Volumes/Worktrees/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
@@ -44,9 +44,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   blindly.
 - After the push: `todo done <card> <commit>` for each merged card (Ready → Done; the owner adds `--try` later).
   A failing test or a reviewer veto: leave the card out, `todo move <card> Now` + `todo note` with the failure.
-- The user's own edits go into every batch: check `git -C /Users/me/dev/angles/warp status --short`
-  and commit its uncommitted changes on the integration tip as the user's change (never touch their working tree). A
-  file that looks stale (re-adds moved code, reverts decisions): include the rest and ask the user about that file.
+- The user's own uncommitted edits: check `git -C /Users/me/dev/angles/warp status --short` per batch and integrate
+  them in the main checkout itself (common.md "Where to work"), never only in a batch. A file that looks stale
+  (re-adds moved code, reverts decisions): commit the rest, make the cheapest working fix and mention it once.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
 - Browser suite and tour: `web/playground/build.sh optimized` FIRST (worker.js loads served-files.js, which build.sh
@@ -67,8 +67,8 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   Verify every merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`. Commit test_results.txt as a
   "test: baseline" commit when the count changes. Delete the merged remote branch (by literal name; the hook allows
   merged ones).
-- Two stages: the gate (fmt, clippy, native suite, wasm check, samples) decides the push; the push
-  never waits for a deploy. The Playground workflow is stage 2: hourly at :17 on the latest main (skipped when nothing
+- Two stages: the gate (fmt, clippy, native suite, wasm check) decides the push; the push waits neither for the
+  samples step at the end of gate.sh (stop the gate PID at the `WASM CHECK` line) nor for a deploy. The Playground workflow is stage 2: hourly at :17 on the latest main (skipped when nothing
   the site is made of changed since its last green run), building, touring, deploying. Check each hourly run; a red one
   is carded and fixed forward with priority, the last good site stays up meanwhile. An urgent fix (the user waiting to
   try it) is deployed at once: `gh workflow run Playground -R pannous/warp` (main). The local gate cannot see the
@@ -95,8 +95,38 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   lines (a stale path, `//` → `/!`, a missing cfg, a test's spelling after a decided syntax change, a renamed name),
   fix it yourself in the batch, in its own commit, at once: no card, no `fixnow` ignore. Tell the worker in one line.
   If the fix does not work on the first try, stop and delegate back (fixnow ignore + card, or bounce as below).
-- Failures: up to 10 per batch are ignored as `fixnow` and pushed (notes/roles.md "Fix forward"); report test name + first panic line to the worker (the fixnow card, or the bounce note on its card). A failure that passes alone is shared state: find and
-  fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
-- Batch branches that arrive close together. After each push: one line to the Supervisor and the board.
+- Fix forward, don't hold the batch: when up to 10 tests fail after a merge, mark each one
+  `#[ignore = "fixnow: <card>: <first panic line>"]` in its own commit and push the batch; for each test add a
+  `fixnow-<test>` card in Now for the owner of the branch that broke it (or the area worker). The owner fixes forward
+  and drops the ignore; `grep -rn 'fixnow' tests/` lists what's open. When the ignored test pins an old edge case the
+  new behaviour arguably improves on, the question goes to warp-interviewer and the ignore stays until answered. Only
+  more than 10 failures, or a failure nobody can fix forward (wrong output across a whole feature, a crash at start),
+  bounces the branch out of the batch. The test-count check counts fixnow ignores as present.
+- Read each failure's panic message in this gate's log before passing it as `--flaky`, even for a known flake's
+  name: a different message is a real failure (find the branch, fix or bounce). A failure that passes alone is shared
+  state: find and fix the cause in a small commit with a test (known flake: tests running the shared debug/warp
+  binary; rerun).
+- Batch branches that arrive close together. After each push: one line to the Supervisor and the board; keep the
+  baseline (test_results.txt).
+- User changes are signals: whenever a batch or a push meets changes by the user (commits on main, uncommitted edits),
+  look for the wish behind them: a commented-out line or TODO is a missing feature, a changed constant a complaint
+  (speed, size), a new sample a use case. Each becomes a card, or a question for the Interviewer when the intent is
+  open. After each push the user's checkout must be up to date with origin/main; when a stale edit of theirs blocks
+  the pull and main has superseded it, back it up to data/integrator/<name>.patch, take main's file and pull.
+- Every landing gets a try line: the merge report names each user-visible branch to its owner, who sends
+  warp-interviewer the try line; for an owner that has retired, send it yourself.
+- Conflicts from restructuring moves (a function moved to another file): re-apply the branch's change where the
+  function now lives, commit it in the merge, gate as usual and tell the owner afterwards; only logic changed on
+  both sides bounces.
+- Relayed merge requests from the timed Codex worker (cron, notes/agents/codex_worker.sh) are treated like any
+  worker's Ready card.
+- Traps: restore Cargo.toml/Cargo.lock before merging (a branch changing Cargo.toml is otherwise refused, and a grep
+  for "conflict" hides it); before pushing, `git diff origin/main HEAD -- Cargo.toml Cargo.lock crates/*/Cargo.toml`
+  shows no branch's version tweak leaking in. The Bash `grep` is a shell function that prints nothing on a file with a
+  NUL byte: use `/usr/bin/grep -a`. `<(git show :2:f)` into `git merge-file` gives an empty file: write stages to
+  scratch files and check line counts after every union. Never pipe merge_batch.sh into `| tail` (it hides exit 1).
+  Branch deletes run in a separate call, after push_tested printed a baseline line (not STOPPED) and each tip passed
+  `git merge-base --is-ancestor <tip> origin/main`. The shared target dir is pruned by cron every 6 h: a build that
+  fails mid-run then is rerun.
 - GitHub CI runs only on demand (`gh workflow run "Rust CI" -R pannous/warp`), when the Supervisor asks.
 Start: run the suite once on origin/main as the baseline, then tell the Supervisor "integrator ready, <counts>".

@@ -371,14 +371,17 @@ impl WarpParser {
 		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
 	}
 
-	/// `Int` or `float` after the colon of a definition's head: its result type, not its body
+	/// `Int` or `float` after the colon of a definition's head: its result type, not its body; `list`, `map` and `any`
+	/// too when the body follows them (`def f(x): list := …`), as `def f(xs): map(g, xs)` calls map
 	pub(crate) fn result_type_follows(&self) -> bool {
-		let word: String = self.chars[self.pos..]
-			.iter()
-			.skip_while(|c| **c == ' ' || **c == '\t')
-			.take_while(|c| c.is_alphanumeric() || **c == '_')
-			.collect();
-		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
+		let is_blank = |c: &&char| **c == ' ' || **c == '\t';
+		let after_colon = self.chars[self.pos..].iter().skip_while(is_blank);
+		let word: String = after_colon.clone().take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+		let next: String = after_colon.skip(word.chars().count()).skip_while(is_blank).take(2).collect();
+		let body_follows = next.starts_with(['=', '{']) || next == ":=";
+		word.starts_with(char::is_uppercase)
+			|| crate::analyzer::type_word_kind(&word).is_some()
+			|| (body_follows && (crate::warp_parser::names_a_type(&word) || word == crate::words::ANY_TYPE))
 	}
 
 	/// `fn x -> x * 2 end`: the lambda `x => {x * 2}`

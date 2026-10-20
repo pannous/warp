@@ -5,9 +5,7 @@
 //! warp compiler already compiles.
 //! A stage is a warp program answering one request, compiled once per worker thread: the compile of the stage program
 //! has thread-local state of its own (diagnostics, compile context), which a compile it runs in the middle of must keep.
-use crate::compiler::node_views::{
-	analysis_view, handled_plain_view, json_text, node_of_handled_view, plain_view, view_json,
-};
+use crate::compiler::node_views::{analysis_view, handled_plain_view, json_text, node_of_handled_view, view_json};
 use crate::node::Node;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
@@ -16,9 +14,14 @@ use std::sync::{Mutex, OnceLock};
 const SWITCH: &str = "WARP_SELF_HOSTED";
 /// WARP_SELF_HOSTED=front: parser.warp and the pass twins, the Rust emitter (a suite count of the front end alone)
 const FRONT_END_ONLY: &str = "front";
+/// WARP_SELF_HOSTED=emit: Rust's front end, emitter.warp (a program the warp front end cannot read yet still reaches it)
+const EMITTER_ONLY: &str = "emit";
 /// WARP_SELF_HOSTED=pure (card pure-runs): parser.warp, the warp passes, analyzer.warp and emitter.warp compile the
 /// source, Rust only carrying each stage's JSON to the next; a program the lane refuses compiles the usual way
 const PURE: &str = "pure";
+/// WARP_SELF_HOSTED=pure-only: the pure lane without the usual compile behind it, a refusal is the program's error (a
+/// count of what the warp compiler compiles alone)
+const PURE_ONLY: &str = "pure-only";
 /// The passes.warp request of the pure lane's front end: the view after parser.warp and every warp pass
 const PURE_STAGE: &str = "\"pure\"";
 /// WARP_SELF_ANALYSIS set beside the switch: analyzer.warp `kinds` analyzes each lowered program too and emitter.warp
@@ -59,8 +62,8 @@ const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
 /// The WARP_ settings that change no stage program's compile, so not its kept module either
 #[cfg(feature = "native")]
 const SETTINGS_BESIDE_STAGES: [&str; 4] = [SWITCH, ANALYSIS_SWITCH, REFUSALS_FILE, SURVEY_SETTING];
-/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses
-#[cfg(feature = "native")]
+/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses (also those
+/// runtime.warp names with `use`)
 const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
@@ -93,10 +96,13 @@ thread_local! {
 /// One request to a worker: its JSON, and where the result's view goes as JSON
 type Request = (String, Sender<String>);
 
+/// The JSON text a stage program reads as one of its setup files, or why it could not be made
+type Setup = fn() -> Result<String, Node>;
+
 /// A stage program, the JSON texts a worker writes once for it to read as `args#2`, `args#3`…, and its idle workers
 struct Stage {
 	program: &'static str,
-	setup: &'static [fn() -> String],
+	setup: &'static [Setup],
 	workers: Mutex<Vec<Sender<Request>>>,
 }
 
@@ -121,14 +127,19 @@ fn emits() -> bool {
 	switch().is_some_and(|value| value != FRONT_END_ONLY)
 }
 
+/// parser.warp and the pass twins run, unless the switch says EMITTER_ONLY
+fn reads() -> bool {
+	switch().is_some_and(|value| value != EMITTER_ONLY)
+}
+
 /// The program parser.warp parses from the source; None when not self-hosted
 pub fn parse(code: &str) -> Option<Node> {
-	enabled().then(|| stage(PARSE_STAGE, &json_text(code), &[]))
+	reads().then(|| stage(PARSE_STAGE, &json_text(code), &[]))
 }
 
 /// The node the warp twin of `pass` makes of `node`; None when not self-hosted or the pass has no twin
 pub fn pass(pass: Pass, node: &Node) -> Option<Node> {
-	if !enabled() {
+	if !reads() {
 		return None;
 	}
 	let (_, index) = TWINNED_PASSES.iter().find(|(twinned, _)| std::ptr::fn_addr_eq(*twinned, pass))?;
@@ -185,21 +196,25 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 }
 
 /// The module the pure lane compiles the source to; None when the lane is off or refuses the program, the refusal then
-/// recorded (REFUSALS_FILE) and logged, and the program compiled the usual way
-pub fn pure_module(code: &str) -> Option<crate::pipeline::CompiledModule> {
-	if switch() != Some(PURE) {
+/// recorded (REFUSALS_FILE) and logged, and the program compiled the usual way; under PURE_ONLY the refusal is the error
+pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule, Node>> {
+	let strict = switch() == Some(PURE_ONLY);
+	if !strict && switch() != Some(PURE) {
 		return None;
 	}
 	match pure_bytes(code) {
 		Ok(bytes) => {
 			record_lines(&format!("{RAN_PURE}\n"));
 			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false })
+			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
 		}
 		Err(refusal) => {
 			log::info!("pure lane refused: {refusal}");
-			record_refusal(&format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE)));
-			None
+			let refused = refusal.starts_with(OUTSIDE_THE_CORE);
+			let refusal = format!("{OUTSIDE_THE_CORE}pure: {}", refusal.trim_start_matches(OUTSIDE_THE_CORE));
+			record_refusal(&refusal);
+			let failure = if refused { refusal } else { format!("the pure lane failed: {refusal}") };
+			strict.then(|| Err(crate::node::error(&failure)))
 		}
 	}
 }
@@ -257,7 +272,7 @@ fn module_of(answer: &str) -> Result<Vec<u8>, String> {
 
 /// The words a module imports from the host (src/host.rs), as JSON: {name: [[parameter kind…], [result kind…]]}, a kind
 /// as emitter.warp names it (an anyref is a "node")
-fn host_words() -> String {
+fn host_words() -> Result<String, Node> {
 	use wasm_encoder::ValType;
 	let kind = |value_type: &ValType| match value_type {
 		ValType::I64 => "int",
@@ -269,18 +284,35 @@ fn host_words() -> String {
 	let words = crate::host::HOST_WORD_SIGNATURES
 		.iter()
 		.map(|(name, parameters, results)| (name.to_string(), serde_json::json!([kinds(parameters), kinds(results)])));
-	serde_json::Value::Object(words.collect()).to_string()
+	Ok(serde_json::Value::Object(words.collect()).to_string())
 }
 
-/// The view of lib/compiler/runtime.warp lowered, as JSON
-fn runtime_words() -> String {
-	let lowered = std::fs::read_to_string(RUNTIME_WORDS)
+/// The view of lib/compiler/runtime.warp lowered, as JSON, its declared types shown as a program's are (`f(): int`
+/// keeps its result's kind); a warp older than lib/ may fail to lower it (card crash-3)
+fn runtime_words() -> Result<String, Node> {
+	runtime_source()
 		.map_err(|failure| crate::node::error(&failure.to_string()))
-		.and_then(|source| crate::pipeline::lower(&source));
-	match lowered {
-		Ok(lowered) => view_json(&plain_view(&lowered)),
-		Err(failure) => panic!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()),
+		.and_then(|source| crate::pipeline::lower(&source))
+		.map(|lowered| view_json(&analysis_view(&lowered)))
+		.map_err(|failure| {
+			crate::node::error(&format!("lib/compiler/runtime.warp does not lower: {}", failure.serialize()))
+		})
+}
+
+/// runtime.warp with the modules its `use <name>` lines name in its place, after it: their words become runtime words,
+/// compiled into a module only when called
+fn runtime_source() -> std::io::Result<String> {
+	let source = std::fs::read_to_string(RUNTIME_WORDS)?;
+	let mut joined = String::new();
+	let mut used = String::new();
+	for line in source.lines() {
+		match line.strip_prefix("use ") {
+			Some(name) => used += &std::fs::read_to_string(format!("{LIBRARY}/{}.warp", name.trim()))?,
+			None => joined += line,
+		}
+		joined.push('\n');
 	}
+	Ok(joined + &used)
 }
 
 /// The node of the view the stage gives, its data handles the nodes in `handles`; a warp failure is an error node, so the program fails as it should
@@ -333,9 +365,13 @@ struct StageProgram {
 
 impl StageProgram {
 	fn new(stage: &Stage, input: PathBuf) -> Self {
-		let setup_file = |(index, setup): (usize, &fn() -> String)| {
+		let mut failed_setup = None;
+		let setup_file = |(index, setup): (usize, &Setup)| {
 			let file = input.with_extension(format!("setup-{index}.json"));
-			let _ = std::fs::write(&file, kept_setup(&format!("{}\nsetup {index}", stage.program), *setup));
+			match kept_setup(&format!("{}\nsetup {index}", stage.program), *setup) {
+				Ok(json) => drop(std::fs::write(&file, json)),
+				Err(failure) => failed_setup = Some(failure),
+			}
 			file
 		};
 		let setup: Vec<PathBuf> = stage.setup.iter().enumerate().map(setup_file).collect();
@@ -346,7 +382,10 @@ impl StageProgram {
 		);
 		use crate::compiler::compile_context::scoped;
 		// the stage reads warp's lib/ alone, whatever folder warp runs in (a program's text.warp is no `text` of it)
-		let module = scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(stage.program));
+		let module = match failed_setup {
+			Some(failure) => Err(failure),
+			None => scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(stage.program)),
+		};
 		StageProgram { module, input, setup }
 	}
 
@@ -374,23 +413,23 @@ impl Drop for StageProgram {
 
 /// The setup JSON `setup` makes, or the one kept under `name` (lowering the runtime words takes seconds)
 #[cfg(feature = "native")]
-fn kept_setup(name: &str, setup: fn() -> String) -> String {
+fn kept_setup(name: &str, setup: Setup) -> Result<String, Node> {
 	use crate::run::module_cache::{keep_bytes, kept_bytes};
 	let key = stage_key(name);
 	let kept = key.as_deref().and_then(|key| kept_bytes(key, SETUP_EXTENSION));
 	if let Some(json) = kept.and_then(|bytes| String::from_utf8(bytes).ok()) {
-		return json;
+		return Ok(json);
 	}
-	let json = setup();
+	let json = setup()?;
 	if let Some(key) = key {
 		keep_bytes(&key, SETUP_EXTENSION, json.as_bytes());
 	}
-	json
+	Ok(json)
 }
 
 /// The setup JSON of a stage program made; the browser build keeps nothing
 #[cfg(not(feature = "native"))]
-fn kept_setup(_name: &str, setup: fn() -> String) -> String {
+fn kept_setup(_name: &str, setup: Setup) -> Result<String, Node> {
 	setup()
 }
 

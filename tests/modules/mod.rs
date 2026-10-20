@@ -75,14 +75,17 @@ mod test_std_qualified;
 mod test_std_random;
 mod test_std_reflection_hints; // card function-repeat
 mod test_std_regex;
+mod test_std_replace_label; // card like-tea
 mod test_std_shadowed_names; // card libm-function
 mod test_std_time;
 mod test_std_time_zones; // card time-zones-warp
 mod test_std_uncertain; // card uncertain-warp
 mod test_std_words; // card std-word
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_two_used_files;
 mod test_use_modules;
 mod test_use_several; // card std-use
 mod test_used_module_bare_words; // card one-dispatch
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
-mod test_wasm_modules; // card read-chron // card map-key
+mod test_wasm_modules; // card read-chron // card map-key // card two-used-files

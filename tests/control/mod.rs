@@ -7,6 +7,7 @@ mod test_await_any_unwarned; // card await-warns
 mod test_await_any_values;
 mod test_await_any_variables;
 mod test_await_go;
+mod test_bang_words; // card warp-is-tests
 mod test_bare_try; // card failed-raised
 mod test_block_assigns_outer;
 mod test_block_parameter_calls; // card repeats-loop
@@ -61,6 +62,7 @@ mod test_empty_block_binding;
 mod test_empty_bodies;
 mod test_empty_reset_in_if;
 mod test_error_branch_kind;
+mod test_error_classes;
 mod test_error_fields; // card error-field
 mod test_error_not_in_data;
 mod test_error_value_return;
@@ -234,6 +236,7 @@ mod test_task_returning_function;
 mod test_task_signals;
 mod test_task_values;
 mod test_tasks;
+mod test_test_pairs; // decision warp-is-tests: tab-separated test pairs
 mod test_text_loop_value;
 mod test_text_patterns; // card text-patterns
 mod test_threads;
