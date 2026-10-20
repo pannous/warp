@@ -25,3 +25,11 @@ fn a_parameter_is_not_another_functions_local_of_that_name() {
 fn a_local_named_like_a_function_heads_a_list_as_its_value() {
 	is!("held(a, suffix) := a; f(x) := { held = x; [held, 1] }; f(2)", warp::warp_parser::parse("[2 1]"));
 }
+
+/// A function ending in a local named like a function returns the local's value, no function value: a variable it is
+/// assigned to elsewhere does not turn a same-named local function into closure calls (card standalone: clauses.warp's
+/// `test = test_of(…)` beside emitter.warp's `test = x => …`)
+#[test]
+fn a_local_named_like_a_function_returned_is_no_function_value() {
+	is!("condition(x) := x\nj(cs: list): any := { condition = cs#1; condition }\nt_of(n: int): any := j([n])\nother(n: int): any := { test = t_of(n); test }\nboth(a, b, code) := { test = x => x + code; test(a) + test(b) }\nboth(1, 2, 10)", 23);
+}

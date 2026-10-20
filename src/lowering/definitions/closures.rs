@@ -559,6 +559,22 @@ impl FunctionValues {
 		}
 	}
 
+	/// Does `function` end in a function value: a name it binds itself (`condition = cs#1; condition` beside a function
+	/// condition) is one only when assigned one
+	fn returns_function_value(&self, function: &crate::compiler::context::UserFunctionDef) -> bool {
+		let last = tail(&function.body);
+		match last.drop_meta() {
+			Node::Symbol(name) => {
+				let parameters = function.params.iter().map(|param| param.name.clone()).collect();
+				match crate::program_names::bound_in_body(parameters, &function.body).contains(name) {
+					true => self.variables.contains(name),
+					false => self.is_function_value(last),
+				}
+			}
+			_ => self.is_function_value(last),
+		}
+	}
+
 	/// A list of function values: a literal holding one, another such list, one with more appended (`out + [f]`, what
 	/// `xs.map(n => (x => x + n))` builds), a signal's listeners, or a block that ends in one
 	fn is_function_list(&self, node: &Node) -> bool {
@@ -590,7 +606,7 @@ impl FunctionValues {
 			let returning: HashSet<String> = context
 				.user_functions
 				.values()
-				.filter(|function| self.is_function_value(tail(&function.body)))
+				.filter(|function| self.returns_function_value(function))
 				.map(|function| function.name.clone())
 				.collect();
 			let (mut variables, mut lists) = (HashSet::new(), HashSet::new());
