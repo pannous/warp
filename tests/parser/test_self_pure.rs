@@ -282,3 +282,12 @@ fn field_defaults_run_pure() {
 	runs_pure("brace_defaults", "class counter{n=0; step:int=1}; c = counter{}; c.n + c.step", "1");
 	runs_pure("optional_field", "class opt { a: int; b? }; opt(4).a", "4");
 }
+
+/// lib/compiler/emitter.warp: a named argument `name = value` takes its parameter's or field's place (P37), a left-out
+/// one its default (card pure-named-arguments)
+#[test]
+fn named_arguments_run_pure() {
+	runs_pure("named_call", "f(a, b) := a * 10 + b; f(b=2, a=7)", "72");
+	runs_pure("named_instance", "class P { x: int; y: int }; p = P(y=2, x=7); p.x * 10 + p.y", "72");
+	runs_pure("named_and_default", "class P { x: int; y: int = 5 }; P(x=1)", "P{x:1 y:5}");
+}

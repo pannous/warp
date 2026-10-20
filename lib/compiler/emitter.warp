@@ -462,8 +462,10 @@ def instance_value(body: Body, class_name: text, fields: any): list {
 # `Point(2, 3)`: the instance whose fields, in the order the class declares them, are the arguments
 def positional_instance(body: Body, class_name: text, arguments: any): list {
 	field_names = if class_name in module.classes then module.classes[class_name].keys else []
-	if #arguments > #field_names { return refuse("an instance of " + class_name + " given more values than fields") }
-	instance_of_fields(body, class_name, field_names[0..<#arguments], arguments)
+	slots = placed_arguments(field_names, arguments)
+	if not (slots is list) { return refuse("an instance of " + class_name + " given more values than fields") }
+	given = range_list(#slots).filter(i => slots[i] != ø)
+	instance_of_fields(body, class_name, given.map(i => field_names[i]), given.map(i => slots[i]#1))
 }
 # the instance of the class whose fields of these names hold these values
 def instance_of_fields(body: Body, class_name: text, field_names: any, field_values: any): list {
@@ -1132,8 +1134,31 @@ def return_value(body: Body, value: any): list {
 
 def call(body: Body, f: Function, arguments: any): list {
 	if #arguments > #f.parameters { return refuse_arguments(f, #arguments) }
-	given = arguments.map(a => expression(body, a))
+	slots = placed_arguments(f.parameters.map(p => name_of(p)), arguments)
+	if not (slots is list) { return refuse_arguments(f, #arguments) }
+	given = range_list(#slots).map(i => if slots[i] == ø then default_value(body, f, i, #arguments) else expression(body, slots[i]#1))
 	call_values(f, given + range_list(#f.parameters - #given).map(i => default_value(body, f, #given + i, #arguments)))
+}
+# `name = value` naming one of `names` (P37)
+is_named_argument(argument: any, names: any): bool := type(argument) is key and op_of(argument) == "=" and key_of(argument) is symbol and name_of(key_of(argument)) in names
+# the arguments in the places of `names`: the positional ones first, each named one (`f(b=2, a=7)`) in its name's place,
+# [argument] each, ø for a place left out; ø when a name is given twice. (The values are computed in the places'
+# order, not as written: P216 wants written order, which differs only for arguments with effects)
+placed_arguments(names: any, arguments: any): any := {
+	slots = []
+	for argument in arguments {
+		if is_named_argument(argument, names) {
+			name = name_of(key_of(argument))
+			at = range_list(#names).filter(i => names[i] == name)#1
+			while #slots <= at { slots += [ø] }
+			if slots[at] != ø { return ø }
+			slots[at] = [value_of(argument)]
+		} else {
+			if #slots >= #names { return ø }
+			slots += [[argument]]
+		}
+	}
+	slots
 }
 refuse_arguments(f: Function, count: int): any := refuse("a call of " + f.name + " with " + count + " arguments")
 # the default of f's parameter i a call leaves out, compiled where the call is: refused when it reads a parameter
