@@ -7,6 +7,7 @@ const FLOAT_AS_RATIONAL: &str = "probes/self_hosting/emitter/core/float_as_ratio
 
 #[test]
 fn float_as_rational_runs_as_rust_runs_it() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let inside = emitter_differential(&[PathBuf::from(FLOAT_AS_RATIONAL)], 1);
 	assert_eq!(inside, [FLOAT_AS_RATIONAL]);
 }
