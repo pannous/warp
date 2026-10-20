@@ -79,7 +79,7 @@ const SETUP_EXTENSION: &str = "json";
 const INPUT_FOLDER: &str = "warp-self-hosted";
 /// Stack of a worker's own frames: the stage program's compile recurses as deeply as a test thread's; the wasm stack
 /// the engines get comes on top (worker_stack)
-const WORKER_STACK: usize = 64 << 20;
+pub(crate) const WORKER_STACK: usize = 64 << 20;
 
 /// Computing time of one stage request: a compiler stage lowering a large program (parser.warp parses and lowers
 /// itself and the files it uses in about 70 s of CPU) is no runaway, so it gets more than a program's 60 s;
@@ -131,7 +131,7 @@ impl Stage {
 
 /// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses (also those
 /// runtime.warp names with `use`), resolved once per process (modules::library_folder)
-fn library() -> &'static std::path::Path {
+pub(crate) fn library() -> &'static std::path::Path {
 	static FOLDER: OnceLock<PathBuf> = OnceLock::new();
 	FOLDER.get_or_init(crate::modules::library_folder)
 }
@@ -251,8 +251,7 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 		Ok(Ok(bytes)) => {
 			record_lines(&format!("{RAN_PURE}\n"));
 			crate::wasm_emitter::write_debug_module(&bytes);
-			let needs_host = imports_from(&bytes, HOST_MODULE);
-			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
+			Some(Ok(module_of_bytes(bytes)))
 		}
 		Err(refusal) => {
 			log::info!("pure lane refused: {refusal}");
@@ -267,7 +266,7 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives;
 /// the program's compile error instead when the checks of the passes stage diagnose one
-fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
+pub(crate) fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
 	let checked = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
 	let failed = || format!("the passes stage failed: {checked}");
 	let parts: serde_json::Value = serde_json::from_str(&checked).map_err(|_| failed())?;
@@ -324,6 +323,12 @@ fn record_lines(lines: &str) {
 	let Some(file) = crate::setting(REFUSALS_FILE) else { return };
 	let appended = std::fs::OpenOptions::new().create(true).append(true).open(&file);
 	let _ = appended.and_then(|mut file| file.write_all(lines.as_bytes()));
+}
+
+/// The module of the bytes the warp compiler made: WASI always, the host when it imports a host word
+pub(crate) fn module_of_bytes(bytes: Vec<u8>) -> crate::pipeline::CompiledModule {
+	let needs_host = imports_from(&bytes, HOST_MODULE);
+	crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }
 }
 
 /// Does the module import a function of `module`
@@ -572,7 +577,7 @@ pub fn compiler_key() -> Option<&'static str> {
 /// path inside lib/, so an identical lib/ elsewhere (another worktree) reuses the kept modules; none when the binary has
 /// no path
 #[cfg(feature = "native")]
-fn stage_key(program: &str) -> Option<String> {
+pub(crate) fn stage_key(program: &str) -> Option<String> {
 	use sha2::{Digest, Sha256};
 	// canonical: macOS gives the path the binary was started by, `../../scratch/warp` keyed every folder apart
 	let binary = std::env::current_exe().ok()?.canonicalize().ok()?;

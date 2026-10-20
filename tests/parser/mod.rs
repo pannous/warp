@@ -74,6 +74,8 @@ mod test_self_sort; // card sort-warp
 mod test_self_time_arithmetic; // card time-arithmetic-warp
 #[cfg(feature = "native")]
 mod test_self_time_text; // card time-text-warp
+#[cfg(feature = "native")]
+mod test_warp_pure; // card warp-pure
 mod test_semicolon_square;
 mod test_spaced_children;
 mod test_spaced_optional_type;

@@ -66,6 +66,15 @@ compare with Rust stages; they retire with those lanes (decision self-hosting: t
 The same file runs from the command line with no switch at all: `warp lib/compiler/compiler.warp app.warp app.wasm`,
 then `warp app.wasm`. That is the independence the decision asks for; the Rust lane is only a convenience around it.
 
+### `warp pure <program.warp> [arguments…]` (card warp-pure, user 2026-10-20: "put everything in the binary")
+src/compiler/standalone.rs: compiler.warp's module, kept in ~/.cache/warp/modules under self_hosted.rs `stage_key`
+(binary + lib/), runs as `compiler.warp <source> <wasm> <folder> <lib>`; the module it writes runs with the program's
+arguments. The pure lane compiles compiler.warp; while it refuses (card pure-compiler-callee), the Rust pipeline does,
+and every run says `warp pure: compiler.warp, Rust-compiled` on stderr. It replaces probes/pure_chain/run.sh and
+~/dev/bin/warp-pure (their JSON hand-offs and Rust-compiled emit.warp).
+For compiler.warp to compile as one program the 11 cross-file clashes were renamed (user decision rename-clashes;
+list on card file-own-words, to undo once that rule lands).
+
 ### WARP_SELF_HOSTED=pure (alias pure-only)
 pure and pure-only become one lane with no fallback; `pure-only` stays as an alias with a note.
 pipeline::eval_source → self_hosted::pure_module(code) → (new, small) `standalone::compiled(code)`: kept compiler

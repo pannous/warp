@@ -66,9 +66,12 @@ const SERVE_COMMAND: &str = "serve";
 /// `warp lower --json <code>`: the lowered program as the JSON node view lib/compiler reads with `node_of(json(…))`,
 /// lossless where the serialized text is not (probes/self_hosting/emitter/emit_lowered.sh)
 const LOWER_JSON_COMMAND: &str = "lower --json";
+/// `warp pure <file> [arguments…]`: the program compiled by lib/compiler/compiler.warp, the warp compiler as one warp
+/// program, and run (src/compiler/standalone.rs)
+const PURE_COMMAND: &str = "pure";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 30] = [
-	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
+const COMMAND_WORDS: [&str; 31] = [
+	"run", "pure", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
 	"fetch", "dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version", "docs",
 	"wiki", "home", "lsp", "start",
 ];
@@ -333,6 +336,8 @@ fn run_command(args: &[String]) {
 			println!("{total} in {} files", paths.len());
 		}
 		std::process::exit(if failed > 0 { 1 } else { 0 });
+	} else if args[1] == PURE_COMMAND && args.get(2).is_some_and(|path| has_warp_extension(path)) {
+		print_and_exit(warp::compiler::standalone::run(std::path::Path::new(&args[2]), args[3..].to_vec()));
 	} else if let Some((only_run, path, program_arguments)) = program_file(args) {
 		// P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
 		warp::modules::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`
@@ -479,6 +484,7 @@ fn usage() {
 	// println!("Usage: warp [options] [file]");
 	println!("  warp <file.warp>     Run a warp file (env WARP_EXECUTABLE=1: also leave its standalone executable <file> next to it)");
 	println!("  warp run <file.warp> Run a warp file, never an executable");
+	println!("  warp pure <file.warp> Run a warp file compiled by the warp compiler written in warp (lib/compiler/compiler.warp)");
 	println!("  warp <file.wasm>     Run a wasm file (or a .cwasm from compile --aot)");
 	println!("  warp eval <code>     Evaluate code");
 	println!("  warp lower <code>    Show the program after the lowering passes (--json: as a node view)");
