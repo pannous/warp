@@ -6,6 +6,7 @@
 # to admit an Error stays unmarked: a variable of the scope `xs: [int or error] = …`, a parameter `f(xs: [int?])`.
 use "walk.warp"
 use "for_loops.warp"
+use "shapes.warp"
 
 list_item_mark = "data·item"
 field_mark = "data·field"
@@ -17,6 +18,8 @@ data_items(program: any): any := shown_in(program, admitting_errors(program), va
 # the node with its writes shown, admitting: the variables of its scope declared to admit an Error, maps: the variables
 # given a map literal, whose `m[k] = e` writes an entry
 shown_in(n: any, admitting: list, maps: list): any := {
+	# an attribute layer `[name, value, node]` is no list as written: only its node is walked
+	if is_attribute(n) { return attributed(value_of(n)#1, value_of(n)#2, shown_in(value_of(n)#3, admitting, maps)) }
 	if is_key(n, ":=") {
 		inside = admitting + parameters_admitting_errors(key_of(n)) + admitting_errors(value_of(n))
 		return Key(key_of(n), Op.Define, shown_in(value_of(n), inside, maps))
@@ -143,8 +146,10 @@ unmarked_item(item: any): any := {
 # any item but a literal, a nested list or map (whose items are marked themselves), a function and a layer the views
 # carry whole (a type, an error, an empty group): `e`, `f(x)`, `e+1`, `c ? e : 1`
 may_hold_an_error(item: any): bool := {
+	if is_attribute(item) { return may_hold_an_error(value_of(item)#3) }
 	if item is number or item is text or item is char or item is bool or item == ø or is_opaque(item) { return no }
 	if is_group(item) and bracket_of(item) in ["[", "{"] { return no }
 	not (is_key(item, "=>") or is_key(item, ":="))
 }
 is_opaque(n: any): bool := type(n) is key and key_of(n) == symbol(opaque_word)
+is_attribute(n: any): bool := type(n) is key and key_of(n) == symbol(attribute_word)
