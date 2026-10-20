@@ -471,11 +471,25 @@ def printed(program, lane, warp, refusals=None):
         return None, ""
 
 
+def whole_text(value):
+    """The text a value written or printed as one text holds («…», "…" or '…', escapes read), else None"""
+    if value.startswith("«") and value.endswith("»"):
+        return value[1:-1]
+    quoted = re.fullmatch(r"([\"'])((?:\\.|(?!\1).)*)\1", value, re.S)
+    return re.sub(r"\\(.)", r"\1", quoted.group(2)) if quoted else None
+
+
 def shown(value):
-    """A printed value or an expected column in one spelling: quotes, commas, spacing unified, bools as 1 and 0, every
-    falsy value 0 (the prelude's is!: `got == expected or (not got and not expected)`)"""
-    value = re.sub(r"[\s,]+", " ", value.strip().replace('"', "'"))
-    value = re.sub(r"'([^']*)'", r"\1", value)
+    """A printed value or an expected column in one spelling: a whole text as its characters, else quotes, commas,
+    spacing unified; bools as 1 and 0, every falsy value 0 (the prelude's is!: `got == expected or (not got and not
+    expected)`)"""
+    value = value.strip()
+    text = whole_text(value)
+    if text is not None:
+        value = text
+    else:
+        value = re.sub(r"[\s,]+", " ", value.replace('"', "'"))
+        value = re.sub(r"'([^']*)'", r"\1", value)
     words = {"true": 1.0, "yes": 1.0, **dict.fromkeys(FALSY, 0.0)}
     try:
         return float(value)

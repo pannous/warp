@@ -163,7 +163,7 @@ fn rewritten(node: Node, enums: &Enums) -> Node {
 	if let Node::Key(left, operator @ (Op::Eq | Op::Ne), right) = node.drop_meta() {
 		if let Some(enum_name) = enums.spelled_enum_of(left).or_else(|| enums.spelled_enum_of(right)) {
 			let spelled = |side: &Node| spelled_text(&enum_name, rewritten(side.clone(), enums));
-			return key(spelled(left), operator.clone(), spelled(right));
+			return key(spelled(left), *operator, spelled(right));
 		}
 	}
 	match node.map_children(|child| rewritten(child, enums)) {
