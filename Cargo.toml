@@ -152,6 +152,12 @@ debug = "line-tables-only"  # backtraces keep function names and file:line (cras
 split-debuginfo = "unpacked"  # Faster on macOS
 codegen-units = 16     # Rust default (256 was wasteful)
 
+# dependencies without debug info (warp-debug was 247 MB, ~118 MB of it symbols) and lightly optimized; the
+# entries for single packages below win over this one
+[profile.dev.package."*"]
+debug = false
+opt-level = 1
+
 # tests run the programs on wasmtime too: its GC at full speed (two million map entries took 40 s unoptimized)
 [profile.dev.package.wasmtime]
 opt-level = 3
