@@ -92,3 +92,18 @@ fn text_escapes_read_pure() {
 	runs_pure("hex_escape", "\"\\x41\\x42\"", "AB");
 	runs_pure("unicode_escape", "\"\\e[H\" == \"\\u{1b}[H\"", "yes");
 }
+
+/// card pure-follows-use: a used file's declarations, and those of the files it uses, reach the pure lane
+#[test]
+fn used_files_run_pure() {
+	let program = concat!(env!("CARGO_MANIFEST_DIR"), "/probes/self_hosting/pure/31_use_file.warp");
+	runs_pure("use_file", program, "[3 3]\n8\nyes");
+}
+
+/// card pure-lane-use: parser.warp reads the member after a dot as a name, `math.sqrt(16)` no √ (the lane refuses
+/// `use math` and the program compiles the usual way, from parser.warp's tree)
+#[test]
+fn a_member_named_like_a_prefix_word_reads_pure() {
+	let (output, _) = pure_run("member_sqrt", "use math\nprint math.sqrt(16)\nprint math.abs(-7)");
+	assert!(output.contains("4\n7"), "{output}");
+}
