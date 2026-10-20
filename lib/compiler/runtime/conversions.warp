@@ -55,14 +55,11 @@ float_checked(n: any): any := {
 	if is_null(n) == 1 or (kind_code(n) != 1 and kind_code(n) != 2) { returned_error("not a float") }
 	n
 }
-# `x: T = v` of a value known only at run time: v when it carries one of `names` (an instance of the class T or of a
-# class under it, a case of the enum T), else the run fails with "not a T", as Rust's
-type_checked(value: any, type_name: text, names: list): any := {
-	if is_null(value) == 0 and (kind_code(value) == 5 or marked_kind(value) == 6) {
-		carried = if kind_code(value) == 5 then node_text(value) else key_name(value)
-		for name in names { if text_order(node_text(name), carried) == 0 { return value } }
-	}
-	returned_error(text_join("not a ", type_name))
+# `x: T = v` of a class or enum T and a value known only at run time: v when it is an object (a symbol, key, block,
+# list or data: Rust's OBJECT_KINDS, src/wasm_emitter/declared_values.rs) or an error (of every type), else the run
+# fails with the message ("not a T")
+object_checked(value: any, message: text): any := {
+	if is_null(value) == 1 or kind_code(value) < 5 or kind_code(value) == 10 or kind_code(value) > 11 { returned_error(message) }
 	value
 }
 # a boxed text, symbol or character where a text is needed, a boxed yes/no where one is needed, a boxed list (ø the

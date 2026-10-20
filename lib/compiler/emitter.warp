@@ -158,12 +158,11 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
 # errors: the indices of the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
-# for an untyped field); variants its enums' bare cases; subtypes, by a class's or enum's name, the names declared
-# under it: its bare cases, the classes extending it
+# for an untyped field); variants its enums' bare cases
 # counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; subtypes: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
 
 module = Module({}, [])
 
@@ -748,25 +747,8 @@ collect_types(n: any): any := {
 record_type(name: any, body: any): any := {
 	if kind_of(name) == "symbol" { return module.classes[name#2] = field_types(body) }
 	if kind_of(name) != "attribute" { return refuse("a type named by " + kind_of(name)) }
-	if name#2 == "variants" {
-		for variant in name#3[3..] {
-			module.variants[variant#2] = yes
-			declared_under(declared_name(name#4), variant#2)
-		}
-	}
-	if name#2 == "extends" and kind_of(name#3) == "symbol" { declared_under(name#3#2, declared_name(name#4)) }
+	if name#2 == "variants" { for variant in name#3[3..] { module.variants[variant#2] = yes } }
 	record_type(name#4, body)
-}
-# the name of a declared type, under its attribute layers
-declared_name(name: any): text := if kind_of(name) == "symbol" then name#2 else declared_name(name#4)
-declared_under(type_name: text, name: text): any := {
-	module.subtypes[type_name] = (if type_name in module.subtypes then module.subtypes[type_name] else []) + [name]
-}
-# the names a value of the class or enum T may carry: T, its bare cases, the classes extending it and what is under them
-def admitted_names(type_name: text): list {
-	names = [type_name]
-	if type_name in module.subtypes { for name in module.subtypes[type_name] { names += admitted_names(name) } }
-	names
 }
 # a character given to a field typed text is that text (`"r"` is a character here)
 def texted(type: any, value: any): list { if value#1 == "char" and type in core_type_words and core_type_words[type] == "text" then shown_text(value) else value }
@@ -966,13 +948,15 @@ def declaration(body: Body, name: text, type_name: text, value: any): list {
 	body.declared[name] = declared_kinds[type_name]
 	assignment(body, symbol(name), value)
 }
-# `x: T = v` of a class or enum T the program declares: x holds an instance or a case of T, a node; a value known only
-# at run time is checked then (runtime.warp type_checked fails with "not a T", as Rust's), one of another kind refused
+# `x: T = v` of a class or enum T the program declares: x holds an object (an instance, also of a class that fits by
+# its fields, or a case of T), a node; a value known only at run time is checked then (runtime.warp object_checked
+# fails with "not a T", as Rust's), one of another kind refused
 def typed_declaration(body: Body, name: text, type_name: text, value: any): list {
 	if value#1 != "node" and value#1 != pending { return refuse("a " + value#1 + " given to a variable declared " + type_name) }
-	names = ["list", vector_code(admitted_names(type_name).map(admitted => boxed(text_value_of(admitted))))]
-	assignment(body, symbol(name), runtime_call("type_checked", [value, text_value_of(type_name), names]))
+	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
+# `a Shape`, `an Animal`, as Rust's error messages name a type
+with_article(name: text): text := (if "AEIOUaeiou".contains(name#1) then "an " else "a ") + name
 # `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
@@ -1922,7 +1906,6 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	for name in host.keys { if not (name in defined) { module.host[name] = host[name] } }
 	module.classes = {}
 	module.variants = {}
-	module.subtypes = {}
 	module.errors = {}
 	module.closures = []
 	module.dispatchers = []
