@@ -516,7 +516,7 @@ def text_value_of(name: text): list { ["text", text_bytes(name)] }
 # an int as an i32 index
 def index_code(value: any): list { converted(value, "int") + [op.i32_wrap_i64] }
 # `#x`: the characters of a text, the items of a list or map, either known only at run time
-def length(value: any): list {
+def length_code(value: any): list {
 	if value#1 == "text" { return runtime_call("text_count", [value]) }
 	if value#1 == "list" { return ["int", value#2 + gc_code(gc_ops.struct_get, [gc.list, 0]) + [op.i64_extend_i32_u]] }
 	if value#1 == "node" { return runtime_call("node_length", [value]) }
@@ -1440,7 +1440,7 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in length_words {
 		# `count = 0; count(users)`: Rust's "`count` is a variable here"
 		if name_of(n#1) in body.names { return refuse("the variable " + name_of(n#1) + " applied to a value") }
-		return length(expression_code(body, n#2))
+		return length_code(expression_code(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression_code(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression_code(body, n#2)) }
@@ -1528,8 +1528,8 @@ def key_expression(body: Body, n: any): list {
 	if operator in steps and right == ø { return assignment(body, left, operation(body, steps[operator], expression_code(body, left), number_value(1))) }
 	if operator == "-" and left == ø { return negation(body, expression_code(body, right)) }
 	if operator in logical_words { return logical(body, logical_words[operator], left, right) }
-	if operator == "#" and left == ø { return length(expression_code(body, right)) }
-	if operator == "." and right is symbol and name_of(right) in counting_properties { return length(expression_code(body, left)) }
+	if operator == "#" and left == ø { return length_code(expression_code(body, right)) }
+	if operator == "." and right is symbol and name_of(right) in counting_properties { return length_code(expression_code(body, left)) }
 	if operator == "." and right is symbol and name_of(right) in byte_count_words { return runtime_call("node_bytes", [["node", boxed(expression_code(body, left))]]) }
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
 	if operator == "." and right is symbol { return field_of(body, expression_code(body, left), name_of(right)) }
