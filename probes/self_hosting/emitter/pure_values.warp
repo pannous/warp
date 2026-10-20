@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+# values the pure lane (WARP_SELF_HOSTED=pure) got wrong: case beyond ASCII, a map made of ø, casts of texts known only
+# at run time, counting properties; prints STRASSE, αβγ привет, 5, 4, 12.5, 8, 1, 4, as the Rust pipeline does
+print upper("straße")
+print lower("ΑΒΓ Привет")
+d = {}
+d["A"] = 5
+e = {}
+e.x = 4
+print d["A"]
+print e.x
+items = ["12.5x", "7"]
+print float(slice(items[0], 0, 4))
+print items[1] as int + 1
+print items[1].bytecount
+print items.number + items.size

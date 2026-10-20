@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+# an instance whose typed fields take values known only at run time, checked then (parser.warp written_tree's
+# Parser{code: source, n: source.length, resumes: found.resumes, …}); a value the type refuses fails with
+# "not an int", "not a text", "not a bool", "not a float". Through emitter.warp: WARP_SELF_HOSTED=1. Gives 9
+class P { n: int; xs: list; t: text; b: bool; r: float }
+def f(x, y, t, b, r) := P{n: x xs: y t: t b: b r: r}
+p = f(3, [1], "ab", yes, 2)
+p.n + #p.xs + #p.t + (if p.b then 1 else 0) + p.r

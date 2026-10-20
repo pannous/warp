@@ -1,0 +1,5 @@
+// a class field named like a router word (`p.header`, `p.status`) is a field read, no call: lib/router.warp stays out
+// and emitter.warp compiles the program itself (expect 418, WARP_SELF_HOSTED=1 with an empty WARP_EMIT_REFUSALS file)
+class Page { header: bool; status: int }
+shown(p) := if p.header then p.status else 0
+shown(Page{header: true, status: 418})
