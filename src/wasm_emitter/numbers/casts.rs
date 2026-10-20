@@ -507,10 +507,10 @@ impl WasmGcEmitter {
 				func.instruction(&I::LocalTee(held));
 				self.emit_field(func, held, 0);
 				Self::emit_kind_test(func, Kind::Int as i64, I::I64Eq);
-				Self::emit_list(func, &[I::If(BlockType::Result(ValType::I32)), I::LocalGet(held)]);
+				Self::emit_list(func, &[I::If(BlockType::Result(ValType::I32)), I::LocalGet(held), I::RefAsNonNull]);
 				self.emit_call(func, "get_int_value");
 				self.emit_code_point_of_int(func);
-				Self::emit_list(func, &[I::Else, I::LocalGet(held)]);
+				Self::emit_list(func, &[I::Else, I::LocalGet(held), I::RefAsNonNull]);
 				self.emit_call(func, crate::wasm_emitter::reflection::library_ops::CODEPOINT_OF);
 				self.emit_call(func, "get_int_value");
 				Self::emit_list(func, &[I::I32WrapI64, I::End]);
