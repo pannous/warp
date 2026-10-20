@@ -58,8 +58,10 @@ symbol_words(n: any): list := {
 # the program with the prelude definitions it reaches after its own statements (its positions stay as written), the
 # program itself when it reaches none; each reached slice parsed once
 with_prelude(program: any, prelude: text): any := {
+	own_names = statements_in(program).map(declared_name)
+	aliases = prelude_aliases(prelude)
+	program = bottom_up(program, n => aliased_call(n, aliases, own_names))
 	program_parts = statements_in(program)
-	own_names = program_parts.map(declared_name)
 	slices = definition_slices(prelude).filter(slice => not (slice#1 in own_names))
 	reached = []
 	brought = []
@@ -79,4 +81,25 @@ with_prelude(program: any, prelude: text): any := {
 	if #brought == 0 { return program }
 	for definition_node in brought { program_parts += [definition_node] }
 	separated(bracketed(program_parts, ""), ";")
+}
+
+# `alias keys = map_keys` of the prelude: the word by each alias (Rust: src/modules/declarations.rs, an alias declares
+# nothing, its calls call the word)
+prelude_aliases(source: text): any := {
+	aliases = {}
+	for line in source.split("\n") {
+		if line.starts_with("alias ") {
+			sides = line[6 ..].split("=")
+			if #sides == 2 { aliases[sides#1.trim()] = sides#2.trim() }
+		}
+	}
+	aliases
+}
+# `keys(m)` as `map_keys(m)`: a call of an alias the program defines no word of calls the word; a variable or
+# parameter of that name (`size = 3`) stays
+aliased_call(n: any, aliases: any, own_names: any): any := {
+	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
+	called = name_of(n#1)
+	if not (called in aliases) or called in own_names { return n }
+	group_like(n, [symbol(aliases[called])] + items_of(n)[1 ..])
 }
