@@ -12,6 +12,11 @@ fn folder(name: &str) -> PathBuf {
 
 /// What `warp run program.warp` in the folder prints, with the folder's cache
 fn printed(folder: &Path) -> String {
+	run(folder).0
+}
+
+/// What `warp run program.warp` in the folder prints on stdout and on stderr, with the folder's cache
+fn run(folder: &Path) -> (String, String) {
 	let run = crate::common::warp_command()
 		.args(["--no-ask", "run", "program.warp"])
 		.current_dir(folder)
@@ -19,7 +24,8 @@ fn printed(folder: &Path) -> String {
 		.output()
 		.unwrap();
 	assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
-	String::from_utf8_lossy(&run.stdout).trim().to_string()
+	let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim().to_string();
+	(text(&run.stdout), text(&run.stderr))
 }
 
 /// The programs the folder's cache holds
@@ -78,4 +84,20 @@ fn a_file_the_program_writes_beside_it_keeps_its_cached_module() {
 	assert_eq!(printed(&folder), "5");
 	assert_eq!(printed(&folder), "5");
 	assert_eq!(cached_programs(&folder), 1);
+}
+
+// card program-cache-paths: `use "./parts/x.warp"` is kept until that file changes, and a run from the kept module says
+// the compile's warnings again
+#[test]
+fn a_module_used_by_its_path_and_a_warning_are_kept() {
+	let folder = folder("program_cache_path");
+	std::fs::create_dir_all(folder.join("parts")).unwrap();
+	std::fs::write(folder.join("program.warp"), "use \"./parts/words.warp\"\nprint bump(Round)").unwrap();
+	std::fs::write(folder.join("parts/words.warp"), "bump(x) := [x, 1]").unwrap();
+	let (first, warned) = run(&folder);
+	assert!(warned.contains("`Round` names nothing"), "{warned}");
+	assert_eq!(run(&folder), (first, warned));
+	assert_eq!(cached_programs(&folder), 1);
+	std::fs::write(folder.join("parts/words.warp"), "bump(x) := [x, 2]").unwrap();
+	assert!(printed(&folder).contains('2'));
 }
