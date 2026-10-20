@@ -1,7 +1,9 @@
 # `a + b`, `a += b` of values known only at run time, and int arithmetic that traps past 64 bits
 # `a + b` of values known only at run time: lists and texts join, numbers add
 node_add(a: any, b: any): any := {
-	# ø, also `[]` in the lowered program, beside a list is that list, beside a text "ø"; beside a number Rust fails
+	# ø, also `[]` in the lowered program, beside a list is that list (ø + ø the empty list), beside a text "ø"; beside
+	# a number Rust fails
+	if is_null(a) == 1 and is_null(b) == 1 { return a }
 	if is_null(a) == 1 and is_null(b) == 0 and kind_code(b) == 8 { return b }
 	if is_null(b) == 1 and is_null(a) == 0 and kind_code(a) == 8 { return a }
 	if textual_node(a) == 1 or textual_node(b) == 1 { return node_text(a) + node_text(b) }

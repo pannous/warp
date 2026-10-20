@@ -10,6 +10,7 @@
 # recursive call knows it.
 use "walk.warp"
 use "words.warp"
+use "signatures.warp"
 use math
 use os
 
@@ -103,7 +104,12 @@ float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
 # the map words read after a dot, `m.keys`, unless m has an entry of that name
-member_words = {keys: "map_keys", values: "map_values"}
+# `m.keys`, `t.chars`, `t.codepoints`: a member name naming a library word of one value, by itself or as a prelude alias,
+# is that word's call (a node's entry of that name first), as Rust's library_words.rs method_call; else ø
+member_word(name: text): any := {
+	word = library_words.get(unaliased(name)) ?? ""
+	if word in module.runtime and #module.runtime[word].parameters == 1 then word else ø
+}
 # `t.bytecount`, `t.byte_size`: the bytes of a text's UTF-8, 8 bytes an item of a list (Rust's node_bytes)
 byte_count_words = {bytecount: yes, byte_size: yes}
 # the kinds `+` joins as texts
@@ -1045,8 +1051,6 @@ def typed_declaration(body: Body, name: text, type_name: text, value: any): list
 	if value#1 != "node" and value#1 != pending { return refuse("a " + value#1 + " given to a variable declared " + type_name) }
 	assignment(body, symbol(name), runtime_call("object_checked", [value, text_value_of("not " + with_article(type_name))]))
 }
-# `a Shape`, `an Animal`, as Rust's error messages name a type
-with_article(name: text): text := (if "AEIOUaeiou".contains(name#1) then "an " else "a ") + name
 # `x: int? = v` (walk.warp's `line_of(n): int? := try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet (Rust's is), a value of another kind is refused
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
@@ -1643,8 +1647,12 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		word = library_words[name_of(n#1)]
 		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
-		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
-		if word == "floor_quotient" { for x in n[1..] { if expression_code(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
+		# `a /! b` of a ratio, a float or a value known only at run time floors the quotient as Rust does;
+		# floor_quotient takes ints only
+		if word == "floor_quotient" and #n == 3 {
+			values = n[1..].map(x => expression_code(body, x))
+			if values.any(value => value#1 != "int") { return floored(operation(body, "/", values#1, values#2)) }
+		}
 		return call(body, module.runtime[word], n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ran_without_error") { return ran_without_error(body, n#2) }
@@ -1755,9 +1763,9 @@ def key_expression(body: Body, n: any): list {
 	if operator == "." and right is symbol and name_of(right) in counting_properties {
 		return field_or_word(body, expression_code(body, left), name_of(right), length_code)
 	}
-	if operator == "." and right is symbol and name_of(right) in member_words {
-		word = member_words[name_of(right)]
-		return field_or_word(body, expression_code(body, left), name_of(right), value => runtime_call(word, [["node", boxed(value)]]))
+	if operator == "." and right is symbol and member_word(name_of(right)) != ø {
+		word = member_word(name_of(right))
+		return field_or_word(body, expression_code(body, left), name_of(right), value => runtime_call(word, [value]))
 	}
 	if operator == "." and right is symbol and name_of(right) in byte_count_words { return runtime_call("node_bytes", [["node", boxed(expression_code(body, left))]]) }
 	# `m.a`: the entry a of the map (or instance) m, as Rust lowers it to `m#("a"+1)`
