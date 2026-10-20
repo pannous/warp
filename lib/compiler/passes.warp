@@ -29,13 +29,14 @@ use "prefix_comparisons.warp"
 use "sleep_durations.warp"
 use "data_items.warp"
 use "lambdas.warp"
+use "min_max.warp"
 use "kind_changes.warp"
 
 passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [tries, definitions, preposition_heads, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [tries, definitions, preposition_heads, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, min_max, lambdas, for_loops, ranges, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
