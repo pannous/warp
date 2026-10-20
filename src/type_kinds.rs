@@ -45,6 +45,8 @@ const MARK_KIND_BITS: i64 = 24;
 const _: () = assert!((Kind::Function as i64) < MARK_KIND_BITS, "every Kind has its bit in the element mark");
 pub const MARK_KINDS_MASK: i64 = (1 << MARK_KIND_BITS) - 1;
 pub const MARK_BOOL_BIT: i64 = MARK_KIND_BITS;
+/// The bits of a mark, shifted down: what lies above them (the separator, other marks) is no part of it
+pub const MARK_BITS: i64 = MARK_KINDS_MASK | 1 << MARK_BOOL_BIT;
 /// The separator of a list (card keep-list: `,` `;` newline, space; 0 for none), in the kind field above the element
 /// mark; the bracket byte and the kind stay where they were, so whatever masks them reads them as before
 pub const SEPARATOR_SHIFT: i64 = 48;

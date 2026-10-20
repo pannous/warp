@@ -122,9 +122,14 @@ fn assigned_cases(program: &Node, enums: &Enums) -> HashMap<String, Option<Strin
 	assigned
 }
 
-/// `Op·text(value)`: the spelling of a case of a spelled enum, a text as it is (node_cases.rs spelling_functions)
+/// `Op·text(value)`: the spelling of a case of a spelled enum, a text as it is (node_cases.rs spelling_functions); a
+/// case written out is its spelling already, `Op.Add` "+", as node_matches.warp has it
 fn spelled_text(enum_name: &str, value: Node) -> Node {
-	call(&format!("{enum_name}·text"), vec![value])
+	let written_case = value.drop_meta().symbol_name().and_then(|case| node_cases::spelling(enum_name, case));
+	match written_case {
+		Some(spelling) => Node::Text(spelling),
+		None => call(&format!("{enum_name}·text"), vec![value]),
+	}
 }
 
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
