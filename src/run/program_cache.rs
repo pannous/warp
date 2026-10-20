@@ -20,6 +20,13 @@ use std::sync::OnceLock;
 pub const PROGRAM_EXTENSION: &str = "program";
 /// The settings that change a compile are named so
 const SETTINGS_PREFIX: &str = "WARP_";
+/// The WARP_ settings only a run reads: its time limit, its profile, the phase times, crash cards
+const RUN_SETTINGS: [&str; 4] = [
+	warp_runtime::fuel::TIME_LIMIT_VARIABLE,
+	warp_runtime::profile::PROFILE_VARIABLE,
+	crate::compiler::phase_times::SETTING,
+	crate::errors::crash_card::OFF_SWITCH,
+];
 /// The kept bytes: one byte of the imports the module needs, then the Compiled (postcard), then the module
 const NEEDS_HOST: u8 = 1;
 const NEEDS_WASI: u8 = 2;
@@ -132,10 +139,11 @@ fn keep_with(key: &str, module: &CompiledModule, compiled: &Compiled) {
 	crate::run::module_cache::keep_bytes(key, PROGRAM_EXTENSION, &bytes);
 }
 
-/// The WARP_ settings, which change a compile, sorted
+/// The WARP_ settings, which change a compile, sorted; not those only a run reads (a measured run compiled again)
 pub(crate) fn warp_settings() -> Vec<(String, String)> {
-	let mut settings: Vec<(String, String)> =
-		std::env::vars().filter(|(name, _)| name.starts_with(SETTINGS_PREFIX)).collect();
+	let mut settings: Vec<(String, String)> = std::env::vars()
+		.filter(|(name, _)| name.starts_with(SETTINGS_PREFIX) && !RUN_SETTINGS.contains(&name.as_str()))
+		.collect();
 	settings.sort();
 	settings
 }

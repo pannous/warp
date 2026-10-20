@@ -17,10 +17,16 @@ fn printed(folder: &Path) -> String {
 
 /// What `warp run program.warp` in the folder prints on stdout and on stderr, with the folder's cache
 fn run(folder: &Path) -> (String, String) {
+	run_with(folder, &[])
+}
+
+/// What `warp run program.warp` prints with these settings beside the folder's cache
+fn run_with(folder: &Path, settings: &[(&str, &str)]) -> (String, String) {
 	let run = crate::common::warp_command()
 		.args(["--no-ask", "run", "program.warp"])
 		.current_dir(folder)
 		.env(warp::run::module_cache::CACHE_VARIABLE, folder.join("cache"))
+		.envs(settings.iter().copied())
 		.output()
 		.unwrap();
 	assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
@@ -100,4 +106,14 @@ fn a_module_used_by_its_path_and_a_warning_are_kept() {
 	assert_eq!(cached_programs(&folder), 1);
 	std::fs::write(folder.join("parts/words.warp"), "bump(x) := [x, 2]").unwrap();
 	assert!(printed(&folder).contains('2'));
+}
+
+// card run-settings-keep: a setting only the run reads (its time limit, a profile, the phase times) runs the kept module
+#[test]
+fn a_run_only_setting_runs_the_kept_module() {
+	let folder = folder("program_cache_run_settings");
+	std::fs::write(folder.join("program.warp"), "print 6 * 7").unwrap();
+	assert_eq!(printed(&folder), "42");
+	assert_eq!(run_with(&folder, &[("WARP_TIME_LIMIT", "77"), ("WARP_PHASE_TIMES", "1")]).0, "42");
+	assert_eq!(cached_programs(&folder), 1);
 }
