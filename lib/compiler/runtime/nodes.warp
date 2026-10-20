@@ -17,29 +17,28 @@ key_node(left: any, operator: any, right: any): any := {
 	spelled = node_text(operator)
 	code = operator_code(spelled)
 	if code == 0 and spelled != "" { raised("unknown operator: " + spelled) }
-	keyed(code * 256 + 6, left, right)
+	keyed(code * KindUnit.Info + Kind.Key, left, right)
 }
-# `as_code(data e)`: e marked as code, of the type code (src/type_kinds.rs CODE_MARK, Rust's emit_as_code)
-code_mark(): int := 72057594037927936
-# the kind field without the code mark: `parse("a+1") == data (a+1)`
-is_code_marked(n: any): int := int_remainder(int_quotient(marked_kind(n), code_mark()), 2)
-code_free_kind(n: any): int := marked_kind(n) - is_code_marked(n) * code_mark()
+# `as_code(data e)`: e marked as code, of the type code (Rust's emit_as_code); the kind field without the code mark:
+# `parse("a+1") == data (a+1)`
+code_bit(n: any): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Code), 2)
+code_free_kind(n: any): int := marked_kind(n) - code_bit(n) * KindUnit.Code
 code_node(n: any): any := {
-	if is_null(n) == 1 or is_code_marked(n) == 1 { return n }
-	with_kind(n, marked_kind(n) + code_mark())
+	if is_null(n) or code_bit(n) == 1 { return n }
+	with_kind(n, marked_kind(n) + KindUnit.Code)
 }
 key_left(n: any): any := entry_key(n)
 key_right(n: any): any := key_value(n)
-key_operator(n: any): text := node_text(operator_spellings()#(int_remainder(int_quotient(marked_kind(n), 256), 256) + 1))
+# the byte above the Kind: a key's operator, a list's bracket, a time's form and more
+info_byte(n: any): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Info), KindUnit.Info)
+key_operator(n: any): text := node_text(operator_spellings()#(info_byte(n) + 1))
 symbol_node(name: any): any := symbol_of(node_text(name))
 # a list's bracket and separator in its kind field: the bracket's info in the byte above the kind, the separator's
 # code at bit 48 (src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
 bracket_spellings(): list := ["{", "[", "(", "<", "·other", ""]
 separator_spellings(): list := ["", " ", ",", ";", "\n", "\t"]
-bracket_unit(): int := 256
-separator_unit(): int := 281474976710656
-bracket_info(n: any): int := int_remainder(int_quotient(marked_kind(n), bracket_unit()), 256)
-separator_info(n: any): int := int_remainder(int_quotient(marked_kind(n), separator_unit()), 8)
+bracket_info(n: any): int := info_byte(n)
+separator_info(n: any): int := int_remainder(int_quotient(marked_kind(n), KindUnit.Separator), 8)
 # how a list shows its brackets and joins its items by its separator (Other's brackets as square ones)
 bracket_openings(): list := ["{", "[", "(", "<", "[", ""]
 bracket_closings(): list := ["}", "]", ")", ">", "]", ""]
@@ -52,11 +51,11 @@ list_shown(n: any): text := {
 }
 # `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too
 list_bracket(n: any): any := {
-	if is_null(n) == 1 or kind_code(n) != 8 or bracket_info(n) == 4 { return ø }
+	if is_null(n) or kind_code(n) != Kind.List or bracket_info(n) == BracketCode.Other { return ø }
 	node_text(bracket_spellings()#(bracket_info(n) + 1))
 }
 list_separator(n: any): any := {
-	if is_null(n) == 1 or kind_code(n) != 8 { return ø }
+	if is_null(n) or kind_code(n) != Kind.List { return ø }
 	node_text(separator_spellings()#(separator_info(n) + 1))
 }
 # the position of a spelling in spellings, from 0
@@ -67,14 +66,14 @@ spelling_code(spellings: list, spelled: text): int := {
 }
 # `bracketed(items, "[")`, `separated(items, ",")`: the list with that bracket or separator; ø stays ø, as `()` parses
 bracketed_node(items: any, bracket: any): any := {
-	if is_null(items) == 1 { return items }
-	if kind_code(items) != 8 { not_a_list() }
+	if is_null(items) { return items }
+	if kind_code(items) != Kind.List { not_a_list() }
 	code = spelling_code(bracket_spellings(), node_text(bracket))
-	list_node(marked_kind(items) + (code - bracket_info(items)) * bracket_unit(), unboxed_list(items))
+	list_node(marked_kind(items) + (code - bracket_info(items)) * KindUnit.Info, unboxed_list(items))
 }
 separated_node(items: any, separator: any): any := {
-	if is_null(items) == 1 { return items }
-	if kind_code(items) != 8 { not_a_list() }
+	if is_null(items) { return items }
+	if kind_code(items) != Kind.List { not_a_list() }
 	code = spelling_code(separator_spellings(), node_text(separator))
-	list_node(marked_kind(items) + (code - separator_info(items)) * separator_unit(), unboxed_list(items))
+	list_node(marked_kind(items) + (code - separator_info(items)) * KindUnit.Separator, unboxed_list(items))
 }

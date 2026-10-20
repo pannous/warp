@@ -2,23 +2,23 @@
 # a map is a curly list of `name:value` keys (kind 8 and 262, as Rust's); a class instance `Point{x:1}` is the key of
 # its class name and the map of its fields; any other key `n:20` is the map of itself, as Rust's keys(n:20) is [n]
 fields_of(m: any): any := {
-	if marked_kind(m) != 6 { return m }
+	if marked_kind(m) != Marked.Instance { return m }
 	fields = key_value(m)
-	if is_null(fields) == 0 and kind_code(fields) == 8 then fields else map_of([m])
+	if not is_null(fields) and kind_code(fields) == Kind.List then fields else map_of([m])
 }
 # the place of m's entry named `name`, counted from 1; 0 when it has none
 map_index(m: any, name: text): int := {
 	entries = unboxed_list(fields_of(m))
-	for i in 1 to #entries { if kind_code(entries#i) == 6 and text_order(key_name(entries#i), name) == 0 { return i } }
+	for i in 1 to #entries { if kind_code(entries#i) == Kind.Key and text_order(key_name(entries#i), name) == 0 { return i } }
 	0
 }
 # 1 when m has fields to look up: a map, or a class instance (the key of its class name and its fields)
-has_fields(m: any): int := if is_null(m) == 0 and is_null(fields_of(m)) == 0 and kind_code(fields_of(m)) == 8 then 1 else 0
+has_fields(m: any): bool := not is_null(m) and not is_null(fields_of(m)) and kind_code(fields_of(m)) == Kind.List
 # `m.name`: the value of m's entry `name`; a value without it fails as Rust's "no field name"
 map_get(m: any, name: text): any := {
 	if is_position_part(m, name) { return position_part(m, name) }
 	if is_list_part(m, name) { return list_part(m, name) }
-	if kind_code(m) == 5 { return node_text(m) }
+	if kind_code(m) == Kind.Symbol { return node_text(m) }
 	if is_error_message(m, name) { return unboxed_text(m) }
 	# a field of that name wins over the part reader: `.key` of the code `key = 3` is 3 (card node-part-clash)
 	if is_entry(m) and text_order(key_name(m), name) == 0 { return key_value(m) }
@@ -26,47 +26,47 @@ map_get(m: any, name: text): any := {
 	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
 	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
 	if is_entry(m) and text_order(name, "op") == 0 { return key_operator(m) }
-	at = if has_fields(m) == 1 then map_index(m, name) else 0
+	at = if has_fields(m) then map_index(m, name) else 0
 	if at == 0 { missing_field(name) }
 	key_value(unboxed_list(fields_of(m))#at)
 }
 # what `for k, v in x` walks: a map's entries as [name, value] pairs, any other list itself
 map_entries(n: any): any := {
-	if marked_kind(n) != 8 { return n }
+	if marked_kind(n) != Marked.Map { return n }
 	out = []
 	for entry in unboxed_list(n) { out += [[key_name(entry), key_value(entry)]] }
 	out
 }
 map_keys(m: any): list := {
 	# `{}` is the empty value: its keys are the empty value too, as Rust's
-	if is_null(m) == 1 { return m }
+	if is_null(m) { return m }
 	out = new_list(0)
-	if marked_kind(m) != 8 and marked_kind(m) != 6 { not_a_map() }
+	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_name(entry)] }
 	out
 }
 map_values(m: any): list := {
 	# `{}` is the empty value: its values are the empty value too, as Rust's
-	if is_null(m) == 1 { return m }
+	if is_null(m) { return m }
 	out = new_list(0)
-	if marked_kind(m) != 8 and marked_kind(m) != 6 { not_a_map() }
+	if marked_kind(m) != Marked.Map and marked_kind(m) != Marked.Instance { not_a_map() }
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
 }
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
 collection_contains(c: any, x: any): bool := {
-	if is_null(c) == 1 { return no } # `[]` is the null node
-	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, node_text(x)) > 0 }
-	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) >= 0 }
+	if is_null(c) { return no } # `[]` is the null node
+	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return map_index(c, node_text(x)) > 0 }
+	if kind_code(c) == Kind.Text { return text_index(unboxed_text(c), node_text(x)) >= 0 }
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
 	no
 }
 # `c.index_of(x)`: a list's 1-based position of its first item equal to x, a text's of the byte part x starts at, 1 for
 # a map's entry named x; 0 when absent (Rust's collection_position, src/lowering/words/library_words.rs)
 collection_position(c: any, x: any): int := {
-	if is_null(c) == 1 { return 0 }
-	if marked_kind(c) == 8 or kind_code(c) == 6 { return if map_index(c, node_text(x)) > 0 then 1 else 0 }
-	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) + 1 }
+	if is_null(c) { return 0 }
+	if marked_kind(c) == Marked.Map or kind_code(c) == Kind.Key { return if map_index(c, node_text(x)) > 0 then 1 else 0 }
+	if kind_code(c) == Kind.Text { return text_index(unboxed_text(c), node_text(x)) + 1 }
 	position = 0
 	for item in unboxed_list(c) {
 		position += 1
@@ -76,13 +76,13 @@ collection_position(c: any, x: any): int := {
 }
 # `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
 node_get(n: any, key: any): any := {
-	if kind_code(key) == 1 and marked_kind(n) != 8 { return node_at(n, unboxed_int(key) + 1) }
+	if kind_code(key) == Kind.Int and marked_kind(n) != Marked.Map { return node_at(n, unboxed_int(key) + 1) }
 	map_get(n, node_text(key))
 }
 # `n[key] = value` of a value known only at run time: an int key sets the item key+1, any other key the entry named
 # by its text (field_with); n, or the map made of ø
 node_put(n: any, key: any, value: any): any := {
-	if kind_code(key) == 1 {
+	if kind_code(key) == Kind.Int {
 		node_set_at(n, unboxed_int(key) + 1, value)
 		return n
 	}
@@ -91,7 +91,7 @@ node_put(n: any, key: any, value: any): any := {
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry
 field_with(m: any, name: text, value: any): any := {
-	if is_null(m) == 1 { return map_of([new_key(name, value)]) }
+	if is_null(m) { return map_of([new_key(name, value)]) }
 	entries = unboxed_list(fields_of(m))
 	at = map_index(m, name)
 	if at == 0 { list_append(entries, [new_key(name, value)]) } else { entries#at = new_key(name, value) }
@@ -99,7 +99,7 @@ field_with(m: any, name: text, value: any): any := {
 }
 # `map_get_or(m, key, fallback)`: the value of m's entry key, fallback when m has none
 map_get_or(m: any, key: any, fallback: any): any := {
-	if is_null(m) == 1 { return fallback }
+	if is_null(m) { return fallback }
 	at = map_index(m, node_text(key))
 	if at == 0 { return fallback }
 	key_value(unboxed_list(fields_of(m))#at)

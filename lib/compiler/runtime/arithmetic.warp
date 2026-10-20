@@ -3,14 +3,14 @@
 node_add(a: any, b: any): any := {
 	# ø, also `[]` in the lowered program, beside a list is that list (ø + ø the empty list), beside a text "ø"; beside
 	# a number Rust fails
-	if is_null(a) == 1 and is_null(b) == 1 { return a }
-	if is_null(a) == 1 and is_null(b) == 0 and kind_code(b) == 8 { return b }
-	if is_null(b) == 1 and is_null(a) == 0 and kind_code(a) == 8 { return a }
-	if textual_node(a) == 1 or textual_node(b) == 1 { return node_text(a) + node_text(b) }
-	if is_null(a) + is_null(b) > 0 { fail() }
-	if kind_code(a) == 8 and kind_code(b) == 8 { return list_join(unboxed_list(a), unboxed_list(b)) }
-	if kind_code(a) == 1 and kind_code(b) == 1 and is_ratio(a) + is_ratio(b) > 0 { return exact_add(a, b) }
-	if kind_code(a) == 1 and kind_code(b) == 1 { return checked_add(unboxed_int(a), unboxed_int(b)) }
+	if is_null(a) and is_null(b) { return a }
+	if is_null(a) and not is_null(b) and kind_code(b) == Kind.List { return b }
+	if is_null(b) and not is_null(a) and kind_code(a) == Kind.List { return a }
+	if textual_node(a) or textual_node(b) { return node_text(a) + node_text(b) }
+	if is_null(a) or is_null(b) { fail() }
+	if kind_code(a) == Kind.List and kind_code(b) == Kind.List { return list_join(unboxed_list(a), unboxed_list(b)) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and is_ratio(a) or is_ratio(b) { return exact_add(a, b) }
+	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return checked_add(unboxed_int(a), unboxed_int(b)) }
 	float_of_node(a) + float_of_node(b)
 }
 # a + b, a - b, a * b of ints; past i64 the ints of Rust grow unbounded, here they trap
@@ -33,7 +33,7 @@ checked_multiply(a: int, b: int): int := {
 }
 # `a += b` of values known only at run time: a list grows in place as list_append, anything else is a + b
 node_append(a: any, b: any) := {
-	if is_null(a) == 0 and is_null(b) == 0 and kind_code(a) == 8 and kind_code(b) == 8 {
+	if not is_null(a) and not is_null(b) and kind_code(a) == Kind.List and kind_code(b) == Kind.List {
 		return list_append(unboxed_list(a), unboxed_list(b))
 	}
 	node_add(a, b)
