@@ -365,6 +365,16 @@ fn global_type_words_read_self_hosted() {
 	}
 }
 
+/// A prefix `if` takes its own `then` and `else` in a match arm (card arm-inline-if)
+#[test]
+fn arm_inline_if_reads_self_hosted() {
+	for lane in ["front", "pure"] {
+		let code = "f(x: any): any := match x {\n\t1: if x > 0 then 1 else 2\n\t_: 0\n}\nf(1)";
+		let (output, _) = lane_run(lane, "arm_inline_if", code);
+		assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == "1"), "{lane} {code}: {output}");
+	}
+}
+
 /// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
 #[test]
 fn kind_changes_fail_pure() {
