@@ -1,0 +1,2 @@
+f(c: codepoint): int := "0123456789abcdef".index_of(c)
+print f('a')

@@ -1,0 +1,34 @@
+// Where parser.warp fails on a file: each top-level chunk (a line at column 0 and the indented or closing lines below
+// it) parsed alone, the failing ones printed with their line number and message. Run from probes/self_hosting:
+// warp parse_failures.warp <file>
+use "../../lib/compiler/parser.warp"
+use os
+
+// the message of the first error view in a view, else ø
+first_error(view: any): any := {
+	if view is list and #view == 2 and view#1 == "error" { return view#2#2 }
+	if view is list {
+		for part in view {
+			found = first_error(part)
+			if found != ø { return found }
+		}
+	}
+	ø
+}
+
+probe_lines = read(args#1).split("\n")
+probe_chunk = ""
+probe_start = 1
+for probe_i in 1 to #probe_lines + 1 {
+	probe_line = if probe_i <= #probe_lines then probe_lines#probe_i else "end"
+	top = probe_line != "" and probe_line[0] != ' ' and probe_line[0] != '\t' and probe_line[0] != '}' and probe_line[0] != ')' and probe_line[0] != ']'
+	if top and probe_chunk.trim() != "" {
+		probe_error = try first_error(tree(probe_chunk)) catch failure { failure.message }
+		if probe_error != ø { print("line " + probe_start + ": " + probe_error + "\n" + probe_chunk[0 .. min(probe_chunk.length, 300)]) }
+		probe_chunk = ""
+	}
+	if top or probe_chunk != "" {
+		if probe_chunk == "" { probe_start = probe_i }
+		probe_chunk = probe_chunk + probe_line + "\n"
+	}
+}

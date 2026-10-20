@@ -32,8 +32,11 @@ definition_slices(source: text): list := {
 }
 # the words that start a definition of the name after them: `def f(x) …`, `const X = 1`, `class Table {…}`
 defining_keywords = function_keywords + declaration_keywords + ["class", "enum", "struct", "trait", "type"]
-# `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), else ""
+# `f` of `f(x) := …`, a value `f = …`, `def f(x)`, `enum F {…}` (a defining keyword's name), operator_↑ of
+# `infix operator ↑(x: number, n: number) := …`, else ""
 defined_name(line: text): text := {
+	declared = operator_declared(blank_words(line))
+	if #declared > 0 { return OPERATOR_FUNCTION_PREFIX + declared#1 }
 	leading = leading_name(line)
 	if leading in defining_keywords { return leading_name(line[#leading ..].trim()) }
 	if leading == "" { return "" }
@@ -71,8 +74,10 @@ symbol_words(n: any): list := {
 with_reached(program: any, module: text, in_front: bool): any := {
 	own_names = statements_in(program).map(declared_name)
 	aliases = module_aliases(module)
-	program = bottom_up(program, n => aliased_call(n, aliases, own_names))
-	slices = definition_slices(module).filter(slice => not (slice#1 in own_names))
+	program = aliased(program, aliases, own_heads(program))
+	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
+	# numbers' ↑), any other definition replaces the module's
+	slices = definition_slices(module).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program)
@@ -108,13 +113,47 @@ module_aliases(source: text): any := {
 	}
 	aliases
 }
-# `keys(m)` as `map_keys(m)`: a call of an alias the program defines no word of calls the word; a variable or
-# parameter of that name (`size = 3`) stays
-aliased_call(n: any, aliases: any, own_names: any): any := {
+# `keys(m)` as `map_keys(m)`: a call of an alias calls the word unless the program defines that name, as a variable
+# or a function taking as many arguments (shadowing is per arity, Rust's library_words.rs word_for_unless: a program's
+# `index_of(source, part, from, n)` leaves `"abc".index_of(c)` to the library); top-down, so a method call
+# `x.f(a)` counts its receiver
+aliased(n: any, aliases: any, own: any): any := match n {
+	Key(receiver, Op.Dot, call): Key(aliased(receiver, aliases, own), Op.Dot, aliased_call(children(call, x => aliased(x, aliases, own)), aliases, own, 1))
+	_: children(aliased_call(n, aliases, own, 0), x => aliased(x, aliases, own))
+}
+
+aliased_call(n: any, aliases: any, own: any, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
-	if not (called in aliases) or called in own_names { return n }
+	if not (called in aliases) or shadows(own, called, #n - 1 + receivers) { return n }
 	group_like(n, [symbol(aliases[called])] + items_of(n)[1 ..])
+}
+
+# whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
+# function when it takes them (a parameter `b = 1` may be left out)
+shadows(own: any, name: text, count: int): bool := {
+	if not (name in own) { return no }
+	head = own[name]
+	if not is_group(head) { return yes }
+	parameters = items_of(head)[1 ..]
+	count >= #parameters.filter(parameter => not is_key(parameter, Op.Assign)) and count <= #parameters
+}
+
+# name → the head `f(a, b)` of each top-level statement defining a function, `yes` for one defining another name
+own_heads(program: any): any := {
+	heads = {}
+	for statement in statements_in(program) {
+		name = declared_name(statement)
+		if name != ø { heads[name] = definition_head_of(statement) ?? yes }
+	}
+	heads
+}
+
+# the head of `f(a) := …`, `f(a): int := …`, `def f(a) {…}`; ø for another statement
+definition_head_of(statement: any): any := {
+	n = if is_keyword_group(statement) then statement#2 else statement
+	while type(n) is key { n = key_of(n) }
+	if is_group(n) and bracket_of(n) == "(" and #n > 0 then n else ø
 }
 
 # the program with the definitions it reaches of the standard modules it uses, those they use in turn included: `use

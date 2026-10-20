@@ -67,7 +67,10 @@ fn a_local_holding_a_calls_value_is_sliced_beside_a_def_of_its_name() {
 #[test]
 fn a_lambda_reads_an_enclosing_local_named_like_a_function() {
 	let held = "held(name: text, suffix: text): text := name + suffix\n";
-	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => held; part(n) }}\nf(1)"), warp::warp_parser::parse("[1 2]"));
+	is!(
+		&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => held; part(n) }}\nf(1)"),
+		warp::warp_parser::parse("[1 2]")
+	);
 	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => #held + i; part(n) }}\nf(1)"), 3);
 	is!(&format!("{held}f(n: int): any := {{ held = [1, 2]; part = i => held#1 + i; part(n) }}\nf(1)"), 2);
 }

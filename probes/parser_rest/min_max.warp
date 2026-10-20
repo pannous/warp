@@ -1,0 +1,10 @@
+f(a: int, b: int): int := min(a, b)
+print f(3, 2)
+print max(1, 5, 2)
+print max([4, 9, 2])
+xs = [3, 1, 2]
+print min(xs)
+print min(xs.map(x => x * 2))
+print min(2.5, 1)
+no_items = []
+print max(no_items)

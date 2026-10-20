@@ -284,7 +284,64 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
 
+/// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
+/// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
+/// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)
+#[test]
+fn lib_forms_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("keyword_key", "m = {if: 4, x: 1}; m[\"if\"]", "4"),
+			("keyword_member", "op = {if: 4, else: 5}; op.if + op.else", "9"),
+			("assigned_membership_word", "xs = [1, 2]; includes = 3; includes + #xs", "5"),
+			("operator_alias_line", "operator × := *\n2 × 3", "6"),
+			("function_reference_sign", "f(x) := x + 1; g = &f; g(2)", "3"),
+			("cube_root_glyph", "∛27", "3"),
+			("degree_temperature", "20°C is temperature", "yes"),
+			("degree_variable", "x = 180; x° > 3.14", "yes"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// parser.warp consumes every Unicode character by its class (card unicode-glyphs): arrow and declared glyph operators,
+/// operator aliases (lib/math.warp), free symbols as values, a quote carrying a combining mark
+#[test]
+fn unicode_glyphs_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("arrow_down", "8↓2", "3"),
+			("declared_glyph", "infix operator ⊕(a: int, b: int) := a * 10 + b; 4 ⊕ 2", "42"),
+			("alias_dot", "2 · 3", "6"),
+			("alias_and", "yes ∧ no", "no"),
+			("alias_element", "2 ∈ [1, 2]", "yes"),
+			("free_symbol_value", "x = ↯\nx", "↯"),
+			("free_symbols_listed", "[↯ ↯]", "[↯ ↯]"),
+			("technical_symbol_value", "x = ⌘\nx", "⌘"),
+			("quote_with_mark", "x = \"\u{305}\"\nx.length", "1"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
 /// lib/compiler/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
+/// A type word after `global` types the declared name, every type word Rust knows (`long`, `double`), not only `int`
+#[test]
+fn global_type_words_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in
+			[("global_long", "global long k=7; k", "7"), ("global_double", "global double d = 1.5; d + 1", "2.5")]
+		{
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
 /// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
 #[test]
 fn kind_changes_fail_pure() {
@@ -329,4 +386,22 @@ fn enums_of_used_files_and_type_variables_run_pure() {
 	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
 	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
 	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
+}
+
+/// parser.warp's last refusals in the pure lane (card pure-parser-rest): a type test beside a local of that name in
+/// another function, `else` on the next line, a prelude alias beside a function of other arity, min and max, a member
+/// naming a library word, `/!` of a value known only at run time, the keys of `{}`
+#[test]
+fn parser_words_run_pure() {
+	let probe = |name: &str| format!("{}/probes/parser_rest/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("type_test_beside_local", &probe("is_shadowed"), "no\nyes\n3\nyes");
+	runs_pure("else_on_next_line", &probe("else_lines"), "[2]");
+	runs_pure("then_on_next_line", &probe("then_line"), "4");
+	runs_pure("method_on_next_line", &probe("method_line"), "[2 4]");
+	runs_pure("alias_beside_arity", &probe("overload"), "16\n42");
+	runs_pure("min_max", &probe("min_max"), "2\n5\n9\n1\n2\n1");
+	runs_pure("member_words", &probe("plurals"), "['h' 'é' 'l' 'l' 'o']\n['a' 'b']\n['a' 'b']\n['a' 'b']\n[1 2]\n5");
+	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
+	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
+	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
 }
