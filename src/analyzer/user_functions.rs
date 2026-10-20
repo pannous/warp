@@ -257,6 +257,8 @@ struct Usages {
 	texted: HashSet<String>,
 	foreign: HashSet<String>,
 	tested: HashSet<String>,
+	/// read as an object: `s.name`, lowered `s#("name"+1)`, of any value with fields (a symbol's name, an event's value)
+	fielded: HashSet<String>,
 	aliases: Vec<(String, String)>,
 }
 
@@ -286,6 +288,11 @@ impl Usages {
 		}
 		if let Some(Node::Symbol(name)) = used_sequence(node).map(Node::drop_meta) {
 			self.indexed.insert(name.clone());
+		}
+		if let Node::Key(object, Op::Hash, index) = node {
+			if let (Node::Symbol(name), true) = (object.drop_meta(), is_field_read(index)) {
+				self.fielded.insert(name.clone());
+			}
 		}
 		if let Some(name) = joined_to_text(node) {
 			self.texted.insert(name.to_string());
@@ -336,7 +343,7 @@ impl Usages {
 	fn used_as(&self, name: &String) -> Option<Kind> {
 		if self.called.contains(name) {
 			Some(Kind::Function)
-		} else if self.celled.contains(name) || self.foreign.contains(name) {
+		} else if self.celled.contains(name) || self.foreign.contains(name) || self.fielded.contains(name) {
 			Some(Kind::Data)
 		} else if self.indexed.contains(name) {
 			// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
