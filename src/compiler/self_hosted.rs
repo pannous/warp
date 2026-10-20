@@ -181,7 +181,11 @@ pub fn emit(node: &Node, kinds: Option<&serde_json::Value>) -> Option<Result<cra
 			None
 		}
 		Err(failure) => Some(Err(crate::node::error(&format!("the self-hosted emitter failed: {failure}")))),
-		Ok(bytes) => {
+		Ok(mut bytes) => {
+			// the Rust front took the program's `use fuel`, so emitter.warp never saw it
+			if let Some(mark) = crate::host::fuel_mark() {
+				wasm_encoder::Section::append_to(&mark, &mut bytes);
+			}
 			let needs_host = imports_from(&bytes, HOST_MODULE);
 			Some(Ok(crate::pipeline::CompiledModule { bytes, needs_host, needs_wasi: true, needs_ffi: false }))
 		}

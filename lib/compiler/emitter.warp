@@ -148,8 +148,9 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # errors: the indices of the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); variants its enums' bare cases
+# counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; shows_values: bool = no; counts_fuel: bool = no; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {} }
 
 module = Module({}, [])
 
@@ -187,6 +188,10 @@ unkeyworded(n: any): any := if bracket_of(n) == "" and #n == 2 and n#1 is symbol
 # `use math`, `import f from lib`: the Rust pipeline brought the module in already, so the statement has no code
 import_words = ["use", "require", "import", "include"]
 is_import(n: any): bool := is_group(n) and #n > 0 and n#1 is symbol and name_of(n#1) in import_words
+# `use fuel`: the program's runs count fuel steps (decision fuel-metering); the module carries the custom section
+# fuel_section for its host (Rust twin: module_finish.rs FUEL_SECTION)
+fuel_section = "warp.fuel"
+uses_fuel(program: any): bool := statements_of(program).any(n => is_import(n) and #n == 2 and n#2 == symbol("fuel"))
 
 def statements_of(n: any): list {
 	# `[1;2;3]` is a list of three items, not three statements
@@ -1534,7 +1539,8 @@ def module_bytes(functions: any): list {
 	texts = section(section_ids.data, vector([[passive_segment] + uleb(#module.bytes) + module.bytes]))
 	globals = section(section_ids.globals, vector(module.global_order.map(global_entry)))
 	parts = [types, imported, declared, memory, globals, exported, segments, codes, texts]
-	wasm_header + joined(parts) + names_section(functions)
+	marks = if module.counts_fuel then section(section_ids.custom, name_bytes(fuel_section)) else []
+	wasm_header + joined(parts) + names_section(functions) + marks
 }
 def import_entry(i: int): list {
 	entry = module.imports#(i + 1)
@@ -1612,6 +1618,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.closures = []
 	module.dispatchers = []
 	module.shows_values = no
+	module.counts_fuel = uses_fuel(program)
 	module.surveying = env(survey_setting) != ø
 	module.refusals = []
 	collect_types(program)
