@@ -4,6 +4,26 @@ divide_by_zero(): int := {
 	fail()
 	0
 }
+# `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail (Rust's
+# emit_data_item); `q.k = e`, `{k: e}`: a field holds none
+held_list_item(item: any): any := {
+	if node_is_error(item) { a_list_item_holds_no_error(item) }
+	item
+}
+held_field(item: any): any := {
+	if node_is_error(item) { a_field_holds_no_error(item) }
+	item
+}
+a_list_item_holds_no_error(error: any): int := {
+	global trap_detail = error
+	fail()
+	0
+}
+a_field_holds_no_error(error: any): int := {
+	global trap_detail = error
+	fail()
+	0
+}
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
 # the runtime errors of the library words, named for src/wasm_emitter/control/traps.rs to read off the trace
 index_out_of_range(): int := {
@@ -42,8 +62,7 @@ returned_error(message: text): int := {
 }
 index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
-	fail()
-	0
+	index_out_of_range()
 }
 # `raise X`: the run fails with X as its message (Rust's returned_error, src/wasm_emitter/control/traps.rs)
 returned_error(): int := {
@@ -53,6 +72,16 @@ returned_error(): int := {
 raised(value: any): int := {
 	global trap_detail = value
 	returned_error()
+}
+# `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
+# it, whose message emitter.warp's throw kept in failed_in: a raise's is the raised value, a missing field's names it
+caught_error(finished: bool, value: any): any := {
+	if finished { return value }
+	global failed_in
+	global trap_detail
+	if text_order(failed_in, "returned error") == 0 { return error_of(node_text(trap_detail)) }
+	if text_order(failed_in, "missing field") == 0 { return error_of("no field " + node_text(trap_detail)) }
+	error_of(failed_in)
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: any): int := {

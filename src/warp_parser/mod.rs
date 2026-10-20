@@ -9,7 +9,6 @@ use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::words::DO_WORD;
 use crate::words::EACH_WORD;
-use crate::words::IS_WORD;
 use crate::words::MAP_WORD;
 use crate::words::OF_WORD;
 use crate::words::PRINT_WORD;
@@ -63,7 +62,7 @@ mod annotations;
 mod math_notation;
 mod rust_macros;
 mod suffixes;
-mod sugar;
+pub(crate) mod sugar;
 mod types;
 pub(crate) use math_notation::*;
 pub(crate) use types::*;
@@ -398,7 +397,8 @@ impl WarpParser {
 			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
-		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None));
+		let types = if options.data_mode { Default::default() } else { declaration_scan::scan_type_names(input) };
+		let program = sugar::sugared(parser.parse_list_with_separators(None, Bracket::None), &types);
 		if options == ParserOptions::default() {
 			crate::normalize::check_style(&program);
 		}

@@ -13,9 +13,10 @@ node_text(n: any): text := match n {
 	_: collection_text(n)
 }
 number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
-# a list between its brackets (a map in braces), a time as time_text shows it
+# a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
 collection_text(n: any): text := {
 	if kind_code(n) == 8 { return list_shown(n) }
+	if node_is_error(n) { return unboxed_text(n) }
 	if kind_code(n) == 18 { return time_text(n) }
 	# a closure: its lambda as written (emitter.warp closure_text_code)
 	if kind_code(n) == 16 { return closure_text(n) }

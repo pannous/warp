@@ -1,0 +1,9 @@
+enum Coin { Penny, Nickel, Dime }
+print(Coin.Dime as int)
+print(Coin.Dime as position)
+print(2 as Coin)
+print(Coin(1))
+c = Coin.Nickel
+print(c as int)
+n = 0
+print(n as Coin)

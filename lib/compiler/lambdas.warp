@@ -1,0 +1,303 @@
+# Lambdas and functions as values (card pure-lambdas; Rust twins: src/lowering/definitions/lambdas.rs, closures.rs):
+# - an iteration word over a list and a function, `map(xs, x => x + 1)`, `xs.filter(even)`, `xs.map(f)` of a variable or
+#   parameter f, is a loop, the lambda's body inlined with its parameters renamed, a function name or value
+#   called on each item:
+#     xs.map(F)  → (map·1 = []; for item·1 in xs { map·1 = map·1 + [F(item·1)] }; map·1)
+# - any other lambda is a closure: a top-level function closure_lambda_<n> whose first parameters are the variables it
+#   captures (by value, decision D7), and in its place `closure_new(closure_lambda_<n>, captured…)`
+# - a function of the program named as a value, `apply(square, 7)`, is the closure `closure_new(square)`; one without
+#   parameters stays its bare call
+# - a call of a variable or parameter, `f(x)`, calls the function value it holds: `closure_call_1(f, x)`
+# emitter.warp and analyzer.warp read closure_new and closure_call_<n> as they read Rust's.
+use "walk.warp"
+use "phrase_blocks.warp"
+use "scope.warp"
+use "multiple_assignments.warp"
+
+lifted_prefix = "closure_lambda_"
+closure_call_word = "closure_call_"
+global lambdas_made = 0
+
+# the words that walk a list with a function: [the arguments between the list and the function]
+iteration_extras = {"map": 0, "filter": 0, "each": 0, "for_each": 0, "forEach": 0, "find": 0, "any": 0, "all": 0, "fold": 1}
+
+fresh_number(): int := {
+	lambdas_made += 1
+	lambdas_made
+}
+
+fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
+
+# the items after a call's head
+arguments_of(call: list): list := call[1..]
+call_node(signature: Node, arguments: list): Node := List([signature] + arguments, Bracket.Round, Separator.None)
+set_to(target: Node, value: Node): Node := Key(target, Op.Assign, value)
+block_of(parts: list): Node := List(parts, Bracket.Curly, Separator.Semicolon)
+if_block(test: Node, parts: list): Node := Key(Key(ø, Op.If, test), Op.Then, block_of(parts))
+for_each(item: Node, list: Node, parts: list): Node := List([symbol("for"), item, symbol("in"), list, block_of(parts)], Bracket.None, Separator.Space)
+grown(out: Node, value: Node): Node := set_to(out, Key(out, Op.Add, List([value], Bracket.Square, Separator.Comma)))
+
+## lambdas
+
+# the lambda itself, without the parentheses around it: `(x => x * 2)`
+lambda_of(n: Node): Node := match n {
+	List(items, Bracket.Round, separator): lambda_of(items#1)
+	_: n
+}
+
+# `x`, `(a, b)`, `x: int` of a lambda's head: its parameters as written
+written_parameters(signature: Node): list := match signature {
+	List(names, Bracket.Round, separator): items_of(signature)
+	_: [signature]
+}
+
+# `x` of `x` and of `x: int`
+parameter_word(parameter: Node): text := match parameter {
+	Key(name, Op.Colon, type): name_of(name)
+	_: name_of(parameter)
+}
+
+arrow_parameters(n: Node): Node := match lambda_of(n) {
+	Key(parameters, arrow, body): parameters
+	_: n
+}
+arrow_result(n: Node): Node := match lambda_of(n) {
+	Key(parameters, arrow, body): body
+	_: n
+}
+
+lambda_parameter_names(arrow: Node): list := written_parameters(arrow_parameters(arrow)).map(parameter_word)
+
+## renaming
+
+# n with the symbol `from` read as `to`, a field after `.` and a key before `:` kept
+renamed(n: any, from: text, to: Node): any := match n {
+	Symbol(name): { if name == from then to else n }
+	Key(left, Op.Dot, right): Key(renamed(left, from, to), Op.Dot, renamed_call(right, from, to))
+	Key(left, op, right): Key(renamed(left, from, to), op, renamed(right, from, to))
+	List(items, bracket, separator): List(items.map(item => renamed(item, from, to)), bracket, separator)
+	_: n
+}
+
+# the method call after a `.`: its name kept, its arguments renamed
+renamed_call(n: Node, from: text, to: Node): Node := match n {
+	List(items, Bracket.Round, Separator.None): List([items#1] + arguments_of(items).map(item => renamed(item, from, to)), Bracket.Round, Separator.None)
+	_: n
+}
+
+# the lambda's body called on the values, its parameters renamed to them
+inlined_body(arrow: Node, values: list): Node := {
+	body = arrow_result(arrow)
+	names = lambda_parameter_names(arrow)
+	for i in 1 to #names { body = renamed(body, names#i, values#i) }
+	body
+}
+
+## iterations
+
+# `xs.map(f)`, `map(xs, f)`: [word, list, extras, function] of an iteration call, else ø
+iteration_of(n: Node): any := match n {
+	Key(list, Op.Dot, called): method_iteration(list, called)
+	List(call, Bracket.Round, Separator.None): {
+		if #call >= 3 and call#1 is symbol and name_of(call#1) in iteration_extras then iteration_parts(name_of(call#1), arguments_of(call)) else ø
+	}
+	_: ø
+}
+
+method_iteration(list: Node, called: Node): any := match called {
+	List(call, Bracket.Round, Separator.None): {
+		if #call >= 2 and call#1 is symbol and name_of(call#1) in iteration_extras then iteration_parts(name_of(call#1), [list] + arguments_of(call)) else ø
+	}
+	_: ø
+}
+
+# the list, the extra arguments and the function of the word, when it has as many as it takes
+iteration_parts(word: text, arguments: list): any := {
+	if #arguments != 2 + iteration_extras[word] { return ø }
+	[word, arguments#1, arguments[1 ..< #arguments - 1], arguments#(#arguments)]
+}
+
+# the loop of the word over list, `apply` giving the function's call on the values of each round
+iteration_loop(word: text, list: Node, extras: list, apply: function): Node := {
+	number = fresh_number()
+	item = fresh_name("item", number)
+	result = fresh_name(word, number)
+	if word == "fold" { return statements([set_to(result, extras#1), for_each(item, list, [set_to(result, apply([result, item]))]), result]) }
+	called = apply([item])
+	if word == "map" { return statements([set_to(result, List([], Bracket.Square, Separator.Comma)), for_each(item, list, [grown(result, called)]), result]) }
+	if word == "filter" { return statements([set_to(result, List([], Bracket.Square, Separator.Comma)), for_each(item, list, [if_block(called, [grown(result, item)])]), result]) }
+	if word == "find" {
+		searching = fresh_name("searching", number)
+		found = [set_to(result, item), set_to(searching, no)]
+		return statements([set_to(result, ø), set_to(searching, yes), for_each(item, list, [if_block(Key(searching, Op.And, called), found)]), result])
+	}
+	if word == "any" { return statements([set_to(result, no), for_each(item, list, [if_block(called, [set_to(result, yes)])]), result]) }
+	if word == "all" { return statements([set_to(result, yes), for_each(item, list, [if_block(Key(ø, Op.Not, called), [set_to(result, no)])]), result]) }
+	statements([set_to(result, ø), for_each(item, list, [set_to(result, called)]), result])
+}
+
+## the program's functions and values
+
+# `f(a, b) := body`: [name, parameters as written, body] of a definition, else ø
+definition_of(n: any): any := match n {
+	Key(signature, Op.Define, body): defined_head(signature, body)
+	_: ø
+}
+defined_head(signature: Node, body: Node): any := match signature {
+	List(call, Bracket.Round, Separator.None): { if #call >= 1 and call#1 is symbol then [name_of(call#1), arguments_of(call), body] else ø }
+	Key(call, Op.Colon, type): defined_head(call, body)
+	_: ø
+}
+
+# a program's statements: a sequence's, by `;` or by lines, else the one statement
+is_sequence_of_statements(program: any): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
+top_statements(program: any): list := if is_sequence_of_statements(program) then items_of(program) else [program]
+
+# the names a body assigns, binds in a `for` or declares `x: T = v`, each once; `x := v` defines, it binds no variable
+names_bound(n: any, found: list): list := {
+	found = newly_bound(n, found)
+	if is_lambda(n) or definition_of(n) != ø { return found }
+	for part in walked_parts(n) { found = names_bound(part, found) }
+	found
+}
+newly_bound(n: any, found: list): list := match n {
+	Key(target, Op.Assign, value): bound_target(target, found)
+	List(parts, Bracket.None, Separator.Space): { if #parts >= 4 and parts#1 == symbol("for") and parts#3 == symbol("in") then bound_target(parts#2, found) else found }
+	_: found
+}
+bound_target(target: Node, found: list): list := match target {
+	Symbol(name): { if name in found then found else found + [name] }
+	Key(name, Op.Colon, type): bound_target(name, found)
+	_: found
+}
+
+# the parts of a node a walk goes into
+walked_parts(n: any): list := match n {
+	Key(left, op, right): [left, right]
+	List(items, bracket, separator): items_of(n)
+	_: []
+}
+
+# every name the node mentions, each once, in order
+mentioned_names(n: any, found: list): list := {
+	if n is symbol {
+		if not (name_of(n) in found) { found += [name_of(n)] }
+		return found
+	}
+	for part in walked_parts(n) { found = mentioned_names(part, found) }
+	found
+}
+
+# What the walk knows: the program's functions with their parameter counts, the lifted lambdas so far
+class Lowering { arities: any; lifted: any }
+
+## the walk
+
+# n with its lambdas lifted, its iterations looped, its function names as values and its calls of variables as
+# closures; `locals` the variables and parameters in scope
+lowered_lambdas(n: any, locals: list, lowering: Lowering): any := {
+	iteration = iteration_of(n)
+	if iteration != ø {
+		looped = iteration_over(iteration, locals, lowering)
+		if looped != ø { return lowered_lambdas(looped, locals + names_bound(looped, []), lowering) }
+	}
+	if is_lambda(n) { return lifted(lambda_of(n), locals, lowering) }
+	match n {
+		Symbol(name): function_value(name, n, locals, lowering)
+		Key(left, Op.Dot, right): Key(lowered_lambdas(left, locals, lowering), Op.Dot, lowered_method(right, locals, lowering))
+		Key(left, Op.Colon, right): Key(left, Op.Colon, lowered_lambdas(right, locals, lowering))
+		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))
+		List(items, Bracket.Round, Separator.None): lowered_call(items_of(n), n, locals, lowering)
+		List(items, Bracket.None, Separator.Space): lowered_phrase(items_of(n), n, locals, lowering)
+		List(items, bracket, separator): List(items.map(item => lowered_lambdas(item, locals, lowering)), bracket, separator)
+		_: n
+	}
+}
+
+# a function of the program with parameters, named where a value goes: its closure; one without stays its bare call
+function_value(name: text, n: Node, locals: list, lowering: Lowering): Node := {
+	if name in locals or not (name in lowering.arities) or lowering.arities[name] == 0 { return n }
+	call_node(symbol("closure_new"), [n])
+}
+
+# `f(a, b)`: a call of a variable is a call of the function value it holds, a function's call keeps its name
+lowered_call(call: list, n: Node, locals: list, lowering: Lowering): Node := {
+	if #call == 0 { return n }
+	arguments = arguments_of(call).map(argument => lowered_lambdas(argument, locals, lowering))
+	signature = call#1
+	if signature is symbol and name_of(signature) in locals { return call_node(symbol(closure_call_word + #arguments), [signature] + arguments) }
+	if signature is symbol { return call_node(signature, arguments) }
+	call_node(lowered_lambdas(signature, locals, lowering), arguments)
+}
+
+# `f 3 4`, words side by side: the first calls the others, its name kept
+lowered_phrase(words: list, n: Node, locals: list, lowering: Lowering): Node := {
+	if #words == 0 or not (words#1 is symbol) { return group_like(n, words.map(word => lowered_lambdas(word, locals, lowering))) }
+	group_like(n, [words#1] + arguments_of(words).map(word => lowered_lambdas(word, locals, lowering)))
+}
+
+# the method call after a `.`: its name kept
+lowered_method(n: Node, locals: list, lowering: Lowering): Node := match n {
+	List(items, Bracket.Round, Separator.None): call_node(items#1, arguments_of(items).map(item => lowered_lambdas(item, locals, lowering)))
+	_: n
+}
+
+# the loop of an iteration whose function is a lambda, a function of the program or a function value, else ø
+iteration_over(iteration: list, locals: list, lowering: Lowering): any := {
+	word = iteration#1
+	function = iteration#4
+	if is_lambda(function) {
+		arrow = lambda_of(function)
+		if #lambda_parameter_names(arrow) != iteration_extras[word] + 1 { return ø }
+		return iteration_loop(word, iteration#2, iteration#3, values => inlined_body(arrow, values))
+	}
+	if not (function is symbol) { return ø }
+	name = name_of(function)
+	if not (name in locals or name in lowering.arities) { return ø }
+	iteration_loop(word, iteration#2, iteration#3, values => call_node(function, values))
+}
+
+# a lambda as the closure of a top-level function taking its captured variables first
+lifted(arrow: Node, locals: list, lowering: Lowering): Node := {
+	parameters = written_parameters(arrow_parameters(arrow))
+	names = parameters.map(parameter_word)
+	body = arrow_result(arrow)
+	captured = mentioned_names(body, []).filter(name => name in locals and not (name in names)).map(name => symbol(name))
+	name = lifted_prefix + fresh_number()
+	inner = captured.map(c => name_of(c)) + names + names_bound(body, [])
+	lowering.arities[name] = #captured + #names
+	lifted_body = lowered_lambdas(body, inner, lowering)
+	lowering.lifted += [Key(call_node(symbol(name), captured + parameters), Op.Define, lifted_body)]
+	call_node(symbol("closure_new"), [symbol(name)] + captured)
+}
+
+## the pass
+
+# a definition with its body lowered, its parameters and variables the locals
+lowered_statement(statement: any, top_locals: list, lowering: Lowering): any := {
+	parts = definition_of(statement)
+	if parts == ø { return lowered_lambdas(statement, top_locals, lowering) }
+	locals = parts#2.map(parameter_word) + names_bound(parts#3, [])
+	match statement {
+		Key(signature, Op.Define, body): Key(signature, Op.Define, lowered_lambdas(body, locals, lowering))
+		_: statement
+	}
+}
+
+lambdas(program: any): any := {
+	written = top_statements(program)
+	arities = {}
+	for statement in written {
+		parts = definition_of(statement)
+		if parts != ø { arities[parts#1] = #(parts#2) }
+	}
+	lowering = Lowering{arities: arities, lifted: []}
+	top_locals = []
+	for statement in written {
+		if definition_of(statement) == ø { top_locals = names_bound(statement, top_locals) }
+	}
+	lowered = written.map(statement => lowered_statement(statement, top_locals, lowering))
+	if is_sequence_of_statements(program) { return group_like(program, lowering.lifted + lowered) }
+	if #lowering.lifted == 0 { return lowered#1 }
+	List(lowering.lifted + lowered, Bracket.None, Separator.Semicolon)
+}

@@ -6,6 +6,9 @@ use warp::Node;
 
 /// Set to "true" in Claude Code cloud sessions
 const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
+/// Runs the compile through the warp-written stages (src/compiler/self_hosted.rs)
+#[cfg(feature = "native")]
+const SELF_HOSTED_VAR: &str = "WARP_SELF_HOSTED";
 /// Set by tests/nightly.sh: the nightly run checks what the gate only samples (twins.rs)
 #[cfg(feature = "native")]
 const NIGHTLY_VARIABLE: &str = "WARP_NIGHTLY";
@@ -90,6 +93,13 @@ pub const MACOS_C_HEADERS: Resource = Resource {
 pub const LEAN: Resource = Resource {
 	name: "the Lean toolchain (disabled in cloud sessions)",
 	available: || std::env::var(CLOUD_SESSION_VAR).as_deref() != Ok("true"),
+};
+/// A twin compares a warp-written compiler stage with Rust's: under WARP_SELF_HOSTED the Rust side runs through the
+/// self-hosted lane too, so the comparison means nothing (and the pure lane compiling emitter.warp itself hangs)
+#[cfg(feature = "native")]
+pub const RUST_PIPELINE: Resource = Resource {
+	name: "the Rust pipeline (WARP_SELF_HOSTED is set: a twin would compare warp with warp)",
+	available: || warp::setting(SELF_HOSTED_VAR).is_none(),
 };
 /// binaryen's wasm-split, which splits a built site's module by route (src/web/route_split.rs)
 #[cfg(feature = "native")]

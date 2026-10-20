@@ -1,0 +1,17 @@
+# `is` is its own operator (card is-operator)
+
+Only `is` tests a type (user decision #30): `3 is int` is yes, `3 == int` compares 3 with the type value int (no).
+
+- Both parsers read `is` as `Op::Is` (Rust spellings.rs "is", parser.warp WORD_OPERATORS), never as `==`.
+- Rust: `Op::Is` lives only while parsing. parse() (warp_parser/sugar.rs read_equality) makes `x is v` the unmarked
+  `x == v`, which the passes read as `is` (a type test where v is a type word), and marks a type word on either side
+  of `==`/`!=` as the type value compared (type_tests.rs equality_operand). The later passes see the trees they always
+  saw. The front lane applies the same reading to parser.warp's tree (self_hosted.rs parse), and the bridge hands the
+  mark on to the warp twin passes (node_views.rs BRIDGED_MARKS).
+- Pure lane: `Op.Is` stays until type_tests.warp, which makes `x is T` of a type word T the program binds nowhere
+  is_type(x, "T") and every other `x is v` `x == v`; `==` there is never a type test.
+- `x is not 4`, `x isn't 4` are `not (x is 4)` in both parsers.
+- Declared types (card operator-leftover): read_equality also marks a bare name of a type the source declares (class,
+  struct, record, type, enum: declaration_scan.rs scan_type_names), so `p == P` and `A == C` are no; `p is P`, `A is C`
+  still test. A bare enum case compared with a marked type is no at once (sum_variants.rs), as the case moves to the
+  right of `==` there and an unbound name on the left reads as a definition written with `is` (P61).

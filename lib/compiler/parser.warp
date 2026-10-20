@@ -5,6 +5,7 @@ use "lexer.warp"
 use "shapes.warp"
 use "words.warp"
 use "sugar.warp"
+use "foreign_forms.warp"
 
 class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool }
 
@@ -25,7 +26,7 @@ def parsed(source) {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source) + PRELUDE_BANG_WORDS, type_body: false}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false}
 	items(p, ' ', "")
 }
 
@@ -47,13 +48,20 @@ def blank_end_of(line, from) {
 	while at < line.length and (line[at] == ' ' or line[at] == '\t') { at = at + 1 }
 	at
 }
-PRELUDE_BANG_WORDS = bang_words(module_source("prelude"))
+// the prelude's bang words, scanned the first time a `name!` needs them: scanning the prelude on every parse made the
+// front stage 5× slower (card front-stage-5x-slower)
+global prelude_bangs = ø
+def prelude_bang_words() {
+	if prelude_bangs == ø { prelude_bangs = bang_words(module_source("prelude")) }
+	prelude_bangs
+}
 
 // The width of the bang word at the parser's position (`is!`), else 0
 def bang_word_at(p) {
 	end = name_end(p.code, p.at, p.n)
 	if end == p.at or not is_at(p.code, end, '!', p.n) or is_at(p.code, end + 1, '=', p.n) { return 0 }
-	if p.bangs contains (p.code[p.at .. end] + "!") then end + 1 - p.at else 0
+	word = p.code[p.at .. end] + "!"
+	if p.bangs contains word or prelude_bang_words() contains word then end + 1 - p.at else 0
 }
 
 // The words a type's name follows where it is declared
@@ -418,6 +426,13 @@ def continued(p, left, min_power) {
 			skip_blanks(p)
 			// `x is in xs` is `x in xs`
 			left = listed("", " ", [left, symbol(if word == "is in" then "in" else word), expression(p, 116)])
+		} else if negated_is_at(p).length > 0 {
+			// `x is not 4` and `x isn't 4` are `not (x is 4)` (Rust twin: spellings.rs NEGATED_SPELLINGS)
+			powers = binding_powers("is")
+			if powers#1 < min_power { break }
+			p.at = p.at + negated_is_at(p).length
+			skip_blanks(p)
+			left = Key(ø, Op.Not, Key(left, Op.Is, expression(p, powers#2)))
 		} else if down_to_at(p) > 0 {
 			// `10 down to 1` is `reverse(1 to 10)`, which for_loop counts down (Rust twin: ranges.rs binary_node)
 			powers = binding_powers("to")
@@ -522,6 +537,14 @@ def floor_division_at(p) {
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag
 def opens_block(p, width) {
 	is_at(p.code, blank_end(p, p.at + width), '{', p.n)
+}
+
+// `is not`, `isn't` at the parser's position, else ""
+def negated_is_at(p) {
+	for word in ["is not", "isn't", "isn’t"] {
+		if keyword_at(p, word) { return word }
+	}
+	""
 }
 
 // `x in xs`, `xs contains x`: the membership word at the parser's position, else ""
@@ -666,7 +689,7 @@ SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."]
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
 // The operators written as words, each with its canonical name
-WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"], ["upto", ".."]]
+WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "is"], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"], ["upto", ".."]]
 
 // The operator at the parser's position as [written, canonical], else []
 // (each text read is a walk from its start, card text-costs: the character is read once and picks the candidates)
@@ -719,7 +742,7 @@ def binding_powers(op) {
 	if op == ".." or op == "to" { return [130, 131] }
 	if op == "as" { return [125, 250] }
 	if op == "<" or op == ">" or op == "<=" or op == ">=" { return [120, 121] }
-	if op == "==" or op == "!=" or op == "===" or op == "!==" or op == "≈" or op == "~" { return [115, 116] }
+	if op == "==" or op == "is" or op == "!=" or op == "===" or op == "!==" or op == "≈" or op == "~" { return [115, 116] }
 	if op == "and" { return [100, 101] }
 	if op == "xor" { return [95, 96] }
 	if op == "or" { return [90, 91] }
@@ -882,7 +905,12 @@ def prefixed(p) {
 		skip_spaces(p)
 		return conditioned(word, header_expression(p, CONDITION_POWER), p)
 	}
-	if form == "loop" { return looped(p) }
+	if form == "loop" {
+		loop = looped(p)
+		return if loop == ø then atom(p) else loop
+	}
+	foreign = foreign_form(p, word)
+	if foreign != ø { return foreign }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else count_worded(p)
 	if declared != ø { return declared }
 	if PREFIX_OPERATORS.contains(form) and not after_member_dot(p) { return word_prefixed(p, word, form) }
@@ -1093,8 +1121,8 @@ def branch_value(p, min_power) {
 
 def keyword_at_position(p, word, at) := starts_at(p.code, word, at) and not (at + word.length < p.n and is_name_char(p.code[at + word.length]))
 
-// `for x in xs {…}`: the loop variable, the iterable and the body
-// Rust twin: statements.rs try_parse_for_in, for_iterable_and_body_word
+// `for x in xs {…}`: the loop variable, the iterable and the body, else ø, nothing read
+// Rust twin: loops.rs try_parse_for_in, for_iterable_and_body_word
 def looped(p) {
 	before = p.at
 	p.at = p.at + 3
@@ -1115,9 +1143,8 @@ def looped(p) {
 	p.at = before + 3
 	skip_spaces(p)
 	ranged = ranged_loop(p)
-	if ranged != ø { return ranged }
-	p.at = before
-	atom(p)
+	if ranged == ø { p.at = before }
+	ranged
 }
 
 // `for 1…100: print it`, `for xs {…}` and `for 0 to 2` with the lines indented below: a loop over the iterable without
@@ -1238,6 +1265,11 @@ def atom(p) {
 	if c == '"' or c == '\'' { return quoted(p) }
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
+	// a loop where an atom stands: the body of a comprehension's clause, `[a + b for a in xs for b in ys]`
+	if keyword_at(p, "for") {
+		loop = looped(p)
+		if loop != ø { return loop }
+	}
 	if is_name_start(c) { return named(p) }
 	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
 	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
@@ -1776,7 +1808,10 @@ def enum_body_at(p) {
 
 // `function add`, `func add`: the function add itself, where the expression ends after the name (or `on`, `is`
 // follows: `map function square on xs`); `function add(x) {…}` defines it
+// `function f`, `func f`: the function f as a value, marked as Rust's parser marks it (closures.rs
+// FUNCTION_REFERENCE_MARK), so the closure pass makes it a closure, a nested one too
 // Rust twin: definitions/functions.rs function_reference_after
+FUNCTION_REFERENCE_MARK = "function_reference"
 def function_reference(p) {
 	at = blank_end(p, p.at)
 	if at == p.at or at >= p.n or not is_alpha(p.code[at]) { return ø }
@@ -1785,7 +1820,7 @@ def function_reference(p) {
 	next_word = p.code[rest .. name_end(p.code, rest, p.n)]
 	if not (rest >= p.n or ";,)]}\n".contains(p.code[rest]) or next_word == "on" or next_word == "is") { return ø }
 	p.at = end
-	symbol(p.code[at .. end])
+	attributed(FUNCTION_REFERENCE_MARK, true, symbol(p.code[at .. end]))
 }
 
 // The items of an argument list: none for ø, the list's items, else the one argument; Swift's labeled parameter
@@ -1957,6 +1992,8 @@ def declared_type(p, word) {
 	skip_blanks(p)
 	end = symbol_end(p.code, p.at, p.n)
 	name = symbol(p.code[p.at .. end])
+	// `mixin Name {…}`: the type its classes take the methods of (foreign_forms.warp)
+	if word == "mixin" { name = attributed("mixin", true, name) }
 	p.at = end
 	parameters = type_parameters(p)
 	ends_statement = ";}\n".contains(peek(p.code, blank_end(p, p.at), p.n))

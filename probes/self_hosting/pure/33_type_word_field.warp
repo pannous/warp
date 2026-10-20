@@ -1,0 +1,6 @@
+// out: yes
+// out: no
+// a map key named like a type leaves the type test: `{symbol: 1}` binds no symbol
+kinds = {symbol: 1, list: 2}
+print symbol("a") is symbol
+print kinds is list

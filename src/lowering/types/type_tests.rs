@@ -296,6 +296,8 @@ pub(crate) fn program_names(node: &Node) -> Names {
 	let mut variables: HashSet<String> =
 		context.user_functions.keys().filter(|name| !is_builtin_type_word(name)).cloned().collect();
 	collect_outer_assigned_names(node, &mut variables);
+	// a case the program declares is that case, never the type of its name: `Kind.Int`, `Meaning.Function`
+	variables.extend(super::sum_variants::sum_types(node).values().flat_map(|variants| variants.bare_names()));
 	let mut bound_otherwise = crate::program_names::Bindings::of(node).bound();
 	bound_otherwise.retain(|name| !context.user_functions.contains_key(name));
 	let functions_taking_arguments = context
@@ -385,7 +387,7 @@ fn phrase_words(node: &Node) -> Option<Vec<&str>> {
 }
 
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
-const EQUALITY_OPERAND: &str = "equality operand";
+pub(crate) const EQUALITY_OPERAND: &str = "equality operand";
 
 /// A side of `x == word` or `word != x` as the parser marks it when the word names a type; lowering names it by its
 /// canonical name as type(x) gives it (`type(s) == string` is `type(s) == text`) unless it is a variable
@@ -400,7 +402,7 @@ pub fn equality_operand(subject: &Node, word: Node) -> Node {
 	}
 }
 
-fn marked_operand(word: &str) -> Node {
+pub(crate) fn marked_operand(word: &str) -> Node {
 	marked(Node::Symbol(word.to_string()))
 }
 

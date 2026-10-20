@@ -22,6 +22,15 @@ fn a_pattern_takes_the_node_apart() {
 	is!(&format!("{ADDS}\nadds(parse(\"a + b * (c + d)\"))"), 2);
 }
 
+/// `match f(x) {…}`, a call as the subject, takes the node apart as a name does
+#[test]
+fn a_called_subject_is_taken_apart() {
+	is!(
+		"id(n: Node): Node := n; right(m: Node): Node := match id(m) { Key(a, op, b): b, _: m }; right(parse(\"x+2\"))",
+		2
+	);
+}
+
 #[test]
 fn a_case_builds_the_node() {
 	is!("Key(symbol(\"a\"), Op.Add, 1)", parse("a+1"));
@@ -66,4 +75,18 @@ fn an_enum_case_in_a_pattern_compares() {
 fn a_patterns_op_is_spelled_as_text() {
 	is!("n = parse(\"a+1\"); match n { Key(l, op, r): op as text, _: 0 }", "+");
 	is!("n = parse(\"(a)\"); match n { List(items, bracket, s): bracket as text, _: 0 }", "(");
+}
+
+// decision enum-case (user 2026-10-20): an operator case and its spelling are synonyms; printed, a case shows its name
+#[test]
+fn an_operator_case_and_its_spelling_are_synonyms() {
+	is!("Op.Add == \"+\"", true);
+	is!("\"+\" != Op.Add", false);
+	is!("op_of(key(1, \"+\", 2)) == Op.Add", true);
+	is!("x = Op.Add; x == \"+\"", true);
+	is!("x = Op.Add; x as text", "+");
+	is!("x = Separator.Comma; x as text", ",");
+	is!("bracket_of(bracketed([1], \"(\")) == Bracket.Round", true);
+	is!("Op.Add == Op.Sub", false);
+	is!("Op.Add", symbol("Add"));
 }

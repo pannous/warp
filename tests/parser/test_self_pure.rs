@@ -77,6 +77,25 @@ fn enum_cases_run_pure() {
 	);
 }
 
+/// plain_enums.warp converts a case to its index and back, node_matches.warp takes `other:` as the default arm and a
+/// case named like a type word (`Int` of node.warp's Kind) as the case (card enum-leftovers)
+#[test]
+fn enum_conversions_and_default_arms_run_pure() {
+	let coin = "enum Coin { Penny, Nickel, Dime }";
+	runs_pure("case_as_int", &format!("{coin}\nCoin.Dime as int"), "2");
+	runs_pure("case_as_position", &format!("{coin}\nCoin.Dime as position"), "3");
+	runs_pure("int_as_case", &format!("{coin}\n2 as Coin"), "Dime");
+	runs_pure("case_call", &format!("{coin}\nCoin(1)"), "Nickel");
+	let cost = "cost(c) := match c { Penny: 1; other: 3 }";
+	runs_pure("other_arm", &format!("{coin}\n{cost}\ncost(Coin.Dime) * 10 + cost(Coin.Penny)"), "31");
+	let name = "name(k) := match k { Int: \"int\"; Float: \"float\"; _: \"node\" }";
+	runs_pure(
+		"type_named_cases",
+		&format!("enum Kind {{ Empty, Int, Float }}\n{name}\nname(Kind.Int) + name(Kind.Empty)"),
+		"intnode",
+	);
+}
+
 /// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
 /// read, as parser.warp's expression, atom and continued do
 #[test]
@@ -197,6 +216,73 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_empty_map", "m = {}; m[1] = 2; m", "{1:2}");
 	runs_pure("number_key_runtime", "d = {}; k = 4; d[k] = 7; d[k]", "7");
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
+}
+
+/// List comprehensions lower to the loop that builds the list (card pure-comprehensions), a second `for` nesting in the
+/// first clause as Rust's parser reads it
+#[test]
+fn comprehensions_run_pure() {
+	runs_pure("comprehension", "xs = [1, 2, 3, 4]; [x * 2 for x in xs]", "[2 4 6 8]");
+	runs_pure("filtered_comprehension", "xs = [1, 2, 3, 4]; [x for x in xs if x > 2]", "[3 4]");
+	runs_pure("nested_for_comprehension", "[a + b for a in [1, 2] for b in [10, 20]]", "[11 21 12 22]");
+}
+
+/// Only `is` tests a type (card is-operator): parser.warp reads `is` as its own operator, so `3 == int` compares 3
+/// with the type int, as Rust's parser reads it; `x is not 4` and `x isn't 4` are `not (x is 4)`
+#[test]
+fn is_tests_types_and_equality_compares_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("is_type_word", "3 is int", "yes"),
+			("equals_type_word", "3 == int", "no"),
+			("text_equals_type_word", "\"a\" == text", "no"),
+			("unequal_type_word", "3 != int", "yes"),
+			("is_value", "x = 3; x is 3", "yes"),
+			("is_not_value", "x = 3; x is not 4", "yes"),
+			("isnt_value", "x = 4; x isn't 4", "no"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// lib/compiler/lambdas.warp: iteration words over a lambda or a function loop, other lambdas are closures capturing
+/// their variables, a function's name is a value and a variable holding one is called (card pure-lambdas)
+#[test]
+fn lambdas_run_pure() {
+	runs_pure("map_lambda", "xs = [1, 2, 3]; xs.map(x => x * 10)", "[10 20 30]");
+	runs_pure("filter_function", "big(x) := x > 1; filter([1, 2, 3], big)", "[2 3]");
+	runs_pure("any_lambda", "[1, 2, 3].any(x => x > 2)", "yes");
+	runs_pure("fold_lambda", "fold([1, 2, 3], 10, (a, b) => a + b)", "16");
+	runs_pure("nested_maps", "xs = [1, 2]; xs.map(x => xs.map(y => x * y))", "[[1 2] [2 4]]");
+	runs_pure("captured", "n = 5; apply(f, x) := f(x); apply(x => x + n, 1)", "6");
+	runs_pure("function_value", "square(x) := x * x; twice(f, x) := f(f(x)); twice(square, 3)", "81");
+	runs_pure("returned_closure", "adder(n) := x => x + n; add2 = adder(2); add2(40)", "42");
+	runs_pure(
+		"mapped_parameter",
+		"scaled(xs, k) := each_item(xs, x => x * k); each_item(xs, f) := xs.map(f); scaled([1, 2], 4)",
+		"[4 8]",
+	);
+}
+
+/// lib/compiler/type_tests.warp: a field named like a type word (`{symbol: …}`) leaves `x is symbol` a type test, only
+/// a variable of that name is compared (card pure-lane-symbol)
+#[test]
+fn type_words_named_by_fields_run_pure() {
+	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
+	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
+}
+
+/// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter
+/// of kind Op, Bracket or Separator holds the text a node carries, and a type variable `T` any value
+#[test]
+fn enums_of_used_files_and_type_variables_run_pure() {
+	let probe = |name: &str| format!("{}/probes/compiler_enums/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("used_enum", &probe("f_used_enum2"), "Function\nyes\nyes");
+	runs_pure("used_op", &probe("f_used_op"), "yes\nno");
+	runs_pure("enum_parameter", &probe("f_meaning"), "yes\nno\nyes\nyes");
+	runs_pure("type_variable", "unchanged(n: T): T := n; print unchanged(3); print unchanged(\"x\")", "3\nx");
 }
 
 /// A type's name is a value, `k = int` prints `class int` (decision type-text); a parameter, a result or a variable

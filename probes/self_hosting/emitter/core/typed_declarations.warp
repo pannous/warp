@@ -1,0 +1,11 @@
+# `x: T = v` of a class or enum the program declares: x holds an object, an instance or a case; a value known only
+# at run time is checked then (an object passes, any other kind fails with "not a T")
+enum Shape { Circle(r: int), Square }
+class Animal { name: text }
+known: Shape = Square
+cased: Shape = Circle(2)
+pet: Animal = Animal{name: "Rex"}
+items = [Square, 3, Circle(1)]
+picked: Shape = items#1
+last: Shape = items#3
+print [known, cased, pet.name, picked, last]

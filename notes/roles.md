@@ -91,8 +91,10 @@ notes/agents/common.md (role prompts: worker.md, fixer.md, implementer.md).
 
 ## Enforcement
 - Rust tests run in the cloud (`scripts/cloud-test.sh`; user 2026-10-20), one local build (main's, the Integrator's).
-  Soft rule, no hook (user: "A soft rule is fine"); the queue below stays for the Mac-only tests
-  (scripts/cloud-test-environmental.txt).
+  Enforced for the Rust tests only (user: "only for the Rust test, the warp tests are fine locally"): test-gate.py
+  blocks cargo test, test binaries, tests/queue.sh and ./test.sh; the queue below stays for the Mac-only tests
+  (scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1 tests/queue.sh -- <filter>`. Warp tests (`warp
+  test`, scripts/is_tests.py) run locally. Probe: probes/hooks/test_gate_cases.py.
 - `tests/queue.sh`: every test run waits for one of 3 machine-wide slot locks (`~/.cargo/warp-tests.lock`, `.lock.2`,
   `.lock.3`, lockf), so at most 3 targeted runs go at once (4 test threads each, nice 10); a full `./test.sh` holds all
   three and runs alone. Each slot's holder is in its `.owner` file. Waiters are served first come, first served by

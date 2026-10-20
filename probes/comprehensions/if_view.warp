@@ -1,0 +1,3 @@
+use "../../lib/compiler/parser.warp"
+print str(plain(tree("if c { m += [e] }")))
+print str(plain(tree("(m = []; L; m)")))

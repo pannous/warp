@@ -1,0 +1,91 @@
+# `[x * x for x in 1..10]` and `[x for x in xs if x % 2 == 0]`: a list built by a loop,
+# `(comprehension_list_0 = []; for x in xs { if c { comprehension_list_0 += [x * x] } }; comprehension_list_0)`, before
+# for_loops.warp lowers the loop (card pure-comprehensions). Python's generator argument `sum(x * x for x in xs)` is the
+# call of that list. Rust twin: src/lowering/collections/comprehensions.rs lower
+use "walk.warp"
+use "phrase_blocks.warp"
+
+made_word = "comprehension_list"
+for_word = "for"
+in_word = "in"
+filter_words = ["if", "where"]
+
+# the comprehensions made so far, numbering each one's list
+global comprehensions_made = 0
+
+# the clause `for v in xs …`
+starts_with_for(n: any): bool := match n {
+	List(words, Bracket.None, separator): #words > 0 and words#1 == symbol(for_word)
+	_: no
+}
+
+# one node of several juxtaposed words: `upper w`
+words_phrase(words: list): Node := if #words == 1 then words#1 else List(words, Bracket.None, Separator.Space)
+
+# The clauses from `(for v in xs …)` and the items after it, as the parser groups them, each ["each", v, xs] or
+# ["if", c]: a second `for` nests in the first clause (`for f in xs (for i in ys ø)`); a filter's condition follows the
+# clause ending in `if`, up to the next `for` clause (`(for f in xs if) (f > 1) (for i in ys ø)`); else ø
+qualifiers(clause: Node, rest: list): any := match clause {
+	List(words, Bracket.None, separator): {
+		if #words < 4 or words#3 != symbol(in_word) or not is_name(words#2) { return ø }
+		found = [["each", words#2, words#4]]
+		tail = words[4..]
+		if #tail == 0 or (#tail == 1 and tail#1 == ø) { return if #rest == 0 then found else ø }
+		if #tail != 1 { return ø }
+		if starts_with_for(tail#1) {
+			nested = qualifiers(tail#1, rest)
+			return if nested == ø then ø else found + nested
+		}
+		if not (is_name(tail#1) and name_of(tail#1) in filter_words) or #rest == 0 { return ø }
+		end = 1
+		while end <= #rest and not starts_with_for(rest#end) { end = end + 1 }
+		if end == 1 { return ø }
+		found = found + [["if", words_phrase(rest[0 .. end - 1])]]
+		if end > #rest { return found }
+		following = qualifiers(rest#end, rest[end..])
+		if following == ø then ø else found + following
+	}
+	_: ø
+}
+
+# the clauses nested in order around `inner`
+looped(clauses: list, inner: Node): Node := {
+	body = inner
+	for i in #clauses down to 1 {
+		clause = clauses#i
+		block = List([body], Bracket.Curly, Separator.Semicolon)
+		body = if clause#1 == "each" then List([symbol(for_word), clause#2, symbol(in_word), clause#3, block], Bracket.None, Separator.Space) else Key(Key(ø, Op.If, clause#2), Op.Then, block)
+	}
+	body
+}
+
+# `[element, (for v in xs), …]`: the list the loop builds, else ø
+comprehension(items: list): any := {
+	at = 1
+	while at <= #items and not starts_with_for(items#at) { at = at + 1 }
+	if at == 1 or at > #items { return ø }
+	clauses = qualifiers(items#at, items[at..])
+	if clauses == ø { return ø }
+	made = symbol(made_word + "_" + comprehensions_made)
+	comprehensions_made = comprehensions_made + 1
+	appended = Key(made, Op.AddAssign, List([words_phrase(items[0 .. at - 1])], Bracket.Square, Separator.Space))
+	List([Key(made, Op.Assign, ø), looped(clauses, appended), made], Bracket.Round, Separator.Semicolon)
+}
+
+# `sum(x * x for x in xs)` as `sum([x * x for x in xs])`, else n
+generator_call(n: Node, items: list): Node := {
+	made = if #items > 1 then comprehension(items[1..]) else ø
+	if made == ø then n else List([items#1, made], Bracket.Round, Separator.None)
+}
+
+comprehension_node(n: Node): Node := match n {
+	List(items, Bracket.Square, separator): {
+		made = comprehension(items)
+		if made == ø then n else made
+	}
+	# Python's generator argument `sum(x * x for x in xs)`: the call of the comprehension's list
+	List(items, Bracket.Round, Separator.None): generator_call(n, items)
+	_: n
+}
+
+comprehensions(program: any): any := bottom_up(program, comprehension_node)

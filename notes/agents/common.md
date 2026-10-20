@@ -57,6 +57,10 @@ After a context swap, this file and your role file win over anything a handover 
 - Suspected non-issues go through the Interviewer: when a small bug you found may not matter (the same value shown
   another way, `96px/inch` vs `96dpi`), SendMessage warp-interviewer before carding or fixing it. A confirmed
   non-issue gets no work: its card, if any, goes to Later with the verdict as a `todo note`.
+- Wrong results go to the Interviewer whenever a reinterpretation is possible (user 2026-10-20): a "wrong" value
+  (survey, test pair, twin) that a different reading of the code or the expectation could make right (`p.first()` of
+  a map, `"" is empty`, named arguments, setters) is sent to warp-interviewer with the code, the value and the
+  expected one before anyone fixes code or test; only an unambiguous bug is carded and fixed directly.
 - Never message warp-integrator with FYIs or swap notices: only requests it must act on; the card is the merge
   request. A wanted gate step (integrator_tools/gate.sh) is a request to warp-integrator, never an edit of its files.
 - Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (codex_worker.sh); Claude spawns
@@ -97,8 +101,10 @@ After a context swap, this file and your role file win over anything a handover 
 
 ## Testing
 - Rust tests run in the cloud (user 2026-10-20: "From now on, run the Rust test suite completely in the cloud"):
-  commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs, except tests needing the Mac (sound,
-  GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt). The Integrator's full suite runs in the cloud too.
+  commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs (a hook blocks them), except tests
+  needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
+  tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
+  scripts/is_tests.py) run locally with the shared binary.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
   suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
@@ -109,9 +115,15 @@ After a context swap, this file and your role file win over anything a handover 
   checked with that binary, Rust changes are built and tested by the cloud lane. It reads lib/ from WARP_LIB, else
   the nearest lib/compiler above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
   Standard modules (`use list`) still come from its build (card std-modules).
+- Long commands in the background (user 2026-10-20): anything expected to take more than a few seconds (cloud
+  lane, builds, surveys, stage compiles, sweeps) runs with the Bash tool's `run_in_background`, so messages reach you
+  while it runs. Never poll its output file or sleep-loop on it: the exit notice wakes you; meanwhile do other work
+  or end the turn. Note the job's PID in your handover; a job you abandon gets killed by PID.
 - Close what you start (user 2026-10-20): after every test, probe or build, kill your own leftover processes by PID
   (warp, scratch/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
-  <your worktree>` before reporting.
+  <your worktree>` before reporting. The safety net, not a substitute: cron's ~/dev/bin/reap-orphans (every 15 min,
+  log /Users/me/warp/reap-orphans.log) kills orphaned warp/test binaries, cargo test/build and xargs sweeps after 30
+  min and a test binary's children after WARP_TEST_TIME_LIMIT (600 s).
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is upgraded to the
   working value in its own commit, and `#[ignore]` is dropped from a test that passes unedited; a change of meaning,
   or editing an un-ignored test's assertions, goes to the Interviewer. Test edits a user decision implies need the
