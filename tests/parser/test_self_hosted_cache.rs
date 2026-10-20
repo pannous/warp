@@ -106,3 +106,15 @@ fn the_warp_emitter_fails_with_rusts_runtime_errors() {
 		assert!(!phases.contains("emit ("), "{program}: the Rust emitter ran: {phases}");
 	}
 }
+
+/// WARP_SELF_HOSTED=0 (or off, no, false, empty) is the lane switched off, as WARP_HINTS=0: the Rust emitter emits
+/// a program emitter.warp would take (card switch-self)
+#[test]
+fn a_zero_switch_is_off() {
+	let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(CACHE_FOLDER);
+	for off in ["0", "off", ""] {
+		let (value, phases) = run_switched(off, ".", &cache, "square(x: int) := x * x; square(3)");
+		assert!(value.contains('9'), "{value}");
+		assert!(phases.contains("emit ("), "WARP_SELF_HOSTED={off:?} ran the self-hosted emitter: {phases}");
+	}
+}

@@ -61,7 +61,7 @@ pub(crate) fn apply_flags(args: &mut Vec<String>) {
 
 	let no_hints = args.iter().position(|arg| arg == NO_HINTS_FLAG).map(|flag| args.remove(flag)).is_some();
 	let hints_variable = env::var(HINTS_VARIABLE).ok();
-	let hints_wanted = hints_variable.as_deref().is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
+	let hints_wanted = hints_variable.is_none() || warp::setting(HINTS_VARIABLE).is_some();
 	let hints_shown = hints_wanted && !no_hints;
 	let fewest_shown = if hints_shown { diagnostic::Level::Hint } else { diagnostic::Level::Weak };
 	let shown = level_flag(args, WARNINGS_FLAG, fewest_shown).unwrap_or(fewest_shown);
