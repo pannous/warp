@@ -6,6 +6,9 @@
 use "walk.warp"
 use "words.warp"
 
+# how a binding form gives a name its meaning
+enum Meaning { Function, Variable, Parameter, Loop, Field }
+
 # the name a binding form gives: `x`, `x: int`, `x: int = 1`; ø for anything else
 binding_name(n: Node): any := match n {
 	Symbol(name): name
@@ -56,24 +59,24 @@ definition_head(n: Node): Node := {
 	if #items > 0 and is_round(items#1) then definition_head(items#1) else n
 }
 
-as_parameters(names: list): list := names.map(name => [name, "parameter"])
+as_parameters(names: list): list := names.map(name => [name, Meaning.Parameter])
 
 # `f(a, b)` as a definition's head: the function and its parameters
 function_meanings(head: Node): list := {
-	if not is_round(head) { return [[head_word(head), "function"]] }
-	[[head_word(head), "function"]] + as_parameters(parameters_in(items_of(head)[1 ..]))
+	if not is_round(head) { return [[head_word(head), Meaning.Function]] }
+	[[head_word(head), Meaning.Function]] + as_parameters(parameters_in(items_of(head)[1 ..]))
 }
 
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
 assignment_meanings(op: Op, target: Node, value: Node): list := {
 	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
-	[[binding_name(target), if op == Op.Define or is_lambda(value) then "function" else "variable"]]
+	[[binding_name(target), if op == Op.Define or is_lambda(value) then Meaning.Function else Meaning.Variable]]
 }
 
 # the meanings a word gives the item after it in a phrase: `for x`, `def f(a)`
 word_meanings(word: Node, next: Node): list := match word {
 	Symbol(name): {
-		if name == "for" then [[binding_name(next), "loop"]]
+		if name == "for" then [[binding_name(next), Meaning.Loop]]
 		else if function_keywords contains name then function_meanings(definition_head(next))
 		else []
 	}
@@ -109,7 +112,7 @@ fields_of(n: Node): list := {
 }
 
 field_meanings(item: Node): list := match item {
-	Key(name, Op.Colon, value): [[binding_name(name), "field"]]
+	Key(name, Op.Colon, value): [[binding_name(name), Meaning.Field]]
 	_: []
 }
 
@@ -156,4 +159,4 @@ scope_of(program: Node): any := {
 }
 
 binds(scope: any, name: text): bool := scope.has(name)
-binds_as(scope: any, name: text, meaning: text): bool := scope.has(name) and scope[name] contains meaning
+binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning
