@@ -1093,9 +1093,12 @@ impl Lifting {
 					return;
 				}
 				// `t = k * 2` before any read of t binds the lambda's own local, no capture; `global n` shares n
+				// a local of an enclosing body is read even when a function elsewhere has its name (`w in numbers`
+				// beside lexer.warp's numbers(text))
+				let is_enclosing_local = self.locals.iter().any(|locals| locals.contains(name));
 				if !params.contains(name)
 					&& !globals.contains(name)
-					&& self.is_variable(name, bound)
+					&& (self.is_variable(name, bound) || is_enclosing_local)
 					&& !captured.contains(name)
 					&& !crate::analyzer::starts_with_fresh_binding(body, name)
 				{

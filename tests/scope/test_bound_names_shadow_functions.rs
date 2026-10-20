@@ -33,3 +33,10 @@ fn a_local_named_like_a_function_heads_a_list_as_its_value() {
 fn a_local_named_like_a_function_returned_is_no_function_value() {
 	is!("condition(x) := x\nj(cs: list): any := { condition = cs#1; condition }\nt_of(n: int): any := j([n])\nother(n: int): any := { test = t_of(n); test }\nboth(a, b, code) := { test = x => x + code; test(a) + test(b) }\nboth(1, 2, 10)", 23);
 }
+
+/// A lambda reads a local of its function also when a function elsewhere has the local's name (card standalone:
+/// analyzer.warp's `w => w in numbers` beside lexer.warp's numbers(text))
+#[test]
+fn a_lambda_captures_a_local_named_like_a_function() {
+	is!("numbers(t: text): list := [t]\nwide(words: list): bool := { numbers = {\"int\": 1}; words.all(w => w in numbers) }\nwide([\"int\"])", true);
+}
