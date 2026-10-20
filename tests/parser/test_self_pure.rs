@@ -319,6 +319,19 @@ fn unicode_glyphs_read_self_hosted() {
 }
 
 /// lib/compiler/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
+/// A type word after `global` types the declared name, every type word Rust knows (`long`, `double`), not only `int`
+#[test]
+fn global_type_words_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in
+			[("global_long", "global long k=7; k", "7"), ("global_double", "global double d = 1.5; d + 1", "2.5")]
+		{
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
 /// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
 #[test]
 fn kind_changes_fail_pure() {

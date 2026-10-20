@@ -2270,7 +2270,8 @@ def is_typed_name(node) := match node {
 // word types it, `global int n = 0` is `n:int = 0`
 // Rust twin: mod.rs DECLARATION_MODIFIERS, words.rs CONSTANT_KEYWORDS, analyzer type_word_kind
 DECLARATION_MODIFIERS = ["export", "mutable", "mut", "const", "constant", "final", "val"]
-DECLARED_TYPE_WORDS = ["int", "float", "number", "text", "string", "bool", "char", "byte"]
+// the type words of words.warp, as Rust reads them (`global long k = 7`)
+DECLARED_TYPE_WORDS = type_words
 
 // `global x = 1`, `global n`, `export api: clock` as `global: x = 1`, a module-level variable; `global a, b` declares
 // each; `export` without a name after it stays a word
