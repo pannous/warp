@@ -425,6 +425,8 @@ fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 pub(super) fn used_sequence(node: &Node) -> Option<&Node> {
 	let is_counting_word = |word: &Node| word.symbol_name().is_some_and(is_counting_word);
 	match node {
+		// `s.name`, lowered `s#("name"+1)`, reads a field of an object: no sequence (card rust-analyzer-errors)
+		Node::Key(_, Op::Hash, index) if is_field_read(index) => None,
 		Node::Key(list, Op::Hash, counted) => Some(if list.is_nothing() { counted } else { list }),
 		Node::Key(list, Op::Dot, property) if is_counting_word(property) => Some(list),
 		Node::List(items, _, _) => match items.as_slice() {
@@ -433,6 +435,11 @@ pub(super) fn used_sequence(node: &Node) -> Option<&Node> {
 		},
 		_ => None,
 	}
+}
+
+/// The index of a field read, a constant text key: `"name"+1` of `s.name`
+fn is_field_read(index: &Node) -> bool {
+	crate::warp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_)))
 }
 
 /// A parameter forwarded to another function's parameter takes its kind: `f(grid) { g(grid) }` with g indexing grid
