@@ -1,0 +1,97 @@
+# `min(a, b, …)`, `max(…)` (card pure-library-words; Rust twin: src/lowering/collections/min_max.rs): comparisons, so
+# exact and float operands share the arithmetic; an argument more than a plain value or arithmetic is computed once
+# into a temporary. One list literal holds the candidates, `max([1 5 2])`; any other one argument is a list folded at
+# run time, an empty one ends the run in empty_extremum (min_of_an_empty_list):
+#   min(xs) → (if count(xs) == 0 then empty_extremum(min) else (best = xs#1; for item in xs { best = if item < best then item else best }; best))
+# A program's own min or max is its function.
+use "walk.warp"
+use "scope.warp"
+
+extremum_comparisons = {min: Op.Lt, max: Op.Gt}
+# the operators of a plain operand, cheap and free of effects to repeat in the comparisons
+plain_operators = ["+", "-", "*", "/", "%", "^", "<", ">", "<=", ">=", "==", "!=", "?", ":"]
+global extrema_made = 0
+
+fresh_extremum(): int := {
+	extrema_made += 1
+	extrema_made
+}
+extremum_name(role: text, number: int): Node := symbol("extremum·" + role + "·" + number)
+
+is_plain(n: any): bool := match n {
+	Key(left, op, right): (op as text) in plain_operators and is_plain(left) and is_plain(right)
+	List(items, bracket, separator): no
+	_: yes
+}
+
+# `(t1 = a; t2 = b; value)`, the value alone without bindings
+with_bindings(bindings: list, value: Node): Node := if #bindings == 0 then value else List(bindings + [value], Bracket.Round, Separator.Semicolon)
+
+if_else(test: Node, value: Node, otherwise: Node): Node := Key(Key(Key(ø, Op.If, test), Op.Then, value), Op.Else, otherwise)
+
+# the best of the operands by pairwise comparisons, each operand computed once
+compared(arguments: list, better: any): Node := {
+	bindings = []
+	operands = []
+	for argument in arguments {
+		if is_plain(argument) {
+			operands += [argument]
+		} else {
+			held = extremum_name("argument", fresh_extremum())
+			bindings += [Key(held, Op.Assign, argument)]
+			operands += [held]
+		}
+	}
+	best = operands#1
+	for next in operands[1..] {
+		# the best so far is named twice: a choice (or arithmetic) bound once, else n operands make 2ⁿ nodes
+		if type(best) is key {
+			held = extremum_name("argument", fresh_extremum())
+			bindings += [Key(held, Op.Assign, best)]
+			best = held
+		}
+		best = Key(Key(best, better, next), Op.Question, Key(best, Op.Colon, next))
+	}
+	with_bindings(bindings, best)
+}
+
+# the list's first item, improved by every later one; an empty list ends the run
+folded(name: text, list: Node, better: any): Node := {
+	number = fresh_extremum()
+	bindings = []
+	listed = list
+	if not (list is symbol) {
+		listed = extremum_name("list", number)
+		bindings = [Key(listed, Op.Assign, list)]
+	}
+	best = extremum_name("best", number)
+	item = extremum_name("item", number)
+	improved = Key(best, Op.Assign, if_else(Key(item, better, best), item, best))
+	loop = List([symbol("for"), item, symbol("in"), listed, List([improved], Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space)
+	fold = List([Key(best, Op.Assign, Key(listed, Op.Hash, 1)), loop, best], Bracket.Round, Separator.Semicolon)
+	no_items = Key(call_of("count", [listed]), Op.Eq, 0)
+	with_bindings(bindings, if_else(no_items, call_of("empty_extremum", [symbol(name)]), fold))
+}
+
+# `min(…)`, also `min xs` without parentheses
+is_extremum_call(n: Node): bool := (bracket_of(n) == "(" and separator_of(n) == "") or (bracket_of(n) == "" and separator_of(n) == " ")
+
+extremum(n: Node, scope: any): Node := {
+	if not is_extremum_call(n) { return n }
+	parts = items_of(n)
+	if #parts < 2 or not (parts#1 is symbol) { return n }
+	name = name_of(parts#1)
+	if not (name in extremum_comparisons) or binds_as(scope, name, "function") { return n }
+	better = extremum_comparisons[name]
+	arguments = parts[1..]
+	if #arguments == 1 and bracket_of(arguments#1) == "[" and #items_of(arguments#1) > 0 { return compared(items_of(arguments#1), better) }
+	# `min 3` of one number is no list: refused downstream as Rust's "takes at least 2 arguments or one list"
+	if #arguments == 1 and not (arguments#1 is number) { return folded(name, arguments#1, better) }
+	if #arguments > 1 { return compared(arguments, better) }
+	n
+}
+
+extrema(program: any): any := {
+	scope = scope_of(program)
+	bottom_up(program, n => extremum(n, scope))
+}

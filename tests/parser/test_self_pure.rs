@@ -258,3 +258,13 @@ fn field_slices_run_pure() {
 fn assigned_it_blocks_run_pure() {
 	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
 }
+
+/// lib/compiler/extrema.warp: min and max of arguments, of a list literal, of a list known at run time (card
+/// pure-library-words)
+#[test]
+fn extrema_run_pure() {
+	runs_pure("max_of_arguments", "max(3, 9, 4)", "9");
+	runs_pure("min_of_literal", "min([4, 1, 6])", "1");
+	runs_pure("max_of_computed", "xs = [5, 2, 7]; max(xs.map(x => x * 2))", "14");
+	runs_pure("min_of_variable", "xs = [5, 2, 7]; min(xs) + max(1.5, 1)", "3.5");
+}

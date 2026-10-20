@@ -1,0 +1,8 @@
+# min and max of arguments, of a list literal, of a computed list, of an empty list (the last line ends the run)
+xs = [5, 2, 7]
+print max(3, 9, 4)
+print min([4, 1, 6])
+print max(xs.map(x => x * 2))
+print min(xs) + max(1.5, 1)
+scores = []
+print min(scores)
