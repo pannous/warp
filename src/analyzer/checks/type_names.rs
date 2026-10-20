@@ -103,7 +103,9 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => {
 			choice_list_type(then_expr, else_expr, scope)
 		}
-		Node::Key(_, Op::Question, then_else) if let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() => {
+		Node::Key(_, Op::Question, then_else)
+			if let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() =>
+		{
 			choice_list_type(then_expr, else_expr, scope)
 		}
 		_ => LIST_WORD.to_string(),
