@@ -908,8 +908,8 @@ def whole(value: any): list { admitted(value, "int") }
 # a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
 # (src/wasm_emitter/declared_values.rs), a float field keeping an int
 field_checks = {int: "int_admitted", list: "list_admitted", text: "text_checked", bool: "bool_checked", float: "float_checked"}
-def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_type in type_words and type_words[field_type] in field_checks }
-def field_value(field_type: any, value: any): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[type_words[field_type]], [value]) else value }
+def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_type in core_type_words and core_type_words[field_type] in field_checks }
+def field_value(field_type: any, value: any): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[core_type_words[field_type]], [value]) else value }
 
 # `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: any, name: text, value: any): list {

@@ -3756,10 +3756,12 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
   ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
   ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
+  ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
+  ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
   ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
   ✓ parser::test_self_pure::recursive_results_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
@@ -6327,7 +6329,6 @@ PASSED:
 
 FAILED:
   ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
-  ✗ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
 
 SUMMARY:
-11 ignored, 6323 passed, 2 failed, 6325 total tested
+11 ignored, 6325 passed, 1 failed, 6326 total tested
