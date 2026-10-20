@@ -741,6 +741,8 @@ GUARD_MARKERS = {"try": "try·else", "assert": "assert·else", "check": "assert�
 FALLBACK_WORDS = ["else", "catch", "except"]
 // The hidden name `try X` binds X's Error to, to hand it on as the value
 UNCAUGHT_ERROR = "uncaught·error"
+// The hidden name `except ParseError:` binds the Error to, to test its class
+CAUGHT_ERROR = "caught·error"
 
 // `try` or `assert` followed by an operand
 // Rust twin: guards.rs guard_word_ahead
@@ -758,24 +760,49 @@ def guarded(p, word) {
 	guarded_part = guarded_phrase(p)
 	written_part = p.code[start .. p.at].trim()
 	skip_spaces(p)
-	caught = ""
+	if fallback_word_ahead(p) != "" {
+		// `except A: a except B: b`: an Error A does not catch passes on to the next one; an `else` after the
+		// fallback is an enclosing `if`'s
+		guard = guarded_part
+		first = yes
+		fallback_word = fallback_word_ahead(p)
+		while fallback_word != "" and (first or fallback_word != "else") {
+			first = no
+			p.at = p.resumes[p.at] + fallback_word.length
+			skip_spaces(p)
+			caught = if fallback_word == "else" then ["", ""] else caught_parts(p, fallback_word)
+			skip_python_colon(p)
+			guard = guarded_by(marker, guard, guarded_phrase(p), caught)
+			skip_spaces(p)
+			fallback_word = fallback_word_ahead(p)
+		}
+		return with_finally(p, guard)
+	}
+	caught = ["", ""]
 	fallback = ø
-	fallback_word = fallback_word_ahead(p)
-	if fallback_word != "" {
-		p.at = p.resumes[p.at] + fallback_word.length
-		skip_spaces(p)
-		if fallback_word != "else" { caught = caught_name(p, fallback_word) }
-		skip_python_colon(p)
-		fallback = guarded_phrase(p)
-	} else if word == "try" {
-		caught = UNCAUGHT_ERROR
+	if word == "try" {
+		caught = [UNCAUGHT_ERROR, ""]
 		fallback = symbol(UNCAUGHT_ERROR)
 	} else if marker == "assert·else" {
 		fallback = "assertion failed: " + written_part
 	}
+	with_finally(p, guarded_by(marker, guarded_part, fallback, caught))
+}
+
+// The marker call `marker(X, Y)`, with the name Y reads the caught Error by as a fourth item (`catch e { … }`);
+// `except ParseError as e` binds `e: ParseError`, which lowering tests before Y runs
+// Rust twin: guards.rs guarded_by
+def guarded_by(marker, guarded_part, fallback, caught) {
 	parts = [symbol(marker), guarded_part, fallback]
-	if caught != "" and mentions(fallback, caught) { parts = parts + [symbol(caught)] }
-	with_finally(p, listed("(", "", parts))
+	name = caught#1
+	caught_class = caught#2
+	if caught_class != "" {
+		bound = if name == "" then CAUGHT_ERROR else name
+		parts = parts + [keyed(":", symbol(bound), symbol(caught_class))]
+	} else if name != "" and mentions(fallback, name) {
+		parts = parts + [symbol(name)]
+	}
+	listed("(", "", parts)
 }
 
 // `try: x` as Python writes it
@@ -794,12 +821,13 @@ def fallback_word_ahead(p) {
 	""
 }
 
-// `catch e`, `except ValueError as e`: the name the error is bound to; `except ZeroDivisionError` names a type
-// Rust twin: guards.rs parse_caught_name
-def caught_name(p, fallback_word) {
-	if not is_name_start(peek(p.code, p.at, p.n)) { return "" }
-	name = word_at(p)
-	p.at = p.at + name.length
+// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: [the name the Error is bound to, the class it must
+// be], "" for none
+// Rust twin: guards.rs parse_caught
+def caught_parts(p, fallback_word) {
+	if not is_name_start(peek(p.code, p.at, p.n)) { return ["", ""] }
+	first = word_at(p)
+	p.at = p.at + first.length
 	skip_spaces(p)
 	if keyword_at(p, "as") {
 		p.at = p.at + 2
@@ -807,9 +835,9 @@ def caught_name(p, fallback_word) {
 		name = word_at(p)
 		p.at = p.at + name.length
 		skip_spaces(p)
-		return name
+		return [name, first]
 	}
-	if fallback_word == "catch" then name else ""
+	if fallback_word == "catch" then [first, ""] else ["", first]
 }
 
 // Either part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else print 3`)
@@ -1819,6 +1847,16 @@ def declared_type(p, word) {
 		name = attributed("extends", symbol(p.code[p.at .. end]), name)
 		p.at = end
 		skip_blanks(p)
+	}
+	// `class ParseError: Error` ending its line: the parent (Rust twin: skip_conformances)
+	if is_at(p.code, p.at, ':', p.n) {
+		parent_at = blank_end(p, p.at + 1)
+		parent_end = symbol_end(p.code, parent_at, p.n)
+		initial = peek(p.code, parent_at, p.n)
+		if parent_end > parent_at and initial.upper() == initial and initial.lower() != initial and ";\n".contains(peek(p.code, blank_end(p, parent_end), p.n)) {
+			p.at = parent_end
+			return declared_type_node(attributed("extends", symbol(p.code[parent_at .. parent_end]), name), listed("{", "", []))
+		}
 	}
 	start = variants_start(p)
 	if start >= 0 { return sum_type(p, name, start, parameters) }
