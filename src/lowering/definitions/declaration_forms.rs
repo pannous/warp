@@ -688,9 +688,8 @@ fn of_typed(items: &[Node]) -> Option<(Node, usize)> {
 	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(mut type_name) = head.drop_meta().clone() else {
-		return None;
-	};
+	// `vector of int` is a `list of int` (check_style notes warp's word)
+	let mut type_name = crate::warp_parser::list_type_head(head.drop_meta().symbol_name()?).to_string();
 	if !of.is_symbol("of") {
 		return None;
 	}

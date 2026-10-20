@@ -990,21 +990,21 @@ fn is_empty_list(argument: &Node) -> bool {
 /// The run-time test of an argument for a parameter type; of a list type also of the list's first item, as a list keeps
 /// no item type at run time (decision list-variant-dispatch: an empty list fits every list type)
 fn run_time_test(argument: Node, type_name: &str) -> Option<Node> {
-	let tested = |type_name: &str| {
-		if takes_widened(type_name) {
-			crate::words::NUMBER_WORD.to_string()
-		} else {
-			type_name.to_string()
-		}
+	use crate::lowering::type_tests::declared_type_test;
+	let tested = |type_name: &str| match takes_widened(type_name) {
+		true => crate::words::NUMBER_WORD.to_string(),
+		false => type_name.to_string(),
 	};
-	let test = crate::lowering::type_tests::declared_type_test(argument.clone(), &tested(type_name))?;
 	let Some(element) = crate::analyzer::list_element_type(type_name) else {
-		return Some(test);
+		return declared_type_test(argument, &tested(type_name));
 	};
+	let is_list = declared_type_test(argument.clone(), crate::words::LIST_WORD)?;
 	let empty = key(call(crate::words::COUNT_WORD, vec![argument.clone()]), Op::Eq, Node::int(0));
 	let first_item = key(argument, Op::Hash, Node::int(1));
-	let item_test = crate::lowering::type_tests::declared_type_test(first_item, &tested(element))?;
-	Some(key(test, Op::And, key(empty, Op::Or, item_test)))
+	// a declared type's instance: is_type names it as the emitter's type registry knows it
+	let item_test = declared_type_test(first_item.clone(), &tested(element))
+		.unwrap_or_else(|| call(crate::words::IS_TYPE, vec![first_item, Node::Text(element.to_string())]));
+	Some(key(is_list, Op::And, key(empty, Op::Or, item_test)))
 }
 
 /// `float` and `number` take any number, as fit() widens an Int: at run time an exact `1.5` is an Int node too
