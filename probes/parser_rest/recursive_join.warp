@@ -1,0 +1,9 @@
+countdown(n: int): list := if n == 0 then [] else [n] + countdown(n - 1)
+pairs(n: int): any := {
+	found = [n]
+	if n == 0 { return found }
+	rest = pairs(n - 1)
+	found + rest
+}
+print(countdown(3))
+print(pairs(2))

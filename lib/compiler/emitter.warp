@@ -824,6 +824,9 @@ def local_value(body: Body, n: any): list {
 }
 
 def operation(body: Body, symbol: text, a: any, b: any): list {
+	# a recursive call's result the first reading does not know yet is of the other operand's kind: `[n] + f(n - 1)`
+	if a#1 == pending and b#1 != pending { a = [b#1, a#2] }
+	if b#1 == pending and a#1 != pending { b = [a#1, b#2] }
 	kind = joint_kind(a#1, b#1)
 	if kind == pending { kind = "int" }
 	if symbol == "#" and (a#1 == "list" or a#1 == "node") { return element(body, a, b) }

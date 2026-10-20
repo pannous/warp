@@ -323,4 +323,5 @@ fn parser_words_run_pure() {
 	runs_pure("type_of_is", &probe("type_of_is"), "yes\nno\nyes");
 	runs_pure("match_arm_forms", &probe("match_arms"), "x\nfirst\nb\nother");
 	runs_pure("coalesce", &probe("coalesce"), "2\n1\n-2");
+	runs_pure("recursive_join", &probe("recursive_join"), "[3 2 1]\n[2 1 0]");
 }
