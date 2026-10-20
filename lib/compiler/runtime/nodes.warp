@@ -6,7 +6,7 @@ held(value: any): any := value
 operator_spellings(): list := ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=",
 	"*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛",
 	"‖", "++", "--", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&",
-	"|", "↑", "↓", "/!", "/!="]
+	"|", "↑", "↓", "/!", "/!=", "is"]
 operator_code(spelled: text): int := {
 	spellings = operator_spellings()
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }

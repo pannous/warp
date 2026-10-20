@@ -198,3 +198,23 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_runtime", "d = {}; k = 4; d[k] = 7; d[k]", "7");
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
+
+/// Only `is` tests a type (card is-operator): parser.warp reads `is` as its own operator, so `3 == int` compares 3
+/// with the type int, as Rust's parser reads it; `x is not 4` and `x isn't 4` are `not (x is 4)`
+#[test]
+fn is_tests_types_and_equality_compares_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("is_type_word", "3 is int", "yes"),
+			("equals_type_word", "3 == int", "no"),
+			("text_equals_type_word", "\"a\" == text", "no"),
+			("unequal_type_word", "3 != int", "yes"),
+			("is_value", "x = 3; x is 3", "yes"),
+			("is_not_value", "x = 3; x is not 4", "yes"),
+			("isnt_value", "x = 4; x isn't 4", "no"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
