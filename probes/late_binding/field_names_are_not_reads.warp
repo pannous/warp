@@ -1,0 +1,5 @@
+class P { n: int }
+def make(s) := P{n: s}
+n = 1
+for i in 1 to 2 { n = make(3).n + n }
+n

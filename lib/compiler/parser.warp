@@ -885,7 +885,7 @@ def prefixed(p) {
 	if form == "loop" { return looped(p) }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else count_worded(p)
 	if declared != ø { return declared }
-	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
+	if PREFIX_OPERATORS.contains(form) and not after_member_dot(p) { return word_prefixed(p, word, form) }
 	if form == "not" {
 		p.at = p.at + 3
 		skip_spaces(p)
@@ -893,6 +893,11 @@ def prefixed(p) {
 	}
 	atom(p)
 }
+
+// Whether the word at the parser's position follows a member's dot: `math.sqrt(4)` calls the member sqrt, no √
+// (a range's `..sqrt 4` keeps the operator)
+// Rust twin: the member name after `.` never reaches lookahead.rs peek_prefix_operator
+def after_member_dot(p) := p.at > 0 and p.code[p.at - 1] == '.' and not (p.at > 1 and p.code[p.at - 2] == '.')
 
 // `abs x`, `sqrt(2)`: the operator word and its operand; `f = abs` alone is the operator itself. Braceless, the word
 // takes its argument like a call (`sqrt 4 + 5` is sqrt(9)); glued parentheses are the whole operand (`sqrt(16) + 1`)
@@ -1228,8 +1233,8 @@ def atom(p) {
 	// `.5` is 0.5
 	if c == '.' and is_digit(peek(p.code, p.at + 1, p.n)) { return float("0" + decimal_number(p)) }
 	if is_name_start(c) { return named(p) }
-	// `$a`, a pattern's name hole: `data($a + 0)`
-	if c == '$' and is_name_start(peek(p.code, p.at + 1, p.n)) {
+	// `$a`, a pattern's name hole: `data($a + 0)`; `$0`, a function's first parameter
+	if c == '$' and (is_name_start(peek(p.code, p.at + 1, p.n)) or is_digit(peek(p.code, p.at + 1, p.n))) {
 		end = symbol_end(p.code, p.at + 1, p.n)
 		hole = symbol(p.code[p.at .. end])
 		p.at = end

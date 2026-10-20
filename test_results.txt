@@ -431,6 +431,7 @@ PASSED:
   ✓ control::test_match_alternatives::alternatives_of_list_patterns
   ✓ control::test_match_alternatives::bar_and_or_are_alternatives
   ✓ control::test_match_alternatives::commas_are_alternatives
+  ✓ control::test_match_arm_if::an_arm_gives_its_inline_if
   ✓ control::test_match_binding_arm::bare_name_arm_binds_the_subject
   ✓ control::test_match_binding_arm::bare_name_unused_by_its_body_is_a_symbol_case
   ✓ control::test_match_binding_arm::variable_arm_compares
@@ -1656,6 +1657,7 @@ PASSED:
   ✓ functions::test_late_binding::a_free_variable_that_never_changes_needs_no_declaration
   ✓ functions::test_late_binding::a_variable_bound_after_the_definition_is_read_at_call_time
   ✓ functions::test_late_binding::declaring_global_reads_the_current_value
+  ✓ functions::test_late_binding::field_names_and_entry_keys_are_not_reads_of_a_variable
   ✓ functions::test_late_binding::in_place_mutation_counts_as_a_change
   ✓ functions::test_late_binding::late_binding_change_inside_function_with_no_later_call_is_fine
   ✓ functions::test_late_binding::loop_variables_are_captured_per_iteration
@@ -3761,7 +3763,10 @@ PASSED:
   ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
   ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
+  ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
+  ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
+  ✓ parser::test_self_pure::enum_cases_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
   ✓ parser::test_self_pure::match_values_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
@@ -3770,6 +3775,7 @@ PASSED:
   ✓ parser::test_self_pure::recursive_results_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
+  ✓ parser::test_self_pure::used_files_run_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
   ✓ parser::test_self_time_arithmetic::clocks_go_round_and_instants_have_no_calendar
@@ -6336,4 +6342,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-11 ignored, 6331 passed, 0 failed, 6331 total tested
+11 ignored, 6337 passed, 0 failed, 6337 total tested

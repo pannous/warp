@@ -22,6 +22,12 @@ multiple_assignments, then phrase_blocks ({print x}), for_loops (for → while),
 the opaque word for it, every other empty group stays ø). A call leaving out trailing parameters takes their
 defaults in emitter.warp (`f(x, y = 2)`, runtime words alike: `slice(xs, 1)`); a default reading another parameter
 is refused. Not core, skipped: `on` handlers, `stored` tables, shaders, canvas.
+`use` (card pure-follows-use): the stage request is ["pure", source, folder] (self_hosted.rs program_folder: the
+program file's folder, else the working directory); lib/compiler/uses.warp parses each used file of that folder on
+its own and splices its declarations (src/modules/declarations.rs is_declaration's forms, not its main-level
+statements) in front of the program, the files it uses first, each once, before the passes run. A `use` naming no
+file there (`use os`, `use math`: a std module) stays and the emitter refuses what it needs. `module_source("x")`
+is written out as lib/x.warp's text, as library_words.rs does.
 Traps writing passes in warp (cards match-silently and others):
 - `match xs#i { Key(…): … }` takes no case: pass the element through a Node parameter. `Empty:` does not take ø: `n is ø`.
 - a local or pattern binding named like a global function (`items`, `defined`, `value`, `names`) silently means the
