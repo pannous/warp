@@ -1069,6 +1069,7 @@ def typed_declaration(body: Body, name: text, type_name: text, value: any): list
 # only at run time is not checked yet (Rust's is), a value of another kind is refused
 def optional_declaration(body: Body, name: text, type_name: text, value: any): list {
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name + "?") }
+	value = texted(type_name, value)
 	kind = value#1
 	if kind != "node" and kind != pending and kind != declared_kinds[type_name] { return refuse("a " + kind + " given to a variable declared " + type_name + "?") }
 	assignment(body, symbol(name), ["node", boxed(value)])
