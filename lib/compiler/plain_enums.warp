@@ -1,0 +1,60 @@
+# Plain enums (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` declares
+# the type Color whose variants are its bare cases, `type @variants(Red Green) Color {}`, and `Color.Red`, `Color::Red`
+# are the case itself, the symbol Red. Not yet here: Swift's `case north` rows, `Coin.Dime as int`, `2 as Coin`,
+# `Coin(2)`.
+use "walk.warp"
+use "phrase_blocks.warp"
+
+enum_word = "enum"
+variants_word = "variants"
+
+# `{Red, Green}`: the names of the cases, else ø
+case_names(block: Node): any := match block {
+	List(cases, Bracket.Curly, separator): if cases.all(is_name) then cases.map(name_of) else ø
+	_: ø
+}
+
+# `enum Color {Red, Green}`: [the enum's name, its case names], else ø
+declared_enum(n: Node): any := match n {
+	List(parts, Bracket.None, Separator.Space): {
+		if #parts != 3 or parts#1 != symbol(enum_word) or not is_name(parts#2) { return ø }
+		cases = case_names(parts#3)
+		if cases == ø then ø else [name_of(parts#2), cases]
+	}
+	_: ø
+}
+
+# the case names of every enum the program declares, by enum name
+enums_in(n: any, enums: any): any := {
+	declared = declared_enum(n)
+	if declared != ø { enums[declared#1] = declared#2 }
+	if is_group(n) { for part in n { enums_in(part, enums) } }
+	enums
+}
+
+# the declaration as the sum type of its cases, the view Rust's sum_type gives
+enum_type(name: text, cases: list): any := {
+	variants = ["list", "", " "] + cases.map(case => ["symbol", case])
+	node_of(["type", ["attribute", variants_word, variants, ["symbol", name]], ["list", "{", ""]])
+}
+
+# `Color.Red` of a case Color declares: Red
+case_of(owner: Node, case: Node, n: Node, enums: any): Node := {
+	if not is_name(owner) or not is_name(case) or not (name_of(owner) in enums) { return n }
+	if name_of(case) in enums[name_of(owner)] then case else n
+}
+
+enum_node(n: Node, enums: any): Node := match n {
+	Key(owner, Op.Dot, case): case_of(owner, case, n, enums)
+	Key(owner, Op.Scope, case): case_of(owner, case, n, enums)
+	_: {
+		declared = declared_enum(n)
+		if declared == ø then n else enum_type(declared#1, declared#2)
+	}
+}
+
+plain_enums(program: any): any := {
+	enums = enums_in(program, {})
+	if #enums.keys == 0 { return program }
+	bottom_up(program, n => enum_node(n, enums))
+}
