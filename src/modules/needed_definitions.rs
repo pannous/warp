@@ -317,13 +317,20 @@ fn implied_words(statements: &[Node]) -> Vec<String> {
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
+	called_names_beyond(statements, &HashSet::new())
+}
+
+/// called_names without the reads `x.f` of the `fields` (`p.header` of a class's field calls no router header)
+pub(crate) fn called_names_beyond(statements: &[Node], fields: &HashSet<String>) -> HashSet<String> {
 	let implied = [
 		implied_words(statements),
 		crate::lowering::library_words::implied_count_words(statements),
 		crate::compiler::compile_context::read(|context| context.compiler_words.clone()),
 	]
 	.concat();
-	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).chain(implied).collect())
+	with_library_words(
+		mentioned_names(statements).into_iter().chain(method_names_beyond(statements, fields)).chain(implied).collect(),
+	)
 }
 
 /// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of
