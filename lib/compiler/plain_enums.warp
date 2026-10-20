@@ -1,16 +1,50 @@
-# Plain enums (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` declares
-# the type Color whose variants are its bare cases, `type @variants(Red Green) Color {}`, and `Color.Red`, `Color::Red`
-# are the case itself, the symbol Red. Not yet here: Swift's `case north` rows, `Coin.Dime as int`, `2 as Coin`,
-# `Coin(2)`.
+# Plain enums (card pure-enums; Rust twin: src/lowering/types/plain_enums.rs): `enum Color { Red, Green }` (Swift's
+# `{ case north, south }`) declares the type Color whose variants are its bare cases, `type @variants(Red Green) Color
+# {}`, and `Color.Red`, `Color::Red`, Swift's `.red` are the case itself, the symbol Red. A case's index, counting from
+# 0 as C does, is `Coin.Dime as int`; an int becomes a case explicitly, `2 as Coin` or `Coin(2)`, an error when no case
+# has that index (card enum-leftovers).
 use "walk.warp"
 use "phrase_blocks.warp"
+use "shapes.warp"
+use "node_matches.warp"
 
 enum_word = "enum"
 variants_word = "variants"
+case_word = "case"
+match_word = "match"
+raise_word = "raise"
+# the types a case converts to, each with the number its first case counts as: `Coin.Dime as int` and `as index` its
+# index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts)
+count_types = {int: 0, index: 0, position: 1}
+# node.warp's enums whose cases convert by their spelling, `op as text` (Rust: node_cases.rs), not by their index
+spelled_enums = ["Op", "Bracket", "Separator"]
+
+# the cases of an enum body, a line of several cases `Penny, Nickel` among lines of cases each a case
+# Rust twin: sum_variants.rs case_rows
+enum_rows(cases: list): list := {
+	rows = []
+	for case in cases {
+		rows += match case {
+			List(row, Bracket.None, Separator.Comma): row
+			_: [case]
+		}
+	}
+	rows
+}
+
+# a case of an enum, `north` of Swift's `case north`, else ø
+case_name(case: Node): any := match case {
+	Symbol(name): name
+	List(words, Bracket.None, Separator.Space): if #words == 2 and words#1 == symbol(case_word) and is_name(words#2) then name_of(words#2) else ø
+	_: ø
+}
 
 # `{Red, Green}`: the names of the cases, else ø
 case_names(block: Node): any := match block {
-	List(cases, Bracket.Curly, separator): if cases.all(is_name) then cases.map(name_of) else ø
+	List(cases, Bracket.Curly, separator): {
+		names = enum_rows(cases).map(case_name)
+		if names.all(name => name != ø) then names else ø
+	}
 	_: ø
 }
 
@@ -32,6 +66,40 @@ enums_in(n: any, enums: any): any := {
 	enums
 }
 
+# the names declared of an enum type, `c: Coin`, with that enum; "" for a name declared of several types
+# Rust twin: match_exhaustive.rs typed_subjects
+subjects_in(n: any, enums: any, subjects: any): any := {
+	declared = match n {
+		Key(name, Op.Colon, type_name): if is_name(name) and is_name(type_name) and name_of(type_name) in enums then [name_of(name), name_of(type_name)] else ø
+		_: ø
+	}
+	if declared != ø {
+		subjects[declared#1] = if declared#1 in subjects and subjects[declared#1] != declared#2 then "" else declared#2
+	}
+	if is_group(n) or n is key { for part in children_of(n) { subjects_in(part, enums, subjects) } }
+	subjects
+}
+
+children_of(n: any): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then [] else [left, right] }
+	_: items_of(n)
+}
+
+# the enum having a case of that name, when only one has it, else ø
+owner_of(case: text, enums: any): any := {
+	owners = enums.keys.filter(name => case in enums[name])
+	if #owners == 1 then owners#1 else ø
+}
+
+# the enum of a value: a case by name, or a name declared of the enum, else ø
+type_of(value: Node, enums: any, subjects: any): any := {
+	if not is_name(value) { return ø }
+	name = name_of(value)
+	owner = owner_of(name, enums)
+	if owner != ø { return owner }
+	if name in subjects and subjects[name] != "" then subjects[name] else ø
+}
+
 # the declaration as the sum type of its cases, the view Rust's sum_type gives
 enum_type(name: text, cases: list): any := {
 	variants = ["list", "", " "] + cases.map(case => ["symbol", case])
@@ -44,9 +112,58 @@ case_of(owner: Node, case: Node, n: Node, enums: any): Node := {
 	if name_of(case) in enums[name_of(owner)] then case else n
 }
 
-enum_node(n: Node, enums: any): Node := match n {
-	Key(owner, Op.Dot, case): case_of(owner, case, n, enums)
+# Swift's `.north`, and its arm `case .north:` read as the member `case.north`: north of the one enum having it
+implicit_case(owner: any, case: Node, n: Node, enums: any): Node := {
+	if not (owner == ø or owner == symbol(case_word)) or not is_name(case) { return n }
+	if owner_of(name_of(case), enums) != ø then case else n
+}
+
+# `match value { arms }`
+# Rust twin: nodes.rs matched
+match_over(value: Node, arms: list): Node := List([symbol(match_word), value, List(arms, Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space)
+
+# The number of a case counting the first as `first`: `2` of `Dime` from 0, a match over the cases for a name of the
+# enum type
+case_number(value: Node, cases: list, first: int): Node := {
+	numbers = 1 to #cases
+	if is_name(value) and name_of(value) in cases { return numbers.filter(i => cases#i == name_of(value))#1 - 1 + first }
+	match_over(value, numbers.map(i => Key(symbol(cases#i), Op.Colon, i - 1 + first)))
+}
+
+# The case at an index: `Dime` of `2`, a match over the indexes for any other value, an error past the cases
+case_at(value: Node, enum_name: text, enums: any): Node := {
+	cases = enums[enum_name]
+	no_case = " is no " + enum_name + " case"
+	if value is int {
+		return if value >= 0 and value < #cases then symbol(cases#(value + 1)) else error_node("" + value + no_case)
+	}
+	raised = List([symbol(raise_word), Key(value, Op.Add, no_case)], Bracket.None, Separator.Space)
+	arms = (1 to #cases).map(i => Key(i - 1, Op.Colon, symbol(cases#i)))
+	match_over(value, arms + [Key(symbol(other_arm), Op.Colon, raised)])
+}
+
+# `Coin.Dime as int` the case's index, `as position` its position, `2 as Coin` the case at an index; other conversions,
+# and those of node.warp's spelled enums, as they are
+case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): Node := {
+	if not is_name(target) { return n }
+	target_name = name_of(target)
+	if target_name in spelled_enums { return n }
+	if target_name in enums { return case_at(value, target_name, enums) }
+	enum_name = type_of(value, enums, subjects)
+	if enum_name == ø or enum_name in spelled_enums or not (target_name in count_types) { return n }
+	case_number(value, enums[enum_name], count_types[target_name])
+}
+
+enum_node(n: Node, enums: any, subjects: any): Node := match n {
+	Key(owner, Op.Dot, case): {
+		cased = case_of(owner, case, n, enums)
+		if cased == n then implicit_case(owner, case, n, enums) else cased
+	}
 	Key(owner, Op.Scope, case): case_of(owner, case, n, enums)
+	Key(value, Op.As, target): case_conversion(value, target, n, enums, subjects)
+	List(items, Bracket.Round, separator): {
+		if #items == 2 and is_name(items#1) and name_of(items#1) in enums then case_at(items#2, name_of(items#1), enums) else n
+	}
 	_: {
 		declared = declared_enum(n)
 		if declared == ø then n else enum_type(declared#1, declared#2)
@@ -56,5 +173,6 @@ enum_node(n: Node, enums: any): Node := match n {
 plain_enums(program: any): any := {
 	enums = enums_in(program, {})
 	if #enums.keys == 0 { return program }
-	bottom_up(program, n => enum_node(n, enums))
+	subjects = subjects_in(program, enums, {})
+	bottom_up(program, n => enum_node(n, enums, subjects))
 }
