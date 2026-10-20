@@ -295,6 +295,8 @@ fn conversion_kind(target: &str) -> Option<Kind> {
 		"list" => Some(Kind::List),
 		"text" | crate::wasm_emitter::numbers::exact::DECIMAL_WORD => Some(Kind::Text),
 		radix if crate::wasm_emitter::numbers::radix::named_radix(radix).is_some() => Some(Kind::Int),
+		// `[] as list of int`, `[] as ints`
+		_ if crate::analyzer::names_list_type(target) => Some(Kind::List),
 		_ => None,
 	}
 }
