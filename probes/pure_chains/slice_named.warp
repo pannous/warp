@@ -1,0 +1,13 @@
+kept(slices: list, own_names: list): list := {
+	slices = slices.filter(slice => not (slice#1 in own_names))
+	reached = {}
+	for slice in slices {
+		if slice#1 == "b" and not (slice#2 in reached) { reached[slice#2] = yes }
+	}
+	brought = []
+	for slice in slices { if slice#2 in reached { brought += [slice#1] } }
+	brought
+}
+print(kept([["a", "x"], ["b", "y"], ["c", "z"]], ["a"]))
+groups = [[1, 2], [3]]
+print(groups.map(len))

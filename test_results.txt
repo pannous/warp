@@ -4200,6 +4200,7 @@ PASSED:
   ✓ programs::test_window_size::the_viewer_reads_a_resize
   ✓ programs::test_window_size::window_size_is_a_property
   ✓ scope::test_bound_names_shadow_functions::a_lambda_captures_a_local_named_like_a_function
+  ✓ scope::test_bound_names_shadow_functions::a_lambda_reads_an_enclosing_local_named_like_a_function
   ✓ scope::test_bound_names_shadow_functions::a_local_holding_a_calls_value_is_sliced_beside_a_def_of_its_name
   ✓ scope::test_bound_names_shadow_functions::a_local_lambda_is_called_beside_a_same_named_function_holder
   ✓ scope::test_bound_names_shadow_functions::a_local_named_like_a_function_heads_a_list_as_its_value
@@ -6349,4 +6350,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-11 ignored, 6344 passed, 0 failed, 6344 total tested
+11 ignored, 6345 passed, 0 failed, 6345 total tested

@@ -35,6 +35,8 @@ webview = ["dep:wry", "dep:winit", "dep:objc2"]
 # the C library libwarp_runtime (library.rs, include/warp_runtime.h): run_wasm compiles the module it is given, so it
 # carries Cranelift; built on its own: `cargo rustc --release -p warp-runtime --lib --crate-type cdylib --features library`
 library = ["compiler"]
+# WARP_PROFILE=<file> (profile.rs): wasmtime's GuestProfiler writing Firefox Profiler JSON; warp has it, the stubs don't
+profiling = ["engine", "wasmtime/profiling"]
 
 [dependencies]
 libloading = { version = "0.9", optional = true } # C functions a program calls (c_calls.rs)

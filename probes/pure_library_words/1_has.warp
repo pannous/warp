@@ -1,0 +1,5 @@
+# m.has(k) of a map known only at run time: yes no
+seen(m: any, k: text): bool := m.has(k)
+m = {a: 1}
+print seen(m, "a")
+print seen(m, "b")

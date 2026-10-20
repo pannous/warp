@@ -62,7 +62,12 @@ impl WasmGcEmitter {
 				None => captured_variables(&function, &outer),
 			}
 			.into_iter()
-			.filter(|(name, _)| !self.ctx.user_functions.contains_key(name))
+			// a function's name read in the body is the function, unless the enclosing body has a local of that name
+			// (`held = …; part = i => held` beside held(name, suffix))
+			.filter(|(name, _)| {
+				!self.ctx.user_functions.contains_key(name)
+					|| enclosing.as_ref().is_some_and(|enclosing| enclosing.lookup(name).is_some())
+			})
 			.collect();
 			let bindings = captured
 				.iter()
