@@ -1,0 +1,10 @@
+// a program's own wasm_instruction and ran_without_error leave the forms `wasm f64.floor` and `try` lower to alone
+wasm_instruction(a: int, b: int): int := a + b
+ran_without_error(a: int, b: int): int := a * b
+lowest(x: float): float := wasm f64.floor
+print(wasm_instruction(1, 2))
+print(ran_without_error(3, 4))
+print(lowest(2.5))
+items = [1, 2]
+// the Rust lane fails here: card rust-lane-program
+print(try items#5 else 0)
