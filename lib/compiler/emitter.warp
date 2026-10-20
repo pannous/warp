@@ -843,9 +843,10 @@ declared_members(body: any): list := if kind_of(body) == "list" then body[3..].m
 declared_fields(body: any): list := declared_members(body).filter(field => field != ø)
 # a field's name as the view holds it: `x`, `"my field"`, `pi` (a constant's word)
 field_name_kinds = ["symbol", "text", "number"]
+without_optional_mark(name: text): text := name[0..<(#name - 1)]
 declared_field(field: any): any := {
 	kind = kind_of(field)
-	if kind in field_name_kinds and field#2.ends_with("?") { return [field#2[0..<(#field#2 - 1)], ø, [ø]] }
+	if kind in field_name_kinds and field#2.ends_with("?") { return [without_optional_mark(field#2), ø, [ø]] }
 	if kind in field_name_kinds { return [field#2, ø, ø] }
 	if kind != "key" { return ø }
 	if field#2 == ":" and kind_of(field#3) in field_name_kinds { return [field#3#2, type_name_of(field#4), ø] }
@@ -1044,7 +1045,7 @@ declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: 
 def declaration(body: Body, name: text, type_name: text, value: any): list {
 	# `x: any = v` admits every value: the plain assignment
 	if type_name == "any" { return assignment(body, symbol(name), value) }
-	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
+	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if not (type_name in declared_kinds) { return refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[type_name]
