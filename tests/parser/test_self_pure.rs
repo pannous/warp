@@ -324,4 +324,5 @@ fn parser_words_run_pure() {
 	runs_pure("match_arm_forms", &probe("match_arms"), "x\nfirst\nb\nother");
 	runs_pure("coalesce", &probe("coalesce"), "2\n1\n-2");
 	runs_pure("recursive_join", &probe("recursive_join"), "[3 2 1]\n[2 1 0]");
+	runs_pure("type_module_words", &probe("type_module_words"), "[1 2 3]\n[1 2]\n7");
 }
