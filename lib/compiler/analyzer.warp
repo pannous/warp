@@ -139,7 +139,8 @@ kind_of_list(n: any, scope: any): text := {
 	if name == "as_code" and #n == 2 { return kind_of(n#2, scope) }
 	if (name == "slice" or name == "reverse") and #n >= 2 {
 		element = kind_of(n#2, scope)
-		return if element == "text" or element == "codepoint" then "text" else if element == "empty" then "empty" else "list"
+		# a slice of a value known only at run time (`p.code[a .. b]`) is a text or a list then
+		return if element == "text" or element == "codepoint" then "text" else if element == "empty" or element == "data" then element else "list"
 	}
 	if name != "" and name in call_kinds and (#n >= 2 or bracket_of(n) == "(") and binding(scope, name) == ø { return call_kinds[name] }
 	typed = typed_call_kind(n, scope)
@@ -176,6 +177,8 @@ kind_of_key(n: any, scope: any): text := {
 	op = op_of(n)
 	if op == ".." or op == "..<" or op == "to" or op == "…" { return "list" }
 	if op == "±" { return "data" }
+	# `p.code`: a field, whose kind the emitter knows from the class (a node at run time here); `xs.length` counts
+	if op == "." and value_of(n) is symbol { return if name_of(value_of(n)) in counting_words then "int" else "data" }
 	if op in arithmetic_ops and not is_empty(key_of(n)) { return arithmetic_kind(kind_of(key_of(n), scope), op, kind_of(value_of(n), scope)) }
 	if op == "=" or op == ":=" { return held_kind(assigned_value(n), scope) }
 	if op in compound_ops { return compound_kind(kind_of(key_of(n), scope), compound_ops[op], kind_of(value_of(n), scope)) }

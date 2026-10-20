@@ -225,3 +225,10 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
+
+/// lib/compiler/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
+/// variable (card pure-field-slice)
+#[test]
+fn field_slices_run_pure() {
+	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
+}
