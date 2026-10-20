@@ -115,4 +115,5 @@ fn a_class_named_like_a_type_takes_its_variant() {
 	);
 	is!(&format!("{variants}slot(\"b\", 1)"), "b1");
 	is!("f(c: text) := 1; f(b: list) := 2; g(x) := f(x) in [2]; g([1])", true);
+	is!("f(c: text) := 1; f(b: list) := 2; g(x) := f(x) == 2; g([1])", true);
 }

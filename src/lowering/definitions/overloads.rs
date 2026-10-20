@@ -966,11 +966,12 @@ impl ParameterOverloads {
 		let [head, arguments @ ..] = items.as_slice() else {
 			return None;
 		};
-		let variants = self.overloaded.get(&head.drop_meta().name())?.clone();
+		// `f(x) in xs` read as words: its head is the call `f(x)`, no name of a variant
+		let name = head.symbol_name()?.to_string();
+		let variants = self.overloaded.get(&name)?.clone();
 		if arguments.is_empty() || !is_call(items, bracket, separator) {
 			return None;
 		}
-		let name = head.drop_meta().name();
 		let variants: Vec<Vec<String>> = variants.into_iter().filter(|types| types.len() == arguments.len()).collect();
 		let declared: Vec<Option<String>> = arguments
 			.iter()
