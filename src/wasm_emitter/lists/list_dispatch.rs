@@ -78,37 +78,11 @@ fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'
 			I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array),
 	];
 	body.extend_from_slice(new_list_tail);
+	body.extend([I::LocalSet(0), I::End]);
+	let grown_items =
+		[I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 }];
+	body.extend(grown_when_full(array, &[I::LocalGet(0), length()], &[I::LocalGet(0), items()], grown, &grown_items));
 	body.extend([
-		I::LocalSet(0),
-		I::End,
-		I::LocalGet(0),
-		length(),
-		I::LocalGet(0),
-		items(),
-		I::ArrayLen,
-		I::I32Eq,
-		I::If(BlockType::Empty),
-		I::LocalGet(0),
-		length(),
-		I::I32Const(1),
-		I::I32Shl,
-		I::I32Const(FIRST_CAPACITY),
-		I::I32Add,
-		I::ArrayNewDefault(array),
-		I::LocalSet(grown),
-		I::LocalGet(grown),
-		I::I32Const(0),
-		I::LocalGet(0),
-		items(),
-		I::I32Const(0),
-		I::LocalGet(0),
-		length(),
-		I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-		I::LocalGet(0),
-		I::LocalGet(grown),
-		I::RefAsNonNull,
-		I::StructSet { struct_type_index: list, field_index: 1 },
-		I::End,
 		I::LocalGet(0),
 		items(),
 		I::LocalGet(0),
@@ -123,6 +97,28 @@ fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'
 		I::StructSet { struct_type_index: list, field_index: 0 },
 		I::LocalGet(0),
 	]);
+	body
+}
+
+/// When the array `items` pushes is full (`count` items): one twice as large (plus FIRST_CAPACITY) in local `grown`,
+/// the items copied into it, then `keep_grown` puts it in place of the full one
+pub(super) fn grown_when_full(
+	array: u32,
+	count: &[I<'static>],
+	items: &[I<'static>],
+	grown: u32,
+	keep_grown: &[I<'static>],
+) -> Vec<I<'static>> {
+	let mut body = [count, items, &[I::ArrayLen, I::I32Eq, I::If(BlockType::Empty)][..]].concat();
+	body.extend_from_slice(count);
+	body.extend([I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array)]);
+	body.extend([I::LocalSet(grown), I::LocalGet(grown), I::I32Const(0)]);
+	body.extend_from_slice(items);
+	body.push(I::I32Const(0));
+	body.extend_from_slice(count);
+	body.push(I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array });
+	body.extend_from_slice(keep_grown);
+	body.push(I::End);
 	body
 }
 
