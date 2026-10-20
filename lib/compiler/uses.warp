@@ -75,8 +75,10 @@ statements_in(program: any): list := {
 }
 
 # what a used file brings, as src/modules/declarations.rs is_declaration: a class, `x = …`, `f(x) := …`,
-# `global x = 0`, `def f(x) …`; not its main-level statements
+# `global x = 0`, `def f(x) …`, a plain `enum Meaning {…}` (plain_enums.warp lowers it with the program); not its
+# main-level statements
 is_declaration(statement: any): bool := {
+	if declared_enum(statement) != ø { return yes }
 	if type(statement) is key {
 		operator = op_of(statement)
 		left = key_of(statement)

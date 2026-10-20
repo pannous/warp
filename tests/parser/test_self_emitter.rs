@@ -30,7 +30,6 @@ fn core_programs_run_as_rust_runs_them() {
 }
 
 #[test]
-#[ignore = "fixnow: probes-guards: emitter.warp prints [0 5 7 Error(\"divide by zero\")] for probes/self_hosting/guards.warp where an Error in a list item raises (decision error-type); also cycle_argument_kinds.warp traps"]
 fn every_source_inside_the_core_runs_as_rust_runs_it() {
 	crate::requires!(crate::common::RUST_PIPELINE);
 	emitter_differential(&twin_sources(&DROPPED), LEAST_SOURCES_INSIDE);

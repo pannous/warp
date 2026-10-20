@@ -200,13 +200,23 @@ pub fn analysis_view(program: &Node) -> Node {
 
 /// What a loop's step shows as in the analysis view, `loop·step: i++`, the way Rust's split_step tells it by its mark
 pub const SHOWN_STEP: &str = "loop·step";
+/// What an item written into a list shows as in the analysis view, `data·item: e`, by its data_items mark
+pub const SHOWN_LIST_ITEM: &str = "data·item";
+/// What a value written into a field shows as in the analysis view, `data·field: e`
+pub const SHOWN_FIELD: &str = "data·field";
 
 /// `float64 r = 3.14159` keeps its type as metadata on the target, which a view drops: shown as `r: float64 = 3.14159`;
-/// the step a `for` lowering appends to its loop body is marked as metadata too: shown as `loop·step: i++`
+/// the step a `for` lowering appends to its loop body is marked as metadata too: shown as `loop·step: i++`, and so is
+/// an item written into a list or field (lowering data_items): shown as `data·item: e`, `data·field: e`
 fn declared_types_shown(node: Node) -> Node {
+	use crate::lowering::data_items::{marked_item, Place};
 	use crate::operators::Op;
 	if crate::wasm_emitter::is_step(&node) {
-		return Node::Key(Box::new(Node::Symbol(SHOWN_STEP.into())), Op::Colon, Box::new(node.drop_meta().clone()));
+		return shown_as(SHOWN_STEP, node.drop_meta().clone());
+	}
+	if let Some((item, place)) = marked_item(&node) {
+		let shown = if place == Place::Field { SHOWN_FIELD } else { SHOWN_LIST_ITEM };
+		return shown_as(shown, declared_types_shown(item.clone()));
 	}
 	match node {
 		Node::Key(target, Op::Assign, value)
@@ -217,6 +227,10 @@ fn declared_types_shown(node: Node) -> Node {
 		}
 		other => other.map_children(declared_types_shown),
 	}
+}
+
+fn shown_as(mark: &str, node: Node) -> Node {
+	Node::Key(Box::new(Node::Symbol(mark.into())), crate::operators::Op::Colon, Box::new(node))
 }
 
 fn plain(view: Node) -> Node {

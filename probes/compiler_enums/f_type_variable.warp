@@ -1,0 +1,4 @@
+# a type variable of a generic signature holds any value (walk.warp unchanged, report)
+unchanged(n: T): T := n
+print unchanged(3)
+print unchanged("x")
