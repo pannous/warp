@@ -75,9 +75,10 @@ impl WasmGcEmitter {
 		let target_name = target.name().to_lowercase();
 		let kind = self.get_type(value);
 		let text_like = crate::type_tests::canonical_spec_word(&target_name) == crate::words::TEXT_WORD;
+		let to_list = crate::analyzer::names_list_type(&target_name);
 		let refused = match kind {
-			Kind::List => target_name != "list" && !text_like,
-			Kind::Int | Kind::Float => target_name == "list",
+			Kind::List => !to_list && !text_like,
+			Kind::Int | Kind::Float => to_list,
 			_ => false,
 		};
 		refused.then(|| format!("cannot cast {kind} to {target_name}: {} as {target_name}", value.serialize()))
@@ -339,6 +340,11 @@ impl WasmGcEmitter {
 				self.emit_fixed_width_check(func, Some(width));
 				self.emit_call(func, "new_int");
 			}
+			// `[] as list of int` (conversions.rs casts the items of any other list): the empty list of that type
+			list_type if crate::analyzer::names_list_type(list_type) => match value.is_empty_node() {
+				true => self.emit_node_instructions(func, &Node::List(vec![], Bracket::Square, Separator::Comma)),
+				false => self.emit_list_cast(func, value),
+			},
 			_ => self.emit_type_error(func, unknown_conversion(value, &target_type.name())),
 		}
 	}

@@ -51,7 +51,7 @@ fn rewrite(node: Node, selectors: &[&str]) -> Node {
 			bracket @ (Bracket::None | Bracket::Round | Bracket::Curly),
 			separator @ (Separator::Space | Separator::None),
 		) if !is_spaced_definition(&items) => {
-			let items = looked_up(type_of_called(items), selectors);
+			let items = folded_casts(looked_up(type_of_called(items), selectors));
 			match (items.len(), &bracket) {
 				(1, Bracket::None) => items.into_iter().next().expect("one item"),
 				_ => Node::List(items, bracket, separator),
@@ -117,6 +117,41 @@ fn looked_up(mut items: Vec<Node>, selectors: &[&str]) -> Vec<Node> {
 	items
 }
 
+/// `[] as list of int`, parsed as the items `[] as list`, `of`, `int` (`xs = [] as list`, `of`, `int` in an
+/// assignment): the cast to the one type `list of int`, `list of list of int` alike
+fn folded_casts(mut items: Vec<Node>) -> Vec<Node> {
+	let mut at = 0;
+	while at + 2 < items.len() {
+		let element = items[at + 2].symbol_name().filter(|_| items[at + 1].is_symbol(OF_WORD));
+		match element.and_then(|element| with_cast_of(&items[at], element)) {
+			Some(cast) => {
+				items[at] = cast;
+				items.drain(at + 1..at + 3);
+			}
+			None => at += 1,
+		}
+	}
+	items
+}
+
+/// The item ending in a cast to a collection type, `[] as list` or `xs = [] as list`, with that type made `list of element`
+fn with_cast_of(item: &Node, element: &str) -> Option<Node> {
+	match item.drop_meta() {
+		Node::Key(value, Op::As, type_word) => {
+			let head = type_word.symbol_name()?;
+			let first = head.split(' ').next()?;
+			is_type_head(&Node::Symbol(first.to_string())).then(|| {
+				let head = crate::warp_parser::list_type_head(head);
+				key(value.as_ref().clone(), Op::As, Node::Symbol(format!("{head} {OF_WORD} {element}")))
+			})
+		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
+			Some(Node::Key(target.clone(), *op, Box::new(with_cast_of(value, element)?)))
+		}
+		_ => None,
+	}
+}
+
 /// `type of x` as `type(x)`, `print type of x` as `print type(x)`: the parser reads `type of` as a declaration head
 /// whose argument is its body (`type of {a:1}`) or the rest of the phrase
 fn type_of_called(mut items: Vec<Node>) -> Vec<Node> {
@@ -154,6 +189,8 @@ fn is_type_head(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(word) => crate::type_tests::COLLECTION_WORDS.contains(&crate::warp_parser::list_type_head(word)),
 		Node::Key(_, Op::Colon, _) => true,
+		// `[] as list of int`: the cast's type
+		Node::Key(_, Op::As, type_word) => is_type_head(type_word),
 		_ => false,
 	}
 }

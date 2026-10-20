@@ -56,3 +56,15 @@ fn a_parameter_as_list_takes_lists_and_texts() {
 	assert_eq!(text_of("l(x) := x as list; l(\"ab\"); l([1 2])"), "[1 2]");
 	is!("l(x) := x as list; #l(\"abc\") + #l([1 2])", 5);
 }
+
+// card cast-list: a cast to a list type converts each item; an empty list is an empty list of that type
+#[test]
+fn a_cast_to_a_list_type_converts_each_item() {
+	is!("xs = [1, 2] as floats; xs#1 + 0.5", 1.5);
+	is!("xs = [1, 2] as [float]; xs#2", 2.0);
+	is!("xs = [1, 2] as list of float; xs#2", 2.0);
+	is!("ys = [\"1\", \"2\"]; zs = ys as ints; zs#2 + 1", 3);
+	is!("xs = [] as list of int; count xs", 0);
+	is!("xs = [] as [int]; count xs", 0);
+	is!("xs = [] as ints; count xs", 0);
+}

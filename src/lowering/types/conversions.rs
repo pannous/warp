@@ -10,6 +10,55 @@ use crate::node::{call, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::BTreeSet;
 
+/// `xs as floats`, `xs as [float]`, `xs as list of float`: each item cast, `[1 as float, 2 as float]` of a list written,
+/// `xs.map(item => item as float)` of any other; an empty list stays a cast, the empty list of that type (the emitter).
+/// A list of a class's instances is class_methods' (`parse_json(t) as [Point]`)
+pub fn lower_list_casts(node: Node) -> Node {
+	match node {
+		Node::Key(value, Op::As, type_node) if let Some(element) = builtin_list_element(&type_node) => {
+			list_cast(lower_list_casts(*value), &element)
+		}
+		other => other.map_children(lower_list_casts),
+	}
+}
+
+/// `float` of `floats`, `[float]` and `list of float`, `list of int` of `list of list of int`: a built-in element type
+fn builtin_list_element(type_node: &Node) -> Option<String> {
+	let type_name = match crate::lowering::declaration_forms::bracketed_list_type(type_node) {
+		Some(list_type) => list_type.name(),
+		None => type_node.symbol_name()?.to_string(),
+	};
+	let element = crate::analyzer::list_element_type(&type_name)?;
+	let is_builtin = crate::analyzer::type_word_kind(element).is_some() || crate::analyzer::names_list_type(element);
+	is_builtin.then(|| element.to_string())
+}
+
+fn list_cast(value: Node, element: &str) -> Node {
+	let element_type = Node::Symbol(element.to_string());
+	let item_cast = |item: Node| match builtin_list_element(&element_type) {
+		Some(inner) => list_cast(item, &inner),
+		None => key(item, Op::As, element_type.clone()),
+	};
+	let written = match value.drop_meta() {
+		Node::List(items, Bracket::Square, separator) => Some((items.clone(), separator.clone())),
+		_ => None,
+	};
+	let is_empty = value.is_empty_node() || written.as_ref().is_some_and(|(items, _)| items.is_empty());
+	match written {
+		_ if is_empty => key(value, Op::As, Node::Symbol(format!("{}{element}", crate::analyzer::LIST_OF_PREFIX))),
+		Some((items, separator)) => Node::List(items.into_iter().map(item_cast).collect(), Bracket::Square, separator),
+		None => {
+			let item = Node::Symbol(format!(
+				"item{}{}",
+				crate::analyzer::TEMPORARY_SEPARATOR,
+				crate::lowering::nodes::fresh_number()
+			));
+			let mapping = key(item.clone(), Op::Arrow, item_cast(item));
+			key(value, Op::Dot, crate::node::parens(vec![Node::Symbol(crate::words::MAP_WORD.to_string()), mapping]))
+		}
+	}
+}
+
 /// The name of the conversion to `target`: `converted_to_text` (`·` would read as a trait witness, traits.rs)
 fn conversion_name(target: &str) -> String {
 	format!("converted_to_{target}")
