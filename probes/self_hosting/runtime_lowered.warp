@@ -1,0 +1,5 @@
+# feasibility probe (card standalone): the warp passes lower lib/compiler/runtime.warp, which Rust lowers today
+use "../../lib/compiler/passes.warp"
+use file
+runtime = lowered_program(read("../../lib/compiler/runtime.warp"), "../../lib/compiler")
+print(#statements_of(runtime))

@@ -63,6 +63,20 @@ fn match_values_run_pure() {
 	runs_pure("match_text", "g(w) := match w { \"hi\": 1; \"hello\": 2; _: 0 }; g(\"hello\")", "2");
 }
 
+/// plain_enums.warp: an enum declares its cases, `Color.Red` and `Color::Red` are the case (card pure-enums)
+#[test]
+fn enum_cases_run_pure() {
+	let color = "enum Color { Red, Green, Blue }";
+	let warmth = "warmth(c) := match c { Color.Red: \"warm\"; Color::Blue: \"cold\"; _: \"mild\" }";
+	runs_pure("enum_arms", &format!("{color}\n{warmth}\nwarmth(Color.Red) + warmth(Color.Green)"), "warmmild");
+	let cents = "cents(coin) := match coin { Penny: 1; Dime: 10; _: 0 }";
+	runs_pure(
+		"bare_case_arms",
+		&format!("enum Coin {{ Penny, Dime }}\n{cents}\ncents(Dime) + cents(Coin.Penny)"),
+		"11",
+	);
+}
+
 /// A call passing the result of a recursive call not known yet, and functions calling each other while one is still
 /// read, as parser.warp's expression, atom and continued do
 #[test]
@@ -129,6 +143,60 @@ fn program_names_run_pure() {
 	runs_pure("spaced_call", "f(a, b) := a + b; f 3 4", "7");
 	runs_pure("statement_block", "add := { it + 1 }; add 2", "3");
 	runs_pure("value_definition", "limit := 3; f(a) := a > limit; f 4", "yes");
+}
+
+/// card pure-follows-use: a used file's declarations, and those of the files it uses, reach the pure lane
+#[test]
+fn used_files_run_pure() {
+	let program = concat!(env!("CARGO_MANIFEST_DIR"), "/probes/self_hosting/pure/31_use_file.warp");
+	runs_pure("use_file", program, "[3 3]\n8\nyes");
+}
+
+/// card pure-lane-use: parser.warp reads the member after a dot as a name, `math.sqrt(16)` no √ (the lane refuses
+/// `use math` and the program compiles the usual way, from parser.warp's tree)
+#[test]
+fn a_member_named_like_a_prefix_word_reads_pure() {
+	let (output, _) = pure_run("member_sqrt", "use math\nprint math.sqrt(16)\nprint math.abs(-7)");
+	assert!(output.contains("4\n7"), "{output}");
+}
+
+/// `name := {…}` holds what the block computes, not the block (card analyzer-reads): `hi()` is 7, an int
+#[test]
+fn block_definitions_hold_their_value_pure() {
+	runs_pure("block_value", "hi := { 3 + 4 }; hi()", "7");
+	runs_pure("block_value_added", "hi := { 3 + 4 }; hi() + 1", "8");
+}
+
+/// parser.warp reads an integer and a time unit word as the duration Rust's parser makes (card parser-reads-day):
+/// `1day` is no `1*day`, and `1 day in h` converts
+#[test]
+fn durations_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("duration_in_unit", "d = 1 day; d in h", "24h"),
+			("glued_duration", "1day + 1 day", "2 days"),
+			("compound_duration", "1 month 2 days", "1 month 2 days"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// A call leaving out trailing parameters takes their defaults, in the program's functions and runtime words alike
+#[test]
+fn defaults_run_pure() {
+	runs_pure("default_given", "add(x, y = 2) := x + y; add(1)", "3");
+	runs_pure("default_typed", "add(x: int, y: int = 2) := x + y; add(1, 5)", "6");
+	runs_pure("default_runtime_word", "xs = [1, 2, 3]; xs.slice(1)", "[2 3]");
+}
+
+/// A map that starts as `{}` or `{1: 5}` is keyed by texts, so a number key names an entry (P34, card integer-key)
+#[test]
+fn number_keys_run_pure() {
+	runs_pure("number_key_empty_map", "m = {}; m[1] = 2; m", "{1:2}");
+	runs_pure("number_key_runtime", "d = {}; k = 4; d[k] = 7; d[k]", "7");
+	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
 
 /// lib/compiler/lambdas.warp: iteration words over a lambda or a function loop, other lambdas are closures capturing

@@ -1,0 +1,100 @@
+## runtime errors: each fails inside a function of its name, which src/wasm_emitter/control/traps.rs reads off the
+## trace as the error's message; the global trap_detail holds the value the message names
+divide_by_zero(): int := {
+	fail()
+	0
+}
+# `xs#i` outside 1…count: "index out of range: i not in 1…count"
+# the runtime errors of the library words, named for src/wasm_emitter/control/traps.rs to read off the trace
+index_out_of_range(): int := {
+	fail()
+	0
+}
+not_a_list(): int := {
+	fail()
+	0
+}
+not_a_text(): int := {
+	fail()
+	0
+}
+not_an_int(): int := {
+	fail()
+	0
+}
+not_a_character(): int := {
+	fail()
+	0
+}
+invalid_number(): int := {
+	fail()
+	0
+}
+an_int_must_be_a_whole_number(): int := {
+	fail()
+	0
+}
+# the run's error is the message (Rust's returned_error with its trap detail)
+returned_error(message: text): int := {
+	global trap_detail = held(message)
+	fail()
+	0
+}
+index_out_of_range_of(index: int, count: int): int := {
+	global trap_detail = held([index, count])
+	fail()
+	0
+}
+# `raise X`: the run fails with X as its message (Rust's returned_error, src/wasm_emitter/control/traps.rs)
+returned_error(): int := {
+	fail()
+	0
+}
+raised(value: any): int := {
+	global trap_detail = value
+	returned_error()
+}
+# `xs#i` of an i known only at run time: an int, else "index must be an integer"
+index_of_node(n: any): int := {
+	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
+	unboxed_int(n)
+}
+# a product beyond the int range (Rust's would be a big int)
+int_overflow() := {
+	fail()
+	0
+}
+index_must_be_an_integer(): int := {
+	fail()
+	0
+}
+# `m.name` of a value without the field `name` known only at run time: "no field name"
+missing_field(name: text): int := {
+	global trap_detail = held(name)
+	fail()
+	0
+}
+# `x as rational` of ∞ or NaN: "not a finite number"
+not_a_finite_number() := {
+	fail()
+	0
+}
+# an int result beyond 64 bits where the runtime has no big ints: "int64 overflow" (src/numbers/fixed_width.rs)
+overflow_of_int64() := {
+	fail()
+	0
+}
+# a closure call of a value that is no closure, or of a closure of another arity
+not_a_function() := {
+	fail()
+	0
+}
+wrong_number_of_arguments() := {
+	fail()
+	0
+}
+# the runtime errors Rust's run names by the function trapping (src/wasm_emitter/lists/list_ops/runtime_errors.rs)
+not_a_map(): int := {
+	fail()
+	0
+}

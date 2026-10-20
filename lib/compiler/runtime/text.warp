@@ -1,0 +1,84 @@
+# Texts byte by byte: joining, counting characters, code points, order, search, printing
+text_join(a: text, b: text): text := {
+	out = new_text(byte_count(a) + byte_count(b))
+	copy_text(out, 0, a, 0, byte_count(a))
+	copy_text(out, byte_count(a), b, 0, byte_count(b))
+	# a walk over a stays good on out, which starts with a's bytes: `t += …` keeps t's cursor
+	if same_text(a, walked_text) == 1 { walked_text = out }
+	if same_text(a, other_text) == 1 { other_text = out }
+	out
+}
+# the text counted last, its size then and its count; the two texts `t#i` walked last, each with its size then, the
+# index the walk stands at, that character's byte and the one before's (-1 when unknown): `for ch in t` counts t once
+# and walks on from the character before, also with another text indexed in between or one look back (linear time,
+# as Rust's text cursor)
+global counted_text = ""
+global counted_bytes = 0
+global counted = 0
+global walked_text = ""
+global walked_bytes = 0
+global walked_index = 0
+global walked_at = 0
+global walked_before = -1
+global other_text = ""
+global other_bytes = 0
+global other_index = 0
+global other_at = 0
+global other_before = -1
+# the characters (grapheme clusters) of a text
+text_count(t: text): int := {
+	if same_text(t, counted_text) == 1 and byte_count(t) == counted_bytes { return counted }
+	count = 0
+	at = 0
+	while at < byte_count(t) {
+		at = character_end(t, at)
+		count += 1
+	}
+	counted_text = t
+	counted_bytes = byte_count(t)
+	counted = count
+	count
+}
+# the code points of a text: its bytes that start one, all but the continuation bytes 10xxxxxx
+code_point_count(t: text): int := {
+	count = 0
+	for i in 0..byte_count(t) {
+		b = byte_at(t, i)
+		if b < 128 or b >= 192 { count += 1 }
+	}
+	count
+}
+# t and a newline to stdout, through the output bytes of linear memory a chunk at a time: the one place a text
+# goes into memory
+print_line(t: text): int := {
+	room = 65520
+	start = 0
+	while start < byte_count(t) {
+		stop = start + room
+		if stop > byte_count(t) { stop = byte_count(t) }
+		for i in start..stop { output_byte(i - start, byte_at(t, i)) }
+		write_output(stop - start)
+		start = stop
+	}
+	output_byte(0, 10)
+	write_output(1)
+}
+# -1, 0 or 1 as a's bytes come before b's, equal them or come after
+text_order(a: text, b: text): int := {
+	i = 0
+	while i < byte_count(a) and i < byte_count(b) {
+		if byte_at(a, i) < byte_at(b, i) { return -1 }
+		if byte_at(a, i) > byte_at(b, i) { return 1 }
+		i += 1
+	}
+	if byte_count(a) == byte_count(b) then 0 else if byte_count(a) < byte_count(b) then -1 else 1
+}
+# where the bytes of part first start in t, -1 when nowhere
+text_index(t: text, part: text): int := {
+	for start in 0..(byte_count(t) - byte_count(part) + 1) {
+		i = 0
+		while i < byte_count(part) and byte_at(t, start + i) == byte_at(part, i) { i += 1 }
+		if i == byte_count(part) { return start }
+	}
+	-1
+}

@@ -1,0 +1,5 @@
+// plain_enums.warp alone over parser.warp's tree (card pure-enums)
+use "../../lib/compiler/parser.warp"
+use "../../lib/compiler/plain_enums.warp"
+program = node_of(plain(tree("enum Color {Red, Green}\nx = Color.Red\ny = Color::Green")))
+print view_of(plain_enums(program))
