@@ -1,0 +1,10 @@
+// out: [3 3]
+// out: 8
+// out: yes
+# a used file's declarations, and those of the files it uses (card pure-follows-use); module_source as the std
+# module's text
+use "used/twice.warp"
+print twice(3)
+print doubled_next(3)
+prelude_length = #module_source("prelude")
+print prelude_length > 100
