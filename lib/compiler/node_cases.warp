@@ -36,6 +36,6 @@ node_value(n: Node, builds: any): Node := match n {
 node_cases(program: any): any := {
 	scope = scope_of(program)
 	builds = {}
-	for case in ["Key", "List"] { if not binds_besides_fields(scope, case) { builds[case] = yes } }
+	for case in ["Key", "List"] { if not (binds_value(scope, case) or binds_as(scope, case, Meaning.Function)) { builds[case] = yes } }
 	bottom_up(program, n => node_value(n, builds))
 }
