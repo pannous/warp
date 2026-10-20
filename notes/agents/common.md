@@ -103,8 +103,9 @@ After a context swap, this file and your role file win over anything a handover 
 - One local build (user 2026-10-20: "We create just one cargo build now, and every other one uses that one warp
   build for their tests"): only main's build runs on the Mac (/Users/me/dev/bin/warp, /Users/me/dev/bin/warp-debug,
   refreshed after each pushed batch). Workers run no cargo build, check or own-warp.sh locally: .warp changes are
-  checked with that binary, Rust changes are built and tested by the cloud lane. Until card shared-warp-build lands,
-  the shared binary reads main's lib/, not your worktree's.
+  checked with that binary, Rust changes are built and tested by the cloud lane. It reads lib/ from WARP_LIB, else
+  the nearest lib/compiler above the program or cwd, so run it from your worktree (or `WARP_LIB=<worktree>/lib`).
+  Standard modules (`use list`) still come from its build (card std-modules).
 - Close what you start (user 2026-10-20): after every test, probe or build, kill your own leftover processes by PID
   (warp, scratch/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
   <your worktree>` before reporting.

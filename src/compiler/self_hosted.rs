@@ -28,31 +28,22 @@ const PURE_STAGE: &str = "\"pure\"";
 /// reads its kinds (a suite count of + analyzer)
 const ANALYSIS_SWITCH: &str = "WARP_SELF_ANALYSIS";
 /// passes.warp `stage` of the request in the worker's input file, with the prelude's text in its setup file
-const PASSES_PROGRAM: &str = concat!(
-	"use \"",
-	env!("CARGO_MANIFEST_DIR"),
-	"/lib/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)), read(args#2))"
-);
+const PASSES_PROGRAM: &str = "use \"{lib}/compiler/passes.warp\"\nuse os\nstage(json(read(args#1)), read(args#2))";
 /// analyzer.warp `emitter_kinds` of the view in the worker's input file, as JSON (shape: notes/self_hosting.md): a
 /// program of its own, as analyzer.warp's names clash with parser.warp's (its local `digits`, its field `.separator`)
-const ANALYSIS_PROGRAM: &str = concat!(
-	"use \"",
-	env!("CARGO_MANIFEST_DIR"),
-	"/lib/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))"
-);
+const ANALYSIS_PROGRAM: &str =
+	"use \"{lib}/compiler/analyzer.warp\"\nuse os\nuse json\nto_json(emitter_kinds(node_of(json(read(args#1)))))";
 /// emitter.warp `typed_wasm_module` of the request in the worker's input file, [the lowered program's view, its kinds
 /// from analyzer.warp or {}], the runtime words' view and the host words in its setup files: the module's bytes, or a refusal starting with OUTSIDE_THE_CORE
 const EMIT_PROGRAM: &str = concat!(
-	"use \"",
-	env!("CARGO_MANIFEST_DIR"),
-	"/lib/compiler/emitter.warp\"\nuse os\n",
+	"use \"{lib}/compiler/emitter.warp\"\nuse os\n",
 	"request = json(read(args#1))\n",
 	"typed_wasm_module(node_of(request#1), node_of(json(read(args#2))), json(read(args#3)), request#2)"
 );
-/// The runtime words emitter.warp compiles into a module, lowered like a program
-const RUNTIME_WORDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler/runtime.warp");
-/// The folder of the compiler's warp files, where runtime.warp's parts are named from
-const COMPILER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/compiler");
+/// Where a stage program names lib/, the folder library() resolves
+const LIBRARY_MARK: &str = "{lib}";
+/// The runtime words emitter.warp compiles into a module, lowered like a program, in the compiler's folder
+const RUNTIME_WORDS: &str = "runtime.warp";
 /// The module the host words are imported from
 const HOST_MODULE: &str = "host";
 /// How emitter.warp refuses a program beyond its core; the Rust emitter emits it then
@@ -67,9 +58,6 @@ const SURVEY_SETTING: &str = "WARP_EMIT_SURVEY";
 /// The WARP_ settings that change no stage program's compile, so not its kept module either
 #[cfg(feature = "native")]
 const SETTINGS_BESIDE_STAGES: [&str; 4] = [SWITCH, ANALYSIS_SWITCH, REFUSALS_FILE, SURVEY_SETTING];
-/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses (also those
-/// runtime.warp names with `use`)
-const LIBRARY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib");
 /// The stage request of the parse: [0, source]; a pass's is [its index in passes.warp `passes`, the view]
 const PARSE_STAGE: usize = 0;
 /// The extension of a stage's setup JSON in the module cache
@@ -121,6 +109,25 @@ static PASSES: Stage = Stage { program: PASSES_PROGRAM, setup: &[prelude_text], 
 static ANALYSIS: Stage = Stage { program: ANALYSIS_PROGRAM, setup: &[], workers: Mutex::new(Vec::new()) };
 static EMIT: Stage =
 	Stage { program: EMIT_PROGRAM, setup: &[runtime_words, host_words], workers: Mutex::new(Vec::new()) };
+
+impl Stage {
+	/// The stage program, naming the files of library()
+	fn text(&self) -> String {
+		self.program.replace(LIBRARY_MARK, &library().display().to_string())
+	}
+}
+
+/// The folder of the warp files a stage program reads: the compiler's and the standard modules it uses (also those
+/// runtime.warp names with `use`), resolved once per process (modules::library_folder)
+fn library() -> &'static std::path::Path {
+	static FOLDER: OnceLock<PathBuf> = OnceLock::new();
+	FOLDER.get_or_init(crate::modules::library_folder)
+}
+
+/// The folder of the compiler's warp files, where runtime.warp's parts are named from
+fn compiler_folder() -> PathBuf {
+	library().join(crate::modules::COMPILER_FOLDER)
+}
 
 /// The switch's value: None when off
 fn switch() -> Option<&'static str> {
@@ -343,7 +350,7 @@ fn runtime_words() -> Result<String, Node> {
 /// one of its parts (`use "runtime/text.warp"`, relative to lib/compiler). Their words become runtime words, compiled
 /// into a module only when called
 pub fn runtime_source() -> std::io::Result<String> {
-	let source = std::fs::read_to_string(RUNTIME_WORDS)?;
+	let source = std::fs::read_to_string(compiler_folder().join(RUNTIME_WORDS))?;
 	let mut joined = String::new();
 	let mut used = String::new();
 	for line in source.lines() {
@@ -357,10 +364,10 @@ pub fn runtime_source() -> std::io::Result<String> {
 }
 
 /// The file of a `use` line of runtime.warp: a quoted path beside runtime.warp, else a module of lib
-fn used_file(name: &str) -> String {
+fn used_file(name: &str) -> PathBuf {
 	match name.strip_prefix('"').and_then(|quoted| quoted.strip_suffix('"')) {
-		Some(path) => format!("{COMPILER}/{path}"),
-		None => format!("{LIBRARY}/{name}.warp"),
+		Some(path) => compiler_folder().join(path),
+		None => library().join(format!("{name}.warp")),
 	}
 }
 
@@ -430,7 +437,7 @@ impl StageProgram {
 		let mut failed_setup = None;
 		let setup_file = |(index, setup): (usize, &Setup)| {
 			let file = input.with_extension(format!("setup-{index}.json"));
-			match kept_setup(&format!("{}\nsetup {index}", stage.program), *setup) {
+			match kept_setup(&format!("{}\nsetup {index}", stage.text()), *setup) {
 				Ok(json) => drop(std::fs::write(&file, json)),
 				Err(failure) => failed_setup = Some(failure),
 			}
@@ -446,7 +453,7 @@ impl StageProgram {
 		// the stage reads warp's lib/ alone, whatever folder warp runs in (a program's text.warp is no `text` of it)
 		let module = match failed_setup {
 			Some(failure) => Err(failure),
-			None => scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(stage.program)),
+			None => scoped(|context| &mut context.beyond_working_directory, true, || compiled_stages(&stage.text())),
 		};
 		StageProgram { module, input, setup }
 	}
@@ -539,7 +546,7 @@ fn stage_key(program: &str) -> Option<String> {
 		binary.display(),
 		crate::run::program_cache::stamp(&binary)
 	));
-	let mut files: Vec<PathBuf> = files_below(PathBuf::from(LIBRARY));
+	let mut files: Vec<PathBuf> = files_below(library().to_path_buf());
 	files.sort();
 	for file in files {
 		hasher.update(format!("{}\n", file.display()));
