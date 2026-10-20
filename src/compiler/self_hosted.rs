@@ -79,6 +79,11 @@ const INPUT_FOLDER: &str = "warp-self-hosted";
 /// the engines get comes on top (worker_stack)
 const WORKER_STACK: usize = 64 << 20;
 
+/// Computing time of one stage request: a compiler stage lowering a large program (parser.warp parses and lowers
+/// itself and the files it uses in about 70 s of CPU) is no runaway, so it gets more than a program's 60 s;
+/// WARP_TIME_LIMIT still decides when set
+const STAGE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
+
 type Pass = fn(Node) -> Node;
 /// Each Rust pass with a warp twin and the twin's index in passes.warp `passes` (counted from 1, as warp's `#`)
 const TWINNED_PASSES: [(Pass, usize); 8] = [
@@ -237,8 +242,10 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives
 fn pure_bytes(code: &str) -> Result<Vec<u8>, String> {
 	let view = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
+	serde_json::from_str::<serde_json::Value>(&view).map_err(|_| format!("the passes stage failed: {view}"))?;
+	let analysis = answer(&ANALYSIS, view.clone())?;
 	let kinds: String =
-		serde_json::from_str(&answer(&ANALYSIS, view.clone())?).map_err(|failure| failure.to_string())?;
+		serde_json::from_str(&analysis).map_err(|_| format!("the analysis stage failed: {analysis}"))?;
 	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)
 }
 
@@ -386,8 +393,9 @@ fn spawn_worker(stage: &'static Stage) -> Sender<Request> {
 		IN_WORKER.with(|inside| inside.set(true));
 		let _ = std::fs::create_dir_all(&folder);
 		let stages = StageProgram::new(stage, input);
+		let limit = warp_runtime::fuel::time_limit_from_environment().unwrap_or(STAGE_TIME_LIMIT);
 		for (request, reply_to) in incoming {
-			let _ = reply_to.send(stages.run(&request));
+			let _ = reply_to.send(crate::util::with_time_limit(limit, || stages.run(&request)));
 		}
 	};
 	std::thread::Builder::new().stack_size(worker_stack()).spawn(work).expect("a self-hosted stage worker");
