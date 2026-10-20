@@ -7,7 +7,7 @@ use "words.warp"
 use "sugar.warp"
 use "foreign_forms.warp"
 
-class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool }
+class Parser { code: text; n: int; at: int; header: bool; iterable: bool; indent: int; spaces: bool; branch: bool; branch_power: int; grouped: bool; enum_cases: bool; resumes: list; breaks: list; finally_blocks: int; types: list; bangs: list; type_body: bool; operators: list; aliases: list }
 
 // The view of a source's tree, as the twins compare it and the self-hosted pipeline hands it on
 def tree(source) := view_of(parsed(source))
@@ -26,7 +26,7 @@ def parsed(source) {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
 	items(p, ' ', "")
 }
 
@@ -64,6 +64,86 @@ def bang_word_at(p) {
 	if end == p.at or not is_at(p.code, end, '!', p.n) or is_at(p.code, end + 1, '=', p.n) { return 0 }
 	word = p.code[p.at .. end] + "!"
 	if p.bangs contains word or prelude_bang_words() contains word then end + 1 - p.at else 0
+}
+
+// `{if: 4, from: 1 to: 2}`: a keyword or operator word glued to a key's colon names the key; `else:`, `then:` and
+// `do:` open blocks
+// Rust twin: lookahead.rs word_names_key, BLOCK_COLON_WORDS
+BLOCK_COLON_WORDS = ["then", "else", "do"]
+def word_names_key(p, word) {
+	after = p.at + word.length
+	word != "" and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
+}
+
+// The blank-separated words of the statement at the parser's position
+def statement_words_at(p) {
+	end = p.at
+	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end = end + 1 }
+	blank_words(p.code[p.at .. end])
+}
+// `operator × := *`, `prefix operator √ := sqrt` (lib/math.warp): another spelling of a built-in operator, a statement
+// declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
+// [spelling, target] of an alias statement's words (`operator ∧ := and`, `prefix operator √ := sqrt`), else []
+// Rust twin: aliases.rs alias_line
+def operator_alias(words) {
+	if words.length > 0 and words#1 == "prefix" { words = words[1 .. words.length] }
+	if words.length == 4 and words#1 == "operator" and words#3 == ":=" and is_operator_spelling(words#4) then [words#2, words#4] else []
+}
+// [spelling, target] of each operator alias a source declares
+// Rust twin: aliases.rs source_aliases
+def operator_aliases(source) {
+	found = []
+	if not source.contains(":=") { return found }
+	for statement in code_statements(source) {
+		alias = operator_alias(blank_words(statement))
+		if alias.length > 0 { found += [alias] }
+	}
+	found
+}
+// lib/math.warp's aliases, which every program reads (decision operator-alias), scanned the first time a parse needs them
+// Rust twin: aliases.rs math_aliases
+global math_aliases = ø
+def math_operator_aliases() {
+	if math_aliases == ø { math_aliases = operator_aliases(module_source("math")) }
+	math_aliases
+}
+// The canonical names of the alias targets parser.warp's operator lists spell otherwise
+// Rust twin: spellings.rs OPERATOR_SPELLINGS ("approximately", "+-", "<-")
+ALIAS_TARGET_NAMES = {"approximately": "≈", "+-": "±", "<-": "="}
+// The canonical name of the operator an alias spells, else ""
+def canonical_operator(target) {
+	for op in SYMBOL_OPERATORS { if op#1 == target { return op#2 } }
+	for op in WORD_OPERATORS { if op#1 == target { return op#2 } }
+	if ALIAS_TARGET_NAMES.has(target) then ALIAS_TARGET_NAMES[target] else ""
+}
+// The alias written at the parser's position as [spelling, target], a word one as a whole word, the longest, else []
+def alias_at(p) {
+	longest = []
+	for alias in p.aliases {
+		spelled = alias#1
+		here = starts_at(p.code, spelled, p.at) and not (is_name_start(spelled[0]) and is_at_name_char(p, p.at + spelled.length))
+		if here and (longest.length == 0 or spelled.length > longest#1.length) { longest = alias }
+	}
+	longest
+}
+// The infix operator an alias at the parser's position spells, as [written, canonical], else []
+def aliased_operator_at(p) {
+	alias = alias_at(p)
+	canonical = if alias.length == 0 then "" else canonical_operator(alias#2)
+	if canonical == "" then [] else [alias#1, canonical]
+}
+// A spelling of a built-in operator: symbols (`*`, `/!=`, `->`), or an operator word (`and`, `in`, `sqrt`)
+// Rust twin: spellings.rs table_operator, PREFIX_OPERATOR_WORDS
+def is_operator_spelling(word) {
+	if not is_name_start(word[0]) { return true }
+	for op in WORD_OPERATORS { if op#1 == word { return true } }
+	form = keyword_form(word)
+	PREFIX_OPERATORS.contains(form) or form == "contains" or word == "in" or word == "approximately"
+}
+// The statement at the parser's position skipped: ø
+def skip_statement(p) {
+	while p.at < p.n and p.code[p.at] != '\n' and p.code[p.at] != ';' { p.at = p.at + 1 }
+	ø
 }
 
 // The words a type's name follows where it is declared
@@ -385,6 +465,19 @@ def continued(p, left, min_power) {
 				continue
 			}
 		}
+		user_op = user_operator_at(p)
+		if user_op != ø and user_op#2 != "prefix" and user_op#3 >= min_power {
+			p.at = p.at + user_op#1.length
+			if user_op#2 == "suffix" {
+				left = operator_call(user_op#1, [left])
+			} else {
+				skip_blanks(p)
+				left = operator_call(user_op#1, [left, expression(p, user_op#3 + 1)])
+			}
+			continue
+		}
+		// a declared operator binding looser than the context ends the operand, unless a built-in one of the glyph binds
+		if user_op != ø and user_op#2 != "prefix" and operator_at(p).length == 0 { break }
 		power = superscript_power(p, left, min_power)
 		if power != ø {
 			left = power
@@ -422,12 +515,11 @@ def continued(p, left, min_power) {
 			// `a /!= b` is the assignment `a = floor_quotient(a, b)`
 			left = if written == "/!=" then Key(left, Op.Assign, quotient_call(left, right)) else quotient_call(left, right)
 		} else if membership_at(p).length > 0 and not counts_units(left) {
-			word = membership_at(p)
+			membership = membership_at(p)
 			if 115 < min_power { break }
-			p.at = p.at + word.length
+			p.at = p.at + membership#1.length
 			skip_blanks(p)
-			// `x is in xs` is `x in xs`
-			left = listed("", " ", [left, symbol(if word == "is in" then "in" else word), expression(p, 116)])
+			left = listed("", " ", [left, symbol(membership#2), expression(p, 116)])
 		} else if negated_is_at(p).length > 0 {
 			// `x is not 4` and `x isn't 4` are `not (x is 4)` (Rust twin: spellings.rs NEGATED_SPELLINGS)
 			powers = binding_powers("is")
@@ -444,6 +536,14 @@ def continued(p, left, min_power) {
 			left = listed("(", "", [symbol("reverse"), Key(expression(p, powers#2), Op.To, left)])
 		} else {
 			op = operator_at(p)
+			if op.length == 0 and free_infix_at(p, left) {
+				if OPERATOR_LEVELS["infix"] < min_power { break }
+				glyph = "" + c
+				p.at = p.at + 1
+				skip_blanks(p)
+				left = operator_call(glyph, [left, expression(p, OPERATOR_LEVELS["infix"] + 1)])
+				continue
+			}
 			if op.length == 0 {
 				if not applies(p, left, min_power) { break }
 				left = listed("", " ", [left, argument(p, not applies_otherwise(p, min_power))])
@@ -463,6 +563,8 @@ def continued(p, left, min_power) {
 			skip_blanks(p)
 			if ELEMENT_WISE_OPERATORS contains op#1 {
 				left = listed("", " ", [left, symbol(op#1), expression(p, powers#2)])
+			} else if DECLARED_ONLY_OPERATORS contains op#2 {
+				left = operator_call(op#2, [left, expression(p, powers#2)])
 			} else {
 				left = keyed(op#2, left, if op#2 == "then" or op#2 == "else" then branch(p, powers#2) else expression(p, powers#2))
 			}
@@ -549,15 +651,18 @@ def negated_is_at(p) {
 	""
 }
 
-// `x in xs`, `xs contains x`: the membership word at the parser's position, else ""
+// `x in xs`, `xs contains x`: the membership word at the parser's position as [written, word], else []; `x is in xs` is
+// `x in xs`
 // Rust twin: expressions.rs special_infix
 def membership_at(p) {
-	for word in ["is in", "in"] {
-		if keyword_at(p, word) { return word }
-	}
+	if keyword_at(p, "is in") { return ["is in", "in"] }
+	if keyword_at(p, "in") { return ["in", "in"] }
 	word = word_at(p)
-	if keyword_form(word) == "contains" and operand_after(p, word.length) { return word }
-	""
+	if keyword_form(word) == "contains" and operand_after(p, word.length) and not assigned_at(p, p.at + word.length) { return [word, word] }
+	// `x ∈ xs`, `xs ∋ x`: an alias of a membership word
+	alias = alias_at(p)
+	if alias.length > 0 and (alias#2 == "in" or keyword_form(alias#2) == "contains") { return alias }
+	[]
 }
 
 // A unit word stays in the flat counting phrase `number of chars in t`
@@ -568,6 +673,11 @@ UNIT_WORDS = ["byte", "bytes", "char", "chars", "character", "characters", "code
 
 // An operand follows `width` characters on: blanks, then no end of the expression
 // Rust twin: scanning.rs operand_after
+// `alias contains = collection_contains`: an assignment's `=` (no `==`) after the blanks at `at`
+def assigned_at(p, at) {
+	sign = blank_end(p, at)
+	is_at(p.code, sign, '=', p.n) and not is_at(p.code, sign + 1, '=', p.n)
+}
 def operand_after(p, width) {
 	at = p.at + width
 	if not (is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n)) { return false }
@@ -686,7 +796,7 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
+SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], [".+", "+"], [".-", "-"], [".*", "*"], ["./", "/"], [".^", "^"], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["÷=", "/!="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], [">>", ">>"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["!", "not"], ["¬", "not"], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/!"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"], ["↑", "↑"], ["↓", "↓"]]
 // `xs .* 2` maps `*` over the elements: the phrase [xs .* 2], binding as `*` does (Rust twin: spellings.rs
 // element_wise_word)
 ELEMENT_WISE_OPERATORS = [".+", ".-", ".*", "./", ".^"]
@@ -698,11 +808,11 @@ WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "x
 def operator_at(p) {
 	c = peek(p.code, p.at, p.n)
 	if is_name_start(c) {
-		if bang_word_at(p) > 0 { return [] }
+		if bang_word_at(p) > 0 or word_names_key(p, word_at(p)) { return [] }
 		for op in WORD_OPERATORS {
 			if op#1[0] == c and keyword_at(p, op#1) and not (p.branch and op#1 == "else") { return op }
 		}
-		return []
+		return aliased_operator_at(p)
 	}
 	if starts_at(p.code, "?:", p.at) or starts_at(p.code, "//", p.at) { return [] }
 	// `x = 1  # one` is a comment, `xs #1` the index operator (card parser-parses)
@@ -710,7 +820,7 @@ def operator_at(p) {
 	for op in SYMBOL_OPERATORS {
 		if op#1[0] == c and starts_at(p.code, op#1, p.at) and (op#1 != ">>" or operand_follows(p, 2)) { return op }
 	}
-	[]
+	aliased_operator_at(p)
 }
 
 // An operand follows `width` characters on, after any blanks: `n >> 7` shifts, `list<list<int>>` closes two generics
@@ -729,6 +839,203 @@ def down_to_at(p) {
 	if at > p.at + 4 and keyword_at_position(p, "to", at) then at + 2 - p.at else 0
 }
 
+// The operators only a declaration gives meaning (lib/prelude.warp `infix operator ↑`): `2↑3` calls operator_↑(2, 3)
+// Rust twin: Op::is_declared_only, word_operators.rs log_calls
+DECLARED_ONLY_OPERATORS = ["↑", "↓"]
+// The name of the function an operator declaration defines: `infix operator ⊕` defines operator_⊕
+// Rust twin: operators/mod.rs OPERATOR_FUNCTION_PREFIX
+OPERATOR_FUNCTION_PREFIX = "operator_"
+// The words declaring an operator of a kind: `prefix operator ∆`, `infix operator ⊕`; `operator ⊕` alone is infix
+// Rust twin: declaration_scan.rs OPERATOR_KINDS, operators.rs declared_kind
+OPERATOR_KINDS = ["prefix", "suffix", "infix"]
+// How tight a declared operator binds, as the built-ins it resembles: [kind, level]; an infix one's right power is one
+// more than its level
+// Rust twin: declaration_scan.rs USER_SUFFIX_BP, USER_PREFIX_RIGHT_BP, USER_INFIX_BP
+OPERATOR_LEVELS = {"prefix": 155, "suffix": 165, "infix": 140}
+
+// The call of a declared operator's function: `2 ⊕ 3` is operator_⊕(2, 3)
+// Rust twin: operators.rs operator_call
+def operator_call(glyph, arguments) := listed("(", "", [symbol(OPERATOR_FUNCTION_PREFIX + glyph)] + arguments)
+
+// The kind of operator a declaration's first word declares, else ""
+def operator_kind_word(word) := if word == "operator" then "infix" else if OPERATOR_KINDS.contains(word) then word else ""
+
+// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), no letter or digit;
+// raised digits too (`suffix operator ³`)
+// Rust twin: operators.rs is_operator_glyph
+def is_operator_glyph(glyph) {
+	beyond_ascii = false
+	at = 0
+	while at < glyph.length {
+		c = glyph[at]
+		if not SUPERSCRIPT_DIGITS.contains(c) and (is_name_char(c) or is_digit(c) or is_blank(c)) { return false }
+		if c > '~' { beyond_ascii = true }
+		at = at + 1
+	}
+	beyond_ascii
+}
+
+// The operator the words after a declaration's first word declare, else "": a glyph (`operator ⊕ := …`), or for infix
+// a word or glyph with its parameters, `infix operator divides(d, n) := …`, `infix operator ↑(x: number, n: number)`
+// Rust twin: operators.rs declared_operator, declared_glyph
+def declared_operator(kind, words) {
+	glyph = if words.length > 2 and words#1 == "operator" and words#3 == ":=" then words#2 else if words.length > 1 and words#2 == ":=" then words#1 else ""
+	if glyph != "" and is_operator_glyph(glyph) { return glyph }
+	if kind != "infix" or not words.contains(":=") or words.length == 0 { return "" }
+	head = if words#1 == "operator" and words.length > 1 then words#2 else words#1
+	end = if is_name_start(head[0]) then name_end(head, 0, head.length) else 0
+	if not is_name_start(head[0]) { while end < head.length and head[end] != '(' { end = end + 1 } }
+	word = head[0 .. end]
+	operator = (is_name_start(head[0]) and word != "operator") or is_operator_glyph(word)
+	if operator and (end == head.length or head[end] == '(') then word else ""
+}
+
+// `operator × := *`: another spelling of a built-in operator, no function
+// Rust twin: aliases.rs alias_line
+
+// The blank-separated words of a statement
+def blank_words(statement) {
+	words = []
+	for word in statement.replace("\t", " ").split(" ") { if word != "" { words += [word] } }
+	words
+}
+
+// The [glyph, kind, level] of each operator a source declares: `[prefix|suffix|infix]
+// operator ⊕ := …` and the pattern `a ⊕ b := …` (infix), at the level a precedence declaration gives it
+// Rust twin: operators.rs declared_operators
+def declared_operators(source) {
+	found = []
+	if not source.contains(":=") { return found }
+	statements = code_statements(source)
+	for statement in statements {
+		if not statement.contains(":=") { continue }
+		declared = operator_declared(blank_words(statement))
+		if declared.length > 0 { found += [declared] }
+	}
+	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
+	for statement in statements {
+		if not statement.contains("precedence") { continue }
+		ranked = precedence_declaration(blank_words(statement), found)
+		if ranked.length != 2 { continue }
+		leveled = []
+		for operator in found { leveled += [if operator#1 == ranked#1 then [operator#1, operator#2, ranked#2] else operator] }
+		found = leveled
+	}
+	found
+}
+
+// The operators a parse of a source knows: its own declared ones, then the standard modules' glyph operators it writes
+// Rust twin: operators.rs scan_user_operators (the operators of a `use`d module's words, `matches`, are not read yet)
+def scanned_operators(source) {
+	found = declared_operators(source)
+	for library in library_glyph_operators() {
+		if source.contains(library#1) and declared_level(found, library#1) < 0 { found += [library] }
+	}
+	found
+}
+// The glyph operators the standard modules declare, with their precedence: `[1] ∪ [2] ∩ [3]` reads ∩ first as
+// lib/list.warp says, without `use list`; scanned the first time a parse needs them
+// Rust twin: operators.rs library_glyph_operators (it scans every std module; these are the ones declaring operators)
+global library_operators = ø
+def library_glyph_operators() {
+	if library_operators == ø {
+		library_operators = []
+		for operator in declared_operators(module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")) {
+			if not is_name_start(operator#1[0]) { library_operators += [operator] }
+		}
+	}
+	library_operators
+}
+
+// The statements of a source's code, outside comments and texts, split at line ends and `;`
+def code_statements(source) {
+	statements = []
+	for line in code_only(source).split("\n") { statements += line.split(";") }
+	statements
+}
+
+// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
+// Rust twin: declaration_scan.rs PRECEDENCE_STEP
+PRECEDENCE_STEP = 2
+// What the words `operator ⊕ has precedence above|below [operator] Y` declare: [glyph, level]; [message] for one that
+// cannot be followed (a built-in ⊕, an unknown Y); [] for any other statement
+// Rust twin: operators.rs precedence_declaration
+def precedence_declaration(words, declared) {
+	if words.length < 6 or words#1 != "operator" or words#3 != "has" or words#4 != "precedence" { return [] }
+	direction = words#5
+	if direction != "above" and direction != "below" { return [] }
+	other = if words.length == 7 and words#6 == "operator" then words#7 else if words.length == 6 then words#6 else ""
+	if other == "" { return [] }
+	glyph = words#2
+	if declared_level(declared, glyph) < 0 { return ["operator " + glyph + " is built in: only a declared operator gets a precedence (`infix operator " + glyph + " := …` first)"] }
+	reference = declared_level(declared, other)
+	if reference < 0 {
+		canonical = canonical_operator(other)
+		if canonical == "" { return ["unknown operator " + other + " in `operator " + glyph + " has precedence " + direction + " " + other + "`"] }
+		reference = binding_powers(canonical)#1
+	}
+	[glyph, if direction == "above" then reference + PRECEDENCE_STEP else reference - PRECEDENCE_STEP]
+}
+// The level of the declared operator spelled `glyph`, else -1
+def declared_level(declared, glyph) {
+	for operator in declared { if operator#1 == glyph { return operator#3 } }
+	-1
+}
+
+// [glyph, kind, level] of the operator a statement's words declare, else []
+def operator_declared(words) {
+	if words.length == 0 { return [] }
+	kind = operator_kind_word(words#1)
+	rest = words[1 .. words.length]
+	glyph = if kind == "" then "" else declared_operator(kind, rest)
+	if glyph != "" and operator_alias(words).length == 0 { return [glyph, kind, OPERATOR_LEVELS[kind]] }
+	if words.length > 3 and words#4 == ":=" and is_operator_glyph(words#2) and is_plain_name(words#1) and is_plain_name(words#3) { return [words#2, "infix", OPERATOR_LEVELS["infix"]] }
+	[]
+}
+def is_plain_name(word) := word.length > 0 and name_end(word, 0, word.length) == word.length
+
+// The declared operator written at the parser's position, the longest glyph, a word one as a whole word, else ø
+// Rust twin: operators.rs user_operator_at
+def user_operator_at(p) {
+	longest = ø
+	for declared in p.operators {
+		glyph = declared#1
+		glyph_here = starts_at(p.code, glyph, p.at) and not (is_name_start(glyph[0]) and is_at_name_char(p, p.at + glyph.length))
+		if glyph_here and (longest == ø or glyph.length > longest#1.length) { longest = declared }
+	}
+	longest
+}
+def is_at_name_char(p, at) := at < p.n and is_name_char(p.code[at])
+
+// `infix operator ⊕(a: int, b: int) := a * 10 + b`, `prefix operator ∆ := …`: the definition of the function
+// operator_⊕, whose parameters are the declared ones, else `it` (prefix, suffix) or `a b` (`left right` when the body
+// names them); ø for any other statement starting with the word
+// Rust twin: operators.rs try_parse_operator_declaration
+def operator_declaration(p, word) {
+	end = p.at
+	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end = end + 1 }
+	words = blank_words(p.code[p.at + word.length .. end])
+	kind = operator_kind_word(word)
+	glyph = declared_operator(kind, words)
+	if glyph == "" { return ø }
+	p.at = p.at + word.length
+	skip_spaces(p)
+	if words#1 == "operator" {
+		p.at = p.at + 8
+		skip_spaces(p)
+	}
+	p.at = p.at + glyph.length
+	declared = if is_at(p.code, p.at, '(', p.n) then expression(p, binding_powers(":=")#1 + 1) else ø
+	skip_spaces(p)
+	p.at = p.at + 2
+	skip_spaces(p)
+	body = expression(p, 0)
+	parts = if declared == ø then ø else group_parts(declared)
+	parameters = if kind != "infix" then [symbol("it")] else if declared == ø then ø else if parts != ø and parts#1 == "(" then parts#3 else [declared]
+	if parameters == ø { parameters = if mentions(body, "left") or mentions(body, "right") then [symbol("left"), symbol("right")] else [symbol("a"), symbol("b")] }
+	Key(operator_call(glyph, parameters), Op.Define, body)
+}
+
 // Left and right binding power of an operator
 // Rust twin: operators.rs Op::binding_power
 def binding_powers(op) {
@@ -737,7 +1044,7 @@ def binding_powers(op) {
 	if op == "." or op == "?." { return [180, 181] }
 	if op == "::" { return [175, 176] }
 	if op == "#" { return [170, 182] }
-	if op == "^" { return [160, 159] }
+	if op == "^" or DECLARED_ONLY_OPERATORS.contains(op) { return [160, 159] }
 	if op == "*" or op == "/" or op == "%" or op == "rem" { return [150, 151] }
 	if op == "+" or op == "-" or op == "±" { return [140, 141] }
 	if op == "<<" or op == ">>" { return [135, 136] }
@@ -897,8 +1204,25 @@ def with_finally(p, guard) {
 def prefixed(p) {
 	c = peek(p.code, p.at, p.n)
 	if starts_path(p) { return path_literal(p) }
+	user_op = user_operator_at(p)
+	if user_op != ø and user_op#2 == "prefix" {
+		p.at = p.at + user_op#1.length
+		skip_spaces(p)
+		return operator_call(user_op#1, [expression(p, user_op#3)])
+	}
 	if not is_name_start(c) { return prefixed_by_symbol(p, c) }
 	word = word_at(p)
+	// `op.if`, `math.sqrt`: a member's name is no keyword
+	if word_names_key(p, word) or after_member_dot(p) { return atom(p) }
+	if word == "operator" or OPERATOR_KINDS.contains(word) {
+		words = statement_words_at(p)
+		ranked = precedence_declaration(words, p.operators)
+		if ranked.length == 1 { raise ranked#1 }
+		// the pre-scans applied both: declared_operators, operator_aliases
+		if ranked.length == 2 or operator_alias(words).length > 0 { return skip_statement(p) }
+		declaration = operator_declaration(p, word)
+		if declaration != ø { return declaration }
+	}
 	form = keyword_form(word)
 	if form == "return" { return returned(p) }
 	if guard_word_at(p, word) { return guarded(p, word) }
@@ -915,7 +1239,7 @@ def prefixed(p) {
 	if foreign != ø { return foreign }
 	declared = if form == "type" then type_declaration(p, word) else if form == "global" then global_declaration(p, word) else if form == "endless" then endless_loop(p) else count_worded(p)
 	if declared != ø { return declared }
-	if PREFIX_OPERATORS.contains(form) and not after_member_dot(p) { return word_prefixed(p, word, form) }
+	if PREFIX_OPERATORS.contains(form) { return word_prefixed(p, word, form) }
 	if form == "not" {
 		p.at = p.at + 3
 		skip_spaces(p)
@@ -970,9 +1294,17 @@ def prefixed_by_symbol(p, c) {
 		p.at = p.at + 1
 		return Key(ø, Op.Hash, expression(p, INDEX_POWER - 1))
 	}
-	if c == '√' {
+	if PREFIX_OPERATORS.contains("" + c) {
 		p.at = p.at + 1
-		return Key(ø, Op.Sqrt, expression(p, PREFIX_POWER))
+		return keyed("" + c, ø, expression(p, PREFIX_POWER))
+	}
+	// `&lerp`: a reference to the function, an `&` glued to the word after it and not to one before it (`a &b`)
+	// Rust twin: functions.rs starts_function_reference, closures.rs function_reference
+	if c == '&' and is_alpha(next) and not (p.at > 0 and is_name_char(p.code[p.at - 1])) {
+		end = name_end(p.code, p.at + 1, p.n)
+		name = p.code[p.at + 1 .. end]
+		p.at = end
+		return attributed(FUNCTION_REFERENCE_MARK, true, symbol(name))
 	}
 	if c == ':' and explicit_symbol_at(p) {
 		end = name_end(p.code, p.at + 1, p.n)
@@ -1326,12 +1658,50 @@ def atom(p) {
 		p.iterable = outer_iterable
 		return group
 	}
+	// `°C`, `°F`: a temperature unit; `°` alone the angle unit (units.rs)
+	// Rust twin: atoms.rs parse_atom (DEGREE)
+	if c == DEGREE {
+		end = if is_alpha(peek(p.code, p.at + 1, p.n)) then name_end(p.code, p.at + 1, p.n) else p.at + 1
+		unit = symbol(p.code[p.at .. end])
+		p.at = end
+		return unit
+	}
 	if c == 'ø' or c == ')' or c == ']' or c == '}' or c == ';' {
 		if c == 'ø' { p.at = p.at + 1 }
 		return ø
 	}
-	raise "Unexpected character '" + c + "'"
+	// `"̅"`: a quote carrying combining marks is one grapheme of the code; the marks open the text (card parser-graphemes)
+	if "\"'".contains(code_points("" + c)#1) { return quoted(p) }
+	// every other character is read: a free symbol names itself, `x = ↯`, `⌘`; any other one is its character, `★`
+	// (card unicode-glyphs)
+	// Rust twin: atoms.rs parse_atom (is_free_symbol, parse_emoji; the Rust lane still errors on other characters)
+	p.at = p.at + 1
+	if is_free_symbol(p, c) then symbol("" + c) else c
 }
+
+// The degree sign of temperatures and angles (Rust twin: numbers/units.rs DEGREE)
+DEGREE = '°'
+
+// The Unicode blocks of symbols a program may use before anything defines them (decision unicode-symbols): arrows,
+// math operators, technical and geometric symbols, dingbat arrows, the supplemental math and arrow blocks
+// Rust twin: operators.rs FREE_SYMBOL_BLOCKS
+FREE_SYMBOL_BLOCKS = [['←', '⏿'], ['■', '◿'], ['➔', '➿'], ['⟀', '⟿'], ['⤀', '⫿'], ['⬀', '⯿'], ['￩', '￬']]
+// A symbol character no built-in operator, prefix operator or alias spells: a free operator or symbol name
+// Rust twin: operators.rs is_free_symbol
+def is_free_symbol(p, c) {
+	glyph = "" + c
+	if glyph.length != 1 or PREFIX_OPERATORS.contains(glyph) { return false }
+	in_block = false
+	for block in FREE_SYMBOL_BLOCKS { if c >= block#1 and c <= block#2 { in_block = true } }
+	if not in_block { return false }
+	for op in SYMBOL_OPERATORS { if op#1 == glyph { return false } }
+	for alias in p.aliases { if alias#1 == glyph { return false } }
+	true
+}
+// `1 ⇔ 1` with no `infix operator ⇔` declared: a free symbol with an operand after it on its line calls its operator;
+// `[↯ ↯]` and `print ↯` read the glyph as a value
+// Rust twin: operators.rs try_parse_free_infix, free_symbol_follows
+def free_infix_at(p, left) := left != ø and is_free_symbol(p, peek(p.code, p.at, p.n)) and operand_follows(p, 1) and not is_free_symbol(p, code_after(p, p.at + 1))
 
 // The URL after its scheme word, up to a blank, a separator, a closer or a quote
 // Rust twin: literals/paths.rs parse_url, is_url_terminator
@@ -1596,7 +1966,7 @@ def counted_unit(amount: int, unit: text) := if amount == 1 then "1 " + unit els
 // Rust twin: literals.rs with_juxtaposed_factor
 def with_glued_factor(p, amount: any) {
 	c = peek(p.code, p.at, p.n)
-	if not (is_name_start(c) or c == '(') or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
+	if not (is_name_start(c) or c == '(' or c == DEGREE) or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
 	}
 	factor = atom(p)
@@ -1697,6 +2067,11 @@ def named(p) {
 		if shader != ø { return shader }
 	}
 	name = symbol(word)
+	// `x°`: a variable in degrees, as `30°` (Rust twin: atoms.rs, card angles-degrees)
+	if is_at(p.code, p.at, DEGREE, p.n) and not is_alpha(peek(p.code, p.at + 1, p.n)) {
+		p.at = p.at + 1
+		return Key(name, Op.Mul, symbol("" + DEGREE))
+	}
 	// `Point {x: 1}` with blanks constructs a declared type as the glued one does (open decision 41); a capitalized word
 	// of no declared type before a block of fields is the tagged object `Person:{…}` (card person-name)
 	declared = p.types.contains(word)
@@ -1919,7 +2294,8 @@ def is_typed_name(node) := match node {
 // word types it, `global int n = 0` is `n:int = 0`
 // Rust twin: mod.rs DECLARATION_MODIFIERS, words.rs CONSTANT_KEYWORDS, analyzer type_word_kind
 DECLARATION_MODIFIERS = ["export", "mutable", "mut", "const", "constant", "final", "val"]
-DECLARED_TYPE_WORDS = ["int", "float", "number", "text", "string", "bool", "char", "byte"]
+// the type words of words.warp, as Rust reads them (`global long k = 7`)
+DECLARED_TYPE_WORDS = type_words
 
 // `global x = 1`, `global n`, `export api: clock` as `global: x = 1`, a module-level variable; `global a, b` declares
 // each; `export` without a name after it stays a word
@@ -2335,9 +2711,12 @@ def digits_read(p) {
 // A text in quotes, its backslash escapes read; one character is a codepoint
 // Rust twin: literals.rs read_text
 def quoted(p) {
-	quote = p.code[p.at]
+	opening = code_points("" + p.code[p.at])
+	quote = opening#1
+	marks = ""
+	for mark in opening[1 .. opening.length] { marks = marks + mark }
 	end = text_end(p.code, p.at + 1, quote, p.n)
-	written = p.code[p.at + 1 .. end - 1]
+	written = marks + p.code[p.at + 1 .. end - 1]
 	p.at = end
 	holed = if quote == '"' then template(written) else ø
 	if holed != ø { return template_node(holed) }
