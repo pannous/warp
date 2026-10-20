@@ -372,7 +372,7 @@ pub(super) fn infer_list_type(
 	if let Some(name) = head {
 		let named = special_form_kind(name, items, bracket, scope)
 			.or_else(|| closure_call_kind(name, items, scope))
-			.or_else(|| scope.function_kind(name).filter(|_| !scope.is_parameter(name)))
+			.or_else(|| scope.function_kind(name).filter(|_| scope.lookup(name).is_none()))
 			.or_else(|| builtin_word_kind(name, items, bracket, scope));
 		if let Some(kind) = named {
 			return kind;

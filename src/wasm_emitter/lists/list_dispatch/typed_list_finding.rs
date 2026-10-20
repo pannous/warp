@@ -174,7 +174,7 @@ impl WasmGcEmitter {
 				(left.is_empty_node() || is_number(left)) && is_number(right)
 			}
 			Node::List(items, _, _) => {
-				matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name))
+				items.first().is_some_and(|head| self.user_function_head(head).is_some())
 			}
 			_ => false,
 		}

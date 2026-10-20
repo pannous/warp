@@ -394,8 +394,7 @@ impl WasmGcEmitter {
 			// Call of a user function, also braceless: `f 3`
 			Node::List(items, _, _)
 				if items.len() >= 2
-					&& let Some(name) =
-						items[0].symbol_name().filter(|name| self.ctx.user_functions.contains_key(*name)) =>
+					&& let Some(name) = self.user_function_head(&items[0]) =>
 			{
 				if let Some(arity) = crate::closures::closure_call_arity(name) {
 					let callee = items.get(1).and_then(Node::symbol_name);

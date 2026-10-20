@@ -128,6 +128,11 @@ impl WasmGcEmitter {
 		called_word(items, bracket, separator).filter(|name| !self.is_variable(name))
 	}
 
+	/// The user function a list's head names, unless a variable here takes the name (called_function's rule)
+	pub(in crate::wasm_emitter) fn user_function_head<'a>(&self, head: &'a Node) -> Option<&'a str> {
+		head.drop_meta().symbol_name().filter(|name| self.ctx.user_functions.contains_key(*name) && !self.is_variable(name))
+	}
+
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
 	/// A variable is not callable.
 	pub(in crate::wasm_emitter) fn resolves_call(&self, name: &str) -> bool {
