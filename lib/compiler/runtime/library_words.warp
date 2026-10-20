@@ -2,7 +2,7 @@
 # the library words of lib/compiler on values known only at run time, as Rust's text and list words give them
 # `slice(x, from, to)`: x's items (a text's characters) from..<to, counted from 0; from ø starts at 0 (`xs[:k]`), to ø
 # or beyond the end stops at the end, a negative from or to fails, as Rust's "index out of range"
-node_slice(x: any, start: any, to: any): any := {
+node_slice(x: any, start: any, to: any = ø): any := {
 	from = if is_null(start) == 1 then 0 else index_of_node(start)
 	stop = if is_null(to) == 1 then node_length(x) else index_of_node(to)
 	if from < 0 or stop < 0 { index_out_of_range() }

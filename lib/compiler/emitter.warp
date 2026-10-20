@@ -151,7 +151,7 @@ def section(id: int, content: any): list { [id] + uleb(#content) + content }
 
 ## the program's functions
 # a function as written; compiling it gives the rest
-class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no }
+class Function { name: text; parameters: any; annotations: any; body: any; index: int = -1; kinds: any = ø; result: any = ø; code: any = ø; locals: any = ø; local_names: any = ø; is_runtime: bool = no; widened: any = {}; sums: any = {}; gives_nothing: bool = no; defaults: any = [] }
 # runtime: the runtime words by name; texts: the offset of each text's bytes in `bytes`, the module's data segment
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
@@ -179,8 +179,16 @@ form_of(n: any): text := {
 	"a " + type(n)
 }
 
-parameter_symbol(p: any): any := if type(p) is key and op_of(p) == ":" then key_of(p) else p
-annotation_of(p: any): any := {
+# `y = 2`: the parameter y, its default 2
+without_default(p: any): any := if type(p) is key and op_of(p) == "=" then key_of(p) else p
+# a parameter's default as [node], ø when it has none (ø itself is a default: `to = ø`)
+default_of(p: any): any := if type(p) is key and op_of(p) == "=" then [value_of(p)] else ø
+parameter_symbol(given: any): any := {
+	p = without_default(given)
+	if type(p) is key and op_of(p) == ":" then key_of(p) else p
+}
+annotation_of(given: any): any := {
+	p = without_default(given)
 	if type(p) is key and op_of(p) == ":" and value_of(p) is symbol { return name_of(value_of(p)) }
 	# `xs: [int]` and other type forms Rust checks at each call: no kind, so the function is refused
 	if type(p) is key and op_of(p) == ":" { return form_of(value_of(p)) }
@@ -227,7 +235,9 @@ def collect_functions(program: any, functions: any): list {
 		if head == ø and not is_import(n) { kept += [n] } else if head != ø {
 			parameters = head[1..].map(parameter_symbol)
 			annotations = head[1..].map(annotation_of)
-			functions[name_of(head#1)] = Function(name_of(head#1), parameters, annotations, value_of(n))
+			f = Function(name_of(head#1), parameters, annotations, value_of(n))
+			f.defaults = head[1..].map(default_of)
+			functions[name_of(head#1)] = f
 		}
 	}
 	kept
@@ -311,6 +321,8 @@ def converted(value: any, to: text): list {
 	if from != to and from != pending and to != pending { refuse("a " + from + " where a " + to + " is needed") }
 	value#2
 }
+# `text(x)`, `string(x)`: x as shown (Rust's TEXT_TYPES)
+text_words = ["text", "string"]
 # int(x) and float(x), as Rust's emit_cast: a text spells the number, a float truncates toward zero
 text_readers = {int: "text_as_int", float: "text_as_float"}
 node_casts = {int: "truncated_int", float: "float_cast"}
@@ -448,8 +460,8 @@ def instance_of_fields(body: Body, class_name: text, field_names: any, field_val
 	codes = []
 	for i in 0..<#field_names {
 		if not (field_names[i] in declared) { return refuse("a field " + class_name + " does not declare") }
-		value = expression(body, field_values[i])
 		field_type = declared[field_names[i]]
+		value = texted(field_type, expression(body, field_values[i]))
 		if not checked_at_run_time(field_type, value#1) and not admits(field_type, value#1) { return refuse("a " + value#1 + " for a typed field of " + class_name) }
 		codes += [keyed_code(name_node(symbol(field_names[i])), boxed(field_value(field_type, value)))]
 	}
@@ -631,7 +643,7 @@ intrinsics = {new_text: 1, copy_text: 5, byte_count: 1, byte_at: 2, code_of: 1, 
 library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zero_fill", round: "rounded", len: "node_length",
 	text_form: "node_text", str: "node_text", split: "split_text", chars: "text_graphemes", code_point_list: "text_chars", reverse: "reversed", list_sum: "list_sum",
 	floor_quotient: "floor_quotient", map_entries: "map_entries", map_keys: "map_keys", map_values: "map_values",
-	collection_contains: "collection_contains", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
+	collection_contains: "collection_contains", collection_position: "collection_position", key: "key_node", key_of: "key_left", value_of: "key_right", op_of: "key_operator",
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
@@ -738,6 +750,8 @@ record_type(name: any, body: any): any := {
 	if name#2 == "variants" { for variant in name#3[3..] { module.variants[variant#2] = yes } }
 	record_type(name#4, body)
 }
+# a character given to a field typed text is that text (`"r"` is a character here)
+def texted(type: any, value: any): list { if value#1 == "char" and type in core_type_words and core_type_words[type] == "text" then shown_text(value) else value }
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion
 def admits(type: any, kind: text): bool { type == ø or type == "any" or (type in core_type_words and core_type_words[type] == kind) }
 # a write to a field `name` of a value known only at run time: every class's field so named takes the kind
@@ -1045,8 +1059,17 @@ def return_value(body: Body, value: any): list {
 }
 
 def call(body: Body, f: Function, arguments: any): list {
-	if #arguments != #f.parameters { return refuse("a call of " + f.name + " with " + #arguments + " arguments") }
-	call_values(f, arguments.map(a => expression(body, a)))
+	if #arguments > #f.parameters { return refuse_arguments(f, #arguments) }
+	given = arguments.map(a => expression(body, a))
+	call_values(f, given + range_list(#f.parameters - #given).map(i => default_value(body, f, #given + i, #arguments)))
+}
+refuse_arguments(f: Function, count: int): any := refuse("a call of " + f.name + " with " + count + " arguments")
+# the default of f's parameter i a call leaves out, compiled where the call is: refused when it reads a parameter
+def default_value(body: Body, f: Function, i: int, count: int): list {
+	default = if i < #f.defaults then f.defaults[i] else ø
+	if default == ø { return refuse_arguments(f, count) }
+	for p in f.parameters { if mentions_name(default#1, name_of(p)) { return refuse("a default of " + f.name + " reading " + name_of(p)) } }
+	expression(body, default#1)
 }
 def call_values(f: Function, values: any): list {
 	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
@@ -1175,6 +1198,9 @@ def conditional(body: Body, test: any, yes_branch: any, no_branch: any, has_else
 	if not has_else { return unmatched(c, a, yes_branch is number) }
 	b = nested(body, no_branch, 1)
 	kind = joint_kind(a#1, b#1)
+	# a first reading whose branches both wait on calls still compiling: its kind is not known yet either (its code is
+	# not kept), so the function's other readings decide it
+	if kind == pending and body.function.result == pending { return [pending, c + [op.if] + value_type("node") + a#2 + [op.else] + b#2 + [op.end]] }
 	if kind == pending { kind = "int" }
 	if kind == no_kind or kind == "mixed" { return [no_kind, c + [op.if, no_value] + dropped(a) + [op.else] + dropped(b) + [op.end]] }
 	[kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end]]
@@ -1417,7 +1443,7 @@ def group_expression(body: Body, n: any): list {
 		return length(expression(body, n#2))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("floor") { return floored(expression(body, n#2)) }
-	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("text") { return shown_text(expression(body, n#2)) }
+	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_words { return shown_text(expression(body, n#2)) }
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1) in text_readers { return cast(expression(body, n#2), name_of(n#1)) }
 	if bracket_of(n) == "(" and #n == 1 { return expression(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression(body, n#2)) }
@@ -1511,12 +1537,16 @@ def key_expression(body: Body, n: any): list {
 	if operator == "as" and right is symbol and name_of(right) == "rational" {
 		return as_rational(expression(body, left))
 	}
-	if operator == "as" and right is symbol and (name_of(right) in type_bytes or name_of(right) in references) {
+	# `t as codepoint`, `x as integer`: a type word's other names are its kind's
+	target = if not (right is symbol) then ø else if name_of(right) in core_type_words then core_type_words[name_of(right)] else name_of(right)
+	if operator == "as" and (target in type_bytes or target in references) {
 		value = expression(body, left)
-		if name_of(right) in text_readers { return cast(value, name_of(right)) }
-		if name_of(right) == "text" { return shown_text(value) }
-		if name_of(right) == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
-		return [name_of(right), converted(value, name_of(right))]
+		if target in text_readers { return cast(value, target) }
+		if target == "text" { return shown_text(value) }
+		# `65 as codepoint` is 'A'
+		if target == "char" and value#1 == "int" { return ["char", value#2 + [op.i32_wrap_i64]] }
+		if target == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
+		return [target, converted(value, target)]
 	}
 	if operator == "not" and left == ø { return ["bool", condition(expression(body, right)) + [op.i32_eqz]] }
 	if left == ø or right == ø {

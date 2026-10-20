@@ -1,0 +1,13 @@
+# feasibility probe (card standalone): parser, passes, analyzer and emitter in ONE warp program, on warp values
+use "../../lib/compiler/passes.warp"
+use "../../lib/compiler/analyzer.warp"
+use "../../lib/compiler/emitter.warp"
+use os
+use file
+
+source = "1 + 2"
+program = lowered_program(source, ".")
+kinds = emitter_kinds(program)
+runtime = lowered_program(read("../../lib/compiler/runtime.warp"), "../../lib")
+module = typed_wasm_module(program, runtime, {}, kinds)
+print(#module)

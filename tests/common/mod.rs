@@ -436,7 +436,13 @@ fn copy_of_the_samples() -> std::path::PathBuf {
 /// What the warp binary writes to stdout running `code` (no questions asked)
 #[cfg(feature = "native")]
 pub fn printed(code: &str) -> String {
-	let output = warp_command().args(["--no-ask", code]).output().expect("warp runs");
+	printed_in(std::path::Path::new("."), code)
+}
+
+/// What the warp binary writes to stdout running `code` in the working directory `folder`
+#[cfg(feature = "native")]
+pub fn printed_in(folder: &std::path::Path, code: &str) -> String {
+	let output = warp_command().current_dir(folder).args(["--no-ask", code]).output().expect("warp runs");
 	String::from_utf8_lossy(&output.stdout).to_string()
 }
 
