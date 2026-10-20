@@ -102,6 +102,8 @@ int_ops = {"+": 124, "-": 125, "*": 126, "==": 81, "!=": 82, "<": 83, ">": 85, "
 # where Rust's ints grow unbounded past i64 the program's + - * trap instead of wrapping (runtime words wrap)
 checked_words = {"+": "checked_add", "-": "checked_subtract", "*": "checked_multiply"}
 float_ops = {"+": 160, "-": 161, "*": 162, "/": 163, "==": 97, "!=": 98, "<": 99, ">": 100, "<=": 101, ">=": 102}
+# yes/no held as i32: only equal or not
+bool_ops = {"==": 70, "!=": 71}
 # `xs.length`, `count xs`: `#xs`; a property also by count's other names, and `x.number` (not `number x`, a conversion)
 length_words = {length: yes, count: yes}
 counting_properties = {length: yes, count: yes, size: yes, len: yes, number: yes}
@@ -907,6 +909,7 @@ def operation(body: Body, symbol: text, a: any, b: any): list {
 	if symbol in comparisons and textual and a#1 in characters and b#1 in characters {
 		return operation(body, symbol, runtime_call("text_order", [shown_text(a), shown_text(b)]), number_value(0))
 	}
+	if kind == "bool" and symbol in bool_ops { return ["bool", a#2 + b#2 + [bool_ops[symbol]]] }
 	if kind != "int" and kind != "float" { return refuse("the operator " + symbol + " on " + a#1 + " and " + b#1) }
 	if symbol == "%" and kind == "int" { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [["float", converted(a, kind)], ["float", converted(b, kind)]]) }
