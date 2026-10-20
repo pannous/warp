@@ -151,7 +151,6 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf, 
 	}
 }
 
-
 /// The class arms of a match's cases, `Point{x, y: 0}: body` and `Circle(r): body`, as the guard
 /// `if parts·from is Point and parts·from.y == 0 then parts·from` and the body with the fields bound
 fn class_arms(arms: &Node, fields: &ClassFields, cases: &Cases) -> Node {
