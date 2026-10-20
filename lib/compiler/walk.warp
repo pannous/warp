@@ -13,6 +13,11 @@ other_arm = "_"
 kind_of(view: any): text := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
 is_group(n: any): bool := bracket_of(n) != ø
+# a key of that operator, `is_key(n, Op.Colon)` of `a: 1`
+is_key(n: any, op: Op): bool := match n {
+	Key(_, written, _): written == op
+	_: no
+}
 
 # an attribute layer (`@name(v) x`, the mark of `x!`) as a node: [name, value, node] behind this word, which a pass
 # walks into
@@ -97,6 +102,8 @@ group_like(n: Node, items: list): Node := match n {
 }
 
 # the call `name(arguments…)`
+# the symbol `word`
+is_word(n: any, word: text): bool := n == symbol(word)
 call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
 
 # a node with f applied to each of its children

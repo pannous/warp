@@ -7,7 +7,7 @@ milliseconds_per_unit = {ms: 1, millisecond: 1, milliseconds: 1, s: 1000, second
 
 # `20ms` (parsed `20 * ms`) is 20, `0.2` is 0.2 * 1000
 in_milliseconds(duration: any): any := {
-	if type(duration) is key and op_of(duration) == "*" and value_of(duration) is symbol and name_of(value_of(duration)) in milliseconds_per_unit {
+	if is_key(duration, Op.Mul) and value_of(duration) is symbol and name_of(value_of(duration)) in milliseconds_per_unit {
 		per_unit = milliseconds_per_unit[name_of(value_of(duration))]
 		return if per_unit == 1 then key_of(duration) else Key(key_of(duration), "*" as Op, per_unit)
 	}

@@ -6,6 +6,9 @@
 use "walk.warp"
 use "words.warp"
 
+# how a binding form gives a name its meaning
+enum Meaning { Function, Variable, Parameter, Loop, Field }
+
 # the name a binding form gives: `x`, `x: int`, `x: int = 1`; ø for anything else
 binding_name(n: Node): any := match n {
 	Symbol(name): name
@@ -15,12 +18,15 @@ binding_name(n: Node): any := match n {
 
 # `x => …`, `(x => …)`: a lambda
 is_lambda(n: Node): bool := match n {
-	Key(left, op, right): (op as text) == "=>" or (op as text) == "->"
-	List(items, bracket, separator): (bracket as text) == "(" and #items == 1 and is_lambda(items#1)
+	Key(left, op, right): op == Op.Arrow
+	List(items, bracket, separator): bracket == Bracket.Round and #items == 1 and is_lambda(items#1)
 	_: no
 }
 
-is_round(n: Node): bool := bracket_of(n) == "("
+is_round(n: Node): bool := match n {
+	List(_, Bracket.Round, _): yes
+	_: no
+}
 
 # the name of a head `f`, `f(a)`, `f: int`
 head_word(n: Node): text := match n {
@@ -53,24 +59,24 @@ definition_head(n: Node): Node := {
 	if #items > 0 and is_round(items#1) then definition_head(items#1) else n
 }
 
-as_parameters(names: list): list := names.map(name => [name, "parameter"])
+as_parameters(names: list): list := names.map(name => [name, Meaning.Parameter])
 
 # `f(a, b)` as a definition's head: the function and its parameters
 function_meanings(head: Node): list := {
-	if not is_round(head) { return [[head_word(head), "function"]] }
-	[[head_word(head), "function"]] + as_parameters(parameters_in(items_of(head)[1 ..]))
+	if not is_round(head) { return [[head_word(head), Meaning.Function]] }
+	[[head_word(head), Meaning.Function]] + as_parameters(parameters_in(items_of(head)[1 ..]))
 }
 
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
-assignment_meanings(op: text, target: Node, value: Node): list := {
+assignment_meanings(op: Op, target: Node, value: Node): list := {
 	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
-	[[binding_name(target), if op == ":=" or is_lambda(value) then "function" else "variable"]]
+	[[binding_name(target), if op == Op.Define or is_lambda(value) then Meaning.Function else Meaning.Variable]]
 }
 
 # the meanings a word gives the item after it in a phrase: `for x`, `def f(a)`
 word_meanings(word: Node, next: Node): list := match word {
 	Symbol(name): {
-		if name == "for" then [[binding_name(next), "loop"]]
+		if name == "for" then [[binding_name(next), Meaning.Loop]]
 		else if function_keywords contains name then function_meanings(definition_head(next))
 		else []
 	}
@@ -86,14 +92,14 @@ phrase_meanings(items: list): list := {
 
 # the meanings a node gives, [name, meaning] each
 meanings_of(n: Node): list := match n {
-	Key(target, op, value): key_meanings(target, op as text, value)
+	Key(target, op, value): key_meanings(target, op, value)
 	List(items, bracket, separator): phrase_meanings(items)
 	_: []
 }
 
-key_meanings(target: Node, op: text, value: Node): list := {
-	if op == "=" or op == ":=" { return assignment_meanings(op, target, value) }
-	if op == "=>" or op == "->" { return as_parameters(parameters_of(target)) }
+key_meanings(target: Node, op: Op, value: Node): list := {
+	if op == Op.Assign or op == Op.Define { return assignment_meanings(op, target, value) }
+	if op == Op.Arrow { return as_parameters(parameters_of(target)) }
 	[]
 }
 
@@ -106,7 +112,7 @@ fields_of(n: Node): list := {
 }
 
 field_meanings(item: Node): list := match item {
-	Key(name, op, value): { if (op as text) == ":" then [[binding_name(name), "field"]] else [] }
+	Key(name, Op.Colon, value): [[binding_name(name), Meaning.Field]]
 	_: []
 }
 
@@ -155,8 +161,8 @@ scope_of(program: Node): any := {
 binds(scope: any, name: text): bool := scope.has(name)
 # bound as anything but a field: `{symbol: "symbol"}` leaves the word symbol free (Rust type_tests.rs bound_otherwise)
 binds_besides_fields(scope: any, name: text): bool := scope.has(name) and scope[name].any(meaning => meaning != "field")
-binds_as(scope: any, name: text, meaning: text): bool := scope.has(name) and scope[name] contains meaning
+binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning
 # the meanings that make a name a value where it stands: a variable, a parameter, a loop variable (a field or a function
 # of that name is no value there)
-value_meanings = ["variable", "parameter", "loop"]
+value_meanings = [Meaning.Variable, Meaning.Parameter, Meaning.Loop]
 binds_value(scope: any, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))

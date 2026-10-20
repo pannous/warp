@@ -1,0 +1,27 @@
+// A list that flows into a `list` field is read and written item by item in time growing with its length (card
+// profile-stage-programs, lexer.warp gaps): the milliseconds of a backwards fill of n items, kept local and then put
+// into a Box
+class Box { items: list }
+def kept(n: int): int {
+	items = n times [n]
+	started = clock()
+	at = n - 2
+	while at >= 0 {
+		items[at] = items[at + 1]
+		at = at - 1
+	}
+	clock() - started
+}
+def boxed(n: int): int {
+	items = n times [n]
+	started = clock()
+	at = n - 2
+	while at >= 0 {
+		items[at] = items[at + 1]
+		at = at - 1
+	}
+	took = clock() - started
+	made = Box{items: items}
+	took
+}
+for n in [8000, 16000, 32000] { print("n " + n + ": kept " + kept(n) + " ms, boxed " + boxed(n) + " ms") }

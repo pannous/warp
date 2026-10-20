@@ -1183,8 +1183,6 @@ PASSED:
   ✓ ffi::test_page_ids::jquery_gives_a_hint_naming_the_warp_forms
   ✓ ffi::test_page_ids::the_first_dollar_field_hints_at_bind
   ✓ ffi::test_page_ids::the_old_dollar_forms_work_with_a_hint
-  ✓ ffi::test_run_wasm_library::run_wasm_of_no_module_fails_loudly
-  ✓ ffi::test_run_wasm_library::run_wasm_runs_a_module_given_as_bytes
   ✓ ffi::test_wasi::test_fd_write
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
@@ -2065,6 +2063,7 @@ PASSED:
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_concat_keeps_arrays::a_concatenation_is_a_copy_of_both_lists
+  ✓ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
   ✓ lists::test_concat_keeps_arrays::index_writes_of_a_concatenated_list_take_constant_time
   ✓ lists::test_count_after_function::a_count_after_a_function
   ✓ lists::test_count_after_function::print_a_count
@@ -2206,7 +2205,10 @@ PASSED:
   ✓ lists::test_list_compound_add::a_function_is_no_number
   ✓ lists::test_list_compound_add::a_list_plus_equals_a_list_concatenates
   ✓ lists::test_list_compound_add::a_list_plus_equals_an_item_is_the_type_error_of_plus
+  ✓ lists::test_list_held_last::a_list_changed_after_its_holder_is_shared
+  ✓ lists::test_list_held_last::a_list_held_last_keeps_its_items
   ✓ lists::test_list_identity::a_list_is_identical_to_itself_in_every_name
+  ✓ lists::test_list_item_conversions::a_loop_variable_read_in_an_inner_loop_keeps_its_values
   ✓ lists::test_list_literal_sign::a_glued_sign_starts_the_next_item_after_anything
   ✓ lists::test_list_literal_sign::spaced_and_glued_operators_still_subtract
   ✓ lists::test_list_methods::a_list_module_word_is_a_method_without_use
@@ -3732,42 +3734,16 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
+  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
   ✓ parser::test_self_float_text::rust_float_text_prints_the_shortest_digits
   ✓ parser::test_self_hosted_analysis::a_program_the_analyses_agree_on_runs_self_analyzed
-  ✓ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
   ✓ parser::test_self_hosted_cache::a_zero_switch_is_off
-  ✓ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
-  ✓ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
-  ✓ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
-  ✓ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
-  ✓ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
   ✓ parser::test_self_hosted_cache::the_warp_emitter_imports_host_words
   ✓ parser::test_self_hosted_library::the_compiler_comes_from_the_checkout_above_the_program
   ✓ parser::test_self_hosted_library::warp_lib_names_the_compilers_folder
-  ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
-  ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
-  ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
-  ✓ parser::test_self_pure::comprehensions_run_pure
-  ✓ parser::test_self_pure::defaults_run_pure
-  ✓ parser::test_self_pure::durations_read_self_hosted
-  ✓ parser::test_self_pure::enum_cases_run_pure
-  ✓ parser::test_self_pure::enum_conversions_and_default_arms_run_pure
-  ✓ parser::test_self_pure::for_loops_run_pure
-  ✓ parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
-  ✓ parser::test_self_pure::lambdas_run_pure
-  ✓ parser::test_self_pure::match_values_run_pure
-  ✓ parser::test_self_pure::number_keys_run_pure
-  ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
-  ✓ parser::test_self_pure::program_names_run_pure
-  ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
-  ✓ parser::test_self_pure::recursive_results_run_pure
-  ✓ parser::test_self_pure::text_escapes_read_pure
-  ✓ parser::test_self_pure::the_core_runs_pure
-  ✓ parser::test_self_pure::type_words_named_by_fields_run_pure
-  ✓ parser::test_self_pure::used_files_run_pure
   ✓ parser::test_self_sort::sort_runs_as_rust_sorts
   ✓ parser::test_self_time_arithmetic::a_missing_day_is_refused
   ✓ parser::test_self_time_arithmetic::clocks_go_round_and_instants_have_no_calendar
@@ -4166,7 +4142,6 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
-  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
@@ -4179,6 +4154,14 @@ PASSED:
   ✓ programs::test_window_size::the_display_is_read_only
   ✓ programs::test_window_size::the_viewer_reads_a_resize
   ✓ programs::test_window_size::window_size_is_a_property
+  ✓ scope::test_bound_names_shadow_functions::a_lambda_captures_a_local_named_like_a_function
+  ✓ scope::test_bound_names_shadow_functions::a_local_lambda_is_called_beside_a_same_named_function_holder
+  ✓ scope::test_bound_names_shadow_functions::a_local_named_like_a_function_heads_a_list_as_its_value
+  ✓ scope::test_bound_names_shadow_functions::a_local_named_like_a_function_is_the_local
+  ✓ scope::test_bound_names_shadow_functions::a_local_named_like_a_function_returned_is_no_function_value
+  ✓ scope::test_bound_names_shadow_functions::a_local_named_like_another_used_files_function_is_the_local
+  ✓ scope::test_bound_names_shadow_functions::a_loop_variable_named_like_a_function_is_indexed
+  ✓ scope::test_bound_names_shadow_functions::a_parameter_is_not_another_functions_local_of_that_name
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
   ✓ scope::test_colon_body_assignment::test_if_colon_body_with_assignment
@@ -4353,6 +4336,7 @@ PASSED:
   ✓ text::test_library_unicode::sort_orders_texts
   ✓ text::test_library_unicode::sort_still_orders_ints
   ✓ text::test_library_unicode::upper_and_lower_cover_unicode_scripts
+  ✓ text::test_map_text::a_map_has_a_text
   ✓ text::test_map_text::a_map_prints
   ✓ text::test_nested_list_text::a_count_takes_the_indexed_element
   ✓ text::test_nested_list_text::a_nested_list_has_the_text_of_its_literal
@@ -4811,6 +4795,7 @@ PASSED:
   ✓ types::test_field_default_variable::a_field_named_result_is_a_field
   ✓ types::test_field_named_like_builtin::a_members_field_is_a_place
   ✓ types::test_field_named_like_builtin::a_size_field_of_an_element_of_a_declared_list
+  ✓ types::test_field_named_like_builtin::a_texts_length_beside_a_map_with_a_length_key
   ✓ types::test_field_named_like_library_word::a_known_instance_reads_its_field
   ✓ types::test_field_named_like_library_word::a_list_keeps_the_library_word
   ✓ types::test_file_declarations::a_braced_empty_class_takes_nothing_in
@@ -6315,9 +6300,37 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ lists::test_concat_keeps_arrays::concatenated_arrays_copy_in_bulk
+  ✗ ffi::test_run_wasm_library::run_wasm_of_no_module_fails_loudly
+  ✗ ffi::test_run_wasm_library::run_wasm_runs_a_module_given_as_bytes
   ✗ modules::test_node_json::the_browser_spells_each_operator_code_alike
-  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
+  ✗ parser::test_self_hosted_analysis::programs_emitted_with_the_analyzed_kinds_give_their_values
+  ✗ parser::test_self_hosted_cache::the_front_end_alone_leaves_emitting_to_rust
+  ✗ parser::test_self_hosted_cache::the_stage_program_is_compiled_once
+  ✗ parser::test_self_hosted_cache::the_stage_programs_ignore_the_working_folder
+  ✗ parser::test_self_hosted_cache::the_warp_emitter_emits_inside_its_core
+  ✗ parser::test_self_hosted_cache::the_warp_emitter_fails_with_rusts_runtime_errors
+  ✗ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
+  ✗ parser::test_self_pure::bang_words_and_tab_columns_run_pure
+  ✗ parser::test_self_pure::block_definitions_hold_their_value_pure
+  ✗ parser::test_self_pure::comprehensions_run_pure
+  ✗ parser::test_self_pure::defaults_run_pure
+  ✗ parser::test_self_pure::durations_read_self_hosted
+  ✗ parser::test_self_pure::enum_cases_run_pure
+  ✗ parser::test_self_pure::enum_conversions_and_default_arms_run_pure
+  ✗ parser::test_self_pure::for_loops_run_pure
+  ✗ parser::test_self_pure::is_tests_types_and_equality_compares_self_hosted
+  ✗ parser::test_self_pure::lambdas_run_pure
+  ✗ parser::test_self_pure::match_values_run_pure
+  ✗ parser::test_self_pure::number_keys_run_pure
+  ✗ parser::test_self_pure::optional_and_float_fields_run_self_hosted
+  ✗ parser::test_self_pure::program_names_run_pure
+  ✗ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
+  ✗ parser::test_self_pure::recursive_results_run_pure
+  ✗ parser::test_self_pure::text_escapes_read_pure
+  ✗ parser::test_self_pure::the_core_runs_pure
+  ✗ parser::test_self_pure::type_words_named_by_fields_run_pure
+  ✗ parser::test_self_pure::used_files_run_pure
+  ✗ programs::test_warp_command::debug_build_names_its_commit
 
 SUMMARY:
-11 ignored, 6312 passed, 3 failed, 6315 total tested
+11 ignored, 6297 passed, 31 failed, 6328 total tested

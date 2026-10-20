@@ -8,6 +8,7 @@ const TIME_PROGRAMS: &str = "probes/self_hosting/emitter/times";
 
 #[test]
 fn time_constants_run_as_rust_runs_them() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let programs: Vec<PathBuf> = sources().into_iter().filter(|path| path.starts_with(TIME_PROGRAMS)).collect();
 	assert!(!programs.is_empty(), "no programs in {TIME_PROGRAMS}");
 	let inside = emitter_differential(&programs, programs.len());

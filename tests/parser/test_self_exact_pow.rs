@@ -7,6 +7,7 @@ const POWERS: &str = "probes/self_hosting/emitter/core/power.warp";
 
 #[test]
 fn int_powers_run_as_rust_runs_them() {
+	crate::requires!(crate::common::RUST_PIPELINE);
 	let inside = emitter_differential(&[PathBuf::from(POWERS)], 1);
 	assert_eq!(inside, [POWERS]);
 }

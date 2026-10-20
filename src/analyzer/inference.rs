@@ -278,16 +278,14 @@ fn subscript_kind(indexed: &Node, index: &Node, scope: &Scope) -> Kind {
 			return Kind::List;
 		}
 	}
-	element_kind(indexed, scope).unwrap_or_else(|| {
-		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
-		let by_name = key
-			.is_some_and(|key| key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
-		if by_name {
-			Kind::Empty
-		} else {
-			Kind::Int
-		}
-	})
+	// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node; so is a
+	// member a text cannot have (`line["length"]`, the run-time branch of `line.length` beside a map with that key)
+	let by_name =
+		key.is_some_and(|key| key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
+	if by_name && infer_type(indexed, scope) == Kind::Text {
+		return Kind::Empty;
+	}
+	element_kind(indexed, scope).unwrap_or(if by_name { Kind::Empty } else { Kind::Int })
 }
 
 /// `x as char`, `x as list`, `x as text`
@@ -372,7 +370,12 @@ pub(super) fn infer_list_type(
 	if let Some(name) = head {
 		let named = special_form_kind(name, items, bracket, scope)
 			.or_else(|| closure_call_kind(name, items, scope))
-			.or_else(|| scope.function_kind(name).filter(|_| !scope.is_parameter(name)))
+			// a parameter takes a function's name, any other variable in a square list (wasm_emitter takes_list_head)
+			.or_else(|| {
+				let is_variable =
+					scope.is_parameter(name) || (*bracket == Bracket::Square && scope.lookup(name).is_some());
+				scope.function_kind(name).filter(|_| !is_variable)
+			})
 			.or_else(|| builtin_word_kind(name, items, bracket, scope));
 		if let Some(kind) = named {
 			return kind;

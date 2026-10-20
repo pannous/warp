@@ -16,3 +16,10 @@ fn a_members_field_is_a_place() {
 	is!("class G{name: text; members: [text]}\ngs: [G] = [G(\"a\", [\"x\"])]\ngs#1.members = [\"y\", \"z\"]\ncount(gs#1.members)", 2);
 	is!("class G{name: text; members: [text]}\nf(o) := { o.members.add(\"z\"); count(o.members) }\nf(G(\"a\", [\"x\"]))", 2);
 }
+
+/// A map with a key `length` elsewhere makes `x.length` look the member up at run time; of a text the branch reading it
+/// is no text, so the length still passes an int parameter (card standalone: parser.warp beside emitter.warp's maps)
+#[test]
+fn a_texts_length_beside_a_map_with_a_length_key() {
+	is!("words = {length: 1}\nneeds_int(n: int) := n + 1\nf(source) := { total = 0; for line in source.split(\"\\n\") { total += needs_int(line.length) }; total }\nf(\"ab\\ncde\")", 7);
+}
