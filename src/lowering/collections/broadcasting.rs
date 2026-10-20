@@ -1441,8 +1441,8 @@ fn instance_dispatch(item: &Node) -> Option<&Node> {
 		.then_some(otherwise)
 }
 
-/// `x is Note` and `x.plus(o)` as written, `is_type(x, "Note")` and `plus(x, o)` once type tests and methods are
-/// lowered: x
+/// `instance_of(x, "Note")`, `x is Note` and `x.plus(o)` as written, `is_type(x, "Note")` and `plus(x, o)` once type
+/// tests and methods are lowered: x
 fn first_operand(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::Key(subject, Op::Eq | Op::Dot, _) => Some(subject),
