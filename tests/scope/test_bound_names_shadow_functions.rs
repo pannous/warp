@@ -53,3 +53,10 @@ fn a_loop_variable_named_like_a_function_is_indexed() {
 fn a_local_lambda_is_called_beside_a_same_named_function_holder() {
 	is!("all_parts(): int := { fs = [x => x * 2]; total = 0; for part in fs { total += part(1) }; total }\nboth(k: int): int := { part = i => i + k; part(0) + part(1) }\nall_parts() + both(10)", 23);
 }
+
+/// A local holding a call's value and sliced is the local, beside a `def` of three parameters by that name (card
+/// local-variable-named: `items = items_of(n); items[1..]` in a file using parser.warp gave 'slice takes 3 arguments')
+#[test]
+fn a_local_holding_a_calls_value_is_sliced_beside_a_def_of_its_name() {
+	is!("def items(p: list, closer: text, bracket: text): list := p\nitems_of(xs: list): any := xs\nt(xs: list): any := { items = items_of(xs); arguments = items[1..]; #arguments }\nt([3, 9, 4])", 2);
+}
