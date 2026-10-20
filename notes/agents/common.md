@@ -97,8 +97,10 @@ After a context swap, this file and your role file win over anything a handover 
 
 ## Testing
 - Rust tests run in the cloud (user 2026-10-20: "From now on, run the Rust test suite completely in the cloud"):
-  commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs, except tests needing the Mac (sound,
-  GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt). The Integrator's full suite runs in the cloud too.
+  commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs (a hook blocks them), except tests
+  needing the Mac (sound, GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt), written `MAC_ONLY_TESTS=1
+  tests/queue.sh -- <filter>`. The Integrator's full suite runs in the cloud too. Warp tests (`warp test`,
+  scripts/is_tests.py) run locally with the shared binary.
 - Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
   to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
   suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
