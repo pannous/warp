@@ -166,3 +166,19 @@ fn block_definitions_hold_their_value_pure() {
 	runs_pure("block_value", "hi := { 3 + 4 }; hi()", "7");
 	runs_pure("block_value_added", "hi := { 3 + 4 }; hi() + 1", "8");
 }
+
+/// parser.warp reads an integer and a time unit word as the duration Rust's parser makes (card parser-reads-day):
+/// `1day` is no `1*day`, and `1 day in h` converts
+#[test]
+fn durations_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("duration_in_unit", "d = 1 day; d in h", "24h"),
+			("glued_duration", "1day + 1 day", "2 days"),
+			("compound_duration", "1 month 2 days", "1 month 2 days"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.contains(value), "{lane} {code}: {output}");
+		}
+	}
+}
