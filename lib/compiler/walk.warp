@@ -97,6 +97,8 @@ group_like(n: Node, items: list): Node := match n {
 }
 
 # the call `name(arguments…)`
+# the symbol `word`
+is_word(n: any, word: text): bool := n == symbol(word)
 call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
 
 # a node with f applied to each of its children
