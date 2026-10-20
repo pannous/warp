@@ -82,7 +82,8 @@ cargo build --offline          # Offline mode (uses the local registry cache)
 ### Testing
 
 Several agent sessions share this Mac, so test runs are rationed (roles and rules: notes/roles.md):
-- Workers run targeted tests only, through the machine-wide queue: `tests/queue.sh -- <filter>`. A hook blocks direct
+- Rust tests run in the cloud (user 2026-10-20): workers run targeted tests only, with `scripts/cloud-test.sh`;
+  tests/queue.sh only for the Mac-only tests (scripts/cloud-test-environmental.txt). A hook blocks direct
   `cargo test` / `cargo browser-test` runs.
 - Only the Integrator session runs the full suite (`./test.sh`, which queues itself) and pushes code to main. Workers
   hand it "branch, tip, filters" and fix what it reports.
@@ -241,8 +242,8 @@ Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same argument
 - Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).
 - `./test.sh` runs `probes/check_layout.sh`, which fails on tracked probes that are repo copies, too large, or of a non-source type.
 
-Workers: before and after each task, run `git status` and the tests that cover your change:
-`tests/queue.sh -- <filter>`. Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging
+Workers: before and after each task, run `git status` and the tests that cover your change (cloud lane:
+`scripts/cloud-test.sh`). Do NOT run `./test.sh` (the full suite): only the Integrator runs it, after merging
 your branch (notes/roles.md).
 If previously passing test fail after the task as seen via git diff test_results.txt
 try to fix failing tests and if it doesn't work roll back
