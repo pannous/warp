@@ -219,7 +219,8 @@ data ⊒ int/float), and the real measure is the suite through the warp compiler
 - Big ints (card emitter-big-ints): an int is an i64 in emitter.warp's modules, and an int beyond 64 bits fails in
   runtime.warp int_overflow ("trap detail: 0"), where Rust's promotes it to a BigInt (`x = 2^62; x * 4`, factorial 25,
   Catalan numbers past the 35th). Sources: samples/golf/catalan-numbers.short.warp and
-  samples/golf/catalan-numbers.warp (inside the core since a body ending in a statement gives ø, 2026-10-19). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
+  samples/golf/catalan-numbers.warp (inside the core since a body ending in a statement gives ø, 2026-10-19),
+  probes/ratio_text.warp (`2^70 + 1`; inside the core since abs(x) emits, 2026-10-20). Back: runtime.warp ports src/wasm_emitter/numbers/big_int.rs (fixnums and
   handles into a big-number heap).
 - Sorting (card sort-warp): runtime.warp's node_order compares texts, characters and numbers only; instances (the
   Comparable witness), times and uncertain values trap there, where Rust's node_order orders them. A sorted list is a
