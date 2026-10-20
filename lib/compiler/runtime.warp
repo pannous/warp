@@ -1352,7 +1352,13 @@ operator_code(spelled: text): int := {
 	for i in 1 to #spellings { if text_order(node_text(spellings#i), spelled) == 0 { return i - 1 } }
 	0
 }
-key_node(left: any, operator: any, right: any): any := keyed(operator_code(node_text(operator)) * 256 + 6, left, right)
+# `key(1, "@@", 2)`: an operator no spelling names fails, as Rust's key builder does
+key_node(left: any, operator: any, right: any): any := {
+	spelled = node_text(operator)
+	code = operator_code(spelled)
+	if code == 0 and spelled != "" { raised("unknown operator: " + spelled) }
+	keyed(code * 256 + 6, left, right)
+}
 key_left(n: any): any := entry_key(n)
 key_right(n: any): any := key_value(n)
 key_operator(n: any): text := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
@@ -1378,11 +1384,11 @@ list_shown(n: any): text := {
 # `bracket_of(n)`: "(" of `(a b)`, "" of a list without brackets; ø of a node that is no list, Other's brackets too
 list_bracket(n: any): any := {
 	if is_null(n) == 1 or kind_code(n) != 8 or bracket_info(n) == 4 { return ø }
-	bracket_spellings()#(bracket_info(n) + 1)
+	node_text(bracket_spellings()#(bracket_info(n) + 1))
 }
 list_separator(n: any): any := {
 	if is_null(n) == 1 or kind_code(n) != 8 { return ø }
-	separator_spellings()#(separator_info(n) + 1)
+	node_text(separator_spellings()#(separator_info(n) + 1))
 }
 # the position of a spelling in spellings, from 0
 spelling_code(spellings: list, spelled: text): int := {
