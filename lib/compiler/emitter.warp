@@ -1509,8 +1509,12 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in library_words {
 		word = library_words[name_of(n#1)]
 		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
-		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
-		if word == "floor_quotient" { for x in n[1..] { if expression_code(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
+		# `a /! b` of a ratio, a float or a value known only at run time floors the quotient as Rust does;
+		# floor_quotient takes ints only
+		if word == "floor_quotient" and #n == 3 {
+			values = n[1..].map(x => expression_code(body, x))
+			if values.any(value => value#1 != "int") { return floored(operation(body, "/", values#1, values#2)) }
+		}
 		return call(body, module.runtime[word], n[1..].map(x => x))
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ran_without_error") { return ran_without_error(body, n#2) }
