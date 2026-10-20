@@ -232,3 +232,9 @@ fn type_words_named_by_fields_run_pure() {
 fn field_slices_run_pure() {
 	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
 }
+
+/// lib/compiler/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
+#[test]
+fn assigned_it_blocks_run_pure() {
+	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
+}

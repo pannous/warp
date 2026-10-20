@@ -197,7 +197,6 @@ annotation_of(given: any): any := {
 
 # `(name params…) := body` at the program's top level, its head; `name := body` reading `it` is a function of `it`, and
 # `name := { statements }` one of none (Rust's defined_function); `x := 5` is a value (assignment_operators)
-implicit_parameter = "it"
 definition(n: any): any := {
 	if not (type(n) is key and op_of(n) == ":=") { return ø }
 	left = key_of(n)

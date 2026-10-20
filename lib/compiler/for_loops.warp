@@ -10,8 +10,6 @@ use "walk.warp"
 use "phrase_blocks.warp"
 use "words.warp"
 
-implicit_variable = "it"
-
 marked_step(step: Node): Node := Key(symbol("loop·step"), Op.Colon, step)
 
 loop_name(variable: Node, suffix: text): Node := match variable {
@@ -129,7 +127,7 @@ lowered_for(n: Node, maps: list): Node := match n {
 			if filters_by_type(parts#2) { return walked_kept(parts#2, iterable, parts#5, name_of(parts#2)) }
 			if is_name(parts#2) { return loop_over(parts#2, iterable, parts#5) }
 		}
-		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_variable), parts#2, parts#3) }
+		if #parts == 3 and parts#1 == symbol("for") { return loop_over(symbol(implicit_parameter), parts#2, parts#3) }
 		n
 	}
 	_: n
