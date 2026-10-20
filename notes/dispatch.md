@@ -128,3 +128,13 @@ that type at compile time, so a text held as a Node goes to `f(n: Node)`; an unt
 (the dispatch chain is one parenthesized value, `f(x) == 2` compares the chosen variant's result). Equal signatures in
 two files stay a compile error (loader claim_signatures). A class named like a built-in type (`Function`) is the
 class there and dispatches through traits.
+
+## The item type of a list picks overloads (polymorphism-lists)
+`play(xs: list of note)`, `play(xs: list of file)`, `play(xs: notes)`, `play(xs: [int])`: variants that take lists of
+different items. A call takes the variant whose item type fits the list's items as known at compile time: the items
+written (`[note(60)]`, `[1, 2]`), a variable assigned such lists, a declared list type; ints widen to a list of floats,
+and a plain `list` variant takes what no list-of variant fits. Items only the run time knows go through the run-time
+chain (`is_type(xs, "list of note")`), which so far passes any list (card list-class), so the first declared variant
+wins, an empty list too (assumption, asked of warp-interviewer). The plural of a declared type is a list of it as
+`ints` is of int. `xs: list of int` and `xs: int list` in a head fold to the one parameter `xs:"list of int"` early
+(declaration_forms lower_list_parameters), so arity, overloads and the analyzer see one parameter.
