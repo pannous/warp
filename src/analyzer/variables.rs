@@ -161,6 +161,9 @@ fn define_new(left: &Node, right: &Node, scope: &mut Scope) {
 		if scope.lookup(name).is_none() && !scope.is_global(name) {
 			let kind = binding_kind(right, scope);
 			scope.define(name.to_string(), None, kind);
+			if let Some(local) = scope.own_binding_mut(name) {
+				local.empty_list = right.is_empty_list_literal();
+			}
 		}
 	}
 }
@@ -170,12 +173,21 @@ fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scop
 	let Some(name) = left.symbol_name() else {
 		return;
 	};
+	// `xs += 3` appends 3 as `xs += [3]` does (decision list-append-plus)
+	let item_list = scope.lookup(name).filter(|_| *op == Op::AddAssign).and_then(|local| {
+		let appends = crate::analyzer::inference::appends_item(local.kind, local.empty_list, infer_type(right, scope));
+		appends.then(|| crate::analyzer::inference::one_item_list(right))
+	});
+	let right = item_list.as_ref().unwrap_or(right);
 	mark_ratio(left, right, scope);
 	widen_to_float(scope, name, right);
 	// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
 	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error. A list stays a list, whatever it adds:
 	// `out += part` of a part of an `any` list grows it in place (list_extend), held as a Node it was copied each step
-	let grows_list = *op == Op::AddAssign && scope.lookup(name).is_some_and(|local| local.kind == Kind::List);
+	let grows_list = *op == Op::AddAssign
+		&& scope
+			.lookup(name)
+			.is_some_and(|local| local.kind == Kind::List || (local.kind == Kind::Empty && local.empty_list));
 	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) && !grows_list {
 		widen_to_node(scope, name, &Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())));
 	}
@@ -242,9 +254,13 @@ fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 			scope.define(name.clone(), type_node, kind);
 			if let Some(local) = scope.own_binding_mut(name) {
 				local.declared = declared.is_some();
+				local.empty_list = right.is_empty_list_literal();
 			}
 		}
 		Node::Symbol(name) => {
+			if let Some(local) = scope.own_binding_mut(name) {
+				local.empty_list = right.is_empty_list_literal();
+			}
 			type_list_by_first_append(name, right, scope);
 			type_map_by_first_entry(name, right, scope);
 			widen_list_type(scope, name, right);
@@ -611,6 +627,7 @@ impl Scope {
 			data_pointer: 0,
 			data_length: 0,
 			may_be_ratio: false,
+			empty_list: false,
 		};
 		self.locals.insert(name, local.clone());
 		local
