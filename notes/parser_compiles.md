@@ -70,7 +70,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | plain `raise "text"` (items, enum_with_values, shader_block, atom, sum_type: group ( raise) | warp-cache: cache-roots b401fc5bb (Ready): runtime.warp raised (trap_detail, returned_error), message as Rust's |
 | gaps: "a block or map holding an instance" is back on main | warp-cache: cache-roots b401fc5bb (Ready): a { } group with a statement beside the instance is a block |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
-| key_meanings: "a int where a list is needed" (survey 2026-10-20 on cache-roots + emitter-twin-fails: 6 refusals) | warp-cache |
-| hex_value: `group ( collection_position` | warp-cache |
-| code_escape: "the unknown name codepoint" | warp-cache |
+| key_meanings: "a int where a list is needed" (survey 2026-10-20 on cache-roots + emitter-twin-fails: 6 refusals) | warp-cache: done on parser-roots 2e5233dd70 (Ready), `x as codepoint/integer/string`; survey on it: 3 refusals left, all warp-self-emitter's (caught_error, line_of, column_of) |
+| hex_value: `group ( collection_position` | warp-cache: done on parser-roots 2e5233dd70 (Ready) (runtime.warp collection_position, xs.index_of(x)) |
+| code_escape: "the unknown name codepoint" | warp-cache: done on parser-roots 2e5233dd70 (Ready) (int as codepoint is a char) |
 | parsed: `group ( caught_error` | warp-self-emitter |
