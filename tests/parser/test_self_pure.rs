@@ -182,3 +182,19 @@ fn durations_read_self_hosted() {
 		}
 	}
 }
+
+/// A call leaving out trailing parameters takes their defaults, in the program's functions and runtime words alike
+#[test]
+fn defaults_run_pure() {
+	runs_pure("default_given", "add(x, y = 2) := x + y; add(1)", "3");
+	runs_pure("default_typed", "add(x: int, y: int = 2) := x + y; add(1, 5)", "6");
+	runs_pure("default_runtime_word", "xs = [1, 2, 3]; xs.slice(1)", "[2 3]");
+}
+
+/// A map that starts as `{}` or `{1: 5}` is keyed by texts, so a number key names an entry (P34, card integer-key)
+#[test]
+fn number_keys_run_pure() {
+	runs_pure("number_key_empty_map", "m = {}; m[1] = 2; m", "{1:2}");
+	runs_pure("number_key_runtime", "d = {}; k = 4; d[k] = 7; d[k]", "7");
+	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
+}
