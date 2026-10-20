@@ -72,7 +72,8 @@ gc_types = [[94, 120, 1], [94, 110, 1], [95, 2, 127, 1, 100, 1, 1], [80, 0, 95, 
 gc_names = [["text", []], ["items", []], ["list", ["length", "items"]], ["Node", ["kind", "data", "value"]], ["i64box", ["value"]], ["f64box", ["value"]], ["Ratio", ["numerator", "denominator"]],
 	["MetaNode", ["kind", "data", "value", "line", "column", "comment"]]]
 # a $Node's kind field (src/type_kinds.rs): the Kind, a bool marked above it, a list's bracket above it
-node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, error: 11, bool: 257, list: 264, unbracketed_list: 1288, map: 8, entry: 262, instance: 6, function: 16}
+node_kind_codes = {int: 1, float: 2, text: 3, codepoint: 4, symbol: 5, error: 11, bool: 257, list: 264, unbracketed_list: 1288, map: 8, entry: 262, instance: 6, function: 16, type_value: 18014398509481989}
+# a type value `int` is a symbol marked 1<<54 above its kind (src/type_kinds.rs TYPE_VALUE_KIND)
 # a map entry `name: value` is a key of the operator `:` (Op::Colon's code 1 above Kind::Key, src/operators/codes.rs)
 # the kinds held as a reference: a text, a list, a boxed value of any kind ("node", also ø) as anyref
 # a time, a $Node of Kind time held as anyref like a node, is its own kind so that only what handles times takes one
@@ -874,6 +875,8 @@ field_defaults(body: any): any := {
 
 # a runtime word sees only the globals runtime.warp declares, never those of the program
 is_global(body: Body, name: text): bool := name not in body.names and name in module.globals and (not body.intrinsics or name in module.runtime_globals)
+# a built-in type's name, `type` or a declared class's
+names_a_type_value(name: text): bool := is_tested_type_word(name) or name == "type" or name in module.classes
 def local_value(body: Body, n: any): list {
 	name = name_of(n)
 	if is_global(body, name) {
@@ -882,6 +885,8 @@ def local_value(body: Body, n: any): list {
 	}
 	# a bare enum case is its name, a symbol, at run time
 	if name not in body.names and name in module.variants { return ["node", node(node_kind_codes.symbol, text_bytes(name))] }
+	# a type's name, unbound, is the type value: `k = int` (Rust: names_a_type_value)
+	if name not in body.names and names_a_type_value(name) { return ["node", node(node_kind_codes.type_value, text_bytes(name))] }
 	if name not in body.names { return refuse("the unknown name " + name) }
 	index = body.names[name]
 	[body.kinds#(index + 1), [op.local_get] + uleb(index)]
@@ -1058,8 +1063,8 @@ def assignment(body: Body, target: any, value: any): list {
 # bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
 declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
 def declaration(body: Body, name: text, type_name: text, value: any): list {
-	# `x: any = v` admits every value: the plain assignment
-	if type_name == "any" { return assignment(body, symbol(name), value) }
+	# `x: any = v` admits every value: the plain assignment; `t: type = int` too, a type value is a node like any
+	if type_name == "any" or type_name == "type" { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if type_name not in declared_kinds { return refuse("a variable declared " + type_name) }
@@ -1966,6 +1971,8 @@ def collect_literal_arguments(n: any) {
 	}
 	if is_group(n) { for x in n { collect_literal_arguments(x) } }
 }
+# the annotations of a parameter held as a node: any value, a function, a type value `int`
+node_annotations = ["any", "function", "type"]
 function_compiled(f: Function, argument_kinds: any): any := {
 	placed(f)
 	parameter_kinds = []
@@ -1978,7 +1985,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
 		}
 		if annotation == ø { module.unannotated[parameter_key(f, i)] = yes }
-		parameter_kinds += [if annotation == ø then given else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
+		parameter_kinds += [if annotation == ø then given else if annotation in node_annotations or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
 	f.kinds = parameter_kinds

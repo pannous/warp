@@ -807,15 +807,13 @@ impl<'a> Loader<'a> {
 		};
 		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
 		if is_explicit_path(name) {
-			crate::modules::reads_beyond_folders("a module by its path");
 			let base = self.including_directory.clone().unwrap_or_default();
-			return file_names.iter().map(|file_name| base.join(file_name)).collect();
+			let candidates: Vec<PathBuf> = file_names.iter().map(|file_name| base.join(file_name)).collect();
+			crate::modules::looks_for(&candidates);
+			return candidates;
 		}
 		if !is_plain_relative_path(name) {
 			return vec![];
-		}
-		if name.contains('/') {
-			crate::modules::reads_beyond_folders("a module of a subfolder");
 		}
 		let beyond_working_directory =
 			crate::compiler::compile_context::read(|context| context.beyond_working_directory);
@@ -824,10 +822,10 @@ impl<'a> Loader<'a> {
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {
-				crate::modules::looks_in(&base.join(directory));
 				candidates.extend(file_names.iter().map(|file_name| base.join(directory).join(file_name)));
 			}
 		}
+		crate::modules::looks_for(&candidates);
 		candidates
 	}
 

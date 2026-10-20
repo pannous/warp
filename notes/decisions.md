@@ -249,6 +249,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - runtime-dates / now-live: `now` reads the clock at run time at each use; tests pin `now <= now`, not `now == now`.
 - time-word (also print-time, time-now, anchor-time): bare `time` is the type; instant, date, local time, zoned time, duration are its subtypes; `now.time` is the time of day, `now.date` the date; `now > 17h` / `now >= October` compare the matching part, `==` stays exact; `time > 18h` is an error with the fix `now > 18h`.
 - module-global-assign: a top-level `tempo = 90` sets the standard module's global.
+- global-plain-write: a variable declared `global x` at the top level is written by a plain `x = …` in any function; no `global x` inside the function needed (library code relies on it: walk.warp's `said = []`).
 - Mutating a main-level list in a function needs `global names`. P106 tasks share a variable only when declared `shared`. P44 `shared xs = int[n]` arrays with atomic `xs#i += v` (`atomic` synonym).
 - range-end-once: every `for` range end is evaluated once. #22 `N times {…}` evaluates N once; `i++ while c` is a plain while; `a = 2 if c` guards the whole assignment.
 - #23 a loop's `it` shadows a function's `it`, with a warning. P174 `mk(k) := { it * k }`: `it` stays the parameter, with a warning. P239 in a lambda naming its parameter, `it` is the outer `it`.

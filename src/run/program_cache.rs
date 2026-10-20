@@ -4,12 +4,14 @@
 //! the source, the program's path, the working directory, the WARP_ settings, `warp fast`, and the files of the folders where its
 //! `use`s look (modules::SEARCH_DIRECTORIES below the program's folder and the working directory: names, sizes, times
 //! of the module files there, so a file the program writes beside it, `save "x.png"`, leaves the key as it was).
-//! A compile that reads beyond them (packages, `use project`, a path, a C library) or says anything (a hint, a warning)
-//! is not kept: its next run compiles and says it again. Kept next to the compiled machine code (module_cache.rs),
-//! `WARP_MODULE_CACHE=off` turns both off.
+//! A module file looked for elsewhere (`use "../lib/x.warp"`, a subfolder's) is kept with its stamp: the program compiles
+//! again once it changes, appears or goes. A compile that reads beyond them (packages, `use project`, a C library) is
+//! not kept; the hints, warnings and assumptions of a kept compile are said again by each run from its module. Kept next to the compiled machine code (module_cache.rs), `WARP_MODULE_CACHE=off` turns both off.
+use crate::errors::diagnostic::{recording_said, say_again, Said};
 use crate::pipeline::CompiledModule;
 use sha2::{Digest, Sha256};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -17,7 +19,14 @@ use std::sync::OnceLock;
 pub const PROGRAM_EXTENSION: &str = "program";
 /// The settings that change a compile are named so
 const SETTINGS_PREFIX: &str = "WARP_";
-/// The kept bytes: one byte of the imports the module needs, then the module
+/// The WARP_ settings only a run reads: its time limit, its profile, the phase times, crash cards
+const RUN_SETTINGS: [&str; 4] = [
+	warp_runtime::fuel::TIME_LIMIT_VARIABLE,
+	warp_runtime::profile::PROFILE_VARIABLE,
+	crate::compiler::phase_times::SETTING,
+	crate::errors::crash_card::OFF_SWITCH,
+];
+/// The kept bytes: one byte of the imports the module needs, then the Compiled (postcard), then the module
 const NEEDS_HOST: u8 = 1;
 const NEEDS_WASI: u8 = 2;
 const NEEDS_FFI: u8 = 4;
@@ -30,6 +39,25 @@ static BINARY: OnceLock<String> = OnceLock::new();
 thread_local! {
 	/// Why the compile running on this thread may not be kept, when it read beyond the key
 	static NOT_KEPT: Cell<Option<&'static str>> = const { Cell::new(None) };
+	/// The module files the compile kept on this thread (keeping) looked for, with their stamps then
+	static LOOKED_FOR: RefCell<Option<BTreeMap<PathBuf, Option<Stamp>>>> = const { RefCell::new(None) };
+}
+
+/// A file's size and modification time
+pub(crate) type Stamp = (u64, std::time::SystemTime);
+
+/// What a kept module's compile depended on beyond its key, and what it said
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct Compiled {
+	looked_for: Vec<(PathBuf, Option<Stamp>)>,
+	said: Vec<Said>,
+}
+
+impl Compiled {
+	/// Whether every file it looked for is as it was then
+	fn is_current(&self) -> bool {
+		self.looked_for.iter().all(|(path, then)| stamp(path) == *then)
+	}
 }
 
 /// The program file `warp` runs from now on keeps its compiled module (main.rs)
@@ -44,15 +72,30 @@ pub fn not_kept(what: &'static str) {
 	NOT_KEPT.with(|reason| reason.set(Some(what)));
 }
 
+/// The compile looks for the module file `path`, there or not: a kept program compiles again once it changes
+pub fn looks_for(path: &Path) {
+	LOOKED_FOR.with(|files| {
+		if let Some(files) = files.borrow_mut().as_mut() {
+			files.entry(path.to_path_buf()).or_insert_with(|| stamp(path));
+		}
+	});
+}
+
 /// The module kept for this program text, when warp keeps programs and has it
 pub fn kept(code: &str) -> Option<CompiledModule> {
 	kept_under(&key(code)?)
 }
 
-/// The module kept under `key`, for a compile whose inputs its caller keys itself (self_hosted.rs stage programs)
+/// The module kept under `key` while the files its compile looked for are unchanged, saying again what that compile
+/// said; for a compile whose inputs its caller keys itself too (self_hosted.rs stage programs)
 pub fn kept_under(key: &str) -> Option<CompiledModule> {
 	let bytes = crate::run::module_cache::kept_bytes(key, PROGRAM_EXTENSION)?;
-	let (&needs, module) = bytes.split_first()?;
+	let (&needs, rest) = bytes.split_first()?;
+	let (compiled, module) = postcard::take_from_bytes::<Compiled>(rest).ok()?;
+	if !compiled.is_current() {
+		return None;
+	}
+	say_again(compiled.said);
 	Some(CompiledModule {
 		bytes: module.to_vec(),
 		needs_host: needs & NEEDS_HOST != 0,
@@ -61,33 +104,43 @@ pub fn kept_under(key: &str) -> Option<CompiledModule> {
 	})
 }
 
-/// The compile of `code` by `compile`, kept when it read nothing beyond the key and said nothing
+/// The compile of `code` by `compile`, kept when it read nothing beyond the key and the files it looked for, with what
+/// it said and assumed
 pub fn keeping<E>(code: &str, compile: impl FnOnce() -> Result<CompiledModule, E>) -> Result<CompiledModule, E> {
 	NOT_KEPT.with(|reason| reason.set(None));
+	LOOKED_FOR.with(|files| files.replace(Some(BTreeMap::new())));
 	let key = key(code); // before the compile: what it read is keyed as it was then
-	let said_before = crate::errors::diagnostic::said();
-	let compiled = compile()?;
-	let quiet = crate::errors::diagnostic::said() == said_before;
-	if let Some(key) = key.filter(|_| quiet && NOT_KEPT.with(Cell::get).is_none()) {
-		keep_under(&key, &compiled);
+	let (compiled, said) = recording_said(compile);
+	let looked_for = LOOKED_FOR.with(|files| files.take()).unwrap_or_default().into_iter().collect();
+	let module = compiled?;
+	if let Some(key) = key.filter(|_| NOT_KEPT.with(Cell::get).is_none()) {
+		keep_with(&key, &module, &Compiled { looked_for, said });
 	}
-	Ok(compiled)
+	Ok(module)
 }
 
 /// Keep `compiled` under `key`
 pub fn keep_under(key: &str, compiled: &CompiledModule) {
-	let needs = [(compiled.needs_host, NEEDS_HOST), (compiled.needs_wasi, NEEDS_WASI), (compiled.needs_ffi, NEEDS_FFI)]
+	keep_with(key, compiled, &Compiled::default());
+}
+
+fn keep_with(key: &str, module: &CompiledModule, compiled: &Compiled) {
+	let needs = [(module.needs_host, NEEDS_HOST), (module.needs_wasi, NEEDS_WASI), (module.needs_ffi, NEEDS_FFI)]
 		.iter()
 		.filter(|(needed, _)| *needed)
 		.fold(0, |all, (_, bit)| all | bit);
-	let bytes: Vec<u8> = std::iter::once(needs).chain(compiled.bytes.iter().copied()).collect();
+	let Ok(dependencies) = postcard::to_allocvec(compiled) else {
+		return;
+	};
+	let bytes: Vec<u8> = std::iter::once(needs).chain(dependencies).chain(module.bytes.iter().copied()).collect();
 	crate::run::module_cache::keep_bytes(key, PROGRAM_EXTENSION, &bytes);
 }
 
-/// The WARP_ settings, which change a compile, sorted
+/// The WARP_ settings, which change a compile, sorted; not those only a run reads (a measured run compiled again)
 pub(crate) fn warp_settings() -> Vec<(String, String)> {
-	let mut settings: Vec<(String, String)> =
-		std::env::vars().filter(|(name, _)| name.starts_with(SETTINGS_PREFIX)).collect();
+	let mut settings: Vec<(String, String)> = std::env::vars()
+		.filter(|(name, _)| name.starts_with(SETTINGS_PREFIX) && !RUN_SETTINGS.contains(&name.as_str()))
+		.collect();
 	settings.sort();
 	settings
 }
@@ -110,27 +163,6 @@ fn key(code: &str) -> Option<String> {
 	Some(crate::extensions::hex_text(&hasher.finalize()))
 }
 
-/// Whether a module found in `folder` lies in a folder the key lists
-pub fn is_searched_folder(folder: &Path) -> bool {
-	let (Some(program), Ok(working)) = (crate::modules::program_file(), std::env::current_dir()) else {
-		return false;
-	};
-	let folder = resolved(folder);
-	searched_folders(&program, &working).iter().any(|searched| resolved(searched) == folder)
-}
-
-/// The absolute path without links, also of a folder that does not exist (yet): a lookup there is keyed all the same
-fn resolved(path: &Path) -> PathBuf {
-	let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-	if let Ok(canonical) = absolute.canonicalize() {
-		return canonical;
-	}
-	match (absolute.parent(), absolute.file_name()) {
-		(Some(parent), Some(name)) => resolved(parent).join(name),
-		_ => absolute,
-	}
-}
-
 /// Where the program's `use`s look: each search directory below its folder and below the working directory
 fn searched_folders(program: &Path, working: &Path) -> Vec<PathBuf> {
 	let program_folder = program.parent().unwrap_or(Path::new("")).to_path_buf();
@@ -142,8 +174,8 @@ fn searched_folders(program: &Path, working: &Path) -> Vec<PathBuf> {
 
 /// A folder's module files (.warp, .wasp, .wasm, .wat: what a `use` loads) with their size and time, sorted; empty when
 /// there is no such folder. Subfolders are left out: their times change with whatever they hold (the cache itself may lie
-/// below), and a `use` naming a subfolder file is not kept (modules::reads_beyond_folders)
-fn listing(folder: &Path) -> Vec<(String, Option<(u64, std::time::SystemTime)>)> {
+/// below); a `use` naming a subfolder file keeps that file's stamp (looks_for)
+fn listing(folder: &Path) -> Vec<(String, Option<Stamp>)> {
 	let modules = crate::modules::MODULE_EXTENSIONS.iter().chain(&crate::modules::wasm_modules::MODULE_EXTENSIONS);
 	let extensions: Vec<&str> = modules.copied().collect();
 	let is_module =
@@ -160,7 +192,7 @@ fn listing(folder: &Path) -> Vec<(String, Option<(u64, std::time::SystemTime)>)>
 }
 
 /// A file's size and modification time
-pub(crate) fn stamp(path: &Path) -> Option<(u64, std::time::SystemTime)> {
+pub(crate) fn stamp(path: &Path) -> Option<Stamp> {
 	let metadata = std::fs::metadata(path).ok()?;
 	Some((metadata.len(), metadata.modified().ok()?))
 }

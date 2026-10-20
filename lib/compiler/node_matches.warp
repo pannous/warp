@@ -9,6 +9,7 @@
 use "walk.warp"
 use "phrase_blocks.warp"
 use "plain_enums.warp"
+use "words.warp"
 
 # node_cases.rs spelling, as `warp lower` shows Rust's Op·text, Bracket·text and Separator·text
 spellings = {"Op": {"Colon": ":", "Dot": ".", "SafeDot": "?.", "Coalesce": "??", "Scope": "::", "Define": ":=",
@@ -81,9 +82,15 @@ is_value_pattern(pattern: Node, variants: any): bool := match pattern {
 	_: no
 }
 
+# `int: e`: an arm of a type word tests the subject's type, as Rust's `match 3 { int: … }` does
+is_type_pattern(pattern: Node): bool := match pattern {
+	Symbol(word): is_tested_type_word(word)
+	_: no
+}
+
 is_case_arm(arm: Node, variants: any): bool := {
 	pattern = arm_pattern(arm)
-	is_other_arm(pattern) or is_value_pattern(pattern, variants) or case_pattern(pattern) != ø
+	is_other_arm(pattern) or is_value_pattern(pattern, variants) or is_type_pattern(pattern) or case_pattern(pattern) != ø
 }
 
 kind_test(case_name: text, subject: Node): Node := {
@@ -140,6 +147,10 @@ arm_chain(arms: list, subject: Node, variants: any): Node := {
 	pattern = arm_pattern(arms#1)
 	if is_other_arm(pattern) { return arm_result(arms#1) }
 	if is_value_pattern(pattern, variants) { return chosen(value_test(subject, pattern), arm_result(arms#1), arm_chain(arms[1..], subject, variants)) }
+	if is_type_pattern(pattern) {
+		test = List([symbol("is_type"), subject, name_of(pattern)], Bracket.Round, Separator.None)
+		return chosen(test, arm_result(arms#1), arm_chain(arms[1..], subject, variants))
+	}
 	case_parts = case_pattern(pattern)
 	chosen(arm_test(case_parts, subject), arm_value(case_parts, subject, arm_result(arms#1)), arm_chain(arms[1..], subject, variants))
 }

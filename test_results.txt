@@ -2417,6 +2417,7 @@ PASSED:
   ✓ lists::test_where_filter::where_filters_by_it
   ✓ lists::test_where_filter::where_with_an_assignment_binds
   ✓ lists::test_word_slices::other_from_and_to_stay
+  ✓ lists::test_worklist_count::a_worklist_keeps_its_count_while_it_grows
   ✓ modules::foreign::tests::json_conversion_keeps_nested_values_and_node_layout
   ✓ modules::test_agent_types::a_companion_takes_the_expected_type_of_any_function
   ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
@@ -3799,6 +3800,7 @@ PASSED:
   ✓ parser::test_self_pure::std_modules_run_pure
   ✓ parser::test_self_pure::text_escapes_read_pure
   ✓ parser::test_self_pure::the_core_runs_pure
+  ✓ parser::test_self_pure::type_values_run_pure
   ✓ parser::test_self_pure::type_words_named_by_fields_run_pure
   ✓ parser::test_self_pure::unicode_glyphs_read_self_hosted
   ✓ parser::test_self_pure::used_files_run_pure
@@ -5290,8 +5292,11 @@ PASSED:
   ✓ types::test_type_of::test_type_without_parentheses
   ✓ types::test_type_parameters::a_type_parameter_takes_a_bare_type_word
   ✓ types::test_type_parameters::a_type_parameter_takes_a_class
+  ✓ types::test_type_parameters::a_type_test_beside_a_function_named_like_a_type
+  ✓ types::test_type_parameters::a_type_value_parameter_tests_as_its_type
   ✓ types::test_type_parameters::a_type_variable_of_a_generic_signature_takes_any_value
   ✓ types::test_type_parameters::a_value_for_a_type_parameter_is_an_error
+  ✓ types::test_type_parameters::a_variable_declared_type_holds_a_type
   ✓ types::test_type_static::the_type_of_a_variable_is_its_value_type
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
@@ -5957,6 +5962,7 @@ PASSED:
   ✓ welcoming::test_english_operator_words::a_function_of_an_operator_word_stays_callable
   ✓ welcoming::test_english_operator_words::membership_ranges_and_loops
   ✓ welcoming::test_english_operator_words::operator_words
+  ✓ welcoming::test_enum_case_words::enum_cases_near_library_words_warn_nothing
   ✓ welcoming::test_error_excerpt::a_message_names_its_position
   ✓ welcoming::test_error_excerpt::an_excerpt_marks_the_word_at_the_position
   ✓ welcoming::test_error_excerpt::the_cli_prints_the_line_of_an_error_and_a_warning
@@ -6368,4 +6374,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-11 ignored, 6363 passed, 0 failed, 6363 total tested
+11 ignored, 6369 passed, 0 failed, 6369 total tested
