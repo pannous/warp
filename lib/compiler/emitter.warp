@@ -963,10 +963,13 @@ def call(body: Body, f: Function, arguments: any): list {
 }
 def call_values(f: Function, values: any): list {
 	if f.kinds == ø { compile_function(f, values.map(v => v#1)) }
-	if f.result == pending { module.saw_pending = yes }
+	# a function still compiling gives the kind it declares; without one its result is not known yet, and the caller
+	# is read again once every function is compiled
+	result = if f.result == pending then declared_result(f) ?? pending else f.result
+	if result == pending { module.saw_pending = yes }
 	code = []
 	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
-	[f.result, code + [op.call] + uleb(f.index)]
+	[result, code + [op.call] + uleb(f.index)]
 }
 
 ## closures (Rust's lowering: src/lowering/definitions/closures.rs)
@@ -1400,6 +1403,17 @@ analyzed_parameter_kind(f: Function, i: int): any := {
 	found = analyzed_function(f)
 	if found == ø or i >= #found["params"] { return ø }
 	held_kind(found["params"][i])
+}
+# the kind a definition declares it gives, `f(x): text := …`: once lowered its body, or a block's last statement, is
+# `… as text`
+declared_result(f: Function): any := declared_kind(f.body)
+declared_kind(n: any): any := {
+	if type(n) is key and op_of(n) == "as" and value_of(n) is symbol {
+		word = name_of(value_of(n))
+		return if word in type_bytes or word in references then word else "node"
+	}
+	if not (is_group(n) and #n > 0 and (bracket_of(n) == "{" or separator_of(n) == ";")) { return ø }
+	declared_kind(n#(#n))
 }
 analyzed_result_kind(f: Function): any := {
 	found = analyzed_function(f)
