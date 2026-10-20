@@ -66,3 +66,7 @@ Survey: WARP_EMIT_SURVEY over parser.warp with its use'd modules (warp-emitter-s
 | gaps: "a block or map holding an instance" is back on main | warp-cache: cache-roots b401fc5bb (Ready): a { } group with a statement beside the instance is a block |
 | `!` words in parser.warp (parser-reads-2), then the pure-lane pass count | warp-is-tests |
 | the pure lane follows `use` (parser.warp's lexer, shapes, words, sugar; refusal `tree: group ( view_of`), card pure-follows-use: lib/compiler/uses.warp splices used files' declarations | warp-self-analyzer (was warp-runtime), pure-follows-use on pure-lane |
+| key_meanings: "a int where a list is needed" (survey 2026-10-20 on cache-roots + emitter-twin-fails: 6 refusals) | warp-cache |
+| hex_value: `group ( collection_position` | warp-cache |
+| code_escape: "the unknown name codepoint" | warp-cache |
+| line_of / column_of "a variable declared int?", parsed: `group ( caught_error` | warp-self-emitter |
