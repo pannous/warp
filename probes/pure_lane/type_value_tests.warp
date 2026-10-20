@@ -5,3 +5,5 @@ print name(float)
 print f(int)
 print g(int)
 print int
+
+print text

@@ -1,12 +1,12 @@
 # Values as they print: the text of any value known only at run time
 # the text of a boxed value of a kind known only at run time (kind codes: src/type_kinds.rs); others trap
-node_text(n: any): text := match n {
+# a type value `int` prints `class int`; ahead of the match, as `Symbol(_)` tests it as the type it names
+node_text(n: any): text := if names_a_type(n) then "class " + unboxed_text(n) else match n {
 	ø: char_text("ø")
 	Number(_): number_text(n)
 	Char(_): char_text(unboxed_char(n))
 	Text(_): unboxed_text(n)
-	# a type value `int` prints `class int`
-	Symbol(_): if names_a_type(n) then "class " + unboxed_text(n) else unboxed_text(n)
+	Symbol(_): unboxed_text(n)
 	Key(_, _, _): key_text(n)
 	True: "yes"
 	False: "no"
