@@ -14,3 +14,9 @@ print lookup({a: 7}, "a")
 print apply_to(x => x * 2, 4)
 print both(yes, no)
 print items_of([1, "a"])
+# an optional alias, a declared variable of an alias
+type Word = Name
+spelled(word: text): Word? := if word == "" then ø else word
+held: Word = "w"
+print spelled("x")
+print held

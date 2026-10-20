@@ -827,10 +827,21 @@ record_type(name: any, body: any): any := {
 	if name#2 in base_class_layers and kind_of(name#3) == "symbol" { module.sum_types[name#3#2] = yes }
 	record_type(name#4, body)
 }
+# the kind a field typed `type` holds: a type word's of the core, a node of any value (a map, a node, a function), a
+# list of a plural type word (`texts`), each through a type alias; ø untyped, "instance" of a class
+def field_kind(type: any): any {
+	if type == ø { return ø }
+	word = aliased_type(type)
+	if word in module.classes { return "instance" }
+	if word in node_annotations { return "node" }
+	if word in core_type_words { return core_type_words[word] }
+	if annotated_kind(word) == "list" { return "list" }
+	"instance"
+}
 # a character given to a field typed text is that text (`"r"` is a character here)
-def texted(type: any, value: any): list { if value#1 == "char" and type in core_type_words and core_type_words[type] == "text" then shown_text(value) else value }
+def texted(type: any, value: any): list { if value#1 == "char" and field_kind(type) == "text" then shown_text(value) else value }
 # whether a field typed `type` (ø: untyped) takes a value of the kind as it is, with no check or conversion
-def admits(type: any, kind: text): bool { type == ø or type == "any" or (type in core_type_words and core_type_words[type] == kind) }
+def admits(type: any, kind: text): bool { type == ø or field_kind(type) == "node" or field_kind(type) == kind }
 # a write to a field `name` of a value known only at run time: every class's field so named takes the kind
 def field_admits(name: text, kind: text): bool {
 	for class_name in module.classes.keys {
@@ -1049,7 +1060,8 @@ def assignment(body: Body, target: any, value: any): list {
 # `x: T = v`: x holds T's kind from here on; a value known only at run time is checked then (field_checks: int_admitted,
 # bool_checked, …), any other value Rust would check at run time (a fraction, a byte's range) is refused
 declared_kinds = {int: "int", float: "float", text: "text", list: "list", bool: "bool"}
-def declaration(body: Body, name: text, type_name: text, value: any): list {
+def declaration(body: Body, name: text, written_type: text, value: any): list {
+	type_name = aliased_type(written_type)
 	# `x: any = v` admits every value: the plain assignment; `t: type = int` too, a type value is a node like any
 	if type_name == "any" or type_name == "type" { return assignment(body, symbol(name), value) }
 	if type_name.ends_with("?") { return optional_declaration(body, name, type_name[0..<(#type_name - 1)], value) }
@@ -1079,6 +1091,7 @@ def optional_declaration(body: Body, name: text, type_name: text, value: any): l
 def admitted(value: any, kind: text): list {
 	if value#1 == kind or value#1 == pending { return value }
 	if value#1 == "int" and kind == "float" { return ["float", converted(value, "float")] }
+	if value#1 == "char" and kind == "text" { return shown_text(value) }
 	if value#1 == "node" and kind in field_checks { return runtime_call(field_checks[kind], [value]) }
 	refuse("a " + value#1 + " given to a variable declared " + kind)
 }
@@ -1086,8 +1099,8 @@ def whole(value: any): list { admitted(value, "int") }
 # a typed field's value of another kind, or known only at run time, is checked then: "not an int" as Rust's
 # (src/wasm_emitter/declared_values.rs), a float field keeping an int
 field_checks = {int: "int_admitted", list: "list_admitted", text: "text_checked", bool: "bool_checked", float: "float_checked"}
-def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_type in core_type_words and core_type_words[field_type] in field_checks }
-def field_value(field_type: any, value: any): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[core_type_words[field_type]], [value]) else value }
+def checked_at_run_time(field_type: any, kind: text): bool { not admits(field_type, kind) and field_kind(field_type) in field_checks }
+def field_value(field_type: any, value: any): list { if checked_at_run_time(field_type, value#1) then runtime_call(field_checks[field_kind(field_type)], [value]) else value }
 
 # `m.x = v`, also as Rust lowers it, `m#("x"+1) = v`: the assignment gives v
 def map_assignment(body: Body, target: any, name: text, value: any): list {
@@ -1971,11 +1984,18 @@ def collect_literal_arguments(n: any) {
 node_annotations = ["any", "Node", "function", "type", "map"]
 # the kind a parameter annotated `word` holds: a type alias's type's, a node for a class, a list for a type word's
 # plural (`ints`, `texts`, `Points`)
-annotated_kind(word: text): text := {
-	while word in module.aliases { word = module.aliases[word] }
+annotated_kind(written: text): text := {
+	word = aliased_type(written)
 	if word in node_annotations or word in module.classes { return "node" }
 	if word.ends_with("s") and names_a_type(word[0..<(#word - 1)]) { return "list" }
 	word
+}
+# the type a type alias names in the end, `Years?` of `type Years = Age; type Age = int` gives `int?`; any other word itself
+aliased_type(word: text): text := {
+	optional = word.ends_with("?")
+	named = if optional then word[0..<(#word - 1)] else word
+	while named in module.aliases { named = module.aliases[named] }
+	if optional then named + "?" else named
 }
 names_a_type(word: text): bool := word in type_bytes or word in references or word in node_annotations or word in module.classes or word in module.aliases
 function_compiled(f: Function, argument_kinds: any): any := {

@@ -1,0 +1,9 @@
+# field types of the compiler's own classes (card types-back): a map, a node, a plural type word, an alias
+type Name = text
+class Scope { kinds: map = {}; names: texts = ["x"]; owner: Name = "main"; root: Node = ø }
+s = Scope()
+s.kinds["a"] = "int"
+print s.kinds["a"]
+print s.names
+print s.owner
+print s.root
