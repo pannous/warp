@@ -19,9 +19,17 @@ key_node(left: any, operator: any, right: any): any := {
 	if code == 0 and spelled != "" { raised("unknown operator: " + spelled) }
 	keyed(code * 256 + 6, left, right)
 }
+# `as_code(data e)`: e marked as code, of the type code (src/type_kinds.rs CODE_MARK, Rust's emit_as_code)
+code_mark(): int := 72057594037927936
+# the kind field without the code mark: `parse("a+1") == data (a+1)`
+code_free_kind(n: any): int := marked_kind(n) - int_remainder(int_quotient(marked_kind(n), code_mark()), 2) * code_mark()
+code_node(n: any): any := {
+	if is_null(n) == 1 or int_remainder(int_quotient(marked_kind(n), code_mark()), 2) == 1 { return n }
+	with_kind(n, marked_kind(n) + code_mark())
+}
 key_left(n: any): any := entry_key(n)
 key_right(n: any): any := key_value(n)
-key_operator(n: any): text := node_text(operator_spellings()#(int_quotient(marked_kind(n), 256) + 1))
+key_operator(n: any): text := node_text(operator_spellings()#(int_remainder(int_quotient(marked_kind(n), 256), 256) + 1))
 symbol_node(name: any): any := symbol_of(node_text(name))
 # a list's bracket and separator in its kind field: the bracket's info in the byte above the kind, the separator's
 # code at bit 48 (src/wasm_emitter/mod.rs list_info); each written as `n.bracket` and `n.separator` give it
