@@ -1,0 +1,8 @@
+# card integer-key: lib/compiler/number_keys.warp keys a map that starts as {} or {1: 5} by texts
+use "../../lib/compiler/passes.warp"
+for source in ["m = {1: 5}; m[1] = 2", "m = {}; m[1] = 2", "xs = [1]; xs[0] = 2"] {
+	n = plain_node(parsed(source))
+	print view_of(n)
+	print view_of(number_keys(n))
+	print view_of(lowered_program(source))
+}

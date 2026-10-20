@@ -1391,6 +1391,7 @@ PASSED:
   ✓ functions::test_charged_getters::assigning_a_getter_is_an_error_naming_the_definition
   ✓ functions::test_closure_float_arguments::a_closure_takes_a_float_element_after_narrowing
   ✓ functions::test_closure_float_arguments::a_closure_takes_a_float_passed_through_a_parameter
+  ✓ functions::test_closure_value_arguments::a_lambda_given_to_a_function_reads_fields_and_gives_bools
   ✓ functions::test_closure_value_arguments::a_lambda_of_the_loop_variable_given_to_a_function_sees_each_turn
   ✓ functions::test_closure_value_arguments::test_a_closure_in_a_list_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_a_text
@@ -3749,7 +3750,6 @@ PASSED:
   ✓ parser::test_self_analyzer::kinds_of_functions_variables_and_value
   ✓ parser::test_self_analyzer::matching_sources_keep_matching
   ✓ parser::test_self_emitter_times::time_constants_run_as_rust_runs_them
-  ✓ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
   ✓ parser::test_self_exact_pow::int_powers_run_as_rust_runs_them
   ✓ parser::test_self_float_as_exact::float_as_rational_runs_as_rust_runs_it
   ✓ parser::test_self_float_text::float_texts_of_emitter_warp_are_rusts
@@ -3766,9 +3766,12 @@ PASSED:
   ✓ parser::test_self_pure::a_member_named_like_a_prefix_word_reads_pure
   ✓ parser::test_self_pure::bang_words_and_tab_columns_run_pure
   ✓ parser::test_self_pure::block_definitions_hold_their_value_pure
+  ✓ parser::test_self_pure::defaults_run_pure
+  ✓ parser::test_self_pure::durations_read_self_hosted
   ✓ parser::test_self_pure::enum_cases_run_pure
   ✓ parser::test_self_pure::for_loops_run_pure
   ✓ parser::test_self_pure::match_values_run_pure
+  ✓ parser::test_self_pure::number_keys_run_pure
   ✓ parser::test_self_pure::optional_and_float_fields_run_self_hosted
   ✓ parser::test_self_pure::program_names_run_pure
   ✓ parser::test_self_pure::pure_only_refuses_without_the_rust_compile
@@ -6340,6 +6343,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_emitter::every_source_inside_the_core_runs_as_rust_runs_it
 
 SUMMARY:
-11 ignored, 6337 passed, 0 failed, 6337 total tested
+11 ignored, 6340 passed, 1 failed, 6341 total tested
