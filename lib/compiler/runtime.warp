@@ -163,9 +163,10 @@ node_text(n: any): text := match n {
 	_: collection_text(n)
 }
 number_text(n: any): text := if kind_code(n) == 1 then exact_text(n) else float_text(unboxed_float(n))
-# a list between its brackets (a map in braces), a time as time_text shows it
+# a list between its brackets (a map in braces), a time as time_text shows it, an Error as its message
 collection_text(n: any): text := {
 	if kind_code(n) == 8 { return list_shown(n) }
+	if node_is_error(n) { return unboxed_text(n) }
 	if kind_code(n) == 18 { return time_text(n) }
 	# a closure: its lambda as written (emitter.warp closure_text_code)
 	if kind_code(n) == 16 { return closure_text(n) }
@@ -302,6 +303,7 @@ has_fields(m: any): int := if is_null(m) == 0 and is_null(fields_of(m)) == 0 and
 map_get(m: any, name: text): any := {
 	if is_position_part(m, name) { return position_part(m, name) }
 	if kind_code(m) == 5 { return node_text(m) }
+	if is_error_message(m, name) { return unboxed_text(m) }
 	if is_entry(m) and text_order(name, "name") == 0 { return key_name(m) }
 	if is_entry(m) and text_order(name, "key") == 0 { return entry_key(m) }
 	if is_entry(m) and text_order(name, "value") == 0 { return key_value(m) }
@@ -1291,8 +1293,7 @@ returned_error(message: text): int := {
 }
 index_out_of_range_of(index: int, count: int): int := {
 	global trap_detail = held([index, count])
-	fail()
-	0
+	index_out_of_range()
 }
 # `raise X`: the run fails with X as its message (Rust's returned_error, src/wasm_emitter/control/traps.rs)
 returned_error(): int := {
@@ -1302,6 +1303,16 @@ returned_error(): int := {
 raised(value: any): int := {
 	global trap_detail = value
 	returned_error()
+}
+# `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
+# it, whose message emitter.warp's throw kept in failed_in: a raise's is the raised value, a missing field's names it
+caught_error(finished: bool, value: any): any := {
+	if finished { return value }
+	global failed_in
+	global trap_detail
+	if text_order(failed_in, "returned error") == 0 { return error_of(node_text(trap_detail)) }
+	if text_order(failed_in, "missing field") == 0 { return error_of("no field " + node_text(trap_detail)) }
+	error_of(failed_in)
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: any): int := {
@@ -1434,6 +1445,7 @@ has_field(m: any, name: text): bool := {
 	if is_null(m) == 1 { return no }
 	if is_position_part(m, name) { return is_meta(m) == 1 }
 	if kind_code(m) == 5 { return text_order(name, "name") == 0 }
+	if node_is_error(m) { return is_error_message(m, name) }
 	if is_entry(m) { return text_order(name, "key") == 0 or text_order(name, "value") == 0 or text_order(name, "name") == 0 or text_order(name, "op") == 0 }
 	if is_plain_list(m) { return text_order(name, "bracket") == 0 or text_order(name, "separator") == 0 }
 	if marked_kind(m) != 8 and marked_kind(m) != 6 { return no }
@@ -1442,6 +1454,8 @@ has_field(m: any, name: text): bool := {
 # `positioned(n, line, column)`: n where it was written, a $MetaNode, as `n.line` and `n.column` read it (Rust's
 # node_api.rs POSITIONED); any other node without a field of that name has no field line
 positioned_node(n: any, line: int, column: int): any := meta_node(n, line, column)
+# `e.message` of an Error e
+is_error_message(m: any, name: text): bool := node_is_error(m) and text_order(name, "message") == 0
 is_position_part(m: any, name: text): bool := {
 	if text_order(name, "line") != 0 and text_order(name, "column") != 0 { return no }
 	not ((marked_kind(m) == 8 or marked_kind(m) == 6) and map_index(m, name) > 0)
