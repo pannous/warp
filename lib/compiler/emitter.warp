@@ -243,7 +243,7 @@ uses_fuel(program: any): bool := block_statements(program).any(n => is_import(n)
 
 def block_statements(n: any): list {
 	# `[1;2;3]` is a list of three items, not three statements
-	if is_group(n) and bracket_of(n) != "[" and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return n.map(x => x) }
+	if is_group(n) and bracket_of(n) != "[" and (bracket_of(n) == "" or bracket_of(n) == "{" or separator_of(n) == ";") { return items_of(n) }
 	[n]
 }
 
@@ -747,10 +747,10 @@ def shown_text(value: any): list {
 # first, the values' texts joined without one (Rust's juxtaposed_text; a one-character text is a character)
 def printed_value(body: Body, n: any): list {
 	if not (is_group(n) and bracket_of(n) == "" and separator_of(n) == " " and #n > 1) { return expression_code(body, n) }
-	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, n.map(x => x), "") }
+	if n#1 is text and text_value(n#1)#1 == "text" { return texts_joined(body, items_of(n), "") }
 	# `print 1+1 "b"`: numbers, texts and their arithmetic print their texts, a space between (Rust's spaced_values_text)
-	if n.all(is_spaced_value) and not n[1..].map(x => x).any(is_negative_literal) { return texts_joined(body, n.map(x => x), " ") }
-	runtime_call("items_text", [list_value(body, n.map(x => x))])
+	if n.all(is_spaced_value) and not items_of(n)[1..].any(is_negative_literal) { return texts_joined(body, items_of(n), " ") }
+	runtime_call("items_text", [list_value(body, items_of(n))])
 }
 # the texts of the values, the separator between
 def texts_joined(body: Body, values: any, separator: text): list {
@@ -1278,7 +1278,7 @@ closure_shown(name: text, captured: int): text := {
 function_name(target: text): text := {
 	parts = target.split(name_joiner)
 	if #parts == 1 { return target }
-	last = parts#(#parts)
+	last = parts.last
 	if last in module.classes then parts[0..<(#parts - 1)].join(name_joiner) else last
 }
 # a value called that is no closure fails in not_a_function; for each closure of f's arity: if the closure's number is
@@ -1369,8 +1369,8 @@ def loop_of(body: Body, test: any, block: any): list {
 def loop_code(body: Body, test: any, block: any, last: int): list {
 	exit_unless = condition(nested(body, test, 2)) + [op.i32_eqz, op.br_if, 1]
 	parts = block_statements(block)
-	has_step = #parts > 0 and is_loop_step(parts#(#parts))
-	again = if has_step then dropped(nested(body, value_of(parts#(#parts)), 2)) + [op.br, 0] else [op.br, 0]
+	has_step = #parts > 0 and is_loop_step(parts.last)
+	again = if has_step then dropped(nested(body, value_of(parts.last), 2)) + [op.br, 0] else [op.br, 0]
 	if has_step { parts = parts[0..<(#parts - 1)] }
 	body.exits += [body.depth + 1]
 	body.continuable += [has_step or continued_safely(test, parts)]
@@ -1389,7 +1389,7 @@ is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) =
 step_operators = ["=", "+=", "-=", "++", "--"]
 continued_safely(test: any, parts: any): bool := {
 	if #parts == 0 { return yes }
-	final_statement = parts#(#parts)
+	final_statement = parts.last
 	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions_name(test, name_of(key_of(final_statement))))
 }
 # n for its effect alone, its value never made: a statement, so an `if` or a loop only runs its branches or body as
@@ -1397,7 +1397,7 @@ continued_safely(test: any, parts: any): bool := {
 def effect(body: Body, n: any): list {
 	if is_group(n) {
 		if not is_code_block(n) { return dropped(statement(body, n)) }
-		return effects(body, n.map(x => x))
+		return effects(body, items_of(n))
 	}
 	if not (type(n) is key) { return dropped(statement(body, n)) }
 	operator = op_of(n)
@@ -1437,14 +1437,14 @@ def nested(body: Body, n: any, blocks: int): list {
 # `break`: to the end of the innermost loop's block
 def loop_exit(body: Body): list {
 	if #body.exits == 0 { return refuse("a break outside a loop") }
-	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits))]
+	[no_kind, [op.br] + uleb(body.depth - body.exits.last)]
 }
 
 # `continue`: to the end of the block around the innermost loop's body, before its step
 def loop_again(body: Body): list {
 	if #body.exits == 0 { return refuse("a continue outside a loop") }
-	if not body.continuable#(#body.continuable) { return refuse("a continue in a loop whose last statement may be its step") }
-	[no_kind, [op.br] + uleb(body.depth - body.exits#(#body.exits) - 2)]
+	if not body.continuable.last { return refuse("a continue in a loop whose last statement may be its step") }
+	[no_kind, [op.br] + uleb(body.depth - body.exits.last - 2)]
 }
 
 # a statement's code, its value dropped
@@ -1470,7 +1470,7 @@ appended(body: Body, target_name: any, addition: any): any := {
 def sequence(body: Body, items: any): list {
 	if #items == 0 { return refuse("an empty block") }
 	code = effects(body, items[0..<(#items - 1)])
-	last = statement(body, items#(#items))
+	last = statement(body, items.last)
 	[last#1, code + last#2]
 }
 # a statement of a sequence: a local stays unshared while statements only append to it (Rust's list_sharing.rs,
@@ -1537,34 +1537,34 @@ is_spaced_call(body: Body, n: any): bool := {
 # `print x`, `raise x` called, a line of their own, or the one line of a block (`if c { print x }`)
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
 def group_expression(body: Body, n: any): list {
-	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, n[2..].map(x => x)) }
+	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, items_of(n)[2..]) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
-		return closure_call(body, int(name_of(n#1)[(#closure_call_prefix)..]), n[1..].map(x => x))
+		return closure_call(body, int(name_of(n#1)[(#closure_call_prefix)..]), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 is symbol and name_of(n#1).contains(captured_marker) {
 		return closure_item(expression_code(body, n#2)#2, captured_index(name_of(n#1)))
 	}
 	if (bracket_of(n) == "(" or is_spaced_call(body, n)) and #n > 0 and n#1 is symbol and name_of(n#1) in module.functions and not is_runtime_word(body, name_of(n#1)) {
-		return call(body, module.functions[name_of(n#1)], n[1..].map(x => x))
+		return call(body, module.functions[name_of(n#1)], items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.classes {
-		return positional_instance(body, name_of(n#1), n[1..].map(x => x))
+		return positional_instance(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.host {
-		return host_call(body, name_of(n#1), n[1..].map(x => x))
+		return host_call(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("wasm_instruction") and n#2 is text { return wasm_instruction(body, n#2) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in intrinsics and body.intrinsics {
-		return intrinsic(body, name_of(n#1), n[1..].map(x => x))
+		return intrinsic(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in time_intrinsics and body.intrinsics {
-		return time_intrinsic(body, name_of(n#1), n[1..].map(x => x))
+		return time_intrinsic(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in time_words {
-		return time_call(body, name_of(n#1), n[1..].map(x => x))
+		return time_call(body, name_of(n#1), items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1) in module.runtime and body.intrinsics {
-		return call(body, module.runtime[name_of(n#1)], n[1..].map(x => x))
+		return call(body, module.runtime[name_of(n#1)], items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 3 and n#1 == symbol("is_type") and n#3 is text { return type_test(body, n#2, n#3) }
 	# a match no case takes: `switch_no_case("label": value)` ends the run in no_case_<label>, which Rust's run reports
@@ -1591,7 +1591,7 @@ def group_expression(body: Body, n: any): list {
 		if word in sort_words and #module.classes > 0 { return refuse("a sort where instances order through compare") }
 		# `a /! b` of a ratio or float floors it as Rust does; floor_quotient takes ints only
 		if word == "floor_quotient" { for x in n[1..] { if expression_code(body, x)#1 != "int" { return refuse("/! on a value not an int") } } }
-		return call(body, module.runtime[word], n[1..].map(x => x))
+		return call(body, module.runtime[word], items_of(n)[1..])
 	}
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("ran_without_error") { return ran_without_error(body, n#2) }
 	if is_call_or_line(n) and #n == 2 and n#1 == symbol("print") { return printed(printed_value(body, n#2)) }
@@ -1606,13 +1606,13 @@ def group_expression(body: Body, n: any): list {
 	if bracket_of(n) == "(" and #n == 1 { return expression_code(body, n#1) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("return") { return return_value(body, expression_code(body, n#2)) }
 	if bracket_of(n) == "" and #n == 2 and n#1 == symbol("global") { return global_declaration_code(body, n#2) }
-	if bracket_of(n) == "[" { return list_value(body, n.map(x => x)) }
+	if bracket_of(n) == "[" { return list_value(body, items_of(n)) }
 	# `{ Run: {…} }` is a block giving an instance to Rust's lowering as often as a map: neither is sure; with a
 	# statement beside it (`{ xs = …; Gaps{…} }`) it is a block, its instance a statement
 	if bracket_of(n) == "{" and n.all(is_map_entry) and n.any(x => is_map_entry(x) and key_of(x) is symbol and name_of(key_of(x)) in module.classes) {
 		return refuse("a block or map holding an instance")
 	}
-	if bracket_of(n) == "{" and n.all(is_map_entry) { return map_value(body, n.map(x => x)) }
+	if bracket_of(n) == "{" and n.all(is_map_entry) { return map_value(body, items_of(n)) }
 	# a map of one entry, as Rust's lowering marks it: map_value already gives the map
 	if bracket_of(n) == "(" and #n == 2 and n#1 == symbol("map_of_entry") { return expression_code(body, n#2) }
 	if bracket_of(n) == "(" and #n == 4 and n#1 == symbol("field_with") {
@@ -1626,8 +1626,8 @@ def group_expression(body: Body, n: any): list {
 	if separator_of(n) == " " and #n > 1 and assigns(n#1) { refuse("a value after an assignment") }
 	# `y 1+1`: values side by side are a list without brackets, as Rust's emitter holds a spaced group (only `;` and
 	# lines are statements); its text is the items with a space between
-	if separator_of(n) == " " and #n > 1 { return ["node", node(node_kind_codes.unbracketed_list, list_value(body, n.map(x => x))#2)] }
-	sequence(body, n.map(x => x))
+	if separator_of(n) == " " and #n > 1 { return ["node", node(node_kind_codes.unbracketed_list, list_value(body, items_of(n))#2)] }
+	sequence(body, items_of(n))
 }
 
 # an item as written into a list or field: an Error there fails as "a list item holds no error" (Rust's emit_data_item);
@@ -1665,7 +1665,7 @@ def key_expression(body: Body, n: any): list {
 		if #right == 1 and not (name_of(left) in module.classes) {
 			return ["node", keyed_code(name_node(left), boxed(expression_code(body, right#1)))]
 		}
-		return instance_value(body, name_of(left), right.map(x => x))
+		return instance_value(body, name_of(left), items_of(right))
 	}
 	# a function value as an operand: Rust's type error `1 + (x => x)`, its reflection `f.name` read as `(closure_new f)#("name"+1)`
 	if not (operator in closure_comparisons) and (is_closure_value(left) or is_closure_value(right)) { return refuse("a function value in " + operator) }
