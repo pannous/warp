@@ -1,0 +1,3 @@
+enum Wasm { StructGet, StructNew, RefCast }
+f(w: Wasm): bool := w == RefCast
+print f(RefCast)

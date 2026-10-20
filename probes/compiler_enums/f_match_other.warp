@@ -1,0 +1,6 @@
+enum Wasm { StructGet, StructNew, RefCast }
+cost(w: Wasm): int := match w {
+	StructGet: 1
+	other: 3
+}
+print cost(Wasm.RefCast)

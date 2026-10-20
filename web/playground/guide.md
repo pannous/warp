@@ -63,23 +63,27 @@ Parentheses go first.
 2 ^ 100
 ```
 
-Fractions stay exact.
+Numbers stay exact. Fractions and decimals are exact numbers: no rounding, ever.
 
 ```warp => 0.5
 1/3 + 1/6
 ```
 
-Decimals are exact too.
-
 ```warp => yes
 0.1 + 0.2 == 0.3
 ```
 
-Floats come from float sources: `sin`, `sqrt` of a non-square, e-notation, `as float` and the suffix `f`. A float spreads
-to what it meets; `≈` compares floats, `==` on them warns.
+Roots and π are real numbers, and warp keeps them exact too: the square root of 2, squared, is exactly 2.
 
-```warp => yes
-0.1f + 0.2 ≈ 0.3
+```warp => 2
+sqrt(2) * sqrt(2)
+```
+
+Fast numbers (floats) are what the computer's chip calculates with: quick, but rounded. Ask for one with the suffix `f`
+or `as float`; compare them with `≈`, not `==`.
+
+```warp => 0.30000000000000004
+0.1f + 0.2
 ```
 
 `mod` gives the remainder.

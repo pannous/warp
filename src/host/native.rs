@@ -166,7 +166,7 @@ pub(crate) fn exported_memory<T>(caller: &mut Caller<'_, T>) -> Option<Memory> {
 /// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
 fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len: i32) -> (i32, i32) {
 	answer_for_text(caller, (path_ptr, path_len), "read", "path", |path| {
-		std::fs::read(crate::util::home_expanded(path)).map_err(|reason| format!("read {path} failed: {reason}"))
+		std::fs::read(crate::modules::in_working_folder(path)).map_err(|reason| format!("read {path} failed: {reason}"))
 	})
 }
 
