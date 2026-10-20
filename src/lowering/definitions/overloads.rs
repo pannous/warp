@@ -402,9 +402,7 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	}
 	let variables =
 		crate::analyzer::agreeing_kinds(&node, HashMap::new(), |_, value| Some(argument_kind(value, &HashMap::new())));
-	let mut registry = TypeRegistry::new();
-	collect_all_types(&mut registry, &node);
-	let classes: HashSet<String> = registry.types().iter().map(|type_def| type_def.name.clone()).collect();
+	let classes = super::nodes::declared_class_names(&node);
 	let list_elements = list_element_variables(&node, &classes, &variables);
 	let mut renaming = ParameterOverloads {
 		overloaded,
@@ -418,7 +416,8 @@ fn lower_parameter_overloads(node: Node) -> Node {
 }
 
 /// Variables assigned lists of one element type, `notes = [note{…}, note{…}]`: that type, None where the assignments
-/// disagree or the items do
+/// disagree or the items do; by name across the program, so an `xs` of other items in another function leaves both to
+/// the run-time test
 fn list_element_variables(
 	node: &Node,
 	classes: &HashSet<String>,

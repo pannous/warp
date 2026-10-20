@@ -585,13 +585,7 @@ pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
 
 /// The names of the classes the program declares (`class Point {…}`)
 pub(crate) fn declared_class_names(node: &Node) -> std::collections::HashSet<String> {
-	let mut names = std::collections::HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::Type { name, .. } = part {
-			names.insert(name.name());
-		}
-	});
-	names
+	crate::modules::needed_definitions::class_names(node)
 }
 
 /// `receiver.method(arguments)`, a receiver in round brackets `(a)` unwrapped
