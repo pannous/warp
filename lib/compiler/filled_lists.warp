@@ -17,7 +17,7 @@ zero_based(one_based: Node): any := match one_based {
 	_: if one_based is int then one_based - 1 else ø
 }
 
-filled(n: Node, zeros: any): Node := match n {
+zero_filled(n: Node, zeros: any): Node := match n {
 	Key(element, Op.Hash, one_based): {
 		if not (element is symbol) or not (name_of(element) in zeros) { return n }
 		count = zero_based(one_based)
@@ -29,5 +29,5 @@ filled(n: Node, zeros: any): Node := match n {
 filled_lists(program: any): any := {
 	scope = scope_of(program)
 	zeros = zeroed_types.filter(word => not binds_value(scope, word))
-	bottom_up(program, n => filled(n, zeros))
+	bottom_up(program, n => zero_filled(n, zeros))
 }
