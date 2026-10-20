@@ -9,7 +9,6 @@ use "lints.warp"
 
 # words whose result is a changed copy of their argument: dropping it changes nothing (Rust COPY_WORDS)
 copy_words = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"]
-mutated_mark = "mutated"
 sleep_word = "sleep"
 error_word = "error"
 fail_word = "fail"
