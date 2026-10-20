@@ -1,3 +1,0 @@
-xs = [3, 1, 2]
-print min(xs)
-print min(xs.map(x => x * 2))
