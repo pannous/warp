@@ -251,9 +251,8 @@ iteration_over(iteration: list, locals: list, lowering: Lowering): any := {
 		if #lambda_parameter_names(arrow) != iteration_extras[word] + 1 { return ø }
 		return iteration_loop(word, iteration#2, iteration#3, values => inlined_body(arrow, values))
 	}
+	# a name: a variable's function value, a function of the program or a library word, `xs.map(len)`
 	if not (function is symbol) { return ø }
-	name = name_of(function)
-	if not (name in locals or name in lowering.arities) { return ø }
 	iteration_loop(word, iteration#2, iteration#3, values => call_node(function, values))
 }
 

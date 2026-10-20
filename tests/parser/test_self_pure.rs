@@ -327,4 +327,7 @@ fn parser_words_run_pure() {
 	runs_pure("type_module_words", &probe("type_module_words"), "[1 2 3]\n[1 2]\n7");
 	runs_pure("nested_case_patterns", &probe("nested_patterns"), "label\n2\nother");
 	runs_pure("error_values", &probe("error_value"), "1\ntoo many\nyes");
+	let chain = |name: &str| format!("{}/probes/pure_chains/{name}.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("library_word_mapped", &chain("slice_named"), "['b']\n[2 1]");
+	runs_pure("chained_iterations", &chain("sorted_then_mapped"), "[\"use a\" \"use b\"]\n[4 6]");
 }
