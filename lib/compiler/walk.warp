@@ -12,10 +12,10 @@ other_arm = "_"
 
 kind_of(view: any): text := if view is list and #view > 0 then view#1 else ""
 # a group, whatever its bracket: `{…}` deeper in a tree is a map at run time, `is list` holds only for the others
-is_group(n: any): bool := bracket_of(n) != ø
-is_curly_group(n: any): bool := is_group(n) and bracket_of(n) == "{"
+is_group(n: Node): bool := bracket_of(n) != ø
+is_curly_group(n: Node): bool := is_group(n) and bracket_of(n) == "{"
 # a key of that operator, `is_key(n, Op.Colon)` of `a: 1`
-is_key(n: any, op: Op): bool := match n {
+is_key(n: Node, op: Op): bool := match n {
 	Key(_, written, _): written == op
 	_: no
 }
@@ -30,7 +30,7 @@ unwrap_word = "unwrap"
 # the view of `{}`, `[]`, `()`: no items
 is_empty_group(view: any): bool := kind_of(view) == "list" and #view == 3
 # an empty map `{}` as plain_node keeps it, behind the opaque word
-is_empty_map(n: any): bool := match n {
+is_empty_map(n: Node): bool := match n {
 	Key(left, op, right): left == symbol(opaque_word) and is_empty_group(right) and right#2 == "{"
 	_: no
 }
@@ -56,7 +56,7 @@ without_layers(view: any, attributes: bool): any := {
 # the node parser.warp builds as plain gives its view: no attribute layers but the mark of `x!`, an empty group as ø but
 # the empty map `{}` (number_keys.warp keys a variable that starts as one by texts), a character as a text, an opaque
 # type or error whole
-plain_node(n: any): any := match n {
+plain_node(n: Node): Node := match n {
 	Key(left, op, right): {
 		if left == symbol(attribute_word) and right#1 == mutated_mark { return List([symbol(unwrap_word), plain_node(right#3)], Bracket.Round, Separator.None) }
 		if left == symbol(attribute_word) { return plain_node(right#3) }
@@ -70,7 +70,7 @@ plain_node(n: any): any := match n {
 }
 
 # the node a view stands for
-node_of(view: any): any := {
+node_of(view: any): Node := {
 	kind = kind_of(view)
 	if kind == "symbol" { return symbol(view#2) }
 	if kind == "text" { return view#2 }
@@ -117,8 +117,8 @@ group_like(n: Node, items: list): Node := match n {
 
 # the call `name(arguments…)`
 # the symbol `word`
-is_word(n: any, word: text): bool := n == symbol(word)
-call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
+is_word(n: Node, word: text): bool := n == symbol(word)
+call_of(name: text, arguments: any): Node := bracketed([symbol(name)] + arguments, "(")
 
 # the numbers of the names the passes make, counted across all of them as Rust's nodes.rs fresh_number counts
 global names_made = 0
@@ -130,8 +130,8 @@ fresh_number(): int := {
 fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
 
 # a program's statements: a sequence's, by `;` or by lines, else the one statement it is
-is_statement_sequence(program: any): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
-statements_in(program: any): list := if is_statement_sequence(program) then items_of(program) else [program]
+is_statement_sequence(program: Node): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
+statements_in(program: Node): list := if is_statement_sequence(program) then items_of(program) else [program]
 
 # a node with f applied to each of its children
 children(n: Node, f: function): Node := match n {
@@ -141,13 +141,13 @@ children(n: Node, f: function): Node := match n {
 }
 
 # the parts of a node, as `children` walks them: a key's two sides, a group's items; none of an opaque view
-parts_of(n: any): list := match n {
+parts_of(n: Node): list := match n {
 	Key(left, op, right): { if left == symbol(opaque_word) then [] else [left, right] }
 	List(items, bracket, separator): items
 	_: []
 }
 # the parts of a node, an opaque view's too: a type's name and body as nodes
-parts_within(n: any): list := match n {
+parts_within(n: Node): list := match n {
 	Key(left, op, right): { if left == symbol(opaque_word) then opaque_parts(right) else [left, right] }
 	_: parts_of(n)
 }
@@ -167,13 +167,13 @@ def items_walked(items: list, quoting_allowed: bool, f: function): list {
 }
 
 # f applied to every node, children first: a pass rewriting the forms it knows and leaving the rest
-bottom_up(n: any, f: function): any := f(children(n, x => bottom_up(x, f)))
+bottom_up(n: Node, f: function): Node := f(children(n, x => bottom_up(x, f)))
 
 # the node itself: the bridge's own twin, which every pass twin relies on
 unchanged(n: T): T := n
 
 # a group's items as a list
-items_of(n: any): list := {
+items_of(n: Node): list := {
 	gathered = []
 	for item in n { gathered += [item] }
 	gathered
@@ -184,9 +184,9 @@ items_of(n: any): list := {
 # with the reports said meanwhile, [line, column, message, preferred] each
 global said = []
 # where n was written, ø for a node without a position (one a pass made)
-line_of(n: any): int? := try n.line else ø
-column_of(n: any): int? := try n.column else ø
-is_positioned(n: any): bool := line_of(n) != ø
+line_of(n: Node): int? := try n.line else ø
+column_of(n: Node): int? := try n.column else ø
+is_positioned(n: Node): bool := line_of(n) != ø
 report(n: T, message: text, preferred: any): T := {
 	said += [[line_of(n), column_of(n), message, preferred]]
 	n
@@ -198,7 +198,7 @@ reported(view: any): list := {
 }
 
 # whether the symbol `word` occurs anywhere in n, inside an opaque layer too
-mentions(n: any, word: text): bool := match n {
+mentions(n: Node, word: text): bool := match n {
 	Symbol(name): name == word
 	Key(left, _, right): { if left == symbol(opaque_word) then view_has(right, part => part == ["symbol", word]) else mentions(left, word) or mentions(right, word) }
 	List(items, _, _): items.any(item => mentions(item, word))
@@ -226,7 +226,7 @@ view_head_name(view: any): text := {
 }
 
 # every list in a node's view, the view itself first: the parts a whole-program question walks
-views_in(n: any): list := lists_in(view_of(n))
+views_in(n: Node): list := lists_in(view_of(n))
 
 # every list in a view, the view itself first
 lists_in(top: any): list := {
