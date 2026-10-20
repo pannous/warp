@@ -398,11 +398,10 @@ impl WasmGcEmitter {
 		// kinds known only at run time (`out = []`, ø until it grows, by a part of an `any` list): decided then
 		let run_time_sum = crate::analyzer::node_arithmetic(self.get_type(left), &Op::Add, self.get_type(right))
 			== Some(super::super::lists::list_ops::NODE_ADD);
-		// node_add_assign is emitted after main when called (an unforeseen call), as node_add is
+		// list_extend and node_add_assign are emitted after main when unforeseen (`t = []; for p in ps { t += p }`: the
+		// analysis requires list_extend only for `+= [v]`), as node_add is
 		let function = match (is_list, run_time_sum) {
-			(true, _) if self.should_emit_function(super::super::lists::list_ops::LIST_EXTEND) => {
-				super::super::lists::list_ops::LIST_EXTEND
-			}
+			(true, _) => super::super::lists::list_ops::LIST_EXTEND,
 			(false, true) => super::super::lists::list_ops::NODE_ADD_ASSIGN,
 			_ => return false,
 		};
