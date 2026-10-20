@@ -71,3 +71,10 @@ fn case_statement_then_type_test() {
 	is!("enum Coin { Penny, Nickel, Dime }; Coin.Nickel; Dime is Coin", true);
 	is!("enum Coin { Penny, Nickel, Dime }; Coin.Nickel; 3 is int", true);
 }
+
+// a case held in a variable converts as the case itself does
+#[test]
+fn a_held_case_converts_as_the_case() {
+	is!(&with_coin("c = Coin.Dime; c as int"), 2);
+	is!(&with_coin("c = Dime; c as position"), 3);
+}
