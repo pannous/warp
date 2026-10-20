@@ -203,7 +203,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 
 ## Bool and truthiness
 - bool-type: yes/no are their own shallow type acting as 1/0; `type(yes)` is bool, prints yes/no, true/false accepted; `0 == false` yes, `0 === false` no; P195 `true + 1` is 2; P199 bool slots accept 1 and 0 only; JSON true/false read as yes/no.
-- Truthiness: ø + 1 stays an error; empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
+- Truthiness: ø + 1 stays an error, and so does ø + text (empty-plus-text: `t = ø; t += "a"` errs with the fix `t = ""`, or `t = []` for a list; `"a" + ø` with text on the left joins its str form); empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
 - predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`) give yes/no, not 1/0.
 - branch-keeps-bool: an `if`/match branch keeps its own value, the bool mark included: `if c then 2 else true` with c false is yes, not 1 (also in lists and `any` slots); only Int→Float widens.
 - text-bool: `as bool` / `bool(x)` read the word ("0", "no", "false" → no); `if` keeps plain truthiness.
@@ -289,6 +289,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - rename-clashes (user 2026-10-20): "for now the pragmatic approach is to rename them": same-named words in two used lib/compiler files get stage-specific names; the general rule (a used file's own code calls its own words) is card file-own-words in Later.
 - diagnostics-files (user 2026-10-20): lib/compiler/diagnostics.warp is the general machinery, no enums, no bridge. The messages live in errors.data, warnings.data, hints.data: TSV, pattern TAB message (`data($x / 0)	"division by zero: {x}"`), comments allowed, translations later as extra columns; ".data" stresses it is a list of lists, read as plain warp data. First match wins.
 - cloud-tests (user 2026-10-20): "From now on, run the Rust test suite completely in the cloud." Workers test with scripts/cloud-test.sh, the Integrator's full suite runs on cloud parts; locally only the Mac-only tests (scripts/cloud-test-environmental.txt). "There are many dangling old processes. Make sure that these are always closed after testing and regularly.": every session kills its own leftovers by PID after each test or probe (notes/agents/common.md "Testing").
+- speed-local-builds (user 2026-10-20, asked whether warp-speed may build its branches locally to time Rust speed changes): "I give my yes". One build at a time, quick release, CARGO_BUILD_JOBS=2, timing only; tests stay in the cloud (notes/agents/common.md "One local build").
 - later (user 2026-10-20): comparing `now` with partial durations (days, years, hours) and matrix.warp as a Matrix class wait.
 - batch 2026-10-19 (user, to build later): a loop in a plain data block gives a nested list, elements splice it; shader `$holes` pass stays (re-read at each paint); run-time block grants are an effect mark `def f(b: block) ! IO`; the eight ignored unit-edge tests stay ignored.
 - letters-only (Interviewer's decision, from 2026-10-15): `letters` stays Unicode letters only; `.length` counts characters.
