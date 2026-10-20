@@ -319,4 +319,5 @@ fn parser_words_run_pure() {
 	runs_pure("floor_quotient_of_nodes", &probe("floor_node"), "3\n3\n2\n2");
 	runs_pure("keys_of_nothing", &probe("empty_keys"), "ø\nø");
 	runs_pure("empty_lists_join", &probe("empty_joins"), "0\n1\n0");
+	runs_pure("arity_overloads", &probe("arity_overloads"), "6\n6\n14\n6\n10\n1");
 }
