@@ -69,6 +69,7 @@ mod test_style_dont_care;
 mod test_template_positions; // card template-positions
 mod test_ternary_hint_got_it; // card hint-dismiss
 mod test_time_limit; // card fuel-metering
+mod test_type_word_shadowed; // card local-named-like-2
 mod test_undefined_in_text_sum; // card compile-path
 mod test_unknown_prefix_word;
 mod test_unknown_word_error;
