@@ -53,10 +53,13 @@ map_values(m: any): list := {
 	for entry in unboxed_list(fields_of(m)) { out += [key_value(entry)] }
 	out
 }
+# the name a key looks up an entry by: a symbol's letters, so the type value `float` names the entry `float:` (Rust:
+# map_key_name)
+name_text(key: any): text := if kind_code(key) == 5 then unboxed_text(key) else node_text(key)
 # `x in c`, `c.contains(x)`: a map's entry named x, a list's item equal to x, a text's part x
 collection_contains(c: any, x: any): bool := {
 	if is_null(c) == 1 { return no } # `[]` is the null node
-	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, node_text(x)) > 0 }
+	if marked_kind(c) == 8 or kind_code(c) == 6 { return map_index(c, name_text(x)) > 0 }
 	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) >= 0 }
 	for item in unboxed_list(c) { if node_equal(item, x) { return yes } }
 	no
@@ -65,7 +68,7 @@ collection_contains(c: any, x: any): bool := {
 # a map's entry named x; 0 when absent (Rust's collection_position, src/lowering/words/library_words.rs)
 collection_position(c: any, x: any): int := {
 	if is_null(c) == 1 { return 0 }
-	if marked_kind(c) == 8 or kind_code(c) == 6 { return if map_index(c, node_text(x)) > 0 then 1 else 0 }
+	if marked_kind(c) == 8 or kind_code(c) == 6 { return if map_index(c, name_text(x)) > 0 then 1 else 0 }
 	if kind_code(c) == 3 { return text_index(unboxed_text(c), node_text(x)) + 1 }
 	position = 0
 	for item in unboxed_list(c) {
@@ -77,7 +80,7 @@ collection_position(c: any, x: any): int := {
 # `x[key]` of a value known only at run time: a list's item at an int key (counted from 0), else the map's entry
 node_get(n: any, key: any): any := {
 	if kind_code(key) == 1 and marked_kind(n) != 8 { return node_at(n, unboxed_int(key) + 1) }
-	map_get(n, node_text(key))
+	map_get(n, name_text(key))
 }
 # `n[key] = value` of a value known only at run time: an int key sets the item key+1, any other key the entry named
 # by its text (field_with); n, or the map made of ø
@@ -86,7 +89,7 @@ node_put(n: any, key: any, value: any): any := {
 		node_set_at(n, unboxed_int(key) + 1, value)
 		return n
 	}
-	field_with(n, node_text(key), value)
+	field_with(n, name_text(key), value)
 }
 # `m.name = value`: a new entry in the old one's place, or at m's end; m itself, so every alias sees it; ø (`{}`)
 # becomes a map of the one entry

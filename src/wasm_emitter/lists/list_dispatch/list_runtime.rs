@@ -145,16 +145,24 @@ impl WasmGcEmitter {
 	/// list_items(node) -> $NodeList: the items of a list's cells in a fresh array, under the list's kind; a walk ends at
 	/// a meta entry or a cell without an item, the last cell's value may be a single item. ø (no item in its data) and
 	/// null hold no items, any other node is the one item, as node_count counts it. Every reader of a list's items starts from it
-	/// (emit_item_walk), so lists can turn from cons cells into vectors (notes/rust_lists.md)
+	/// (emit_item_walk), so lists can turn from cons cells into vectors (notes/rust_lists.md).
+	/// list_item_count(node) -> i64: as many as list_items finds, without their array (node_count)
 	pub(in crate::wasm_emitter) fn emit_list_items(&mut self) {
+		self.emit_item_cells_walk(LIST_ITEMS, false);
+		self.emit_item_cells_walk(LIST_ITEM_COUNT, true);
+	}
+
+	/// One walk along the cells, the items stored in an array that grows when full (grown_when_full), or only counted
+	fn emit_item_cells_walk(&mut self, name: &'static str, counts_only: bool) {
 		let (array, list) = self.typed_list_types(ElementType::Node);
 		let node = self.type_manager.node_type;
 		let (nullable_node, any) = (Ref(self.node_ref(true)), Self::any_ref());
 		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
-		let locals = vec![nullable_node, nullable_node, any, ValType::I32, array_ref, ValType::I64, ValType::I32];
-		let list_ref = Ref(self.typed_list_ref(ElementType::Node));
-		self.runtime_function(LIST_ITEMS, vec![nullable_node], vec![list_ref], locals, |s, f| {
-			let (cell, item, data, count, items, tag, listed) = (1, 2, 3, 4, 5, 6, 7);
+		let locals =
+			vec![nullable_node, nullable_node, any, ValType::I32, array_ref, ValType::I64, ValType::I32, array_ref];
+		let result = if counts_only { ValType::I64 } else { Ref(self.typed_list_ref(ElementType::Node)) };
+		self.runtime_function(name, vec![nullable_node], vec![result], locals, |s, f| {
+			let (cell, item, data, count, items, tag, listed, grown) = (1, 2, 3, 4, 5, 6, 7, 8);
 			let is_list = |f: &mut Function, local: u32| {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
@@ -173,20 +181,24 @@ impl WasmGcEmitter {
 			);
 			Self::emit_list(f, &field(0, 0));
 			Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::End, I::If(BlockType::Empty),
+			Self::emit_list(f, &[I::End, I::If(BlockType::Empty)]);
+			match counts_only {
+				true => Self::emit_list(f, &[I::I64Const(0)]),
+				#[rustfmt::skip]
+				false => Self::emit_list(f, &[
 					I::I32Const(0), I::I32Const(0), I::ArrayNewDefault(array),
-					I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::StructNew(list), I::Return,
-				I::End,
-			]);
-			// twice along the cells: counting the items, then storing them in an array of that length; a cell that is
-			// no list is the last item (a non-list node the only one)
+					I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::StructNew(list),
+				]),
+			}
+			Self::emit_list(f, &[I::Return, I::End]);
+			// a cell that is no list is the last item (a non-list node the only one)
+			if !counts_only {
+				Self::emit_list(f, &[I::I32Const(0), I::ArrayNewDefault(array), I::LocalSet(items)]);
+			}
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::Loop(BlockType::Empty),
-					I::I32Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(cell),
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+				I::LocalGet(0), I::LocalSet(cell),
+				I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
 			]);
 			is_list(f, cell);
 			Self::emit_list(f, &[I::LocalTee(listed), I::If(BlockType::Result(Ref(s.node_ref(false))))]);
@@ -200,24 +212,29 @@ impl WasmGcEmitter {
 				I::Else,
 					I::LocalGet(cell), I::RefAsNonNull,
 				I::End,
-				I::LocalSet(item),
-				I::LocalGet(items), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty),
-					I::LocalGet(items), I::LocalGet(count), I::LocalGet(item), I::ArraySet(array),
-				I::End,
-				I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count),
 			]);
+			match counts_only {
+				true => Self::emit_list(f, &[I::Drop]),
+				#[rustfmt::skip]
+				false => {
+					f.instruction(&I::LocalSet(item));
+					let keep_grown = [I::LocalGet(grown), I::LocalSet(items)];
+					Self::emit_list(f, &grown_when_full(array, &[I::LocalGet(count)], &[I::LocalGet(items)], grown, &keep_grown));
+					Self::emit_list(f, &[I::LocalGet(items), I::LocalGet(count), I::LocalGet(item), I::ArraySet(array)]);
+				}
+			}
+			Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
 			Self::emit_list(f, &[I::LocalGet(listed), I::I32Eqz, I::BrIf(1)]);
 			Self::emit_list(f, &field(cell, 2));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-						I::LocalTee(cell), I::RefIsNull, I::BrIf(1), I::Br(0),
-					I::End, I::End,
-					I::LocalGet(items), I::RefIsNull, I::If(BlockType::Empty),
-						I::LocalGet(count), I::ArrayNewDefault(array), I::LocalSet(items), I::Br(1),
-					I::End,
-				I::End,
-				I::LocalGet(count), I::LocalGet(items), I::RefAsNonNull,
+					I::LocalTee(cell), I::RefIsNull, I::BrIf(1), I::Br(0),
+				I::End, I::End,
 			]);
+			if counts_only {
+				return Self::emit_list(f, &[I::LocalGet(count), I::I64ExtendI32U]);
+			}
+			Self::emit_list(f, &[I::LocalGet(count), I::LocalGet(items), I::RefAsNonNull]);
 			// a list keeps its kind (brackets), a single item is a `[…]` list
 			Self::emit_list(f, &field(0, 0));
 			f.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
