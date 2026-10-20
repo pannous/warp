@@ -55,16 +55,20 @@ cloud sessions and routines share the subscription's limits. Cloud work also unl
 Runs a branch's tests on a cloud VM instead of the Mac's queue:
 
     scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] <branch> <tip> [filters…|--full]
-    scripts/cloud-test.sh --result [--card <card>] <branch> <tip>      # collect a --no-wait run later
+    scripts/cloud-test.sh --result [same options] [--card <card>] <branch> <tip> [same filters]
 
 - The tip must be pushed (a full commit id from `git rev-parse`). Filters as for tests/queue.sh; `--full` = test.sh's
   flags. `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
 - How: `claude --cloud` in detached tmux with a two-line prompt; the job's arguments go to the branch
   cloud-jobs/<job>, the session runs `cloud-test.sh --job <job>` (calls wait ≤ 9 min, under the cloud Bash tool's
   10 min) until it prints CLOUD TEST DONE. The detached run checks out the tip, adds the wasm32 targets, builds from
-  crates.io, tests with --no-fail-fast and pushes `result.md` + `log.txt.gz` to `cloud-results/<branch>-<tip8>`.
+  crates.io, tests with --no-fail-fast and pushes `result.md` + `log.txt.gz` to
+  `cloud-results/<branch>-<tip8>-<run-signature>`.
 - The Mac polls that branch once a minute (`git ls-remote`), saves to data/cloud/<run>/ (launch.txt, result.md,
   log.txt.gz), deletes the branch, prints the result and, with `--card`, adds a `todo note`. Exit status 0 = green.
+- A run's signature covers its base, environment settings, cargo arguments, filters, and skips. Concurrent runs of
+  one branch and tip therefore keep separate results. To collect a `--no-wait` run later, repeat those same options
+  and filters after `--result`; an identical invocation keeps the same id and coalesces while it is pending.
 - Environmental failures: scripts/cloud-test-environmental.txt, one regex per line with its reason; matches are listed
   apart and don't make the verdict red. Grown only from real runs. `--summarize <log> [list]` re-summarizes a saved log.
 - Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message and keeps
@@ -75,7 +79,7 @@ Runs a branch's tests on a cloud VM instead of the Mac's queue:
 - Model: defaults to Haiku. A session keeps the model it was created with; reused sessions get a `/model` message
   before each job. `CLOUD_TEST_MODEL=<model>`; `CLOUD_TEST_FAST=1` passes fast mode (from 2026-11-02, to use up the
   credit; whether it takes effect is unverified).
-- A second launch of a pending run (same branch and tip) only waits for its result. A job without a result frees its
+- A second launch of an identical pending run only waits for its result. A job without a result frees its
   session after 90 min. A run that can't reach its tests pushes a red result naming why; the test run is killed after
   40 min, or once no test finished for 15 min (STALL_SECONDS). `pkill cargo` leaves the test binary running: the
   watchdog kills timeout's process group.
