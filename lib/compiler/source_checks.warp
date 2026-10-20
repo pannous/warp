@@ -16,7 +16,7 @@ fail_word = "fail"
 
 # the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
 source_checks(program: any, prelude: text): any := {
-	spellings = prelude_aliases(prelude)
+	spellings = module_aliases(prelude)
 	for n in nodes_in(program) {
 		located_error(n)
 		spelled_number_join(n)
