@@ -120,12 +120,38 @@ group_like(n: Node, items: list): Node := match n {
 is_word(n: any, word: text): bool := n == symbol(word)
 call_of(name: text, arguments: any): any := bracketed([symbol(name)] + arguments, "(")
 
+# the numbers of the names the passes make, counted across all of them as Rust's nodes.rs fresh_number counts
+global names_made = 0
+fresh_number(): int := {
+	names_made += 1
+	names_made
+}
+# `item·3`: a name a pass makes, its role and its number
+fresh_name(role: text, number: int): Node := symbol(role + "·" + number)
+
+# a program's statements: a sequence's, by `;` or by lines, else the one statement it is
+is_statement_sequence(program: any): bool := bracket_of(program) == "" and (separator_of(program) == ";" or separator_of(program) == "\n")
+statements_in(program: any): list := if is_statement_sequence(program) then items_of(program) else [program]
+
 # a node with f applied to each of its children
 children(n: Node, f: function): Node := match n {
 	Key(left, op, right): { if left == symbol(opaque_word) then n else Key(f(left), op, f(right)) }
 	List(items, bracket, separator): List(items_walked(items, (bracket == Bracket.None and separator == Separator.Space) or (bracket == Bracket.Round and separator == Separator.None), f), bracket, separator)
 	_: n
 }
+
+# the parts of a node, as `children` walks them: a key's two sides, a group's items; none of an opaque view
+parts_of(n: any): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then [] else [left, right] }
+	List(items, bracket, separator): items
+	_: []
+}
+# the parts of a node, an opaque view's too: a type's name and body as nodes
+parts_within(n: any): list := match n {
+	Key(left, op, right): { if left == symbol(opaque_word) then opaque_parts(right) else [left, right] }
+	_: parts_of(n)
+}
+opaque_parts(view: any): list := view.filter(part => part is list).map(node_of)
 
 # `data e`, `print data e`, `f(data e)`: in a line or a call the item after the word is code as written, which no
 # pass rewrites (Rust lowers no quote)

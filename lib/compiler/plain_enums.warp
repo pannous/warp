@@ -74,13 +74,8 @@ subjects_in(n: any, enums: any, subjects: any): any := {
 	if declared != ø {
 		subjects[declared#1] = if declared#1 in subjects and subjects[declared#1] != declared#2 then "" else declared#2
 	}
-	if is_group(n) or n is key { for part in children_of(n) { subjects_in(part, enums, subjects) } }
+	if is_group(n) or n is key { for part in parts_of(n) { subjects_in(part, enums, subjects) } }
 	subjects
-}
-
-children_of(n: any): list := match n {
-	Key(left, op, right): { if left == symbol(opaque_word) then [] else [left, right] }
-	_: items_of(n)
 }
 
 # the enum having a case of that name, when only one has it, else ø
@@ -106,7 +101,7 @@ enum_type(name: text, cases: list): any := {
 
 # `Color.Red` of a case Color declares: Red
 case_of(owner: Node, case: Node, n: Node, enums: any): Node := {
-	if not is_name(owner) or not is_name(case) or not (name_of(owner) in enums) { return n }
+	if not is_name(owner) or not is_name(case) or name_of(owner) not in enums { return n }
 	if name_of(case) in enums[name_of(owner)] then case else n
 }
 
@@ -147,7 +142,7 @@ case_conversion(value: Node, target: Node, n: Node, enums: any, subjects: any): 
 	if target_name in spelled_enums { return n }
 	if target_name in enums { return case_at(value, target_name, enums) }
 	enum_name = type_of(value, enums, subjects)
-	if enum_name == ø or enum_name in spelled_enums or not (target_name in count_types) { return n }
+	if enum_name == ø or enum_name in spelled_enums or target_name not in count_types { return n }
 	case_number(value, enums[enum_name], count_types[target_name], enums)
 }
 

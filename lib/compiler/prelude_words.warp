@@ -77,7 +77,7 @@ with_reached(program: any, module: text, in_front: bool): any := {
 	program = aliased(program, aliases, own_heads(program))
 	# a program's operator declaration overloads the module's beside it (`infix operator ↑(v: V, n: int)` beside the
 	# numbers' ↑), any other definition replaces the module's
-	slices = definition_slices(module).filter(slice => not (slice#1 in own_names) or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
+	slices = definition_slices(module).filter(slice => slice#1 not in own_names or slice#1.starts_with(OPERATOR_FUNCTION_PREFIX))
 	# the statements of each reached slice, by its text
 	reached = {}
 	wanted = symbol_words(program)
@@ -85,7 +85,7 @@ with_reached(program: any, module: text, in_front: bool): any := {
 		word = wanted#1
 		wanted = wanted[1 ..]
 		for slice in slices {
-			if slice#1 == word and not (slice#2 in reached) {
+			if slice#1 == word and slice#2 not in reached {
 				slice_node = plain_node(parsed(slice#2))
 				reached[slice#2] = statements_in(slice_node)
 				wanted += symbol_words(slice_node)
@@ -125,14 +125,14 @@ aliased(n: any, aliases: any, own: any): any := match n {
 aliased_call(n: any, aliases: any, own: any, receivers: int): any := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n > 0 and n#1 is symbol) { return n }
 	called = name_of(n#1)
-	if not (called in aliases) or shadows(own, called, #n - 1 + receivers) { return n }
+	if called not in aliases or shadows(own, called, #n - 1 + receivers) { return n }
 	group_like(n, [symbol(aliases[called])] + items_of(n)[1 ..])
 }
 
 # whether the program's own `name` hides the library word from a call of `count` arguments: a variable always, a
 # function when it takes them (a parameter `b = 1` may be left out)
 shadows(own: any, name: text, count: int): bool := {
-	if not (name in own) { return no }
+	if name not in own { return no }
 	head = own[name]
 	if not is_group(head) { return yes }
 	parameters = items_of(head)[1 ..]
@@ -169,10 +169,10 @@ with_type_module_uses(program: any): any := {
 	providers = type_module_providers()
 	wanted = {}
 	for word in called_words(program) {
-		if word in providers and not (word in own) and not (word in call_kinds) { wanted[providers[word]] = yes }
+		if word in providers and word not in own and word not in call_kinds { wanted[providers[word]] = yes }
 	}
 	# in the order of type_modules, Rust's sorted one
-	modules = type_modules.filter(module => module in wanted and not (module in used))
+	modules = type_modules.filter(module => module in wanted and module not in used)
 	if #modules == 0 { return program }
 	use_statements = modules.map(module => plain_node(parsed("use " + module)))
 	separated(bracketed(use_statements + statements_in(program), ""), ";")
@@ -218,7 +218,7 @@ used_module_sources(statements: any, folder: text, seen: any): list := {
 	sources = []
 	for statement in statements {
 		module = use_target(statement)
-		if module is symbol and file_used(statement, folder) == ø and not (name_of(module) in seen) {
+		if module is symbol and file_used(statement, folder) == ø and name_of(module) not in seen {
 			seen += [name_of(module)]
 			source = file_text(std_module_path(name_of(module)))
 			if source != ø {
