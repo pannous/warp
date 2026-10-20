@@ -2,7 +2,6 @@
 //! filters, in the output pane (card put-warn), and a clear button for the program beside the bug button (card
 //! there-should)
 const PAGE: &str = include_str!("../../web/playground/index.html");
-const PLAYGROUND: &str = include_str!("../../web/playground/playground.js");
 
 fn position(text: &str) -> usize {
 	PAGE.find(text).unwrap_or_else(|| panic!("index.html has {text}"))
@@ -18,7 +17,7 @@ fn the_warn_level_sits_above_the_diagnostics() {
 
 #[test]
 fn a_clear_button_sits_beside_the_bug_button() {
+	// what pressing it does: web/playground/test_in_browser.py clear_button_wrong
 	let (bug, clear, toolbar_end) = (position("id=\"bug\""), position("id=\"clear-code\""), position("</nav>"));
 	assert!(bug < clear && clear < toolbar_end, "after the bug button, in the toolbar");
-	assert!(PLAYGROUND.contains("$(\"clear-code\").onclick"), "the button clears the editor");
 }
