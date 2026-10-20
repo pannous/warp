@@ -4,6 +4,8 @@
 # so does a method `x.parse(…)`.
 use "walk.warp"
 use "parser.warp"
+use "uses.warp"
+use "for_loops.warp"
 
 parse_word = "parse"
 eval_word = "eval"
@@ -48,22 +50,15 @@ words_rewritten(n: any, rewrite: function, words: list): any := {
 	rewrite(children(n, child => words_rewritten(child, rewrite, words)))
 }
 
-# does the definition bind the word: a parameter of that name, or an assignment to it in its body
+# does the definition bind the word: a parameter of that name, or a definition of it in its body
 binds_word(definition: any, word: text): bool := {
 	head = key_of(definition)
-	is_group(head) and items_of(head).any(part => part == symbol(word)) or definition_statements(value_of(definition)).any(statement => defined_here(statement, word))
-}
-definition_statements(n: any): list := if is_group(n) and bracket_of(n) != "[" then items_of(n) else [n]
-
-# does the program define the word itself: `parse(t) := …`, `parse = …`
-defined_here(statement: any, word: text): bool := {
-	if not (is_key(statement, Op.Define) or is_key(statement, Op.Assign)) { return no }
-	head = key_of(statement)
-	head == symbol(word) or (is_group(head) and #head > 0 and head#1 == symbol(word))
+	is_group(head) and items_of(head).any(part => part == symbol(word)) or body_statements(value_of(definition)).any(statement => declared_name(statement) == word)
 }
 
 parse_words(program: any): any := {
 	words = [parse_word, eval_word]
-	if definition_statements(program).any(statement => words.any(word => defined_here(statement, word))) { return program }
+	# the program's own `parse(t) := …`, `parse = …`
+	if statements_in(program).any(statement => declared_name(statement) in words) { return program }
 	words_rewritten(program, n => parse_call(eval_call(n)), words)
 }

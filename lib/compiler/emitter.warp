@@ -57,7 +57,6 @@ runtime_error_fixes = {index_must_be_an_integer: whole_number_fix, count_must_be
 # SHOWN_LIST_ITEM; lib/compiler/data_items.warp), and the runtime word that fails where it holds an Error
 data_item_checks = {"data·item": "held_list_item", "data·field": "held_field"}
 # `data e`: e as written (src/lowering/control/blocks.rs DATA_WORD)
-data_word = "data"
 catch_clause_byte = 0
 mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
@@ -194,7 +193,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
 # unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; sum_types: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; builders: any = []; catches_errors: bool = no; counts_fuel: bool = no; reads_positions: bool = no; literal_arguments: any = {}; class_defaults: any = {}; member_classes: any = {}; unannotated: any = {} }
 
 module = Module({}, [])
 
@@ -1566,9 +1565,18 @@ def expression_code(body: Body, n: any): list {
 }
 
 # `data e`: e as written, a node (Rust's blocks.rs as_data); `parse("a + 1")` is `as_code(data a + 1)`
-is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(data_word)
-# `print data (a + 1)`: the quote is the last item
-ends_in_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n > 2 and n#(#n - 1) == symbol(data_word)
+is_quote(n: any): bool := bracket_of(n) == "" and separator_of(n) == " " and #n == 2 and n#1 == symbol(quote_word)
+# `print data (a + 1)`, `as_code(data (a + 1))`: a `data` after the head of a line or call quotes the item after it;
+# its place, else 0
+inline_quote_at(n: any): int := {
+	if not ((bracket_of(n) == "" and separator_of(n) == " ") or (bracket_of(n) == "(" and separator_of(n) == "")) { return 0 }
+	for i in 2..<#n { if n#i == symbol(quote_word) { return i } }
+	0
+}
+quote_folded(n: any, at: int): any := {
+	quote = separated(bracketed([n#at, n#(at + 1)], ""), " ")
+	separated(bracketed(items_of(n)[..(at - 1)] + [quote] + items_of(n)[(at + 1)..], bracket_of(n)), separator_of(n))
+}
 # `code.line`, `code.column`, `e.comment` (Rust's view: `code#("line" + 1)`): the views carry no positions or comments
 position_fields = ["line", "column", "comment"]
 reads_position(n: any): bool := {
@@ -1604,7 +1612,7 @@ is_spaced_call(body: Body, n: any): bool := {
 is_call_or_line(n: any): bool := bracket_of(n) == "(" or bracket_of(n) == "" or (bracket_of(n) == "{" and separator_of(n) == " ")
 def group_expression(body: Body, n: any): list {
 	if is_quote(n) { return ["node", quoted_code(body, n#2)] }
-	if ends_in_quote(n) { return group_expression(body, separated(bracketed(n[..(#n - 2)].map(x => x) + [separated(bracketed([n#(#n - 1), n#(#n)], ""), " ")], ""), " ")) }
+	if inline_quote_at(n) > 0 { return group_expression(body, quote_folded(n, inline_quote_at(n))) }
 	if bracket_of(n) == "(" and #n > 1 and n#1 == symbol("closure_new") { return closure_value(body, n#2, n[2..].map(x => x)) }
 	if bracket_of(n) == "(" and #n > 0 and n#1 is symbol and name_of(n#1).starts_with(closure_call_prefix) {
 		return closure_call(body, int(name_of(n#1)[(#closure_call_prefix)..]), n[1..].map(x => x))
@@ -2011,7 +2019,7 @@ def zero_of(kind: text): list {
 	[op.i32_const, 0]
 }
 def global_entry(name: text): list { value_type(module.globals[name]#2) + [mutable] + zero_of(module.globals[name]#2) + [op.end] }
-def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + [1] + value_type(f.result) }
+def function_type(f: Function): list { [function_type_byte] + vector(f.kinds.map(value_type)) + (if f.result == no_kind then [0] else [1] + value_type(f.result)) }
 def function_body(f: Function): list {
 	content = vector(f.locals.map(k => [1] + value_type(k))) + f.code + [op.end]
 	uleb(#content) + content
@@ -2056,6 +2064,10 @@ def module_bytes(functions: any): list {
 	}
 	# the program's functions under the names left free, as Rust's export_names: a module imported compiled calls them
 	taken = ["main", "memory"] + exported_globals
+	for f in module.builders {
+		exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
+		taken += [f.name]
+	}
 	for f in functions[1..] {
 		if not f.is_runtime and not (f.name in taken) {
 			exports += [name_bytes(f.name) + [export_function_byte] + uleb(f.index)]
@@ -2088,10 +2100,10 @@ def host_import(name: text): list {
 def host_type(kind: text): list { if kind == "i32" then [type_bytes.char] else value_type(kind) }
 
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
-# giving a node builds and reads nodes through functions the module exports for it (new_int…), which this one lacks
+# giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
 def host_call(body: Body, name: text, arguments: any): list {
 	signature = module.host[name]
-	if "node" in signature#1 or "node" in signature#2 { return refuse("the host word " + name + " on nodes") }
+	if "node" in signature#1 or "node" in signature#2 { exported_builders() }
 	if #arguments != #signature#1 { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	code = []
 	for i in 0..<#arguments { code += host_argument(expression_code(body, arguments[i]), signature#1[i]) }
@@ -2100,6 +2112,38 @@ def host_call(body: Body, name: text, arguments: any): list {
 	result = signature#2#1
 	if result == "i32" { return ["int", code + [op.i64_extend_i32_s]] }
 	[result, code]
+}
+# the constructors a host word builds nodes with, as Rust's module exports them (src/host/tasks/values.rs
+# CONSTRUCTORS): [export name, parameter kinds (char: an i32), runtime word of runtime/builders.warp]
+host_builders = [["new_empty", [], "built_empty"], ["new_int", ["int"], "built_int"], ["new_bool", ["int"], "built_bool"],
+	["new_float", ["float"], "built_float"], ["new_codepoint", ["char"], "built_codepoint"], ["new_text", ["char", "char"], "built_text"],
+	["new_symbol", ["char", "char"], "built_symbol"], ["new_key", ["node", "node", "int"], "built_key"],
+	["new_list", ["node", "node", "int"], "built_list"], ["error_of", ["node"], "built_error"]]
+# made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
+# the trap detail the host left (src/host/native.rs raised)
+def exported_builders(): any {
+	if #module.builders > 0 { return ø }
+	for builder in host_builders {
+		parameters = builder#2
+		values = range_list(#parameters).map(i => if parameters[i] == "char" then ["int", [op.local_get] + uleb(i) + [op.i64_extend_i32_u]] else [parameters[i], [op.local_get] + uleb(i)])
+		f = exported_function(builder#1, parameters, "node")
+		f.code = runtime_call(builder#3, values)#2
+	}
+	f = exported_function("returned_error", [], no_kind)
+	f.code = error_throw("returned_error") + [op.unreachable]
+}
+# a function the host calls by its name, its code written by the caller
+exported_function(name: text, kinds: list, result: text): any := {
+	f = Function(name, [], [], ø)
+	f.index = #module.imports + #module.order
+	module.order += [f]
+	f.kinds = kinds
+	f.result = result
+	f.locals = []
+	f.local_names = range_list(#kinds).map(i => "argument" + (i + 1))
+	f.is_runtime = yes
+	module.builders += [f]
+	f
 }
 def host_argument(value: any, kind: text): list {
 	if kind == "i32" { return host_int(value) + [op.i32_wrap_i64] }
@@ -2169,6 +2213,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.literal_arguments = {}
 	module.saw_pending = no
 	module.rereads = []
+	module.builders = []
 	collect_types(program)
 	module.imports = if mentions_name(program, "print") then [fd_write] else []
 	if mentions_name(program, "read") { module.imports += [host_read] }
