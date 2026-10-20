@@ -10,7 +10,7 @@ pushed(list: Node, call: list, n: Node): Node := {
 	if #call == 2 and call#1 == symbol("push") and is_name(list) {
 		return Key(list, Op.AddAssign, List([call#2], Bracket.Square, Separator.Comma))
 	}
-	if #call >= 1 and call#1 is symbol and not (name_of(call#1) in in_place_methods) {
+	if #call >= 1 and call#1 is symbol and name_of(call#1) not in in_place_methods {
 		return List([call#1, list] + call[1..], Bracket.Round, Separator.None)
 	}
 	n

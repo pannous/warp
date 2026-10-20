@@ -214,7 +214,8 @@ After a context swap, this file and your role file win over anything a handover 
      differs from origin, or does not merge cleanly (naming the files); `--force` only for a branch carrying other
      branches. Several cards on one branch: ready each. First a `todo note <card>` in this fixed form: `card | branch |
      tip (full sha) | filters | passed/failed (cloud) | clippy+wasm32 ok`, then new tests, "docs: <page>"
-     and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix): `todo ready <card>
+     and the sample. Express (the user or the Supervisor asked for your result fast, a crash fix, and every card of
+     warp-speed, the standing speed worker: user 2026-10-20 "express route to main"): `todo ready <card>
      --express`; the Integrator pushes it to main untested at once, the gate follows. When the user says "express" or
      "quickly", they expect about a minute: one targeted test or none, give the user a try line with
      `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp` (a Rust change: after its express landing), ready it express.

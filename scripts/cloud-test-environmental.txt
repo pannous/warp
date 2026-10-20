@@ -17,3 +17,4 @@ control::test_try_host_failure::try_catches_a_file_or_http    # the VM runs as r
 modules::test_std_exec::a_failing_command_is_an_error         # the same /no/such/folder, created by the test above
 functions::test_deep_recursion::the_warp_command_recurses     # Linux's 8 MB main stack (card linux-deep-recursion)
 programs::test_display_names::                                # display.size runs xrandr, absent on the VM
+programs::test_warp_command::debug_build_names_its_commit     # WARP_COMMIT is the tip, HEAD the --on-main merge commit
