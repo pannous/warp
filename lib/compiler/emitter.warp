@@ -679,7 +679,7 @@ library_words = {join: "joined", "times·text": "repeated_text", zero_fill: "zer
 	bracket_of: "list_bracket", separator_of: "list_separator", bracketed: "bracketed_node", separated: "separated_node", positioned: "positioned_node",
 	name_of: "node_text", Symbol: "symbol_node", symbol: "symbol_node", sort: "sorted_node", sorted: "sorted_node", list_sorted_by: "sorted_node_by",
 	slice: "node_slice", starts_with: "node_starts_with", ends_with: "node_ends_with", lower: "text_lower", upper: "text_upper",
-	trim: "node_trim", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", caught_error: "caught_error"}
+	trim: "node_trim", map_get_or: "map_get_or", contains: "collection_contains", is_error: "node_is_error", error: "error_node", caught_error: "caught_error"}
 # node_order knows no user compare: a program with classes sorts outside the core
 sort_words = ["sorted_node", "sorted_node_by"]
 # `x is spec`: the type words of Rust's BUILTIN_TYPES (src/lowering/types/type_tests.rs) the core holds, by their
@@ -687,9 +687,9 @@ sort_words = ["sorted_node", "sorted_node_by"]
 core_type_words = {int: "int", integer: "int", long: "int", i64: "int", i32: "int", rational: "rational", real: "rational",
 	exact: "rational", float: "float", double: "float", f64: "float", f32: "float", float32: "float", float64: "float",
 	number: "number", text: "text", str: "text", string: "text", codepoint: "char", char: "char", character: "char",
-	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map"}
+	bool: "bool", boolean: "bool", list: "list", key: "key", symbol: "symbol", map: "map", error: "error"}
 covered_kinds = {int: ["int"], rational: ["int"], float: ["float"], number: ["int", "float"], text: ["text", "char"],
-	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: []}
+	char: ["char"], bool: ["bool"], list: ["list"], key: [], symbol: [], map: [], error: []}
 def type_test(body: Body, subject: any, spec: text): list {
 	if spec in module.classes { return runtime_call("instance_of", [["node", boxed(expression_code(body, subject))], text_value(spec)]) }
 	if not (spec in core_type_words) { return refuse("a test of the type " + spec) }
