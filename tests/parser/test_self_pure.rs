@@ -444,3 +444,10 @@ fn parser_words_run_pure() {
 	runs_pure("loop_of_functions", &chain("loop_of_functions"), "6\n4");
 	runs_pure("library_word_method_in_lambda", &chain("slice_method"), "[[\"operator_+\" 'y'] ['c' 'z']]");
 }
+
+/// parser.warp reads a float literal through float(text): more digits than a double holds give the nearest float (card
+/// pure-lane-prints)
+#[test]
+fn long_float_literals_read_pure() {
+	runs_pure("long_float_literal", "x = 8.33333333332248946124e+03; x - 8333", "0.33333332248912484");
+}
