@@ -47,6 +47,7 @@ mod test_list_phrases;
 mod test_lone_words;
 mod test_lowered_error_text;
 mod test_map_broadcast_hint; // card hint-map
+mod test_enum_case_words; // card enum-case-words
 mod test_near_miss_words; // card hard-coded
 mod test_open_range_slices; // card golf-open
 mod test_own_definition_hint; // card hint-own-definition

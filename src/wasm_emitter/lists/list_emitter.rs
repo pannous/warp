@@ -1238,6 +1238,7 @@ impl WasmGcEmitter {
 		self.resolves_call(word)
 			|| crate::numbers::units::is_unit(word)
 			|| crate::analyzer::type_word_kind(word).is_some()
+			|| self.ctx.variant_names.contains(word) // an enum's case: `Op.Add` is the case Add, near add or not
 	}
 
 	/// `data cube 3`: the words after the prefix as data (P62); true when it was one
