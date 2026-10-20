@@ -216,8 +216,8 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
 - Next item: lib/math.warp and lib/units.warp become complete standalone warp files, and the parser fetches its
   lists of special functions and operators from them instead of hard-coded Rust tables (card standalone-math-units).
   Not units (decision units-opt-in): the stage programs never import or build lib/units.warp (checked 2026-10-20:
-  parser.wasm and passes.wasm hold none of its words); parser.warp's `1 month` and sleep_durations' `sleep 2s` are
-  the time module's durations, no units.
+  parser.wasm and passes.wasm hold none of its words); parser.warp's `1 month` is the time module's
+  duration, no units.
 - Lowering passes: src/pipeline.rs runs ~150 passes, each `fn(Node) -> Node`, in SOURCE_PHASES and MEANING_PASSES. A
   pass is the smallest unit with a twin; early self-contained passes first; each twin can replace its Rust pass once
   it matches everywhere. They take node_view data, the form parser.warp's `tree` writes
@@ -230,7 +230,12 @@ Order: lowering passes first, then the analyzer, then the emitter; only the boot
   lib/compiler/walk.warp has the bridge (`node_of`, `view_of`; an error, a type or sealed data stays opaque) and the
   shared walk (`children(n, f)`, `bottom_up(n, f)`; a group is `n.bracket != ø`). Both sides drop literal and attribute
   layers, read a character as a text and an empty group as ø (card empty-group-node, open). `bridge_differential`
-  checks the bridge alone. Twins so far: times_phrases.warp, number_words.warp (with its hints).
+  checks the bridge alone. Twins so far: number_words.warp (with its hints).
+- Phrases out of the core (card phrases-out-of-core, user 2026-10-20): `n times …` and sleep's units are no compiler
+  passes in warp. `n times` is refused by name ("`n times` (library word pending)", emitter.warp
+  pending_library_words) until it is a library word; `sleep(seconds)` is the prelude word, calling the host word
+  sleep_ms (decision sleep-seconds), so a bare number needs no pass; `sleep 20ms` waits for unit values (Rust's pass
+  folds it into sleep_ms meanwhile). The Rust lane keeps its own times pass.
 - Positions and reports (card carries-line): where the Rust pass hints, warns or makes an error, pass_differential
   gives the twin the positioned view, ["at", line, column, view] around each positioned node (twins.rs
   positioned_view); walk.warp node_of makes it `positioned(node, line, column)`, read back by `line_of(n)` /

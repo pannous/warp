@@ -1,12 +1,14 @@
 //! The words of the program's environment, imported from the "host" module and called like C functions:
-//! `sleep(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
+//! `sleep_ms(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
 //! since the Unix epoch. A program that defines a word of the same name keeps its own. warp adds the words that need
 //! its compiler, the network or threads (host.rs); these need nothing.
 //! `signal_poll()` and `signal_listen(kind, id, argument)` serve the handlers of system signals (system_signals.rs).
 pub const HOST_LIBRARY: &str = "host";
 /// foreign_call(runtime, module, member, call, arguments): a module of another runtime (foreign.rs), Nodes in and out
 pub const FOREIGN_CALL: &str = "foreign_call";
+/// `sleep(seconds)`, the prelude word; it calls `sleep_ms(milliseconds)`, the host word that pauses
 pub const SLEEP: &str = "sleep";
+pub const SLEEP_MS: &str = "sleep_ms";
 pub const RANDOM: &str = "random";
 pub const RANDOM_BELOW: &str = "random_below";
 /// `random_seed(n)`: random and random_below give the same numbers after the same seed (natively and in the browser)
@@ -152,7 +154,7 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
 pub const BASIC_HOST_WORDS: [&str; 13] = [
-	SLEEP,
+	SLEEP_MS,
 	RANDOM,
 	RANDOM_BELOW,
 	RANDOM_SEED,
@@ -181,7 +183,7 @@ mod linking {
 	pub fn link_host_words<T: 'static>(linker: &mut Linker<T>) -> Result<()> {
 		system_signals::forget_timers(); // each run links anew, on its own thread
 		RANDOM_STATE.set(0); // and starts unseeded
-		linker.func_wrap(HOST_LIBRARY, SLEEP, |mut caller: Caller<'_, T>, milliseconds: i64| {
+		linker.func_wrap(HOST_LIBRARY, SLEEP_MS, |mut caller: Caller<'_, T>, milliseconds: i64| {
 			system_signals::end_at_first_frame()?;
 			system_signals::sleep_with_handlers(
 				&mut caller,

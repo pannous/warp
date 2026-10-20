@@ -521,3 +521,13 @@ fn a_lexer_over_short_words_takes_linear_time_pure() {
 	let lexer = format!("{starts_at}; src = \"\"; for k in 0..2000 {{ src = src + \"abc def ghi \" }}; words = [\"de\", \"gh\", \"zz\", \"def\"]; hits = 0; t0 = clock(); for at in 0..src.length {{ for word in words {{ if starts_at(src, word, at) {{ hits += 1 }} }} }}; if clock() - t0 < 3000 then hits else -1");
 	runs_pure("lexer_short_words", &lexer, "6000");
 }
+
+/// `n times` and sleep's units are no passes of the warp compiler (card phrases-out-of-core): `n times` is refused by
+/// name until it is a library word, `sleep(seconds)` is the prelude word calling the host word sleep_ms
+#[test]
+fn phrases_out_of_the_core() {
+	let (output, _) = lane_run("pure-only", "times_pending", "a = 0; 3 times { a += 1 }; a");
+	assert!(output.contains("outside the core: pure: `n times` (library word pending)"), "{output}");
+	let sleep = format!("{}/probes/pure_chains/sleep_seconds.warp", env!("CARGO_MANIFEST_DIR"));
+	runs_pure("sleep_seconds", &sleep, "yes\nwoke");
+}

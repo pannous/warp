@@ -316,6 +316,8 @@ pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 // paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
 // row) of every pixel, row by row
 paint_each(f, width, height) := paint([pixel_color(f(i % width, i /! width)) for i in 0..width * height], width, height)
+// sleep 0.2, sleep(t): a bare number is seconds (decision sleep-seconds); `sleep 20ms` the compiler folds into sleep_ms
+sleep(amount) := sleep_ms(amount * 1000)
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)

@@ -867,13 +867,12 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	data.downcast_ref::<crate::time::Time>().map(|time| time.to_string())
 }
 
-/// The unit of a bare number of sleep (decision sleep-seconds)
-const SECOND: &str = "s";
-/// what the host word sleep takes per second of a run-time number
+/// milliseconds per second, what the host word sleep_ms counts
 const MILLISECONDS_PER_SECOND: i64 = 1000;
 
-/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`, `sleep 2`: a constant duration is its milliseconds, what the host
-/// word takes; a run-time number counts seconds as a bare one does, so `sleep(t)` sleeps `t * 1000` milliseconds
+/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is `sleep_ms` of its milliseconds, what the
+/// host word takes; a bare number `sleep 2`, also one at run time, `sleep(t)`, stays the call of the prelude word
+/// sleep, which counts seconds (decision sleep-seconds; card phrases-out-of-core)
 /// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
 pub fn lower_sleep_durations(program: Node) -> Node {
 	// a duration whose unit word is one of the program's names (`s = 1; sleep 5 s`) stays as written; `m = 2` leaves
@@ -890,27 +889,16 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 				};
 				let shadows = duration.mentions_where(|name| shadowed.contains(name));
-				let bare = matches!(duration.drop_meta(), Node::Number(_));
-				if bare {
+				let call = |word: Node, argument: Node| Node::List(vec![word, argument], Bracket::Round, Separator::None);
+				if matches!(duration.drop_meta(), Node::Number(_)) {
 					if let Err(error) = warn_bare_duration(&duration) {
 						return error;
 					}
 				}
-				let duration = match bare {
-					true => Node::List(vec![duration, Node::Symbol(SECOND.into())], Bracket::None, Separator::Space),
-					false => duration,
-				};
-				let sleeping = |milliseconds: Node| {
-					Node::List(vec![items[0].clone(), milliseconds], Bracket::Round, Separator::None)
-				};
 				match (milliseconds(&duration).filter(|_| !shadows), &items[1..]) {
-					(Some(amount), _) => sleeping(Node::int(amount)),
-					// a number at run time counts seconds too (decision sleep-seconds): `f(t) := sleep(t)`
-					(None, [seconds]) => sleeping(Node::Key(
-						Box::new(lower(seconds.clone(), shadowed)),
-						Op::Mul,
-						Box::new(Node::int(MILLISECONDS_PER_SECOND)),
-					)),
+					(Some(amount), _) => call(Node::Symbol(crate::host::SLEEP_MS.into()), Node::int(amount)),
+					// a bare number, also one at run time, is seconds: the prelude word sleep's (decision sleep-seconds)
+					(None, [seconds]) => call(items[0].clone(), lower(seconds.clone(), shadowed)),
 					(None, _) => {
 						Node::List(items.into_iter().map(|item| lower(item, shadowed)).collect(), bracket, separator)
 					}

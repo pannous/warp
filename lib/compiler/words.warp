@@ -47,7 +47,7 @@ call_kinds = {"string": "text", "count": "int", "is_type": "int", "collection_co
 	"sin": "float", "zero_fill": "list", "page_path": "empty", "paint": "empty", "map_values": "list",
 	"sound_samples": "empty", "task_spawn_values": "int", "byte_slice": "text", "draw_shape": "empty",
 	"byte_at": "int", "foreign_call": "empty", "random": "float", "linear_count": "int", "collection_position": "int",
-	"symbol": "symbol", "is_error": "int", "sleep": "empty", "bracketed": "list", "ran_without_error": "int",
+	"symbol": "symbol", "is_error": "int", "sleep": "empty", "sleep_ms": "empty", "bracketed": "list", "ran_without_error": "int",
 	"task_join": "int", "task_failure": "empty", "task_await_value": "empty", "next": "int", "as_code": "int",
 	"instance_of": "int", "float": "float", "time_of": "data", "linear_getf": "float", "linear_new": "int",
 	"separated": "list", "linear_setf": "float", "key_of": "empty", "cell_get": "empty", "int": "int",

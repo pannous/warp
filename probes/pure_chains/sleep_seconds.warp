@@ -1,0 +1,6 @@
+// sleep counts seconds, the prelude word sleep(seconds) calling the host word sleep_ms (decision sleep-seconds)
+started = clock()
+sleep(0.2)
+print(clock() - started >= 190)
+sleep 0.01
+print("woke")

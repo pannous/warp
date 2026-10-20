@@ -86,7 +86,7 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
 	const program = () => holder.exports;
-	// the host word sleep (src/host.rs): a page cannot block, so it busy-waits
+	// the host word sleep_ms (src/host.rs): a page cannot block, so it busy-waits
 	holder.sleep = milliseconds => {
 		hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
 		const until = Date.now() + Number(milliseconds);
@@ -134,7 +134,7 @@ function programImports(holder, hooks) {
 				(holder.answerHeaders ??= {})[plainOfTree(readNode(program(), name))] = String(plainOfTree(readNode(program(), value)));
 			},
 			// the host words (src/host.rs)
-			sleep: holder.sleep,
+			sleep_ms: holder.sleep,
 			clock: () => BigInt(Date.now()),
 			// seconds east of UTC in the browser's time zone at that instant: an instant's wall clock (wasm_emitter/times.rs)
 			local_offset: milliseconds => BigInt(-new Date(Number(milliseconds)).getTimezoneOffset() * 60),

@@ -3,7 +3,6 @@
 use "parser.warp"
 use "interpolation.warp"
 use "welcome_forms.warp"
-use "times_phrases.warp"
 use "filled_lists.warp"
 use "number_words.warp"
 use "of_lookups.warp"
@@ -27,7 +26,6 @@ use "preposition_heads.warp"
 use "plain_enums.warp"
 use "uses.warp"
 use "prefix_comparisons.warp"
-use "sleep_durations.warp"
 use "data_items.warp"
 use "parse_words.warp"
 use "lambdas.warp"
@@ -36,11 +34,11 @@ use "arity_overloads.warp"
 use "coalesce.warp"
 use "kind_changes.warp"
 
-passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, times_phrases, element_wise_operators_pass, number_words_pass]
+passes = [interpolation, match_arms, arrow_result_types, of_lookups, grouped_receivers, element_wise_operators_pass, number_words_pass]
 
 # the pure lane's passes (card pure-runs): the twinned ones (passes#i is stage i Rust drives) between those Rust runs
 # outside src/compiler/self_hosted.rs, first principles in warp
-pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons, sleep_durations] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, min_max, coalesce, lambdas, for_loops, ranges, list_methods, number_keys]
+pure_passes = [parse_words, tries, definitions, preposition_heads, arity_overloads, clauses, multiple_assignments, type_tests, prefix_comparisons] + passes + [bare_returns, filled_lists, node_matches, node_cases, plain_enums, phrase_blocks, comprehensions, data_items, min_max, coalesce, lambdas, for_loops, ranges, list_methods, number_keys]
 
 # a node after every pure pass, in order
 lowered_node(n: any): any := {
