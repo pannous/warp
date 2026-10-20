@@ -26,7 +26,7 @@ def parsed(source) {
 // The tree as the source writes it, before the count words (lib/compiler/sugar.warp counted)
 def written_tree(source) {
 	found = gaps(source, source.length)
-	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: declared_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
+	p = Parser{code: source, n: source.length, at: 0, header: false, iterable: false, indent: 0, spaces: false, branch: false, branch_power: 0, grouped: false, enum_cases: false, resumes: found.resumes, breaks: found.breaks, finally_blocks: 0, types: declared_type_names(source), bangs: bang_words(source), type_body: false, operators: scanned_operators(source), aliases: operator_aliases(source) + math_operator_aliases()}
 	items(p, ' ', "")
 }
 
@@ -73,15 +73,16 @@ def word_names_key(p, word) {
 	word != "" and not BLOCK_COLON_WORDS.contains(word) and is_at(p.code, after, ':', p.n) and not is_at(p.code, after + 1, ':', p.n) and not is_at(p.code, after + 1, '=', p.n)
 }
 
-// `operator × := *`, `prefix operator √ := sqrt` (lib/math.warp): another spelling of a built-in operator, a statement
-// declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
-// Rust twin: aliases.rs alias_line
-def alias_line_at(p) {
+// The blank-separated words of the statement at the parser's position
+def statement_words_at(p) {
 	end = p.at
 	while end < p.n and p.code[end] != '\n' and p.code[end] != ';' { end = end + 1 }
-	operator_alias(blank_words(p.code[p.at .. end])).length > 0
+	blank_words(p.code[p.at .. end])
 }
+// `operator × := *`, `prefix operator √ := sqrt` (lib/math.warp): another spelling of a built-in operator, a statement
+// declaring nothing (the pre-scan made the spelling an operator: operator_aliases)
 // [spelling, target] of an alias statement's words (`operator ∧ := and`, `prefix operator √ := sqrt`), else []
+// Rust twin: aliases.rs alias_line
 def operator_alias(words) {
 	if words.length > 0 and words#1 == "prefix" { words = words[1 .. words.length] }
 	if words.length == 4 and words#1 == "operator" and words#3 == ":=" and is_operator_spelling(words#4) then [words#2, words#4] else []
@@ -91,11 +92,9 @@ def operator_alias(words) {
 def operator_aliases(source) {
 	found = []
 	if not source.contains(":=") { return found }
-	for line in code_only(source).split("\n") {
-		for statement in line.split(";") {
-			alias = operator_alias(blank_words(statement))
-			if alias.length > 0 { found += [alias] }
-		}
+	for statement in code_statements(source) {
+		alias = operator_alias(blank_words(statement))
+		if alias.length > 0 { found += [alias] }
 	}
 	found
 }
@@ -900,19 +899,85 @@ def blank_words(statement) {
 }
 
 // The [glyph, kind, level] of each operator a source declares: `[prefix|suffix|infix]
-// operator ⊕ := …` and the pattern `a ⊕ b := …` (infix)
-// Rust twin: operators.rs declared_operators (precedence declarations are not read yet)
+// operator ⊕ := …` and the pattern `a ⊕ b := …` (infix), at the level a precedence declaration gives it
+// Rust twin: operators.rs declared_operators
 def declared_operators(source) {
 	found = []
 	if not source.contains(":=") { return found }
-	for line in code_only(source).split("\n") {
-		for statement in line.split(";") {
-			if not statement.contains(":=") { continue }
-			declared = operator_declared(blank_words(statement))
-			if declared.length > 0 { found += [declared] }
-		}
+	statements = code_statements(source)
+	for statement in statements {
+		if not statement.contains(":=") { continue }
+		declared = operator_declared(blank_words(statement))
+		if declared.length > 0 { found += [declared] }
+	}
+	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
+	for statement in statements {
+		if not statement.contains("precedence") { continue }
+		ranked = precedence_declaration(blank_words(statement), found)
+		if ranked.length != 2 { continue }
+		leveled = []
+		for operator in found { leveled += [if operator#1 == ranked#1 then [operator#1, operator#2, ranked#2] else operator] }
+		found = leveled
 	}
 	found
+}
+
+// The operators a parse of a source knows: its own declared ones, then the standard modules' glyph operators it writes
+// Rust twin: operators.rs scan_user_operators (the operators of a `use`d module's words, `matches`, are not read yet)
+def scanned_operators(source) {
+	found = declared_operators(source)
+	for library in library_glyph_operators() {
+		if source.contains(library#1) and declared_level(found, library#1) < 0 { found += [library] }
+	}
+	found
+}
+// The glyph operators the standard modules declare, with their precedence: `[1] ∪ [2] ∩ [3]` reads ∩ first as
+// lib/list.warp says, without `use list`; scanned the first time a parse needs them
+// Rust twin: operators.rs library_glyph_operators (it scans every std module; these are the ones declaring operators)
+global library_operators = ø
+def library_glyph_operators() {
+	if library_operators == ø {
+		library_operators = []
+		for operator in declared_operators(module_source("math") + "\n" + module_source("list") + "\n" + module_source("regex")) {
+			if not is_name_start(operator#1[0]) { library_operators += [operator] }
+		}
+	}
+	library_operators
+}
+
+// The statements of a source's code, outside comments and texts, split at line ends and `;`
+def code_statements(source) {
+	statements = []
+	for line in code_only(source).split("\n") { statements += line.split(";") }
+	statements
+}
+
+// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
+// Rust twin: declaration_scan.rs PRECEDENCE_STEP
+PRECEDENCE_STEP = 2
+// What the words `operator ⊕ has precedence above|below [operator] Y` declare: [glyph, level]; [message] for one that
+// cannot be followed (a built-in ⊕, an unknown Y); [] for any other statement
+// Rust twin: operators.rs precedence_declaration
+def precedence_declaration(words, declared) {
+	if words.length < 6 or words#1 != "operator" or words#3 != "has" or words#4 != "precedence" { return [] }
+	direction = words#5
+	if direction != "above" and direction != "below" { return [] }
+	other = if words.length == 7 and words#6 == "operator" then words#7 else if words.length == 6 then words#6 else ""
+	if other == "" { return [] }
+	glyph = words#2
+	if declared_level(declared, glyph) < 0 { return ["operator " + glyph + " is built in: only a declared operator gets a precedence (`infix operator " + glyph + " := …` first)"] }
+	reference = declared_level(declared, other)
+	if reference < 0 {
+		canonical = canonical_operator(other)
+		if canonical == "" { return ["unknown operator " + other + " in `operator " + glyph + " has precedence " + direction + " " + other + "`"] }
+		reference = binding_powers(canonical)#1
+	}
+	[glyph, if direction == "above" then reference + PRECEDENCE_STEP else reference - PRECEDENCE_STEP]
+}
+// The level of the declared operator spelled `glyph`, else -1
+def declared_level(declared, glyph) {
+	for operator in declared { if operator#1 == glyph { return operator#3 } }
+	-1
 }
 
 // [glyph, kind, level] of the operator a statement's words declare, else []
@@ -1148,7 +1213,11 @@ def prefixed(p) {
 	// `op.if`, `math.sqrt`: a member's name is no keyword
 	if word_names_key(p, word) or after_member_dot(p) { return atom(p) }
 	if word == "operator" or OPERATOR_KINDS.contains(word) {
-		if alias_line_at(p) { return skip_statement(p) }
+		words = statement_words_at(p)
+		ranked = precedence_declaration(words, p.operators)
+		if ranked.length == 1 { raise ranked#1 }
+		// the pre-scans applied both: declared_operators, operator_aliases
+		if ranked.length == 2 or operator_alias(words).length > 0 { return skip_statement(p) }
 		declaration = operator_declaration(p, word)
 		if declaration != ø { return declaration }
 	}
