@@ -44,8 +44,13 @@ no_field_prefix = "no_field_"
 no_case_prefix = "no_case_"
 # a runtime error's fix after its message (src/wasm_emitter/lists/list_ops/runtime_errors.rs RUNTIME_ERROR_FIXES)
 whole_number_fix = "fix: compute it with /! (floor division) or `… as int`"
+error_in_data_fix = "handle it with try … else, or declare `or error`"
 runtime_error_fixes = {index_must_be_an_integer: whole_number_fix, count_must_be_an_integer: whole_number_fix,
-	an_int_must_be_a_whole_number: whole_number_fix, not_a_map: "keys, values and entries are a map's; a list's positions are 1..count(xs)"}
+	an_int_must_be_a_whole_number: whole_number_fix, not_a_map: "keys, values and entries are a map's; a list's positions are 1..count(xs)",
+	a_list_item_holds_no_error: error_in_data_fix, a_field_holds_no_error: error_in_data_fix}
+# `[e 2]`, `q.k = e`: an item written into a list or field, shown `data·item: e`, `data·field: e` (src/compiler/node_views.rs
+# SHOWN_LIST_ITEM; lib/compiler/data_items.warp), and the runtime word that fails where it holds an Error
+data_item_checks = {"data·item": "held_list_item", "data·field": "held_field"}
 catch_clause_byte = 0
 mutable = 1
 # the GC types ahead of the function types: an array (94) of one [storage type, mutable], a struct (95) of fields
@@ -173,7 +178,8 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # counts_fuel: the program said `use fuel`
 # kinds: what lib/compiler/analyzer.warp `kinds` found in the program ({functions: {f: {params, result}}, …}), or {}
 # literal_arguments: the kinds of the literals the program's calls pass, by `f·i` (collect_literal_arguments)
-class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {} }
+# unannotated: the parameters, by `f·i`, whose kind the calls give (widen_parameter)
+class Module { functions: any; order: any; runtime: any = {}; texts: any = {}; bytes: any = []; globals: any = {}; global_order: any = []; imports: any = []; host: any = {}; classes: any = {}; variants: any = {}; errors: any = {}; closures: any = []; dispatchers: any = []; surveying: bool = no; refusals: any = []; kinds: any = {}; runtime_globals: any = []; shared: any = {}; saw_pending: bool = no; rereads: any = []; catches_errors: bool = no; counts_fuel: bool = no; literal_arguments: any = {}; unannotated: any = {} }
 
 module = Module({}, [])
 
@@ -1114,8 +1120,19 @@ def call_values(f: Function, values: any): list {
 	result = if f.result == pending then declared_result(f) ?? pending else f.result
 	if result == pending { module.saw_pending = yes }
 	code = []
-	for i in 0..<#values { code += converted(values[i], f.kinds[i]) }
+	for i in 0..<#values {
+		widen_parameter(f, i, values[i]#1)
+		code += converted(values[i], f.kinds[i])
+	}
 	[result, code + [op.call] + uleb(f.index)]
+}
+# a call of a function still compiling (its own body, a cycle) passing an argument its unannotated parameter does not
+# hold, `f(xs#1)` inside `f(n)` first called with a list: the parameter takes their joint kind from f's next reading on
+widen_parameter(f: Function, i: int, kind: text) := {
+	held = f.kinds[i]
+	if f.result != pending or not (parameter_key(f, i) in module.unannotated) or kind == pending or held_as(kind, held) { return }
+	joint = joint_kind(held, kind)
+	if joint in type_bytes or joint in references { f.widened[parameter_key(f, i)] = joint }
 }
 
 ## closures (Rust's lowering: src/lowering/definitions/closures.rs)
@@ -1544,10 +1561,18 @@ def group_expression(body: Body, n: any): list {
 	sequence(body, n.map(x => x))
 }
 
+# an item as written into a list or field: an Error there fails as "a list item holds no error" (Rust's emit_data_item);
+# a value of any other kind than node holds none
+def data_item(body: Body, mark: text, item: any): list {
+	value = expression_code(body, item)
+	if value#1 != "node" { return value }
+	runtime_call(data_item_checks[mark], [value])
+}
 def key_expression(body: Body, n: any): list {
 	operator = op_of(n)
 	left = key_of(n)
 	right = value_of(n)
+	if operator == ":" and left is symbol and name_of(left) in data_item_checks { return data_item(body, name_of(left), right) }
 	if operator == "else" and type(left) is key and op_of(left) == "then" { return conditional(body, value_of(key_of(left)), value_of(left), right, yes) }
 	if operator == "then" and type(left) is key and op_of(left) == "if" { return conditional(body, right_of_if(left), right, ø, no) }
 	# `c ? a : b`: the keys ?(c, :(a, b))
@@ -1794,6 +1819,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 		if parameter_key(f, i) in module.literal_arguments {
 			for kind in module.literal_arguments[parameter_key(f, i)] { given = parameter_joint(given, kind) }
 		}
+		if annotation == ø { module.unannotated[parameter_key(f, i)] = yes }
 		parameter_kinds += [if annotation == ø then given else if annotation == "any" or annotation == "function" or annotation in module.classes then "node" else annotation]
 	}
 	for kind in parameter_kinds { if not (kind in type_bytes or kind in references) { return refuse("a parameter of kind " + kind) } }
@@ -1803,6 +1829,7 @@ function_compiled(f: Function, argument_kinds: any): any := {
 	widened = -1
 	while widened != #f.widened.keys {
 		widened = #f.widened.keys
+		f.kinds = range_list(#parameter_kinds).map(i => if parameter_key(f, i) in f.widened then f.widened[parameter_key(f, i)] else parameter_kinds[i])
 		f.result = pending
 		first = new_scope(f)
 		result = expression_code(first, f.body)#1

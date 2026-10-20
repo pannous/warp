@@ -24,10 +24,18 @@ construction(parts: list, n: Node, builds: any): Node := {
 	call_of("separated", [call_of("bracketed", [parts#2, parts#3]), parts#4])
 }
 
-node_value(n: Node, builds: any): Node := match n {
+# the annotations that hold any value, unless the program declares that type itself: Node; Op, Bracket and Separator,
+# whose cases are texts here; a type variable `T` of a generic signature (Rust twin: type_parameters.rs
+# lower_type_variables)
+holds_any(type: Node, declared: any): bool := match type {
+	Symbol(name): not (name in declared) and (name == node_type or name in spelled_enums or (#name == 1 and is_capitalized(name)))
+	_: no
+}
+
+node_value(n: Node, builds: any, declared: any): Node := match n {
 	Key(owner, Op.Dot, case_name): if is_word(owner, node_type) then node_case(case_name) else n
 	Key(owner, Op.Scope, case_name): if is_word(owner, node_type) then node_case(case_name) else n
-	Key(subject, Op.Colon, type): if is_word(type, node_type) then Key(subject, Op.Colon, symbol("any")) else n
+	Key(subject, Op.Colon, type): if holds_any(type, declared) then Key(subject, Op.Colon, symbol("any")) else n
 	Key(value, Op.As, type): if type is symbol and name_of(type) in spelled_enums then value else n
 	List(parts, Bracket.Round, Separator.None): construction(parts, n, builds)
 	_: n
@@ -37,5 +45,6 @@ node_cases(program: any): any := {
 	scope = scope_of(program)
 	builds = {}
 	for case in ["Key", "List"] { if not binds_besides_fields(scope, case) { builds[case] = yes } }
-	bottom_up(program, n => node_value(n, builds))
+	declared = enums_in(program, {})
+	bottom_up(program, n => node_value(n, builds, declared))
 }
