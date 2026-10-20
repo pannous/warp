@@ -278,16 +278,14 @@ fn subscript_kind(indexed: &Node, index: &Node, scope: &Scope) -> Kind {
 			return Kind::List;
 		}
 	}
-	element_kind(indexed, scope).unwrap_or_else(|| {
-		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
-		let by_name = key
-			.is_some_and(|key| key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
-		if by_name {
-			Kind::Empty
-		} else {
-			Kind::Int
-		}
-	})
+	// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node; so is a
+	// member a text cannot have (`line["length"]`, the run-time branch of `line.length` beside a map with that key)
+	let by_name = key
+		.is_some_and(|key| key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
+	if by_name && infer_type(indexed, scope) == Kind::Text {
+		return Kind::Empty;
+	}
+	element_kind(indexed, scope).unwrap_or(if by_name { Kind::Empty } else { Kind::Int })
 }
 
 /// `x as char`, `x as list`, `x as text`
