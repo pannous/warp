@@ -284,6 +284,29 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
 
+/// lib/compiler/analyzer.warp: a field read `p.code` is a value known at run time, so is a slice of it, held in a
+/// variable (card pure-field-slice)
+#[test]
+fn field_slices_run_pure() {
+	runs_pure("field_slice", "class P { code: text }; p = P{code: \"hello\"}; w = p.code[1 .. 3]; w + \"!\"", "el!");
+}
+
+/// lib/compiler/definitions.warp: `f = { it + 1 }` defines a function of `it` as `f := { it + 1 }` does (card pure-error)
+#[test]
+fn assigned_it_blocks_run_pure() {
+	runs_pure("assigned_it_block", "f = { it + 1 }; f(2)", "3");
+}
+
+/// lib/compiler/min_max.warp: min and max of arguments, of a list literal, of a list known at run time (card
+/// pure-library-words)
+#[test]
+fn extrema_run_pure() {
+	runs_pure("max_of_arguments", "max(3, 9, 4)", "9");
+	runs_pure("min_of_literal", "min([4, 1, 6])", "1");
+	runs_pure("max_of_computed", "xs = [5, 2, 7]; max(xs.map(x => x * 2))", "14");
+	runs_pure("min_of_variable", "xs = [5, 2, 7]; min(xs) + max(1.5, 1)", "3.5");
+}
+
 /// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
 /// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
 /// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)

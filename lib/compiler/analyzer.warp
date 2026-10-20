@@ -172,6 +172,8 @@ kind_of_key(n: any, scope: any): text := {
 	op = op_of(n)
 	if op == ".." or op == "..<" or op == "to" or op == "…" { return "list" }
 	if op == "±" { return "data" }
+	# `p.code`: a field, whose kind the emitter knows from the class (a node at run time here); `xs.length` counts
+	if op == "." and value_of(n) is symbol { return if name_of(value_of(n)) in counting_words then "int" else "data" }
 	if op in arithmetic_ops and not is_empty(key_of(n)) { return arithmetic_kind(kind_of(key_of(n), scope), op, kind_of(value_of(n), scope)) }
 	if op == "=" or op == ":=" { return held_kind(assigned_value(n), scope) }
 	if op in compound_ops { return compound_kind(kind_of(key_of(n), scope), compound_ops[op], kind_of(value_of(n), scope)) }
