@@ -1,0 +1,6 @@
+global counter = 5
+base = 10
+def twice(x) { x * 2 }
+thrice(x) := x * 3
+def half(x): int { x / 2 }
+print "main-level of the used file"
