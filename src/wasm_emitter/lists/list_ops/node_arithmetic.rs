@@ -621,10 +621,8 @@ impl WasmGcEmitter {
 				}
 				true
 			}
-			// a list plus a value of run-time kind is node_add's, decided at run time
-			Kind::List if crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).is_some() => {
-				false
-			}
+			// a list (a `[]` local too) plus a value of run-time kind is node_add's, decided at run time
+			Kind::List if crate::analyzer::node_arithmetic(Kind::List, op, self.get_type(right)).is_some() => false,
 			Kind::List => {
 				let item_list = self.appended_item_list(left, right);
 				self.emit_node_instructions(func, left);
