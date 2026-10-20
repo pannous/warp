@@ -175,6 +175,28 @@ pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node
 	key(if_then(condition, body), Op::Else, otherwise)
 }
 
+/// A run-time dispatch `if test₁ then case₁ else if test₂ then case₂ … else otherwise`, the cases tried in order; a
+/// case without a test is taken whatever comes after it
+pub(crate) fn tested_cases(cases: Vec<(Option<Node>, Node)>, otherwise: Node) -> Node {
+	cases.into_iter().rev().fold(otherwise, |otherwise, (test, case)| match test {
+		Some(test) => if_then_else(test, case, otherwise),
+		None => case,
+	})
+}
+
+/// A value a dispatch reads more than once, evaluated once: `name·1 = value` joins the bindings, `name·1` stands for it
+pub(crate) fn bound_once(name: &str, value: Node, bindings: &mut Vec<Node>) -> Node {
+	let temporary = Node::Symbol(format!("{name}·{}", fresh_number()));
+	bindings.push(assign(temporary.clone(), value));
+	temporary
+}
+
+/// `(binding; …; value)`, `(value)` without bindings: one value wherever the call stood, `f(x) in m` tests the
+/// chosen variant's result
+pub(crate) fn after_bindings(bindings: Vec<Node>, value: Node) -> Node {
+	Node::List([bindings, vec![value]].concat(), Bracket::Round, Separator::Semicolon)
+}
+
 /// `if c then a else b` and `c ? a : b`: the condition and both branches
 pub(crate) fn branches(node: &Node) -> Option<(&Node, &Node, &Node)> {
 	match node.drop_meta() {
@@ -563,13 +585,7 @@ pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
 
 /// The names of the classes the program declares (`class Point {…}`)
 pub(crate) fn declared_class_names(node: &Node) -> std::collections::HashSet<String> {
-	let mut names = std::collections::HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::Type { name, .. } = part {
-			names.insert(name.name());
-		}
-	});
-	names
+	crate::modules::needed_definitions::class_names(node)
 }
 
 /// `receiver.method(arguments)`, a receiver in round brackets `(a)` unwrapped

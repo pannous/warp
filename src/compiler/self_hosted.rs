@@ -267,37 +267,48 @@ pub fn pure_module(code: &str) -> Option<Result<crate::pipeline::CompiledModule,
 }
 
 /// The source's module through the warp stages: the view the passes leave, its kinds, the module emitter.warp gives;
-/// the program's compile error instead when the checks of the passes stage diagnose one
+/// the program's compile error instead when the checks of the passes stage diagnose one. Their warnings are said once
+/// the module is made, so a refusal leaves them to the Rust lane, and fail it under `use strict`
 fn pure_bytes(code: &str) -> Result<Result<Vec<u8>, Node>, String> {
 	let checked = answer(&PASSES, format!("[{PURE_STAGE}, {}, {}]", json_text(code), json_text(&program_folder())))?;
 	let failed = || format!("the passes stage failed: {checked}");
 	let parts: serde_json::Value = serde_json::from_str(&checked).map_err(|_| failed())?;
 	let [view, diagnostics] = parts.as_array().map(Vec::as_slice).ok_or_else(failed)? else { return Err(failed()) };
-	if let Err(diagnosed) = reported(diagnostics) {
-		return Ok(Err(diagnosed));
-	}
+	let warnings = match diagnosed(diagnostics) {
+		Ok(warnings) => warnings,
+		Err(error) => return Ok(Err(error)),
+	};
 	let view = view.to_string();
 	let analysis = answer(&ANALYSIS, view.clone())?;
 	let kinds: String =
 		serde_json::from_str(&analysis).map_err(|_| format!("the analysis stage failed: {analysis}"))?;
-	module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?).map(Ok)
+	let bytes = module_of(&answer(&EMIT, format!("[{view}, {kinds}]"))?)?;
+	let said = crate::errors::diagnostic::in_source_mode(code, || crate::errors::diagnostic::report(&warnings));
+	Ok(said.map(|()| bytes))
 }
 
-/// Says what the checks of the passes stage diagnosed, [level, message] each (lib/compiler/diagnostics.warp): an
-/// error is the program's value, a warning or hint is said as the Rust checks' are, failing under `use strict` alike
-fn reported(diagnostics: &serde_json::Value) -> Result<(), Node> {
+/// What the checks of the passes stage diagnosed, [level, message, fix, topic@expression] each
+/// (lib/compiler/diagnostics.warp): an error is the program's value, the warnings and hints are said as the Rust
+/// checks' are
+fn diagnosed(diagnostics: &serde_json::Value) -> Result<Vec<crate::errors::diagnostic::Diagnostic>, Node> {
 	use crate::errors::diagnostic::{Diagnostic, Level};
 	let mut said = Vec::new();
 	for diagnostic in diagnostics.as_array().into_iter().flatten() {
 		let text_at = |index: usize| diagnostic.get(index).and_then(serde_json::Value::as_str).unwrap_or_default();
-		let found = Diagnostic { message: text_at(1).to_string(), ..Default::default() };
+		let fix = Some(text_at(2)).filter(|fix| !fix.is_empty()).map(String::from);
+		let found = Diagnostic { message: text_at(1).to_string(), fix, ..Default::default() };
+		// what "got it" silences: `topic@expression`
+		let found = match text_at(3).split_once('@') {
+			Some((topic, written)) => found.about(topic, written),
+			None => found,
+		};
 		match text_at(0) {
 			ERROR_LEVEL => return Err(found.into_error()),
 			HINT_LEVEL => said.push(found.level(Level::Hint)),
 			_ => said.push(found),
 		}
 	}
-	crate::errors::diagnostic::report(&said)
+	Ok(said)
 }
 
 /// The folder the program's `use`s name files of, as an absolute path: its file's, else the working directory

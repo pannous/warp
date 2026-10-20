@@ -154,20 +154,21 @@ impl InstanceCalls {
 	/// `if instance_of(b, "Bus") then call(b, signal) else b(signal)`, a case per type defining `call`
 	/// The head is evaluated once: `mk()(2)` binds `callee·1 = mk()` first
 	fn dispatched(&self, head: &Node, arguments: &[Node]) -> Node {
-		if !matches!(head.drop_meta(), Node::Symbol(_)) {
-			let callee = Node::Symbol(format!("callee·{}", crate::lowering::nodes::fresh_number()));
-			let binding = assign(callee.clone(), head.clone());
-			let dispatch = self.dispatched(&callee, arguments);
-			return Node::List(vec![binding, dispatch], Bracket::Round, Separator::Semicolon);
-		}
+		let mut bindings = vec![];
+		let head = match head.drop_meta() {
+			Node::Symbol(_) => head.clone(),
+			_ => crate::lowering::nodes::bound_once("callee", head.clone(), &mut bindings),
+		};
 		let as_function = parens([vec![head.clone()], arguments.to_vec()].concat());
 		// `f(x, i)` of a library's untyped f is no `call(b: Bus, signal)`: only a call taking these arguments is tried
 		let takes_these =
 			|type_name: &&String| self.call_arity(type_name).is_none_or(|arity| arity == arguments.len() + 1);
-		self.callable.iter().filter(takes_these).rev().fold(as_function, |otherwise, type_name| {
+		let cases = self.callable.iter().filter(takes_these).map(|type_name| {
 			let test = call(INSTANCE_OF, vec![head.clone(), Node::Text(type_name.clone())]);
-			if_then_else(test, self.call_of(head, arguments), otherwise)
-		})
+			(Some(test), self.call_of(&head, arguments))
+		});
+		let dispatch = crate::lowering::nodes::tested_cases(cases.collect(), as_function);
+		crate::lowering::nodes::after_bindings(bindings, dispatch)
 	}
 
 	/// The parameter count of the `call` of type_name, the instance included: 2 of `call(b: Bus, signal)`

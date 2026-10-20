@@ -24,6 +24,8 @@ const TOPIC: &str = "return-type";
 const COMPANION_SUFFIX: &str = "_as";
 /// How well a value fits `any`: worse than every typed fit, so the untyped variant is the fallback
 const ANY_FIT: u32 = 100;
+/// How well a list of known elements fits a plain `list`: worse than a list of its elements, even widened
+const LIST_FIT: u32 = 2;
 
 /// The function f whose companion f_as is `name`
 pub fn companion_of(name: &str) -> Option<&str> {
@@ -377,6 +379,7 @@ impl Lowering {
 fn lower_parameter_overloads(node: Node) -> Node {
 	let mut signatures: HashMap<String, Vec<Vec<Option<String>>>> = HashMap::new();
 	collect_signatures(&node, &mut signatures);
+	let classes = crate::modules::needed_definitions::class_names(&node);
 	let overloaded: HashMap<String, Vec<Vec<String>>> = signatures
 		.into_iter()
 		.filter(|(_, variants)| variants.len() > 1)
@@ -387,8 +390,10 @@ fn lower_parameter_overloads(node: Node) -> Node {
 				.collect();
 			let typed = variants.iter().flatten().any(|type_name| type_name != ANY_TYPE);
 			let distinct = variants.iter().enumerate().all(|(index, types)| !variants[..index].contains(types));
-			// parameters of declared types dispatch through traits (traits.rs)
-			let builtin = variants.iter().flatten().all(|type_name| is_overload_type(type_name));
+			// parameters of declared types dispatch through traits (traits.rs), a class named like a built-in type too
+			// (`Function`)
+			let builtin =
+				variants.iter().flatten().all(|type_name| is_overload_type(type_name) && !classes.contains(type_name));
 			(distinct && builtin && typed).then_some((name, variants))
 		})
 		.collect();
@@ -397,9 +402,71 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	}
 	let variables =
 		crate::analyzer::agreeing_kinds(&node, HashMap::new(), |_, value| Some(argument_kind(value, &HashMap::new())));
-	let mut renaming =
-		ParameterOverloads { overloaded, variables, seen: HashMap::new(), declared: vec![HashMap::new()] };
+	let classes = super::nodes::declared_class_names(&node);
+	let list_elements = list_element_variables(&node, &classes, &variables);
+	let mut renaming = ParameterOverloads {
+		overloaded,
+		variables,
+		classes,
+		list_elements,
+		seen: HashMap::new(),
+		declared: vec![HashMap::new()],
+	};
 	renaming.rewrite(node)
+}
+
+/// Variables assigned lists of one element type, `notes = [note{…}, note{…}]`: that type, None where the assignments
+/// disagree or the items do; by name across the program, so an `xs` of other items in another function leaves both to
+/// the run-time test
+fn list_element_variables(
+	node: &Node,
+	classes: &HashSet<String>,
+	variables: &HashMap<String, Option<Kind>>,
+) -> HashMap<String, Option<String>> {
+	let mut elements: HashMap<String, Option<String>> = HashMap::new();
+	node.visit(&mut |node| {
+		let Node::Key(target, Op::Assign | Op::Define, value) = node else {
+			return;
+		};
+		let Node::Symbol(name) = target.drop_meta() else {
+			return;
+		};
+		let element = literal_element_type(value, classes, variables);
+		elements
+			.entry(name.clone())
+			.and_modify(|known| {
+				if *known != element {
+					*known = None
+				}
+			})
+			.or_insert(element);
+	});
+	elements
+}
+
+/// The element type of a list written with its items: `int` of `[1, 2]`, `note` of `[note{…}]`; None for an empty or
+/// mixed list
+fn literal_element_type(
+	value: &Node,
+	classes: &HashSet<String>,
+	variables: &HashMap<String, Option<Kind>>,
+) -> Option<String> {
+	let Node::List(items, Bracket::Square, _) = value.ungrouped() else {
+		return None;
+	};
+	let mut types = items.iter().map(|item| item_type(item, classes, variables));
+	let first = types.next()??;
+	types.all(|item_type| item_type.as_ref() == Some(&first)).then_some(first)
+}
+
+/// `note` of an instance `note{…}` of a declared type, `int` of `1`
+fn item_type(item: &Node, classes: &HashSet<String>, variables: &HashMap<String, Option<Kind>>) -> Option<String> {
+	match item.ungrouped() {
+		Node::Key(class, Op::Colon, fields) if matches!(fields.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			class.symbol_name().filter(|name| classes.contains(*name)).map(str::to_string)
+		}
+		other => argument_kind(other, variables).map(|kind| kind.to_string()),
+	}
 }
 
 /// The argument counts a definition accepts: its parameters without a default are required
@@ -889,6 +956,59 @@ fn fit(kind: Kind, type_name: &str) -> Option<u32> {
 	}
 }
 
+/// How well a list of `element`s fits a parameter of the list type `type_name`: its element as fit() takes a value,
+/// a plain `list` worse than every list of a fitting element; an element only the run time knows fits every list
+fn element_fit(element: Option<&str>, type_name: &str) -> Option<u32> {
+	let Some(wanted) = crate::analyzer::list_element_type(type_name) else {
+		return match type_name {
+			ANY_TYPE => Some(ANY_FIT),
+			_ if overload_kind(type_name) == Some(Kind::List) => Some(if element.is_some() { LIST_FIT } else { 0 }),
+			_ => None,
+		};
+	};
+	let Some(element) = element else { return Some(0) };
+	match type_word_kind(element) {
+		_ if crate::type_tests::canonical_spec_word(element) == crate::type_tests::canonical_spec_word(wanted) => {
+			Some(0)
+		}
+		Some(kind) => fit(kind, wanted),
+		None => None,
+	}
+}
+
+/// `files` of `list of file`, the cast of `[] as files` (`[] as [file]` converts each item instead)
+fn plural(list_type: &str) -> String {
+	match crate::analyzer::list_element_type(list_type) {
+		Some(element) => crate::extensions::strings::english_plural(element),
+		None => list_type.to_string(),
+	}
+}
+
+/// `[]` as written
+fn is_empty_list(argument: &Node) -> bool {
+	matches!(argument.ungrouped(), Node::List(items, Bracket::Square, _) if items.is_empty())
+}
+
+/// The run-time test of an argument for a parameter type; of a list type also of the list's first item, as a list keeps
+/// no item type at run time (decision list-variant-dispatch: an empty list fits every list type)
+fn run_time_test(argument: Node, type_name: &str) -> Option<Node> {
+	use crate::lowering::type_tests::declared_type_test;
+	let tested = |type_name: &str| match takes_widened(type_name) {
+		true => crate::words::NUMBER_WORD.to_string(),
+		false => type_name.to_string(),
+	};
+	let Some(element) = crate::analyzer::list_element_type(type_name) else {
+		return declared_type_test(argument, &tested(type_name));
+	};
+	let is_list = declared_type_test(argument.clone(), crate::words::LIST_WORD)?;
+	let empty = key(call(crate::words::COUNT_WORD, vec![argument.clone()]), Op::Eq, Node::int(0));
+	let first_item = key(argument, Op::Hash, Node::int(1));
+	// a declared type's instance: is_type names it as the emitter's type registry knows it
+	let item_test = declared_type_test(first_item.clone(), &tested(element))
+		.unwrap_or_else(|| call(crate::words::IS_TYPE, vec![first_item, Node::Text(element.to_string())]));
+	Some(key(is_list, Op::And, key(empty, Op::Or, item_test)))
+}
+
 /// `float` and `number` take any number, as fit() widens an Int: at run time an exact `1.5` is an Int node too
 fn takes_widened(type_name: &str) -> bool {
 	type_name == crate::words::FLOAT_WORD || type_name == crate::words::NUMBER_WORD
@@ -897,6 +1017,10 @@ fn takes_widened(type_name: &str) -> bool {
 struct ParameterOverloads {
 	overloaded: HashMap<String, Vec<Vec<String>>>,
 	variables: HashMap<String, Option<Kind>>,
+	/// The declared types, whose instances a list may hold
+	classes: HashSet<String>,
+	/// The element type of each variable assigned lists of one (list_element_variables)
+	list_elements: HashMap<String, Option<String>>,
 	/// Definitions of each overloaded name renamed so far, in declaration order
 	seen: HashMap<String, usize>,
 	/// The parameters and declared variables in scope with their declared type (`n: any`, `leaf: any = "abc"`; none
@@ -950,6 +1074,36 @@ impl ParameterOverloads {
 		(type_name != ANY_TYPE || any_variant).then(|| type_name.clone())
 	}
 
+	/// The element type of a list argument as far as the compile knows it: of its declared list type, of its items
+	/// written, of the lists assigned to the variable it names
+	fn element_type(&self, argument: &Node, declared: Option<&str>) -> Option<String> {
+		if let Some(element) = declared.and_then(crate::analyzer::list_element_type) {
+			return Some(element.to_string());
+		}
+		match argument.ungrouped() {
+			Node::Symbol(name) => self.list_elements.get(name).cloned().flatten(),
+			list => literal_element_type(list, &self.classes, &self.variables),
+		}
+	}
+
+	/// `[] as files`, `[] as ints`: the list and the list type it is cast to, which picks the variant
+	fn as_list_type(&self, argument: &Node) -> Option<(Node, String)> {
+		let Node::Key(list, Op::As, type_node) = argument.ungrouped() else {
+			return None;
+		};
+		let type_name = match type_node.drop_meta() {
+			Node::Symbol(word) if crate::analyzer::names_list_type(word) => word.clone(),
+			Node::Symbol(word) => {
+				let classes: Vec<&str> = self.classes.iter().map(String::as_str).collect();
+				let class = crate::extensions::strings::named_or_plural(&classes, word)
+					.filter(|class| *class != word.as_str())?;
+				format!("{}{class}", crate::analyzer::LIST_OF_PREFIX)
+			}
+			_ => return None,
+		};
+		Some((list.as_ref().clone(), type_name))
+	}
+
 	fn variant_name(name: &str, types: &[String]) -> String {
 		// `f·list_of_int`: one word
 		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, &type_name.replace(' ', "_")))
@@ -963,16 +1117,27 @@ impl ParameterOverloads {
 		let [head, arguments @ ..] = items.as_slice() else {
 			return None;
 		};
-		let variants = self.overloaded.get(&head.drop_meta().name())?.clone();
+		// `f(x) in xs` read as words: its head is the call `f(x)`, no name of a variant
+		let name = head.symbol_name()?.to_string();
+		let variants = self.overloaded.get(&name)?.clone();
 		if arguments.is_empty() || !is_call(items, bracket, separator) {
 			return None;
 		}
-		let name = head.drop_meta().name();
 		let variants: Vec<Vec<String>> = variants.into_iter().filter(|types| types.len() == arguments.len()).collect();
+		let cast: Vec<Option<(Node, String)>> = arguments.iter().map(|argument| self.as_list_type(argument)).collect();
 		let declared: Vec<Option<String>> = arguments
 			.iter()
 			.enumerate()
-			.map(|(position, argument)| self.declared_type(argument, position, &variants))
+			.map(|(position, argument)| match &cast[position] {
+				Some((_, type_name)) => Some(type_name.clone()),
+				None => self.declared_type(argument, position, &variants),
+			})
+			.collect();
+		// the list of `[] as files` goes to the variant as it is: the cast picked the variant
+		let arguments: Vec<Node> = arguments
+			.iter()
+			.zip(cast)
+			.map(|(argument, cast)| cast.map_or_else(|| argument.clone(), |(list, _)| list))
 			.collect();
 		let kinds: Vec<Option<Kind>> = arguments
 			.iter()
@@ -984,14 +1149,52 @@ impl ParameterOverloads {
 				_ => argument_kind(argument, &self.variables),
 			})
 			.collect();
+		let mut elements: Vec<Option<String>> = arguments
+			.iter()
+			.zip(&declared)
+			.zip(&kinds)
+			.map(|((argument, declared), kind)| match kind {
+				Some(Kind::List) => self.element_type(argument, declared.as_deref()),
+				_ => None,
+			})
+			.collect();
+		let differing_elements = |position: usize| {
+			let mut taken = variants.iter().map(|types| crate::analyzer::list_element_type(&types[position]));
+			let first = taken.next().flatten();
+			taken.any(|element| element != first)
+		};
+		// decision list-variant-dispatch: `play([])` fits every list variant and takes the first, saying so
+		for (position, argument) in arguments.iter().enumerate() {
+			if declared[position].is_none() && is_empty_list(argument) && differing_elements(position) {
+				let list_types: Vec<&String> = variants.iter().map(|types| &types[position]).collect();
+				let question = format!("`[]` fits every variant of {name}: which list is it?");
+				let readings = list_types
+					.iter()
+					.map(|type_name| reading(type_name, &format!("[] as {}", plural(type_name))))
+					.collect();
+				let asked = Ask::new(TOPIC, question, readings, Fallback::Warning).written("[]").at_node(argument);
+				let taken = match ask(&asked) {
+					Ok(chosen) => list_types[chosen],
+					Err(error) => return Some(error),
+				};
+				elements[position] = crate::analyzer::list_element_type(taken).map(str::to_string);
+			}
+		}
+		// a list whose element type only the run time knows, where the variants take lists of different elements
+		let elements_untold = |position: usize| {
+			kinds[position] == Some(Kind::List) && elements[position].is_none() && differing_elements(position)
+		};
 		// an argument declared `any` (a Node) fits only an `any` variant; an argument of a kind unknown at compile time
 		// fits every type for now: the run time tests it
 		let fits_argument = |position: usize, type_name: &str| match (declared[position].as_deref(), kinds[position]) {
 			(Some(ANY_TYPE), _) => (type_name == ANY_TYPE).then_some(0),
+			(_, Some(Kind::List)) => element_fit(elements[position].as_deref(), type_name),
 			(_, Some(kind)) => fit(kind, type_name),
 			(_, None) => Some(0),
 		};
-		let is_known = |position: usize| kinds[position].is_some() || declared[position].as_deref() == Some(ANY_TYPE);
+		let is_known = |position: usize| {
+			(kinds[position].is_some() && !elements_untold(position)) || declared[position].as_deref() == Some(ANY_TYPE)
+		};
 		let scores: Vec<(u32, &Vec<String>)> = variants
 			.iter()
 			.filter_map(|types| {
@@ -1007,7 +1210,10 @@ impl ParameterOverloads {
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
 		if !(0..arguments.len()).all(is_known) && scores.len() > 1 {
 			let candidates: Vec<&Vec<String>> = scores.iter().map(|(_, types)| *types).collect();
-			return Some(Self::dispatched(&name, &candidates, &kinds, arguments, &no_variant));
+			// a list of untold elements is tested at run time, as an argument of unknown kind
+			let tested_kinds: Vec<Option<Kind>> =
+				(0..arguments.len()).map(|position| kinds[position].filter(|_| !elements_untold(position))).collect();
+			return Some(Self::dispatched(&name, &candidates, &tested_kinds, arguments, &no_variant));
 		}
 		let best = scores.iter().map(|(score, _)| *score).min();
 		let chosen: Vec<&Vec<String>> =
@@ -1042,11 +1248,7 @@ impl ParameterOverloads {
 			.into_iter()
 			.zip(kinds)
 			.map(|(argument, kind)| match (kind, argument.drop_meta()) {
-				(None, Node::List(..) | Node::Key(..)) => {
-					let temporary = Node::Symbol(format!("overload·{}", super::nodes::fresh_number()));
-					bindings.push(assign(temporary.clone(), argument));
-					temporary
-				}
+				(None, Node::List(..) | Node::Key(..)) => super::nodes::bound_once("overload", argument, &mut bindings),
 				_ => argument,
 			})
 			.collect();
@@ -1065,20 +1267,12 @@ impl ParameterOverloads {
 		let mut ordered = candidates.to_vec();
 		ordered.sort_by_key(|types| (std::cmp::Reverse(tested_types(types).len()), widened(types)));
 		let refusal = call(crate::words::RAISE_WORD, vec![Node::Text(no_variant.to_string())]);
-		let chain = ordered.iter().rev().fold(refusal, |otherwise, types| {
+		let cases = ordered.iter().map(|types| {
 			let variant = call(&Self::variant_name(name, types), arguments.clone());
-			let tests = tested_types(types).into_iter().filter_map(|(argument, type_name)| {
-				let tested = if takes_widened(&type_name) { crate::words::NUMBER_WORD } else { &type_name };
-				crate::lowering::type_tests::declared_type_test(argument, tested)
-			});
-			match tests.reduce(|all, test| key(all, Op::And, test)) {
-				Some(test) => super::nodes::if_then_else(test, variant, otherwise),
-				None => variant,
-			}
+			let tests =
+				tested_types(types).into_iter().filter_map(|(argument, type_name)| run_time_test(argument, &type_name));
+			(tests.reduce(|all, test| key(all, Op::And, test)), variant)
 		});
-		match bindings.is_empty() {
-			true => chain,
-			false => Node::List([bindings, vec![chain]].concat(), Bracket::Round, Separator::Semicolon),
-		}
+		super::nodes::after_bindings(bindings, super::nodes::tested_cases(cases.collect(), refusal))
 	}
 }

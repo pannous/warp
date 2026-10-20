@@ -41,6 +41,8 @@ mod test_package_tools;
 mod test_packages;
 mod test_prelude_own_names; // card lib-math
 mod test_prelude_shadowing; // card program-own
+#[cfg(feature = "native")]
+mod test_program_arguments; // card wasm-args
 mod test_replaced_module_function; // card use-sound-def
 mod test_rewrites; // card compiler-modules
 mod test_runtime_word_lines; // card retire-library-words

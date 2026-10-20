@@ -7,6 +7,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 program=$(cd "$(dirname "${1:-$here/hello.warp}")" && pwd)/$(basename "${1:-$here/hello.warp}")
 lib=$(cd "$here/../../lib" && pwd)
 export WARP_LIB="$lib" WARP_HINTS=0 WARP_NO_WINDOW=1 WARP_TIME_LIMIT=900
+# the lane is this script's choice per step: a caller's WARP_SELF_HOSTED would pure-compile emit.warp too
+unset WARP_SELF_HOSTED
 warp=/Users/me/dev/bin/warp
 compiler="$lib/compiler"
 inputs_hash=$({ shasum "$(readlink -f $warp)" "$here/view.warp"; find "$lib" -name '*.warp' -exec shasum {} +; } | sort | shasum | cut -c1-16)
@@ -28,6 +30,7 @@ fi
 cd "$run" || exit 1
 cp "$program" program.warp
 $warp "$cache/view.wasm" > view.json || { cat view.json; fail "the pure-compiled parser and passes"; }
-$warp "$here/emit.warp" "$run/view.json" "$cache/runtime.json" "$run/program.wasm" 2>&1 | grep -v "^warning\|^  assumed\|^ *[0-9]* |\|^ *|"
+# from a folder that stays the same: the working directory is part of the compiled program's cache key (program_cache.rs)
+(cd "$here" && $warp emit.warp "$run/view.json" "$cache/runtime.json" "$run/program.wasm") 2>&1 | grep -v "^warning\|^  assumed\|^ *[0-9]* |\|^ *|"
 [ -s program.wasm ] || fail "emitter.warp"
 $warp program.wasm
