@@ -24,5 +24,5 @@ fn a_branch_printing_a_number_gives_empty() {
 fn an_element_of_a_list_from_an_if_keeps_its_type() {
 	is!("n = 1; d = if n == 1 then [\"ab\", \"cd\"] else ø; k = d#2; k", "cd");
 	is!("n = 1; d = if n == 1 then [\"ab\", \"cd\"] else [\"x\"]; k = d#2; k", "cd");
-	is!("g(n: any, s: any) := { d = if n == 1 then [\"m\", \"M\"] else ø; s[d#1] = d#2; s }; g(1, {})#m", "M");
+	is!("g(n: any, s: any) := { d = if n == 1 then [\"key\", \"KEY\"] else ø; s[d#1] = d#2; s }; g(1, {})#key", "KEY");
 }
