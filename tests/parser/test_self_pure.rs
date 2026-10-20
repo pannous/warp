@@ -198,3 +198,50 @@ fn number_keys_run_pure() {
 	runs_pure("number_key_runtime", "d = {}; k = 4; d[k] = 7; d[k]", "7");
 	runs_pure("number_key_literal", "m = {1: 5}; m[1]", "5");
 }
+
+/// Only `is` tests a type (card is-operator): parser.warp reads `is` as its own operator, so `3 == int` compares 3
+/// with the type int, as Rust's parser reads it; `x is not 4` and `x isn't 4` are `not (x is 4)`
+#[test]
+fn is_tests_types_and_equality_compares_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("is_type_word", "3 is int", "yes"),
+			("equals_type_word", "3 == int", "no"),
+			("text_equals_type_word", "\"a\" == text", "no"),
+			("unequal_type_word", "3 != int", "yes"),
+			("is_value", "x = 3; x is 3", "yes"),
+			("is_not_value", "x = 3; x is not 4", "yes"),
+			("isnt_value", "x = 4; x isn't 4", "no"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// lib/compiler/lambdas.warp: iteration words over a lambda or a function loop, other lambdas are closures capturing
+/// their variables, a function's name is a value and a variable holding one is called (card pure-lambdas)
+#[test]
+fn lambdas_run_pure() {
+	runs_pure("map_lambda", "xs = [1, 2, 3]; xs.map(x => x * 10)", "[10 20 30]");
+	runs_pure("filter_function", "big(x) := x > 1; filter([1, 2, 3], big)", "[2 3]");
+	runs_pure("any_lambda", "[1, 2, 3].any(x => x > 2)", "yes");
+	runs_pure("fold_lambda", "fold([1, 2, 3], 10, (a, b) => a + b)", "16");
+	runs_pure("nested_maps", "xs = [1, 2]; xs.map(x => xs.map(y => x * y))", "[[1 2] [2 4]]");
+	runs_pure("captured", "n = 5; apply(f, x) := f(x); apply(x => x + n, 1)", "6");
+	runs_pure("function_value", "square(x) := x * x; twice(f, x) := f(f(x)); twice(square, 3)", "81");
+	runs_pure("returned_closure", "adder(n) := x => x + n; add2 = adder(2); add2(40)", "42");
+	runs_pure(
+		"mapped_parameter",
+		"scaled(xs, k) := each_item(xs, x => x * k); each_item(xs, f) := xs.map(f); scaled([1, 2], 4)",
+		"[4 8]",
+	);
+}
+
+/// lib/compiler/type_tests.warp: a field named like a type word (`{symbol: …}`) leaves `x is symbol` a type test, only
+/// a variable of that name is compared (card pure-lane-symbol)
+#[test]
+fn type_words_named_by_fields_run_pure() {
+	runs_pure("field_named_symbol", "kinds = {symbol: 1}; is_word(n) := n is symbol; is_word(:hello)", "yes");
+	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
+}

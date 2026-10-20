@@ -160,3 +160,7 @@ scope_of(program: Node): any := {
 
 binds(scope: any, name: text): bool := scope.has(name)
 binds_as(scope: any, name: text, meaning: Meaning): bool := scope.has(name) and scope[name] contains meaning
+# the meanings that make a name a value where it stands: a variable, a parameter, a loop variable (a field or a function
+# of that name is no value there)
+value_meanings = [Meaning.Variable, Meaning.Parameter, Meaning.Loop]
+binds_value(scope: any, name: text): bool := value_meanings.any(meaning => binds_as(scope, name, meaning))

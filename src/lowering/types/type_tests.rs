@@ -387,7 +387,7 @@ fn phrase_words(node: &Node) -> Option<Vec<&str>> {
 }
 
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
-const EQUALITY_OPERAND: &str = "equality operand";
+pub(crate) const EQUALITY_OPERAND: &str = "equality operand";
 
 /// A side of `x == word` or `word != x` as the parser marks it when the word names a type; lowering names it by its
 /// canonical name as type(x) gives it (`type(s) == string` is `type(s) == text`) unless it is a variable
