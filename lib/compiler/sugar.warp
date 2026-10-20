@@ -11,7 +11,7 @@ COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
 // function anywhere (`twice(x) := …`, in `scope`), a variable once assigned (`once = [5]`, statements in order, in
 // `bound`), a parameter inside its definition
 // Rust twin: control/loops.rs try_parse_count_word
-counted(node: any, scope: any, bound: list): any := match node {
+counted(node: Node, scope: any, bound: list): Node := match node {
 	Key(target, Op.Assign, value): Key(target, Op.Assign, counted(value, scope, bound + parameter_names(target)))
 	Key(target, Op.Define, value): Key(target, Op.Define, counted(value, scope, bound + parameter_names(target)))
 	List(items, bracket, separator): count_phrase(List(counted_items(items_of(node), scope, bound), bracket, separator), scope, bound)
@@ -34,7 +34,7 @@ count_phrase(node: Node, scope: any, bound: list): Node := match node {
 	_: node
 }
 
-is_count_phrase(word: any, body: any, scope: any, bound: list): bool := word is symbol and counts(body) and is_count_word(name_of(word), scope, bound)
+is_count_phrase(word: Node, body: Node, scope: any, bound: list): bool := word is symbol and counts(body) and is_count_word(name_of(word), scope, bound)
 
 is_count_word(word: text, scope: any, bound: list): bool := {
 	if count_of(word) == ø or (bound contains word) { return false }
@@ -42,21 +42,21 @@ is_count_word(word: text, scope: any, bound: list): bool := {
 }
 
 // The name `x = …` or `f(a) := …` binds
-assigned_names(item: any): list := match item {
+assigned_names(item: Node): list := match item {
 	Key(target, Op.Assign, value): bound_name(target)
 	Key(target, Op.Define, value): bound_name(target)
 	_: []
 }
 
 // x of `x` and of the head `x(a)`
-bound_name(target: any): list := {
+bound_name(target: Node): list := {
 	if target is symbol { return [name_of(target)] }
 	if is_call_head(target) and target#1 is symbol { return [name_of(target#1)] }
 	[]
 }
 
 // The parameters of `f(a, b: int) := …`: a and b
-parameter_names(target: any): list := {
+parameter_names(target: Node): list := {
 	names = []
 	if not is_call_head(target) { return names }
 	for parameter in items_of(target)[1:] {
@@ -67,13 +67,13 @@ parameter_names(target: any): list := {
 }
 
 // What a count word repeats: a block of code, a list or a text; `twice {a: 1}` passes an object, it stays the call
-counts(body: any): bool := {
+counts(body: Node): bool := {
 	if is_block(body) { return not counts_pairs(body) }
 	is_list_of(body, "[") or body is text
 }
 
 // A block of `key: value` entries only, an object rather than code
-counts_pairs(node: any): bool := {
+counts_pairs(node: Node): bool := {
 	if not is_block(node) or #group_parts(node)#3 == 0 { return false }
 	for entry in group_parts(node)#3 {
 		if not is_pair(entry) { return false }
@@ -82,7 +82,7 @@ counts_pairs(node: any): bool := {
 }
 
 // `name: value` of the program, no opaque view or attribute layer
-is_pair(entry: any): bool := match entry {
+is_pair(entry: Node): bool := match entry {
 	Key(name, Op.Colon, value): is_pair_key(entry)
 	_: no
 }
@@ -96,11 +96,11 @@ count_of(word: text): any := {
 }
 
 // `a /! b` and `a div b` are the call `floor_quotient(a, b)`
-quotient_call(left: any, right: any): Node := listed("(", "", [symbol("floor_quotient"), left, right])
+quotient_call(left: Node, right: Node): Node := listed("(", "", [symbol("floor_quotient"), left, right])
 
 // `xs[i]` is the 1-based `xs#(i+1)`; a slice `xs[a:b]`, `xs[a..b]`, `xs[a...last]` is the call `slice(xs, a, b)`
 // Rust twin: warp_parser subscript
-subscript(target: any, index: any): Node := {
+subscript(target: Node, index: Node): Node := {
 	bounds = slice_bounds(index)
 	if bounds != ø { return listed("(", "", [symbol("slice"), target] + bounds) }
 	Key(target, Op.Hash, one_based(index))
@@ -108,7 +108,7 @@ subscript(target: any, index: any): Node := {
 
 // The 0-based start and exclusive end of a slice index (ø where omitted, `xs[1:]`), else ø; `a...last` ends after last
 // Rust twin: subscripts.rs slice_bounds
-slice_bounds(written: any): any := match written {
+slice_bounds(written: Node): list := match written {
 	// an opaque view (a template `"k\(i)"`) or attribute layer is a key too, but no slice
 	Key(start, Op.Colon, end): { if is_pair_key(written) then [start, end] else ø }
 	Key(start, Op.Range, end): [start, end]
@@ -118,7 +118,7 @@ slice_bounds(written: any): any := match written {
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
-one_based(index: any): any := if index is number then index + 1 else Key(index, Op.Add, 1)
+one_based(index: Node): Node := if index is number then index + 1 else Key(index, Op.Add, 1)
 
 // The words that start a member with code, no field types: `def scaled(k) {…}`, `get`, `override`
 // Rust twin: mod.rs ACCESSOR_WORDS, MEMBER_MODIFIERS
@@ -126,7 +126,7 @@ CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "
 
 // A class body's fields with their types, `x: int` holding the type int; a method keeps its code
 // Rust twin: types/declarations.rs transform_fields_to_types, symbol_to_type
-typed_fields(node: any): any := match node {
+typed_fields(node: Node): Node := match node {
 	Key(name, Op.Define, value): node
 	Key(name, op, value): { if is_pair_key(node) then Key(name, op, if value is symbol then type_node(value, ø) else value) else node }
 	List(members, bracket, separator): { if starts_code(members#1) then node else typed_members(bracket as text, separator as text, items_of(node).map(typed_fields)) }
@@ -137,19 +137,19 @@ typed_fields(node: any): any := match node {
 // word that is no type after the key is the lambda's parameter, so the entry f holds `x => x * 2`, in any bracket and
 // in a call's named argument `Holder(d: x => x + 1)`; a typed lambda `x: int => x * 2` stays one
 // Rust twin: definitions/lambdas.rs field_holding_lambda
-field_holding_lambda(item: any): any := match item {
+field_holding_lambda(item: Node): Node := match item {
 	Key(lambda_head, Op.Arrow, lambda_body): entry_of_lambda(lambda_head, lambda_body, item)
 	_: item
 }
 
-entry_of_lambda(lambda_head: any, lambda_body: any, item: any): any := match lambda_head {
+entry_of_lambda(lambda_head: Node, lambda_body: Node, item: Node): Node := match lambda_head {
 	Key(entry_name, Op.Colon, entry_value): { if is_pair_key(lambda_head) and entry_name is symbol and is_parameter_word(entry_value) then Key(entry_name, Op.Colon, Key(entry_value, Op.Arrow, lambda_body)) else item }
 	_: item
 }
 
 // a lambda's parameter after a key: a lowercase word that is no type, or a parenthesized group
 // Rust twin: definitions/functions.rs is_parameter_word
-is_parameter_word(node: any): bool := {
+is_parameter_word(node: Node): bool := {
 	if is_list_of(node, "(") { return yes }
 	if not (node is symbol) { return no }
 	first = name_of(node)[0]
@@ -167,7 +167,7 @@ typed_members(bracket: text, separator: text, members: list): Node := {
 
 // `def scaled(k) {…}`, `get`, `init(n) {…}`: a member that starts with code
 // Rust twin: lookahead.rs starts_code
-starts_code(first: any): bool := {
+starts_code(first: Node): bool := {
 	if first is symbol { return CODE_MEMBER_WORDS contains name_of(first) }
 	is_call_head(first) and first#1 is symbol
 }
