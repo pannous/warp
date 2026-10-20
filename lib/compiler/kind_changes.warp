@@ -131,10 +131,12 @@ evident_results(program: any): any := {
 	}
 	results
 }
+# a `{a; b}` or `a; b` body's last statement, a `{a}` body's only one
 last_expression(body: any): any := {
-	body_statements = statements_in(if is_group(body) and (bracket_of(body) == "{" or bracket_of(body) == "(") and #body == 1 then body#1 else body)
-	last = body_statements#(#body_statements)
-	if last == body then body else last_expression(last)
+	if not is_group(body) or #body == 0 { return body }
+	if (bracket_of(body) == "{" or bracket_of(body) == "") and separator_of(body) in statement_separators { return last_expression(body#(#body)) }
+	if bracket_of(body) == "{" and #body == 1 { return last_expression(body#1) }
+	body
 }
 
 # the first kind change of the assignments in program order, not into function definitions (their own scopes):
@@ -148,9 +150,9 @@ first_kind_change(n: any, kinds: any, results: any, global_names: any): any := {
 		# its body shares the globals and its `nonlocal` ones
 		nonlocals = declared_nonlocals(value_of(n))
 		body_kinds = {}
-		for variable in kinds.keys() { if variable in global_names or variable in nonlocals { body_kinds[variable] = kinds[variable] } }
+		for outer_name in kinds.keys() { if outer_name in global_names or outer_name in nonlocals { body_kinds[outer_name] = kinds[outer_name] } }
 		change = first_kind_change(value_of(n), body_kinds, results, global_names)
-		for variable in body_kinds.keys() { if variable in global_names or variable in nonlocals { kinds[variable] = body_kinds[variable] } }
+		for outer_name in body_kinds.keys() { if outer_name in global_names or outer_name in nonlocals { kinds[outer_name] = body_kinds[outer_name] } }
 		return change
 	}
 	if is_operator(n, "->") or is_operator(n, "=>") { return ø }

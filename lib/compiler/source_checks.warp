@@ -12,7 +12,6 @@ mutated_mark = "mutated"
 sleep_word = "sleep"
 error_word = "error"
 fail_word = "fail"
-statement_separators = [";", "\n"]
 
 # the program, each check's facts diagnosed; `prelude` names the other spellings of the words (`uppercase`)
 source_checks(program: any, prelude: text): any := {
