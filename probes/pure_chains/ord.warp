@@ -1,0 +1,7 @@
+// ord of a text of one character, of a character, of a text parameter
+print(ord("a"))
+c = "ü"
+print(ord(c))
+print(ord('z'))
+f(t: text): int := ord(t)
+print(f("b"))

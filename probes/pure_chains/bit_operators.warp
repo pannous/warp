@@ -1,0 +1,7 @@
+// xor, rem, << and >> of ints (Rust: bitwise; >> keeps the sign)
+print(12 xor 10)
+print(-17 >> 2)
+print(3 << 4)
+print(-7 rem 3)
+x = 12
+print(x xor 10)

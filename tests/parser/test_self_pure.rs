@@ -423,4 +423,7 @@ fn parser_words_run_pure() {
 	runs_pure("pending_results", &chain("pending_results"), "[\"int\" 4]\n[5 5 0 5 5 0 0]");
 	runs_pure("map_get_default", &chain("map_get_default"), "ø\n1\n7");
 	runs_pure("own_special_forms", &chain("own_special_forms"), "3\n12\n2\n0");
+	runs_pure("bit_operators", &chain("bit_operators"), "6\n-5\n48\n-1\n6");
+	runs_pure("ord", &chain("ord"), "97\n252\n122\n98");
+	runs_pure("std_module_of_a_used_file", &chain("std_in_used/main"), "6");
 }

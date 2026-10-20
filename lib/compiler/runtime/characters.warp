@@ -8,6 +8,8 @@ code_point_at(t: text, at: int): int := {
 	for k in 1 to code_point_width(lead) - 1 { n = n * 64 + byte_at(t, at + k) - 128 }
 	n
 }
+# `ord(c)`: the code point of the character c (a text of one)
+first_code_point(t: text): int := code_point_at(t, 0)
 within(c: int, low: int, high: int): bool := c >= low and c <= high
 # a code point that continues the character before it: combining marks, variation selectors, skin tones, ZWJ …
 # (src/extensions/strings.rs GRAPHEME_EXTEND, the same table)
