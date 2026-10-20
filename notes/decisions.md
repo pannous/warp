@@ -173,7 +173,8 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - unit-definitions: `quantity length meter` declares a base and its SI anchor; `unit cm := meter / 100`, `unit N := kg*m/s²` (derived quantities follow from the expression); offsets `unit °F := (it + 459.67) * 5/9 K`; SI prefixes only for SI-anchored/derived units. unit-target: `unit °C as K := it + 273.15`. unit-prefix-lines: `prefix k := 10^3`, `SI dimension length meter`.
 - Unit symbols bind only after a number, never as bare names; a variable gets a unit by `x * 1 m`.
 - unit-after-number (also variable-named-like): `m = 5; 3m` is 3 meters with a hint "write 3*m to multiply".
-- litre-suffix: a glued unit beats a number suffix (`2L` is 2 litres); exactness is `2 as exact`. Ambiguous glued units (L, l, a unit named like a variable) need `use units`, else an error with a fix adding it; unambiguous units work without.
+- litre-suffix: a glued unit beats a number suffix (`2L` is 2 litres) once units are on (units-opt-in); exactness is `2 as exact`.
+- units-opt-in (user 2026-10-20, superseding "unambiguous units work without `use units`"): "the unit module should only become active when imported, and the parser should not import the unit module. It shouldn't even build it." Without `use units` no unit word is read as a unit (`x#m` is the variable m, `3km` is no quantity); lib/compiler (parser.warp) neither imports nor builds the units module. Follow-up (user, same day): "We may skip all automatic module imports and hints for now": no module is imported automatically, and no hint or fix suggests a `use` for now. Scope (user, same day): "don't retroactively change the Rust code. What works in warp works in warp, but don't add new features": this applies to the warp pipeline (lib/compiler, the self-hosted stages); the Rust lane stays as it is. Temporary (user, same day): "it should not be disabled long term. It's just an intermediate step. One shortcut we allow": automatic imports and use-hints come back after the core milestone (card units-back).
 - pixel-lengths: px is its own quantity (`unit dpi := px / inch`); a length becomes px by `3 cm * display.dpi`; `3 cm as px` is a plain DimensionError.
 - display-names: display.density (aliases dpi, ppi) in dpi; display.size width × height in px (alias dimensions, with a hint); display.diagonal in inch; display.resolution is an ambiguous alias reading display.size, with a hint.
 - unit-types: a unit can type a field (`display { density: dpi }`): it fixes the kind of quantity, converts other units, refuses other quantities. unit-field-plain-number: a plain number there warns with a fix adding the unit.
@@ -187,6 +188,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 - P1 text * number repeats (`"ab"*2`); a digit text warns; text*float and text*text are type errors; `n times "ab"` is the explicit repeat.
 - brace-hole: `\(…)` canonical interpolation; `\{…}`, `${…}`, `$(…)` work; bare `"$x"` is literal (P6); single quotes stay literal; `$` holes in sql/sh templates keep working.
 - P126 texts inside containers print double-quoted; a top-level `print "a"` writes a.
+- digit-as-char: `2 as char` is the digit '2', like P25 `int('5')` is 5; a code point becomes a character by `char(0x41)`.
 - #35 lists join to "[1 2]"; `"x" as float` is a loud error. P74 `codepoint(c)` (aliases ord, ordinal, P27) gives an Int; P25 `int('5')` is 5; `int(c)` of a non-digit is invalid_number; P65 arithmetic on a character is not_a_number.
 - #26 upper/lower are Unicode, sort takes any comparable values, reverse works on text; `names.upper` = `upper names`.
 - An untyped parameter given a one-character text takes it as Text. P31 the Printable operation is `text(p:person)`, the one allowed type-word function name. P32 `print xs` prints its str(). P41 `print "x changed to " value` joins without a separator after a text literal; commas join with a space.
@@ -202,6 +204,7 @@ Numbering: P = interview questions, D = wiki-survey questions, #n = the first qu
 ## Bool and truthiness
 - bool-type: yes/no are their own shallow type acting as 1/0; `type(yes)` is bool, prints yes/no, true/false accepted; `0 == false` yes, `0 === false` no; P195 `true + 1` is 2; P199 bool slots accept 1 and 0 only; JSON true/false read as yes/no.
 - Truthiness: ø + 1 stays an error; empty values are falsy; only 0 equals false; #38 a non-empty list (even `[ø]`) is truthy; #28 `x=ø; x.size` and `[].count` are 0; `is empty` covers "", [], {}, ø.
+- predicate-bool: predicates (`is_blank`, `is_even`, `is_odd`, every `is_…`) give yes/no, not 1/0.
 - text-bool: `as bool` / `bool(x)` read the word ("0", "no", "false" → no); `if` keeps plain truthiness.
 - in-bool: `x in list` is yes/no (also `xs.has(x)`); the position comes from `xs.index_of(x)`.
 

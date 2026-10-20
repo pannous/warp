@@ -1,0 +1,14 @@
+parts(n: any): list := [n, n]
+f(ws: list): any := {
+	picked = []
+	for w in ws {
+		if w > 0 {
+			if not (w in picked) { picked += [w] }
+		}
+	}
+	if #picked == 0 { return ws }
+	out = []
+	for w in picked.sort() { out += parts(w) }
+	out + [9]
+}
+print(f([2, 1]))

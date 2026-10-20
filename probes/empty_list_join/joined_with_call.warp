@@ -1,0 +1,8 @@
+parts(n: any): list := [n, n]
+f(ws: list): list := {
+	out = []
+	for w in ws { out += [w] }
+	out + parts(9)
+}
+print(f([1, 2]))
+print(f([]))

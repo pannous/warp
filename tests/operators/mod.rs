@@ -26,7 +26,6 @@ mod test_logic_grouped_operands;
 mod test_logical_block_operand;
 mod test_logical_calls;
 mod test_logical_values_in_functions;
-mod test_or_chain_once; // card or-once
 mod test_minus_after_callable;
 mod test_module_operator_call_form; // card matches-call
 mod test_mutating_bang;
@@ -40,6 +39,7 @@ mod test_operator_parsing;
 mod test_operator_precedence;
 mod test_operator_spellings; // card operator-spelling
 mod test_operators;
+mod test_or_chain_once; // card or-once
 mod test_pipe_stages;
 mod test_pipeline;
 mod test_postfix_words;

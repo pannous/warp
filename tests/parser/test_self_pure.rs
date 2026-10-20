@@ -56,6 +56,16 @@ fn for_loops_run_pure() {
 	runs_pure("for_nested", "t = 0; for i in 1 to 2 { for j in 1 to 3 { t += i * j } }; t", "18");
 }
 
+/// lib/compiler/parser.warp reads `for each x in xs` and `each x in xs` as `for x in xs`; a loop variable named `each`
+/// stays one (card pure-error-undefined)
+#[test]
+fn for_each_loops_run_pure() {
+	let basket = "basket = [{price: 2} {price: 3}]; t = 0;";
+	runs_pure("for_each", &format!("{basket} for each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("each_in", &format!("{basket} each item in basket {{ t = t + item.price }}; t"), "5");
+	runs_pure("variable_each", "t = 0; for each in [10, 20] { t = t + each }; t", "30");
+}
+
 /// node_matches.warp: an arm of a number, text or character tests the subject equals it
 #[test]
 fn match_values_run_pure() {
@@ -274,7 +284,64 @@ fn type_words_named_by_fields_run_pure() {
 	runs_pure("variable_named_text", "text = \"a\"; \"a\" is text", "yes");
 }
 
+/// What the lib bench found parser.warp failing on in lib/ (scripts/lib_bench.sh): a keyword naming a key or a member
+/// (`{if: 4}`, `op.if`, emitter.warp), a membership word assigned (`alias contains = …`, prelude.warp), an operator
+/// alias line, `&f` and `∛x` (math.warp), the degree sign (`20°C`, units.warp)
+#[test]
+fn lib_forms_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("keyword_key", "m = {if: 4, x: 1}; m[\"if\"]", "4"),
+			("keyword_member", "op = {if: 4, else: 5}; op.if + op.else", "9"),
+			("assigned_membership_word", "xs = [1, 2]; includes = 3; includes + #xs", "5"),
+			("operator_alias_line", "operator × := *\n2 × 3", "6"),
+			("function_reference_sign", "f(x) := x + 1; g = &f; g(2)", "3"),
+			("cube_root_glyph", "∛27", "3"),
+			("degree_temperature", "20°C is temperature", "yes"),
+			("degree_variable", "x = 180; x° > 3.14", "yes"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
+/// parser.warp consumes every Unicode character by its class (card unicode-glyphs): arrow and declared glyph operators,
+/// operator aliases (lib/math.warp), free symbols as values, a quote carrying a combining mark
+#[test]
+fn unicode_glyphs_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in [
+			("arrow_down", "8↓2", "3"),
+			("declared_glyph", "infix operator ⊕(a: int, b: int) := a * 10 + b; 4 ⊕ 2", "42"),
+			("alias_dot", "2 · 3", "6"),
+			("alias_and", "yes ∧ no", "no"),
+			("alias_element", "2 ∈ [1, 2]", "yes"),
+			("free_symbol_value", "x = ↯\nx", "↯"),
+			("free_symbols_listed", "[↯ ↯]", "[↯ ↯]"),
+			("technical_symbol_value", "x = ⌘\nx", "⌘"),
+			("quote_with_mark", "x = \"\u{305}\"\nx.length", "1"),
+		] {
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
 /// lib/compiler/kind_changes.warp: a variable given a value of a kind that does not mix fails with the message of
+/// A type word after `global` types the declared name, every type word Rust knows (`long`, `double`), not only `int`
+#[test]
+fn global_type_words_read_self_hosted() {
+	for lane in ["front", "pure"] {
+		for (name, code, value) in
+			[("global_long", "global long k=7; k", "7"), ("global_double", "global double d = 1.5; d + 1", "2.5")]
+		{
+			let (output, _) = lane_run(lane, name, code);
+			assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == value), "{lane} {code}: {output}");
+		}
+	}
+}
+
 /// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
 #[test]
 fn kind_changes_fail_pure() {
@@ -290,6 +357,24 @@ fn kind_changes_fail_pure() {
 #[test]
 fn std_modules_run_pure() {
 	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
+}
+
+/// lib/compiler/emitter.warp: an instance leaving out fields gives them their declared defaults, an optional field ø
+/// (card pure-field-defaults)
+#[test]
+fn field_defaults_run_pure() {
+	runs_pure("call_defaults", "class point{x:int=0; y:int=3}; point(5)", "point{x:5 y:3}");
+	runs_pure("brace_defaults", "class counter{n=0; step:int=1}; c = counter{}; c.n + c.step", "1");
+	runs_pure("optional_field", "class opt { a: int; b? }; opt(4).a", "4");
+}
+
+/// lib/compiler/emitter.warp: a named argument `name = value` takes its parameter's or field's place (P37), a left-out
+/// one its default (card pure-named-arguments)
+#[test]
+fn named_arguments_run_pure() {
+	runs_pure("named_call", "f(a, b) := a * 10 + b; f(b=2, a=7)", "72");
+	runs_pure("named_instance", "class P { x: int; y: int }; p = P(y=2, x=7); p.x * 10 + p.y", "72");
+	runs_pure("named_and_default", "class P { x: int; y: int = 5 }; P(x=1)", "P{x:1 y:5}");
 }
 
 /// card scope-binding: a used file's plain enum reaches the program (scope.warp's Meaning in parser.warp); a parameter

@@ -1,13 +1,17 @@
 # `x is int`, `n is symbol` (card pure-type-tests): `x is T` of a type word T no variable, parameter or loop variable
-# of the program names (a field `{symbol: …}` does not) is the type test is_type(x, "T"), as Rust's
-# src/lowering/types/type_tests.rs lowers it; every other `x is v` is `x == v`. Only `is` tests a type: `3 == int`
-# compares 3 with the type (no)
+# of the program names (a field `{symbol: …}` does not), or of a type the program declares, is the type test
+# is_type(x, "T"), as Rust's src/lowering/types/type_tests.rs lowers it (plain_enums.warp answers it for an enum);
+# every other `x is v` is `x == v`. Only `is` tests a type: `3 == int` compares 3 with the type (no)
 use "walk.warp"
 use "words.warp"
 use "scope.warp"
 
 tested_word_call(subject: Node, word: text, equality: Node, scope: any): Node :=
-	if is_tested_type_word(word) and not binds_value(scope, word) then call_of("is_type", [subject, word]) else equality
+	if is_tested_type(word, scope) then call_of("is_type", [subject, word]) else equality
+
+# a type word no value of the program is named, or a type it declares (`enum Coin {…}`, `class P {…}`)
+is_tested_type(word: text, scope: any): bool :=
+	not binds_value(scope, word) and (is_tested_type_word(word) or binds_as(scope, word, Meaning.Type))
 
 tested_type_call(subject: Node, type: Node, scope: any): Node := match type {
 	Symbol(word): tested_word_call(subject, word, Key(subject, Op.Eq, type), scope)
