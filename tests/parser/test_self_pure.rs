@@ -365,6 +365,16 @@ fn global_type_words_read_self_hosted() {
 	}
 }
 
+/// A prefix `if` takes its own `then` and `else` in a match arm (card arm-inline-if)
+#[test]
+fn arm_inline_if_reads_self_hosted() {
+	for lane in ["front", "pure"] {
+		let code = "f(x: any): any := match x {\n\t1: if x > 0 then 1 else 2\n\t_: 0\n}\nf(1)";
+		let (output, _) = lane_run(lane, "arm_inline_if", code);
+		assert!(output.lines().any(|line| line.trim_start_matches('»').trim() == "1"), "{lane} {code}: {output}");
+	}
+}
+
 /// lib/compiler/errors.data, said by the pure lane itself (card pure-diagnostics, P45)
 #[test]
 fn kind_changes_fail_pure() {
@@ -477,6 +487,22 @@ fn type_values_run_pure() {
 	runs_pure("typed_array", "ys = float[2]; ys", "[0 0]");
 	runs_pure("type_value_arm", "name(t: type): text := match t { int: \"whole\"; float: \"real\"; _: \"other\" }; name(float)", "real");
 	runs_pure("type_value_covered", "f(t: type) := t is number; f(int)", "yes");
+}
+
+/// `n as char` (decision digit-as-char): a digit 0…9 is its digit character, another number the character of its code
+/// point, one no character has an error (card pure-lane-x02)
+#[test]
+fn digit_casts_run_pure() {
+	runs_pure("digit_cast", "x = 7; x as char", "'7'");
+	runs_pure("code_point_cast", "x = 65; x as codepoint", "'A'");
+	runs_pure("invalid_code_point", "x = 55296; try (x as codepoint) else \"fallback\"", "fallback");
+}
+
+/// parser.warp reads a float literal through float(text): more digits than a double holds give the nearest float (card
+/// pure-lane-prints)
+#[test]
+fn long_float_literals_read_pure() {
+	runs_pure("long_float_literal", "x = 8.33333333332248946124e+03; x - 8333", "0.33333332248912484");
 }
 
 /// card text-cache-lru: the pure runtime keeps the count and walks of a lexer's source while it compares short words

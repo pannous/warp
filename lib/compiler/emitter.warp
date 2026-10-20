@@ -184,7 +184,7 @@ class Function { name: text; parameters: any; annotations: any; body: any; index
 # globals: [index, kind] of each `global` variable by name, global_order their names
 # imports: the functions imported ahead of the program's, [module, name, type] each (fd_write)
 # host: the host words a module may import, name → [[parameter kind…], [result kind…]] (src/host.rs)
-# errors: the indices of the functions that only trap, by name (error_function)
+# errors: the functions that only trap, by name (error_function)
 # classes: the program's classes (an enum's cases with fields among them), each its fields' type names by name (ø
 # for an untyped field); class_defaults the values of the fields an instance may leave out, [view] each by name (an
 # optional field's is ø); member_classes the classes declaring methods or operators in their body; variants its enums'
@@ -235,7 +235,7 @@ function_head(n: any): any := {
 	left = key_of(n)
 	if bracket_of(left) == "(" and #left > 0 and left#1 is symbol { return left }
 	if not (left is symbol) { return ø }
-	if mentions_name(value_of(n), implicit_parameter) { return [left, symbol(implicit_parameter)] }
+	if mentions(value_of(n), implicit_parameter) { return [left, symbol(implicit_parameter)] }
 	if is_statement_block(value_of(n)) { return [left] }
 	ø
 }
@@ -292,7 +292,7 @@ shared_names(statements: any) := {
 	shared
 }
 reads_free(f: Function, name: text) := {
-	if not mentions_name(f.body, name) or assigns(f.body, name) { return no }
+	if not mentions(f.body, name) or assigns(f.body, name) { return no }
 	for p in f.parameters { if name_of(p) == name { return no } }
 	yes
 }
@@ -544,17 +544,10 @@ def is_swizzle(name: text): bool { #name >= 1 and #name <= 4 and name.all(c => c
 def ended_in(kind: text, error: text): list { [kind, [op.call] + uleb(error_function(error)) + [op.drop, op.unreachable]] }
 # the index of a function that only traps, named so the run's error reads as Rust's does (src/wasm_emitter/control/traps.rs)
 def error_function(name: text): int {
-	if name in module.errors { return module.errors[name] }
-	f = Function(name, [], [], ø)
-	f.index = #module.imports + #module.order
-	module.order += [f]
-	f.kinds = []
-	f.result = "int"
+	if name in module.errors { return module.errors[name].index }
+	f = added_function(name, [], "int", [])
 	f.code = error_throw(name) + [op.unreachable]
-	f.locals = []
-	f.local_names = []
-	# the index, not the Function: a Function read back from the map fails with "key not found" (card error-index)
-	module.errors[name] = f.index
+	module.errors[name] = f
 	f.index
 }
 def field_of(body: Body, value: any, name: text): list { if value#1 == "node" then field_read(body, value, name) else refuse("the field " + name + " of a " + value#1) }
@@ -808,13 +801,6 @@ is_spaced_value(n: any): bool := {
 is_negative_literal(n: any): bool := (n is number and n < 0) or (type(n) is key and op_of(n) == "-" and key_of(n) == ø)
 # `print x`: x's text and a newline to stdout; ø, as Rust's print gives
 def printed(value: any): list { ["node", dropped(runtime_call("print_line", [shown_text(value)])) + [ref_null, gc.node]] }
-# whether the symbol `name` occurs in n
-mentions_name(n: any, name: text): bool := {
-	if n is symbol { return name_of(n) == name }
-	if type(n) is key { return mentions_name(key_of(n), name) or mentions_name(value_of(n), name) }
-	if is_group(n) { for x in n { if mentions_name(x, name) { return yes } } }
-	no
-}
 def runtime_call(name: text, values: any): list { call_values(module.runtime[name], values) }
 # the classes and enum cases the program declares, wherever it does (a declaration arrives as an opaque view
 # ["type", name, body], its name an attribute layer for an enum's bare cases or a base class)
@@ -1221,7 +1207,7 @@ refuse_arguments(f: Function, count: int): any := refuse("a call of " + f.name +
 def default_value(body: Body, f: Function, i: int, count: int): list {
 	default = if i < #f.defaults then f.defaults[i] else ø
 	if default == ø { return refuse_arguments(f, count) }
-	for p in f.parameters { if mentions_name(default#1, name_of(p)) { return refuse("a default of " + f.name + " reading " + name_of(p)) } }
+	for p in f.parameters { if mentions(default#1, name_of(p)) { return refuse("a default of " + f.name + " reading " + name_of(p)) } }
 	expression_code(body, default#1)
 }
 def call_values(f: Function, values: any): list {
@@ -1288,13 +1274,7 @@ dispatcher(arity: int): any := {
 made_late(name: text, result: text, parameters: list): any := {
 	# (a list: `name in module.dispatchers` of a map missed the name just set, card emitter-name)
 	for known in module.dispatchers { if known.name == name { return known } }
-	f = Function(name, [], [], ø)
-	f.index = #module.imports + #module.order
-	module.order += [f]
-	f.kinds = parameters.map(p => "node")
-	f.result = result
-	f.locals = []
-	f.local_names = parameters
+	f = added_function(name, parameters.map(p => "node"), result, parameters)
 	f.code = [op.unreachable]
 	module.dispatchers += [f]
 	f
@@ -1348,7 +1328,7 @@ dispatcher_code(f: Function): any := {
 # `ran_without_error{statement}`, what `try` lowers to: 1 when the statement finished, 0 when a runtime error was thrown
 # in it; the depth goes up for the statement and back down on both paths (a jump out of it would skip that: refused)
 def ran_without_error(body: Body, statement: any): list {
-	for jump in ["return", "break", "continue"] { if mentions_name(statement, jump) { return refuse("a " + jump + " out of a try") } }
+	for jump in ["return", "break", "continue"] { if mentions(statement, jump) { return refuse("a " + jump + " out of a try") } }
 	guarded = [op.try_table, no_value] + uleb(1) + [catch_clause_byte, 0, 0] + nested_effect(body, statement, 3) + [op.end]
 	finished = try_depth_step(op.i64_sub) + [op.i64_const, 1, op.br, 1, op.end]
 	caught = [op.drop] + try_depth_step(op.i64_sub) + [op.i64_const, 0]
@@ -1424,7 +1404,7 @@ def loop_code(body: Body, test: any, block: any, last: int): list {
 	kept = if looped#1 == no_kind then looped#2 else boxed(looped) + [op.local_set] + uleb(last)
 	[op.block, no_value, op.loop, no_value] + exit_unless + [op.block, no_value] + kept + [op.end] + again + [op.end, op.end]
 }
-is_endless(test: any, block: any): bool := test == yes and not mentions_name(block, "break")
+is_endless(test: any, block: any): bool := test == yes and not mentions(block, "break")
 is_loop_step(n: any): bool := type(n) is key and op_of(n) == ":" and key_of(n) == symbol("loop·step")
 # whether a continue may skip the loop's last statement: not when it assigns a name the test reads, the shape of a
 # lowered `for`'s step that came unmarked (Rust's iterator loops: `x = x·iterator.next()`)
@@ -1432,7 +1412,7 @@ step_operators = ["=", "+=", "-=", "++", "--"]
 continued_safely(test: any, parts: any): bool := {
 	if #parts == 0 { return yes }
 	final_statement = parts.last
-	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions_name(test, name_of(key_of(final_statement))))
+	not (type(final_statement) is key and op_of(final_statement) in step_operators and key_of(final_statement) is symbol and mentions(test, name_of(key_of(final_statement))))
 }
 # n for its effect alone, its value never made: a statement, so an `if` or a loop only runs its branches or body as
 # statements too (no value boxed for nothing)
@@ -1540,9 +1520,9 @@ self_append_name(n: any): any := {
 	if not (type(n) is key and key_of(n) is symbol) { return ø }
 	name = name_of(key_of(n))
 	sum = value_of(n)
-	if op_of(n) == "+=" and not mentions_name(sum, name) { return name }
+	if op_of(n) == "+=" and not mentions(sum, name) { return name }
 	if op_of(n) != "=" or not (type(sum) is key and op_of(sum) == "+" and key_of(sum) == key_of(n)) { return ø }
-	if mentions_name(value_of(sum), name) { return ø }
+	if mentions(value_of(sum), name) { return ø }
 	name
 }
 # whether n mentions the local name only in appends to it
@@ -1804,8 +1784,8 @@ def key_expression(body: Body, n: any): list {
 		value = expression_code(body, left)
 		if target in text_readers { return cast(value, target) }
 		if target == "text" { return shown_text(value) }
-		# `65 as codepoint` is 'A'
-		if target == "char" and value#1 == "int" { return ["char", value#2 + [op.i32_wrap_i64]] }
+		# `65 as codepoint` is 'A', `2 as char` the digit '2'
+		if target == "char" and value#1 == "int" { return ["char", runtime_call("cast_code_point", [value])#2 + [op.i32_wrap_i64]] }
 		if target == "bool" and (value#1 == "node" or value#1 == "text") { return runtime_call("bool_cast", [["node", boxed(value)]]) }
 		return [target, converted(value, target)]
 	}
@@ -1968,8 +1948,7 @@ def collect_literal_arguments(n: any) {
 # the annotations of a parameter held as a node: any value, a function, a type value `int`
 node_annotations = ["any", "function", "type"]
 function_compiled(f: Function, argument_kinds: any): any := {
-	f.index = #module.imports + #module.order
-	module.order += [f]
+	placed(f)
 	parameter_kinds = []
 	for i in 0..<#f.parameters {
 		annotation = f.annotations[i]
@@ -2140,15 +2119,24 @@ def exported_builders(): any {
 	f = exported_function("returned_error", [], no_kind)
 	f.code = error_throw("returned_error") + [op.unreachable]
 }
-# a function the host calls by its name, its code written by the caller
-exported_function(name: text, kinds: list, result: text): any := {
-	f = Function(name, [], [], ø)
+# f at the module's next function index (results `any`: a declared Function result fails, card class-result-type)
+placed(f: Function): any := {
 	f.index = #module.imports + #module.order
 	module.order += [f]
+	f
+}
+# a function made by the emitter (no source), at the next index, its code written by the caller
+added_function(name: text, kinds: list, result: text, local_names: list): any := {
+	f = placed(Function(name, [], [], ø))
 	f.kinds = kinds
 	f.result = result
 	f.locals = []
-	f.local_names = range_list(#kinds).map(i => "argument" + (i + 1))
+	f.local_names = local_names
+	f
+}
+# a function the host calls by its name, its code written by the caller
+exported_function(name: text, kinds: list, result: text): any := {
+	f = added_function(name, kinds, result, range_list(#kinds).map(i => "argument" + (i + 1)))
 	f.is_runtime = yes
 	module.builders += [f]
 	f
@@ -2197,7 +2185,7 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.globals = {}
 	module.runtime_globals = []
 	module.global_order = []
-	module.catches_errors = mentions_name(program, "ran_without_error")
+	module.catches_errors = mentions(program, "ran_without_error")
 	if module.catches_errors {
 		declared_global(try_depth_name, "int")
 		declared_global(failed_in_name, "text")
@@ -2223,11 +2211,11 @@ typed_wasm_module(program: any, runtime: any, host: any, kinds: any): any := {
 	module.rereads = []
 	module.builders = []
 	collect_types(program)
-	module.imports = if mentions_name(program, "print") then [fd_write] else []
-	if mentions_name(program, "read") { module.imports += [host_read] }
+	module.imports = if mentions(program, "print") then [fd_write] else []
+	if mentions(program, "read") { module.imports += [host_read] }
 	# imported ahead of the functions, whose indices follow them: every host word the program names
 	for name in module.host.keys {
-		if mentions_name(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
+		if mentions(program, name) or (name in time_host_words and makes_time(program)) { module.imports += [host_import(name)] }
 	}
 	for n in collect_functions(runtime, module.runtime) { runtime_global(n) }
 	for name in module.runtime.keys {
@@ -2291,7 +2279,7 @@ time_words = {time_of: 2, instant_at: 1}
 time_intrinsics = {time_form: 1, time_position: 1, duration_months: 1, duration_days: 1, zone_index: 1, zone_offset: 1}
 # the host words runtime words over times call, imported when the program makes a time (Rust: imports.rs makes_instant)
 time_host_words = ["local_offset"]
-makes_time(program: any): bool := mentions_name(program, "instant_at") or mentions_name(program, "time_of")
+makes_time(program: any): bool := mentions(program, "instant_at") or mentions(program, "time_of")
 
 # time_of(info, position): the time node; instant_at(milliseconds since 1970): an instant
 def time_call(body: Body, name: text, arguments: any): list {
