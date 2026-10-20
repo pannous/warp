@@ -93,10 +93,16 @@ After a context swap, this file and your role file win over anything a handover 
   `&&`-chained commit silently doesn't happen. Check `git show --stat HEAD` after committing.
 
 ## Testing
-- Test first. Only targeted runs, only through the queue: `tests/queue.sh -- <filter>`, filtered to the test files
-  your change touches (grep tests/ for the changed syntax to find the ones pinning old behaviour), never whole
-  folders or the whole test binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set
-  CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session prompts; kill by PID).
+- Rust tests run in the cloud (user 2026-10-20: "From now on, run the Rust test suite completely in the cloud"):
+  commit, push, `scripts/cloud-test.sh` (below); no local tests/queue.sh runs, except tests needing the Mac (sound,
+  GPU, windows, Lean, SDL: scripts/cloud-test-environmental.txt). The Integrator's full suite runs in the cloud too.
+- Test first. Only targeted runs, filtered to the test files your change touches (grep tests/ for the changed syntax
+  to find the ones pinning old behaviour), never whole folders or the whole test binary: the Integrator runs the full
+  suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean, never pkill by pattern (it matches session
+  prompts; kill by PID).
+- Close what you start (user 2026-10-20): after every test, probe or build, kill your own leftover processes by PID
+  (warp, scratch/warp, test binaries, cargo, refusals.sh ladders); check with `ps -o pid,etime,command -U $USER | grep
+  <your worktree>` before reporting.
 - Test upgrades need no question (AGENTS.md): an error/"not yet"/ignored test that now works is upgraded to the
   working value in its own commit, and `#[ignore]` is dropped from a test that passes unedited; a change of meaning,
   or editing an un-ignored test's assertions, goes to the Interviewer. Test edits a user decision implies need the
@@ -106,12 +112,9 @@ After a context swap, this file and your role file win over anything a handover 
 - Native-only test code: anything used only by a `#[cfg(feature = "native")]` test gets the same cfg; a whole test
   file running the CLI or std::os::unix gets it on its `mod` line, and a new `mod x;` never goes between a cfg line
   and the module it guards. Register a new test file in its folder's mod.rs before `cargo fmt` (fmt skips it).
-- Cloud test lane instead of the queue, for committed and pushed work: `scripts/cloud-test.sh --card <card> <branch>
-  <tip from git rev-parse HEAD> <filters>` in the background (~6 min on a cloud VM of its own, ~$0.30 of the Cloud
-  session credit, exit 0 = green, at most 3 at once; notes/cloud_development.md). Use it whenever 2 or more runs wait
-  in the queue (`ls ~/.cargo/warp-tests.lock.queue | wc -l`) or your filters take more than a few minutes;
-  tests/queue.sh for uncommitted edits, quick single-test re-runs and tests needing the Mac (sound, GPU, windows,
-  Lean, SDL: scripts/cloud-test-environmental.txt). A green cloud run counts as the targeted run.
+- Cloud test lane: `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>` in the
+  background (~6 min on a cloud VM of its own, ~$0.30 of the Cloud session credit, exit 0 = green;
+  notes/cloud_development.md). A green cloud run counts as the targeted run.
 - No Chrome, Chromium or Firefox on the Mac, headless included: browser runs happen only in CI. The browser suite,
   the playground tour, web::test_dom_pages and the agent-browser probes refuse locally ("browser tests run in CI
   only"); never call agent-browser yourself. To check the playground: first the dry run on pannous.com,
