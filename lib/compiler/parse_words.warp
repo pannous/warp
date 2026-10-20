@@ -41,14 +41,22 @@ eval_call(n: any): any := {
 	called_word(interpret_word, [called_word(parse_word, [given])])
 }
 
-# the words rewritten everywhere but on the right of `.`
-words_rewritten(n: any, rewrite: function): any := {
-	if is_key(n, Op.Dot) { return Key(words_rewritten(key_of(n), rewrite), Op.Dot, value_of(n)) }
-	rewrite(children(n, child => words_rewritten(child, rewrite)))
+# the words rewritten everywhere but on the right of `.` and inside a definition binding the word itself (notes/
+# dispatch.md: shadowing is scoped): `f(t) := { parse = x => 7; parse(t) }` calls its own
+words_rewritten(n: any, rewrite: function, words: list): any := {
+	if is_key(n, Op.Dot) { return Key(words_rewritten(key_of(n), rewrite, words), Op.Dot, value_of(n)) }
+	if is_key(n, Op.Define) and words.any(word => binds_word(n, word)) { return n }
+	rewrite(children(n, child => words_rewritten(child, rewrite, words)))
 }
 
+# does the definition bind the word: a parameter of that name, or an assignment to it in its body
+binds_word(definition: any, word: text): bool := {
+	head = key_of(definition)
+	is_group(head) and items_of(head).any(part => part == symbol(word)) or definition_statements(value_of(definition)).any(statement => defined_here(statement, word))
+}
+definition_statements(n: any): list := if is_group(n) and bracket_of(n) != "[" then items_of(n) else [n]
+
 # does the program define the word itself: `parse(t) := …`, `parse = …`
-defines_word(program: any, word: text): bool := items_of(program).any(statement => defined_here(statement, word))
 defined_here(statement: any, word: text): bool := {
 	if not (is_key(statement, Op.Define) or is_key(statement, Op.Assign)) { return no }
 	head = key_of(statement)
@@ -56,6 +64,7 @@ defined_here(statement: any, word: text): bool := {
 }
 
 parse_words(program: any): any := {
-	if defines_word(program, parse_word) or defines_word(program, eval_word) { return program }
-	words_rewritten(program, n => parse_call(eval_call(n)))
+	words = [parse_word, eval_word]
+	if definition_statements(program).any(statement => words.any(word => defined_here(statement, word))) { return program }
+	words_rewritten(program, n => parse_call(eval_call(n)), words)
 }
