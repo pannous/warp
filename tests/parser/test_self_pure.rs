@@ -284,3 +284,10 @@ fn kind_changes_fail_pure() {
 	assert!(output.contains("x was an Int, is given a Text"), "{output}");
 	runs_pure("kinds_that_mix", "x = 1; x = 2.5; x", "2.5");
 }
+
+/// card uses-std-modules: a standard module a program uses by name (`use case_tables`, lib/case_tables.warp) brings
+/// the definitions the program reaches, its values included, in front of the program
+#[test]
+fn std_modules_run_pure() {
+	runs_pure("use_case_tables", "use case_tables\n#upper_case_ranges", "1818");
+}
