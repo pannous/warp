@@ -91,7 +91,7 @@ caught_error(finished: bool, value: any): any := {
 }
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
 index_of_node(n: any): int := {
-	if is_null(n) == 1 or kind_code(n) != 1 or is_ratio(n) == 1 { index_must_be_an_integer() }
+	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { index_must_be_an_integer() }
 	unboxed_int(n)
 }
 # a product beyond the int range (Rust's would be a big int)

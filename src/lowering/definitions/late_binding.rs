@@ -16,7 +16,7 @@ use super::nodes::{any_part, children_rewritten, word_headed};
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{
 	ask_local_or_global, captured_variables, collect_variables, declare_global, declares_local, find_assignments,
-	param_kind, starts_with_fresh_binding, Scope, MAIN_LEVEL_READING,
+	find_bindings, is_loop_binding, param_kind, starts_with_fresh_binding, Scope, MAIN_LEVEL_READING,
 };
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
@@ -79,7 +79,8 @@ fn global_writers(statements: &[Node]) -> HashMap<String, HashSet<String>> {
 /// A function's `let y = …` is its own y, and so is a fresh `y = …` (Python's local) of a variable that is global only
 /// because the compiler made it one (late binding, a `global y` of another function): without `global y` the function
 /// never changes it, nor a variable of the same name in another used file (`op = op_of(n)` in analyzer.warp, emitter.warp's
-/// op table). Its own y is renamed apart, as the global would take every write and read of the name in the function.
+/// op table); the same holds for `y, z = …`, and a loop variable `for y in …` is the loop's own even of a top-level
+/// `global y`. Its own y is renamed apart, as the global would take every write and read of the name in the function.
 /// A program's own function gets the local-or-global warning, as for main's variables; a used module's stays quiet.
 fn with_own_locals(
 	program: Node,
@@ -91,17 +92,20 @@ fn with_own_locals(
 	let mut owned: Vec<(String, String)> = vec![];
 	for function in program.sequence_statements().iter().flat_map(functions_in) {
 		let writes = writers.get(&function.name);
-		for (assignment, name) in find_assignments(&function.body, &|name| main.is_global(name) || made_global(name)) {
+		for (binding, name) in find_bindings(&function.body, &|name| main.is_global(name) || made_global(name)) {
 			if owned.iter().any(|(owner, own)| *owner == function.name && own == name) || *name == function.name {
 				continue;
 			}
+			let fresh = !writes.is_some_and(|names| names.contains(name))
+				&& !function.params.iter().any(|param| param.name == *name)
+				&& starts_with_fresh_binding(&function.body, name);
+			// a loop variable is always the loop's own; a top-level `global x` is written by a plain `x = …`
 			let own = declares_local(&function.body, name)
-				|| (made_global(name)
-					&& !writes.is_some_and(|names| names.contains(name))
-					&& !function.params.iter().any(|param| param.name == *name)
-					&& starts_with_fresh_binding(&function.body, name)
+				|| (fresh && is_loop_binding(binding))
+				|| (fresh
+					&& made_global(name)
 					&& (is_module_function(&function.name)
-						|| ask_local_or_global(assignment, name, &function.name, None)? != MAIN_LEVEL_READING));
+						|| ask_local_or_global(binding, name, &function.name, None)? != MAIN_LEVEL_READING));
 			if own {
 				owned.push((function.name.clone(), name.clone()));
 			}
