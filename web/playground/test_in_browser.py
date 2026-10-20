@@ -105,6 +105,9 @@ KEY_CODES = {"Tab": 9, "Enter": 13}
 STOP_BUTTON = "(Run becomes Stop while a program runs, and stops it)"
 STOP_BUTTON_CODE = "n = 0\nwhile yes { n += 1 }"
 STOP_BUTTON_WAIT_MS = 1500  # past playground.js STOP_GRACE_MS, well before RUN_TIMEOUT_MS
+# card there-should: the clear button beside the bug button empties the editor, its undo brings the program back
+CLEAR_BUTTON = "(the clear button empties the editor, undo brings the program back)"
+CLEAR_BUTTON_CODE = "x = 2\nx * 3"
 MEMBER_COMPLETION = "(members listed after a dot)"  # card member-completion: completion.js asks the compiler (members.rs)
 MEMBER_CODE = "xs = [1 2]; xs"
 MEMBERS_LISTED = ["count", "sum", "map", "unique"]
@@ -605,6 +608,21 @@ def stop_button_wrong():
 	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
 
 
+def clear_button_wrong():
+	"""pressing the clear button leaves an empty editor; the editor's undo shows the program again"""
+	shown = browser("eval", f"""(() => {{
+		const editor = document.querySelector(".CodeMirror").CodeMirror;
+		editor.setValue({json.dumps(CLEAR_BUTTON_CODE)});
+		document.getElementById("clear-code").click();
+		const cleared = editor.getValue();
+		editor.undo();
+		return JSON.stringify({{ cleared, undone: editor.getValue() }});
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"cleared": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"cleared": "", "undone": CLEAR_BUTTON_CODE}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
+
 def member_completion_wrong():
 	"""Tab after `xs.` of a list lists its members, which come from the compiler's worker: the list shows them"""
 	shown = browser("eval", f"""(async () => {{
@@ -979,7 +997,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLEAR_BUTTON, clear_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (FIX_BUTTON, fix_button_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (BUG_BUTTON, lambda: bug_button_wrong(page_url)), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
