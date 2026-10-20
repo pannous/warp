@@ -99,6 +99,13 @@ text_chars(t: text): list := {
 	}
 	out
 }
+# `t.bytes`: t's UTF-8 bytes, ints; `for b in t.bytes` reads them one by one, `byte_at(t, i)`
+text_byte_list(t: text): list := {
+	out = new_list(byte_count(t))
+	for i in 1 to #out { out#i = byte_at(t, i - 1) }
+	out
+}
+text_byte(t: text, at: int): int := byte_at(t, at)
 # `xs.reverse`: a list's items or a text's characters the other way round
 reversed(n: any): any := {
 	if kind_code(n) == 4 { return char_text(unboxed_char(n)) }
