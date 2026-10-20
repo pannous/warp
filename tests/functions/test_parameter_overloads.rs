@@ -90,3 +90,14 @@ fn an_overload_is_picked_at_run_time_when_only_the_value_tells() {
 	// a class parameter dispatches through traits, at run time too
 	is!("class A{x:int}; area(a:A) := 1; area(b: list) := 2; h(v) := area(v); h([1]) * 10 + h(A(1))", 21);
 }
+
+// card two-files-defining-2 (decision cross-module-overload): a declared type picks the variant written with it, so a
+// text held as a Node takes the Node variant; a value of no declared type is still tested at run time
+#[test]
+fn a_declared_type_picks_its_variant() {
+	let variants = "filled(message: text) := 1; filled(n: Node) := 2; ";
+	is!(&format!("{variants}leaf: Node = \"abc\"; filled(leaf)"), 2);
+	is!(&format!("{variants}shown(n: Node) := filled(n); shown(\"abc\")"), 2);
+	is!(&format!("{variants}said(m: text) := filled(m); said(\"abc\")"), 1);
+	is!(&format!("{variants}h(v) := filled(v); h(\"abc\") * 10 + h(Key(1, Op.Add, 2))"), 12);
+}
