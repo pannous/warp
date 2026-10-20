@@ -168,25 +168,21 @@ impl WasmGcEmitter {
 			s.emit_text_bounds(f, (bytes, pointer, end));
 			Self::emit_list(f, &[I::LocalGet(1), I::LocalSet(wanted), I::I64Const(1), I::LocalSet(base)]);
 			let cursors = s.text_cursors();
+			// the slot of the cursor holding this text, -1 for none (emit_move_text_cursor)
 			Self::emit_if_long_text(f, end);
-			for &(text, index, at, _) in &cursors {
-				#[rustfmt::skip]
-				let in_this_text = [
-					I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
-					I::I32And,
-				];
-				Self::emit_list(f, &in_this_text);
+			Self::emit_list(f, &[I32Const(-1), I::LocalSet(slot)]);
+			for (number, &(text, index, at, _)) in cursors.iter().enumerate() {
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
+					I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::If(BlockType::Empty),
+					I32Const(number as i32), I::LocalSet(slot),
+					I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
 					I::GlobalGet(index), I::LocalGet(wanted), I::I64LeS, I::I32And, I::GlobalGet(index),
 					I::LocalGet(base), I::I64GtS, I::I32And, I::If(BlockType::Empty),
 						I::GlobalGet(at), I::LocalSet(pointer),
 						I::GlobalGet(index), I::LocalSet(base),
 					I::End,
-				]);
-				Self::emit_list(f, &in_this_text);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
+					I::GlobalGet(at), I::LocalGet(end), I::I32LtU,
 					I::GlobalGet(index), I::LocalGet(wanted), I::I64GtS, I::I32And, I::LocalGet(base),
 					I::LocalGet(wanted), I::I64LtS, I::I32And, I::If(BlockType::Empty),
 						I::LocalGet(bytes), I::GlobalGet(at), I::LocalGet(end), I::GlobalGet(index), I::LocalGet(wanted),
@@ -199,6 +195,7 @@ impl WasmGcEmitter {
 					I::LocalGet(back_index), I::LocalGet(base), I::I64GtS, I::If(BlockType::Empty),
 						I::LocalGet(back), I::LocalSet(pointer),
 						I::LocalGet(back_index), I::LocalSet(base),
+					I::End,
 					I::End,
 					I::End,
 				]);
@@ -320,7 +317,8 @@ impl WasmGcEmitter {
 	}
 
 	/// The cursor of the text in local `bytes` set to grapheme `wanted` at byte index `pointer`: the cursor holding that
-	/// text, else the one used least recently (locals `slot`, `least` and `stamp` are scratch)
+	/// text, local `slot` (-1 when none holds it), else the one used least recently (locals `least` and `stamp` are
+	/// scratch)
 	fn emit_move_text_cursor(
 		&self,
 		f: &mut Function,
@@ -328,15 +326,9 @@ impl WasmGcEmitter {
 		(bytes, wanted, pointer): (u32, u32, u32),
 		(slot, least, stamp): (u32, u32, u32),
 	) {
+		Self::emit_list(f, &[I::LocalGet(slot), I32Const(0), I::I32LtS, I::If(BlockType::Empty)]);
 		Self::emit_least_slot(f, cursors.iter().map(|&(_, _, _, used)| used), slot, least);
-		for (number, &(text, _, _, _)) in cursors.iter().enumerate() {
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::GlobalGet(text), I::LocalGet(bytes), I::RefEq, I::If(BlockType::Empty),
-					I::I32Const(number as i32), I::LocalSet(slot),
-				I::End,
-			]);
-		}
+		f.instruction(&I::End);
 		self.emit_next_stamp(f);
 		f.instruction(&I::LocalSet(stamp));
 		let parts = cursors
